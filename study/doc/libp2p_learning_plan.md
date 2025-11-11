@@ -257,6 +257,368 @@ let behaviour = RequestResponse::new(
 );
 ```
 
+#### 3.4 NAT穿透与中继
+
+**理解NAT问题**
+- 大多数节点位于NAT或防火墙后
+- 无法直接建立入站连接
+- 需要中继或打洞技术
+
+##### 方案1：Relay v2 协议（中继）
+- [ ] **Circuit Relay协议**
+  - 通过中继节点转发流量
+  - 保证连通性
+  - HOP协议（中继节点）
+  - STOP协议（客户端）
+
+```rust
+// Relay客户端配置
+use libp2p::relay::client;
+
+let (relay_transport, relay_behaviour) = client::new(local_peer_id);
+
+// 组合到行为中
+#[derive(NetworkBehaviour)]
+struct MyBehaviour {
+    relay_client: client::Behaviour,
+    kad: kad::Behaviour<MemoryStore>,
+    gossipsub: gossipsub::Behaviour,
+    // ... 其他协议
+}
+
+// 通过中继连接
+let relay_addr = "/ip4/relay-server.example.com/tcp/4001/p2p/12D3KooW..."
+    .parse()?;
+swarm.dial(relay_addr)?;
+```
+
+##### 方案2：DCUtR（直连升级）
+- [ ] **Direct Connection Upgrade through Relay**
+  - 首先通过中继建立连接
+  - 后台协商打洞参数
+  - 成功后升级为直连
+  - 显著降低延迟
+
+```rust
+// DCUtR配置
+use libp2p::dcutr;
+
+#[derive(NetworkBehaviour)]
+struct MyBehaviour {
+    relay_client: relay::client::Behaviour,
+    dcutr: dcutr::Behaviour,  // 添加DCUtR
+    // ... 其他协议
+}
+
+// 打洞协商会自动进行
+// 监听事件查看状态
+SwarmEvent::Behaviour(MyBehaviourEvent::Dcutr(dcutr::Event {
+    remote_peer_id,
+    result: Ok(connection_id),
+})) => {
+    info!("打洞成功，已升级到直连: {}", remote_peer_id);
+}
+```
+
+##### 方案3：AutoNAT（自动NAT检测）
+- [ ] **自动检测NAT类型**
+  - 探测自己的网络状态
+  - 判断是否在NAT后
+  - 决定是否需要中继
+
+```rust
+// AutoNAT配置
+use libp2p::autonat;
+
+let autonat_config = autonat::Config {
+    retry_interval: Duration::from_secs(90),
+    refresh_interval: Duration::from_secs(30),
+    boot_delay: Duration::from_secs(5),
+    throttle_server_period: Duration::ZERO,
+    ..Default::default()
+};
+
+let autonat = autonat::Behaviour::new(
+    local_peer_id,
+    autonat_config,
+);
+
+#[derive(NetworkBehaviour)]
+struct MyBehaviour {
+    autonat: autonat::Behaviour,
+    // ... 其他协议
+}
+
+// 监听NAT状态事件
+SwarmEvent::Behaviour(MyBehaviourEvent::Autonat(
+    autonat::Event::StatusChanged { old, new }
+)) => {
+    info!("NAT状态变化: {:?} -> {:?}", old, new);
+    match new {
+        NatStatus::Public(addr) => info!("公网地址: {}", addr),
+        NatStatus::Private => info!("在NAT后，需要中继"),
+        _ => {}
+    }
+}
+```
+
+##### 公网中继服务器部署方案
+
+**方案对比总览**
+
+| 方案 | 成本 | 难度 | 可靠性 | 适用场景 |
+|------|------|------|--------|---------|
+| 公共中继节点 | 免费 | ⭐ | ⭐⭐⭐ | 学习、测试 |
+| 云服务器中继 | $5-50/月 | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 生产环境 |
+| 边缘计算平台 | $0-50/月 | ⭐⭐ | ⭐⭐⭐⭐ | 全球分布 |
+| P2P云平台 | $20-200/月 | ⭐⭐ | ⭐⭐⭐⭐ | 托管服务 |
+| 家庭宽带 | 仅电费 | ⭐⭐⭐⭐ | ⭐⭐ | 个人测试 |
+| 混合部署 | $50-500/月 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 企业级 |
+
+**方案A：使用公共中继节点**（最快上手）
+
+libp2p官方提供的免费公共中继：
+```rust
+// 连接到公共中继
+let public_relays = vec![
+    "/dnsaddr/relay.libp2p.io",
+    "/ip4/147.75.80.110/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+];
+
+for relay in public_relays {
+    swarm.dial(relay.parse()?)?;
+}
+```
+
+**优点**：
+- ✅ 零配置，立即可用
+- ✅ 全球分布，延迟低
+- ✅ 适合学习和原型开发
+
+**缺点**：
+- ❌ 共享资源，可能限流
+- ❌ 隐私考虑
+- ❌ 不适合生产环境
+
+**方案B：自建云服务器中继**（推荐生产）
+
+**云服务商选择**：
+- **AWS EC2**：全球节点，按需付费
+- **DigitalOcean**：简单便宜，$5/月起
+- **Vultr**：全球节点多，性价比高
+- **Google Cloud**：网络质量好
+- **Hetzner**：欧洲低价
+
+**服务器配置**：
+```yaml
+# 最低配置（小规模应用）
+CPU: 1核
+内存: 1GB
+带宽: 1-5Mbps
+存储: 20GB
+成本: $5-10/月
+
+# 推荐配置（生产环境）
+CPU: 2核+
+内存: 2GB+
+带宽: 10Mbps+
+存储: 40GB+
+成本: $20-50/月
+```
+
+**部署方式**：
+1. **Rust二进制部署**：编译relay-server程序
+2. **Docker容器化**：使用官方镜像
+3. **Systemd服务**：开机自启动
+4. **Kubernetes**：大规模集群部署
+
+**中继服务器程序**：
+```bash
+# 使用官方示例
+git clone https://github.com/libp2p/rust-libp2p
+cd rust-libp2p/examples/relay-server
+
+# 编译
+cargo build --release
+
+# 运行
+./target/release/relay-server --port 4001
+
+# 配置防火墙
+ufw allow 4001/tcp
+ufw allow 4001/udp
+```
+
+**方案C：边缘计算平台**（全球低延迟）
+
+适合需要全球分布的应用：
+
+**Fly.io**（推荐）：
+- 免费3个实例
+- 全球边缘节点
+- 自动HTTPS
+- 简单部署
+
+**Cloudflare Workers**：
+- 全球CDN节点
+- WebSocket支持
+- 免费额度大
+
+**Railway**：
+- 按用量计费
+- 简单配置
+- 自动扩展
+
+**方案D：混合部署架构**（企业级）
+
+多区域中继 + 自动故障转移：
+```
+客户端
+  ├─→ 中继1（AWS us-east-1）
+  ├─→ 中继2（GCP europe-west1）
+  ├─→ 中继3（Vultr tokyo）
+  └─→ 中继4（Cloudflare Workers）
+```
+
+**优势**：
+- 高可用性（99.9%+）
+- 地理负载均衡
+- 自动故障转移
+- 灵活扩展
+
+**实现策略**：
+```rust
+// 配置多个中继节点
+let relay_nodes = vec![
+    ("/dns4/relay-us.example.com/tcp/4001/p2p/12D3...", "us-east"),
+    ("/dns4/relay-eu.example.com/tcp/4001/p2p/12D3...", "europe"),
+    ("/dns4/relay-asia.example.com/tcp/4001/p2p/12D3...", "asia"),
+];
+
+// 健康检查和自动切换
+for (addr, region) in relay_nodes {
+    match swarm.dial(addr.parse()?) {
+        Ok(_) => info!("已连接到 {} 中继", region),
+        Err(e) => warn!("{} 中继连接失败: {}", region, e),
+    }
+}
+```
+
+##### 完整的NAT穿透配置示例
+
+```rust
+// 组合所有NAT穿透技术
+#[derive(NetworkBehaviour)]
+struct FullP2PBehaviour {
+    // 局域网发现
+    mdns: mdns::tokio::Behaviour,
+
+    // 全网发现
+    kad: kad::Behaviour<MemoryStore>,
+
+    // NAT类型检测
+    autonat: autonat::Behaviour,
+
+    // 中继客户端
+    relay_client: relay::client::Behaviour,
+
+    // 直连升级
+    dcutr: dcutr::Behaviour,
+
+    // 应用协议
+    identify: identify::Behaviour,
+    gossipsub: gossipsub::Behaviour,
+}
+
+// 连接建立流程
+// 1. mDNS发现局域网节点（0-1秒）
+// 2. 连接Bootstrap节点（1秒）
+// 3. 通过Relay建立初始连接（2-3秒）
+// 4. AutoNAT检测网络状态（3-5秒）
+// 5. DCUtR协商打洞（5-10秒）
+// 6. 升级到直连（延迟降低50-80%）
+```
+
+##### 中继服务器监控
+
+**关键指标**：
+- 活跃连接数
+- 中继流量（入站/出站）
+- 连接建立延迟
+- 打洞成功率
+- CPU/内存使用
+
+```rust
+// Prometheus指标
+use prometheus::{IntGauge, Counter};
+
+lazy_static! {
+    static ref ACTIVE_RELAYS: IntGauge = IntGauge::new(
+        "relay_active_connections",
+        "Active relay connections"
+    ).unwrap();
+
+    static ref RELAY_BYTES: Counter = Counter::new(
+        "relay_bytes_total",
+        "Total bytes relayed"
+    ).unwrap();
+
+    static ref DCUTR_SUCCESS: Counter = Counter::new(
+        "dcutr_success_total",
+        "Successful hole punching attempts"
+    ).unwrap();
+}
+```
+
+##### 成本优化建议
+
+**学习阶段**：
+1. 先用公共中继（免费）
+2. 熟悉后部署Fly.io免费层
+
+**开发阶段**：
+1. DigitalOcean单节点（$5/月）
+2. 配合公共中继作为备份
+
+**生产阶段**：
+1. 多区域部署（3+节点）
+2. 监控 + 告警系统
+3. 自动化运维
+
+**企业级**：
+1. 混合云部署
+2. 专用P2P基础设施
+3. 合规和安全审计
+
+##### 安全性考虑
+
+**中继服务器安全配置**：
+```rust
+// 资源限制
+let relay_config = relay::Config {
+    max_reservations: 128,
+    max_reservations_per_peer: 4,
+    reservation_duration: Duration::from_secs(3600),
+    max_circuits: 16,
+    max_circuits_per_peer: 4,
+    max_circuit_duration: Duration::from_secs(120),
+    max_circuit_bytes: 1_000_000,  // 1MB
+};
+
+// 访问控制
+use libp2p::core::ConnLimit;
+
+let limits = ConnectionLimits::default()
+    .with_max_pending_incoming(Some(10))
+    .with_max_established_per_peer(Some(8));
+```
+
+**DDoS防护**：
+- 使用Cloudflare等CDN
+- 限制每个IP的连接数
+- 速率限制
+- 异常流量检测
+
 #### 实践项目
 ```rust
 // 项目3：去中心化文件共享
