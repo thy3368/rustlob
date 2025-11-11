@@ -1,0 +1,11 @@
+# web3 学习计划
+
+- 写 libp2p 学习计划 在目录/Users/hongyaotang/src/rustlob/study/doc
+- 写 web3 共识算法学习计划 在目录/Users/hongyaotang/src/rustlob/study/doc
+- 写 零知识证明 学习计划 在目录/Users/hongyaotang/src/rustlob/study/doc
+- 写 revm 学习计划 在目录/Users/hongyaotang/src/rustlob/study/doc 不要写代码 列举主要特性要学的
+- 写 substrate 学习计划 在目录/Users/hongyaotang/src/rustlob/study/doc
+- 写 一个 hyperliquid 类似的dex交易系统 制定学习计划和开发计划 在目录/Users/hongyaotang/src/rustlob/study/doc
+
+
+- 写一个chat 程序 用作教学 在/Users/hongyaotang/src/rustlob/study/web3/src/libp2p下
