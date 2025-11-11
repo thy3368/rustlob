@@ -164,10 +164,12 @@ async fn create_swarm() -> Result<
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // 3.1 初始化日志系统
+    // 过滤掉 mDNS 的 ERROR 级别日志，减少虚拟接口的噪音
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+                .add_directive(tracing::Level::INFO.into())
+                .add_directive("libp2p_mdns=warn".parse()?),  // mDNS只显示warn及以上
         )
         .init();
 
