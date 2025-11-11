@@ -1,0 +1,12 @@
+# Environment configuration
+.env
+
+# JWT secret
+jwt.hex
+
+# Config directory
+config/
+
+# Logs
+*.log
+logs/

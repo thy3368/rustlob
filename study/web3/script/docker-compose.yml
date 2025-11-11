@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  reth:
+    image: ghcr.io/paradigmxyz/reth:latest
+    container_name: reth-node
+    restart: unless-stopped
+    ports:
+      # P2P port
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      # HTTP RPC
+      - "8545:8545"
+      # WebSocket RPC
+      - "8546:8546"
+      # Metrics
+      - "9001:9001"
+    volumes:
+      # Data directory
+      - reth-data:/root/.local/share/reth
+      # JWT secret for consensus client communication
+      - ./jwt.hex:/root/jwt.hex:ro
+      # Optional: custom config
+      - ./config:/root/config:ro
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+    command: >
+      node
+      --chain ${CHAIN:-mainnet}
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,debug,trace
+      --http.corsdomain "*"
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8546
+      --ws.api eth,net,web3
+      --ws.origins "*"
+      --authrpc.jwtsecret /root/jwt.hex
+      --authrpc.addr 0.0.0.0
+      --authrpc.port 8551
+      --metrics 0.0.0.0:9001
+      --log.file.directory /root/.local/share/reth/logs
+    networks:
+      - reth-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Lighthouse consensus client
+  lighthouse:
+    image: sigp/lighthouse:latest
+    container_name: lighthouse-beacon
+    restart: unless-stopped
+    ports:
+      - "9000:9000/tcp"
+      - "9000:9000/udp"
+      - "5052:5052"
+    volumes:
+      - lighthouse-data:/root/.lighthouse
+      - ./jwt.hex:/root/jwt.hex:ro
+    command: >
+      lighthouse bn
+      --network ${CHAIN:-mainnet}
+      --datadir /root/.lighthouse
+      --http
+      --http-address 0.0.0.0
+      --http-port 5052
+      --execution-endpoint http://reth:8551
+      --execution-jwt /root/jwt.hex
+      --checkpoint-sync-url https://beaconstate.ethstaker.cc
+    networks:
+      - reth-network
+    depends_on:
+      - reth
+    profiles:
+      - full-node
+
+volumes:
+  reth-data:
+    driver: local
+  lighthouse-data:
+    driver: local
+
+networks:
+  reth-network:
+    driver: bridge
