@@ -1474,32 +1474,29 @@ dependencies = [
 
 [[package]]
 name = "kameo"
-version = "0.15.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c42ee4184bdd5866e790df1af2d4167cd5b4844a5e74436ce8a5e1453c698a4"
+checksum = "a0c810e1c537b7700111db2d7fc546d05dbd06c120307eb8d82f739f9d17055d"
 dependencies = [
  "downcast-rs",
  "dyn-clone",
  "futures",
  "kameo_macros",
- "once_cell",
  "serde",
  "tokio",
- "tokio-stream",
  "tracing",
 ]
 
 [[package]]
 name = "kameo_macros"
-version = "0.15.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d137602d8f93fe9989d925767e1a80595eb8e881e592c110f191767b06b6fe49"
+checksum = "a13c324e2d8c8e126e63e66087448b4267e263e6cb8770c56d10a9d0d279d9e2"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
  "syn 2.0.110",
- "uuid",
 ]
 
 [[package]]
@@ -3180,17 +3177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-stream"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eca58d7bba4a75707817a2c44174253f9236b2d5fbd055602e9d5c07c139a047"
-dependencies = [
- "futures-core",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
 name = "tokio-util"
 version = "0.7.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3357,17 +3343,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "uuid"
-version = "1.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
-dependencies = [
- "getrandom 0.3.4",
- "js-sys",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "valuable"

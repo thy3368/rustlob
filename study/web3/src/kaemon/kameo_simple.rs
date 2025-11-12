@@ -1,13 +1,12 @@
+use kameo::actor::ActorRef;
 /// Kameo Framework Simple Example
 ///
 /// Kameo is a lightweight actor framework for Rust
 /// This example demonstrates a simple Counter actor
 ///
 /// Run with: cargo run --bin kameo_simple
-
-use kameo::actor::ActorRef;
+use kameo::actor::Spawn;
 use kameo::message::{Context, Message};
-use kameo::request::MessageSend;
 use kameo::Actor;
 
 /// Counter actor that maintains a simple count
@@ -28,7 +27,13 @@ pub struct Increment;
 impl Message<Increment> for Counter {
     type Reply = i32;
 
-    async fn handle(&mut self, _msg: Increment, _ctx: &mut Context<Self, Self::Reply>) -> Self::Reply {
+    async fn handle(
+        &mut self,
+        _msg: Increment,
+        _ctx: &mut Context<Self, Self::Reply>,
+    ) -> Self::Reply {
+        //todo 通常在这里引用领域服务，重要！！！！
+        //todo service.handle(command)/service.async_handle(command)
         self.count += 1;
         self.count
     }
@@ -40,7 +45,11 @@ pub struct GetCount;
 impl Message<GetCount> for Counter {
     type Reply = i32;
 
-    async fn handle(&mut self, _msg: GetCount, _ctx: &mut Context<Self, Self::Reply>) -> Self::Reply {
+    async fn handle(
+        &mut self,
+        _msg: GetCount,
+        _ctx: &mut Context<Self, Self::Reply>,
+    ) -> Self::Reply {
         self.count
     }
 }
@@ -61,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Kameo Counter Example ===\n");
 
     // Spawn the counter actor
-    let counter_ref: ActorRef<Counter> = kameo::spawn(Counter::new());
+    let counter_ref: ActorRef<Counter> = Counter::spawn(Counter::new());
     println!("✓ Counter actor spawned");
 
     // Increment counter
@@ -77,6 +86,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get current count
     let count = counter_ref.ask(GetCount).send().await?;
     println!("\nCurrent count: {}", count);
+
+    counter_ref.tell(GetCount).send().await?;
 
     // Reset counter
     counter_ref.ask(Reset).send().await?;
