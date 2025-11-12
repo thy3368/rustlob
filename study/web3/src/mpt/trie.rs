@@ -37,6 +37,15 @@ impl<S: Storage> MerklePatriciaTrie<S> {
         }
     }
 
+    /// 从现有根哈希创建 MPT（用于恢复持久化的树）
+    pub fn from_root(storage: S, root_hash: [u8; 32]) -> Self {
+        Self {
+            storage,
+            root_hash,
+            entries_cache: HashMap::new(),
+        }
+    }
+
     /// 计算节点哈希
     fn hash_node(node: &Node) -> [u8; 32] {
         let mut hasher = Keccak256::new();

@@ -59,3 +59,4 @@ alloy-primitives = "0.8"
 hex = "0.4"
 derive_more = { version = "1.0", features = ["full"] }
 sha3 = "0.10"
+tempfile = "3.8"

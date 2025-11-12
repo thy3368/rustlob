@@ -3,8 +3,12 @@ mod usecases;
 mod trie;
 mod storage;
 mod example;
+mod persistent_storage;
+mod block_data;
+mod block_persistence_example;
 
 use example::{run_advanced_example, run_basic_example, run_ethereum_state_example, run_ethereum_transaction_example, run_light_client_example};
+use block_persistence_example::run_block_persistence_example;
 
 /// MPT 演示程序
 ///
@@ -47,6 +51,11 @@ fn main() {
         std::process::exit(1);
     }
 
+    // 运行区块持久化示例
+    if let Err(e) = run_block_persistence_example() {
+        eprintln!("❌ 区块持久化示例失败: {}", e);
+        std::process::exit(1);
+    }
 
     // 打印架构信息
     print_architecture_info();
