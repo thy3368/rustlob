@@ -23,6 +23,14 @@ path = "src/kaemon/kameo_simple1.rs"
 name = "sup"
 path = "src/kaemon/supervisor.rs"
 
+[[bin]]
+name = "revm_counter"
+path = "src/revm/main.rs"
+
+[[bin]]
+name = "mpt_demo"
+path = "src/mpt/main.rs"
+
 
 
 [dependencies]
@@ -46,3 +54,8 @@ serde_json = "1.0"
 async-std = { version = "1.12", features = ["attributes"] }
 clap = { version = "4.5", features = ["derive"] }
 kameo = "0.19.0"
+revm = { version = "18.0.0", features = ["std"] }
+alloy-primitives = "0.8"
+hex = "0.4"
+derive_more = { version = "1.0", features = ["full"] }
+sha3 = "0.10"

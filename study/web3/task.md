@@ -17,7 +17,9 @@
 
 - 写一个chat 程序 用作教学 在/Users/hongyaotang/src/rustlob/study/web3/src/libp2p下
 - crossbeam::queue::SegQueue与crossbeam::channel比较
-- 写个运维系统搭建方案 包含运维领域的能力 重点分析领域架构 基于开源软件  在目录/Users/hongyaotang/src/rustlob/study/doc/sre
-- 写个使用 kameo crate的例子，越简单越好  在/Users/hongyaotang/src/rustlob/study/web3/src/kaemon
+- 写个运维系统搭建方案 包含运维领域的能力 重点分析领域架构 基于开源软件 在目录/Users/hongyaotang/src/rustlob/study/doc/sre
+- 写个使用 kameo crate的例子，越简单越好 在/Users/hongyaotang/src/rustlob/study/web3/src/kaemon
 - 写一个在docker下的reth节点运行脚本 在/Users/hongyaotang/src/rustlob/study/web3/script下
 - 写一个合约 并在revm上执行 在/Users/hongyaotang/src/rustlob/study/web3/src/revm下
+- 用trait 表达mpt树的use case 在/Users/hongyaotang/src/rustlob/study/web3/src/mpt下
+- 写出rust代码例子 基于geth block 持久化源代码  在/Users/hongyaotang/src/rustlob/study/web3/src/mpt下
