@@ -1,5 +1,4 @@
-use crate::lob::{OrderRepository, Price, Quantity, Side, Trade, TraderId, OrderId};
-use crate::lob::repository::RepositoryAccessor;
+use crate::lob::{OrderId, Price, Quantity, Side, Trade, TraderId};
 
 /// 钉住订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +39,6 @@ pub enum UrgencyLevel {
 #[derive(Debug, Clone)]
 pub enum Command {
     // ========== 基础订单类型 ==========
-
     /// 限价单命令 ✅ 已实现
     LimitOrder {
         trader: TraderId,
@@ -66,12 +64,9 @@ pub enum Command {
     },
 
     /// 取消订单命令 ✅ 已实现
-    CancelOrder {
-        order_id: OrderId,
-    },
+    CancelOrder { order_id: OrderId },
 
     // ========== 时间条件订单 (Time-In-Force) ==========
-
     /// FOK订单 (Fill-Or-Kill) 🔧 待实现
     /// 立即全部成交，否则全部取消
     FillOrKillOrder {
@@ -106,11 +101,10 @@ pub enum Command {
         side: Side,
         price: Price,
         quantity: Quantity,
-        expire_time: u64,  // Unix timestamp
+        expire_time: u64, // Unix timestamp
     },
 
     // ========== 止损订单 (Stop Orders) ==========
-
     /// 止损市价单 (Stop Market) 🔧 待实现
     /// 当市价达到触发价时，转为市价单
     StopMarketOrder {
@@ -143,12 +137,11 @@ pub enum Command {
     TrailingStopPercentOrder {
         trader: TraderId,
         side: Side,
-        trail_percent: u32,  // basis points (1/10000)
+        trail_percent: u32, // basis points (1/10000)
         quantity: Quantity,
     },
 
     // ========== 订单修改命令 ==========
-
     /// 修改订单 🔧 待实现
     ModifyOrder {
         order_id: OrderId,
@@ -170,7 +163,6 @@ pub enum Command {
     },
 
     // ========== 高级订单类型 ==========
-
     /// 隐藏订单 (Hidden Order) 🔧 待实现
     /// 完全不显示在订单簿中
     HiddenOrder {
@@ -209,7 +201,6 @@ pub enum Command {
     },
 
     // ========== 算法交易订单 ==========
-
     /// TWAP订单 (Time-Weighted Average Price) 🔧 待实现
     TwapOrder {
         trader: TraderId,
@@ -244,7 +235,6 @@ pub enum Command {
     },
 
     // ========== 条件订单 ==========
-
     /// OCO订单 (One-Cancels-Other) 🔧 待实现
     OcoOrder {
         trader: TraderId,
@@ -263,7 +253,6 @@ pub enum Command {
     },
 
     // ========== 交易所特定订单 ==========
-
     /// 拍卖订单 🔧 待实现
     AuctionOrder {
         trader: TraderId,
@@ -290,7 +279,6 @@ pub enum Command {
 #[derive(Debug, Clone)]
 pub enum CommandResult {
     // ========== 基础订单类型结果 ==========
-
     /// 限价单结果 ✅
     LimitOrder {
         order_id: OrderId,
@@ -298,9 +286,7 @@ pub enum CommandResult {
     },
 
     /// 市价单结果 ✅
-    MarketOrder {
-        trades: Vec<Trade>,
-    },
+    MarketOrder { trades: Vec<Trade> },
 
     /// 冰山单结果 ✅
     IcebergOrder {
@@ -311,17 +297,11 @@ pub enum CommandResult {
     },
 
     /// 取消订单结果 ✅
-    CancelOrder {
-        success: bool,
-    },
+    CancelOrder { success: bool },
 
     // ========== 时间条件订单结果 ==========
-
     /// FOK订单结果 🔧
-    FillOrKillOrder {
-        filled: bool,
-        trades: Vec<Trade>,
-    },
+    FillOrKillOrder { filled: bool, trades: Vec<Trade> },
 
     /// IOC订单结果 🔧
     ImmediateOrCancelOrder {
@@ -344,7 +324,6 @@ pub enum CommandResult {
     },
 
     // ========== 止损订单结果 ==========
-
     /// 止损市价单结果 🔧
     StopMarketOrder {
         order_id: OrderId,
@@ -376,7 +355,6 @@ pub enum CommandResult {
     },
 
     // ========== 订单修改结果 ==========
-
     /// 修改订单结果 🔧
     ModifyOrder {
         order_id: OrderId,
@@ -400,7 +378,6 @@ pub enum CommandResult {
     },
 
     // ========== 高级订单类型结果 ==========
-
     /// 隐藏订单结果 🔧
     HiddenOrder {
         order_id: OrderId,
@@ -430,7 +407,6 @@ pub enum CommandResult {
     },
 
     // ========== 算法交易订单结果 ==========
-
     /// TWAP订单结果 🔧
     TwapOrder {
         parent_order_id: OrderId,
@@ -460,11 +436,10 @@ pub enum CommandResult {
         parent_order_id: OrderId,
         child_orders: Vec<OrderId>,
         total_traded: Quantity,
-        implementation_shortfall: i64,  // 可以为负（成本）
+        implementation_shortfall: i64, // 可以为负（成本）
     },
 
     // ========== 条件订单结果 ==========
-
     /// OCO订单结果 🔧
     OcoOrder {
         executed_order: Box<CommandResult>,
@@ -481,7 +456,6 @@ pub enum CommandResult {
     },
 
     // ========== 交易所特定订单结果 ==========
-
     /// 拍卖订单结果 🔧
     AuctionOrder {
         order_id: OrderId,
@@ -506,96 +480,20 @@ pub enum CommandResult {
 /// - 市价单 (Market Order)
 /// - 取消单 (Cancel Order)
 /// - 冰山单 (Iceberg Order)
+///
+/// 遵循Clean Architecture原则：
+/// - 处理器专注于业务逻辑，不依赖仓储层
+/// - 纯函数式命令处理，输入命令返回结果
+/// - 仓储操作由用例层(Use Case Layer)负责
 pub trait OrderCommandHandler: Send + Sync {
     /// 统一的命令处理API
     ///
     /// # 参数
-    /// - `repository`: 订单仓储
     /// - `command`: 订单命令
     ///
     /// # 返回
     /// - `CommandResult`: 命令执行结果
-    fn handle<R>(
-        &self,
-        repository: &mut R,
-        command: Command,
-    ) -> CommandResult
-    where
-        R: OrderRepository + RepositoryAccessor;
-
-    /// 处理限价订单
-    ///
-    /// # 参数
-    /// - `repository`: 订单仓储
-    /// - `trader`: 交易员ID
-    /// - `side`: 订单方向
-    /// - `price`: 限价
-    /// - `quantity`: 数量
-    ///
-    /// # 返回
-    /// - `Vec<Trade>`: 成交列表
-    /// - `Quantity`: 剩余未成交数量
-    fn handle_limit_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor;
-
-    /// 处理市价订单
-    ///
-    /// 市价单以市场最优价格立即成交，不设置价格限制
-    ///
-    /// # 参数
-    /// - `repository`: 订单仓储
-    /// - `trader`: 交易员ID
-    /// - `side`: 订单方向
-    /// - `quantity`: 数量
-    ///
-    /// # 返回
-    /// - `Vec<Trade>`: 成交列表
-    /// - `Quantity`: 剩余未成交数量（市价单通常全部成交）
-    fn handle_market_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor;
-
-    /// 处理冰山订单
-    ///
-    /// 冰山单只显示部分数量（display_quantity），隐藏总量
-    ///
-    /// # 参数
-    /// - `repository`: 订单仓储
-    /// - `trader`: 交易员ID
-    /// - `side`: 订单方向
-    /// - `price`: 限价
-    /// - `total_quantity`: 总数量（隐藏）
-    /// - `display_quantity`: 显示数量
-    ///
-    /// # 返回
-    /// - `Vec<Trade>`: 成交列表
-    /// - `Quantity`: 剩余总数量
-    /// - `Quantity`: 当前显示数量
-    fn handle_iceberg_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        total_quantity: Quantity,
-        display_quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor;
+    fn handle(&mut self, command: Command) -> CommandResult;
 
     /// 获取处理器名称
     fn handler_name(&self) -> &'static str;

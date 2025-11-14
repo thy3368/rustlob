@@ -17,48 +17,83 @@
 //!
 //! - **types**: 领域实体和值对象
 //! - **repository**: 仓储接口和实现（数据访问层）
-//! - **matching_service**: 匹配服务（领域服务层）
-//! - **engine**: 订单簿Facade（应用层）
+//! - **matching_service**: 匹配服务（领域服务层） - **核心服务**
+//! - **market_data_service**: 市场数据查询服务（领域服务层）
 //! - **arena**: 内存池分配器（基础设施层）
+//!
+//! ## 使用方式
+//!
+//! 直接使用 MatchingService 获得最佳性能：
+//!
+//! ```rust
+//! use lob::lob::{
+//!     MatchingService, InMemoryOrderRepository, OrderRepository,
+//!     TraderId, Side, OrderEntry
+//! };
+//!
+//! // 创建 repository
+//! let repository = InMemoryOrderRepository::new(100_000, 1000);
+//!
+//! // 创建匹配服务
+//! let mut matching_service = MatchingService::new(repository);
+//!
+//! // 执行订单匹配
+//! let trader = TraderId::from_str("TRADER1");
+//! let (trades, remaining) = matching_service.match_limit_order(
+//!     trader, Side::Buy, 10000, 100
+//! );
+//!
+//! // 如果有剩余，手动添加到订单簿
+//! if remaining > 0 {
+//!     let order_id = matching_service.repository_mut().allocate_order_id();
+//!     let entry = OrderEntry::new(order_id, trader, remaining);
+//!     matching_service.repository_mut()
+//!         .add_order(order_id, entry, Side::Buy, 10000).unwrap();
+//! }
+//! ```
 //!
 //! # 示例
 //!
 //! ```
-//! use lob::lob::{OrderBook, TraderId, Side};
+//! use lob::lob::{
+//!     MatchingService, InMemoryOrderRepository, OrderRepository,
+//!     TraderId, Side, OrderEntry
+//! };
 //!
-//! let mut book = OrderBook::new();
+//! let repository = InMemoryOrderRepository::new(100_000, 1000);
+//! let mut matching_service = MatchingService::new(repository);
 //!
 //! // 放置卖单
 //! let seller = TraderId::from_str("SELLER1");
-//! book.limit_order(seller, Side::Sell, 10000, 100);
+//! let sell_order_id = matching_service.repository_mut().allocate_order_id();
+//! let sell_entry = OrderEntry::new(sell_order_id, seller, 100);
+//! matching_service.repository_mut()
+//!     .add_order(sell_order_id, sell_entry, Side::Sell, 10000).unwrap();
 //!
 //! // 放置匹配的买单
 //! let buyer = TraderId::from_str("BUYER1");
-//! let (order_id, trades) = book.limit_order(buyer, Side::Buy, 10000, 50);
+//! let (trades, _remaining) = matching_service.match_limit_order(
+//!     buyer, Side::Buy, 10000, 50
+//! );
 //!
 //! assert_eq!(trades.len(), 1);
 //! assert_eq!(trades[0].quantity, 50);
 //! ```
 
-pub mod arena;             // 内存池分配器
-pub mod engine;            // 订单簿Facade
-pub mod handler;           // 订单命令处理器trait
-pub mod matching_service;  // 匹配服务
-pub mod repository;        // 仓储接口和实现
-pub mod types;             // 数据类型定义
+pub mod arena; // 内存池分配器
+pub mod handler; // 订单命令处理器trait
+pub mod market_data_service; // 市场数据服务
+pub mod matching_service; // 匹配服务
+pub mod repository; // 仓储接口和实现
+pub mod types; // 数据类型定义
 
 // 重新导出常用类型
-pub use engine::{OrderBook, OrderBookSnapshot};
 pub use types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
 
 // 导出服务和仓储（供高级用户使用）
 pub use handler::{
-    OrderCommandHandler,
-    Command,
-    CommandResult,
-    PegType,
-    AuctionType,
-    UrgencyLevel,
+    AuctionType, Command, CommandResult, OrderCommandHandler, PegType, UrgencyLevel,
 };
-pub use matching_service::{MatchingService, MarketDataService};
-pub use repository::{OrderRepository, InMemoryOrderRepository, RepositoryError};
+pub use market_data_service::MarketDataService;
+pub use matching_service::MatchingService;
+pub use repository::{InMemoryOrderRepository, OrderRepository, RepositoryError};

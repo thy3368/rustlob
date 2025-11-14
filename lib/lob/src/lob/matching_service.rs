@@ -2,73 +2,194 @@
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-
-use super::handler::{OrderCommandHandler, Command, CommandResult};
+use super::handler::{Command, CommandResult, OrderCommandHandler};
 use super::repository::{OrderRepository, RepositoryAccessor};
-use super::types::{Price, Quantity, Side, Trade, TraderId};
-
+use super::types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
 
 
 /// 匹配服务
 ///
-/// 负责订单匹配逻辑，不直接处理数据存储
-pub struct MatchingService;
+/// 负责订单匹配逻辑，持有OrderRepository引用
+pub struct MatchingService<R>
+where
+    R: OrderRepository + RepositoryAccessor,
+{
+    repository: R,
+}
 
-impl MatchingService {
+impl<R> MatchingService<R>
+where
+    R: OrderRepository + RepositoryAccessor,
+{
     /// 创建新的匹配服务
-    pub fn new() -> Self {
-        Self
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+
+    /// 获取repository的可变引用
+    pub fn repository_mut(&mut self) -> &mut R {
+        &mut self.repository
+    }
+
+    /// 获取repository的不可变引用
+    pub fn repository(&self) -> &R {
+        &self.repository
     }
 
     /// 执行限价订单匹配
     ///
     /// 返回 (成交列表, 剩余数量)
-    pub fn match_limit_order<R>(
-        &self,
-        repository: &mut R,
+    pub fn match_limit_order(
+        &mut self,
         trader: TraderId,
         side: Side,
         price: Price,
         quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
+    ) -> (Vec<Trade>, Quantity) {
         let mut remaining = quantity;
         let mut trades = Vec::new();
 
         match side {
             Side::Buy => {
                 // 从最佳（最低）卖价开始匹配
-                self.match_buy_order(repository, trader, price, &mut remaining, &mut trades);
+                self.match_buy_order(trader, price, &mut remaining, &mut trades);
             }
             Side::Sell => {
                 // 从最佳（最高）买价开始匹配
-                self.match_sell_order(repository, trader, price, &mut remaining, &mut trades);
+                self.match_sell_order(trader, price, &mut remaining, &mut trades);
             }
         }
 
         (trades, remaining)
     }
 
+    /// 执行市价订单匹配
+    ///
+    /// 市价单以任何价格成交，直到数量全部成交或对手方订单耗尽
+    /// 返回 (成交列表, 剩余数量)
+    pub fn match_market_order(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        quantity: Quantity,
+    ) -> (Vec<Trade>, Quantity) {
+        let mut remaining = quantity;
+        let mut trades = Vec::new();
+
+        match side {
+            Side::Buy => {
+                // 市价买单：以任何价格成交（使用 u32::MAX 作为价格上限）
+                self.match_buy_order(trader, u32::MAX, &mut remaining, &mut trades);
+            }
+            Side::Sell => {
+                // 市价卖单：以任何价格成交（使用 0 作为价格下限）
+                self.match_sell_order(trader, 0, &mut remaining, &mut trades);
+            }
+        }
+
+        (trades, remaining)
+    }
+
+    /// 取消订单
+    ///
+    /// # 参数
+    /// - `order_id`: 要取消的订单ID
+    ///
+    /// # 返回
+    /// - `bool`: 取消是否成功
+    pub fn cancel_order(&mut self, order_id: OrderId) -> bool {
+        self.repository.cancel_order(order_id)
+    }
+
+    /// 执行冰山订单匹配
+    ///
+    /// 冰山订单仅显示部分数量（display_quantity），当显示部分成交后自动补充
+    ///
+    /// # 参数
+    /// - `trader`: 交易者ID
+    /// - `side`: 买卖方向
+    /// - `price`: 限价
+    /// - `total_quantity`: 总数量
+    /// - `display_quantity`: 每次显示的数量
+    ///
+    /// # 返回
+    /// - `order_id`: 订单ID（挂单中的订单ID，如果没有挂单则为0）
+    /// - `trades`: 本次成交列表
+    /// - `remaining_total`: 剩余总数量（未成交且未挂单的数量）
+    /// - `current_display`: 当前显示数量（挂单中的数量）
+    pub fn match_iceberg_order(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        total_quantity: Quantity,
+        display_quantity: Quantity,
+    ) -> (OrderId, Vec<Trade>, Quantity, Quantity) {
+        // 1. 先匹配第一批显示数量
+        let (trades, remaining_display) =
+            self.match_limit_order(trader, side, price, display_quantity);
+
+        // 2. 计算已成交数量和剩余总数量
+        let matched_qty = display_quantity - remaining_display;
+        let mut remaining_total = total_quantity - matched_qty;
+
+        // 3. 根据成交情况决定如何处理
+        if remaining_display == 0 && remaining_total > 0 {
+            // 情况A: 显示部分完全成交，还有剩余总量
+            // 自动将下一批显示数量加入订单簿
+            let next_display = std::cmp::min(remaining_total, display_quantity);
+            let order_id = self.repository.allocate_order_id();
+            let entry = OrderEntry::new(order_id, trader, next_display);
+            let _ = self.repository.add_order(order_id, entry, side, price);
+
+            // 更新剩余总量（减去已挂单的数量）
+            remaining_total -= next_display;
+
+            (order_id, trades, remaining_total, next_display)
+        } else if remaining_display > 0 {
+            // 情况B: 显示部分未完全成交
+            // 将剩余的显示部分加入订单簿
+            let order_id = self.repository.allocate_order_id();
+            let entry = OrderEntry::new(order_id, trader, remaining_display);
+            let _ = self.repository.add_order(order_id, entry, side, price);
+
+            // 剩余总量需要减去挂单的数量
+            remaining_total -= remaining_display;
+
+            (order_id, trades, remaining_total, remaining_display)
+        } else {
+            // 情况C: 显示部分完全成交且无剩余总量
+            // 冰山订单完全执行完毕
+            (0, trades, 0, 0)
+        }
+    }
+
     /// 匹配买单
-    fn match_buy_order<R>(
-        &self,
-        repository: &mut R,
+    fn match_buy_order(
+        &mut self,
         trader: TraderId,
         price: Price,
         remaining: &mut Quantity,
         trades: &mut Vec<Trade>,
-    ) where
-        R: OrderRepository + RepositoryAccessor,
-    {
-        // 从最低价开始匹配卖单
-        let mut current_price = 0;
+    ) {
+        // 早期退出优化：如果买价低于最低卖价，不可能匹配
+        if let Some(ask_min) = self.repository.best_ask() {
+            if price < ask_min {
+                return; // 买价太低，直接返回
+            }
+        } else {
+            return; // 没有卖单，直接返回
+        }
+
+        // 从最低卖价开始匹配（而不是从0开始）
+        let mut current_price = self.repository.best_ask().unwrap();
 
         while *remaining > 0 && current_price <= price {
             // 查找下一个非空卖价
-            if let Some(ask_price) = self.find_next_non_empty_price(repository, current_price, price, Side::Sell) {
-                let fills = self.match_at_price(repository, trader, Side::Buy, ask_price, remaining);
+            if let Some(ask_price) =
+                self.find_next_non_empty_price(current_price, price, Side::Sell)
+            {
+                let fills = self.match_at_price(trader, Side::Buy, ask_price, remaining);
                 trades.extend(fills);
                 current_price = ask_price + 1;
             } else {
@@ -78,23 +199,30 @@ impl MatchingService {
     }
 
     /// 匹配卖单
-    fn match_sell_order<R>(
-        &self,
-        repository: &mut R,
+    fn match_sell_order(
+        &mut self,
         trader: TraderId,
         price: Price,
         remaining: &mut Quantity,
         trades: &mut Vec<Trade>,
-    ) where
-        R: OrderRepository + RepositoryAccessor,
-    {
-        // 从最高价开始匹配买单
-        let mut current_price = u32::MAX;
+    ) {
+        // 早期退出优化：如果卖价高于最高买价，不可能匹配
+        if let Some(bid_max) = self.repository.best_bid() {
+            if price > bid_max {
+                return; // 卖价太高，直接返回
+            }
+        } else {
+            return; // 没有买单，直接返回
+        }
+
+        // 从最高买价开始匹配（而不是从 u32::MAX 开始）
+        let mut current_price = self.repository.best_bid().unwrap();
 
         while *remaining > 0 && current_price >= price {
             // 查找上一个非空买价
-            if let Some(bid_price) = self.find_prev_non_empty_price(repository, current_price, price, Side::Buy) {
-                let fills = self.match_at_price(repository, trader, Side::Sell, bid_price, remaining);
+            if let Some(bid_price) = self.find_prev_non_empty_price(current_price, price, Side::Buy)
+            {
+                let fills = self.match_at_price(trader, Side::Sell, bid_price, remaining);
                 trades.extend(fills);
 
                 if bid_price == 0 {
@@ -108,29 +236,27 @@ impl MatchingService {
     }
 
     /// 在特定价格级别执行匹配
-    fn match_at_price<R>(
-        &self,
-        repository: &mut R,
+    fn match_at_price(
+        &mut self,
         trader: TraderId,
         side: Side,
         price: Price,
         remaining: &mut Quantity,
-    ) -> Vec<Trade>
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
+    ) -> Vec<Trade> {
         let mut trades = Vec::new();
 
         // 获取对手方
         let opposite_side = side.opposite();
 
-        let mut current_idx = repository.get_first_order_at_price(price, opposite_side);
+        let mut current_idx = self
+            .repository
+            .get_first_order_at_price(price, opposite_side);
         let mut first_active_idx = None;
 
         while *remaining > 0 && current_idx.is_some() {
             let idx = current_idx.unwrap();
 
-            if let Some(entry) = repository.get_entry_mut(idx) {
+            if let Some(entry) = self.repository.get_entry_mut(idx) {
                 if entry.is_active() {
                     // 跟踪第一个活跃订单
                     if first_active_idx.is_none() {
@@ -155,7 +281,7 @@ impl MatchingService {
                     if entry.quantity == 0 {
                         let order_id = entry.order_id;
                         // 通过 cancel_order 移除索引
-                        repository.cancel_order(order_id);
+                        self.repository.cancel_order(order_id);
 
                         // 如果这是第一个活跃订单，重置标记
                         if first_active_idx == Some(idx) {
@@ -165,11 +291,11 @@ impl MatchingService {
                 }
 
                 // 获取下一个订单索引
-                current_idx = repository.get_next_order(idx);
+                current_idx = self.repository.get_next_order(idx);
 
                 // 更新 first_active_idx
                 if first_active_idx.is_none() && current_idx.is_some() {
-                    if let Some(next_entry) = repository.get_entry(current_idx.unwrap()) {
+                    if let Some(next_entry) = self.repository.get_entry(current_idx.unwrap()) {
                         if next_entry.is_active() {
                             first_active_idx = current_idx;
                         }
@@ -183,28 +309,26 @@ impl MatchingService {
         // 更新价格点以反映第一个活跃订单
         if first_active_idx.is_none() && current_idx.is_none() {
             // 所有订单都已消费，清空价格级别
-            repository.update_price_point(price, opposite_side, None, None);
+            self.repository
+                .update_price_point(price, opposite_side, None, None);
         } else if first_active_idx.is_some() {
             // 更新为第一个活跃订单
-            repository.update_price_point(price, opposite_side, first_active_idx, None);
+            self.repository
+                .update_price_point(price, opposite_side, first_active_idx, None);
         }
 
         trades
     }
 
     /// 查找下一个非空的价格级别（用于买单匹配卖单）
-    fn find_next_non_empty_price<R>(
+    fn find_next_non_empty_price(
         &self,
-        repository: &R,
         start_price: Price,
         max_price: Price,
         side: Side,
-    ) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
+    ) -> Option<Price> {
         for price in start_price..=max_price {
-            if !repository.is_price_empty(price, side) {
+            if !self.repository.is_price_empty(price, side) {
                 return Some(price);
             }
         }
@@ -212,20 +336,16 @@ impl MatchingService {
     }
 
     /// 查找上一个非空的价格级别（用于卖单匹配买单）
-    fn find_prev_non_empty_price<R>(
+    fn find_prev_non_empty_price(
         &self,
-        repository: &R,
         start_price: Price,
         min_price: Price,
         side: Side,
-    ) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
+    ) -> Option<Price> {
         let start = start_price.min(100_000); // 限制搜索范围
 
         for price in (min_price..=start).rev() {
-            if !repository.is_price_empty(price, side) {
+            if !self.repository.is_price_empty(price, side) {
                 return Some(price);
             }
         }
@@ -233,46 +353,56 @@ impl MatchingService {
     }
 }
 
-impl Default for MatchingService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl OrderCommandHandler for MatchingService {
-    fn handle<R>(
-        &self,
-        repository: &mut R,
-        command: Command,
-    ) -> CommandResult
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
+impl<R> OrderCommandHandler for MatchingService<R>
+where
+    R: OrderRepository + RepositoryAccessor + Send + Sync,
+{
+    fn handle(&mut self, command: Command) -> CommandResult {
         match command {
-            // ========== 已实现的基础订单类型 ==========
-            Command::LimitOrder { trader, side, price, quantity } => {
-                let (trades, _remaining) = self.handle_limit_order(
-                    repository, trader, side, price, quantity
-                );
-                CommandResult::LimitOrder {
-                    order_id: repository.allocate_order_id(),
-                    trades,
-                }
+            // ========== 基础订单类型 ==========
+            Command::LimitOrder {
+                trader,
+                side,
+                price,
+                quantity,
+            } => {
+                // 先匹配，然后将剩余部分加入订单簿
+                let (trades, remaining) = self.match_limit_order(trader, side, price, quantity);
+
+                let order_id = if remaining > 0 {
+                    // 有剩余数量，加入订单簿
+                    let order_id = self.repository.allocate_order_id();
+                    let entry = OrderEntry::new(order_id, trader, remaining);
+                    let _ = self.repository.add_order(order_id, entry, side, price);
+                    order_id
+                } else {
+                    0 // 完全成交，不产生订单ID
+                };
+
+                CommandResult::LimitOrder { order_id, trades }
             }
 
-            Command::MarketOrder { trader, side, quantity } => {
-                let (trades, _remaining) = self.handle_market_order(
-                    repository, trader, side, quantity
-                );
+            Command::MarketOrder {
+                trader,
+                side,
+                quantity,
+            } => {
+                let (trades, _remaining) = self.match_market_order(trader, side, quantity);
                 CommandResult::MarketOrder { trades }
             }
 
-            Command::IcebergOrder { trader, side, price, total_quantity, display_quantity } => {
-                let (trades, remaining_total, current_display) = self.handle_iceberg_order(
-                    repository, trader, side, price, total_quantity, display_quantity
-                );
+            Command::IcebergOrder {
+                trader,
+                side,
+                price,
+                total_quantity,
+                display_quantity,
+            } => {
+                let (order_id, trades, remaining_total, current_display) =
+                    self.match_iceberg_order(trader, side, price, total_quantity, display_quantity);
+
                 CommandResult::IcebergOrder {
-                    order_id: repository.allocate_order_id(),
+                    order_id,
                     trades,
                     remaining_total,
                     current_display,
@@ -280,356 +410,20 @@ impl OrderCommandHandler for MatchingService {
             }
 
             Command::CancelOrder { order_id } => {
-                let success = repository.cancel_order(order_id);
+                let success = self.cancel_order(order_id);
                 CommandResult::CancelOrder { success }
             }
 
-            // ========== 待实现的时间条件订单 ==========
-            Command::FillOrKillOrder { .. } => {
-                todo!("FOK订单待实现")
-            }
-
-            Command::ImmediateOrCancelOrder { .. } => {
-                todo!("IOC订单待实现")
-            }
-
-            Command::AllOrNoneOrder { .. } => {
-                todo!("AON订单待实现")
-            }
-
-            Command::GoodTillDateOrder { .. } => {
-                todo!("GTD订单待实现")
-            }
-
-            // ========== 待实现的止损订单 ==========
-            Command::StopMarketOrder { .. } => {
-                todo!("止损市价单待实现")
-            }
-
-            Command::StopLimitOrder { .. } => {
-                todo!("止损限价单待实现")
-            }
-
-            Command::TrailingStopOrder { .. } => {
-                todo!("追踪止损单待实现")
-            }
-
-            Command::TrailingStopPercentOrder { .. } => {
-                todo!("追踪止损百分比单待实现")
-            }
-
-            // ========== 待实现的订单修改命令 ==========
-            Command::ModifyOrder { .. } => {
-                todo!("修改订单待实现")
-            }
-
-            Command::CancelReplaceOrder { .. } => {
-                todo!("取消并替换订单待实现")
-            }
-
-            Command::CancelAllOrders { .. } => {
-                todo!("批量取消订单待实现")
-            }
-
-            // ========== 待实现的高级订单类型 ==========
-            Command::HiddenOrder { .. } => {
-                todo!("隐藏订单待实现")
-            }
-
-            Command::PeggedOrder { .. } => {
-                todo!("钉住订单待实现")
-            }
-
-            Command::MinimumQuantityOrder { .. } => {
-                todo!("最小成交量订单待实现")
-            }
-
-            Command::TwoWayQuote { .. } => {
-                todo!("双向报价待实现")
-            }
-
-            // ========== 待实现的算法交易订单 ==========
-            Command::TwapOrder { .. } => {
-                todo!("TWAP订单待实现")
-            }
-
-            Command::VwapOrder { .. } => {
-                todo!("VWAP订单待实现")
-            }
-
-            Command::PovOrder { .. } => {
-                todo!("POV订单待实现")
-            }
-
-            Command::ImplementationShortfallOrder { .. } => {
-                todo!("实施缺口订单待实现")
-            }
-
-            // ========== 待实现的条件订单 ==========
-            Command::OcoOrder { .. } => {
-                todo!("OCO订单待实现")
-            }
-
-            Command::BracketOrder { .. } => {
-                todo!("括号订单待实现")
-            }
-
-            // ========== 待实现的交易所特定订单 ==========
-            Command::AuctionOrder { .. } => {
-                todo!("拍卖订单待实现")
-            }
-
-            Command::MarketMakerQuote { .. } => {
-                todo!("做市商双边报价待实现")
+            // ========== 未实现的订单类型 ==========
+            _ => {
+                // 对于未实现的命令类型，返回空结果或错误
+                // 这里简单返回一个取消失败的结果作为占位符
+                CommandResult::CancelOrder { success: false }
             }
         }
-    }
-
-    fn handle_limit_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
-        // 使用已有的match_limit_order方法
-        self.match_limit_order(repository, trader, side, price, quantity)
-    }
-
-    fn handle_market_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
-        // 市价单使用极端价格来确保成交
-        // 买单使用最大价格，卖单使用最小价格
-        let price = match side {
-            Side::Buy => u32::MAX,  // 买单愿意支付任何价格
-            Side::Sell => 0,        // 卖单愿意接受任何价格
-        };
-
-        self.match_limit_order(repository, trader, side, price, quantity)
-    }
-
-    fn handle_iceberg_order<R>(
-        &self,
-        repository: &mut R,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        total_quantity: Quantity,
-        display_quantity: Quantity,
-    ) -> (Vec<Trade>, Quantity, Quantity)
-    where
-        R: OrderRepository + RepositoryAccessor,
-    {
-        // 冰山单逻辑：
-        // 1. 首先尝试匹配显示数量
-        // 2. 如果显示数量全部成交，从总量中补充新的显示数量
-        // 3. 返回剩余总量和当前显示数量
-
-        let mut remaining_total = total_quantity;
-        let mut current_display = display_quantity.min(remaining_total);
-        let mut all_trades = Vec::new();
-
-        while remaining_total > 0 && current_display > 0 {
-            // 匹配当前显示数量
-            let (trades, remaining_display) = self.match_limit_order(
-                repository,
-                trader,
-                side,
-                price,
-                current_display,
-            );
-
-            all_trades.extend(trades);
-
-            // 更新剩余总量
-            let matched = current_display - remaining_display;
-            remaining_total -= matched;
-
-            if remaining_display > 0 {
-                // 显示数量未完全成交，说明没有更多对手方订单
-                current_display = remaining_display;
-                break;
-            }
-
-            // 显示数量已完全成交，补充新的显示数量
-            current_display = display_quantity.min(remaining_total);
-
-            // 如果没有新的显示数量，退出
-            if current_display == 0 {
-                break;
-            }
-        }
-
-        (all_trades, remaining_total, current_display)
     }
 
     fn handler_name(&self) -> &'static str {
         "PriceTimeMatchingService"
-    }
-}
-
-/// 市场数据查询服务
-///
-/// 提供订单簿市场数据查询功能
-pub struct MarketDataService;
-
-impl MarketDataService {
-    /// 创建新的市场数据服务
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// 查找最佳买价
-    pub fn find_best_bid<R>(&self, repository: &R) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
-        self.find_best_price(repository, Side::Buy, true)
-    }
-
-    /// 查找最佳卖价
-    pub fn find_best_ask<R>(&self, repository: &R) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
-        self.find_best_price(repository, Side::Sell, false)
-    }
-
-    /// 查找最佳价格
-    fn find_best_price<R>(&self, repository: &R, side: Side, descending: bool) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
-        let max_search = 100_000u32;
-
-        if descending {
-            // 从高到低搜索（买单）
-            for price in (0..=max_search).rev() {
-                if !repository.is_price_empty(price, side) {
-                    return Some(price);
-                }
-            }
-        } else {
-            // 从低到高搜索（卖单）
-            for price in 0..=max_search {
-                if !repository.is_price_empty(price, side) {
-                    return Some(price);
-                }
-            }
-        }
-
-        None
-    }
-
-    /// 计算买卖价差
-    pub fn calculate_spread<R>(&self, repository: &R) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
-        match (self.find_best_ask(repository), self.find_best_bid(repository)) {
-            (Some(ask), Some(bid)) if ask > bid => Some(ask - bid),
-            _ => None,
-        }
-    }
-
-    /// 计算中间价
-    pub fn calculate_mid_price<R>(&self, repository: &R) -> Option<Price>
-    where
-        R: OrderRepository,
-    {
-        match (self.find_best_ask(repository), self.find_best_bid(repository)) {
-            (Some(ask), Some(bid)) => Some((ask + bid) / 2),
-            _ => None,
-        }
-    }
-}
-
-impl Default for MarketDataService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lob::repository::InMemoryOrderRepository;
-    use crate::lob::types::{TraderId, OrderEntry};
-
-    #[test]
-    fn test_simple_match() {
-        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
-        let service = MatchingService::new();
-
-        let seller = TraderId::from_str("SELLER");
-        let buyer = TraderId::from_str("BUYER");
-
-        // 添加卖单
-        let sell_order_id = repo.allocate_order_id();
-        let sell_entry = OrderEntry::new(sell_order_id, seller, 100);
-        repo.add_order(sell_order_id, sell_entry, Side::Sell, 10000).unwrap();
-
-        // 匹配买单
-        let (trades, remaining) = service.match_limit_order(&mut repo, buyer, Side::Buy, 10000, 100);
-
-        assert_eq!(trades.len(), 1);
-        assert_eq!(trades[0].quantity, 100);
-        assert_eq!(remaining, 0);
-    }
-
-    #[test]
-    fn test_partial_fill() {
-        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
-        let service = MatchingService::new();
-
-        let seller = TraderId::from_str("SELLER");
-        let buyer = TraderId::from_str("BUYER");
-
-        // 添加大卖单
-        let sell_order_id = repo.allocate_order_id();
-        let sell_entry = OrderEntry::new(sell_order_id, seller, 200);
-        repo.add_order(sell_order_id, sell_entry, Side::Sell, 10000).unwrap();
-
-        // 匹配小买单
-        let (trades, remaining) = service.match_limit_order(&mut repo, buyer, Side::Buy, 10000, 50);
-
-        assert_eq!(trades.len(), 1);
-        assert_eq!(trades[0].quantity, 50);
-        assert_eq!(remaining, 0);
-    }
-
-    #[test]
-    fn test_market_data_service() {
-        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
-        let md_service = MarketDataService::new();
-
-        let trader = TraderId::from_str("TRADER");
-
-        // 添加订单
-        let buy_id = repo.allocate_order_id();
-        let buy_entry = OrderEntry::new(buy_id, trader, 100);
-        repo.add_order(buy_id, buy_entry, Side::Buy, 9900).unwrap();
-
-        let sell_id = repo.allocate_order_id();
-        let sell_entry = OrderEntry::new(sell_id, trader, 100);
-        repo.add_order(sell_id, sell_entry, Side::Sell, 10100).unwrap();
-
-        // 验证市场数据
-        assert_eq!(md_service.find_best_bid(&repo), Some(9900));
-        assert_eq!(md_service.find_best_ask(&repo), Some(10100));
-        assert_eq!(md_service.calculate_spread(&repo), Some(200));
-        assert_eq!(md_service.calculate_mid_price(&repo), Some(10000));
     }
 }
