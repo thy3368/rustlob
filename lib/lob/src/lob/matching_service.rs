@@ -367,6 +367,7 @@ where
                 quantity,
             } => {
                 // 先匹配，然后将剩余部分加入订单簿
+                // 更改订单，新增订单，新增交易，1) 计算变更的entityEvent 2)play entityEvent在仓储中
                 let (trades, remaining) = self.match_limit_order(trader, side, price, quantity);
 
                 let order_id = if remaining > 0 {
