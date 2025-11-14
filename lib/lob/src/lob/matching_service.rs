@@ -3,8 +3,11 @@
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
 
+use super::handler::{OrderCommandHandler, Command, CommandResult};
 use super::repository::{OrderRepository, RepositoryAccessor};
 use super::types::{Price, Quantity, Side, Trade, TraderId};
+
+
 
 /// 匹配服务
 ///
@@ -233,6 +236,247 @@ impl MatchingService {
 impl Default for MatchingService {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl OrderCommandHandler for MatchingService {
+    fn handle<R>(
+        &self,
+        repository: &mut R,
+        command: Command,
+    ) -> CommandResult
+    where
+        R: OrderRepository + RepositoryAccessor,
+    {
+        match command {
+            // ========== 已实现的基础订单类型 ==========
+            Command::LimitOrder { trader, side, price, quantity } => {
+                let (trades, _remaining) = self.handle_limit_order(
+                    repository, trader, side, price, quantity
+                );
+                CommandResult::LimitOrder {
+                    order_id: repository.allocate_order_id(),
+                    trades,
+                }
+            }
+
+            Command::MarketOrder { trader, side, quantity } => {
+                let (trades, _remaining) = self.handle_market_order(
+                    repository, trader, side, quantity
+                );
+                CommandResult::MarketOrder { trades }
+            }
+
+            Command::IcebergOrder { trader, side, price, total_quantity, display_quantity } => {
+                let (trades, remaining_total, current_display) = self.handle_iceberg_order(
+                    repository, trader, side, price, total_quantity, display_quantity
+                );
+                CommandResult::IcebergOrder {
+                    order_id: repository.allocate_order_id(),
+                    trades,
+                    remaining_total,
+                    current_display,
+                }
+            }
+
+            Command::CancelOrder { order_id } => {
+                let success = repository.cancel_order(order_id);
+                CommandResult::CancelOrder { success }
+            }
+
+            // ========== 待实现的时间条件订单 ==========
+            Command::FillOrKillOrder { .. } => {
+                todo!("FOK订单待实现")
+            }
+
+            Command::ImmediateOrCancelOrder { .. } => {
+                todo!("IOC订单待实现")
+            }
+
+            Command::AllOrNoneOrder { .. } => {
+                todo!("AON订单待实现")
+            }
+
+            Command::GoodTillDateOrder { .. } => {
+                todo!("GTD订单待实现")
+            }
+
+            // ========== 待实现的止损订单 ==========
+            Command::StopMarketOrder { .. } => {
+                todo!("止损市价单待实现")
+            }
+
+            Command::StopLimitOrder { .. } => {
+                todo!("止损限价单待实现")
+            }
+
+            Command::TrailingStopOrder { .. } => {
+                todo!("追踪止损单待实现")
+            }
+
+            Command::TrailingStopPercentOrder { .. } => {
+                todo!("追踪止损百分比单待实现")
+            }
+
+            // ========== 待实现的订单修改命令 ==========
+            Command::ModifyOrder { .. } => {
+                todo!("修改订单待实现")
+            }
+
+            Command::CancelReplaceOrder { .. } => {
+                todo!("取消并替换订单待实现")
+            }
+
+            Command::CancelAllOrders { .. } => {
+                todo!("批量取消订单待实现")
+            }
+
+            // ========== 待实现的高级订单类型 ==========
+            Command::HiddenOrder { .. } => {
+                todo!("隐藏订单待实现")
+            }
+
+            Command::PeggedOrder { .. } => {
+                todo!("钉住订单待实现")
+            }
+
+            Command::MinimumQuantityOrder { .. } => {
+                todo!("最小成交量订单待实现")
+            }
+
+            Command::TwoWayQuote { .. } => {
+                todo!("双向报价待实现")
+            }
+
+            // ========== 待实现的算法交易订单 ==========
+            Command::TwapOrder { .. } => {
+                todo!("TWAP订单待实现")
+            }
+
+            Command::VwapOrder { .. } => {
+                todo!("VWAP订单待实现")
+            }
+
+            Command::PovOrder { .. } => {
+                todo!("POV订单待实现")
+            }
+
+            Command::ImplementationShortfallOrder { .. } => {
+                todo!("实施缺口订单待实现")
+            }
+
+            // ========== 待实现的条件订单 ==========
+            Command::OcoOrder { .. } => {
+                todo!("OCO订单待实现")
+            }
+
+            Command::BracketOrder { .. } => {
+                todo!("括号订单待实现")
+            }
+
+            // ========== 待实现的交易所特定订单 ==========
+            Command::AuctionOrder { .. } => {
+                todo!("拍卖订单待实现")
+            }
+
+            Command::MarketMakerQuote { .. } => {
+                todo!("做市商双边报价待实现")
+            }
+        }
+    }
+
+    fn handle_limit_order<R>(
+        &self,
+        repository: &mut R,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+    ) -> (Vec<Trade>, Quantity)
+    where
+        R: OrderRepository + RepositoryAccessor,
+    {
+        // 使用已有的match_limit_order方法
+        self.match_limit_order(repository, trader, side, price, quantity)
+    }
+
+    fn handle_market_order<R>(
+        &self,
+        repository: &mut R,
+        trader: TraderId,
+        side: Side,
+        quantity: Quantity,
+    ) -> (Vec<Trade>, Quantity)
+    where
+        R: OrderRepository + RepositoryAccessor,
+    {
+        // 市价单使用极端价格来确保成交
+        // 买单使用最大价格，卖单使用最小价格
+        let price = match side {
+            Side::Buy => u32::MAX,  // 买单愿意支付任何价格
+            Side::Sell => 0,        // 卖单愿意接受任何价格
+        };
+
+        self.match_limit_order(repository, trader, side, price, quantity)
+    }
+
+    fn handle_iceberg_order<R>(
+        &self,
+        repository: &mut R,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        total_quantity: Quantity,
+        display_quantity: Quantity,
+    ) -> (Vec<Trade>, Quantity, Quantity)
+    where
+        R: OrderRepository + RepositoryAccessor,
+    {
+        // 冰山单逻辑：
+        // 1. 首先尝试匹配显示数量
+        // 2. 如果显示数量全部成交，从总量中补充新的显示数量
+        // 3. 返回剩余总量和当前显示数量
+
+        let mut remaining_total = total_quantity;
+        let mut current_display = display_quantity.min(remaining_total);
+        let mut all_trades = Vec::new();
+
+        while remaining_total > 0 && current_display > 0 {
+            // 匹配当前显示数量
+            let (trades, remaining_display) = self.match_limit_order(
+                repository,
+                trader,
+                side,
+                price,
+                current_display,
+            );
+
+            all_trades.extend(trades);
+
+            // 更新剩余总量
+            let matched = current_display - remaining_display;
+            remaining_total -= matched;
+
+            if remaining_display > 0 {
+                // 显示数量未完全成交，说明没有更多对手方订单
+                current_display = remaining_display;
+                break;
+            }
+
+            // 显示数量已完全成交，补充新的显示数量
+            current_display = display_quantity.min(remaining_total);
+
+            // 如果没有新的显示数量，退出
+            if current_display == 0 {
+                break;
+            }
+        }
+
+        (all_trades, remaining_total, current_display)
+    }
+
+    fn handler_name(&self) -> &'static str {
+        "PriceTimeMatchingService"
     }
 }
 

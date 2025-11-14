@@ -3,6 +3,7 @@
 /// 提供统一的订单簿操作接口，内部使用Repository和MatchingService
 /// 遵循Clean Architecture的Facade模式，简化客户端使用
 
+use super::handler::OrderCommandHandler;
 use super::matching_service::{MatchingService, MarketDataService};
 use super::repository::{InMemoryOrderRepository, OrderRepository};
 use super::types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
@@ -110,6 +111,69 @@ impl OrderBook {
         self.trades.extend(&trades);
 
         (order_id, trades)
+    }
+
+    /// 提交市价订单
+    ///
+    /// 市价单以当前市场最优价格立即成交，无价格限制
+    /// 返回 (成交列表)
+    pub fn market_order(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        quantity: Quantity,
+    ) -> Vec<Trade> {
+        // 执行市价单匹配
+        let (trades, _remaining) = self.matching_service.handle_market_order(
+            &mut self.repository,
+            trader,
+            side,
+            quantity,
+        );
+
+        // 存储交易记录
+        self.trades.extend(&trades);
+
+        trades
+    }
+
+    /// 提交冰山订单
+    ///
+    /// 冰山单只显示部分数量，隐藏总量以避免影响市场
+    /// 返回 (订单ID, 成交列表, 剩余总量, 当前显示量)
+    pub fn iceberg_order(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        total_quantity: Quantity,
+        display_quantity: Quantity,
+    ) -> (OrderId, Vec<Trade>, Quantity, Quantity) {
+        // 分配订单ID
+        let order_id = self.repository.allocate_order_id();
+
+        // 执行冰山单匹配
+        let (trades, remaining_total, current_display) = self.matching_service.handle_iceberg_order(
+            &mut self.repository,
+            trader,
+            side,
+            price,
+            total_quantity,
+            display_quantity,
+        );
+
+        // 如果有剩余显示数量，添加到订单簿
+        if current_display > 0 {
+            let entry = OrderEntry::new(order_id, trader, current_display);
+            if let Err(e) = self.repository.add_order(order_id, entry, side, price) {
+                eprintln!("添加冰山订单失败: {}", e);
+            }
+        }
+
+        // 存储交易记录
+        self.trades.extend(&trades);
+
+        (order_id, trades, remaining_total, current_display)
     }
 
     /// 取消订单
@@ -243,5 +307,104 @@ mod tests {
         assert_eq!(book.best_ask(), Some(10100));
         assert_eq!(book.spread(), Some(200));
         assert_eq!(book.mid_price(), Some(10000));
+    }
+
+    #[test]
+    fn test_market_order_buy() {
+        let mut book = OrderBook::new();
+        let buyer = TraderId::from_str("BUYER");
+        let seller = TraderId::from_str("SELLER");
+
+        // 添加多层卖单
+        book.limit_order(seller, Side::Sell, 10000, 50);
+        book.limit_order(seller, Side::Sell, 10100, 50);
+        book.limit_order(seller, Side::Sell, 10200, 50);
+
+        // 市价买单应该从最低价开始成交
+        let trades = book.market_order(buyer, Side::Buy, 100);
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].price, 10000);
+        assert_eq!(trades[0].quantity, 50);
+        assert_eq!(trades[1].price, 10100);
+        assert_eq!(trades[1].quantity, 50);
+    }
+
+    #[test]
+    fn test_market_order_sell() {
+        let mut book = OrderBook::new();
+        let buyer = TraderId::from_str("BUYER");
+        let seller = TraderId::from_str("SELLER");
+
+        // 添加多层买单
+        book.limit_order(buyer, Side::Buy, 10200, 50);
+        book.limit_order(buyer, Side::Buy, 10100, 50);
+        book.limit_order(buyer, Side::Buy, 10000, 50);
+
+        // 市价卖单应该从最高价开始成交
+        let trades = book.market_order(seller, Side::Sell, 100);
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].price, 10200);
+        assert_eq!(trades[0].quantity, 50);
+        assert_eq!(trades[1].price, 10100);
+        assert_eq!(trades[1].quantity, 50);
+    }
+
+    #[test]
+    fn test_iceberg_order_partial_display() {
+        let mut book = OrderBook::new();
+        let buyer = TraderId::from_str("BUYER");
+        let seller = TraderId::from_str("SELLER");
+
+        // 添加对手方订单
+        book.limit_order(buyer, Side::Buy, 10000, 50);
+
+        // 冰山卖单：总量1000，显示量100
+        let (_order_id, trades, remaining_total, current_display) =
+            book.iceberg_order(seller, Side::Sell, 10000, 1000, 100);
+
+        // 应该成交50，剩余总量950，当前显示量50
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].quantity, 50);
+        assert_eq!(remaining_total, 950);
+        assert_eq!(current_display, 50);
+    }
+
+    #[test]
+    fn test_iceberg_order_full_display() {
+        let mut book = OrderBook::new();
+        let buyer = TraderId::from_str("BUYER");
+        let seller = TraderId::from_str("SELLER");
+
+        // 添加对手方订单
+        book.limit_order(buyer, Side::Buy, 10000, 150);
+
+        // 冰山卖单：总量1000，显示量100
+        let (_order_id, trades, remaining_total, current_display) =
+            book.iceberg_order(seller, Side::Sell, 10000, 1000, 100);
+
+        // 第一批100全部成交，补充新的100，再成交50
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].quantity, 100);
+        assert_eq!(trades[1].quantity, 50);
+        assert_eq!(remaining_total, 850);
+        assert_eq!(current_display, 50);
+    }
+
+    #[test]
+    fn test_iceberg_order_no_match() {
+        let mut book = OrderBook::new();
+        let seller = TraderId::from_str("SELLER");
+
+        // 没有对手方订单
+        let (_order_id, trades, remaining_total, current_display) =
+            book.iceberg_order(seller, Side::Sell, 10000, 1000, 100);
+
+        // 无成交，显示量100进入订单簿
+        assert_eq!(trades.len(), 0);
+        assert_eq!(remaining_total, 1000);
+        assert_eq!(current_display, 100);
+        assert_eq!(book.best_ask(), Some(10000));
     }
 }

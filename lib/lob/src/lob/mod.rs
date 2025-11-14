@@ -42,6 +42,7 @@
 
 pub mod arena;             // 内存池分配器
 pub mod engine;            // 订单簿Facade
+pub mod handler;           // 订单命令处理器trait
 pub mod matching_service;  // 匹配服务
 pub mod repository;        // 仓储接口和实现
 pub mod types;             // 数据类型定义
@@ -51,5 +52,13 @@ pub use engine::{OrderBook, OrderBookSnapshot};
 pub use types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
 
 // 导出服务和仓储（供高级用户使用）
+pub use handler::{
+    OrderCommandHandler,
+    Command,
+    CommandResult,
+    PegType,
+    AuctionType,
+    UrgencyLevel,
+};
 pub use matching_service::{MatchingService, MarketDataService};
 pub use repository::{OrderRepository, InMemoryOrderRepository, RepositoryError};
