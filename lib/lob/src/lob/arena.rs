@@ -104,7 +104,7 @@ mod tests {
 
         assert_eq!(idx, 0);
         assert_eq!(arena.len(), 1);
-        assert_eq!(arena.get(idx).unwrap().quantity, 100);
+        assert_eq!(arena.get(idx).unwrap().unfilled_quantity, 100);
     }
 
     #[test]

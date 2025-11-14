@@ -290,7 +290,7 @@ mod tests {
         // 查找订单
         let found = repo.find_order(order_id);
         assert!(found.is_some());
-        assert_eq!(found.unwrap().quantity, 100);
+        assert_eq!(found.unwrap().unfilled_quantity, 100);
     }
 
     #[test]

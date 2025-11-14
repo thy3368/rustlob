@@ -2,8 +2,8 @@
 ///
 /// 本模块提供高性能订单簿基础类型，
 /// 针对低时延交易系统进行优化。
-
 use std::fmt;
+
 
 /// 交易员标识符（8字节固定长度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,8 +46,8 @@ impl fmt::Display for TraderId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Side {
-    Buy = b'B',   // 买入
-    Sell = b'S',  // 卖出
+    Buy = b'B',  // 买入
+    Sell = b'S', // 卖出
 }
 
 impl Side {
@@ -82,10 +82,10 @@ pub type Quantity = u32;
 /// 交易执行记录
 #[derive(Debug, Clone, Copy)]
 pub struct Trade {
-    pub buyer: TraderId,      // 买方
-    pub seller: TraderId,     // 卖方
-    pub price: Price,         // 成交价格
-    pub quantity: Quantity,   // 成交数量
+    pub buyer: TraderId,    // 买方
+    pub seller: TraderId,   // 卖方
+    pub price: Price,       // 成交价格
+    pub quantity: Quantity, // 成交数量
 }
 
 impl Trade {
@@ -117,7 +117,8 @@ impl fmt::Display for Trade {
 pub struct OrderEntry {
     pub order_id: OrderId,           // 订单ID
     pub trader: TraderId,            // 交易员ID
-    pub quantity: Quantity,          // 数量
+    pub total_quantity: Quantity,    // 总数量
+    pub unfilled_quantity: Quantity, // 未成交数量
     pub next_idx: Option<usize>,     // 链表中下一个订单的索引
 }
 
@@ -128,7 +129,8 @@ impl OrderEntry {
         Self {
             order_id,
             trader,
-            quantity,
+            total_quantity: quantity,
+            unfilled_quantity: quantity,
             next_idx: None,
         }
     }
@@ -136,21 +138,21 @@ impl OrderEntry {
     /// 检查订单是否仍然有效（数量>0）
     #[inline]
     pub fn is_active(&self) -> bool {
-        self.quantity > 0
+        self.unfilled_quantity > 0
     }
 
     /// 取消订单（通过将数量置零，单次内存写入，速度快）
     #[inline]
     pub fn cancel(&mut self) {
-        self.quantity = 0;
+        self.unfilled_quantity = 0;
     }
 }
 
 /// 订单簿中的价格点（链表头）
 #[derive(Debug, Clone, Copy)]
 pub struct PricePoint {
-    pub first_order_idx: Option<usize>,  // 该价格的第一个订单索引
-    pub last_order_idx: Option<usize>,   // 该价格的最后一个订单索引
+    pub first_order_idx: Option<usize>, // 该价格的第一个订单索引
+    pub last_order_idx: Option<usize>,  // 该价格的最后一个订单索引
 }
 
 impl Default for PricePoint {

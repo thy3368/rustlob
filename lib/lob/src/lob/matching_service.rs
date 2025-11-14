@@ -264,7 +264,7 @@ where
                     }
 
                     // 计算成交数量
-                    let fill_qty = (*remaining).min(entry.quantity);
+                    let fill_qty = (*remaining).min(entry.unfilled_quantity);
 
                     // 创建交易记录
                     let trade = match side {
@@ -275,10 +275,10 @@ where
 
                     // 更新数量
                     *remaining -= fill_qty;
-                    entry.quantity -= fill_qty;
+                    entry.unfilled_quantity -= fill_qty;
 
                     // 如果订单完全成交，标记为非活跃
-                    if entry.quantity == 0 {
+                    if entry.unfilled_quantity == 0 {
                         let order_id = entry.order_id;
                         // 通过 cancel_order 移除索引
                         self.repository.cancel_order(order_id);

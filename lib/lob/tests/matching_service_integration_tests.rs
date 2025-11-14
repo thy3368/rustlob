@@ -46,9 +46,10 @@ fn test_simple_buy_match() {
     let buyer = TraderId::from_str("BUYER");
 
     // 添加卖单
+    //todo 将 add_order 替换成
     add_order(&mut service, seller, Side::Sell, 10000, 100);
 
-    // 匹配买单
+    // 匹配买单 match_limit_order
     let (trades, remaining) = service.match_limit_order(buyer, Side::Buy, 10000, 100);
 
     assert_eq!(trades.len(), 1);
@@ -382,7 +383,7 @@ fn test_partial_match_order_remains() {
 
     // 验证剩余订单仍在订单簿中
     let remaining_order = service.repository().find_order(order_id).unwrap();
-    assert_eq!(remaining_order.quantity, 150); // 200 - 50 = 150
+    assert_eq!(remaining_order.unfilled_quantity, 150); // 200 - 50 = 150
 }
 
 // ==================== 大量订单测试 ====================
@@ -503,7 +504,7 @@ fn test_repository_access() {
     assert!(!service.repository().is_price_empty(10000, Side::Sell));
     let found_order = service.repository().find_order(order_id);
     assert!(found_order.is_some());
-    assert_eq!(found_order.unwrap().quantity, 100);
+    assert_eq!(found_order.unwrap().unfilled_quantity, 100);
 }
 
 #[test]

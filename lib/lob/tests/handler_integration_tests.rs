@@ -1,11 +1,11 @@
 /// OrderCommandHandler 集成测试
 ///
 /// 测试通过 handle 方法执行各种订单命令
-
 use lob::lob::handler::{Command, CommandResult, OrderCommandHandler};
 use lob::lob::matching_service::MatchingService;
 use lob::lob::repository::InMemoryOrderRepository;
 use lob::lob::types::{Side, TraderId};
+
 
 // ========== 辅助函数 ==========
 
@@ -87,6 +87,8 @@ fn test_limit_order_partial_match() {
         }
         _ => panic!("期望 LimitOrder 结果"),
     }
+
+    //todo lob中还有一个买单需要验证
 }
 
 #[test]
