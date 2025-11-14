@@ -13,6 +13,14 @@
 //! - 缓存行对齐的数据结构
 //! - 快速订单取消（单次内存写入）
 //!
+//! ## Clean Architecture 分层
+//!
+//! - **types**: 领域实体和值对象
+//! - **repository**: 仓储接口和实现（数据访问层）
+//! - **matching_service**: 匹配服务（领域服务层）
+//! - **engine**: 订单簿Facade（应用层）
+//! - **arena**: 内存池分配器（基础设施层）
+//!
 //! # 示例
 //!
 //! ```
@@ -32,10 +40,16 @@
 //! assert_eq!(trades[0].quantity, 50);
 //! ```
 
-pub mod arena;   // 内存池分配器
-pub mod engine;  // 订单匹配引擎
-pub mod types;   // 数据类型定义
+pub mod arena;             // 内存池分配器
+pub mod engine;            // 订单簿Facade
+pub mod matching_service;  // 匹配服务
+pub mod repository;        // 仓储接口和实现
+pub mod types;             // 数据类型定义
 
 // 重新导出常用类型
 pub use engine::{OrderBook, OrderBookSnapshot};
 pub use types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
+
+// 导出服务和仓储（供高级用户使用）
+pub use matching_service::{MatchingService, MarketDataService};
+pub use repository::{OrderRepository, InMemoryOrderRepository, RepositoryError};
