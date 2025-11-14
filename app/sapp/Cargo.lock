@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "lob"
+version = "0.1.0"
+
+[[package]]
 name = "sapp"
 version = "0.1.0"
+dependencies = [
+ "lob",
+]
