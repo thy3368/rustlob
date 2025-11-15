@@ -30,12 +30,17 @@ where
 /// - `side`: 新订单的方向
 ///
 /// # 返回
-/// (订单更新事件列表, 新订单事件Option, 交易事件列表, 新订单ID)
+/// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
 fn create_trades(
     matched_orders: Option<Vec<&mut OrderEntry>>,
     trader: TraderId,
     side: Side,
-) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, OrderId) {
+) -> (
+    Option<Vec<EntityEvent>>,
+    Option<Vec<EntityEvent>>,
+    u64,
+    OrderId,
+) {
     let mut order_events = Vec::new();
     let mut trade_events = Vec::new();
     let order_id = 1; // TODO: 应从repository分配
@@ -47,9 +52,7 @@ fn create_trades(
         // 3. 如果需要，创建新订单事件
     }
 
-    let my_order_event = None; // TODO: 如果有剩余数量，创建新订单事件
-
-    (order_events, my_order_event, trade_events, order_id)
+    (order_events, trade_events, 1000, order_id)
 }
 
 impl<R> MatchingService<R>
@@ -354,9 +357,7 @@ where
                 price,
                 quantity,
             } => {
-                // 事件溯源模式：1) 生成EntityEvent 2) replay事件到仓储
-
-                let create_event::EntityEvent = EntityEvent::new();
+                // cqrs模式：1) 生成EntityEvent 2) replay事件到仓储
 
                 let orders = self.lob_repo.match_Orders(side, price, quantity);
 
@@ -364,8 +365,13 @@ where
                     let (order_change_events, trade_create_events, order_id) =
                         create_trades(orders, trader, side, price, quantity);
 
+                    let create_event::EntityEvent = EntityEvent::new();
+
                     //事件落库
                     self.event_repo.save(create_event);
+
+                    //todo if create_event没有全成交，还要写lob
+
                     self.event_repo.save(order_change_events);
                     self.event_repo.save(trade_create_events);
 
@@ -379,6 +385,8 @@ where
                     self.entity_repo.replay2(trade_create_events);
                 } else {
                     //事件落库
+                    let create_event::EntityEvent = EntityEvent::new();
+
                     self.event_repo.save(create_event);
                     //在lob生成订单
                     self.lob_repo.replay2(create_event);
@@ -388,17 +396,6 @@ where
                 //event中 包括旧order的update，新order的create;
 
                 //1，订单生成事件；2，订单更改事件（买卖单）；3，交易生成事件
-
-                //存事件
-                self.event_repo.save(order_events);
-                self.event_repo.save(trade_events);
-
-                //更新内存订单薄，对于已成交的就在内存中删掉，唯一区别；或者直接更新内存
-                self.lob_repo.replay2(order_events);
-
-                //更新数据库订单
-                self.entity_repo.replay2(order_events);
-                self.entity_repo.replay2(trade_events);
 
                 CommandResult::LimitOrder { order_id, trades }
             }
