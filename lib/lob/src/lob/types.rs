@@ -79,6 +79,151 @@ pub type Price = u32;
 /// 数量/规模
 pub type Quantity = u32;
 
+/// 事件操作类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum EventOperation {
+    Create = 1,  // 创建
+    Update = 2,  // 更新
+    Delete = 3,  // 删除
+}
+
+/// 字段值类型（支持订单簿常用数据类型）
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldValue {
+    U32(u32),
+    U64(u64),
+    OptionUsize(Option<usize>),
+    TraderId(TraderId),
+    Side(Side),
+    OrderEntry(OrderEntry),
+}
+
+/// 字段变更记录 (field_name, old_value, new_value)
+#[derive(Debug, Clone)]
+pub struct FieldChange {
+    pub field_name: &'static str,
+    pub old_value: Option<FieldValue>,
+    pub new_value: Option<FieldValue>,
+}
+
+impl FieldChange {
+    /// 创建字段（Create操作）
+    #[inline]
+    pub fn created(field_name: &'static str, new_value: FieldValue) -> Self {
+        Self {
+            field_name,
+            old_value: None,
+            new_value: Some(new_value),
+        }
+    }
+
+    /// 更新字段（Update操作）
+    #[inline]
+    pub fn updated(field_name: &'static str, old_value: FieldValue, new_value: FieldValue) -> Self {
+        Self {
+            field_name,
+            old_value: Some(old_value),
+            new_value: Some(new_value),
+        }
+    }
+
+    /// 删除字段（Delete操作）
+    #[inline]
+    pub fn deleted(field_name: &'static str, old_value: FieldValue) -> Self {
+        Self {
+            field_name,
+            old_value: Some(old_value),
+            new_value: None,
+        }
+    }
+}
+
+/// 单条记录的变更
+#[derive(Debug, Clone)]
+pub struct RecordChange {
+    /// 记录ID（如order_id, trade_id等）
+    pub entity_id: u64,
+    /// 该记录的字段变更列表
+    pub field_changes: Vec<FieldChange>,
+}
+
+impl RecordChange {
+    #[inline]
+    pub fn new(entity_id: u64, field_changes: Vec<FieldChange>) -> Self {
+        Self {
+            entity_id,
+            field_changes,
+        }
+    }
+}
+
+/// 实体事件
+/// 遵循事件溯源模式，支持批量记录多条记录的字段变更
+#[derive(Debug, Clone)]
+pub struct EntityEvent {
+    /// 事件序列号（全局唯一）
+    pub event_id: u64,
+    /// 事务ID（同一事务中的多个事件共享此ID，确保原子性）
+    pub transaction_id: u64,
+    /// 实体名称（如 "Order", "Trade", "PricePoint"）
+    pub entity_name: &'static str,
+    /// 操作类型
+    pub operation: EventOperation,
+    /// 批量记录变更（支持多条记录）
+    pub changes: Vec<RecordChange>,
+}
+
+impl EntityEvent {
+    /// 创建新的实体事件
+    #[inline]
+    pub fn new(
+        event_id: u64,
+        transaction_id: u64,
+        entity_name: &'static str,
+        operation: EventOperation,
+        changes: Vec<RecordChange>,
+    ) -> Self {
+        Self {
+            event_id,
+            transaction_id,
+            entity_name,
+            operation,
+            changes,
+        }
+    }
+
+    /// 创建单条记录的事件（便捷方法）
+    #[inline]
+    pub fn single(
+        event_id: u64,
+        transaction_id: u64,
+        entity_name: &'static str,
+        operation: EventOperation,
+        entity_id: u64,
+        field_changes: Vec<FieldChange>,
+    ) -> Self {
+        Self {
+            event_id,
+            transaction_id,
+            entity_name,
+            operation,
+            changes: vec![RecordChange::new(entity_id, field_changes)],
+        }
+    }
+
+    /// 批量创建记录的事件（便捷方法）
+    #[inline]
+    pub fn batch(
+        event_id: u64,
+        transaction_id: u64,
+        entity_name: &'static str,
+        operation: EventOperation,
+        changes: Vec<RecordChange>,
+    ) -> Self {
+        Self::new(event_id, transaction_id, entity_name, operation, changes)
+    }
+}
 /// 交易执行记录
 #[derive(Debug, Clone, Copy)]
 pub struct Trade {
@@ -112,7 +257,7 @@ impl fmt::Display for Trade {
 }
 
 /// 订单簿条目（64字节缓存行对齐以提升性能）
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(align(64))]
 pub struct OrderEntry {
     pub order_id: OrderId,           // 订单ID

@@ -3,7 +3,7 @@
 /// 使用内存池和价格索引数组实现高性能订单存储
 use super::traits::{OrderRepository, RepositoryAccessor, RepositoryError};
 use crate::lob::arena::OrderArena;
-use crate::lob::types::{OrderEntry, OrderId, Price, PricePoint, Side};
+use crate::lob::types::{EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Side};
 use std::collections::HashMap;
 
 
@@ -99,6 +99,7 @@ impl InMemoryOrderRepository {
 }
 
 impl OrderRepository for InMemoryOrderRepository {
+    //good
     fn add_order(
         &mut self,
         order_id: OrderId,
@@ -128,7 +129,7 @@ impl OrderRepository for InMemoryOrderRepository {
             price_point.last_order_idx
         };
 
-        // 链接到现有订单
+        // 链接到现有订单 完成插入操作
         if let Some(last_idx) = last_idx {
             if let Some(last_entry) = self.arena.get_mut(last_idx) {
                 last_entry.next_idx = Some(idx);
@@ -163,6 +164,7 @@ impl OrderRepository for InMemoryOrderRepository {
         Ok(())
     }
 
+    //good
     fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry> {
         self.order_index
             .get(&order_id)
@@ -180,6 +182,8 @@ impl OrderRepository for InMemoryOrderRepository {
             if let Some(entry) = self.arena.get_mut(idx) {
                 entry.cancel();
                 self.order_index.remove(&order_id);
+                // 注意：不立即free，因为订单可能在链表中间
+                // 会在update_price_point时批量回收链表前面的inactive订单
                 return true;
             }
         }
@@ -202,6 +206,30 @@ impl OrderRepository for InMemoryOrderRepository {
         first_idx: Option<usize>,
         last_idx: Option<usize>,
     ) {
+        // 在更新价格点之前，先批量回收链表前面的inactive订单
+        // 这些订单通常是完全成交的订单，按FIFO顺序排在链表前面
+        if let Some(old_first_idx) = self.get_price_point(price, side).and_then(|pp| pp.first_order_idx) {
+            let mut current_idx = Some(old_first_idx);
+
+            // 遍历链表前面的inactive订单并回收
+            while let Some(idx) = current_idx {
+                if let Some(entry) = self.arena.get(idx) {
+                    if !entry.is_active() {
+                        // 记录next_idx（因为下面要free当前节点）
+                        let next = entry.next_idx;
+                        // 回收这个inactive订单的arena槽位
+                        self.arena.free(idx);
+                        current_idx = next;
+                    } else {
+                        // 遇到第一个活跃订单，停止回收
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
         if let Some(price_point) = self.get_price_point_mut(price, side) {
             price_point.first_order_idx = first_idx;
             price_point.last_order_idx = last_idx;
@@ -258,6 +286,114 @@ impl OrderRepository for InMemoryOrderRepository {
 
     fn best_ask(&self) -> Option<Price> {
         self.ask_min
+    }
+
+    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError> {
+        for event in events {
+            match (event.entity_name, event.operation) {
+                ("Order", EventOperation::Create) => {
+                    // 处理订单创建事件
+                    for change in event.changes {
+                        let order_id = change.entity_id;
+
+                        // 提取字段值
+                        let mut entry = None;
+                        let mut side = None;
+                        let mut price = None;
+
+                        for field in change.field_changes {
+                            match field.field_name {
+                                "entry" => {
+                                    if let Some(FieldValue::OrderEntry(e)) = field.new_value {
+                                        entry = Some(e);
+                                    }
+                                }
+                                "side" => {
+                                    if let Some(FieldValue::Side(s)) = field.new_value {
+                                        side = Some(s);
+                                    }
+                                }
+                                "price" => {
+                                    if let Some(FieldValue::U32(p)) = field.new_value {
+                                        price = Some(p);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        // 如果有完整信息，添加订单
+                        if let (Some(e), Some(s), Some(p)) = (entry, side, price) {
+                            let _ = self.add_order(order_id, e, s, p);
+                        }
+                    }
+                }
+                ("Order", EventOperation::Update) => {
+                    // 处理订单更新事件
+                    for change in event.changes {
+                        let order_id = change.entity_id;
+
+                        for field in change.field_changes {
+                            if field.field_name == "unfilled_quantity" {
+                                if let Some(FieldValue::U32(new_qty)) = field.new_value {
+                                    // 更新订单数量
+                                    if let Some(entry) = self.find_order_mut(order_id) {
+                                        entry.unfilled_quantity = new_qty;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                ("Order", EventOperation::Delete) => {
+                    // 处理订单删除事件
+                    for change in event.changes {
+                        let order_id = change.entity_id;
+                        // cancel_order内部已经调用了arena.free()
+                        self.cancel_order(order_id);
+                    }
+                }
+                ("PricePoint", EventOperation::Update) => {
+                    // 处理价格点更新事件
+                    for change in event.changes {
+                        let price = change.entity_id as Price;
+
+                        let mut first_idx = None;
+                        let mut last_idx = None;
+                        let mut side = None;
+
+                        for field in change.field_changes {
+                            match field.field_name {
+                                "first_idx" => {
+                                    if let Some(FieldValue::OptionUsize(idx)) = field.new_value {
+                                        first_idx = Some(idx);
+                                    }
+                                }
+                                "last_idx" => {
+                                    if let Some(FieldValue::OptionUsize(idx)) = field.new_value {
+                                        last_idx = Some(idx);
+                                    }
+                                }
+                                "side" => {
+                                    if let Some(FieldValue::Side(s)) = field.new_value {
+                                        side = Some(s);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let (Some(s), Some(f_idx), Some(l_idx)) = (side, first_idx, last_idx) {
+                            self.update_price_point(price, s, f_idx, l_idx);
+                        }
+                    }
+                }
+                _ => {
+                    // 忽略其他事件类型（如Trade）
+                }
+            }
+        }
+        Ok(())
     }
 }
 

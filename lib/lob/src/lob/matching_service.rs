@@ -4,7 +4,10 @@
 /// 遵循Clean Architecture的领域服务模式
 use super::handler::{Command, CommandResult, OrderCommandHandler};
 use super::repository::{OrderRepository, RepositoryAccessor};
-use super::types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
+use super::types::{
+    EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price, Quantity,
+    Side, Trade, TraderId,
+};
 
 
 /// 匹配服务
@@ -15,6 +18,10 @@ where
     R: OrderRepository + RepositoryAccessor,
 {
     repository: R,
+    /// 事件序列号计数器
+    event_id_counter: u64,
+    /// 事务ID计数器
+    transaction_id_counter: u64,
 }
 
 impl<R> MatchingService<R>
@@ -23,7 +30,25 @@ where
 {
     /// 创建新的匹配服务
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            event_id_counter: 1,
+            transaction_id_counter: 1,
+        }
+    }
+
+    /// 分配新的事件ID
+    fn allocate_event_id(&mut self) -> u64 {
+        let id = self.event_id_counter;
+        self.event_id_counter += 1;
+        id
+    }
+
+    /// 分配新的事务ID
+    fn allocate_transaction_id(&mut self) -> u64 {
+        let id = self.transaction_id_counter;
+        self.transaction_id_counter += 1;
+        id
     }
 
     /// 获取repository的可变引用
@@ -34,6 +59,285 @@ where
     /// 获取repository的不可变引用
     pub fn repository(&self) -> &R {
         &self.repository
+    }
+
+    /// 执行限价订单匹配（事件溯源版本）
+    ///
+    /// 生成所有状态变更的EntityEvent，包括：
+    /// - 对手方订单数量更新事件
+    /// - 交易执行事件
+    /// - 对手方订单删除事件（完全成交）
+    /// - 价格点更新事件
+    /// - 新订单添加事件（如果有剩余）
+    ///
+    /// # 返回
+    /// - `Vec<EntityEvent>`: 所有事件列表
+    /// - `Vec<Trade>`: 交易列表
+    /// - `OrderId`: 新订单ID（0表示完全成交）
+    pub fn match_limit_order_with_events(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+        transaction_id: u64,
+    ) -> (Vec<EntityEvent>, Vec<Trade>, OrderId) {
+        let mut events = Vec::new();
+        let mut trades = Vec::new();
+        let mut remaining = quantity;
+
+        // 匹配逻辑
+        match side {
+            Side::Buy => {
+                self.match_buy_order_with_events(
+                    trader,
+                    price,
+                    &mut remaining,
+                    &mut trades,
+                    &mut events,
+                    transaction_id,
+                );
+            }
+            Side::Sell => {
+                self.match_sell_order_with_events(
+                    trader,
+                    price,
+                    &mut remaining,
+                    &mut trades,
+                    &mut events,
+                    transaction_id,
+                );
+            }
+        }
+
+        // 如果有剩余数量，生成添加订单事件
+        let order_id = if remaining > 0 {
+            let order_id = self.repository.allocate_order_id();
+            let entry = OrderEntry::new(order_id, trader, remaining);
+
+            let event_id = self.allocate_event_id();
+            let add_order_event = EntityEvent::single(
+                event_id,
+                transaction_id,
+                "Order",
+                EventOperation::Create,
+                order_id,
+                vec![
+                    FieldChange::created("entry", FieldValue::OrderEntry(entry)),
+                    FieldChange::created("side", FieldValue::Side(side)),
+                    FieldChange::created("price", FieldValue::U32(price)),
+                ],
+            );
+            events.push(add_order_event);
+            order_id
+        } else {
+            0
+        };
+
+        (events, trades, order_id)
+    }
+
+    /// 匹配买单（生成事件）
+    fn match_buy_order_with_events(
+        &mut self,
+        trader: TraderId,
+        price: Price,
+        remaining: &mut Quantity,
+        trades: &mut Vec<Trade>,
+        events: &mut Vec<EntityEvent>,
+        transaction_id: u64,
+    ) {
+        // 早期退出：如果买价低于最低卖价，不可能匹配
+        if let Some(ask_min) = self.repository.best_ask() {
+            if price < ask_min {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let mut current_price = self.repository.best_ask().unwrap();
+
+        while *remaining > 0 && current_price <= price {
+            if let Some(ask_price) =
+                self.find_next_non_empty_price(current_price, price, Side::Sell)
+            {
+                self.match_at_price_with_events(
+                    trader,
+                    Side::Buy,
+                    ask_price,
+                    remaining,
+                    trades,
+                    events,
+                    transaction_id,
+                );
+                current_price = ask_price + 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// 匹配卖单（生成事件）
+    fn match_sell_order_with_events(
+        &mut self,
+        trader: TraderId,
+        price: Price,
+        remaining: &mut Quantity,
+        trades: &mut Vec<Trade>,
+        events: &mut Vec<EntityEvent>,
+        transaction_id: u64,
+    ) {
+        // 早期退出：如果卖价高于最高买价，不可能匹配
+        if let Some(bid_max) = self.repository.best_bid() {
+            if price > bid_max {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let mut current_price = self.repository.best_bid().unwrap();
+
+        while *remaining > 0 && current_price >= price {
+            if let Some(bid_price) = self.find_prev_non_empty_price(current_price, price, Side::Buy)
+            {
+                self.match_at_price_with_events(
+                    trader,
+                    Side::Sell,
+                    bid_price,
+                    remaining,
+                    trades,
+                    events,
+                    transaction_id,
+                );
+
+                if bid_price == 0 {
+                    break;
+                }
+                current_price = bid_price.saturating_sub(1);
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// 在特定价格级别匹配（生成事件）
+    fn match_at_price_with_events(
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        remaining: &mut Quantity,
+        trades: &mut Vec<Trade>,
+        events: &mut Vec<EntityEvent>,
+        transaction_id: u64,
+    ) {
+        let opposite_side = side.opposite();
+        let mut current_idx = self
+            .repository
+            .get_first_order_at_price(price, opposite_side);
+        let mut first_active_idx = None;
+
+        while *remaining > 0 && current_idx.is_some() {
+            let idx = current_idx.unwrap();
+
+            if let Some(entry) = self.repository.get_entry(idx) {
+                if entry.is_active() {
+                    if first_active_idx.is_none() {
+                        first_active_idx = Some(idx);
+                    }
+
+                    let fill_qty = (*remaining).min(entry.unfilled_quantity);
+                    let old_qty = entry.unfilled_quantity;
+                    let new_qty = old_qty - fill_qty;
+                    let order_id = entry.order_id;
+
+                    // 生成交易事件
+                    let trade = match side {
+                        Side::Buy => Trade::new(trader, entry.trader, price, fill_qty),
+                        Side::Sell => Trade::new(entry.trader, trader, price, fill_qty),
+                    };
+                    trades.push(trade);
+
+                    // 生成订单更新事件
+                    let event_id = self.allocate_event_id();
+                    let update_event = EntityEvent::single(
+                        event_id,
+                        transaction_id,
+                        "Order",
+                        EventOperation::Update,
+                        order_id,
+                        vec![FieldChange::updated(
+                            "unfilled_quantity",
+                            FieldValue::U32(old_qty),
+                            FieldValue::U32(new_qty),
+                        )],
+                    );
+                    events.push(update_event);
+
+                    *remaining -= fill_qty;
+
+                    // 如果订单完全成交，生成删除事件
+                    if new_qty == 0 {
+                        let event_id = self.allocate_event_id();
+                        let delete_event = EntityEvent::single(
+                            event_id,
+                            transaction_id,
+                            "Order",
+                            EventOperation::Delete,
+                            order_id,
+                            vec![],
+                        );
+                        events.push(delete_event);
+
+                        if first_active_idx == Some(idx) {
+                            first_active_idx = None;
+                        }
+                    }
+                }
+
+                current_idx = self.repository.get_next_order(idx);
+
+                if first_active_idx.is_none() && current_idx.is_some() {
+                    if let Some(next_entry) = self.repository.get_entry(current_idx.unwrap()) {
+                        if next_entry.is_active() {
+                            first_active_idx = current_idx;
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        // 生成价格点更新事件
+        let event_id = self.allocate_event_id();
+        let price_event = EntityEvent::single(
+            event_id,
+            transaction_id,
+            "PricePoint",
+            EventOperation::Update,
+            price as u64,
+            vec![
+                FieldChange::updated(
+                    "first_idx",
+                    FieldValue::OptionUsize(None),
+                    FieldValue::OptionUsize(first_active_idx),
+                ),
+                FieldChange::updated(
+                    "last_idx",
+                    FieldValue::OptionUsize(None),
+                    FieldValue::OptionUsize(if first_active_idx.is_none() {
+                        None
+                    } else {
+                        current_idx
+                    }),
+                ),
+                FieldChange::created("side", FieldValue::Side(opposite_side)),
+            ],
+        );
+        events.push(price_event);
     }
 
     /// 执行限价订单匹配
@@ -366,19 +670,21 @@ where
                 price,
                 quantity,
             } => {
-                // 先匹配，然后将剩余部分加入订单簿
-                // 更改订单，新增订单，新增交易，1) 计算变更的entityEvent 2)play entityEvent在仓储中
-                let (trades, remaining) = self.match_limit_order(trader, side, price, quantity);
+                // 事件溯源模式：1) 生成EntityEvent 2) replay事件到仓储
 
-                let order_id = if remaining > 0 {
-                    // 有剩余数量，加入订单簿
-                    let order_id = self.repository.allocate_order_id();
-                    let entry = OrderEntry::new(order_id, trader, remaining);
-                    let _ = self.repository.add_order(order_id, entry, side, price);
-                    order_id
-                } else {
-                    0 // 完全成交，不产生订单ID
-                };
+                let orders = self.repository.match_Order(price, quantity);
+                //event中 包括旧order的update，新order的create;
+
+                let (order_events, my_order_event, trades, order_id) =
+                    create_trade(orders, trader, side);
+                //存事件
+                self.event_repo.save(order_events);
+
+                //更新内存订单薄，对于已成交的就在内存中删掉，哈一区别
+                self.repository.replay2(order_events);
+
+                //更新数据库订单
+                self.db_repository.replay2(order_events);
 
                 CommandResult::LimitOrder { order_id, trades }
             }
@@ -388,6 +694,18 @@ where
                 side,
                 quantity,
             } => {
+                let transaction_id = self.allocate_transaction_id();
+                let (events, trades, order_id) = self.match_limit_order_with_events(
+                    trader,
+                    side,
+                    price,
+                    quantity,
+                    transaction_id,
+                );
+
+                // 应用所有事件到仓储
+                let _ = self.repository.replay(events);
+
                 let (trades, _remaining) = self.match_market_order(trader, side, quantity);
                 CommandResult::MarketOrder { trades }
             }

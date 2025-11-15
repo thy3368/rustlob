@@ -6,9 +6,12 @@
 use super::types::OrderEntry;
 
 /// 固定大小的订单条目内存池
+///
+/// 使用Free List机制实现内存回收和重用
 pub struct OrderArena {
     entries: Vec<OrderEntry>,  // 订单条目数组
-    next_free: usize,          // 下一个空闲位置
+    next_free: usize,          // 下一个空闲位置（bump pointer）
+    free_list: Vec<usize>,     // 已释放槽位的索引列表
 }
 
 impl OrderArena {
@@ -18,12 +21,22 @@ impl OrderArena {
         Self {
             entries: Vec::with_capacity(capacity),
             next_free: 0,
+            free_list: Vec::new(),
         }
     }
 
     /// 分配新的订单条目，返回其索引
+    ///
+    /// 优先从free list中重用已释放的槽位，提升内存利用率
     #[inline]
     pub fn allocate(&mut self, entry: OrderEntry) -> Option<usize> {
+        // 优先从free list中分配（重用已释放的槽位）
+        if let Some(idx) = self.free_list.pop() {
+            self.entries[idx] = entry;
+            return Some(idx);
+        }
+
+        // free list为空，使用bump pointer分配新槽位
         if self.next_free >= self.entries.capacity() {
             return None; // 内存池已满
         }
@@ -34,13 +47,27 @@ impl OrderArena {
         Some(idx)
     }
 
-    /// 通过索引获取条目的引用
+    /// 释放指定索引的订单条目，将其加入free list以供重用
+    ///
+    /// # 参数
+    /// - `idx`: 要释放的订单条目索引
+    ///
+    /// # 性能
+    /// - O(1) 时间复杂度
+    #[inline]
+    pub fn free(&mut self, idx: usize) {
+        if idx < self.entries.len() {
+            self.free_list.push(idx);
+        }
+    }
+
+    /// 通过索引获取条目的引用 good
     #[inline]
     pub fn get(&self, idx: usize) -> Option<&OrderEntry> {
         self.entries.get(idx)
     }
 
-    /// 通过索引获取条目的可变引用
+    /// 通过索引获取条目的可变引用 good
     #[inline]
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut OrderEntry> {
         self.entries.get_mut(idx)
@@ -75,6 +102,7 @@ impl OrderArena {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.next_free = 0;
+        self.free_list.clear();
     }
 
     /// 预留额外容量

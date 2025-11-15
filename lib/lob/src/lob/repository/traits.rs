@@ -1,5 +1,5 @@
 /// 仓储接口定义
-use crate::lob::types::{OrderEntry, OrderId, Price, Side};
+use crate::lob::types::{EntityEvent, OrderEntry, OrderId, Price, Side};
 
 
 /// 订单仓储接口
@@ -59,6 +59,16 @@ pub trait OrderRepository {
 
     /// 获取最佳卖价（O(1) 缓存访问）
     fn best_ask(&self) -> Option<Price>;
+
+    /// 重放事件列表，将事件应用到仓储状态
+    ///
+    /// # 参数
+    /// - `events`: 事件列表（按event_id顺序）
+    ///
+    /// # 返回
+    /// - `Ok(())`: 成功应用所有事件
+    /// - `Err(RepositoryError)`: 应用事件失败
+    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError>;
 }
 
 /// 仓储访问器trait
