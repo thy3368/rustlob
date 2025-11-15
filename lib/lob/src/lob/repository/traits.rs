@@ -1,5 +1,6 @@
 /// 仓储接口定义
 use crate::lob::types::{EntityEvent, OrderEntry, OrderId, Price, Side};
+use crate::lob::Quantity;
 
 
 /// 订单仓储接口
@@ -14,6 +15,8 @@ pub trait OrderRepository {
         side: Side,
         price: Price,
     ) -> Result<(), RepositoryError>;
+
+    fn match_Orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&mut OrderEntry>>;
 
     /// 根据订单ID查找订单
     fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry>;

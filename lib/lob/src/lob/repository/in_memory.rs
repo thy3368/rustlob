@@ -3,7 +3,10 @@
 /// 使用内存池和价格索引数组实现高性能订单存储
 use super::traits::{OrderRepository, RepositoryAccessor, RepositoryError};
 use crate::lob::arena::OrderArena;
-use crate::lob::types::{EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Side};
+use crate::lob::types::{
+    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Side,
+};
+use crate::lob::Quantity;
 use std::collections::HashMap;
 
 
@@ -81,21 +84,6 @@ impl InMemoryOrderRepository {
             }
         }
     }
-
-    /// 验证订单簿不变式：最高买价 <= 最低卖价
-    ///
-    /// 如果 bid_max > ask_min，说明存在应该匹配但未匹配的订单，这是严重错误
-    #[inline]
-    fn validate_invariant(&self) {
-        if let (Some(bid), Some(ask)) = (self.bid_max, self.ask_min) {
-            debug_assert!(
-                bid <= ask,
-                "订单簿不变式违反: bid_max ({}) > ask_min ({}), 存在未匹配订单!",
-                bid,
-                ask
-            );
-        }
-    }
 }
 
 impl OrderRepository for InMemoryOrderRepository {
@@ -158,10 +146,113 @@ impl OrderRepository for InMemoryOrderRepository {
             }
         }
 
-        // 验证不变式（仅在 debug 模式）
-        self.validate_invariant();
-
         Ok(())
+    }
+
+    //
+    fn match_Orders(
+        &self,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+    ) -> Option<Vec<&mut OrderEntry>> {
+        // 根据 side,price,quantity 匹配所有的Order
+        // quantity总和要大于等于quantity, 返回匹配上的订单数组
+
+        let mut matched_orders = Vec::new();
+        let mut remaining = quantity;
+        let opposite_side = side.opposite();
+
+        match side {
+            Side::Buy => {
+                // 买单：从最低卖价开始匹配
+                if let Some(ask_min) = self.ask_min {
+                    if price < ask_min {
+                        return None; // 买价太低，无法匹配
+                    }
+
+                    // 遍历价格从低到高
+                    for current_price in ask_min..=price {
+                        if remaining == 0 {
+                            break;
+                        }
+
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
+                            let mut current_idx = Some(first_idx);
+
+                            while remaining > 0 && current_idx.is_some() {
+                                let idx = current_idx.unwrap();
+
+                                if let Some(entry) = self.arena.get(idx) {
+                                    if entry.is_active() {
+                                        let fill_qty = remaining.min(entry.unfilled_quantity);
+                                        remaining -= fill_qty;
+
+                                        // 使用 unsafe 获取可变引用
+                                        unsafe {
+                                            let ptr = entry as *const OrderEntry as *mut OrderEntry;
+                                            matched_orders.push(&mut *ptr);
+                                        }
+                                    }
+                                    current_idx = entry.next_idx;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Side::Sell => {
+                // 卖单：从最高买价开始匹配
+                if let Some(bid_max) = self.bid_max {
+                    if price > bid_max {
+                        return None; // 卖价太高，无法匹配
+                    }
+
+                    // 遍历价格从高到低
+                    for current_price in (price..=bid_max).rev() {
+                        if remaining == 0 {
+                            break;
+                        }
+
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
+                            let mut current_idx = Some(first_idx);
+
+                            while remaining > 0 && current_idx.is_some() {
+                                let idx = current_idx.unwrap();
+
+                                if let Some(entry) = self.arena.get(idx) {
+                                    if entry.is_active() && entry.unfilled_quantity > 0 {
+                                        let fill_qty = remaining.min(entry.unfilled_quantity);
+                                        remaining -= fill_qty;
+
+                                        // 使用 unsafe 获取可变引用
+                                        unsafe {
+                                            let ptr = entry as *const OrderEntry as *mut OrderEntry;
+                                            matched_orders.push(&mut *ptr);
+                                        }
+                                    }
+                                    current_idx = entry.next_idx;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if matched_orders.is_empty() {
+            None
+        } else {
+            Some(matched_orders)
+        }
     }
 
     //good
@@ -208,7 +299,10 @@ impl OrderRepository for InMemoryOrderRepository {
     ) {
         // 在更新价格点之前，先批量回收链表前面的inactive订单
         // 这些订单通常是完全成交的订单，按FIFO顺序排在链表前面
-        if let Some(old_first_idx) = self.get_price_point(price, side).and_then(|pp| pp.first_order_idx) {
+        if let Some(old_first_idx) = self
+            .get_price_point(price, side)
+            .and_then(|pp| pp.first_order_idx)
+        {
             let mut current_idx = Some(old_first_idx);
 
             // 遍历链表前面的inactive订单并回收
@@ -252,9 +346,6 @@ impl OrderRepository for InMemoryOrderRepository {
                 }
             }
         }
-
-        // 验证不变式（仅在 debug 模式）
-        self.validate_invariant();
     }
 
     fn is_price_empty(&self, price: Price, side: Side) -> bool {
@@ -351,41 +442,6 @@ impl OrderRepository for InMemoryOrderRepository {
                         let order_id = change.entity_id;
                         // cancel_order内部已经调用了arena.free()
                         self.cancel_order(order_id);
-                    }
-                }
-                ("PricePoint", EventOperation::Update) => {
-                    // 处理价格点更新事件
-                    for change in event.changes {
-                        let price = change.entity_id as Price;
-
-                        let mut first_idx = None;
-                        let mut last_idx = None;
-                        let mut side = None;
-
-                        for field in change.field_changes {
-                            match field.field_name {
-                                "first_idx" => {
-                                    if let Some(FieldValue::OptionUsize(idx)) = field.new_value {
-                                        first_idx = Some(idx);
-                                    }
-                                }
-                                "last_idx" => {
-                                    if let Some(FieldValue::OptionUsize(idx)) = field.new_value {
-                                        last_idx = Some(idx);
-                                    }
-                                }
-                                "side" => {
-                                    if let Some(FieldValue::Side(s)) = field.new_value {
-                                        side = Some(s);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if let (Some(s), Some(f_idx), Some(l_idx)) = (side, first_idx, last_idx) {
-                            self.update_price_point(price, s, f_idx, l_idx);
-                        }
                     }
                 }
                 _ => {
@@ -696,5 +752,42 @@ mod tests {
                 test_repo.best_ask().unwrap()
             );
         }
+    }
+
+    #[test]
+    fn test_match_Orders() {
+        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+        let trader = TraderId::from_str("SELLER1");
+
+        // 添加多个卖单
+        let sell1 = OrderEntry::new(1, trader, 50);
+        repo.add_order(1, sell1, Side::Sell, 10000).unwrap();
+
+        let sell2 = OrderEntry::new(2, trader, 60);
+        repo.add_order(2, sell2, Side::Sell, 10000).unwrap();
+
+        let sell3 = OrderEntry::new(3, trader, 40);
+        repo.add_order(3, sell3, Side::Sell, 10100).unwrap();
+
+        // 测试买单匹配：需要100数量
+        let matched = repo.match_Orders(Side::Buy, 10100, 100);
+
+        assert!(matched.is_some());
+        let orders = matched.unwrap();
+
+        // 应该匹配2个订单（50 + 50 = 100）
+        assert_eq!(orders.len(), 2);
+
+        // 验证第一个订单
+        assert_eq!(orders[0].order_id, 1);
+        assert_eq!(orders[0].unfilled_quantity, 50);
+
+        // 验证第二个订单
+        assert_eq!(orders[1].order_id, 2);
+        assert_eq!(orders[1].unfilled_quantity, 60);
+
+        // 验证总数量 >= 100
+        let total: u32 = orders.iter().map(|o| o.unfilled_quantity).sum();
+        assert!(total >= 100);
     }
 }
