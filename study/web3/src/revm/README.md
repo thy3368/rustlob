@@ -134,6 +134,122 @@ fn decode_uint256(data: &[u8]) -> U256 {
 - 实际使用: ~21,000 for simple transfers
 - 合约调用: ~50,000-100,000 depending on complexity
 
+## 合约字节码生成
+
+### 使用 solc 编译器生成完整的标准字节码
+
+**重要提示**：必须使用 Solidity 编译器生成的完整字节码，手工编造或截断的字节码会导致 `InvalidJump` 或 `StackUnderflow` 错误！
+
+#### 安装 Solidity 编译器
+
+```bash
+# macOS
+brew install solidity
+
+# Ubuntu/Debian
+sudo add-apt-repository ppa:ethereum/ethereum
+sudo apt-get update
+sudo apt-get install solc
+
+# 验证安装
+solc --version
+```
+
+#### 编写 Solidity 合约
+
+创建 `Counter.sol` 文件：
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+contract Counter {
+    uint256 public count;
+
+    function increment() public {
+        count += 1;
+    }
+}
+```
+
+#### 编译生成字节码
+
+```bash
+# 编译合约，生成优化的字节码
+solc --bin --abi --optimize --optimize-runs 200 Counter.sol
+
+# 输出示例：
+# ======= Counter.sol:Counter =======
+# Binary:
+# 6080604052348015600e575f5ffd5b5060c580601a5f395ff3fe...
+```
+
+#### 验证字节码完整性
+
+**字节码结构验证**：
+
+```
+部署字节码 (Creation Bytecode):
+├─ 初始化代码 (0-26 bytes)
+│  └─ 设置初始状态
+├─ 运行时代码长度标记 (PUSH1 0xc5)
+├─ 运行时代码偏移标记 (PUSH1 0x1a)
+└─ 运行时代码 (Runtime Bytecode)
+   ├─ 函数调度器
+   ├─ count() 实现
+   └─ increment() 实现
+```
+
+**常见问题排查**：
+
+| 错误 | 原因 | 解决方案 |
+|------|------|----------|
+| `InvalidJump` | 字节码被截断 | 使用完整的 solc 输出 |
+| `StackUnderflow` | 字节码损坏 | 重新编译，确保复制完整 |
+| `OddLength` | 字节码长度为奇数 | 检查是否有遗漏的字符 |
+
+#### 在代码中使用编译的字节码
+
+```rust
+// src/revm/contracts.rs
+
+/// ✅ 由 solc 0.8.30 编译的完整字节码
+pub const COUNTER_BYTECODE: &str =
+    "6080604052348015600e575f5ffd5b5060c580601a5f395ff3fe\
+     6080604052348015600e575f5ffd5b50600436106030575f3560\
+     e01c806306661abd146034578063d09de08a14604d575b5f5ffd\
+     5b603b5f5481565b60405190815260200160405180910390f35b\
+     60536055565b005b60015f5f82825460649190606b565b909155\
+     5050565b80820180821115608957634e487b7160e01b5f526011\
+     60045260245ffd5b9291505056fea2646970667358221220a48a\
+     a1ce6ad99f3a568df931a13cb1db6bbd0417ec8cf682182c7944\
+     54b27c5664736f6c634300081e0033";
+
+pub fn get_counter_bytecode() -> Vec<u8> {
+    hex::decode(COUNTER_BYTECODE)
+        .expect("Invalid hex string")
+}
+```
+
+### 性能数据（实际运行结果）
+
+```
+✅ 部署成功:
+   - 部署字节码: 223 bytes
+   - 运行时代码: 197 bytes
+   - 合约地址: 0x1c81a61a407017c58397a47d2ab28191b9b8ec9b
+
+✅ Gas 消耗:
+   - 首次 increment(): 43,405 gas (冷存储写入)
+   - 后续 increment(): 26,305 gas (热存储更新)
+
+✅ 执行结果:
+   - 初始 count: 0
+   - 第 1 次 increment: count = 1
+   - 第 2 次 increment: count = 2
+   - 第 3 次 increment: count = 3
+```
+
 ## 扩展示例
 
 ### 部署自定义合约
@@ -143,8 +259,8 @@ use web3::revm::RevmExecutor;
 
 let mut executor = RevmExecutor::new();
 
-// 你的合约字节码
-let bytecode = vec![/* ... */];
+// 使用 solc 编译的完整字节码
+let bytecode = hex::decode("6080604052...").unwrap();
 
 let address = executor
     .deploy_contract("MyContract", bytecode)
@@ -196,12 +312,143 @@ cargo test --lib revm
 cargo test --bin revm_counter
 ```
 
+## 故障排查
+
+### 常见错误及解决方案
+
+#### 1. InvalidJump 错误
+
+**症状**：
+```
+❌ 错误: View call halted: InvalidJump
+```
+
+**根本原因**：
+字节码被截断，导致 REVM 无法正确提取运行时代码。
+
+**诊断步骤**：
+```bash
+# 分析字节码结构
+# 部署字节码格式: PUSH1 <size> DUP1 PUSH1 <offset> PUSH0 CODECOPY ...
+
+# 示例：被截断的字节码
+部署字节码长度: 353 bytes
+运行时代码大小: 421 bytes (从字节码中读取)
+运行时代码偏移: 28 bytes
+运行时代码范围: bytes[28..449]  ❌ 超出边界！
+缺失字节数: 96 bytes (449 - 353)
+```
+
+**解决方案**：
+1. 使用 `solc` 编译器重新生成完整字节码
+2. 确保复制整个字节码字符串，不要截断
+3. 验证字节码长度与编译器输出一致
+
+#### 2. StackUnderflow 错误
+
+**症状**：
+```
+❌ 错误: View call halted: StackUnderflow
+```
+
+**可能原因**：
+- 字节码损坏或格式错误
+- 字节码版本与 REVM 不兼容
+- 函数选择器不匹配
+
+**解决方案**：
+1. 验证 Solidity 编译器版本 (推荐 0.8.20+)
+2. 检查函数选择器是否正确计算
+3. 使用 `--optimize` 优化编译
+
+#### 3. OddLength 错误
+
+**症状**：
+```
+panicked at 'Invalid hex string: OddLength'
+```
+
+**原因**：
+十六进制字符串长度为奇数（缺少一个字符）
+
+**解决方案**：
+```rust
+// ❌ 错误：长度为 221（奇数）
+pub const BYTECODE: &str = "608060405234801561000f575f80fd...03";
+
+// ✅ 正确：长度为 222（偶数）
+pub const BYTECODE: &str = "608060405234801561000f575f80fd...0033";
+```
+
+#### 4. 状态未提交问题
+
+**症状**：
+```
+✅ 合约调用成功，Gas 使用: 21064
+   当前计数: 0  ❌ 应该是 1
+```
+
+**原因**：
+使用 `transact()` 但未提交状态到数据库
+
+**解决方案**：
+```rust
+// ❌ 错误：状态未提交
+let result = evm.transact()?;
+
+// ✅ 方法1：使用 transact_commit (REVM 18.0+)
+let result = evm.transact_commit()?;
+
+// ✅ 方法2：手动提交
+let result_and_state = evm.transact()?;
+drop(evm);  // 释放对 db 的借用
+self.db.commit(result_and_state.state);
+```
+
+### 调试技巧
+
+#### 1. 查看合约账户信息
+
+```rust
+pub fn debug_account(&self, address: Address) {
+    if let Some(account) = self.db.accounts.get(&address) {
+        println!("账户 {:?}:", address);
+        println!("  余额: {}", account.info.balance);
+        println!("  nonce: {}", account.info.nonce);
+        println!("  代码哈希: {:?}", account.info.code_hash);
+        if let Some(ref code) = account.info.code {
+            println!("  代码长度: {} bytes", code.bytecode().len());
+        }
+    }
+}
+```
+
+#### 2. 验证字节码完整性
+
+```bash
+# 计算字节码长度
+echo -n "6080604052..." | wc -c
+# 输出: 446 (应该是偶数)
+
+# 长度/2 = 实际字节数
+# 446 / 2 = 223 bytes ✅
+```
+
+#### 3. 使用 Remix IDE 验证
+
+访问 https://remix.ethereum.org：
+1. 粘贴 Solidity 代码
+2. 编译（Ctrl+S）
+3. 复制 Bytecode（不是 Deployment Bytecode）
+4. 对比长度和内容
+
 ## 依赖项
 
 ```toml
 revm = { version = "18.0.0", features = ["std"] }
 alloy-primitives = "0.8"
 hex = "0.4"
+sha3 = "0.10"  # 用于计算函数选择器
 ```
 
 ## 参考资源
