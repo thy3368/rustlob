@@ -12,11 +12,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 从环境变量或命令行参数选择服务类型
     let service_type = env::args()
         .nth(1)
-        .unwrap_or_else(|| "axum".to_string());
+        .unwrap_or_else(|| "websocket".to_string());
 
     match service_type.as_str() {
+        "websocket" | "ws" => {
+            // 启动 WebSocket 服务（默认，最高性能）
+            println!("启动 WebSocket 服务...");
+            let port = env::var("WS_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(9090);
+
+            websocket_service::start(port).await?;
+        }
+
         "axum" | "http" => {
-            // 启动 Axum HTTP REST API 服务（默认）
+            // 启动 Axum HTTP REST API 服务
             println!("启动 Axum HTTP 服务...");
             let port = env::var("PORT")
                 .ok()
@@ -27,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         "jsonrpc" | "rpc" => {
-            // 启动 JSON-RPC 服务（原有）
+            // 启动 JSON-RPC 服务
             println!("启动 JSON-RPC 服务...");
             let config = RpcServiceConfig {
                 listen_addr: "127.0.0.1:3030".to_string(),
@@ -41,9 +52,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             server.wait();
         }
 
-        "both" => {
-            // 同时启动两个服务
-            println!("同时启动 HTTP 和 JSON-RPC 服务...");
+        "all" => {
+            // 同时启动所有服务
+            println!("同时启动 WebSocket, HTTP 和 JSON-RPC 服务...");
 
             // 启动 JSON-RPC 服务（后台线程）
             let _rpc_handle = std::thread::spawn(|| {
@@ -58,16 +69,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 server.wait();
             });
 
-            // 启动 Axum 服务（主线程）
-            rest_service::start(8080).await?;
+            // 启动 HTTP 服务（后台任务）
+            tokio::spawn(async move {
+                if let Err(e) = rest_service::start(8080).await {
+                    eprintln!("HTTP服务错误: {}", e);
+                }
+            });
+
+            // 启动 WebSocket 服务（主线程）
+            websocket_service::start(9090).await?;
         }
 
         _ => {
             eprintln!("未知的服务类型: {}", service_type);
-            eprintln!("用法: sapp [axum|jsonrpc|both]");
-            eprintln!("  axum     - 启动 HTTP REST API (默认, 端口 8080)");
-            eprintln!("  jsonrpc  - 启动 JSON-RPC (端口 3030)");
-            eprintln!("  both     - 同时启动两个服务");
+            eprintln!("用法: sapp [websocket|axum|jsonrpc|all]");
+            eprintln!("  websocket - 启动 WebSocket 服务 (默认, 端口 9090, 推荐)");
+            eprintln!("  axum      - 启动 HTTP REST API (端口 8080)");
+            eprintln!("  jsonrpc   - 启动 JSON-RPC (端口 3030)");
+            eprintln!("  all       - 同时启动所有服务");
             std::process::exit(1);
         }
     }

@@ -12,13 +12,16 @@ jsonrpc-core = "18.0"
 jsonrpc-http-server = "18.0"
 
 # HTTP REST API (新增axum)
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # 序列化
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+# 时间处理
+chrono = "0.4"
 
 # 日志
 tracing = "0.1"

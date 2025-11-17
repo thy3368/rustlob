@@ -1,247 +1,189 @@
-# SAPP - LOB Matching Service (JSON-RPC Server)
+# SAPP - 订单匹配服务应用层
 
-## 概述
+高性能订单撮合系统的应用层实现，提供多种协议接口访问底层限价订单簿（LOB）引擎。
 
-SAPP 是基于 LOB (Limit Order Book) 库的高性能订单匹配服务，提供 JSON-RPC 2.0 接口。
+## 🚀 快速开始
 
-**特性**:
-- ✅ **JSON-RPC 2.0** - 标准化 RPC 接口
-- ✅ **异步处理** - 支持并发请求
-- ✅ **模块化架构** - 服务、模型、主程序分离
-- ✅ **Clean Architecture** - 领域驱动设计
-- ✅ **低延迟** - 内存订单簿，零拷贝操作
-
-## 架构
-
-```
-app/sapp/                    # JSON-RPC 服务层
-├── Cargo.toml              # 依赖: lob, jsonrpc, tokio
-├── src/
-│   ├── main.rs             # 服务启动入口
-│   ├── rpc_service.rs      # JSON-RPC 服务实现
-│   └── models.rs           # 请求/响应数据模型
-├── test_rpc.sh             # API 测试脚本
-└── README.md               # 本文档
-
-lib/lob/                    # 订单簿核心库
-├── src/lob/
-│   ├── matching_service.rs # 匹配服务
-│   ├── repository/         # 仓储层
-│   └── types.rs            # 领域类型
-└── tests/                  # 单元测试
-```
-
-### 分层架构
-
-```
-┌──────────────────────────────────┐
-│  RPC Layer (rpc_service.rs)      │
-│  • JSON-RPC 2.0 接口             │
-│  • 异步请求处理                   │
-│  • 数据转换                       │
-└────────────┬─────────────────────┘
-             │
-┌────────────▼─────────────────────┐
-│  Service Layer (MatchingService) │
-│  • 订单匹配逻辑                   │
-│  • 事件溯源                       │
-│  • 命令处理                       │
-└────────────┬─────────────────────┘
-             │
-┌────────────▼─────────────────────┐
-│  Repository Layer                │
-│  • 内存订单簿                     │
-│  • 价格-时间优先队列               │
-│  • 零拷贝操作                     │
-└──────────────────────────────────┘
-```
-
-## 快速开始
-
-### 1. 启动服务
+### 启动服务
 
 ```bash
+# 方式1: 启动 WebSocket 服务（默认，推荐）
 cargo run --release
+
+# 方式2: 启动 HTTP REST API
+cargo run --release -- axum
+
+# 方式3: 启动 JSON-RPC 服务
+cargo run --release -- jsonrpc
+
+# 方式4: 同时启动所有服务
+cargo run --release -- all
 ```
 
-服务输出：
-```
-╔══════════════════════════════════════════════════════════════╗
-║           LOB Matching Service - JSON-RPC Server            ║
-╚══════════════════════════════════════════════════════════════╝
+### 端口配置
 
-✓ 服务器已启动
-  监听地址: http://127.0.0.1:3030
-  工作线程: 4
-  订单容量: 100000
-  价格范围: 0 - 1000000
+| 服务类型 | 默认端口 | 访问地址 |
+|---------|---------|---------|
+| WebSocket | 9090 | `ws://localhost:9090/ws` |
+| HTTP REST | 8080 | `http://localhost:8080` |
+| JSON-RPC | 3030 | `http://localhost:3030` |
 
-可用的 RPC 方法:
-  📝 place_limit_order    - 提交限价单
-  🚀 place_market_order   - 提交市价单
-  🧊 place_iceberg_order  - 提交冰山单
-  ❌ cancel_order         - 取消订单
-  📊 get_book_status      - 获取订单簿状态
-  💚 health               - 健康检查
+## 📦 服务类型对比
 
-按 Ctrl+C 停止服务器...
-```
+| 特性 | WebSocket | HTTP REST | JSON-RPC |
+|-----|-----------|-----------|----------|
+| 延迟 | **< 100μs** | ~ 1ms | ~ 1ms |
+| 实时推送 | ✅ | ❌ | ❌ |
+| 双向通信 | ✅ | ❌ | ❌ |
+| 并发连接 | > 10,000 | 中等 | 中等 |
+| 易用性 | 中等 | ✅ | 中等 |
+| 推荐场景 | 实时交易 | API集成 | 传统系统 |
 
-### 2. 测试 API
+## 📡 WebSocket 服务（推荐）
 
-运行自动化测试：
-```bash
-./test_rpc.sh
-```
-
-## API 文档
-
-### 1. `health` - 健康检查
+详细文档: [WEBSOCKET.md](./WEBSOCKET.md)
 
 ```bash
-curl -X POST http://127.0.0.1:3030 \
+# 启动服务
+cargo run --release
+
+# 运行示例客户端
+cargo run --example ws_client --release
+
+# 运行性能测试
+cargo run --example ws_benchmark --release
+```
+
+### 快速示例
+
+```javascript
+const ws = new WebSocket('ws://localhost:9090/ws');
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'trade') {
+    console.log(`成交: ${msg.quantity}@${msg.price}`);
+  }
+};
+
+// 下单
+ws.send(JSON.stringify({
+  type: 'limit_order',
+  trader_id: 'alice',
+  side: 'buy',
+  price: 50000,
+  quantity: 10
+}));
+```
+
+## 🌐 HTTP REST API
+
+```bash
+# 启动服务
+cargo run --release -- axum
+
+# 下单
+curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"health","params":{},"id":1}'
+  -d '{"trader_id":"alice","side":"buy","price":50000,"quantity":10}'
+
+# 查询深度
+curl http://localhost:8080/api/market/depth
 ```
 
-### 2. `place_limit_order` - 提交限价单
+## 🔌 JSON-RPC 服务
 
 ```bash
-curl -X POST http://127.0.0.1:3030 \
+# 启动服务
+cargo run --release -- jsonrpc
+
+# 调用
+curl -X POST http://localhost:3030 \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc":"2.0",
     "method":"place_limit_order",
-    "params":{
-      "trader_id":"TRADER001",
-      "side":"BUY",
-      "price":10000,
-      "quantity":100
-    },
-    "id":2
+    "params":{"trader_id":"alice","side":"BUY","price":50000,"quantity":10},
+    "id":1
   }'
 ```
 
-**参数**:
-- `trader_id`: 交易员ID (字符串)
-- `side`: `"BUY"` 或 `"SELL"`
-- `price`: 价格 (u32)
-- `quantity`: 数量 (u32)
+## 🏗️ 架构设计
 
-**响应**:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "order_id": 1,
-    "trades": [
-      {
-        "buyer": "BUYER001",
-        "seller": "SELLER01",
-        "price": 10000,
-        "quantity": 50
-      }
-    ],
-    "status": "success"
-  },
-  "id": 2
-}
-```
-
-### 3. `get_book_status` - 获取订单簿状态
-
-```bash
-curl -X POST http://127.0.0.1:3030 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"get_book_status","params":{},"id":3}'
-```
-
-**响应**:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "best_bid": 9999,
-    "best_ask": 10001,
-    "spread": 2,
-    "active_orders": 5
-  },
-  "id": 3
-}
-```
-
-完整 API 文档请参考源代码注释。
-
-## 使用 LOB 库
-
-### 依赖配置
-
-在 `Cargo.toml` 中：
-```toml
-[dependencies]
-lob = { path = "../../lib/lob" }
-```
-
-### 基本用法
-
-```rust
-use lob::lob::{OrderBook, TraderId, Side};
-
-fn main() {
-    // 创建订单簿
-    let mut book = OrderBook::new();
-
-    // 创建交易员
-    let buyer = TraderId::from_str("BUYER001");
-    let seller = TraderId::from_str("SELLER01");
-
-    // 放置卖单
-    let (sell_order_id, _) = book.limit_order(seller, Side::Sell, 10000, 100);
-
-    // 放置买单（匹配）
-    let (buy_order_id, trades) = book.limit_order(buyer, Side::Buy, 10000, 50);
-
-    // 查询订单簿状态
-    println!("最佳买价: {:?}", book.best_bid());
-    println!("最佳卖价: {:?}", book.best_ask());
-}
-```
-
-## Clean Architecture 实践
+### Clean Architecture 分层
 
 ```
 ┌─────────────────────────────────────┐
-│  应用层 (app/sapp)                   │
-│  - 用户交互和展示逻辑                 │
-└──────────────┬──────────────────────┘
-               │ 依赖
-               ▼
-┌─────────────────────────────────────┐
-│  库层 (lib/lob)                      │
-│  - 领域模型和业务逻辑                 │
-│  - 无外部依赖                        │
+│   Interfaces Layer                  │
+│   - websocket_service.rs            │
+│   - rest_service.rs                 │
+│   - json_rpc_service.rs             │
+├─────────────────────────────────────┤
+│   Application Layer                 │
+│   - OrderCommandHandler             │
+│   - Command/CommandResult           │
+├─────────────────────────────────────┤
+│   Domain Layer (lib/lob)            │
+│   - MatchingService                 │
+│   - Order, Trade 实体               │
+├─────────────────────────────────────┤
+│   Infrastructure Layer              │
+│   - InMemoryOrderRepository         │
+│   - Arena 分配器                    │
 └─────────────────────────────────────┘
 ```
 
-## 开发指南
+## 📊 性能指标
 
-### 修改库代码
+### 预期性能（Apple M1/M2 或高性能 x86-64）
+
+| 指标 | 目标值 |
+|-----|--------|
+| WebSocket Ping/Pong (P99) | < 500μs |
+| 订单处理延迟 (P99) | < 1ms |
+| 撮合延迟 (P99) | < 2ms |
+| 吞吐量 | > 50,000 订单/秒 |
+
+### 运行性能测试
+
 ```bash
-cd ../../lib/lob
-# 编辑 src/lob/*.rs
-cargo test  # 运行测试
+cargo run --example ws_benchmark --release
 ```
 
-### 修改应用代码
-```bash
-cd app/sapp
-# 编辑 src/main.rs
-cargo run
+## 📚 项目结构
+
+```
+app/sapp/
+├── src/
+│   ├── main.rs                 # 应用入口
+│   ├── websocket_service.rs    # WebSocket 服务
+│   ├── rest_service.rs         # HTTP REST 服务
+│   ├── json_rpc_service.rs     # JSON-RPC 服务
+│   └── models.rs               # 数据模型
+├── examples/
+│   ├── ws_client.rs            # WebSocket 客户端示例
+│   └── ws_benchmark.rs         # 性能基准测试
+├── Cargo.toml
+├── README.md                   # 本文件
+├── WEBSOCKET.md               # WebSocket 详细文档
+└── test_ws.sh                 # 快速测试脚本
 ```
 
-## 参考资料
+## 🔧 环境变量
 
-- [LOB库文档](../../lib/lob/README.md)
-- [集成测试文档](../../lib/lob/tests/README.md)
-- [Clean Architecture指南](../../CLAUDE.md)
+```bash
+export WS_PORT=9090     # WebSocket 端口
+export PORT=8080        # HTTP 端口
+export RUST_LOG=info    # 日志级别
+```
 
+## 📖 相关文档
+
+- [WebSocket 详细文档](./WEBSOCKET.md) - 实时推送服务完整指南
+- [LOB 引擎文档](../../lib/lob/README.md) - 底层撮合引擎
+- [Clean Architecture 标准](../../CLAUDE.md) - 架构设计规范
+- [Rust 低延迟指南](../../ld/RUST_LOW_LATENCY_GUIDE.md) - 性能优化
+
+## 📄 许可证
+
+MIT License

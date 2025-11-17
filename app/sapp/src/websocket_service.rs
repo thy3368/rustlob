@@ -4,10 +4,7 @@
 //! 目标延迟：WebSocket消息处理 < 100μs
 
 use axum::{
-    extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
-    },
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State},
     response::IntoResponse,
     routing::get,
     Router,
