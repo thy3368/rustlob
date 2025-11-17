@@ -1,11 +1,11 @@
 mod models;
-mod json_rpc_service;
-mod rest_service;
-mod websocket_service;
+mod server;
+mod client;
 
 use models::RpcServiceConfig;
-use json_rpc_service::LobRpcService;
+use server::json_rpc_service::LobRpcService;
 use std::env;
+use server::{restful_service, websocket_service};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8080);
 
-            rest_service::start(port).await?;
+            restful_service::start(port).await?;
         }
 
         "jsonrpc" | "rpc" => {
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 启动 HTTP 服务（后台任务）
             tokio::spawn(async move {
-                if let Err(e) = rest_service::start(8080).await {
+                if let Err(e) = restful_service::start(8080).await {
                     eprintln!("HTTP服务错误: {}", e);
                 }
             });
