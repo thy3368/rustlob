@@ -5,10 +5,11 @@
 use super::handler::{Command, CommandResult, OrderCommandHandler};
 use super::repository::{OrderRepository, RepositoryAccessor};
 use super::types::{EntityEvent, OrderId, Price, Quantity};
+use crate::event;
 use crate::lob::repository::entity_repo::EntityRepo;
 use crate::lob::repository::event_repo::EventRepo;
+use crate::lob::repository::id_repo::IdRepo;
 use crate::lob::OrderEntry;
-use crate::event;
 
 
 /// 匹配服务
@@ -21,88 +22,7 @@ where
     lob_repo: R,
     event_repo: EventRepo,
     entity_repo: EntityRepo,
-    /// 事件序列号计数器
-    event_id_counter: u64,
-    /// 事务ID计数器
-    transaction_id_counter: u64,
-}
-
-/// 创建交易事件
-///
-/// # 参数
-/// - `matched_orders`: 匹配的订单列表
-/// - `price`: 新订单的交易员ID
-/// - `quantity`: 新订单的方向
-///
-/// # 返回
-/// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
-fn create_trades(
-    matched_orders: Option<Vec<&mut OrderEntry>>,
-    price: Price,
-    quantity: Quantity,
-) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
-    use super::types::{EventOperation, FieldValue};
-
-    let mut order_events = Vec::new();
-    let mut trade_events = Vec::new();
-    let mut remaining = quantity;
-    let transaction_id = 1; // TODO: 应该传入
-    let mut event_id = 1; // TODO: 应该从全局分配
-
-    if let Some(orders) = matched_orders {
-        for matched_order in orders {
-            if remaining == 0 {
-                break;
-            }
-
-            // 1. 计算成交数量
-            let fill_qty = remaining.min(matched_order.unfilled_quantity);
-
-            // 2. 更新订单的未成交数量
-            let old_unfilled = matched_order.unfilled_quantity;
-            let new_unfilled = old_unfilled - fill_qty;
-            matched_order.unfilled_quantity = new_unfilled;
-            remaining -= fill_qty;
-
-            // 3. 创建订单更新事件
-            let order_update_event = event!(
-                "Order", EventOperation::Update, event_id, transaction_id, matched_order.order_id => {
-                    update: ("unfilled_quantity", FieldValue::U32(old_unfilled), FieldValue::U32(new_unfilled)),
-                }
-            );
-            order_events.push(order_update_event);
-            event_id += 1;
-
-            // 4. 创建交易事件
-            let trade_id = event_id;
-            let trade_event = event!(
-                "Trade", EventOperation::Create, event_id, transaction_id, trade_id => {
-                    create:
-                        "price" => FieldValue::U32(price),
-                        "quantity" => FieldValue::U32(fill_qty),
-                        "matched_order_id" => FieldValue::U64(matched_order.order_id),
-                }
-            );
-            trade_events.push(trade_event);
-            event_id += 1;
-        }
-    }
-
-    let unfilled_amount = remaining;
-
-    let order_events_opt = if order_events.is_empty() {
-        None
-    } else {
-        Some(order_events)
-    };
-
-    let trade_events_opt = if trade_events.is_empty() {
-        None
-    } else {
-        Some(trade_events)
-    };
-
-    (order_events_opt, trade_events_opt, unfilled_amount)
+    id_repo: IdRepo,
 }
 
 impl<R> MatchingService<R>
@@ -114,25 +34,106 @@ where
         Self {
             lob_repo: repository,
             event_repo: EventRepo {},
+            id_repo: IdRepo {
+                event_id_counter: 1,
+                transaction_id_counter: 1,
+            },
             entity_repo: EntityRepo {},
-            event_id_counter: 1,
-            transaction_id_counter: 1,
         }
     }
 
-    /// 分配新的事件ID
-    fn allocate_event_id(&mut self) -> u64 {
-        let id = self.event_id_counter;
-        self.event_id_counter += 1;
-        id
+    /// 创建交易事件
+    ///
+    /// # 参数
+    /// - `matched_orders`: 匹配的订单列表
+    /// - `price`: 新订单的交易员ID
+    /// - `quantity`: 新订单的方向
+    ///
+    /// # 返回
+    /// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
+    fn create_trades(
+        &self,
+        matched_orders: Option<Vec<&mut OrderEntry>>,
+        price: Price,
+        quantity: Quantity,
+    ) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
+        use super::types::{EventOperation, FieldValue};
+
+        let mut order_events = Vec::new();
+        let mut trade_events = Vec::new();
+        let mut remaining = quantity;
+        let transaction_id = 1; // TODO: 应该传入
+        let mut event_id = 1; // TODO: 应该从全局分配
+
+        if let Some(orders) = matched_orders {
+            for matched_order in orders {
+                if remaining == 0 {
+                    break;
+                }
+
+                // 1. 计算成交数量
+                let fill_qty = remaining.min(matched_order.unfilled_quantity);
+
+                // 2. 更新订单的未成交数量
+                let old_unfilled = matched_order.unfilled_quantity;
+                let new_unfilled = old_unfilled - fill_qty;
+                matched_order.unfilled_quantity = new_unfilled;
+                remaining -= fill_qty;
+
+                // 3. 创建订单更新事件
+                let order_update_event = event!(
+                    "Order", EventOperation::Update, event_id, transaction_id, matched_order.order_id => {
+                        update: ("unfilled_quantity", FieldValue::U32(old_unfilled), FieldValue::U32(new_unfilled)),
+                    }
+                );
+                order_events.push(order_update_event);
+                event_id += 1;
+
+                // 4. 创建交易事件
+                let trade_id = event_id;
+                let trade_event = event!(
+                    "Trade", EventOperation::Create, event_id, transaction_id, trade_id => {
+                        create:
+                            "price" => FieldValue::U32(price),
+                            "quantity" => FieldValue::U32(fill_qty),
+                            "matched_order_id" => FieldValue::U64(matched_order.order_id),
+                    }
+                );
+                trade_events.push(trade_event);
+                event_id += 1;
+            }
+        }
+
+        let unfilled_amount = remaining;
+
+        let order_events_opt = if order_events.is_empty() {
+            None
+        } else {
+            Some(order_events)
+        };
+
+        let trade_events_opt = if trade_events.is_empty() {
+            None
+        } else {
+            Some(trade_events)
+        };
+
+        (order_events_opt, trade_events_opt, unfilled_amount)
     }
 
-    /// 分配新的事务ID
-    fn allocate_transaction_id(&mut self) -> u64 {
-        let id = self.transaction_id_counter;
-        self.transaction_id_counter += 1;
-        id
-    }
+    // /// 分配新的事件ID
+    // fn allocate_event_id(&mut self) -> u64 {
+    //     let id = self.event_id_counter;
+    //     self.event_id_counter += 1;
+    //     id
+    // }
+
+    // /// 分配新的事务ID
+    // fn allocate_transaction_id(&mut self) -> u64 {
+    //     let id = self.transaction_id_counter;
+    //     self.transaction_id_counter += 1;
+    //     id
+    // }
 
     /// 获取repository的可变引用
     pub fn repository_mut(&mut self) -> &mut R {
@@ -178,12 +179,12 @@ where
 
                 if orders.is_some() && orders.as_ref().unwrap().len() > 0 {
                     let (order_change_events, trade_create_events, unfilled_amount) =
-                        create_trades(orders, price, quantity);
+                        self.create_trades(orders, price, quantity);
 
                     // 创建新订单事件（如果有未成交部分）
 
-                    let transaction_id = self.allocate_transaction_id();
-                    let event_id = self.allocate_event_id();
+                    let transaction_id = self.id_repo.allocate_transaction_id();
+                    let event_id = self.id_repo.allocate_event_id();
 
                     // 创建订单创建事件
                     let order_create_event = event!(
@@ -240,11 +241,7 @@ where
                 trader,
                 side,
                 quantity,
-            } => {
-                let transaction_id = self.allocate_transaction_id();
-
-                CommandResult::ToDo {}
-            }
+            } => CommandResult::ToDo {},
 
             Command::IcebergOrder {
                 trader,
