@@ -4,6 +4,8 @@
 //!
 //! 运行: cargo run --example ws_benchmark --release
 
+mod client;
+
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
