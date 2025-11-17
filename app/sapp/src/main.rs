@@ -1,46 +1,75 @@
-use lob::lob::{OrderBook, TraderId, Side};
+mod models;
+mod rpc_service;
+mod matching_service;
 
-fn main() {
-    println!("=== LOB引擎演示 ===\n");
+use models::RpcServiceConfig;
+use rpc_service::LobRpcService;
+use std::env;
 
-    // 创建订单簿
-    let mut book = OrderBook::new();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 从环境变量或命令行参数选择服务类型
+    let service_type = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "axum".to_string());
 
-    // 创建交易员
-    let buyer = TraderId::from_str("BUYER001");
-    let seller = TraderId::from_str("SELLER01");
+    match service_type.as_str() {
+        "axum" | "http" => {
+            // 启动 Axum HTTP REST API 服务（默认）
+            println!("启动 Axum HTTP 服务...");
+            let port = env::var("PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(8080);
 
-    // 放置卖单
-    let (sell_order_id, _) = book.limit_order(seller, Side::Sell, 10000, 100);
-    println!("✓ 放置卖单 #{}: 价格=10000, 数量=100", sell_order_id);
+            matching_service::start_server(port).await?;
+        }
 
-    // 放置买单（匹配）
-    let (buy_order_id, trades) = book.limit_order(buyer, Side::Buy, 10000, 50);
-    println!("✓ 放置买单 #{}: 价格=10000, 数量=50", buy_order_id);
+        "jsonrpc" | "rpc" => {
+            // 启动 JSON-RPC 服务（原有）
+            println!("启动 JSON-RPC 服务...");
+            let config = RpcServiceConfig {
+                listen_addr: "127.0.0.1:3030".to_string(),
+                threads: 4,
+                order_capacity: 100000,
+                price_range: 1000000,
+            };
 
-    // 显示成交
-    if !trades.is_empty() {
-        println!("\n成交记录:");
-        for (i, trade) in trades.iter().enumerate() {
-            println!(
-                "  {}. {} -> {} @ {} x {}",
-                i + 1,
-                trade.buyer,
-                trade.seller,
-                trade.price,
-                trade.quantity
-            );
+            let service = LobRpcService::new(config);
+            let server = service.start();
+            server.wait();
+        }
+
+        "both" => {
+            // 同时启动两个服务
+            println!("同时启动 HTTP 和 JSON-RPC 服务...");
+
+            // 启动 JSON-RPC 服务（后台线程）
+            let _rpc_handle = std::thread::spawn(|| {
+                let config = RpcServiceConfig {
+                    listen_addr: "127.0.0.1:3030".to_string(),
+                    threads: 4,
+                    order_capacity: 100000,
+                    price_range: 1000000,
+                };
+                let service = LobRpcService::new(config);
+                let server = service.start();
+                server.wait();
+            });
+
+            // 启动 Axum 服务（主线程）
+            matching_service::start_server(8080).await?;
+        }
+
+        _ => {
+            eprintln!("未知的服务类型: {}", service_type);
+            eprintln!("用法: sapp [axum|jsonrpc|both]");
+            eprintln!("  axum     - 启动 HTTP REST API (默认, 端口 8080)");
+            eprintln!("  jsonrpc  - 启动 JSON-RPC (端口 3030)");
+            eprintln!("  both     - 同时启动两个服务");
+            std::process::exit(1);
         }
     }
 
-    // 显示订单簿状态
-    let snapshot = book.snapshot();
-    println!("\n订单簿状态:");
-    println!("  最佳买价: {:?}", book.best_bid());
-    println!("  最佳卖价: {:?}", book.best_ask());
-    println!("  价差: {:?}", book.spread());
-    println!("  活跃订单数: {}", snapshot.active_orders);
-    println!("  总成交数: {}", snapshot.total_trades);
-
-    println!("\n✓ LOB引擎运行正常！");
+    Ok(())
 }
