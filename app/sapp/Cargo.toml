@@ -23,3 +23,17 @@ serde_json = "1.0"
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# WebSocket (高性能)
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+futures-channel = "0.3"
+
+# 并发和同步
+dashmap = "5.5"
+crossbeam = "0.8"
+
+# 性能监控
+metrics = "0.21"
+metrics-exporter-prometheus = "0.13"

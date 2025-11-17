@@ -1,6 +1,7 @@
 mod models;
 mod json_rpc_service;
 mod rest_service;
+mod websocket_service;
 
 use models::RpcServiceConfig;
 use json_rpc_service::LobRpcService;
