@@ -150,6 +150,7 @@ impl OrderRepository for InMemoryOrderRepository {
     }
 
     //
+    #[allow(invalid_reference_casting)]
     fn match_Orders(
         &self,
         side: Side,
@@ -192,7 +193,7 @@ impl OrderRepository for InMemoryOrderRepository {
 
                                         // 使用 unsafe 获取可变引用
                                         unsafe {
-                                            let ptr = entry as *const OrderEntry as *mut OrderEntry;
+                                            let ptr = std::ptr::from_ref(entry).cast_mut();
                                             matched_orders.push(&mut *ptr);
                                         }
                                     }
@@ -233,7 +234,7 @@ impl OrderRepository for InMemoryOrderRepository {
 
                                         // 使用 unsafe 获取可变引用
                                         unsafe {
-                                            let ptr = entry as *const OrderEntry as *mut OrderEntry;
+                                            let ptr = std::ptr::from_ref(entry).cast_mut();
                                             matched_orders.push(&mut *ptr);
                                         }
                                     }
@@ -383,41 +384,9 @@ impl OrderRepository for InMemoryOrderRepository {
         for event in events {
             match (event.entity_name, event.operation) {
                 ("Order", EventOperation::Create) => {
+                    let order_entry: OrderEntry = trans(event);
+                    // self.add_order(order_entry);
                     // 处理订单创建事件
-                    for change in event.changes {
-                        let order_id = change.entity_id;
-
-                        // 提取字段值
-                        let mut entry = None;
-                        let mut side = None;
-                        let mut price = None;
-
-                        for field in change.field_changes {
-                            match field.field_name {
-                                "entry" => {
-                                    if let Some(FieldValue::OrderEntry(e)) = field.new_value {
-                                        entry = Some(e);
-                                    }
-                                }
-                                "side" => {
-                                    if let Some(FieldValue::Side(s)) = field.new_value {
-                                        side = Some(s);
-                                    }
-                                }
-                                "price" => {
-                                    if let Some(FieldValue::U32(p)) = field.new_value {
-                                        price = Some(p);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        // 如果有完整信息，添加订单
-                        if let (Some(e), Some(s), Some(p)) = (entry, side, price) {
-                            let _ = self.add_order(order_id, e, s, p);
-                        }
-                    }
                 }
                 ("Order", EventOperation::Update) => {
                     // 处理订单更新事件
@@ -451,6 +420,11 @@ impl OrderRepository for InMemoryOrderRepository {
         }
         Ok(())
     }
+}
+
+fn trans(entity_event: EntityEvent) -> OrderEntry {
+    //将EntityEvent 转成OrderEntry
+    todo!()
 }
 
 impl RepositoryAccessor for InMemoryOrderRepository {

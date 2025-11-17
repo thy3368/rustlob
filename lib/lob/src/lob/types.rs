@@ -4,6 +4,56 @@
 /// 针对低时延交易系统进行优化。
 use std::fmt;
 
+/// 简化字段变更创建的宏
+#[macro_export]
+macro_rules! fields {
+    // Create操作：fields!(create: "name" => value, ...)
+    (create: $($name:expr => $value:expr),* $(,)?) => {
+        vec![$($crate::lob::types::FieldChange::created($name, $value)),*]
+    };
+
+    // Update操作：fields!(update: ("name", old, new), ...)
+    (update: $(($name:expr, $old:expr, $new:expr)),* $(,)?) => {
+        vec![$($crate::lob::types::FieldChange::updated($name, $old, $new)),*]
+    };
+
+    // Delete操作：fields!(delete: "name" => value, ...)
+    (delete: $($name:expr => $value:expr),* $(,)?) => {
+        vec![$($crate::lob::types::FieldChange::deleted($name, $value)),*]
+    };
+}
+
+/// 简化事件创建的宏（适用所有实体）
+#[macro_export]
+macro_rules! event {
+    // 单记录事件
+    ($entity:expr, $op:expr, $event_id:expr, $tx_id:expr, $entity_id:expr => {
+        $($field_spec:tt)*
+    }) => {
+        $crate::lob::types::EntityEvent::single(
+            $event_id,
+            $tx_id,
+            $entity,
+            $op,
+            $entity_id,
+            $crate::fields!($($field_spec)*),
+        )
+    };
+
+    // 批量记录事件
+    (batch $entity:expr, $op:expr, $event_id:expr, $tx_id:expr => [
+        $($entity_id:expr => { $($field_spec:tt)* }),* $(,)?
+    ]) => {
+        $crate::lob::types::EntityEvent::batch(
+            $event_id,
+            $tx_id,
+            $entity,
+            $op,
+            vec![$($crate::lob::types::RecordChange::new($entity_id, $crate::fields!($($field_spec)*)),)*],
+        )
+    };
+}
+
 
 /// 交易员标识符（8字节固定长度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,8 +145,10 @@ pub enum FieldValue {
     U64(u64),
     OptionUsize(Option<usize>),
     TraderId(TraderId),
+    OrderId(OrderId),
+    Quantity(Quantity),
     Side(Side),
-    OrderEntry(OrderEntry),
+    // OrderEntry(OrderEntry),
 }
 
 /// 字段变更记录 (field_name, old_value, new_value)

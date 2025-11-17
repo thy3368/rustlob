@@ -285,6 +285,11 @@ pub enum CommandResult {
         trades: Vec<Trade>,
     },
 
+    ToDo {
+
+    },
+    
+
     /// 市价单结果 ✅
     MarketOrder { trades: Vec<Trade> },
 

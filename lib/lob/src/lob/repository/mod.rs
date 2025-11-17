@@ -1,3 +1,5 @@
+pub mod entity_repo;
+pub mod event_repo;
 pub mod in_memory;
 /// 订单仓储模块
 ///
