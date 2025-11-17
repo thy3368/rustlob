@@ -1,9 +1,9 @@
 mod models;
-mod rpc_service;
-mod matching_service;
+mod json_rpc_service;
+mod rest_service;
 
 use models::RpcServiceConfig;
-use rpc_service::LobRpcService;
+use json_rpc_service::LobRpcService;
 use std::env;
 
 #[tokio::main]
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8080);
 
-            matching_service::start_server(port).await?;
+            rest_service::start(port).await?;
         }
 
         "jsonrpc" | "rpc" => {
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             // 启动 Axum 服务（主线程）
-            matching_service::start_server(8080).await?;
+            rest_service::start(8080).await?;
         }
 
         _ => {

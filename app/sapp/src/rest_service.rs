@@ -228,7 +228,7 @@ impl IntoResponse for AppError {
 
 // ============ 服务器启动 ============
 
-pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     // 初始化日志
     tracing_subscriber::fmt()
         .with_env_filter("info,matching_service=debug")
