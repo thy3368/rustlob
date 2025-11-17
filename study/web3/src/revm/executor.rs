@@ -2,8 +2,9 @@ use alloy_primitives::{Address, Bytes, U256};
 use revm::{
     db::InMemoryDB,
     primitives::{
-        AccountInfo, Bytecode, ExecutionResult, Output, TransactTo, TxEnv,
+        AccountInfo, ExecutionResult, Output, TransactTo,
     },
+    DatabaseCommit,
     Evm,
 };
 use std::collections::HashMap;
@@ -72,12 +73,16 @@ impl RevmExecutor {
             .build();
 
         // 执行部署交易
-        let result = evm
+        let result_and_state = evm
             .transact()
             .map_err(|e| format!("Transaction failed: {:?}", e))?;
 
-        // 提交状态变更
-        let result = result.result;
+        // 显式 drop EVM 以释放对 db 的借用
+        drop(evm);
+
+        // 手动提交状态变更
+        self.db.commit(result_and_state.state);
+        let result = result_and_state.result;
 
         // 检查执行结果
         match result {
@@ -134,12 +139,16 @@ impl RevmExecutor {
             .build();
 
         // 执行调用
-        let result = evm
+        let result_and_state = evm
             .transact()
             .map_err(|e| format!("Transaction failed: {:?}", e))?;
 
-        // 提交状态变更
-        let result = result.result;
+        // 显式 drop EVM 以释放对 db 的借用
+        drop(evm);
+
+        // 手动提交状态变更
+        self.db.commit(result_and_state.state);
+        let result = result_and_state.result;
 
         // 检查执行结果
         match result {
@@ -226,6 +235,7 @@ impl RevmExecutor {
     }
 
     /// 获取合约地址
+    #[allow(dead_code)]
     pub fn get_contract_address(&self, name: &str) -> Option<Address> {
         self.contracts.get(name).copied()
     }
@@ -233,6 +243,24 @@ impl RevmExecutor {
     /// 获取调用者地址
     pub fn get_caller(&self) -> Address {
         self.caller
+    }
+
+    /// 调试：检查账户信息
+    #[allow(dead_code)]
+    pub fn debug_account(&self, address: Address) {
+        if let Some(account) = self.db.accounts.get(&address) {
+            println!("账户 {:?}:", address);
+            println!("  余额: {}", account.info.balance);
+            println!("  nonce: {}", account.info.nonce);
+            println!("  代码哈希: {:?}", account.info.code_hash);
+            if let Some(ref code) = account.info.code {
+                println!("  代码长度: {} bytes", code.bytecode().len());
+            } else {
+                println!("  代码: None");
+            }
+        } else {
+            println!("账户 {:?} 不存在", address);
+        }
     }
 }
 

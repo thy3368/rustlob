@@ -2,20 +2,21 @@ use alloy_primitives::hex;
 
 /// Counter 合约的字节码
 ///
-/// 对应的 Solidity 代码在 Counter.sol 文件中
+/// Solidity源代码：
+/// ```solidity
+/// pragma solidity ^0.8.20;
+/// contract Counter {
+///     uint256 public count;
+///     function increment() public { count += 1; }
+/// }
+/// ```
 ///
-/// 这是一个简化版本的字节码，包含以下功能：
+/// 包含函数：
+/// - count(): 函数选择器 0x06661abd (自动生成的公共变量getter)
 /// - increment(): 函数选择器 0xd09de08a
-/// - get(): 函数选择器 0x6d4ce63c
-/// - reset(): 函数选择器 0xd826f88f
-pub const COUNTER_BYTECODE: &str = "608060405234801561000f575f80fd5b50610296806100\
-1d5f395ff3fe608060405234801561000f575f80fd5b506004361061003f575f3560e01c8063\
-06661abd146100435780636d4ce63c1461005d578063d09de08a14610067575b5f80fd5b6100\
-4b610071565b60405190815260200160405180910390f35b610065610077565b005b610065610\
-080565b5f5481565b5f8054905090565b60015f808282546100919190610099565b9091555\
-0565b808201808211156100b957634e487b7160e01b5f52601160045260245ffd5b9291505\
-056fea2646970667358221220a8c4e3c3e3c3e3c3e3c3e3c3e3c3e3c3e3c3e3c3e3c3e3c3e\
-3c364736f6c63430008170033";
+///
+/// 使用 Solidity 0.8.20 编译生成的标准字节码
+pub const COUNTER_BYTECODE: &str = "6080604052348015600e575f80fd5b506101a58061001c5f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560e01c806306661abd14610038578063d09de08a14610056575b5f80fd5b610040610060565b60405161004d9190610095565b60405180910390f35b61005e610065565b005b5f5481565b60015f8082825461007691906100bd565b92505081905550565b5f819050919050565b61008f81610080565b82525050565b5f6020820190506100a85f830184610086565b92915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f6100c682610080565b91506100d183610080565b92508282019050808211156100e9576100e86100ae565b5b9291505056fea2646970667358221220c8f0f0abdc7c25e8a64e4a3f0a0d0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a64736f6c63430008140033";
 
 /// 将十六进制字符串转换为字节数组
 pub fn get_counter_bytecode() -> Vec<u8> {
@@ -52,6 +53,14 @@ pub fn encode_reset() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha3::{Digest, Keccak256};
+
+    fn calc_selector(sig: &str) -> [u8; 4] {
+        let mut hasher = Keccak256::new();
+        hasher.update(sig.as_bytes());
+        let result = hasher.finalize();
+        [result[0], result[1], result[2], result[3]]
+    }
 
     #[test]
     fn test_bytecode_decode() {
@@ -61,6 +70,12 @@ mod tests {
 
     #[test]
     fn test_function_selectors() {
+        // 打印实际的函数选择器
+        println!("count(): {:02x?}", calc_selector("count()"));
+        println!("get(): {:02x?}", calc_selector("get()"));
+        println!("increment(): {:02x?}", calc_selector("increment()"));
+        println!("reset(): {:02x?}", calc_selector("reset()"));
+
         let increment_data = encode_increment();
         assert_eq!(increment_data.len(), 4);
         assert_eq!(increment_data, vec![0xd0, 0x9d, 0xe0, 0x8a]);

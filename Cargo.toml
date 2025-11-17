@@ -1,6 +1,21 @@
-[package]
-name = "rustlob"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "lib/lob",
+    "app/dapp",
+    "app/sapp",
+]
 
-[dependencies]
+exclude = [
+    "study/web3",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Hongyao Tang"]
+license = "MIT"
+
+[workspace.dependencies]
+# 共享依赖可以在这里定义

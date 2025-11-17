@@ -1,4 +1,5 @@
-use crate::revm::{contracts, RevmExecutor};
+use super::contracts;
+use super::executor::RevmExecutor;
 use alloy_primitives::U256;
 
 /// REVM Counter 合约演示示例
@@ -27,12 +28,18 @@ pub fn run_counter_example() -> Result<(), String> {
 
     let contract_address = executor.deploy_contract("Counter", bytecode)?;
     println!("   合约地址: {:?}", contract_address);
+
+    // 调试：检查合约是否真的被部署
+    executor.debug_account(contract_address);
     println!();
 
     // 3. 查询初始计数值
     println!("🔍 步骤 3: 查询初始计数值");
-    let get_calldata = contracts::encode_get();
-    let result = executor.view_contract("Counter", get_calldata)?;
+    println!("   使用 count() 而不是 get() 来读取公共变量");
+
+    // 使用 count() 函数选择器（公共变量的自动getter）
+    let count_selector = vec![0x06, 0x66, 0x1a, 0xbd];
+    let result = executor.view_contract("Counter", count_selector.clone())?;
 
     let count = decode_uint256(&result);
     println!("   当前计数: {}", count);
@@ -43,7 +50,7 @@ pub fn run_counter_example() -> Result<(), String> {
     let increment_calldata = contracts::encode_increment();
     executor.call_contract("Counter", increment_calldata.clone())?;
 
-    let result = executor.view_contract("Counter", contracts::encode_get())?;
+    let result = executor.view_contract("Counter", count_selector.clone())?;
     let count = decode_uint256(&result);
     println!("   当前计数: {}", count);
     println!();
@@ -52,7 +59,7 @@ pub fn run_counter_example() -> Result<(), String> {
     println!("➕ 步骤 5: 调用 increment() - 第 2 次");
     executor.call_contract("Counter", increment_calldata.clone())?;
 
-    let result = executor.view_contract("Counter", contracts::encode_get())?;
+    let result = executor.view_contract("Counter", count_selector.clone())?;
     let count = decode_uint256(&result);
     println!("   当前计数: {}", count);
     println!();
@@ -61,27 +68,7 @@ pub fn run_counter_example() -> Result<(), String> {
     println!("➕ 步骤 6: 调用 increment() - 第 3 次");
     executor.call_contract("Counter", increment_calldata)?;
 
-    let result = executor.view_contract("Counter", contracts::encode_get())?;
-    let count = decode_uint256(&result);
-    println!("   当前计数: {}", count);
-    println!();
-
-    // 7. 重置计数器
-    println!("🔄 步骤 7: 调用 reset() 重置计数器");
-    let reset_calldata = contracts::encode_reset();
-    executor.call_contract("Counter", reset_calldata)?;
-
-    let result = executor.view_contract("Counter", contracts::encode_get())?;
-    let count = decode_uint256(&result);
-    println!("   当前计数: {}", count);
-    println!();
-
-    // 8. 再次增加以验证功能
-    println!("➕ 步骤 8: 重置后再次 increment()");
-    let increment_calldata = contracts::encode_increment();
-    executor.call_contract("Counter", increment_calldata)?;
-
-    let result = executor.view_contract("Counter", contracts::encode_get())?;
+    let result = executor.view_contract("Counter", count_selector.clone())?;
     let count = decode_uint256(&result);
     println!("   当前计数: {}", count);
     println!();
@@ -105,6 +92,7 @@ fn decode_uint256(data: &[u8]) -> U256 {
 }
 
 /// 打印执行统计信息
+#[allow(dead_code)]
 pub fn print_stats() {
     println!();
     println!("📊 REVM 统计信息:");
