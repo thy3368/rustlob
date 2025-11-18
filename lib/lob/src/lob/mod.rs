@@ -85,11 +85,14 @@ pub mod handler; // 订单命令处理器trait
 pub mod market_data_service; // 市场数据服务
 pub mod matching_service; // 匹配服务
 pub mod repository; // 仓储接口和实现
-pub mod types;
-// 数据类型定义
+pub mod types; // 数据类型定义
+// pub mod level_types; // Level 1-3 市场数据类型
 
 // 重新导出常用类型
-pub use types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
+// pub use types::{OrderEntry, OrderId, Price, Quantity, Side, Trade, TraderId};
+
+// 导出 Level 1-3 市场数据类型
+// pub use level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
 
 // 导出服务和仓储（供高级用户使用）
 pub use handler::{

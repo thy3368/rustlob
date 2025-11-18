@@ -7,7 +7,7 @@ use lob::lob::handler::{Command, CommandResult, OrderCommandHandler};
 use lob::lob::matching_service::MatchingService;
 use lob::lob::repository::in_memory::InMemoryOrderRepository;
 use lob::lob::repository::OrderRepository;  // 导入 trait 以使用其方法
-use lob::lob::types::{Side, TraderId};
+use lob::lob::types::lob_types::{Side, TraderId};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 

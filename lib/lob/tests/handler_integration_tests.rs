@@ -4,7 +4,7 @@
 use lob::lob::handler::{Command, CommandResult, OrderCommandHandler};
 use lob::lob::matching_service::MatchingService;
 use lob::lob::repository::InMemoryOrderRepository;
-use lob::lob::types::{Side, TraderId};
+use lob::lob::types::lob_types::{Side, TraderId};
 
 
 // ========== 辅助函数 ==========

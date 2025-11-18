@@ -1,9 +1,10 @@
+use crate::lob::types::lob_types::OrderEntry;
+
 /// 订单簿条目的内存池分配器
 ///
 /// 提供快速、缓存友好的分配，无堆开销。
 /// 订单从预分配池中使用bump-pointer分配。
 
-use super::types::OrderEntry;
 
 /// 固定大小的订单条目内存池
 ///
@@ -120,8 +121,8 @@ impl Default for OrderArena {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::lob::types::TraderId;
+    use crate::lob::arena::OrderArena;
+    use crate::lob::types::lob_types::{OrderEntry, TraderId};
 
     #[test]
     fn test_arena_allocation() {

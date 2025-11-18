@@ -21,7 +21,7 @@ use lob::lob::{
         traits::OrderRepository,
     },
     matching_service::MatchingService as LobMatchingService,
-    types::{Side, TraderId},
+    types::lob_types::{Side, TraderId},
 };
 
 // ============ DTOs ============

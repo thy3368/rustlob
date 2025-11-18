@@ -28,7 +28,7 @@ use lob::lob::{
     handler::{Command, CommandResult, OrderCommandHandler},
     matching_service::MatchingService as LobMatchingService,
     repository::{in_memory::InMemoryOrderRepository, traits::OrderRepository},
-    types::{Side, TraderId},
+    types::lob_types::{Side, TraderId},
 };
 
 // ============ 类型定义 ============

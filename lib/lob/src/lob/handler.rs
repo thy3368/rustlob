@@ -1,4 +1,4 @@
-use crate::lob::{OrderId, Price, Quantity, Side, Trade, TraderId};
+use crate::lob::types::lob_types::{OrderId, Price, Quantity, Side, Trade, TraderId};
 
 /// 钉住订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

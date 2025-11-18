@@ -4,22 +4,23 @@
 /// 针对低时延交易系统进行优化。
 use std::fmt;
 
+
 /// 简化字段变更创建的宏
 #[macro_export]
 macro_rules! fields {
     // Create操作：fields!(create: "name" => value, ...)
     (create: $($name:expr => $value:expr),* $(,)?) => {
-        vec![$($crate::lob::types::FieldChange::created($name, $value)),*]
+        vec![$($crate::lob::types::lob_types::FieldChange::created($name, $value)),*]
     };
 
     // Update操作：fields!(update: ("name", old, new), ...)
     (update: $(($name:expr, $old:expr, $new:expr)),* $(,)?) => {
-        vec![$($crate::lob::types::FieldChange::updated($name, $old, $new)),*]
+        vec![$($crate::lob::types::lob_types::FieldChange::updated($name, $old, $new)),*]
     };
 
     // Delete操作：fields!(delete: "name" => value, ...)
     (delete: $($name:expr => $value:expr),* $(,)?) => {
-        vec![$($crate::lob::types::FieldChange::deleted($name, $value)),*]
+        vec![$($crate::lob::types::lob_types::FieldChange::deleted($name, $value)),*]
     };
 }
 
@@ -30,7 +31,7 @@ macro_rules! event {
     ($entity:expr, $op:expr, $event_id:expr, $tx_id:expr, $entity_id:expr => {
         $($field_spec:tt)*
     }) => {
-        $crate::lob::types::EntityEvent::single(
+        $crate::lob::types::lob_types::EntityEvent::single(
             $event_id,
             $tx_id,
             $entity,
@@ -44,16 +45,15 @@ macro_rules! event {
     (batch $entity:expr, $op:expr, $event_id:expr, $tx_id:expr => [
         $($entity_id:expr => { $($field_spec:tt)* }),* $(,)?
     ]) => {
-        $crate::lob::types::EntityEvent::batch(
+        $crate::lob::types::lob_types::EntityEvent::batch(
             $event_id,
             $tx_id,
             $entity,
             $op,
-            vec![$($crate::lob::types::RecordChange::new($entity_id, $crate::fields!($($field_spec)*)),)*],
+            vec![$($crate::lob::types::lob_types::RecordChange::new($entity_id, $crate::fields!($($field_spec)*)),)*],
         )
     };
 }
-
 
 /// 交易员标识符（8字节固定长度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,9 +133,9 @@ pub type Quantity = u32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum EventOperation {
-    Create = 1,  // 创建
-    Update = 2,  // 更新
-    Delete = 3,  // 删除
+    Create = 1, // 创建
+    Update = 2, // 更新
+    Delete = 3, // 删除
 }
 
 /// 字段值类型（支持订单簿常用数据类型）

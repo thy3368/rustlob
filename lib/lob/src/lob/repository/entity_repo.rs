@@ -1,4 +1,4 @@
-use crate::lob::types::EntityEvent;
+use crate::lob::types::lob_types::EntityEvent;
 
 pub struct EntityRepo {}
 

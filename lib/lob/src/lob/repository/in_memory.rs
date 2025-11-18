@@ -3,12 +3,8 @@
 /// 使用内存池和价格索引数组实现高性能订单存储
 use super::traits::{OrderRepository, RepositoryAccessor, RepositoryError};
 use crate::lob::arena::OrderArena;
-use crate::lob::types::{
-    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Side,
-};
-use crate::lob::Quantity;
 use std::collections::HashMap;
-
+use crate::lob::types::lob_types::{EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side};
 
 /// 内存仓储实现
 ///
@@ -439,8 +435,9 @@ impl RepositoryAccessor for InMemoryOrderRepository {
 
 #[cfg(test)]
 mod tests {
+    use crate::lob::types::lob_types::TraderId;
     use super::*;
-    use crate::lob::types::TraderId;
+
 
     #[test]
     fn test_add_and_find_order() {

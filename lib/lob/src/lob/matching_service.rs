@@ -1,16 +1,15 @@
+use crate::lob::types::lob_types::EntityEvent;
 /// 订单匹配服务
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
 use super::handler::{Command, CommandResult, OrderCommandHandler};
 use super::repository::{OrderRepository, RepositoryAccessor};
-use super::types::{EntityEvent, OrderId, Price, Quantity};
 use crate::event;
 use crate::lob::repository::entity_repo::EntityRepo;
 use crate::lob::repository::event_repo::EventRepo;
 use crate::lob::repository::id_repo::IdRepo;
-use crate::lob::OrderEntry;
-
+use crate::lob::types::lob_types::{EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity};
 
 /// 匹配服务
 ///
@@ -57,7 +56,6 @@ where
         price: Price,
         quantity: Quantity,
     ) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
-        use super::types::{EventOperation, FieldValue};
 
         let mut order_events = Vec::new();
         let mut trade_events = Vec::new();
@@ -188,13 +186,13 @@ where
 
                     // 创建订单创建事件
                     let order_create_event = event!(
-                        "Order", super::types::EventOperation::Create, event_id, transaction_id, new_order_id => {
+                        "Order", EventOperation::Create, event_id, transaction_id, new_order_id => {
                             create:
-                                "order_id" => super::types::FieldValue::OrderId(new_order_id),
-                                "trader" => super::types::FieldValue::TraderId(trader),
-                                "side" => super::types::FieldValue::Side(side),
-                                "quantity" => super::types::FieldValue::Quantity(unfilled_amount),
-                                "price" => super::types::FieldValue::U32(price),
+                                "order_id" => FieldValue::OrderId(new_order_id),
+                                "trader" => FieldValue::TraderId(trader),
+                                "side" => FieldValue::Side(side),
+                                "quantity" => FieldValue::Quantity(unfilled_amount),
+                                "price" => FieldValue::U32(price),
                         }
                     );
 
