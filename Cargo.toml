@@ -2,7 +2,7 @@
 members = [
     "lib/lob",
     "app/dapp",
-    "app/sapp",
+    "app/sapp", "lib/algo",
 ]
 
 exclude = [
