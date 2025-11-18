@@ -55,6 +55,9 @@ macro_rules! event {
     };
 }
 
+//快照概念，担心entity_event过长
+pub struct Snapshot {}
+
 /// 交易员标识符（8字节固定长度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(align(8))]
