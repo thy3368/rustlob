@@ -1,18 +1,12 @@
-pub mod cqrs;
-// CQRS 统一框架
-pub mod cqrs_example;
+//! CQRS (Command Query Responsibility Segregation) Framework
+//!
+//! 提供统一的 Command/Query/Result 模式，支持：
+//! - 命令和查询的元数据追踪
+//! - 序列化支持（可选 serde feature）
+//! - 异步处理（可选 async feature）
+//! - 类型安全的处理器接口
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod cqrs;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// 重新导出所有公共类型
+pub use cqrs::*;
