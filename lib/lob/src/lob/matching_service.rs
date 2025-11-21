@@ -119,19 +119,7 @@ where
         (order_events_opt, trade_events_opt, unfilled_amount)
     }
 
-    // /// 分配新的事件ID
-    // fn allocate_event_id(&mut self) -> u64 {
-    //     let id = self.event_id_counter;
-    //     self.event_id_counter += 1;
-    //     id
-    // }
 
-    // /// 分配新的事务ID
-    // fn allocate_transaction_id(&mut self) -> u64 {
-    //     let id = self.transaction_id_counter;
-    //     self.transaction_id_counter += 1;
-    //     id
-    // }
 
     /// 获取repository的可变引用
     pub fn repository_mut(&mut self) -> &mut R {

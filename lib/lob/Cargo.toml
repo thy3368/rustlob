@@ -8,6 +8,7 @@ async-trait = "0.1"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 tokio = { version = "1.0", features = ["full"], optional = true }
+cqrs = { path = "../cqrs", features = ["serde"] }
 
 [features]
 default = []
