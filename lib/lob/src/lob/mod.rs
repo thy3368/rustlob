@@ -85,7 +85,10 @@ pub mod handler; // 订单命令处理器trait
 pub mod market_data_service; // 市场数据服务
 pub mod matching_service; // 匹配服务
 pub mod repository; // 仓储接口和实现
-pub mod types; // 数据类型定义
+pub mod types;
+pub mod cqrs;  // CQRS 使用示例
+pub mod order_query_service_v2; // OrderQueryService CQRS 重构版本
+// 数据类型定义
 // pub mod level_types; // Level 1-3 市场数据类型
 
 // 重新导出常用类型

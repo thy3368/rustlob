@@ -266,6 +266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cqrs"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "crossbeam"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1006,6 +1017,12 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 [[package]]
 name = "lob"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "rand",
+ "serde",
+ "tokio",
+]
 
 [[package]]
 name = "lock_api"
