@@ -285,6 +285,7 @@ pub enum CommandResult {
         trades: Vec<Trade>,
     },
 
+    ///未完成时使用
     ToDo {
 
     },
@@ -499,6 +500,7 @@ pub trait OrderCommandHandler: Send + Sync {
     /// # 返回
     /// - `CommandResult`: 命令执行结果
     fn handle(&mut self, command: Command) -> CommandResult;
+    fn limit_order(&mut self, command: Command) -> CommandResult;
 
     /// 获取处理器名称
     fn handler_name(&self) -> &'static str;

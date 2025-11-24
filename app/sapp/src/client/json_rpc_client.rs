@@ -7,6 +7,10 @@ impl OrderCommandHandler for JsonRpcClient {
         todo!()
     }
 
+    fn limit_order(&mut self, command: Command) -> CommandResult {
+        todo!()
+    }
+
     fn handler_name(&self) -> &'static str {
         todo!()
     }
