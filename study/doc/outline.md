@@ -11,13 +11,14 @@
 ## cex交易所 rustlob
 
 - 现货
-- 永续合约
+- 永续合约 资金费率
 - 领域模型 order,trade,account,user
 - lob限价订单薄
 - 订单类型：市价，限价，条件订单（市价，匹配）路透有100种
 - rpo 几分钟恢复； rto, 通过raft实现多副本
 - 仓储层算法，数组方式，前匹配，后插入特点最快，比红黑树什么的强
 - 网络 组播
+- 统一账户
 
 ## dex
 
@@ -25,14 +26,19 @@
 - hyper liquid
 - lighter
 
-## 钱包技术 rustwallet
+## 钱包技术 rust wallet
 
 - 同链转
 - 跨链转
 - 闪兑
 - amm调用
+- 兑换路径
 
 ## 公链应用 dapp
 
 - 借贷
 - amm
+
+## 编程技术
+
+- clean架构，cqrs，event sourcing，actor线程模型
