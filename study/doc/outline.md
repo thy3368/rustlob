@@ -1,0 +1,38 @@
+## 公链 rusteth
+
+- 共识算法 pow工作量证明,pos,抗拜占庭算法，hot stuff
+- merkel tree
+- transaction，account，reception，block header
+- 数据库
+- inbound json rpc/restfull/websocket/libp2p
+- outbound 网络libp2p
+- 零知识证明
+
+## cex交易所 rustlob
+
+- 现货
+- 永续合约
+- 领域模型 order,trade,account,user
+- lob限价订单薄
+- 订单类型：市价，限价，条件订单（市价，匹配）路透有100种
+- rpo 几分钟恢复； rto, 通过raft实现多副本
+- 仓储层算法，数组方式，前匹配，后插入特点最快，比红黑树什么的强
+- 网络 组播
+
+## dex
+
+- aster
+- hyper liquid
+- lighter
+
+## 钱包技术 rustwallet
+
+- 同链转
+- 跨链转
+- 闪兑
+- amm调用
+
+## 公链应用 dapp
+
+- 借贷
+- amm
