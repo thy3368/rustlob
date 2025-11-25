@@ -42,3 +42,9 @@
 ## 编程技术
 
 - clean架构，cqrs，event sourcing，actor线程模型
+
+## rust
+
+- clean架构 控制领域复杂度和扩展性
+- ， 先写core[domain,service],[outbound,inbound]; 先单线程，再多线程，再分布式； 先故服务无状态，只有repo有状态，多用消息channel
+  象erlang.
