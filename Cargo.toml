@@ -2,7 +2,7 @@
 members = [
     "lib/core/lob",
     "app/dapp",
-    "app/sapp", "lib/support/algo", "lib/common/cqrs", "study/hotstuff", "lib/core/account", "lib/core/prep", "lib/core/spot",
+    "app/sapp", "lib/support/algo", "lib/common/cqrs", "study/hotstuff", "lib/core/account", "lib/core/prep", "lib/core/spot", "lib/core/option",
 ]
 
 exclude = [
