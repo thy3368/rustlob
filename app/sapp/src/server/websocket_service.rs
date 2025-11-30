@@ -345,7 +345,7 @@ async fn handle_client_message(
             let trader = TraderId::from_str(&trader_id);
             let order_side = match side.to_lowercase().as_str() {
                 "buy" => Side::Buy,
-                "sell" => Side::Sell,
+                "sell" => Side::Sel,
                 _ => return Err("invalid side".to_string()),
             };
 
@@ -416,7 +416,7 @@ async fn handle_client_message(
             let trader = TraderId::from_str(&trader_id);
             let order_side = match side.to_lowercase().as_str() {
                 "buy" => Side::Buy,
-                "sell" => Side::Sell,
+                "sell" => Side::Sel,
                 _ => return Err("invalid side".to_string()),
             };
 
