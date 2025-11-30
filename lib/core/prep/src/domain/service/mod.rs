@@ -1,7 +1,7 @@
-//! Perpetual contract domain services
-//!
-//! Contains command definitions and handlers
+//! 永续合约领域服务
 
 pub mod command;
+pub mod matching;
 
 pub use command::*;
+pub use matching::*;

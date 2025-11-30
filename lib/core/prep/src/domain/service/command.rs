@@ -9,89 +9,12 @@
 //! - P2: 高级功能 (SwitchMarginMode, SettleFundingRate, ADL, TrailingStop)
 //! - P3: 扩展功能 (FlashClose, ReversePosition, BatchCancelOrders)
 
-// ============================================================================
-// 基础类型别名
-// ============================================================================
-
-/// 交易者ID
-pub type TraderId = u64;
-/// 订单ID
-pub type OrderId = u64;
-/// 仓位ID
-pub type PositionId = u64;
-/// 价格（最小价格单位）
-pub type Price = u64;
-/// 数量（最小数量单位）
-pub type Quantity = u64;
-/// 杠杆倍数
-pub type Leverage = u32;
-/// 保证金金额
-pub type Margin = u64;
-/// 时间戳（Unix毫秒）
-pub type Timestamp = u64;
-
-// ============================================================================
-// 核心枚举
-// ============================================================================
-
-/// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Side {
-    /// 买入
-    Buy,
-    /// 卖出
-    Sell,
-}
-
-/// 持仓方向（双向持仓模式）
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PositionSide {
-    /// 单向持仓或净仓位
-    Both,
-    /// 多头（双向持仓）
-    Long,
-    /// 空头（双向持仓）
-    Short,
-}
-
-/// 保证金模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MarginMode {
-    /// 全仓
-    Cross,
-    /// 逐仓
-    Isolated,
-}
-
-/// 持仓模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PositionMode {
-    /// 单向持仓
-    OneWay,
-    /// 双向持仓
-    Hedge,
-}
-
-/// 订单有效期
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TimeInForce {
-    /// 成交为止
-    GTC,
-    /// 立即成交或取消
-    IOC,
-    /// 全部成交或取消
-    FOK,
-    /// 指定时间前有效
-    GTD { expire_time: Timestamp },
-    /// 只做Maker
-    PostOnly,
-}
-
-impl Default for TimeInForce {
-    fn default() -> Self {
-        Self::GTC
-    }
-}
+use crate::domain::entity::{
+    Trade,
+    TraderId, OrderId, PositionId,
+    Price, Quantity, Leverage, Margin,
+    Side, PositionSide, MarginMode, PositionMode, TimeInForce, OrderStatus,
+};
 
 // ============================================================================
 // P0 - 核心交易命令（统一委托模型）
@@ -294,37 +217,40 @@ pub enum Command {
 }
 
 // ============================================================================
-// 成交记录
-// ============================================================================
-
-/// 成交记录
-#[derive(Debug, Clone)]
-pub struct Trade {
-    /// 成交ID
-    pub trade_id: u64,
-    /// 订单ID
-    pub order_id: OrderId,
-    /// 成交价格
-    pub price: Price,
-    /// 成交数量
-    pub quantity: Quantity,
-    /// 方向
-    pub side: Side,
-    /// 持仓方向
-    pub position_side: PositionSide,
-    /// 时间戳
-    pub timestamp: Timestamp,
-    /// 手续费
-    pub fee: u64,
-    /// 已实现盈亏
-    pub realized_pnl: i64,
-    /// 是否Maker
-    pub is_maker: bool,
-}
-
-// ============================================================================
 // 命令结果
 // ============================================================================
+
+/// 错误码
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCode {
+    /// 保证金不足
+    InsufficientMargin = 1001,
+    /// 余额不足
+    InsufficientBalance = 1002,
+    /// 订单不存在
+    OrderNotFound = 1003,
+    /// 仓位不存在
+    PositionNotFound = 1004,
+    /// 无效数量
+    InvalidQuantity = 1005,
+    /// 无效价格
+    InvalidPrice = 1006,
+    /// 无效杠杆
+    InvalidLeverage = 1007,
+    /// 持仓模式不匹配
+    PositionModeMismatch = 1008,
+    /// 只减仓被拒
+    ReduceOnlyRejected = 1009,
+    /// 超最大挂单数
+    MaxOpenOrdersExceeded = 1010,
+    /// 超最大持仓量
+    MaxPositionSizeExceeded = 1011,
+    /// 会触发强平
+    WouldTriggerLiquidation = 1012,
+    /// 系统错误
+    SystemError = 9999,
+}
+
 
 /// 命令结果
 #[derive(Debug, Clone)]
@@ -532,54 +458,6 @@ pub enum CommandResult {
         /// 错误信息
         message: String,
     },
-}
-
-/// 订单状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OrderStatus {
-    /// 新订单
-    New,
-    /// 部分成交
-    PartiallyFilled,
-    /// 全部成交
-    Filled,
-    /// 已取消
-    Cancelled,
-    /// 已拒绝
-    Rejected,
-    /// 已过期
-    Expired,
-}
-
-/// 错误码
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErrorCode {
-    /// 保证金不足
-    InsufficientMargin = 1001,
-    /// 余额不足
-    InsufficientBalance = 1002,
-    /// 订单不存在
-    OrderNotFound = 1003,
-    /// 仓位不存在
-    PositionNotFound = 1004,
-    /// 无效数量
-    InvalidQuantity = 1005,
-    /// 无效价格
-    InvalidPrice = 1006,
-    /// 无效杠杆
-    InvalidLeverage = 1007,
-    /// 持仓模式不匹配
-    PositionModeMismatch = 1008,
-    /// 只减仓被拒
-    ReduceOnlyRejected = 1009,
-    /// 超最大挂单数
-    MaxOpenOrdersExceeded = 1010,
-    /// 超最大持仓量
-    MaxPositionSizeExceeded = 1011,
-    /// 会触发强平
-    WouldTriggerLiquidation = 1012,
-    /// 系统错误
-    SystemError = 9999,
 }
 
 // ============================================================================
