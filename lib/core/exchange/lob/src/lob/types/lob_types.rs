@@ -100,7 +100,7 @@ impl fmt::Display for TraderId {
 #[repr(u8)]
 pub enum Side {
     Buy = b'B',  // 买入
-    Sel = b'S', // 卖出
+    Sell = b'S', // 卖出
 }
 
 impl Side {
@@ -108,8 +108,8 @@ impl Side {
     #[inline]
     pub fn opposite(&self) -> Side {
         match self {
-            Side::Buy => Side::Sel,
-            Side::Sel => Side::Buy,
+            Side::Buy => Side::Sell,
+            Side::Sell => Side::Buy,
         }
     }
 }
@@ -118,7 +118,7 @@ impl fmt::Display for Side {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Side::Buy => write!(f, "BUY"),
-            Side::Sel => write!(f, "SELL"),
+            Side::Sell => write!(f, "SELL"),
         }
     }
 }

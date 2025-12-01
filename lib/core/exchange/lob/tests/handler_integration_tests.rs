@@ -29,7 +29,7 @@ fn test_limit_order_full_match() {
     // 添加卖单
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 100,
     };
@@ -63,7 +63,7 @@ fn test_limit_order_partial_match() {
     // 添加小卖单
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 50,
     };
@@ -98,7 +98,7 @@ fn test_limit_order_no_match() {
     // 添加高价卖单
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10100,
         quantity: 100,
     };
@@ -132,7 +132,7 @@ fn test_market_order_buy() {
     // 添加多个卖单
     let sell1 = Command::LimitOrder {
         trader: trader("SELLER1"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 50,
     };
@@ -140,7 +140,7 @@ fn test_market_order_buy() {
 
     let sell2 = Command::LimitOrder {
         trader: trader("SELLER2"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10100,
         quantity: 50,
     };
@@ -191,7 +191,7 @@ fn test_market_order_sell() {
     // 市价卖单吃掉所有买单
     let market_cmd = Command::MarketOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         quantity: 100,
     };
 
@@ -319,7 +319,7 @@ fn test_iceberg_order_partial_match() {
     // 添加小卖单
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 50,
     };
@@ -361,7 +361,7 @@ fn test_iceberg_order_display_fully_matched() {
     // 添加卖单恰好等于显示数量
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 100,
     };
@@ -402,7 +402,7 @@ fn test_iceberg_order_fully_matched() {
     // 添加大卖单
     let sell_cmd = Command::LimitOrder {
         trader: trader("SELLER"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 200,
     };
@@ -447,7 +447,7 @@ fn test_mixed_order_types() {
     // 1. 添加限价卖单
     let sell1 = Command::LimitOrder {
         trader: trader("SELLER1"),
-        side: Side::Sel,
+        side: Side::Sell,
         price: 10000,
         quantity: 100,
     };

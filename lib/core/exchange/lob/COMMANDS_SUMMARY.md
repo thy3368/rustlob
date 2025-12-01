@@ -353,11 +353,11 @@ Command::FillOrKillOrder { trader, side, price, quantity } => {
 
 ## 相关文档
 
-- [COMMAND_PATTERN.md](./COMMAND_PATTERN.md) - 命令模式设计
-- [COMMANDS_ROADMAP.md](./COMMANDS_ROADMAP.md) - 完整路线图
-- [ORDER_COMMANDS.md](./ORDER_COMMANDS.md) - 基础命令文档
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - 系统架构
-- [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) - 快速参考
+- [COMMAND_PATTERN.md](COMMAND_PATTERN.md) - 命令模式设计
+- [COMMANDS_ROADMAP.md](COMMANDS_ROADMAP.md) - 完整路线图
+- [ORDER_COMMANDS.md](ORDER_COMMANDS.md) - 基础命令文档
+- [ARCHITECTURE.md](ARCHITECTURE.md) - 系统架构
+- [QUICK_REFERENCE.md](QUICK_REFERENCE.md) - 快速参考
 
 ## 技术债务
 

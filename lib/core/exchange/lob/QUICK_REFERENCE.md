@@ -454,11 +454,11 @@ A: 当前每个OrderBook实例支持一个交易对。
 
 ## 文档链接
 
-- [架构文档](./ARCHITECTURE.md)
-- [重构总结](./REFACTORING_SUMMARY.md)
-- [测试文档](./tests/README.md)
-- [测试总结](./tests/TEST_SUMMARY.md)
-- [命令参考](./tests/COMMANDS.md)
+- [架构文档](ARCHITECTURE.md)
+- [重构总结](REFACTORING_SUMMARY.md)
+- [测试文档](tests/README.md)
+- [测试总结](tests/TEST_SUMMARY.md)
+- [命令参考](tests/COMMANDS.md)
 
 ## 版本信息
 
@@ -471,5 +471,5 @@ A: 当前每个OrderBook实例支持一个交易对。
 ---
 
 **快速开始**: 查看 [README.md](./README.md)
-**详细文档**: 查看 [ARCHITECTURE.md](./ARCHITECTURE.md)
-**测试指南**: 查看 [tests/README.md](./tests/README.md)
+**详细文档**: 查看 [ARCHITECTURE.md](ARCHITECTURE.md)
+**测试指南**: 查看 [tests/README.md](tests/README.md)

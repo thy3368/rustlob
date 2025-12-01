@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 fn parse_side(s: &str) -> Option<Side> {
     match s.to_uppercase().as_str() {
         "BUY" | "B" => Some(Side::Buy),
-        "SELL" | "S" => Some(Side::Sel),
+        "SELL" | "S" => Some(Side::Sell),
         _ => None,
     }
 }

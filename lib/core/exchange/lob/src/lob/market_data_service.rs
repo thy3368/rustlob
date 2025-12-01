@@ -75,7 +75,7 @@ mod tests {
 
         let sell_id = repo.allocate_order_id();
         let sell_entry = OrderEntry::new(sell_id, trader, 100);
-        repo.add_order(sell_id, sell_entry, Side::Sel, 10100)
+        repo.add_order(sell_id, sell_entry, Side::Sell, 10100)
             .unwrap();
 
         // 创建市场数据服务
@@ -123,7 +123,7 @@ mod tests {
 
         let sell_id = repo.allocate_order_id();
         let sell_entry = OrderEntry::new(sell_id, trader, 100);
-        repo.add_order(sell_id, sell_entry, Side::Sel, 10100)
+        repo.add_order(sell_id, sell_entry, Side::Sell, 10100)
             .unwrap();
 
         let md_service = MarketDataService::new(repo);

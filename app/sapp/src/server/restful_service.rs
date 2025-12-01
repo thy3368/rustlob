@@ -109,7 +109,7 @@ async fn place_limit_order(
     let trader = TraderId::from_str(&req.trader_id);
     let side = match req.side.to_lowercase().as_str() {
         "buy" => Side::Buy,
-        "sell" => Side::Sel,
+        "sell" => Side::Sell,
         _ => return Err(AppError::InvalidInput("invalid side, must be 'buy' or 'sell'".to_string())),
     };
 

@@ -8,7 +8,7 @@ use crate::event;
 use crate::lob::repository::entity_repo::EntityRepo;
 use crate::lob::repository::event_repo::EventRepo;
 use crate::lob::repository::id_repo::IdRepo;
-use crate::lob::types::lob_types::Side::Buy;
+use crate::lob::types::lob_types::Side::{Buy, Sell};
 use crate::lob::types::lob_types::{EntityEvent, Trade};
 use crate::lob::types::lob_types::{
     EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
@@ -198,7 +198,7 @@ where
         {
             //如果是买单 检查账户余客，如果是卖单 检查库存股数
             match side {
-                Sel => {
+                Sell => {
 
                     //检查库存是否> quantity
                 }

@@ -46,7 +46,7 @@ impl InMemoryOrderRepository {
         let price_idx = price as usize;
         match side {
             Side::Buy => self.bids.get_mut(price_idx),
-            Side::Sel => self.asks.get_mut(price_idx),
+            Side::Sell => self.asks.get_mut(price_idx),
         }
     }
 
@@ -55,7 +55,7 @@ impl InMemoryOrderRepository {
         let price_idx = price as usize;
         match side {
             Side::Buy => self.bids.get(price_idx),
-            Side::Sel => self.asks.get(price_idx),
+            Side::Sell => self.asks.get(price_idx),
         }
     }
 
@@ -134,7 +134,7 @@ impl OrderRepository for InMemoryOrderRepository {
                     self.bid_max = Some(price);
                 }
             }
-            Side::Sel => {
+            Side::Sell => {
                 // 更新最低卖价
                 if self.ask_min.is_none() || price < self.ask_min.unwrap() {
                     self.ask_min = Some(price);
@@ -202,7 +202,7 @@ impl OrderRepository for InMemoryOrderRepository {
                     }
                 }
             }
-            Side::Sel => {
+            Side::Sell => {
                 // 卖单：从最高买价开始匹配
                 if let Some(bid_max) = self.bid_max {
                     if price > bid_max {
@@ -335,7 +335,7 @@ impl OrderRepository for InMemoryOrderRepository {
                         self.recalculate_bid_max();
                     }
                 }
-                Side::Sel => {
+                Side::Sell => {
                     // 如果清空的是最佳卖价，需要重新查找
                     if Some(price) == self.ask_min {
                         self.recalculate_ask_min();
@@ -493,7 +493,7 @@ mod tests {
 
         // 空仓储中所有价格点都应该为空
         assert!(repo.is_price_empty(10000, Side::Buy));
-        assert!(repo.is_price_empty(10000, Side::Sel));
+        assert!(repo.is_price_empty(10000, Side::Sell));
     }
 
     #[test]
@@ -549,17 +549,17 @@ mod tests {
 
         // 添加第一个卖单
         let order1 = OrderEntry::new(1, trader, 100);
-        repo.add_order(1, order1, Side::Sel, 10100).unwrap();
+        repo.add_order(1, order1, Side::Sell, 10100).unwrap();
         assert_eq!(repo.best_ask(), Some(10100));
 
         // 添加更低价卖单（应该更新）
         let order2 = OrderEntry::new(2, trader, 100);
-        repo.add_order(2, order2, Side::Sel, 10000).unwrap();
+        repo.add_order(2, order2, Side::Sell, 10000).unwrap();
         assert_eq!(repo.best_ask(), Some(10000));
 
         // 添加更高价卖单（不应该更新）
         let order3 = OrderEntry::new(3, trader, 100);
-        repo.add_order(3, order3, Side::Sel, 10200).unwrap();
+        repo.add_order(3, order3, Side::Sell, 10200).unwrap();
         assert_eq!(repo.best_ask(), Some(10000));
     }
 
@@ -598,26 +598,26 @@ mod tests {
         let trader = TraderId::from_str("TRADER1");
 
         // 添加多个卖单
-        repo.add_order(1, OrderEntry::new(1, trader, 100), Side::Sel, 10000)
+        repo.add_order(1, OrderEntry::new(1, trader, 100), Side::Sell, 10000)
             .unwrap();
-        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sel, 10100)
+        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sell, 10100)
             .unwrap();
-        repo.add_order(3, OrderEntry::new(3, trader, 100), Side::Sel, 10200)
+        repo.add_order(3, OrderEntry::new(3, trader, 100), Side::Sell, 10200)
             .unwrap();
         assert_eq!(repo.best_ask(), Some(10000));
 
         // 清空最佳卖价级别
-        repo.update_price_point(10000, Side::Sel, None, None);
+        repo.update_price_point(10000, Side::Sell, None, None);
 
         // 应该自动重新计算为次优卖价
         assert_eq!(repo.best_ask(), Some(10100));
 
         // 再次清空
-        repo.update_price_point(10100, Side::Sel, None, None);
+        repo.update_price_point(10100, Side::Sell, None, None);
         assert_eq!(repo.best_ask(), Some(10200));
 
         // 清空最后一个
-        repo.update_price_point(10200, Side::Sel, None, None);
+        repo.update_price_point(10200, Side::Sell, None, None);
         assert_eq!(repo.best_ask(), None);
     }
 
@@ -633,7 +633,7 @@ mod tests {
         assert_eq!(repo.best_ask(), None);
 
         // 添加卖单不应影响买单
-        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sel, 10100)
+        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sell, 10100)
             .unwrap();
         assert_eq!(repo.best_bid(), Some(9900));
         assert_eq!(repo.best_ask(), Some(10100));
@@ -652,7 +652,7 @@ mod tests {
         // 添加正常的买卖价差
         repo.add_order(1, OrderEntry::new(1, trader, 100), Side::Buy, 9900)
             .unwrap();
-        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sel, 10100)
+        repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Sell, 10100)
             .unwrap();
 
         // 验证不变式：bid_max <= ask_min
@@ -661,7 +661,7 @@ mod tests {
         // 添加更接近的价格
         repo.add_order(3, OrderEntry::new(3, trader, 100), Side::Buy, 9999)
             .unwrap();
-        repo.add_order(4, OrderEntry::new(4, trader, 100), Side::Sel, 10001)
+        repo.add_order(4, OrderEntry::new(4, trader, 100), Side::Sell, 10001)
             .unwrap();
 
         // 仍然满足不变式
@@ -678,9 +678,9 @@ mod tests {
             .unwrap();
         repo.add_order(2, OrderEntry::new(2, trader, 100), Side::Buy, 9950)
             .unwrap();
-        repo.add_order(3, OrderEntry::new(3, trader, 100), Side::Sel, 10050)
+        repo.add_order(3, OrderEntry::new(3, trader, 100), Side::Sell, 10050)
             .unwrap();
-        repo.add_order(4, OrderEntry::new(4, trader, 100), Side::Sel, 10100)
+        repo.add_order(4, OrderEntry::new(4, trader, 100), Side::Sell, 10100)
             .unwrap();
 
         assert_eq!(repo.best_bid(), Some(9950));
@@ -712,7 +712,7 @@ mod tests {
                 .add_order(1, OrderEntry::new(1, trader, 100), Side::Buy, bid_price)
                 .unwrap();
             test_repo
-                .add_order(2, OrderEntry::new(2, trader, 100), Side::Sel, ask_price)
+                .add_order(2, OrderEntry::new(2, trader, 100), Side::Sell, ask_price)
                 .unwrap();
 
             // 所有情况都应该满足 bid <= ask
@@ -732,13 +732,13 @@ mod tests {
 
         // 添加多个卖单
         let sell1 = OrderEntry::new(1, trader, 50);
-        repo.add_order(1, sell1, Side::Sel, 10000).unwrap();
+        repo.add_order(1, sell1, Side::Sell, 10000).unwrap();
 
         let sell2 = OrderEntry::new(2, trader, 60);
-        repo.add_order(2, sell2, Side::Sel, 10000).unwrap();
+        repo.add_order(2, sell2, Side::Sell, 10000).unwrap();
 
         let sell3 = OrderEntry::new(3, trader, 40);
-        repo.add_order(3, sell3, Side::Sel, 10100).unwrap();
+        repo.add_order(3, sell3, Side::Sell, 10100).unwrap();
 
         // 测试买单匹配：需要100数量
         let matched = repo.match_Orders(Side::Buy, 10100, 100);
