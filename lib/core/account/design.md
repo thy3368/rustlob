@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Account 模块负责账户和余额管理，消费 Settlement 模块生成的 `BalanceCommand` 并执行余额变更。
+Account 模块负责账户和余额管理，通过统一的 `AccountCommand` 处理来自 LOB（下单/撤单）和 Settlement（结算）的所有余额操作。
 
 ### 1.1 核心职责
 
@@ -10,7 +10,7 @@ Account 模块负责账户和余额管理，消费 Settlement 模块生成的 `B
 |------|------|
 | **余额管理** | 管理用户各资产的可用/冻结余额 |
 | **余额检查** | 为下单提供余额充足性验证 |
-| **命令消费** | 消费 BalanceCommand 执行余额变更 |
+| **统一命令处理** | 处理来自 LOB 和 Settlement 的 AccountCommand |
 | **乐观锁** | 使用 version 字段保证并发安全 |
 
 ### 1.2 设计原则
@@ -543,15 +543,19 @@ pub trait AccountService: Send + Sync {
 ```rust
 impl<T: BalanceStore> AccountService for AccountServiceImpl<T> {
     fn execute(&mut self, cmd: AccountCommand) -> AccountCommandResult {
-        // 1. 检查账户状态
-        let account_id = cmd.account_id();
-        if let Err(e) = self.check_account_status(account_id) {
-            return AccountCommandResult::Error(e);
+        // 1. 检查账户状态（查询操作跳过检查）
+        if !matches!(cmd, AccountCommand::GetBalance { .. }) {
+            let account_id = cmd.account_id();
+            if let Err(e) = self.check_account_status(account_id) {
+                return AccountCommandResult::Error(e);
+            }
         }
 
         match cmd {
+            // ==================== LOB 调用（基于交易对） ====================
+
             AccountCommand::CheckAndFreeze { account_id, order_id, pair, side, price, quantity } => {
-                // 2. 计算冻结金额（带溢出检查）
+                // 计算冻结金额（带溢出检查）
                 let (asset_id, amount) = match side {
                     Side::Buy => {
                         match price.checked_mul(quantity) {
@@ -562,10 +566,10 @@ impl<T: BalanceStore> AccountService for AccountServiceImpl<T> {
                     Side::Sell => (pair.base_asset, quantity),
                 };
 
-                // 3. 原子检查并冻结
+                // 原子检查并冻结
                 match self.check_and_freeze_balance(account_id, asset_id, amount) {
                     Ok(balance) => AccountCommandResult::Frozen {
-                        order_id,
+                        reference_id: order_id,
                         asset_id,
                         amount,
                         new_available: balance.available,
@@ -588,7 +592,7 @@ impl<T: BalanceStore> AccountService for AccountServiceImpl<T> {
 
                 match self.unfreeze_balance(account_id, asset_id, amount) {
                     Ok(balance) => AccountCommandResult::Unfrozen {
-                        order_id,
+                        reference_id: order_id,
                         asset_id,
                         amount,
                         new_available: balance.available,
@@ -598,12 +602,117 @@ impl<T: BalanceStore> AccountService for AccountServiceImpl<T> {
                 }
             }
 
+            // ==================== Settlement 调用（直接操作资产） ====================
+
+            AccountCommand::Freeze { account_id, asset_id, amount, reference_id } => {
+                match self.freeze_balance(account_id, asset_id, amount) {
+                    Ok(balance) => AccountCommandResult::Frozen {
+                        reference_id,
+                        asset_id,
+                        amount,
+                        new_available: balance.available,
+                        new_frozen: balance.frozen,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::UnfreezeAsset { account_id, asset_id, amount, reference_id } => {
+                match self.unfreeze_balance(account_id, asset_id, amount) {
+                    Ok(balance) => AccountCommandResult::Unfrozen {
+                        reference_id,
+                        asset_id,
+                        amount,
+                        new_available: balance.available,
+                        new_frozen: balance.frozen,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::Credit { account_id, asset_id, amount, reference_id } => {
+                match self.credit_balance(account_id, asset_id, amount) {
+                    Ok(balance) => AccountCommandResult::Credited {
+                        reference_id,
+                        asset_id,
+                        amount,
+                        new_available: balance.available,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::Debit { account_id, asset_id, amount, reference_id } => {
+                match self.debit_balance(account_id, asset_id, amount) {
+                    Ok(balance) => AccountCommandResult::Debited {
+                        reference_id,
+                        asset_id,
+                        amount,
+                        from_frozen: false,
+                        new_available: balance.available,
+                        new_frozen: balance.frozen,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::DebitFrozen { account_id, asset_id, amount, reference_id } => {
+                match self.debit_frozen_balance(account_id, asset_id, amount) {
+                    Ok(balance) => AccountCommandResult::Debited {
+                        reference_id,
+                        asset_id,
+                        amount,
+                        from_frozen: true,
+                        new_available: balance.available,
+                        new_frozen: balance.frozen,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::Transfer { from_account_id, to_account_id, asset_id, amount, reference_id } => {
+                // 转账需要检查两个账户状态
+                if let Err(e) = self.check_account_status(to_account_id) {
+                    return AccountCommandResult::Error(e);
+                }
+
+                match self.transfer_balance(from_account_id, to_account_id, asset_id, amount) {
+                    Ok(_) => AccountCommandResult::Transferred {
+                        reference_id,
+                        from_account_id,
+                        to_account_id,
+                        asset_id,
+                        amount,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            AccountCommand::SettlePnl { account_id, asset_id, pnl, reference_id } => {
+                match self.settle_pnl(account_id, asset_id, pnl) {
+                    Ok(balance) => AccountCommandResult::PnlSettled {
+                        reference_id,
+                        asset_id,
+                        pnl,
+                        new_available: balance.available,
+                    },
+                    Err(e) => AccountCommandResult::Error(e),
+                }
+            }
+
+            // ==================== 查询 ====================
+
             AccountCommand::GetBalance { account_id, asset_id } => {
                 AccountCommandResult::Balance(
                     self.get_balance(account_id, asset_id).cloned()
                 )
             }
         }
+    }
+
+    fn execute_batch(&mut self, cmds: Vec<AccountCommand>) -> Vec<AccountCommandResult> {
+        // TODO: 批量执行应在事务中完成，保证原子性
+        cmds.into_iter().map(|cmd| self.execute(cmd)).collect()
     }
 }
 
@@ -644,23 +753,146 @@ impl<T: BalanceStore> AccountServiceImpl<T> {
 
         Ok(balance.clone())
     }
+
+    /// 冻结（可用 → 冻结）
+    fn freeze_balance(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<Balance, BalanceError> {
+        self.check_and_freeze_balance(account_id, asset_id, amount)
+    }
+
+    /// 解冻（冻结 → 可用）
+    fn unfreeze_balance(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<Balance, BalanceError> {
+        let balance = self.get_balance_mut(account_id, asset_id)
+            .ok_or(BalanceError::AccountNotFound)?;
+
+        if balance.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: balance.frozen,
+            });
+        }
+
+        balance.frozen -= amount;
+        balance.available += amount;
+        balance.version += 1;
+
+        Ok(balance.clone())
+    }
+
+    /// 入账（增加可用）
+    fn credit_balance(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<Balance, BalanceError> {
+        let balance = self.get_or_create_balance_mut(account_id, asset_id);
+
+        balance.available = balance.available.checked_add(amount)
+            .ok_or(BalanceError::Overflow)?;
+        balance.version += 1;
+
+        Ok(balance.clone())
+    }
+
+    /// 扣款（减少可用）
+    fn debit_balance(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<Balance, BalanceError> {
+        let balance = self.get_balance_mut(account_id, asset_id)
+            .ok_or(BalanceError::AccountNotFound)?;
+
+        if balance.available < amount {
+            return Err(BalanceError::InsufficientAvailable {
+                required: amount,
+                available: balance.available,
+            });
+        }
+
+        balance.available -= amount;
+        balance.version += 1;
+
+        Ok(balance.clone())
+    }
+
+    /// 扣减冻结余额
+    fn debit_frozen_balance(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<Balance, BalanceError> {
+        let balance = self.get_balance_mut(account_id, asset_id)
+            .ok_or(BalanceError::AccountNotFound)?;
+
+        if balance.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: balance.frozen,
+            });
+        }
+
+        balance.frozen -= amount;
+        balance.version += 1;
+
+        Ok(balance.clone())
+    }
+
+    /// 转账（跨账户）
+    fn transfer_balance(
+        &mut self,
+        from_account_id: AccountId,
+        to_account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<(), BalanceError> {
+        // 先扣款再入账（需要事务保证原子性）
+        self.debit_balance(from_account_id, asset_id, amount)?;
+        self.credit_balance(to_account_id, asset_id, amount)?;
+        Ok(())
+    }
+
+    /// 结算盈亏
+    fn settle_pnl(
+        &mut self,
+        account_id: AccountId,
+        asset_id: AssetId,
+        pnl: i64,
+    ) -> Result<Balance, BalanceError> {
+        let balance = self.get_or_create_balance_mut(account_id, asset_id);
+
+        if pnl >= 0 {
+            // 盈利：增加可用
+            balance.available = balance.available.checked_add(pnl as u64)
+                .ok_or(BalanceError::Overflow)?;
+        } else {
+            // 亏损：减少可用
+            let loss = (-pnl) as u64;
+            if balance.available < loss {
+                return Err(BalanceError::InsufficientAvailable {
+                    required: loss,
+                    available: balance.available,
+                });
+            }
+            balance.available -= loss;
+        }
+        balance.version += 1;
+
+        Ok(balance.clone())
+    }
 }
-```
-
-### 4.7 BalanceCommandConsumer (命令消费接口)
-
-消费 Settlement 生成的 BalanceCommand：
-
-```rust
-/// BalanceCommand 消费者
-pub trait BalanceCommandConsumer: Send + Sync {
-    /// 消费单个命令
-    fn consume(&mut self, command: BalanceCommand) -> Result<BalanceSnapshot, ConsumerError>;
-
-    /// 批量消费（原子执行）
-    fn consume_batch(&mut self, batch: BalanceCommandBatch) -> Result<Vec<BalanceSnapshot>, ConsumerError>;
-}
-```
 
 ---
 
@@ -852,6 +1084,115 @@ where
 }
 ```
 
+### 7.3 Settlement 集成示例
+
+```rust
+/// Settlement 服务使用 AccountCommand 进行结算
+pub struct SettlementService<A: AccountService> {
+    account_service: A,
+}
+
+impl<A: AccountService> SettlementService<A> {
+    /// 处理成交结算
+    ///
+    /// 买方：扣减冻结的 quote_asset，入账 base_asset
+    /// 卖方：扣减冻结的 base_asset，入账 quote_asset
+    pub fn settle_trade(
+        &mut self,
+        trade_id: u64,
+        buyer_account_id: AccountId,
+        seller_account_id: AccountId,
+        pair: TradingPair,
+        price: u64,
+        quantity: u64,
+    ) -> Result<(), SettlementError> {
+        let quote_amount = price.checked_mul(quantity)
+            .ok_or(SettlementError::Overflow)?;
+
+        // 1. 扣减买方冻结的 quote_asset (USDT)
+        let cmd = AccountCommand::DebitFrozen {
+            account_id: buyer_account_id,
+            asset_id: pair.quote_asset,
+            amount: quote_amount,
+            reference_id: trade_id,
+        };
+        self.execute_or_fail(cmd)?;
+
+        // 2. 入账买方的 base_asset (BTC)
+        let cmd = AccountCommand::Credit {
+            account_id: buyer_account_id,
+            asset_id: pair.base_asset,
+            amount: quantity,
+            reference_id: trade_id,
+        };
+        self.execute_or_fail(cmd)?;
+
+        // 3. 扣减卖方冻结的 base_asset (BTC)
+        let cmd = AccountCommand::DebitFrozen {
+            account_id: seller_account_id,
+            asset_id: pair.base_asset,
+            amount: quantity,
+            reference_id: trade_id,
+        };
+        self.execute_or_fail(cmd)?;
+
+        // 4. 入账卖方的 quote_asset (USDT)
+        let cmd = AccountCommand::Credit {
+            account_id: seller_account_id,
+            asset_id: pair.quote_asset,
+            amount: quote_amount,
+            reference_id: trade_id,
+        };
+        self.execute_or_fail(cmd)?;
+
+        Ok(())
+    }
+
+    /// 转账（如划转资产）
+    pub fn transfer(
+        &mut self,
+        transfer_id: u64,
+        from_account_id: AccountId,
+        to_account_id: AccountId,
+        asset_id: AssetId,
+        amount: u64,
+    ) -> Result<(), SettlementError> {
+        let cmd = AccountCommand::Transfer {
+            from_account_id,
+            to_account_id,
+            asset_id,
+            amount,
+            reference_id: transfer_id,
+        };
+        self.execute_or_fail(cmd)
+    }
+
+    /// 结算合约盈亏
+    pub fn settle_pnl(
+        &mut self,
+        settlement_id: u64,
+        account_id: AccountId,
+        asset_id: AssetId,
+        pnl: i64,
+    ) -> Result<(), SettlementError> {
+        let cmd = AccountCommand::SettlePnl {
+            account_id,
+            asset_id,
+            pnl,
+            reference_id: settlement_id,
+        };
+        self.execute_or_fail(cmd)
+    }
+
+    fn execute_or_fail(&mut self, cmd: AccountCommand) -> Result<(), SettlementError> {
+        match self.account_service.execute(cmd) {
+            AccountCommandResult::Error(e) => Err(SettlementError::BalanceError(e)),
+            _ => Ok(()),
+        }
+    }
+}
+```
+
 ---
 
 ## 8. 目录结构
@@ -867,11 +1208,13 @@ lib/core/account/
 │   │   ├── entity/
 │   │   │   ├── mod.rs
 │   │   │   ├── account.rs            # Account, AccountType, AccountStatus
-│   │   │   ├── balance.rs            # Balance, BalanceSnapshot, BalanceOp
+│   │   │   ├── balance.rs            # Balance, BalanceOp
+│   │   │   ├── command.rs            # AccountCommand, AccountCommandResult
+│   │   │   ├── trading_pair.rs       # TradingPair, Side
 │   │   │   └── error.rs              # BalanceError
 │   │   ├── service/
 │   │   │   ├── mod.rs
-│   │   │   └── account_service.rs    # AccountService trait
+│   │   │   └── account_service.rs    # AccountService trait + impl
 │   │   └── repository/
 │   │       ├── mod.rs
 │   │       └── balance_store.rs      # BalanceStore trait
