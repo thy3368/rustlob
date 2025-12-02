@@ -280,23 +280,89 @@ impl EntityEvent {
     }
 }
 /// 交易执行记录
+///
+/// 记录一次撮合成交的完整信息，用于：
+/// - 事件溯源（TradeCreated事件）
+/// - 账户结算（确定资金划转方向）
+/// - 交易历史查询
 #[derive(Debug, Clone, Copy)]
 pub struct Trade {
-    pub buyer: TraderId,    // 买方
-    pub seller: TraderId,   // 卖方
-    pub price: Price,       // 成交价格
-    pub quantity: Quantity, // 成交数量
+    /// 交易唯一标识
+    pub trade_id: u64,
+    /// 成交价格
+    pub price: Price,
+    /// 成交数量
+    pub quantity: Quantity,
+    /// Taker交易员（主动方，新订单提交者）
+    pub taker_trader: TraderId,
+    /// Maker交易员（被动方，订单簿中的挂单方）
+    pub maker_trader: TraderId,
+    /// Taker订单ID
+    pub taker_order_id: OrderId,
+    /// Maker订单ID
+    pub maker_order_id: OrderId,
+    /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
+    pub taker_side: Side,
 }
 
 impl Trade {
     /// 创建新的交易记录
     #[inline]
-    pub fn new(buyer: TraderId, seller: TraderId, price: Price, quantity: Quantity) -> Self {
+    pub fn new(
+        trade_id: u64,
+        price: Price,
+        quantity: Quantity,
+        taker_trader: TraderId,
+        maker_trader: TraderId,
+        taker_order_id: OrderId,
+        maker_order_id: OrderId,
+        taker_side: Side,
+    ) -> Self {
         Self {
-            buyer,
-            seller,
+            trade_id,
             price,
             quantity,
+            taker_trader,
+            maker_trader,
+            taker_order_id,
+            maker_order_id,
+            taker_side,
+        }
+    }
+
+    /// 获取买方交易员
+    #[inline]
+    pub fn buyer(&self) -> TraderId {
+        match self.taker_side {
+            Side::Buy => self.taker_trader,
+            Side::Sell => self.maker_trader,
+        }
+    }
+
+    /// 获取卖方交易员
+    #[inline]
+    pub fn seller(&self) -> TraderId {
+        match self.taker_side {
+            Side::Buy => self.maker_trader,
+            Side::Sell => self.taker_trader,
+        }
+    }
+
+    /// 获取买方订单ID
+    #[inline]
+    pub fn buyer_order_id(&self) -> OrderId {
+        match self.taker_side {
+            Side::Buy => self.taker_order_id,
+            Side::Sell => self.maker_order_id,
+        }
+    }
+
+    /// 获取卖方订单ID
+    #[inline]
+    pub fn seller_order_id(&self) -> OrderId {
+        match self.taker_side {
+            Side::Buy => self.maker_order_id,
+            Side::Sell => self.taker_order_id,
         }
     }
 }
@@ -305,8 +371,14 @@ impl fmt::Display for Trade {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TRADE: {} <- {} @ {} x {}",
-            self.buyer, self.seller, self.price, self.quantity
+            "TRADE#{}: {} {} @ {} x {} (taker={}, maker={})",
+            self.trade_id,
+            self.taker_side,
+            if self.taker_side == Side::Buy { "BUY" } else { "SELL" },
+            self.price,
+            self.quantity,
+            self.taker_trader,
+            self.maker_trader
         )
     }
 }

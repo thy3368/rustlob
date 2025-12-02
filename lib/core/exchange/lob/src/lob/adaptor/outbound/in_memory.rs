@@ -1,10 +1,14 @@
+use crate::lob::adaptor::outbound::arena::OrderArena;
+use crate::lob::domain::entity::lob_types::{
+    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side,
+};
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-use crate::lob::domain::repository::traits::{OrderRepository, RepositoryAccessor, RepositoryError};
-use crate::lob::adaptor::outbound::arena::OrderArena;
+use crate::lob::domain::repository::traits::{
+    OrderRepository, RepositoryAccessor, RepositoryError,
+};
 use std::collections::HashMap;
-use crate::lob::domain::entity::lob_types::{EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side};
 
 /// 内存仓储实现
 ///
@@ -145,14 +149,12 @@ impl OrderRepository for InMemoryOrderRepository {
         Ok(())
     }
 
-    //
-    #[allow(invalid_reference_casting)]
-    fn match_Orders(
+    fn match_orders(
         &self,
         side: Side,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&mut OrderEntry>> {
+    ) -> Option<Vec<&OrderEntry>> {
         // 根据 side,price,quantity 匹配所有的Order
         // quantity总和要大于等于quantity, 返回匹配上的订单数组
 
@@ -183,15 +185,10 @@ impl OrderRepository for InMemoryOrderRepository {
                                 let idx = current_idx.unwrap();
 
                                 if let Some(entry) = self.arena.get(idx) {
-                                    if entry.is_active() {
+                                    if entry.is_active() && entry.unfilled_quantity > 0 {
                                         let fill_qty = remaining.min(entry.unfilled_quantity);
                                         remaining -= fill_qty;
-
-                                        // 使用 unsafe 获取可变引用
-                                        unsafe {
-                                            let ptr = std::ptr::from_ref(entry).cast_mut();
-                                            matched_orders.push(&mut *ptr);
-                                        }
+                                        matched_orders.push(entry);
                                     }
                                     current_idx = entry.next_idx;
                                 } else {
@@ -227,12 +224,7 @@ impl OrderRepository for InMemoryOrderRepository {
                                     if entry.is_active() && entry.unfilled_quantity > 0 {
                                         let fill_qty = remaining.min(entry.unfilled_quantity);
                                         remaining -= fill_qty;
-
-                                        // 使用 unsafe 获取可变引用
-                                        unsafe {
-                                            let ptr = std::ptr::from_ref(entry).cast_mut();
-                                            matched_orders.push(&mut *ptr);
-                                        }
+                                        matched_orders.push(entry);
                                     }
                                     current_idx = entry.next_idx;
                                 } else {
@@ -435,9 +427,8 @@ impl RepositoryAccessor for InMemoryOrderRepository {
 
 #[cfg(test)]
 mod tests {
-    use crate::lob::domain::entity::lob_types::TraderId;
     use super::*;
-
+    use crate::lob::domain::entity::lob_types::TraderId;
 
     #[test]
     fn test_add_and_find_order() {
@@ -741,7 +732,7 @@ mod tests {
         repo.add_order(3, sell3, Side::Sell, 10100).unwrap();
 
         // 测试买单匹配：需要100数量
-        let matched = repo.match_Orders(Side::Buy, 10100, 100);
+        let matched = repo.match_orders(Side::Buy, 10100, 100);
 
         assert!(matched.is_some());
         let orders = matched.unwrap();

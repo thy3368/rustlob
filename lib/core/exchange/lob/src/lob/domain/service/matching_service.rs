@@ -1,9 +1,3 @@
-/// 订单匹配服务
-///
-/// 实现价格-时间优先的订单匹配算法
-/// 遵循Clean Architecture的领域服务模式
-use crate::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
-use crate::lob::domain::repository::{OrderRepository, RepositoryAccessor};
 use crate::event;
 use crate::lob::adaptor::outbound::entity_repo::EntityRepo;
 use crate::lob::adaptor::outbound::event_repo::EventRepo;
@@ -13,10 +7,15 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, Trade};
 use crate::lob::domain::entity::lob_types::{
     EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
 };
+use crate::lob::domain::repository::{OrderRepository, RepositoryAccessor};
+/// 订单匹配服务
+///
+/// 实现价格-时间优先的订单匹配算法
+/// 遵循Clean Architecture的领域服务模式
+use crate::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
 use account::{
     AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
 };
-
 
 /// 匹配服务
 ///
@@ -76,7 +75,7 @@ where
     /// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
     fn create_trades(
         &self,
-        matched_orders: Option<Vec<&mut OrderEntry>>,
+        matched_orders: Option<Vec<&OrderEntry>>,
         price: Price,
         quantity: Quantity,
     ) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
@@ -98,7 +97,7 @@ where
                 // 2. 更新订单的未成交数量
                 let old_unfilled = matched_order.unfilled_quantity;
                 let new_unfilled = old_unfilled - fill_qty;
-                matched_order.unfilled_quantity = new_unfilled;
+                // matched_order.unfilled_quantity = new_unfilled;
                 remaining -= fill_qty;
 
                 // 3. 创建订单更新事件
@@ -261,7 +260,7 @@ where
             }
 
             // 账户冻结成功，继续撮合流程
-            let orders = self.lob_repo.match_Orders(side, price, quantity);
+            let orders = self.lob_repo.match_orders(side, price, quantity);
 
             if orders.is_some() && orders.as_ref().unwrap().len() > 0 {
                 let (order_change_events, trade_create_events, unfilled_amount) =
