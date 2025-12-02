@@ -2,37 +2,34 @@
 
 use serde::{Deserialize, Serialize};
 
-/// JSON-RPC 请求参数：限价单
+/// 统一命令请求
 #[derive(Debug, Deserialize)]
-pub struct LimitOrderRequest {
-    pub trader_id: String,
-    pub side: String,      // "BUY" or "SELL"
-    pub price: u32,
-    pub quantity: u32,
+pub struct CommandRequest {
+    /// 命令类型: LimitOrder, MarketOrder, IcebergOrder, CancelOrder
+    pub command: String,
+    pub trader_id: Option<String>,
+    pub side: Option<String>,
+    pub price: Option<u32>,
+    pub quantity: Option<u32>,
+    pub total_quantity: Option<u32>,
+    pub display_quantity: Option<u32>,
+    pub order_id: Option<u64>,
 }
 
-/// JSON-RPC 请求参数：市价单
-#[derive(Debug, Deserialize)]
-pub struct MarketOrderRequest {
-    pub trader_id: String,
-    pub side: String,
-    pub quantity: u32,
-}
-
-/// JSON-RPC 请求参数：冰山单
-#[derive(Debug, Deserialize)]
-pub struct IcebergOrderRequest {
-    pub trader_id: String,
-    pub side: String,
-    pub price: u32,
-    pub total_quantity: u32,
-    pub display_quantity: u32,
-}
-
-/// JSON-RPC 请求参数：取消订单
-#[derive(Debug, Deserialize)]
-pub struct CancelOrderRequest {
-    pub order_id: u64,
+/// 统一命令响应
+#[derive(Debug, Serialize, Default)]
+pub struct CommandResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trades: Option<Vec<TradeInfo>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_total: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_display: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// 交易信息
@@ -44,16 +41,20 @@ pub struct TradeInfo {
     pub quantity: u32,
 }
 
+/// 健康检查响应
+#[derive(Debug, Serialize)]
+pub struct HealthResponse {
+    pub status: String,
+    pub service: String,
+    pub version: String,
+}
+
 /// RPC 服务配置
 #[derive(Debug, Clone)]
 pub struct RpcServiceConfig {
-    /// 监听地址
     pub listen_addr: String,
-    /// 工作线程数
     pub threads: usize,
-    /// 订单容量
     pub order_capacity: usize,
-    /// 价格范围
     pub price_range: usize,
 }
 

@@ -1,6 +1,7 @@
 use crate::lob::adaptor::outbound::arena::OrderArena;
 use crate::lob::domain::entity::lob_types::{
-    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side,
+    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity,
+    Side, TraderId,
 };
 /// 内存仓储实现
 ///
@@ -282,55 +283,110 @@ impl OrderRepository for InMemoryOrderRepository {
 
     fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError> {
         for event in events {
-            match (event.entity_name, event.operation) {
-                ("Order", EventOperation::Create) => {
-                    let order_entry: OrderEntry = trans(event);
-                    // self.add_order(order_entry);
-                    // 处理订单创建事件
-                }
-                ("Order", EventOperation::Update) => {
-                    // 处理订单更新事件
-                    for change in event.changes {
-                        let order_id = change.entity_id;
-
-                        for field in change.field_changes {
-                            if field.field_name == "unfilled_quantity" {
-                                if let Some(FieldValue::U32(new_qty)) = field.new_value {
-                                    // 更新订单数量
-                                    if let Some(entry) = self.find_order_mut(order_id) {
-                                        entry.unfilled_quantity = new_qty;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                ("Order", EventOperation::Delete) => {
-                    // 处理订单删除事件
-                    for change in event.changes {
-                        let order_id = change.entity_id;
-                        // cancel_order内部已经调用了arena.free()
-                        self.cancel_order(order_id);
-                    }
-                }
-                _ => {
-                    // 忽略其他事件类型（如Trade）
-                }
-            }
+            self.apply_event(event)?;
         }
         Ok(())
     }
 }
 
-fn trans(entity_event: EntityEvent) -> OrderEntry {
-    //将EntityEvent 转成OrderEntry
-    todo!()
+impl InMemoryOrderRepository {
+    /// 应用单个事件
+    fn apply_event(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+        match (event.entity_name, event.operation) {
+            ("Order", EventOperation::Create) => self.apply_order_create(event),
+            ("Order", EventOperation::Update) => self.apply_order_update(event),
+            ("Order", EventOperation::Delete) => self.apply_order_delete(event),
+            _ => Ok(()), // 忽略其他事件类型（如 Trade）
+        }
+    }
+
+    /// 应用订单创建事件
+    fn apply_order_create(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+        for change in event.changes {
+            let order_id = change.entity_id;
+
+            // 从字段变更中提取订单信息
+            let mut trader = TraderId::new([0u8; 8]);
+            let mut side = Side::Buy;
+            let mut price: Price = 0;
+            let mut quantity: Quantity = 0;
+
+            for field in change.field_changes {
+                match field.field_name {
+                    "trader" => {
+                        if let Some(FieldValue::TraderId(t)) = field.new_value {
+                            trader = t;
+                        }
+                    }
+                    "side" => {
+                        if let Some(FieldValue::Side(s)) = field.new_value {
+                            side = s;
+                        }
+                    }
+                    "price" => {
+                        if let Some(FieldValue::U32(p)) = field.new_value {
+                            price = p;
+                        }
+                    }
+                    "quantity" | "total_quantity" => {
+                        if let Some(FieldValue::U32(q)) = field.new_value {
+                            quantity = q;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let entry = OrderEntry::new(order_id, trader, quantity);
+            self.add_order(order_id, entry, side, price)?;
+        }
+        Ok(())
+    }
+
+    /// 应用订单更新事件
+    fn apply_order_update(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+        for change in event.changes {
+            let order_id = change.entity_id;
+
+            if let Some(entry) = self.find_order_mut(order_id) {
+                for field in change.field_changes {
+                    match field.field_name {
+                        "unfilled_quantity" => {
+                            if let Some(FieldValue::U32(qty)) = field.new_value {
+                                entry.unfilled_quantity = qty;
+                            }
+                        }
+                        "total_quantity" => {
+                            if let Some(FieldValue::U32(qty)) = field.new_value {
+                                entry.total_quantity = qty;
+                            }
+                        }
+                        "next_idx" => {
+                            if let Some(FieldValue::OptionUsize(idx)) = field.new_value {
+                                entry.next_idx = idx;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 应用订单删除事件
+    fn apply_order_delete(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+        for change in event.changes {
+            self.cancel_order(change.entity_id);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lob::domain::entity::lob_types::TraderId;
+    use crate::lob::domain::entity::lob_types::{FieldChange, RecordChange, TraderId};
 
     #[test]
     fn test_add_and_find_order() {
@@ -347,5 +403,183 @@ mod tests {
         let found = repo.find_order(order_id);
         assert!(found.is_some());
         assert_eq!(found.unwrap().unfilled_quantity, 100);
+    }
+
+    #[test]
+    fn test_replay_create_order() {
+        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+        let trader = TraderId::from_str("TRADER1");
+
+        // 构造 Create 事件
+        let event = EntityEvent::new(
+            1, // event_id
+            1, // transaction_id
+            "Order",
+            EventOperation::Create,
+            vec![RecordChange::new(
+                100, // order_id
+                vec![
+                    FieldChange::created("trader", FieldValue::TraderId(trader)),
+                    FieldChange::created("side", FieldValue::Side(Side::Buy)),
+                    FieldChange::created("price", FieldValue::U32(10000)),
+                    FieldChange::created("quantity", FieldValue::U32(50)),
+                ],
+            )],
+        );
+
+        // 重放事件
+        let result = repo.replay(vec![event]);
+        assert!(result.is_ok());
+
+        // 验证订单已创建
+        let found = repo.find_order(100);
+        assert!(found.is_some());
+        let order = found.unwrap();
+        assert_eq!(order.order_id, 100);
+        assert_eq!(order.unfilled_quantity, 50);
+        assert_eq!(order.trader, trader);
+    }
+
+    #[test]
+    fn test_replay_update_order() {
+        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+        let trader = TraderId::from_str("TRADER1");
+
+        // 先添加订单
+        let entry = OrderEntry::new(100, trader, 100);
+        repo.add_order(100, entry, Side::Buy, 10000).unwrap();
+
+        // 构造 Update 事件
+        let event = EntityEvent::new(
+            2,
+            2,
+            "Order",
+            EventOperation::Update,
+            vec![RecordChange::new(
+                100,
+                vec![FieldChange::updated(
+                    "unfilled_quantity",
+                    FieldValue::U32(100),
+                    FieldValue::U32(30),
+                )],
+            )],
+        );
+
+        // 重放事件
+        let result = repo.replay(vec![event]);
+        assert!(result.is_ok());
+
+        // 验证订单已更新
+        let found = repo.find_order(100).unwrap();
+        assert_eq!(found.unfilled_quantity, 30);
+    }
+
+    #[test]
+    fn test_replay_delete_order() {
+        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+        let trader = TraderId::from_str("TRADER1");
+
+        // 先添加订单
+        let entry = OrderEntry::new(100, trader, 100);
+        repo.add_order(100, entry, Side::Buy, 10000).unwrap();
+        assert!(repo.find_order(100).is_some());
+
+        // 构造 Delete 事件
+        let event = EntityEvent::new(
+            3,
+            3,
+            "Order",
+            EventOperation::Delete,
+            vec![RecordChange::new(100, vec![])],
+        );
+
+        // 重放事件
+        let result = repo.replay(vec![event]);
+        assert!(result.is_ok());
+
+        // 验证订单已删除（从索引中移除）
+        assert!(repo.find_order(100).is_none());
+    }
+
+    #[test]
+    fn test_replay_multiple_events() {
+        let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+        let trader1 = TraderId::from_str("TRADER1");
+        let trader2 = TraderId::from_str("TRADER2");
+
+        // 构造多个事件
+        let events = vec![
+            // 创建订单1
+            EntityEvent::new(
+                1,
+                1,
+                "Order",
+                EventOperation::Create,
+                vec![RecordChange::new(
+                    1,
+                    vec![
+                        FieldChange::created("trader", FieldValue::TraderId(trader1)),
+                        FieldChange::created("side", FieldValue::Side(Side::Buy)),
+                        FieldChange::created("price", FieldValue::U32(10000)),
+                        FieldChange::created("quantity", FieldValue::U32(100)),
+                    ],
+                )],
+            ),
+            // 创建订单2
+            EntityEvent::new(
+                2,
+                2,
+                "Order",
+                EventOperation::Create,
+                vec![RecordChange::new(
+                    2,
+                    vec![
+                        FieldChange::created("trader", FieldValue::TraderId(trader2)),
+                        FieldChange::created("side", FieldValue::Side(Side::Sell)),
+                        FieldChange::created("price", FieldValue::U32(10100)),
+                        FieldChange::created("quantity", FieldValue::U32(50)),
+                    ],
+                )],
+            ),
+            // 更新订单1
+            EntityEvent::new(
+                3,
+                3,
+                "Order",
+                EventOperation::Update,
+                vec![RecordChange::new(
+                    1,
+                    vec![FieldChange::updated(
+                        "unfilled_quantity",
+                        FieldValue::U32(100),
+                        FieldValue::U32(60),
+                    )],
+                )],
+            ),
+            // 删除订单2
+            EntityEvent::new(
+                4,
+                4,
+                "Order",
+                EventOperation::Delete,
+                vec![RecordChange::new(2, vec![])],
+            ),
+        ];
+
+        // 重放所有事件
+        let result = repo.replay(events);
+        assert!(result.is_ok());
+
+        // 验证最终状态
+        let order1 = repo.find_order(1).unwrap();
+        assert_eq!(order1.unfilled_quantity, 60);
+
+        // 订单2已从索引中移除，无法通过 find_order 查找
+        assert!(repo.find_order(2).is_none());
+
+        assert_eq!(repo.best_bid(), Some(10000));
+        // 注：best_ask 仍为 Some(10100)，因为 cancel_order 采用延迟回收策略，
+        // 不会立即更新 best_ask 缓存。只有当价格级别完全清空时才会更新。
+        assert_eq!(repo.best_ask(), Some(10100));
     }
 }

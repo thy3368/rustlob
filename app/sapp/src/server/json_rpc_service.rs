@@ -1,280 +1,156 @@
 //! LOB JSON-RPC 服务实现
+//!
+//! 通过单一 handle 接口转发所有命令
 
 use crate::models::*;
-use jsonrpc_core::{IoHandler, Params};
-use jsonrpc_http_server::{Server, ServerBuilder, DomainsValidation};
-use lob::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
-use lob::lob::domain::service::matching_service::MatchingService;
-use lob::lob::domain::::in_memory::InMemoryOrderRepository;
-use lob::lob::domain::::OrderRepository;  // 导入 trait 以使用其方法
-use lob::lob::domain::entity::lob_types::{Side, TraderId};
-use serde_json::json;
+use jsonrpc_core::Result;
+use jsonrpc_derive::rpc;
+use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
+use lob::lob::{Command, CommandResult, OrderCommandHandler, Side, TraderId};
 use std::sync::{Arc, Mutex};
 
 /// 解析 Side 字符串
-fn parse_side(s: &str) -> Option<Side> {
+fn parse_side(s: &str) -> std::result::Result<Side, jsonrpc_core::Error> {
     match s.to_uppercase().as_str() {
-        "BUY" | "B" => Some(Side::Buy),
-        "SELL" | "S" => Some(Side::Sell),
-        _ => None,
+        "BUY" | "B" => Ok(Side::Buy),
+        "SELL" | "S" => Ok(Side::Sell),
+        _ => Err(jsonrpc_core::Error::invalid_params("Invalid side")),
+    }
+}
+
+/// LOB RPC 接口 - 统一命令入口
+#[rpc(server)]
+pub trait LobRpc {
+    /// 统一命令处理接口
+    #[rpc(name = "execute")]
+    fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse>;
+
+    /// 健康检查
+    #[rpc(name = "health")]
+    fn health(&self) -> Result<HealthResponse>;
+}
+
+/// LOB RPC 服务实现
+pub struct LobRpcImpl<H: OrderCommandHandler + Send + 'static> {
+    handler: Arc<Mutex<H>>,
+}
+
+impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
+    pub fn new(handler: H) -> Self {
+        Self {
+            handler: Arc::new(Mutex::new(handler)),
+        }
+    }
+
+    /// 将请求转换为 Command
+    fn parse_command(cmd: &CommandRequest) -> std::result::Result<Command, jsonrpc_core::Error> {
+        match cmd.command.as_str() {
+            "LimitOrder" => Ok(Command::LimitOrder {
+                trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
+                side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
+                price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
+                quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
+            }),
+            "MarketOrder" => Ok(Command::MarketOrder {
+                trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
+                side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
+                quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
+            }),
+            "IcebergOrder" => Ok(Command::IcebergOrder {
+                trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
+                side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
+                price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
+                total_quantity: cmd.total_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing total_quantity"))?,
+                display_quantity: cmd.display_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing display_quantity"))?,
+            }),
+            "CancelOrder" => Ok(Command::CancelOrder {
+                order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?,
+            }),
+            _ => Err(jsonrpc_core::Error::invalid_params(format!("unknown command: {}", cmd.command))),
+        }
+    }
+
+    /// 将 CommandResult 转换为响应
+    fn to_response(result: CommandResult) -> CommandResponse {
+        match result {
+            CommandResult::LimitOrder { order_id, trades } => CommandResponse {
+                success: true,
+                order_id: Some(order_id),
+                trades: Some(trades.iter().map(|t| TradeInfo {
+                    buyer: t.buyer().to_string(),
+                    seller: t.seller().to_string(),
+                    price: t.price,
+                    quantity: t.quantity,
+                }).collect()),
+                ..Default::default()
+            },
+            CommandResult::MarketOrder { trades } => CommandResponse {
+                success: true,
+                trades: Some(trades.iter().map(|t| TradeInfo {
+                    buyer: t.buyer().to_string(),
+                    seller: t.seller().to_string(),
+                    price: t.price,
+                    quantity: t.quantity,
+                }).collect()),
+                ..Default::default()
+            },
+            CommandResult::IcebergOrder { order_id, trades, remaining_total, current_display } => CommandResponse {
+                success: true,
+                order_id: Some(order_id),
+                trades: Some(trades.iter().map(|t| TradeInfo {
+                    buyer: t.buyer().to_string(),
+                    seller: t.seller().to_string(),
+                    price: t.price,
+                    quantity: t.quantity,
+                }).collect()),
+                remaining_total: Some(remaining_total),
+                current_display: Some(current_display),
+                ..Default::default()
+            },
+            CommandResult::CancelOrder { success } => CommandResponse {
+                success,
+                ..Default::default()
+            },
+            _ => CommandResponse {
+                success: false,
+                error: Some("unsupported command result".to_string()),
+                ..Default::default()
+            },
+        }
+    }
+}
+
+impl<H: OrderCommandHandler + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
+    fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse> {
+        let command = Self::parse_command(&cmd)?;
+        let mut h = self.handler.lock().unwrap();
+        let result = h.handle(command);
+        Ok(Self::to_response(result))
+    }
+
+    fn health(&self) -> Result<HealthResponse> {
+        Ok(HealthResponse {
+            status: "ok".to_string(),
+            service: "lob-matching-service".to_string(),
+            version: "0.1.0".to_string(),
+        })
     }
 }
 
 /// LOB JSON-RPC 服务
 pub struct LobRpcService {
     config: RpcServiceConfig,
-    matching_service: Arc<Mutex<MatchingService<InMemoryOrderRepository>>>,
 }
 
 impl LobRpcService {
-    /// 创建新的 RPC 服务
     pub fn new(config: RpcServiceConfig) -> Self {
-        let repository = InMemoryOrderRepository::new(config.order_capacity, config.price_range);
-        let matching_service = MatchingService::new(repository);
-
-        Self {
-            config,
-            matching_service: Arc::new(Mutex::new(matching_service)),
-        }
+        Self { config }
     }
 
-    /// 构建 JSON-RPC handler
-    fn build_handler(&self) -> IoHandler {
-        let mut io = IoHandler::new();
-
-        self.register_limit_order(&mut io);
-        self.register_market_order(&mut io);
-        self.register_iceberg_order(&mut io);
-        self.register_cancel_order(&mut io);
-        self.register_book_status(&mut io);
-        self.register_health_check(&mut io);
-
-        io
-    }
-
-    /// 注册限价单 RPC 方法
-    fn register_limit_order(&self, io: &mut IoHandler) {
-        let service = self.matching_service.clone();
-
-        io.add_method("place_limit_order", move |params: Params| {
-            let service = service.clone();
-
-            async move {
-                let req: LimitOrderRequest = params.parse()?;
-
-                let side = parse_side(&req.side)
-                    .ok_or_else(|| jsonrpc_core::Error::invalid_params("Invalid side"))?;
-                let trader = TraderId::from_str(&req.trader_id);
-
-                let command = Command::LimitOrder {
-                    trader,
-                    side,
-                    price: req.price,
-                    quantity: req.quantity,
-                };
-
-                let mut svc = service.lock().unwrap();
-                let result = svc.handle(command);
-
-                match result {
-                    CommandResult::LimitOrder { order_id, trades } => {
-                        let trade_infos: Vec<TradeInfo> = trades
-                            .iter()
-                            .map(|t| TradeInfo {
-                                buyer: t.buyer.to_string(),
-                                seller: t.seller.to_string(),
-                                price: t.price,
-                                quantity: t.quantity,
-                            })
-                            .collect();
-
-                        Ok(json!({
-                            "order_id": order_id,
-                            "trades": trade_infos,
-                            "status": "success"
-                        }))
-                    }
-                    _ => Err(jsonrpc_core::Error::internal_error()),
-                }
-            }
-        });
-    }
-
-    /// 注册市价单 RPC 方法
-    fn register_market_order(&self, io: &mut IoHandler) {
-        let service = self.matching_service.clone();
-
-        io.add_method("place_market_order", move |params: Params| {
-            let service = service.clone();
-
-            async move {
-                let req: MarketOrderRequest = params.parse()?;
-
-                let side = parse_side(&req.side)
-                    .ok_or_else(|| jsonrpc_core::Error::invalid_params("Invalid side"))?;
-                let trader = TraderId::from_str(&req.trader_id);
-
-                let command = Command::MarketOrder {
-                    trader,
-                    side,
-                    quantity: req.quantity,
-                };
-
-                let mut svc = service.lock().unwrap();
-                let result = svc.handle(command);
-
-                match result {
-                    CommandResult::MarketOrder { trades } => {
-                        let trade_infos: Vec<TradeInfo> = trades
-                            .iter()
-                            .map(|t| TradeInfo {
-                                buyer: t.buyer.to_string(),
-                                seller: t.seller.to_string(),
-                                price: t.price,
-                                quantity: t.quantity,
-                            })
-                            .collect();
-
-                        Ok(json!({
-                            "trades": trade_infos,
-                            "status": "success"
-                        }))
-                    }
-                    _ => Err(jsonrpc_core::Error::internal_error()),
-                }
-            }
-        });
-    }
-
-    /// 注册冰山单 RPC 方法
-    fn register_iceberg_order(&self, io: &mut IoHandler) {
-        let service = self.matching_service.clone();
-
-        io.add_method("place_iceberg_order", move |params: Params| {
-            let service = service.clone();
-
-            async move {
-                let req: IcebergOrderRequest = params.parse()?;
-
-            let side = parse_side(&req.side)
-                .ok_or_else(|| jsonrpc_core::Error::invalid_params("Invalid side"))?;
-            let trader = TraderId::from_str(&req.trader_id);
-
-            let command = Command::IcebergOrder {
-                trader,
-                side,
-                price: req.price,
-                total_quantity: req.total_quantity,
-                display_quantity: req.display_quantity,
-            };
-
-            let mut svc = service.lock().unwrap();
-            let result = svc.handle(command);
-
-            match result {
-                CommandResult::IcebergOrder {
-                    order_id,
-                    trades,
-                    remaining_total,
-                    current_display,
-                } => {
-                    let trade_infos: Vec<TradeInfo> = trades
-                        .iter()
-                        .map(|t| TradeInfo {
-                            buyer: t.buyer.to_string(),
-                            seller: t.seller.to_string(),
-                            price: t.price,
-                            quantity: t.quantity,
-                        })
-                        .collect();
-
-                    Ok(json!({
-                        "order_id": order_id,
-                        "trades": trade_infos,
-                        "remaining_total": remaining_total,
-                        "current_display": current_display,
-                        "status": "success"
-                    }))
-                }
-                _ => Err(jsonrpc_core::Error::internal_error()),
-            }
-            }
-        });
-    }
-
-    /// 注册取消订单 RPC 方法
-    fn register_cancel_order(&self, io: &mut IoHandler) {
-        let service = self.matching_service.clone();
-
-        io.add_method("cancel_order", move |params: Params| {
-            let service = service.clone();
-
-            async move {
-                let req: CancelOrderRequest = params.parse()?;
-
-            let command = Command::CancelOrder {
-                order_id: req.order_id,
-            };
-
-            let mut svc = service.lock().unwrap();
-            let result = svc.handle(command);
-
-            match result {
-                CommandResult::CancelOrder { success } => {
-                    Ok(json!({
-                        "success": success,
-                        "order_id": req.order_id
-                    }))
-                }
-                _ => Err(jsonrpc_core::Error::internal_error()),
-                }
-            }
-        });
-    }
-
-    /// 注册订单簿状态 RPC 方法
-    fn register_book_status(&self, io: &mut IoHandler) {
-        let service = self.matching_service.clone();
-
-        io.add_method("get_book_status", move |_params: Params| {
-            let service = service.clone();
-
-            async move {
-            let svc = service.lock().unwrap();
-            let repo = svc.repository();
-
-            let best_bid = repo.best_bid();
-            let best_ask = repo.best_ask();
-            let spread = match (best_bid, best_ask) {
-                (Some(bid), Some(ask)) if ask > bid => Some(ask - bid),
-                _ => None,
-            };
-            let active_orders = repo.active_order_count();
-
-            Ok(json!({
-                "best_bid": best_bid,
-                "best_ask": best_ask,
-                "spread": spread,
-                "active_orders": active_orders
-            }))
-            }
-        });
-    }
-
-    /// 注册健康检查 RPC 方法
-    fn register_health_check(&self, io: &mut IoHandler) {
-        io.add_method("health", |_params: Params| async move {
-            Ok(json!({
-                "status": "ok",
-                "service": "lob-matching-service",
-                "version": "0.1.0"
-            }))
-        });
-    }
-
-    /// 启动服务
-    pub fn start(self) -> Server {
-        let io = self.build_handler();
+    pub fn start<H: OrderCommandHandler + Send + Sync + 'static>(self, handler: H) -> Server {
+        let rpc_impl = LobRpcImpl::new(handler);
+        let mut io = jsonrpc_core::IoHandler::new();
+        io.extend_with(rpc_impl.to_delegate());
 
         let server = ServerBuilder::new(io)
             .threads(self.config.threads)
@@ -283,36 +159,11 @@ impl LobRpcService {
             .expect("无法启动 JSON-RPC 服务器");
 
         self.print_banner();
-
         server
     }
 
-    /// 打印启动信息
     fn print_banner(&self) {
-        println!("╔══════════════════════════════════════════════════════════════╗");
-        println!("║           LOB Matching Service - JSON-RPC Server            ║");
-        println!("╚══════════════════════════════════════════════════════════════╝");
-        println!();
-        println!("✓ 服务器已启动");
-        println!("  监听地址: http://{}", self.config.listen_addr);
-        println!("  工作线程: {}", self.config.threads);
-        println!("  订单容量: {}", self.config.order_capacity);
-        println!("  价格范围: 0 - {}", self.config.price_range);
-        println!();
-        println!("可用的 RPC 方法:");
-        println!("  📝 place_limit_order    - 提交限价单");
-        println!("  🚀 place_market_order   - 提交市价单");
-        println!("  🧊 place_iceberg_order  - 提交冰山单");
-        println!("  ❌ cancel_order         - 取消订单");
-        println!("  📊 get_book_status      - 获取订单簿状态");
-        println!("  💚 health               - 健康检查");
-        println!();
-        println!("示例请求:");
-        println!(r#"  curl -X POST http://{} \"#, self.config.listen_addr);
-        println!(r#"    -H "Content-Type: application/json" \"#);
-        println!(r#"    -d '{{"jsonrpc":"2.0","method":"place_limit_order","params":{{"trader_id":"TRADER001","side":"BUY","price":10000,"quantity":100}},"id":1}}'"#);
-        println!();
-        println!("按 Ctrl+C 停止服务器...");
-        println!();
+        println!("LOB JSON-RPC Server @ http://{}", self.config.listen_addr);
+        println!("Methods: execute, health");
     }
 }

@@ -1,11 +1,36 @@
+mod client;
 mod models;
 mod server;
-mod client;
 
+use account::{
+    AccountServiceImpl, InMemoryAccountRepository, InMemoryBalanceRepository, TradingPair,
+};
+use lob::lob::{InMemoryOrderRepository, MatchingService};
 use models::RpcServiceConfig;
 use server::json_rpc_service::LobRpcService;
 use std::env;
-use server::{restful_service, websocket_service};
+
+/// 创建 MatchingService 实例
+fn create_matching_service(
+    order_capacity: usize,
+    price_range: usize,
+) -> MatchingService<InMemoryOrderRepository, AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository>>
+{
+    let lob_repo = InMemoryOrderRepository::new(order_capacity, price_range);
+    let account_repo = InMemoryAccountRepository::new();
+    let balance_repo = InMemoryBalanceRepository::with_default_timestamp();
+    let account_service = AccountServiceImpl::new(
+        account_repo,
+        balance_repo,
+        || std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64,
+    );
+    let trading_pair = TradingPair::BTC_USDT;
+
+    MatchingService::new(lob_repo, account_service, trading_pair)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -15,28 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "websocket".to_string());
 
     match service_type.as_str() {
-        "websocket" | "ws" => {
-            // 启动 WebSocket 服务（默认，最高性能）
-            println!("启动 WebSocket 服务...");
-            let port = env::var("WS_PORT")
-                .ok()
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(9090);
-
-            websocket_service::start(port).await?;
-        }
-
-        "axum" | "http" => {
-            // 启动 Axum HTTP REST API 服务
-            println!("启动 Axum HTTP 服务...");
-            let port = env::var("PORT")
-                .ok()
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(8080);
-
-            restful_service::start(port).await?;
-        }
-
         "jsonrpc" | "rpc" => {
             // 启动 JSON-RPC 服务
             println!("启动 JSON-RPC 服务...");
@@ -47,8 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 price_range: 1000000,
             };
 
+            let handler = create_matching_service(config.order_capacity, config.price_range);
             let service = LobRpcService::new(config);
-            let server = service.start();
+            let server = service.start(handler);
             server.wait();
         }
 
@@ -64,20 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     order_capacity: 100000,
                     price_range: 1000000,
                 };
+                let handler = create_matching_service(config.order_capacity, config.price_range);
                 let service = LobRpcService::new(config);
-                let server = service.start();
+                let server = service.start(handler);
                 server.wait();
             });
-
-            // 启动 HTTP 服务（后台任务）
-            tokio::spawn(async move {
-                if let Err(e) = restful_service::start(8080).await {
-                    eprintln!("HTTP服务错误: {}", e);
-                }
-            });
-
-            // 启动 WebSocket 服务（主线程）
-            websocket_service::start(9090).await?;
         }
 
         _ => {

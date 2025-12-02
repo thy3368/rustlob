@@ -59,11 +59,6 @@ where
         }
     }
 
-    /// 获取 account_service 的可变引用
-    pub fn account_service_mut(&mut self) -> &mut A {
-        &mut self.account_service
-    }
-
     /// 创建交易事件
     ///
     /// # 参数
@@ -139,16 +134,6 @@ where
         };
 
         (order_events_opt, trade_events_opt, unfilled_amount)
-    }
-
-    /// 获取repository的可变引用
-    pub fn repository_mut(&mut self) -> &mut R {
-        &mut self.lob_repo
-    }
-
-    /// 获取repository的不可变引用
-    pub fn repository(&self) -> &R {
-        &self.lob_repo
     }
 
     /// 取消订单
