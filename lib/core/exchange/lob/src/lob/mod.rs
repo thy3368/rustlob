@@ -94,7 +94,7 @@ mod adaptor;
 
 // 导出服务和仓储（供高级用户使用）
 pub use domain::service::handler::{
-    AuctionType, Command, CommandResult, OrderCommandHandler, PegType, UrgencyLevel,
+    AuctionType, SpotCommand, SpotCommandResult, PegType, SpotOrderHandler, UrgencyLevel,
 };
 pub use domain::service::market_data_service::MarketDataService;
 pub use domain::service::matching_service::MatchingService;

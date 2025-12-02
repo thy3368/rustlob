@@ -6,7 +6,7 @@ use crate::models::*;
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{Command, CommandResult, OrderCommandHandler, Side, TraderId};
+use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler, Side, TraderId};
 use std::sync::{Arc, Mutex};
 
 /// 解析 Side 字符串
@@ -31,11 +31,11 @@ pub trait LobRpc {
 }
 
 /// LOB RPC 服务实现
-pub struct LobRpcImpl<H: OrderCommandHandler + Send + 'static> {
+pub struct LobRpcImpl<H: SpotOrderHandler + Send + 'static> {
     handler: Arc<Mutex<H>>,
 }
 
-impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
+impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
     pub fn new(handler: H) -> Self {
         Self {
             handler: Arc::new(Mutex::new(handler)),
@@ -43,27 +43,27 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
     }
 
     /// 将请求转换为 Command
-    fn parse_command(cmd: &CommandRequest) -> std::result::Result<Command, jsonrpc_core::Error> {
+    fn parse_command(cmd: &CommandRequest) -> std::result::Result<SpotCommand, jsonrpc_core::Error> {
         match cmd.command.as_str() {
-            "LimitOrder" => Ok(Command::LimitOrder {
+            "LimitOrder" => Ok(SpotCommand::LimitOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
                 price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
             }),
-            "MarketOrder" => Ok(Command::MarketOrder {
+            "MarketOrder" => Ok(SpotCommand::MarketOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
             }),
-            "IcebergOrder" => Ok(Command::IcebergOrder {
+            "IcebergOrder" => Ok(SpotCommand::IcebergOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
                 price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
                 total_quantity: cmd.total_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing total_quantity"))?,
                 display_quantity: cmd.display_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing display_quantity"))?,
             }),
-            "CancelOrder" => Ok(Command::CancelOrder {
+            "CancelOrder" => Ok(SpotCommand::CancelOrder {
                 order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?,
             }),
             _ => Err(jsonrpc_core::Error::invalid_params(format!("unknown command: {}", cmd.command))),
@@ -71,9 +71,9 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
     }
 
     /// 将 CommandResult 转换为响应
-    fn to_response(result: CommandResult) -> CommandResponse {
+    fn to_response(result: SpotCommandResult) -> CommandResponse {
         match result {
-            CommandResult::LimitOrder { order_id, trades } => CommandResponse {
+            SpotCommandResult::LimitOrder { order_id, trades } => CommandResponse {
                 success: true,
                 order_id: Some(order_id),
                 trades: Some(trades.iter().map(|t| TradeInfo {
@@ -84,7 +84,7 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
                 }).collect()),
                 ..Default::default()
             },
-            CommandResult::MarketOrder { trades } => CommandResponse {
+            SpotCommandResult::MarketOrder { trades } => CommandResponse {
                 success: true,
                 trades: Some(trades.iter().map(|t| TradeInfo {
                     buyer: t.buyer().to_string(),
@@ -94,7 +94,7 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
                 }).collect()),
                 ..Default::default()
             },
-            CommandResult::IcebergOrder { order_id, trades, remaining_total, current_display } => CommandResponse {
+            SpotCommandResult::IcebergOrder { order_id, trades, remaining_total, current_display } => CommandResponse {
                 success: true,
                 order_id: Some(order_id),
                 trades: Some(trades.iter().map(|t| TradeInfo {
@@ -107,7 +107,7 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
                 current_display: Some(current_display),
                 ..Default::default()
             },
-            CommandResult::CancelOrder { success } => CommandResponse {
+            SpotCommandResult::CancelOrder { success } => CommandResponse {
                 success,
                 ..Default::default()
             },
@@ -120,7 +120,7 @@ impl<H: OrderCommandHandler + Send + 'static> LobRpcImpl<H> {
     }
 }
 
-impl<H: OrderCommandHandler + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
+impl<H: SpotOrderHandler + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
     fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse> {
         let command = Self::parse_command(&cmd)?;
         let mut h = self.handler.lock().unwrap();
@@ -147,7 +147,7 @@ impl LobRpcService {
         Self { config }
     }
 
-    pub fn start<H: OrderCommandHandler + Send + Sync + 'static>(self, handler: H) -> Server {
+    pub fn start<H: SpotOrderHandler + Send + Sync + 'static>(self, handler: H) -> Server {
         let rpc_impl = LobRpcImpl::new(handler);
         let mut io = jsonrpc_core::IoHandler::new();
         io.extend_with(rpc_impl.to_delegate());

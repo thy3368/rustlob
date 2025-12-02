@@ -12,7 +12,7 @@ use crate::lob::domain::repository::OrderRepository;
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-use crate::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
+use crate::lob::domain::service::handler::{SpotCommand, SpotCommandResult, SpotOrderHandler};
 use account::{
     AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
 };
@@ -148,53 +148,33 @@ where
     }
 }
 
-impl<R, A> OrderCommandHandler for MatchingService<R, A>
+impl<R, A> SpotOrderHandler for MatchingService<R, A>
 where
     R: OrderRepository + Send + Sync,
     A: AccountService,
 {
-    fn handle(&mut self, command: Command) -> CommandResult {
-        match command {
-            // ========== 基础订单类型 ==========
-            Command::LimitOrder {
-                trader,
-                side,
-                price,
-                quantity,
-            } => self.limit_order(command),
-
-            Command::MarketOrder {
-                trader,
-                side,
-                quantity,
-            } => CommandResult::ToDo {},
-
-            Command::IcebergOrder {
-                trader,
-                side,
-                price,
-                total_quantity,
-                display_quantity,
-            } => CommandResult::ToDo {},
-
-            Command::CancelOrder { order_id } => {
-                let success = self.cancel_order(order_id);
-                CommandResult::CancelOrder { success }
+    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult {
+        match cmd {
+            SpotCommand::LimitOrder { .. } => self.handle_limit_order(cmd),
+            SpotCommand::MarketOrder { .. } => SpotCommandResult::ToDo {},
+            SpotCommand::IcebergOrder { .. } => SpotCommandResult::ToDo {},
+            SpotCommand::CancelOrder { order_id } => {
+                SpotCommandResult::CancelOrder { success: self.cancel_order(order_id) }
             }
-
-            // ========== 未实现的订单类型 ==========
-            _ => {
-                // 对于未实现的命令类型，返回空结果或错误
-                // 这里简单返回一个取消失败的结果作为占位符
-                CommandResult::CancelOrder { success: false }
-            }
+            _ => SpotCommandResult::ToDo {},
         }
     }
+}
 
-    fn limit_order(&mut self, command: Command) -> CommandResult {
+impl<R, A> MatchingService<R, A>
+where
+    R: OrderRepository + Send + Sync,
+    A: AccountService,
+{
+    fn handle_limit_order(&mut self, command: SpotCommand) -> SpotCommandResult {
         let trades: Vec<Trade> = Vec::new(); // TODO: 从 trade_events 转换
 
-        if let Command::LimitOrder {
+        if let SpotCommand::LimitOrder {
             trader,
             side,
             price,
@@ -234,11 +214,11 @@ where
                 }
                 AccountCommandResult::Error(err) => {
                     // 余额不足或其他错误，返回失败
-                    return CommandResult::AccountCheckFailed { error: err };
+                    return SpotCommandResult::AccountCheckFailed { error: err };
                 }
                 _ => {
                     // 不应发生的情况
-                    return CommandResult::AccountCheckFailed {
+                    return SpotCommandResult::AccountCheckFailed {
                         error: BalanceError::Overflow,
                     };
                 }
@@ -307,13 +287,9 @@ where
             // }
         }
 
-        CommandResult::LimitOrder {
+        SpotCommandResult::LimitOrder {
             order_id: 23232,
             trades: Vec::new(),
         }
-    }
-
-    fn handler_name(&self) -> &'static str {
-        "PriceTimeMatchingService"
     }
 }

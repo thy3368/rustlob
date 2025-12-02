@@ -1,17 +1,9 @@
-use lob::lob::{Command, CommandResult, OrderCommandHandler};
+use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler};
 
 pub struct JsonRpcClient {}
 
-impl OrderCommandHandler for JsonRpcClient {
-    fn handle(&mut self, command: Command) -> CommandResult {
-        todo!()
-    }
-
-    fn limit_order(&mut self, command: Command) -> CommandResult {
-        todo!()
-    }
-
-    fn handler_name(&self) -> &'static str {
+impl SpotOrderHandler for JsonRpcClient {
+    fn handle(&mut self, command: SpotCommand) -> SpotCommandResult {
         todo!()
     }
 }

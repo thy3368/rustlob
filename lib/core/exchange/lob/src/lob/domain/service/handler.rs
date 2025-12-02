@@ -38,7 +38,7 @@ pub enum UrgencyLevel {
 ///
 /// 定义所有支持的订单类型命令
 #[derive(Debug, Clone)]
-pub enum Command {
+pub enum SpotCommand {
     // ========== 基础订单类型 ==========
     /// 限价单命令 ✅ 已实现
     LimitOrder {
@@ -239,8 +239,8 @@ pub enum Command {
     /// OCO订单 (One-Cancels-Other) 🔧 待实现
     OcoOrder {
         trader: TraderId,
-        order1: Box<Command>,
-        order2: Box<Command>,
+        order1: Box<SpotCommand>,
+        order2: Box<SpotCommand>,
     },
 
     /// 括号订单 (Bracket Order) 🔧 待实现
@@ -278,7 +278,7 @@ pub enum Command {
 ///
 /// 封装不同命令的执行结果
 #[derive(Debug, Clone)]
-pub enum CommandResult {
+pub enum SpotCommandResult {
     // ========== 基础订单类型结果 ==========
     /// 限价单结果 ✅
     LimitOrder {
@@ -454,7 +454,7 @@ pub enum CommandResult {
     // ========== 条件订单结果 ==========
     /// OCO订单结果 🔧
     OcoOrder {
-        executed_order: Box<CommandResult>,
+        executed_order: Box<SpotCommandResult>,
         cancelled_order_id: Option<OrderId>,
     },
 
@@ -485,29 +485,12 @@ pub enum CommandResult {
     },
 }
 
-/// 订单命令处理器trait
+/// 现货订单命令处理器
 ///
-/// 定义所有订单类型的处理接口，支持：
-/// - 限价单 (Limit Order)
-/// - 市价单 (Market Order)
-/// - 取消单 (Cancel Order)
-/// - 冰山单 (Iceberg Order)
+/// 核心订单处理接口，仅处理基础订单类型：
+/// - LimitOrder, MarketOrder, CancelOrder, IcebergOrder
 ///
-/// 遵循Clean Architecture原则：
-/// - 处理器专注于业务逻辑，不依赖仓储层
-/// - 纯函数式命令处理，输入命令返回结果
-/// - 仓储操作由用例层(Use Case Layer)负责
-pub trait OrderCommandHandler: Send + Sync {
-    /// 统一的命令处理API
-    ///
-    /// # 参数
-    /// - `command`: 订单命令
-    ///
-    /// # 返回
-    /// - `CommandResult`: 命令执行结果
-    fn handle(&mut self, command: Command) -> CommandResult;
-    fn limit_order(&mut self, command: Command) -> CommandResult;
-
-    /// 获取处理器名称
-    fn handler_name(&self) -> &'static str;
+/// 扩展订单类型（算法订单、条件订单等）由独立模块处理
+pub trait SpotOrderHandler: Send + Sync {
+    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult;
 }

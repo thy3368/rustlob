@@ -7,7 +7,7 @@ use account::{
     AssetId, InMemoryAccountRepository, InMemoryBalanceRepository, TradingPair, UserId,
 };
 use lob::lob::{
-    Command, CommandResult, InMemoryOrderRepository, MatchingService, OrderCommandHandler, Side,
+    SpotCommand, SpotCommandResult, InMemoryOrderRepository, MatchingService, SpotOrderCommandHandler, Side,
     TraderId,
 };
 
@@ -63,7 +63,7 @@ fn test_limit_order_full_match() {
     let mut handler = create_handler();
 
     // 添加卖单
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10000,
@@ -72,7 +72,7 @@ fn test_limit_order_full_match() {
     handler.handle(sell_cmd);
 
     // 买单完全匹配
-    let buy_cmd = Command::LimitOrder {
+    let buy_cmd = SpotCommand::LimitOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -82,7 +82,7 @@ fn test_limit_order_full_match() {
     let result = handler.handle(buy_cmd);
 
     match result {
-        CommandResult::LimitOrder { order_id, trades } => {
+        SpotCommandResult::LimitOrder { order_id, trades } => {
             assert_eq!(trades.len(), 1);
             assert_eq!(trades[0].quantity, 100);
             assert_eq!(trades[0].price, 10000);
@@ -97,7 +97,7 @@ fn test_limit_order_partial_match() {
     let mut handler = create_handler();
 
     // 添加小卖单
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10000,
@@ -106,7 +106,7 @@ fn test_limit_order_partial_match() {
     handler.handle(sell_cmd);
 
     // 大买单部分成交
-    let buy_cmd = Command::LimitOrder {
+    let buy_cmd = SpotCommand::LimitOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -116,7 +116,7 @@ fn test_limit_order_partial_match() {
     let result = handler.handle(buy_cmd);
 
     match result {
-        CommandResult::LimitOrder { order_id, trades } => {
+        SpotCommandResult::LimitOrder { order_id, trades } => {
             assert_eq!(trades.len(), 1);
             assert_eq!(trades[0].quantity, 50);
             assert!(order_id > 0); // 有剩余50挂单
@@ -132,7 +132,7 @@ fn test_limit_order_no_match() {
     let mut handler = create_handler();
 
     // 添加高价卖单
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10100,
@@ -141,7 +141,7 @@ fn test_limit_order_no_match() {
     handler.handle(sell_cmd);
 
     // 低价买单无法成交
-    let buy_cmd = Command::LimitOrder {
+    let buy_cmd = SpotCommand::LimitOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -151,7 +151,7 @@ fn test_limit_order_no_match() {
     let result = handler.handle(buy_cmd);
 
     match result {
-        CommandResult::LimitOrder { order_id, trades } => {
+        SpotCommandResult::LimitOrder { order_id, trades } => {
             assert_eq!(trades.len(), 0);
             assert!(order_id > 0); // 全部挂单
         }
@@ -166,7 +166,7 @@ fn test_market_order_buy() {
     let mut handler = create_handler();
 
     // 添加多个卖单
-    let sell1 = Command::LimitOrder {
+    let sell1 = SpotCommand::LimitOrder {
         trader: trader("SELLER1"),
         side: Side::Sell,
         price: 10000,
@@ -174,7 +174,7 @@ fn test_market_order_buy() {
     };
     handler.handle(sell1);
 
-    let sell2 = Command::LimitOrder {
+    let sell2 = SpotCommand::LimitOrder {
         trader: trader("SELLER2"),
         side: Side::Sell,
         price: 10100,
@@ -183,7 +183,7 @@ fn test_market_order_buy() {
     handler.handle(sell2);
 
     // 市价买单吃掉所有卖单
-    let market_cmd = Command::MarketOrder {
+    let market_cmd = SpotCommand::MarketOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         quantity: 100,
@@ -192,7 +192,7 @@ fn test_market_order_buy() {
     let result = handler.handle(market_cmd);
 
     match result {
-        CommandResult::MarketOrder { trades } => {
+        SpotCommandResult::MarketOrder { trades } => {
             assert_eq!(trades.len(), 2);
             assert_eq!(trades[0].price, 10000); // 先成交最低价
             assert_eq!(trades[0].quantity, 50);
@@ -208,7 +208,7 @@ fn test_market_order_sell() {
     let mut handler = create_handler();
 
     // 添加多个买单
-    let buy1 = Command::LimitOrder {
+    let buy1 = SpotCommand::LimitOrder {
         trader: trader("BUYER1"),
         side: Side::Buy,
         price: 10100,
@@ -216,7 +216,7 @@ fn test_market_order_sell() {
     };
     handler.handle(buy1);
 
-    let buy2 = Command::LimitOrder {
+    let buy2 = SpotCommand::LimitOrder {
         trader: trader("BUYER2"),
         side: Side::Buy,
         price: 10000,
@@ -225,7 +225,7 @@ fn test_market_order_sell() {
     handler.handle(buy2);
 
     // 市价卖单吃掉所有买单
-    let market_cmd = Command::MarketOrder {
+    let market_cmd = SpotCommand::MarketOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         quantity: 100,
@@ -234,7 +234,7 @@ fn test_market_order_sell() {
     let result = handler.handle(market_cmd);
 
     match result {
-        CommandResult::MarketOrder { trades } => {
+        SpotCommandResult::MarketOrder { trades } => {
             assert_eq!(trades.len(), 2);
             assert_eq!(trades[0].price, 10100); // 先成交最高价
             assert_eq!(trades[0].quantity, 50);
@@ -250,7 +250,7 @@ fn test_market_order_no_liquidity() {
     let mut handler = create_handler();
 
     // 空订单簿，市价单无法成交
-    let market_cmd = Command::MarketOrder {
+    let market_cmd = SpotCommand::MarketOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         quantity: 100,
@@ -259,7 +259,7 @@ fn test_market_order_no_liquidity() {
     let result = handler.handle(market_cmd);
 
     match result {
-        CommandResult::MarketOrder { trades } => {
+        SpotCommandResult::MarketOrder { trades } => {
             assert_eq!(trades.len(), 0);
         }
         _ => panic!("期望 MarketOrder 结果"),
@@ -273,7 +273,7 @@ fn test_cancel_order_success() {
     let mut handler = create_handler();
 
     // 添加限价单
-    let limit_cmd = Command::LimitOrder {
+    let limit_cmd = SpotCommand::LimitOrder {
         trader: trader("TRADER"),
         side: Side::Buy,
         price: 10000,
@@ -283,16 +283,16 @@ fn test_cancel_order_success() {
     let limit_result = handler.handle(limit_cmd);
 
     let order_id = match limit_result {
-        CommandResult::LimitOrder { order_id, .. } => order_id,
+        SpotCommandResult::LimitOrder { order_id, .. } => order_id,
         _ => panic!("期望 LimitOrder 结果"),
     };
 
     // 取消订单
-    let cancel_cmd = Command::CancelOrder { order_id };
+    let cancel_cmd = SpotCommand::CancelOrder { order_id };
     let result = handler.handle(cancel_cmd);
 
     match result {
-        CommandResult::CancelOrder { success } => {
+        SpotCommandResult::CancelOrder { success } => {
             assert!(success);
         }
         _ => panic!("期望 CancelOrder 结果"),
@@ -304,11 +304,11 @@ fn test_cancel_order_not_found() {
     let mut handler = create_handler();
 
     // 取消不存在的订单
-    let cancel_cmd = Command::CancelOrder { order_id: 999 };
+    let cancel_cmd = SpotCommand::CancelOrder { order_id: 999 };
     let result = handler.handle(cancel_cmd);
 
     match result {
-        CommandResult::CancelOrder { success } => {
+        SpotCommandResult::CancelOrder { success } => {
             assert!(!success);
         }
         _ => panic!("期望 CancelOrder 结果"),
@@ -322,7 +322,7 @@ fn test_iceberg_order_no_match() {
     let mut handler = create_handler();
 
     // 无对手方，冰山单全部挂单
-    let iceberg_cmd = Command::IcebergOrder {
+    let iceberg_cmd = SpotCommand::IcebergOrder {
         trader: trader("TRADER"),
         side: Side::Buy,
         price: 10000,
@@ -333,7 +333,7 @@ fn test_iceberg_order_no_match() {
     let result = handler.handle(iceberg_cmd);
 
     match result {
-        CommandResult::IcebergOrder {
+        SpotCommandResult::IcebergOrder {
             order_id,
             trades,
             remaining_total,
@@ -353,7 +353,7 @@ fn test_iceberg_order_partial_match() {
     let mut handler = create_handler();
 
     // 添加小卖单
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10000,
@@ -362,7 +362,7 @@ fn test_iceberg_order_partial_match() {
     handler.handle(sell_cmd);
 
     // 冰山买单部分成交
-    let iceberg_cmd = Command::IcebergOrder {
+    let iceberg_cmd = SpotCommand::IcebergOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -373,7 +373,7 @@ fn test_iceberg_order_partial_match() {
     let result = handler.handle(iceberg_cmd);
 
     match result {
-        CommandResult::IcebergOrder {
+        SpotCommandResult::IcebergOrder {
             order_id,
             trades,
             remaining_total,
@@ -395,7 +395,7 @@ fn test_iceberg_order_display_fully_matched() {
     let mut handler = create_handler();
 
     // 添加卖单恰好等于显示数量
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10000,
@@ -404,7 +404,7 @@ fn test_iceberg_order_display_fully_matched() {
     handler.handle(sell_cmd);
 
     // 冰山买单显示部分完全成交，自动补充下一批
-    let iceberg_cmd = Command::IcebergOrder {
+    let iceberg_cmd = SpotCommand::IcebergOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -415,7 +415,7 @@ fn test_iceberg_order_display_fully_matched() {
     let result = handler.handle(iceberg_cmd);
 
     match result {
-        CommandResult::IcebergOrder {
+        SpotCommandResult::IcebergOrder {
             order_id,
             trades,
             remaining_total,
@@ -436,7 +436,7 @@ fn test_iceberg_order_fully_matched() {
     let mut handler = create_handler();
 
     // 添加大卖单
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("SELLER"),
         side: Side::Sell,
         price: 10000,
@@ -446,7 +446,7 @@ fn test_iceberg_order_fully_matched() {
 
     // 小冰山单：总量100，显示50
     // 第一批50成交后，剩余50自动作为下一批显示加入订单簿
-    let iceberg_cmd = Command::IcebergOrder {
+    let iceberg_cmd = SpotCommand::IcebergOrder {
         trader: trader("BUYER"),
         side: Side::Buy,
         price: 10000,
@@ -457,7 +457,7 @@ fn test_iceberg_order_fully_matched() {
     let result = handler.handle(iceberg_cmd);
 
     match result {
-        CommandResult::IcebergOrder {
+        SpotCommandResult::IcebergOrder {
             order_id,
             trades,
             remaining_total,
@@ -481,7 +481,7 @@ fn test_mixed_order_types() {
 
     // 场景：多种订单类型混合
     // 1. 添加限价卖单
-    let sell1 = Command::LimitOrder {
+    let sell1 = SpotCommand::LimitOrder {
         trader: trader("SELLER1"),
         side: Side::Sell,
         price: 10000,
@@ -490,7 +490,7 @@ fn test_mixed_order_types() {
     handler.handle(sell1);
 
     // 2. 添加冰山买单（部分成交）
-    let iceberg = Command::IcebergOrder {
+    let iceberg = SpotCommand::IcebergOrder {
         trader: trader("BUYER1"),
         side: Side::Buy,
         price: 10000,
@@ -500,7 +500,7 @@ fn test_mixed_order_types() {
     let iceberg_result = handler.handle(iceberg);
 
     match iceberg_result {
-        CommandResult::IcebergOrder { trades, .. } => {
+        SpotCommandResult::IcebergOrder { trades, .. } => {
             assert_eq!(trades.len(), 1);
             assert_eq!(trades[0].quantity, 50);
         }
@@ -508,7 +508,7 @@ fn test_mixed_order_types() {
     }
 
     // 3. 市价买单吃掉剩余卖单
-    let market = Command::MarketOrder {
+    let market = SpotCommand::MarketOrder {
         trader: trader("BUYER2"),
         side: Side::Buy,
         quantity: 100,
@@ -516,7 +516,7 @@ fn test_mixed_order_types() {
     let market_result = handler.handle(market);
 
     match market_result {
-        CommandResult::MarketOrder { trades } => {
+        SpotCommandResult::MarketOrder { trades } => {
             assert_eq!(trades.len(), 1);
             assert_eq!(trades[0].quantity, 50); // 剩余50被吃掉
         }
@@ -552,7 +552,7 @@ fn test_insufficient_balance_buy() {
     let mut handler = MatchingService::new(repo, account_service, TradingPair::BTC_USDT);
 
     // 尝试买入需要 10000 * 100 = 1000000 USDT
-    let buy_cmd = Command::LimitOrder {
+    let buy_cmd = SpotCommand::LimitOrder {
         trader: trader("POOR"),
         side: Side::Buy,
         price: 10000,
@@ -562,7 +562,7 @@ fn test_insufficient_balance_buy() {
     let result = handler.handle(buy_cmd);
 
     match result {
-        CommandResult::AccountCheckFailed { error } => {
+        SpotCommandResult::AccountCheckFailed { error } => {
             // 余额不足，应该失败
             println!("预期的余额不足错误: {:?}", error);
         }
@@ -590,7 +590,7 @@ fn test_insufficient_balance_sell() {
     let mut handler = MatchingService::new(repo, account_service, TradingPair::BTC_USDT);
 
     // 尝试卖出 100 BTC
-    let sell_cmd = Command::LimitOrder {
+    let sell_cmd = SpotCommand::LimitOrder {
         trader: trader("POOR"),
         side: Side::Sell,
         price: 10000,
@@ -600,7 +600,7 @@ fn test_insufficient_balance_sell() {
     let result = handler.handle(sell_cmd);
 
     match result {
-        CommandResult::AccountCheckFailed { error } => {
+        SpotCommandResult::AccountCheckFailed { error } => {
             // 余额不足，应该失败
             println!("预期的余额不足错误: {:?}", error);
         }

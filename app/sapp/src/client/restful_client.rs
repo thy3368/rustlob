@@ -1,18 +1,10 @@
-use lob::lob::{Command, CommandResult, OrderCommandHandler};
+use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler};
 
 //实现restful的的client
 pub struct RestfulClient {}
 
-impl OrderCommandHandler for RestfulClient {
-    fn handle(&mut self, command: Command) -> CommandResult {
-        todo!()
-    }
-
-    fn limit_order(&mut self, command: Command) -> CommandResult {
-        todo!()
-    }
-
-    fn handler_name(&self) -> &'static str {
+impl SpotOrderHandler for RestfulClient {
+    fn handle(&mut self, command: SpotCommand) -> SpotCommandResult {
         todo!()
     }
 }
