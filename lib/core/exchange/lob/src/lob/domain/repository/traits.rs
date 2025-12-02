@@ -5,7 +5,10 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Pr
 /// 订单仓储接口
 ///
 /// 定义订单数据的存储和检索操作
+/// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
 pub trait OrderRepository {
+    // === 核心写操作 ===
+
     /// 添加订单到仓储
     fn add_order(
         &mut self,
@@ -15,7 +18,10 @@ pub trait OrderRepository {
         price: Price,
     ) -> Result<(), RepositoryError>;
 
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>>;
+    /// 取消订单
+    fn cancel_order(&mut self, order_id: OrderId) -> bool;
+
+    // === 核心读操作 ===
 
     /// 根据订单ID查找订单
     fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry>;
@@ -23,44 +29,35 @@ pub trait OrderRepository {
     /// 根据订单ID查找订单（可变引用）
     fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry>;
 
-    /// 取消订单
-    fn cancel_order(&mut self, order_id: OrderId) -> bool;
+    /// 匹配订单，返回匹配到的订单引用列表
+    ///
+    /// # 参数
+    /// - `side`: 订单方向（买/卖）
+    /// - `price`: 价格
+    /// - `quantity`: 需要匹配的数量
+    ///
+    /// # 返回
+    /// - `Some(Vec<&OrderEntry>)`: 匹配到的订单列表（总数量 >= quantity）
+    /// - `None`: 无法匹配
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>>;
 
-    /// 获取指定价格级别的第一个订单索引
-    fn get_first_order_at_price(&self, price: Price, side: Side) -> Option<usize>;
-
-    /// 获取订单的下一个订单索引
-    fn get_next_order(&self, idx: usize) -> Option<usize>;
-
-    /// 更新价格点的首个订单索引
-    fn update_price_point(
-        &mut self,
-        price: Price,
-        side: Side,
-        first_idx: Option<usize>,
-        last_idx: Option<usize>,
-    );
-
-    /// 检查价格级别是否为空
-    fn is_price_empty(&self, price: Price, side: Side) -> bool;
-
-    /// 获取活跃订单数量
-    fn active_order_count(&self) -> usize;
-
-    /// 分配订单ID
-    fn allocate_order_id(&mut self) -> OrderId;
-
-    /// 获取下一个订单ID（不分配）
-    fn next_order_id(&self) -> OrderId;
-
-    /// 设置下一个订单ID（用于状态恢复）
-    fn set_next_order_id(&mut self, id: OrderId);
+    // === 市场数据查询 ===
 
     /// 获取最佳买价（O(1) 缓存访问）
     fn best_bid(&self) -> Option<Price>;
 
     /// 获取最佳卖价（O(1) 缓存访问）
     fn best_ask(&self) -> Option<Price>;
+
+    /// 获取活跃订单数量
+    fn active_order_count(&self) -> usize;
+
+    // === 订单ID管理 ===
+
+    /// 分配订单ID
+    fn allocate_order_id(&mut self) -> OrderId;
+
+    // === 事件溯源 ===
 
     /// 重放事件列表，将事件应用到仓储状态
     ///
@@ -71,17 +68,6 @@ pub trait OrderRepository {
     /// - `Ok(())`: 成功应用所有事件
     /// - `Err(RepositoryError)`: 应用事件失败
     fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError>;
-}
-
-/// 仓储访问器trait
-///
-/// 用于从仓储中获取订单条目的只读访问
-pub trait RepositoryAccessor {
-    /// 获取订单条目的不可变引用
-    fn get_entry(&self, idx: usize) -> Option<&OrderEntry>;
-
-    /// 获取订单条目的可变引用
-    fn get_entry_mut(&mut self, idx: usize) -> Option<&mut OrderEntry>;
 }
 
 /// 仓储错误类型

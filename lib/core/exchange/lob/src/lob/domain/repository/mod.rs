@@ -4,14 +4,14 @@
 ///
 /// ## 模块结构
 ///
-/// - `traits`: 仓储接口定义（OrderRepository, RepositoryAccessor）
+/// - `traits`: 仓储接口定义（OrderRepository）
 /// - `errors`: 错误类型定义（RepositoryError）
 /// - `in_memory`: 内存仓储实现（InMemoryOrderRepository）
 ///
 /// ## 使用示例
 ///
 /// ```rust
-/// use lob::lob::domain::::{OrderRepository, InMemoryOrderRepository};
+/// use lob::lob::domain::repository::{OrderRepository, InMemoryOrderRepository};
 ///
 /// let mut repo = InMemoryOrderRepository::new(100_000, 1000);
 /// ```
@@ -20,4 +20,4 @@ pub mod traits;
 
 // 重新导出公共接口
 pub use crate::lob::adaptor::outbound::in_memory::InMemoryOrderRepository;
-pub use traits::{OrderRepository, RepositoryAccessor, RepositoryError};
+pub use traits::{OrderRepository, RepositoryError};

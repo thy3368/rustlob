@@ -5,9 +5,7 @@ use crate::lob::domain::entity::lob_types::{
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-use crate::lob::domain::repository::traits::{
-    OrderRepository, RepositoryAccessor, RepositoryError,
-};
+use crate::lob::domain::repository::traits::{OrderRepository, RepositoryError};
 use std::collections::HashMap;
 
 /// 内存仓储实现
@@ -84,6 +82,98 @@ impl InMemoryOrderRepository {
             }
         }
     }
+
+    // === 内部方法（不对外暴露）===
+
+    /// 获取指定价格级别的第一个订单索引
+    #[inline]
+    fn get_first_order_at_price(&self, price: Price, side: Side) -> Option<usize> {
+        self.get_price_point(price, side)
+            .and_then(|pp| pp.first_order_idx)
+    }
+
+    /// 获取订单的下一个订单索引
+    #[inline]
+    fn get_next_order(&self, idx: usize) -> Option<usize> {
+        self.arena.get(idx).and_then(|entry| entry.next_idx)
+    }
+
+    /// 更新价格点的首尾订单索引
+    fn update_price_point(
+        &mut self,
+        price: Price,
+        side: Side,
+        first_idx: Option<usize>,
+        last_idx: Option<usize>,
+    ) {
+        // 在更新价格点之前，先批量回收链表前面的inactive订单
+        // 这些订单通常是完全成交的订单，按FIFO顺序排在链表前面
+        if let Some(old_first_idx) = self
+            .get_price_point(price, side)
+            .and_then(|pp| pp.first_order_idx)
+        {
+            let mut current_idx = Some(old_first_idx);
+
+            // 遍历链表前面的inactive订单并回收
+            while let Some(idx) = current_idx {
+                if let Some(entry) = self.arena.get(idx) {
+                    if !entry.is_active() {
+                        // 记录next_idx（因为下面要free当前节点）
+                        let next = entry.next_idx;
+                        // 回收这个inactive订单的arena槽位
+                        self.arena.free(idx);
+                        current_idx = next;
+                    } else {
+                        // 遇到第一个活跃订单，停止回收
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if let Some(price_point) = self.get_price_point_mut(price, side) {
+            price_point.first_order_idx = first_idx;
+            price_point.last_order_idx = last_idx;
+        }
+
+        // 如果价格级别变空，可能需要重新计算最佳价格
+        if first_idx.is_none() && last_idx.is_none() {
+            match side {
+                Side::Buy => {
+                    // 如果清空的是最佳买价，需要重新查找
+                    if Some(price) == self.bid_max {
+                        self.recalculate_bid_max();
+                    }
+                }
+                Side::Sell => {
+                    // 如果清空的是最佳卖价，需要重新查找
+                    if Some(price) == self.ask_min {
+                        self.recalculate_ask_min();
+                    }
+                }
+            }
+        }
+    }
+
+    /// 检查价格级别是否为空
+    #[inline]
+    fn is_price_empty(&self, price: Price, side: Side) -> bool {
+        self.get_price_point(price, side)
+            .map_or(true, |pp| pp.is_empty())
+    }
+
+    /// 获取下一个订单ID（不分配）
+    #[inline]
+    fn next_order_id(&self) -> OrderId {
+        self.next_order_id
+    }
+
+    /// 设置下一个订单ID（用于状态恢复）
+    fn set_next_order_id(&mut self, id: OrderId) {
+        self.next_order_id = id;
+    }
 }
 
 impl OrderRepository for InMemoryOrderRepository {
@@ -158,7 +248,8 @@ impl OrderRepository for InMemoryOrderRepository {
         // 根据 side,price,quantity 匹配所有的Order
         // quantity总和要大于等于quantity, 返回匹配上的订单数组
 
-        let mut matched_orders = Vec::new();
+        // 预分配容量，减少内存重分配开销
+        let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
         let opposite_side = side.opposite();
 
@@ -270,78 +361,6 @@ impl OrderRepository for InMemoryOrderRepository {
         false
     }
 
-    fn get_first_order_at_price(&self, price: Price, side: Side) -> Option<usize> {
-        self.get_price_point(price, side)
-            .and_then(|pp| pp.first_order_idx)
-    }
-
-    fn get_next_order(&self, idx: usize) -> Option<usize> {
-        self.arena.get(idx).and_then(|entry| entry.next_idx)
-    }
-
-    fn update_price_point(
-        &mut self,
-        price: Price,
-        side: Side,
-        first_idx: Option<usize>,
-        last_idx: Option<usize>,
-    ) {
-        // 在更新价格点之前，先批量回收链表前面的inactive订单
-        // 这些订单通常是完全成交的订单，按FIFO顺序排在链表前面
-        if let Some(old_first_idx) = self
-            .get_price_point(price, side)
-            .and_then(|pp| pp.first_order_idx)
-        {
-            let mut current_idx = Some(old_first_idx);
-
-            // 遍历链表前面的inactive订单并回收
-            while let Some(idx) = current_idx {
-                if let Some(entry) = self.arena.get(idx) {
-                    if !entry.is_active() {
-                        // 记录next_idx（因为下面要free当前节点）
-                        let next = entry.next_idx;
-                        // 回收这个inactive订单的arena槽位
-                        self.arena.free(idx);
-                        current_idx = next;
-                    } else {
-                        // 遇到第一个活跃订单，停止回收
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-
-        if let Some(price_point) = self.get_price_point_mut(price, side) {
-            price_point.first_order_idx = first_idx;
-            price_point.last_order_idx = last_idx;
-        }
-
-        // 如果价格级别变空，可能需要重新计算最佳价格
-        if first_idx.is_none() && last_idx.is_none() {
-            match side {
-                Side::Buy => {
-                    // 如果清空的是最佳买价，需要重新查找
-                    if Some(price) == self.bid_max {
-                        self.recalculate_bid_max();
-                    }
-                }
-                Side::Sell => {
-                    // 如果清空的是最佳卖价，需要重新查找
-                    if Some(price) == self.ask_min {
-                        self.recalculate_ask_min();
-                    }
-                }
-            }
-        }
-    }
-
-    fn is_price_empty(&self, price: Price, side: Side) -> bool {
-        self.get_price_point(price, side)
-            .map_or(true, |pp| pp.is_empty())
-    }
-
     fn active_order_count(&self) -> usize {
         self.order_index.len()
     }
@@ -350,14 +369,6 @@ impl OrderRepository for InMemoryOrderRepository {
         let id = self.next_order_id;
         self.next_order_id += 1;
         id
-    }
-
-    fn next_order_id(&self) -> OrderId {
-        self.next_order_id
-    }
-
-    fn set_next_order_id(&mut self, id: OrderId) {
-        self.next_order_id = id;
     }
 
     fn best_bid(&self) -> Option<Price> {
@@ -413,16 +424,6 @@ impl OrderRepository for InMemoryOrderRepository {
 fn trans(entity_event: EntityEvent) -> OrderEntry {
     //将EntityEvent 转成OrderEntry
     todo!()
-}
-
-impl RepositoryAccessor for InMemoryOrderRepository {
-    fn get_entry(&self, idx: usize) -> Option<&OrderEntry> {
-        self.arena.get(idx)
-    }
-
-    fn get_entry_mut(&mut self, idx: usize) -> Option<&mut OrderEntry> {
-        self.arena.get_mut(idx)
-    }
 }
 
 #[cfg(test)]

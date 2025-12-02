@@ -7,7 +7,7 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, Trade};
 use crate::lob::domain::entity::lob_types::{
     EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
 };
-use crate::lob::domain::repository::{OrderRepository, RepositoryAccessor};
+use crate::lob::domain::repository::OrderRepository;
 /// 订单匹配服务
 ///
 /// 实现价格-时间优先的订单匹配算法
@@ -23,7 +23,7 @@ use account::{
 /// 遵循Clean Architecture：通过trait注入AccountService依赖
 pub struct MatchingService<R, A>
 where
-    R: OrderRepository + RepositoryAccessor,
+    R: OrderRepository,
     A: AccountService,
 {
     lob_repo: R,
@@ -36,7 +36,7 @@ where
 
 impl<R, A> MatchingService<R, A>
 where
-    R: OrderRepository + RepositoryAccessor,
+    R: OrderRepository,
     A: AccountService,
 {
     /// 创建新的匹配服务
@@ -165,7 +165,7 @@ where
 
 impl<R, A> OrderCommandHandler for MatchingService<R, A>
 where
-    R: OrderRepository + RepositoryAccessor + Send + Sync,
+    R: OrderRepository + Send + Sync,
     A: AccountService,
 {
     fn handle(&mut self, command: Command) -> CommandResult {
