@@ -156,12 +156,13 @@ where
     fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult {
         match cmd {
             SpotCommand::LimitOrder { .. } => self.handle_limit_order(cmd),
-            SpotCommand::MarketOrder { .. } => SpotCommandResult::ToDo {},
-            SpotCommand::IcebergOrder { .. } => SpotCommandResult::ToDo {},
+            SpotCommand::MarketOrder { .. } => SpotCommandResult::NotImplemented,
+            SpotCommand::IcebergOrder { .. } => SpotCommandResult::NotImplemented,
             SpotCommand::CancelOrder { order_id } => {
                 SpotCommandResult::CancelOrder { success: self.cancel_order(order_id) }
             }
-            _ => SpotCommandResult::ToDo {},
+            SpotCommand::ModifyOrder { .. } => SpotCommandResult::NotImplemented,
+            SpotCommand::CancelAllOrders { .. } => SpotCommandResult::NotImplemented,
         }
     }
 }

@@ -4,7 +4,7 @@ use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler};
 pub struct WebSocketClient {}
 
 impl SpotOrderHandler for WebSocketClient {
-    fn handle(&mut self, command: SpotCommand) -> SpotCommandResult {
+    fn handle(&mut self, _command: SpotCommand) -> SpotCommandResult {
         todo!()
     }
 }

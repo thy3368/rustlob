@@ -3,7 +3,7 @@ use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler};
 pub struct JsonRpcClient {}
 
 impl SpotOrderHandler for JsonRpcClient {
-    fn handle(&mut self, command: SpotCommand) -> SpotCommandResult {
+    fn handle(&mut self, _command: SpotCommand) -> SpotCommandResult {
         todo!()
     }
 }

@@ -1,46 +1,23 @@
+//! 订单命令处理器
+//!
+//! 采用分层命令模式设计：
+//! - SpotCommand: 核心现货订单（由 MatchingService 直接处理）
+//! - AlgoCommand: 算法交易订单（由 AlgoService 处理，内部调用 SpotCommand）
+//! - ConditionalCommand: 条件订单（由 ConditionalService 处理）
+
 use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Trade, TraderId};
 use account::BalanceError;
 
-/// 钉住订单类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PegType {
-    /// 钉住最优价（Primary Peg）
-    Primary,
-    /// 钉住对手价（Market Peg）
-    Market,
-    /// 钉住中间价（Midpoint Peg）
-    Midpoint,
-}
+// ============================================================================
+// 核心现货命令 (SpotCommand)
+// ============================================================================
 
-/// 拍卖类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuctionType {
-    /// 开盘拍卖
-    Opening,
-    /// 收盘拍卖
-    Closing,
-    /// 盘中拍卖
-    Intraday,
-}
-
-/// 紧急程度
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UrgencyLevel {
-    /// 低紧急度
-    Low,
-    /// 中等紧急度
-    Medium,
-    /// 高紧急度
-    High,
-}
-
-/// 订单命令枚举
+/// 现货订单命令
 ///
-/// 定义所有支持的订单类型命令
+/// 核心订单类型，由 MatchingService 直接处理
 #[derive(Debug, Clone)]
 pub enum SpotCommand {
-    // ========== 基础订单类型 ==========
-    /// 限价单命令 ✅ 已实现
+    /// 限价单
     LimitOrder {
         trader: TraderId,
         side: Side,
@@ -48,14 +25,14 @@ pub enum SpotCommand {
         quantity: Quantity,
     },
 
-    /// 市价单命令 ✅ 已实现
+    /// 市价单
     MarketOrder {
         trader: TraderId,
         side: Side,
         quantity: Quantity,
     },
 
-    /// 冰山单命令 ✅ 已实现
+    /// 冰山单
     IcebergOrder {
         trader: TraderId,
         side: Side,
@@ -64,60 +41,214 @@ pub enum SpotCommand {
         display_quantity: Quantity,
     },
 
-    /// 取消订单命令 ✅ 已实现
+    /// 取消订单
     CancelOrder { order_id: OrderId },
 
-    // ========== 时间条件订单 (Time-In-Force) ==========
-    /// FOK订单 (Fill-Or-Kill) 🔧 待实现
-    /// 立即全部成交，否则全部取消
-    FillOrKillOrder {
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
+    /// 修改订单
+    ModifyOrder {
+        order_id: OrderId,
+        new_price: Option<Price>,
+        new_quantity: Option<Quantity>,
     },
 
-    /// IOC订单 (Immediate-Or-Cancel) 🔧 待实现
-    /// 立即成交，未成交部分自动取消
-    ImmediateOrCancelOrder {
+    /// 批量取消订单
+    CancelAllOrders {
         trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
+        side: Option<Side>,
+    },
+}
+
+/// 现货命令执行结果
+#[derive(Debug, Clone)]
+pub enum SpotCommandResult {
+    /// 限价单结果
+    LimitOrder {
+        order_id: OrderId,
+        trades: Vec<Trade>,
     },
 
-    /// AON订单 (All-Or-None) 🔧 待实现
-    /// 必须全部成交，否则保留在订单簿
-    AllOrNoneOrder {
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
+    /// 市价单结果
+    MarketOrder { trades: Vec<Trade> },
+
+    /// 冰山单结果
+    IcebergOrder {
+        order_id: OrderId,
+        trades: Vec<Trade>,
+        remaining_total: Quantity,
+        current_display: Quantity,
     },
 
-    /// GTD订单 (Good-Till-Date) 🔧 待实现
-    /// 有效至指定时间
-    GoodTillDateOrder {
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-        expire_time: u64, // Unix timestamp
+    /// 取消订单结果
+    CancelOrder { success: bool },
+
+    /// 修改订单结果
+    ModifyOrder {
+        order_id: OrderId,
+        success: bool,
+        new_price: Option<Price>,
+        new_quantity: Option<Quantity>,
     },
 
-    // ========== 止损订单 (Stop Orders) ==========
-    /// 止损市价单 (Stop Market) 🔧 待实现
+    /// 批量取消订单结果
+    CancelAllOrders {
+        cancelled_count: usize,
+        order_ids: Vec<OrderId>,
+    },
+
+    /// 账户检查失败（余额不足等）
+    AccountCheckFailed { error: BalanceError },
+
+    /// 未实现
+    NotImplemented,
+}
+
+/// 现货订单处理器
+///
+/// 核心订单处理接口，处理 SpotCommand
+pub trait SpotOrderHandler: Send + Sync {
+    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult;
+}
+
+// ============================================================================
+// 算法交易命令 (AlgoCommand)
+// ============================================================================
+
+/// 紧急程度
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UrgencyLevel {
+    Low,
+    Medium,
+    High,
+}
+
+/// 算法交易命令
+///
+/// 由 AlgoService 处理，内部拆分为多个 SpotCommand
+#[derive(Debug, Clone)]
+pub enum AlgoCommand {
+    /// TWAP订单 (Time-Weighted Average Price)
+    /// 按时间均匀分配订单
+    Twap {
+        trader: TraderId,
+        side: Side,
+        total_quantity: Quantity,
+        duration_secs: u64,
+        interval_secs: u64,
+    },
+
+    /// VWAP订单 (Volume-Weighted Average Price)
+    /// 按市场成交量分配订单
+    Vwap {
+        trader: TraderId,
+        side: Side,
+        total_quantity: Quantity,
+        target_vwap: Option<Price>,
+    },
+
+    /// POV订单 (Percentage of Volume)
+    /// 按市场成交量百分比参与
+    Pov {
+        trader: TraderId,
+        side: Side,
+        total_quantity: Quantity,
+        participation_rate: u32, // basis points (1/10000)
+    },
+
+    /// 实施缺口订单 (Implementation Shortfall)
+    /// 最小化执行成本与决策价格的差异
+    ImplementationShortfall {
+        trader: TraderId,
+        side: Side,
+        total_quantity: Quantity,
+        urgency: UrgencyLevel,
+    },
+}
+
+/// 算法命令执行结果
+#[derive(Debug, Clone)]
+pub enum AlgoCommandResult {
+    /// TWAP结果
+    Twap {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        avg_price: Option<Price>,
+    },
+
+    /// VWAP结果
+    Vwap {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        achieved_vwap: Option<Price>,
+    },
+
+    /// POV结果
+    Pov {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        actual_participation_rate: u32,
+    },
+
+    /// 实施缺口结果
+    ImplementationShortfall {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        shortfall_bps: i32, // basis points, 可为负
+    },
+
+    /// 未实现
+    NotImplemented,
+}
+
+/// 算法订单处理器
+pub trait AlgoOrderHandler: Send + Sync {
+    fn handle(&mut self, cmd: AlgoCommand) -> AlgoCommandResult;
+}
+
+// ============================================================================
+// 条件订单命令 (ConditionalCommand)
+// ============================================================================
+
+/// 钉住类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PegType {
+    /// 钉住最优价 (Primary Peg)
+    Primary,
+    /// 钉住对手价 (Market Peg)
+    Market,
+    /// 钉住中间价 (Midpoint Peg)
+    Midpoint,
+}
+
+/// 拍卖类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuctionType {
+    Opening,
+    Closing,
+    Intraday,
+}
+
+/// 条件订单命令
+///
+/// 由 ConditionalService 处理，触发后转为 SpotCommand
+#[derive(Debug, Clone)]
+pub enum ConditionalCommand {
+    // ========== 止损订单 ==========
+    /// 止损市价单
     /// 当市价达到触发价时，转为市价单
-    StopMarketOrder {
+    StopMarket {
         trader: TraderId,
         side: Side,
         stop_price: Price,
         quantity: Quantity,
     },
 
-    /// 止损限价单 (Stop Limit) 🔧 待实现
+    /// 止损限价单
     /// 当市价达到触发价时，转为限价单
-    StopLimitOrder {
+    StopLimit {
         trader: TraderId,
         side: Side,
         stop_price: Price,
@@ -125,126 +256,64 @@ pub enum SpotCommand {
         quantity: Quantity,
     },
 
-    /// 追踪止损单 (Trailing Stop) 🔧 待实现
+    /// 追踪止损单
     /// 止损价随市价变化而移动
-    TrailingStopOrder {
+    TrailingStop {
         trader: TraderId,
         side: Side,
         trail_amount: Price,
         quantity: Quantity,
     },
 
-    /// 追踪止损百分比单 🔧 待实现
-    TrailingStopPercentOrder {
+    /// 追踪止损百分比单
+    TrailingStopPercent {
         trader: TraderId,
         side: Side,
-        trail_percent: u32, // basis points (1/10000)
+        trail_percent: u32, // basis points
         quantity: Quantity,
     },
 
-    // ========== 订单修改命令 ==========
-    /// 修改订单 🔧 待实现
-    ModifyOrder {
-        order_id: OrderId,
-        new_price: Option<Price>,
-        new_quantity: Option<Quantity>,
-    },
-
-    /// 取消并替换订单 (Cancel-Replace) 🔧 待实现
-    CancelReplaceOrder {
-        old_order_id: OrderId,
-        new_price: Price,
-        new_quantity: Quantity,
-    },
-
-    /// 批量取消订单 🔧 待实现
-    CancelAllOrders {
-        trader: TraderId,
-        side: Option<Side>,
-    },
-
-    // ========== 高级订单类型 ==========
-    /// 隐藏订单 (Hidden Order) 🔧 待实现
-    /// 完全不显示在订单簿中
-    HiddenOrder {
+    // ========== 时间条件订单 ==========
+    /// FOK订单 (Fill-Or-Kill)
+    /// 立即全部成交，否则全部取消
+    FillOrKill {
         trader: TraderId,
         side: Side,
         price: Price,
         quantity: Quantity,
     },
 
-    /// 钉住订单 (Pegged Order) 🔧 待实现
-    /// 价格自动跟随市场最优价
-    PeggedOrder {
-        trader: TraderId,
-        side: Side,
-        offset: i32,
-        quantity: Quantity,
-        peg_type: PegType,
-    },
-
-    /// 最小成交量订单 🔧 待实现
-    MinimumQuantityOrder {
+    /// IOC订单 (Immediate-Or-Cancel)
+    /// 立即成交，未成交部分自动取消
+    ImmediateOrCancel {
         trader: TraderId,
         side: Side,
         price: Price,
         quantity: Quantity,
-        min_quantity: Quantity,
     },
 
-    /// 双向报价 (Two-Way Quote) 🔧 待实现
-    TwoWayQuote {
-        trader: TraderId,
-        bid_price: Price,
-        bid_quantity: Quantity,
-        ask_price: Price,
-        ask_quantity: Quantity,
-    },
-
-    // ========== 算法交易订单 ==========
-    /// TWAP订单 (Time-Weighted Average Price) 🔧 待实现
-    TwapOrder {
+    /// GTD订单 (Good-Till-Date)
+    /// 有效至指定时间
+    GoodTillDate {
         trader: TraderId,
         side: Side,
-        total_quantity: Quantity,
-        duration: u64,
-        interval: u64,
+        price: Price,
+        quantity: Quantity,
+        expire_timestamp: u64,
     },
 
-    /// VWAP订单 (Volume-Weighted Average Price) 🔧 待实现
-    VwapOrder {
+    // ========== 组合订单 ==========
+    /// OCO订单 (One-Cancels-Other)
+    /// 一个成交则取消另一个
+    Oco {
         trader: TraderId,
-        side: Side,
-        total_quantity: Quantity,
-        target_vwap: Option<Price>,
+        order1: Box<ConditionalCommand>,
+        order2: Box<ConditionalCommand>,
     },
 
-    /// POV订单 (Percentage of Volume) 🔧 待实现
-    PovOrder {
-        trader: TraderId,
-        side: Side,
-        total_quantity: Quantity,
-        participation_rate: u32,
-    },
-
-    /// 实施缺口订单 (Implementation Shortfall) 🔧 待实现
-    ImplementationShortfallOrder {
-        trader: TraderId,
-        side: Side,
-        total_quantity: Quantity,
-        urgency: UrgencyLevel,
-    },
-
-    // ========== 条件订单 ==========
-    /// OCO订单 (One-Cancels-Other) 🔧 待实现
-    OcoOrder {
-        trader: TraderId,
-        order1: Box<SpotCommand>,
-        order2: Box<SpotCommand>,
-    },
-
-    /// 括号订单 (Bracket Order) 🔧 待实现
-    BracketOrder {
+    /// 括号订单 (Bracket Order)
+    /// 入场单 + 止盈单 + 止损单
+    Bracket {
         trader: TraderId,
         side: Side,
         entry_price: Price,
@@ -253,213 +322,90 @@ pub enum SpotCommand {
         stop_loss_price: Price,
     },
 
-    // ========== 交易所特定订单 ==========
-    /// 拍卖订单 🔧 待实现
-    AuctionOrder {
+    // ========== 高级订单 ==========
+    /// 隐藏订单
+    /// 完全不显示在订单簿中
+    Hidden {
         trader: TraderId,
         side: Side,
         price: Price,
         quantity: Quantity,
-        auction_type: AuctionType,
     },
 
-    /// 做市商双边报价 🔧 待实现
-    MarketMakerQuote {
+    /// 钉住订单
+    /// 价格自动跟随市场最优价
+    Pegged {
         trader: TraderId,
-        bid_price: Price,
-        bid_quantity: Quantity,
-        ask_price: Price,
-        ask_quantity: Quantity,
-        mm_id: String,
+        side: Side,
+        offset: i32,
+        quantity: Quantity,
+        peg_type: PegType,
+    },
+
+    /// 最小成交量订单
+    MinimumQuantity {
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+        min_quantity: Quantity,
     },
 }
 
-/// 命令执行结果
-///
-/// 封装不同命令的执行结果
+/// 条件命令执行结果
 #[derive(Debug, Clone)]
-pub enum SpotCommandResult {
-    // ========== 基础订单类型结果 ==========
-    /// 限价单结果 ✅
-    LimitOrder {
+pub enum ConditionalCommandResult {
+    // ========== 止损订单结果 ==========
+    StopMarket {
         order_id: OrderId,
+        triggered: bool,
         trades: Vec<Trade>,
     },
 
-    /// 账户检查失败（余额不足等）
-    AccountCheckFailed {
-        error: BalanceError,
-    },
-
-    ///未完成时使用
-    ToDo {
-
-    },
-    
-
-    /// 市价单结果 ✅
-    MarketOrder { trades: Vec<Trade> },
-
-    /// 冰山单结果 ✅
-    IcebergOrder {
+    StopLimit {
         order_id: OrderId,
+        triggered: bool,
         trades: Vec<Trade>,
-        remaining_total: Quantity,
-        current_display: Quantity,
     },
 
-    /// 取消订单结果 ✅
-    CancelOrder { success: bool },
+    TrailingStop {
+        order_id: OrderId,
+        current_stop_price: Price,
+        triggered: bool,
+        trades: Vec<Trade>,
+    },
+
+    TrailingStopPercent {
+        order_id: OrderId,
+        current_stop_price: Price,
+        triggered: bool,
+        trades: Vec<Trade>,
+    },
 
     // ========== 时间条件订单结果 ==========
-    /// FOK订单结果 🔧
-    FillOrKillOrder { filled: bool, trades: Vec<Trade> },
+    FillOrKill {
+        filled: bool,
+        trades: Vec<Trade>,
+    },
 
-    /// IOC订单结果 🔧
-    ImmediateOrCancelOrder {
+    ImmediateOrCancel {
         order_id: OrderId,
         trades: Vec<Trade>,
         cancelled_quantity: Quantity,
     },
 
-    /// AON订单结果 🔧
-    AllOrNoneOrder {
-        order_id: OrderId,
-        trades: Vec<Trade>,
-        filled: bool,
-    },
-
-    /// GTD订单结果 🔧
-    GoodTillDateOrder {
+    GoodTillDate {
         order_id: OrderId,
         trades: Vec<Trade>,
     },
 
-    // ========== 止损订单结果 ==========
-    /// 止损市价单结果 🔧
-    StopMarketOrder {
-        order_id: OrderId,
-        triggered: bool,
-        trades: Vec<Trade>,
-    },
-
-    /// 止损限价单结果 🔧
-    StopLimitOrder {
-        order_id: OrderId,
-        triggered: bool,
-        trades: Vec<Trade>,
-    },
-
-    /// 追踪止损单结果 🔧
-    TrailingStopOrder {
-        order_id: OrderId,
-        current_stop_price: Price,
-        triggered: bool,
-        trades: Vec<Trade>,
-    },
-
-    /// 追踪止损百分比单结果 🔧
-    TrailingStopPercentOrder {
-        order_id: OrderId,
-        current_stop_price: Price,
-        triggered: bool,
-        trades: Vec<Trade>,
-    },
-
-    // ========== 订单修改结果 ==========
-    /// 修改订单结果 🔧
-    ModifyOrder {
-        order_id: OrderId,
-        success: bool,
-        new_price: Option<Price>,
-        new_quantity: Option<Quantity>,
-    },
-
-    /// 取消并替换订单结果 🔧
-    CancelReplaceOrder {
-        old_order_id: OrderId,
-        new_order_id: OrderId,
-        success: bool,
-        trades: Vec<Trade>,
-    },
-
-    /// 批量取消订单结果 🔧
-    CancelAllOrders {
-        cancelled_count: usize,
-        order_ids: Vec<OrderId>,
-    },
-
-    // ========== 高级订单类型结果 ==========
-    /// 隐藏订单结果 🔧
-    HiddenOrder {
-        order_id: OrderId,
-        trades: Vec<Trade>,
-    },
-
-    /// 钉住订单结果 🔧
-    PeggedOrder {
-        order_id: OrderId,
-        current_price: Price,
-        trades: Vec<Trade>,
-    },
-
-    /// 最小成交量订单结果 🔧
-    MinimumQuantityOrder {
-        order_id: OrderId,
-        trades: Vec<Trade>,
-        all_fills_meet_minimum: bool,
-    },
-
-    /// 双向报价结果 🔧
-    TwoWayQuote {
-        bid_order_id: OrderId,
-        ask_order_id: OrderId,
-        bid_trades: Vec<Trade>,
-        ask_trades: Vec<Trade>,
-    },
-
-    // ========== 算法交易订单结果 ==========
-    /// TWAP订单结果 🔧
-    TwapOrder {
-        parent_order_id: OrderId,
-        child_orders: Vec<OrderId>,
-        total_traded: Quantity,
-        avg_price: Option<Price>,
-    },
-
-    /// VWAP订单结果 🔧
-    VwapOrder {
-        parent_order_id: OrderId,
-        child_orders: Vec<OrderId>,
-        total_traded: Quantity,
-        vwap: Option<Price>,
-    },
-
-    /// POV订单结果 🔧
-    PovOrder {
-        parent_order_id: OrderId,
-        child_orders: Vec<OrderId>,
-        total_traded: Quantity,
-        actual_participation_rate: u32,
-    },
-
-    /// 实施缺口订单结果 🔧
-    ImplementationShortfallOrder {
-        parent_order_id: OrderId,
-        child_orders: Vec<OrderId>,
-        total_traded: Quantity,
-        implementation_shortfall: i64, // 可以为负（成本）
-    },
-
-    // ========== 条件订单结果 ==========
-    /// OCO订单结果 🔧
-    OcoOrder {
-        executed_order: Box<SpotCommandResult>,
+    // ========== 组合订单结果 ==========
+    Oco {
+        executed_order: Box<ConditionalCommandResult>,
         cancelled_order_id: Option<OrderId>,
     },
 
-    /// 括号订单结果 🔧
-    BracketOrder {
+    Bracket {
         entry_order_id: OrderId,
         take_profit_order_id: OrderId,
         stop_loss_order_id: OrderId,
@@ -467,30 +413,79 @@ pub enum SpotCommandResult {
         exit_trades: Vec<Trade>,
     },
 
-    // ========== 交易所特定订单结果 ==========
-    /// 拍卖订单结果 🔧
+    // ========== 高级订单结果 ==========
+    Hidden {
+        order_id: OrderId,
+        trades: Vec<Trade>,
+    },
+
+    Pegged {
+        order_id: OrderId,
+        current_price: Price,
+        trades: Vec<Trade>,
+    },
+
+    MinimumQuantity {
+        order_id: OrderId,
+        trades: Vec<Trade>,
+        all_fills_meet_minimum: bool,
+    },
+
+    /// 未实现
+    NotImplemented,
+}
+
+/// 条件订单处理器
+pub trait ConditionalOrderHandler: Send + Sync {
+    fn handle(&mut self, cmd: ConditionalCommand) -> ConditionalCommandResult;
+}
+
+// ============================================================================
+// 做市商命令 (MarketMakerCommand) - 可选扩展
+// ============================================================================
+
+/// 做市商命令
+#[derive(Debug, Clone)]
+pub enum MarketMakerCommand {
+    /// 双向报价
+    TwoWayQuote {
+        trader: TraderId,
+        bid_price: Price,
+        bid_quantity: Quantity,
+        ask_price: Price,
+        ask_quantity: Quantity,
+    },
+
+    /// 拍卖订单
+    AuctionOrder {
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+        auction_type: AuctionType,
+    },
+}
+
+/// 做市商命令结果
+#[derive(Debug, Clone)]
+pub enum MarketMakerCommandResult {
+    TwoWayQuote {
+        bid_order_id: OrderId,
+        ask_order_id: OrderId,
+        bid_trades: Vec<Trade>,
+        ask_trades: Vec<Trade>,
+    },
+
     AuctionOrder {
         order_id: OrderId,
         auction_price: Option<Price>,
         trades: Vec<Trade>,
     },
 
-    /// 做市商双边报价结果 🔧
-    MarketMakerQuote {
-        bid_order_id: OrderId,
-        ask_order_id: OrderId,
-        bid_trades: Vec<Trade>,
-        ask_trades: Vec<Trade>,
-        spread: Price,
-    },
+    NotImplemented,
 }
 
-/// 现货订单命令处理器
-///
-/// 核心订单处理接口，仅处理基础订单类型：
-/// - LimitOrder, MarketOrder, CancelOrder, IcebergOrder
-///
-/// 扩展订单类型（算法订单、条件订单等）由独立模块处理
-pub trait SpotOrderHandler: Send + Sync {
-    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult;
+/// 做市商处理器
+pub trait MarketMakerHandler: Send + Sync {
+    fn handle(&mut self, cmd: MarketMakerCommand) -> MarketMakerCommandResult;
 }

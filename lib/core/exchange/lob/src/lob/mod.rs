@@ -93,8 +93,22 @@ mod adaptor;
 // pub use level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
 
 // 导出服务和仓储（供高级用户使用）
+// 核心现货命令
 pub use domain::service::handler::{
-    AuctionType, SpotCommand, SpotCommandResult, PegType, SpotOrderHandler, UrgencyLevel,
+    SpotCommand, SpotCommandResult, SpotOrderHandler,
+};
+// 算法交易命令
+pub use domain::service::handler::{
+    AlgoCommand, AlgoCommandResult, AlgoOrderHandler, UrgencyLevel,
+};
+// 条件订单命令
+pub use domain::service::handler::{
+    ConditionalCommand, ConditionalCommandResult, ConditionalOrderHandler,
+    PegType, AuctionType,
+};
+// 做市商命令
+pub use domain::service::handler::{
+    MarketMakerCommand, MarketMakerCommandResult, MarketMakerHandler,
 };
 pub use domain::service::market_data_service::MarketDataService;
 pub use domain::service::matching_service::MatchingService;
