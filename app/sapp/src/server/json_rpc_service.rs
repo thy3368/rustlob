@@ -6,7 +6,7 @@ use crate::models::*;
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler, Side, TraderId};
+use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderHandler, Side, TraderId, Command};
 use std::sync::{Arc, Mutex};
 
 /// 解析 Side 字符串
@@ -42,7 +42,8 @@ impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
         }
     }
 
-    /// 将请求转换为 Command
+    /// 将请求转换为 SpotCommand
+    /// 注意: IcebergOrder 已移至 ConditionalCommand，需通过 ConditionalOrderHandler 处理
     fn parse_command(cmd: &CommandRequest) -> std::result::Result<SpotCommand, jsonrpc_core::Error> {
         match cmd.command.as_str() {
             "LimitOrder" => Ok(SpotCommand::LimitOrder {
@@ -56,13 +57,6 @@ impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
             }),
-            "IcebergOrder" => Ok(SpotCommand::IcebergOrder {
-                trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
-                side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
-                price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
-                total_quantity: cmd.total_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing total_quantity"))?,
-                display_quantity: cmd.display_quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing display_quantity"))?,
-            }),
             "CancelOrder" => Ok(SpotCommand::CancelOrder {
                 order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?,
             }),
@@ -70,7 +64,7 @@ impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
         }
     }
 
-    /// 将 CommandResult 转换为响应
+    /// 将 SpotCommandResult 转换为响应
     fn to_response(result: SpotCommandResult) -> CommandResponse {
         match result {
             SpotCommandResult::LimitOrder { order_id, trades } => CommandResponse {
@@ -94,19 +88,6 @@ impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
                 }).collect()),
                 ..Default::default()
             },
-            SpotCommandResult::IcebergOrder { order_id, trades, remaining_total, current_display } => CommandResponse {
-                success: true,
-                order_id: Some(order_id),
-                trades: Some(trades.iter().map(|t| TradeInfo {
-                    buyer: t.buyer().to_string(),
-                    seller: t.seller().to_string(),
-                    price: t.price,
-                    quantity: t.quantity,
-                }).collect()),
-                remaining_total: Some(remaining_total),
-                current_display: Some(current_display),
-                ..Default::default()
-            },
             SpotCommandResult::CancelOrder { success } => CommandResponse {
                 success,
                 ..Default::default()
@@ -122,10 +103,23 @@ impl<H: SpotOrderHandler + Send + 'static> LobRpcImpl<H> {
 
 impl<H: SpotOrderHandler + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
     fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse> {
-        let command = Self::parse_command(&cmd)?;
+        let spot_command = Self::parse_command(&cmd)?;
+        // 使用请求中的 nonce，如果没有则生成一个
+        let nonce = cmd.nonce.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64
+        });
+        let idempotent_cmd = Command::new(nonce, spot_command);
+
         let mut h = self.handler.lock().unwrap();
-        let result = h.handle(command);
-        Ok(Self::to_response(result))
+        let idempotent_result = h.handle(idempotent_cmd);
+
+        let mut response = Self::to_response(idempotent_result.result);
+        response.nonce = Some(idempotent_result.nonce);
+        response.is_duplicate = Some(idempotent_result.is_duplicate);
+        Ok(response)
     }
 
     fn health(&self) -> Result<HealthResponse> {

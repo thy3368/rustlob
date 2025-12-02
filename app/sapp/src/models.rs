@@ -5,29 +5,30 @@ use serde::{Deserialize, Serialize};
 /// 统一命令请求
 #[derive(Debug, Deserialize)]
 pub struct CommandRequest {
-    /// 命令类型: LimitOrder, MarketOrder, IcebergOrder, CancelOrder
+    /// 幂等性 nonce（可选，如不提供则自动生成）
+    pub nonce: Option<u64>,
+    /// 命令类型: LimitOrder, MarketOrder, CancelOrder
     pub command: String,
     pub trader_id: Option<String>,
     pub side: Option<String>,
     pub price: Option<u32>,
     pub quantity: Option<u32>,
-    pub total_quantity: Option<u32>,
-    pub display_quantity: Option<u32>,
     pub order_id: Option<u64>,
 }
 
 /// 统一命令响应
 #[derive(Debug, Serialize, Default)]
 pub struct CommandResponse {
+    /// 对应命令的 nonce
+    pub nonce: Option<u64>,
+    /// 是否为重复命令（幂等命中）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_duplicate: Option<bool>,
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_id: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trades: Option<Vec<TradeInfo>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub remaining_total: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_display: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }

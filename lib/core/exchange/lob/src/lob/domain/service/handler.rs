@@ -4,9 +4,95 @@
 //! - SpotCommand: 核心现货订单（由 MatchingService 直接处理）
 //! - AlgoCommand: 算法交易订单（由 AlgoService 处理，内部调用 SpotCommand）
 //! - ConditionalCommand: 条件订单（由 ConditionalService 处理）
+//!
+//! 幂等性设计：
+//! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
 use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Trade, TraderId};
 use account::BalanceError;
+
+// ============================================================================
+// 幂等性包装 (Idempotent Command)
+// ============================================================================
+
+/// Nonce 类型 - 客户端生成的唯一标识
+pub type Nonce = u64;
+
+/// 幂等命令包装
+///
+/// 所有命令通过此结构包装，实现幂等性检查
+#[derive(Debug, Clone)]
+pub struct Command<C> {
+    /// 客户端生成的唯一标识（同一 nonce 只处理一次）
+    pub nonce: Nonce,
+    /// 命令时间戳（Unix毫秒，用于过期检查）
+    pub timestamp_ms: u64,
+    /// 实际命令内容
+    pub payload: C,
+}
+
+impl<C> Command<C> {
+    /// 创建新命令
+    pub fn new(nonce: Nonce, payload: C) -> Self {
+        Self {
+            nonce,
+            timestamp_ms: 0, // 由调用方设置
+            payload,
+        }
+    }
+
+    /// 创建带时间戳的命令
+    pub fn with_timestamp(nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
+        Self {
+            nonce,
+            timestamp_ms,
+            payload,
+        }
+    }
+}
+
+/// 命令执行结果包装
+#[derive(Debug, Clone)]
+pub struct CommandResult<R> {
+    /// 对应命令的 nonce
+    pub nonce: Nonce,
+    /// 是否为重复命令（幂等命中）
+    pub is_duplicate: bool,
+    /// 实际结果
+    pub result: R,
+}
+
+impl<R> CommandResult<R> {
+    /// 创建新结果
+    pub fn new(nonce: Nonce, result: R) -> Self {
+        Self {
+            nonce,
+            is_duplicate: false,
+            result,
+        }
+    }
+
+    /// 创建重复命令的结果
+    pub fn duplicate(nonce: Nonce, result: R) -> Self {
+        Self {
+            nonce,
+            is_duplicate: true,
+            result,
+        }
+    }
+}
+
+/// 类型别名 - 各类幂等命令
+pub type IdempotentSpotCommand = Command<SpotCommand>;
+pub type IdempotentAlgoCommand = Command<AlgoCommand>;
+pub type IdempotentConditionalCommand = Command<ConditionalCommand>;
+pub type IdempotentMarketMakerCommand = Command<MarketMakerCommand>;
+
+/// 类型别名 - 各类幂等结果
+pub type IdempotentSpotResult = CommandResult<SpotCommandResult>;
+pub type IdempotentAlgoResult = CommandResult<AlgoCommandResult>;
+pub type IdempotentConditionalResult = CommandResult<ConditionalCommandResult>;
+pub type IdempotentMarketMakerResult = CommandResult<MarketMakerCommandResult>;
 
 // ============================================================================
 // 核心现货命令 (SpotCommand)
@@ -30,15 +116,6 @@ pub enum SpotCommand {
         trader: TraderId,
         side: Side,
         quantity: Quantity,
-    },
-
-    /// 冰山单
-    IcebergOrder {
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        total_quantity: Quantity,
-        display_quantity: Quantity,
     },
 
     /// 取消订单
@@ -70,14 +147,6 @@ pub enum SpotCommandResult {
     /// 市价单结果
     MarketOrder { trades: Vec<Trade> },
 
-    /// 冰山单结果
-    IcebergOrder {
-        order_id: OrderId,
-        trades: Vec<Trade>,
-        remaining_total: Quantity,
-        current_display: Quantity,
-    },
-
     /// 取消订单结果
     CancelOrder { success: bool },
 
@@ -104,9 +173,9 @@ pub enum SpotCommandResult {
 
 /// 现货订单处理器
 ///
-/// 核心订单处理接口，处理 SpotCommand
+/// 核心订单处理接口，处理幂等命令
 pub trait SpotOrderHandler: Send + Sync {
-    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult;
+    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult;
 }
 
 // ============================================================================
@@ -205,7 +274,7 @@ pub enum AlgoCommandResult {
 
 /// 算法订单处理器
 pub trait AlgoOrderHandler: Send + Sync {
-    fn handle(&mut self, cmd: AlgoCommand) -> AlgoCommandResult;
+    fn handle(&mut self, cmd: IdempotentAlgoCommand) -> IdempotentAlgoResult;
 }
 
 // ============================================================================
@@ -323,6 +392,16 @@ pub enum ConditionalCommand {
     },
 
     // ========== 高级订单 ==========
+    /// 冰山单 - 部分隐藏订单
+    /// 只显示 display_quantity，成交后自动从隐藏部分补充
+    Iceberg {
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        total_quantity: Quantity,
+        display_quantity: Quantity,
+    },
+
     /// 隐藏订单
     /// 完全不显示在订单簿中
     Hidden {
@@ -414,6 +493,14 @@ pub enum ConditionalCommandResult {
     },
 
     // ========== 高级订单结果 ==========
+    /// 冰山单结果
+    Iceberg {
+        order_id: OrderId,
+        trades: Vec<Trade>,
+        remaining_total: Quantity,
+        current_display: Quantity,
+    },
+
     Hidden {
         order_id: OrderId,
         trades: Vec<Trade>,
@@ -437,7 +524,7 @@ pub enum ConditionalCommandResult {
 
 /// 条件订单处理器
 pub trait ConditionalOrderHandler: Send + Sync {
-    fn handle(&mut self, cmd: ConditionalCommand) -> ConditionalCommandResult;
+    fn handle(&mut self, cmd: IdempotentConditionalCommand) -> IdempotentConditionalResult;
 }
 
 // ============================================================================
@@ -487,5 +574,5 @@ pub enum MarketMakerCommandResult {
 
 /// 做市商处理器
 pub trait MarketMakerHandler: Send + Sync {
-    fn handle(&mut self, cmd: MarketMakerCommand) -> MarketMakerCommandResult;
+    fn handle(&mut self, cmd: IdempotentMarketMakerCommand) -> IdempotentMarketMakerResult;
 }

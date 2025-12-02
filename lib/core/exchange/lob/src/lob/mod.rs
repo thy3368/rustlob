@@ -93,6 +93,14 @@ mod adaptor;
 // pub use level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
 
 // 导出服务和仓储（供高级用户使用）
+// 幂等性包装
+pub use domain::service::handler::{
+    Nonce, Command, CommandResult,
+    IdempotentSpotCommand, IdempotentSpotResult,
+    IdempotentAlgoCommand, IdempotentAlgoResult,
+    IdempotentConditionalCommand, IdempotentConditionalResult,
+    IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
+};
 // 核心现货命令
 pub use domain::service::handler::{
     SpotCommand, SpotCommandResult, SpotOrderHandler,

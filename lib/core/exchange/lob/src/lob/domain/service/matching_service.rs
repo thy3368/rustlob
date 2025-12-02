@@ -12,7 +12,10 @@ use crate::lob::domain::repository::OrderRepository;
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-use crate::lob::domain::service::handler::{SpotCommand, SpotCommandResult, SpotOrderHandler};
+use crate::lob::domain::service::handler::{
+    SpotCommand, SpotCommandResult, SpotOrderHandler,
+    IdempotentSpotCommand, IdempotentSpotResult, CommandResult,
+};
 use account::{
     AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
 };
@@ -153,17 +156,28 @@ where
     R: OrderRepository + Send + Sync,
     A: AccountService,
 {
-    fn handle(&mut self, cmd: SpotCommand) -> SpotCommandResult {
-        match cmd {
-            SpotCommand::LimitOrder { .. } => self.handle_limit_order(cmd),
+    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult {
+        let nonce = cmd.nonce;
+
+        // TODO: 检查 nonce 是否已处理（幂等性检查）
+        // if let Some(cached_result) = self.nonce_cache.get(&nonce) {
+        //     return CommandResult::duplicate(nonce, cached_result.clone());
+        // }
+
+        let result = match cmd.payload {
+            SpotCommand::LimitOrder { .. } => self.handle_limit_order(cmd.payload),
             SpotCommand::MarketOrder { .. } => SpotCommandResult::NotImplemented,
-            SpotCommand::IcebergOrder { .. } => SpotCommandResult::NotImplemented,
             SpotCommand::CancelOrder { order_id } => {
                 SpotCommandResult::CancelOrder { success: self.cancel_order(order_id) }
             }
             SpotCommand::ModifyOrder { .. } => SpotCommandResult::NotImplemented,
             SpotCommand::CancelAllOrders { .. } => SpotCommandResult::NotImplemented,
-        }
+        };
+
+        // TODO: 缓存结果用于幂等性
+        // self.nonce_cache.insert(nonce, result.clone());
+
+        CommandResult::new(nonce, result)
     }
 }
 
