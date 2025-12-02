@@ -71,7 +71,7 @@ where
     ///
     /// # 返回
     /// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
-    fn create_trades(
+    fn create_events(
         &self,
         matched_orders: Option<Vec<&OrderEntry>>,
         price: Price,
@@ -244,7 +244,7 @@ where
 
             if orders.is_some() && orders.as_ref().unwrap().len() > 0 {
                 let (order_change_events, trade_create_events, unfilled_amount) =
-                    self.create_trades(orders, price, quantity);
+                    self.create_events(orders, price, quantity);
 
                 // 创建新订单事件（如果有未成交部分）
 
