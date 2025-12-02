@@ -1,7 +1,3 @@
-pub mod entity_repo;
-pub mod event_repo;
-pub mod id_repo;
-pub mod in_memory;
 /// 订单仓储模块
 ///
 /// 遵循Clean Architecture的仓储模式，将数据访问逻辑与业务逻辑分离
@@ -15,7 +11,7 @@ pub mod in_memory;
 /// ## 使用示例
 ///
 /// ```rust
-/// use lob::lob::repository::{OrderRepository, InMemoryOrderRepository};
+/// use lob::lob::domain::::{OrderRepository, InMemoryOrderRepository};
 ///
 /// let mut repo = InMemoryOrderRepository::new(100_000, 1000);
 /// ```
@@ -23,5 +19,5 @@ pub mod in_memory;
 pub mod traits;
 
 // 重新导出公共接口
-pub use in_memory::InMemoryOrderRepository;
+pub use crate::lob::adaptor::outbound::in_memory::InMemoryOrderRepository;
 pub use traits::{OrderRepository, RepositoryAccessor, RepositoryError};

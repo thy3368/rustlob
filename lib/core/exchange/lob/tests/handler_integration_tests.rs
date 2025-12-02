@@ -1,18 +1,54 @@
-/// OrderCommandHandler 集成测试
-///
-/// 测试通过 handle 方法执行各种订单命令
-use lob::lob::handler::{Command, CommandResult, OrderCommandHandler};
-use lob::lob::matching_service::MatchingService;
-use lob::lob::repository::InMemoryOrderRepository;
-use lob::lob::types::lob_types::{Side, TraderId};
+//! OrderCommandHandler 集成测试
+//!
+//! 测试通过 handle 方法执行各种订单命令
 
+use account::{
+    Account, AccountId, AccountRepository, AccountService, AccountServiceImpl, AccountType,
+    AssetId, InMemoryAccountRepository, InMemoryBalanceRepository, TradingPair, UserId,
+};
+use lob::lob::{
+    Command, CommandResult, InMemoryOrderRepository, MatchingService, OrderCommandHandler, Side,
+    TraderId,
+};
 
 // ========== 辅助函数 ==========
 
+/// 创建测试用的 AccountService
+fn create_account_service() -> AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository> {
+    let account_repo = InMemoryAccountRepository::new();
+    let balance_repo = InMemoryBalanceRepository::new(|| 1000);
+
+    let mut service = AccountServiceImpl::new(account_repo, balance_repo, || 1000);
+
+    // 为测试添加默认账户
+    // TraderId 是 8 字节，转为 u64 作为 AccountId
+    let traders = ["SELLER", "SELLER1", "SELLER2", "BUYER", "BUYER1", "BUYER2", "TRADER"];
+    for trader_name in traders {
+        let trader_id = TraderId::from_str(trader_name);
+        let account_id = AccountId(u64::from_le_bytes(*trader_id.as_bytes()));
+        let account = Account::new(account_id, UserId(account_id.0), AccountType::Spot, 1000);
+        service.account_repo_mut().save(account);
+
+        // 设置充足的初始余额
+        service
+            .balance_repo_mut()
+            .set_balance(account_id, AssetId::USDT, 10_000_000); // 1000万 USDT
+        service
+            .balance_repo_mut()
+            .set_balance(account_id, AssetId::BTC, 10_000); // 1万 BTC
+    }
+
+    service
+}
+
 /// 创建测试用的 MatchingService
-fn create_handler() -> MatchingService<InMemoryOrderRepository> {
+fn create_handler() -> MatchingService<
+    InMemoryOrderRepository,
+    AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository>,
+> {
     let repo = InMemoryOrderRepository::new(100_000, 1000);
-    MatchingService::new(repo)
+    let account_service = create_account_service();
+    MatchingService::new(repo, account_service, TradingPair::BTC_USDT)
 }
 
 /// 从字符串创建 TraderId
@@ -492,4 +528,82 @@ fn test_mixed_order_types() {
 fn test_handler_name() {
     let handler = create_handler();
     assert_eq!(handler.handler_name(), "PriceTimeMatchingService");
+}
+
+// ========== 账户余额不足测试 ==========
+
+#[test]
+fn test_insufficient_balance_buy() {
+    let repo = InMemoryOrderRepository::new(100_000, 1000);
+    let account_repo = InMemoryAccountRepository::new();
+    let balance_repo = InMemoryBalanceRepository::new(|| 1000);
+
+    let mut account_service = AccountServiceImpl::new(account_repo, balance_repo, || 1000);
+
+    // 创建账户但余额不足
+    let trader_id = TraderId::from_str("POOR");
+    let account_id = AccountId(u64::from_le_bytes(*trader_id.as_bytes()));
+    let account = Account::new(account_id, UserId(account_id.0), AccountType::Spot, 1000);
+    account_service.account_repo_mut().save(account);
+    account_service
+        .balance_repo_mut()
+        .set_balance(account_id, AssetId::USDT, 100); // 只有 100 USDT
+
+    let mut handler = MatchingService::new(repo, account_service, TradingPair::BTC_USDT);
+
+    // 尝试买入需要 10000 * 100 = 1000000 USDT
+    let buy_cmd = Command::LimitOrder {
+        trader: trader("POOR"),
+        side: Side::Buy,
+        price: 10000,
+        quantity: 100,
+    };
+
+    let result = handler.handle(buy_cmd);
+
+    match result {
+        CommandResult::AccountCheckFailed { error } => {
+            // 余额不足，应该失败
+            println!("预期的余额不足错误: {:?}", error);
+        }
+        _ => panic!("期望 AccountCheckFailed 结果"),
+    }
+}
+
+#[test]
+fn test_insufficient_balance_sell() {
+    let repo = InMemoryOrderRepository::new(100_000, 1000);
+    let account_repo = InMemoryAccountRepository::new();
+    let balance_repo = InMemoryBalanceRepository::new(|| 1000);
+
+    let mut account_service = AccountServiceImpl::new(account_repo, balance_repo, || 1000);
+
+    // 创建账户但 BTC 余额不足
+    let trader_id = TraderId::from_str("POOR");
+    let account_id = AccountId(u64::from_le_bytes(*trader_id.as_bytes()));
+    let account = Account::new(account_id, UserId(account_id.0), AccountType::Spot, 1000);
+    account_service.account_repo_mut().save(account);
+    account_service
+        .balance_repo_mut()
+        .set_balance(account_id, AssetId::BTC, 10); // 只有 10 BTC
+
+    let mut handler = MatchingService::new(repo, account_service, TradingPair::BTC_USDT);
+
+    // 尝试卖出 100 BTC
+    let sell_cmd = Command::LimitOrder {
+        trader: trader("POOR"),
+        side: Side::Sell,
+        price: 10000,
+        quantity: 100,
+    };
+
+    let result = handler.handle(sell_cmd);
+
+    match result {
+        CommandResult::AccountCheckFailed { error } => {
+            // 余额不足，应该失败
+            println!("预期的余额不足错误: {:?}", error);
+        }
+        _ => panic!("期望 AccountCheckFailed 结果"),
+    }
 }

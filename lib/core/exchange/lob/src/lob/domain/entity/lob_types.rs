@@ -10,17 +10,17 @@ use std::fmt;
 macro_rules! fields {
     // Create操作：fields!(create: "name" => value, ...)
     (create: $($name:expr => $value:expr),* $(,)?) => {
-        vec![$($crate::lob::types::lob_types::FieldChange::created($name, $value)),*]
+        vec![$($crate::lob::domain::entity::lob_types::FieldChange::created($name, $value)),*]
     };
 
     // Update操作：fields!(update: ("name", old, new), ...)
     (update: $(($name:expr, $old:expr, $new:expr)),* $(,)?) => {
-        vec![$($crate::lob::types::lob_types::FieldChange::updated($name, $old, $new)),*]
+        vec![$($crate::lob::domain::entity::lob_types::FieldChange::updated($name, $old, $new)),*]
     };
 
     // Delete操作：fields!(delete: "name" => value, ...)
     (delete: $($name:expr => $value:expr),* $(,)?) => {
-        vec![$($crate::lob::types::lob_types::FieldChange::deleted($name, $value)),*]
+        vec![$($crate::lob::domain::entity::lob_types::FieldChange::deleted($name, $value)),*]
     };
 }
 
@@ -31,7 +31,7 @@ macro_rules! event {
     ($entity:expr, $op:expr, $event_id:expr, $tx_id:expr, $entity_id:expr => {
         $($field_spec:tt)*
     }) => {
-        $crate::lob::types::lob_types::EntityEvent::single(
+        $crate::lob::domain::entity::lob_types::EntityEvent::single(
             $event_id,
             $tx_id,
             $entity,
@@ -45,12 +45,12 @@ macro_rules! event {
     (batch $entity:expr, $op:expr, $event_id:expr, $tx_id:expr => [
         $($entity_id:expr => { $($field_spec:tt)* }),* $(,)?
     ]) => {
-        $crate::lob::types::lob_types::EntityEvent::batch(
+        $crate::lob::domain::entity::lob_types::EntityEvent::batch(
             $event_id,
             $tx_id,
             $entity,
             $op,
-            vec![$($crate::lob::types::lob_types::RecordChange::new($entity_id, $crate::fields!($($field_spec)*)),)*],
+            vec![$($crate::lob::domain::entity::lob_types::RecordChange::new($entity_id, $crate::fields!($($field_spec)*)),)*],
         )
     };
 }

@@ -1,4 +1,4 @@
-use crate::lob::types::lob_types::{OrderId, Price, Quantity, TraderId};
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, TraderId};
 
 /// 市场数据等级定义（Level 1-3）
 ///

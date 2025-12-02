@@ -1,4 +1,4 @@
-use crate::lob::types::lob_types::OrderEntry;
+use crate::lob::domain::entity::lob_types::OrderEntry;
 
 /// 订单簿条目的内存池分配器
 ///
@@ -121,8 +121,8 @@ impl Default for OrderArena {
 
 #[cfg(test)]
 mod tests {
-    use crate::lob::arena::OrderArena;
-    use crate::lob::types::lob_types::{OrderEntry, TraderId};
+    use crate::lob::adaptor::outbound::arena::OrderArena;
+    use crate::lob::domain::entity::lob_types::{OrderEntry, TraderId};
 
     #[test]
     fn test_arena_allocation() {

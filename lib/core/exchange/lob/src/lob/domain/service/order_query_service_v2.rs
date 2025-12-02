@@ -26,7 +26,7 @@
 //! 4. **元数据支持**：内置追踪、缓存、性能监控
 
 use cqrs::*;
-use crate::lob::types::lob_types::{OrderId, Price, Quantity, Side, TraderId};
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
 
 // ==================== 临时类型定义（原来在 mgn.rs 中）====================
 

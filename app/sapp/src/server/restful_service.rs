@@ -14,16 +14,13 @@ use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
-use lob::lob::{
-    handler::{Command, CommandResult, OrderCommandHandler},
-    repository::{
-        in_memory::InMemoryOrderRepository,
-        traits::OrderRepository,
-    },
-    matching_service::MatchingService as LobMatchingService,
-    types::lob_types::{Side, TraderId},
+use lob::lob::domain::service::matching_service::MatchingService as LobMatchingService;
+use lob::lob::domain::::{
+    in_memory::InMemoryOrderRepository,
+    traits::OrderRepository,
 };
-
+use lob::lob::domain::entity::lob_types::{Side, TraderId};
+use lob::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
 // ============ DTOs ============
 
 /// 下单请求

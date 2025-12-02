@@ -1,8 +1,8 @@
 /// 市场数据查询服务，提供行情数据服务
 ///
 /// 提供订单簿市场数据查询功能
-use super::repository::OrderRepository;
-use crate::lob::types::lob_types::Price;
+use crate::lob::domain::repository::OrderRepository;
+use crate::lob::domain::entity::lob_types::Price;
 
 
 /// 市场数据查询服务
@@ -59,8 +59,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lob::repository::InMemoryOrderRepository;
-    use crate::lob::types::lob_types::{OrderEntry, Side, TraderId};
+    use crate::lob::domain::repository::InMemoryOrderRepository;
+    use crate::lob::domain::entity::lob_types::{OrderEntry, Side, TraderId};
 
     #[test]
     fn test_market_data_service() {

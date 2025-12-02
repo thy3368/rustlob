@@ -1,4 +1,5 @@
-use crate::lob::types::lob_types::{OrderId, Price, Quantity, Side, Trade, TraderId};
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Trade, TraderId};
+use account::BalanceError;
 
 /// 钉住订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -283,6 +284,11 @@ pub enum CommandResult {
     LimitOrder {
         order_id: OrderId,
         trades: Vec<Trade>,
+    },
+
+    /// 账户检查失败（余额不足等）
+    AccountCheckFailed {
+        error: BalanceError,
     },
 
     ///未完成时使用

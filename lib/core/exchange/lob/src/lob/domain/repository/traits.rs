@@ -1,5 +1,5 @@
 /// 仓储接口定义
-use crate::lob::types::lob_types::{EntityEvent, OrderEntry, OrderId, Price, Quantity, Side};
+use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Price, Quantity, Side};
 
 
 /// 订单仓储接口

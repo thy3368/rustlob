@@ -1,6 +1,7 @@
 //! 账户服务实现
 //!
-//! 使用 Repository 抽象实现 AccountService
+//! 遵循 Clean Architecture：Service 层实现业务逻辑
+//! Repository 层只负责纯粹的 CRUD 操作
 
 use crate::domain::entity::{
     AccountCommand, AccountCommandResult, BalanceError, Side, Timestamp,
@@ -52,6 +53,254 @@ where
     /// 获取余额仓储的可变引用
     pub fn balance_repo_mut(&mut self) -> &mut B {
         &mut self.balance_repo
+    }
+
+    // ==================== 业务操作（从 Repository 移至 Service） ====================
+
+    /// 冻结操作：可用 → 冻结
+    #[inline]
+    fn do_freeze(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self
+            .balance_repo
+            .get_mut(account_id, asset_id)
+            .ok_or(BalanceError::BalanceNotFound {
+                account_id,
+                asset_id,
+            })?;
+
+        if balance.available < amount {
+            return Err(BalanceError::InsufficientAvailable {
+                required: amount,
+                available: balance.available,
+            });
+        }
+
+        let new_frozen = balance
+            .frozen
+            .checked_add(amount)
+            .ok_or(BalanceError::Overflow)?;
+
+        balance.available -= amount;
+        balance.frozen = new_frozen;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
+    }
+
+    /// 解冻操作：冻结 → 可用
+    #[inline]
+    fn do_unfreeze(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self
+            .balance_repo
+            .get_mut(account_id, asset_id)
+            .ok_or(BalanceError::BalanceNotFound {
+                account_id,
+                asset_id,
+            })?;
+
+        if balance.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: balance.frozen,
+            });
+        }
+
+        let new_available = balance
+            .available
+            .checked_add(amount)
+            .ok_or(BalanceError::Overflow)?;
+
+        balance.frozen -= amount;
+        balance.available = new_available;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
+    }
+
+    /// 入账操作：增加可用余额
+    #[inline]
+    fn do_credit(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self.balance_repo.get_or_create(account_id, asset_id, now);
+
+        balance.available = balance
+            .available
+            .checked_add(amount)
+            .ok_or(BalanceError::Overflow)?;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
+    }
+
+    /// 扣款操作：减少可用余额
+    #[inline]
+    fn do_debit(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self
+            .balance_repo
+            .get_mut(account_id, asset_id)
+            .ok_or(BalanceError::BalanceNotFound {
+                account_id,
+                asset_id,
+            })?;
+
+        if balance.available < amount {
+            return Err(BalanceError::InsufficientAvailable {
+                required: amount,
+                available: balance.available,
+            });
+        }
+
+        balance.available -= amount;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
+    }
+
+    /// 扣减冻结余额
+    #[inline]
+    fn do_debit_frozen(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self
+            .balance_repo
+            .get_mut(account_id, asset_id)
+            .ok_or(BalanceError::BalanceNotFound {
+                account_id,
+                asset_id,
+            })?;
+
+        if balance.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: balance.frozen,
+            });
+        }
+
+        balance.frozen -= amount;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
+    }
+
+    /// 转账操作（原子）
+    #[inline]
+    fn do_transfer(
+        &mut self,
+        from_account_id: crate::AccountId,
+        to_account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        amount: u64,
+        now: Timestamp,
+    ) -> Result<(), BalanceError> {
+        // 1. 预检查：源账户余额
+        {
+            let from_balance = self
+                .balance_repo
+                .get(from_account_id, asset_id)
+                .ok_or(BalanceError::BalanceNotFound {
+                    account_id: from_account_id,
+                    asset_id,
+                })?;
+
+            if from_balance.available < amount {
+                return Err(BalanceError::InsufficientAvailable {
+                    required: amount,
+                    available: from_balance.available,
+                });
+            }
+        }
+
+        // 2. 预检查：目标账户是否会溢出
+        {
+            if let Some(to_balance) = self.balance_repo.get(to_account_id, asset_id) {
+                to_balance
+                    .available
+                    .checked_add(amount)
+                    .ok_or(BalanceError::Overflow)?;
+            }
+        }
+
+        // 3. 执行转账 - 扣减源账户
+        {
+            let from_balance = self.balance_repo.get_mut(from_account_id, asset_id).unwrap();
+            from_balance.available -= amount;
+            from_balance.version += 1;
+            from_balance.updated_at = now;
+        }
+
+        // 4. 增加目标账户
+        {
+            let to_balance = self.balance_repo.get_or_create(to_account_id, asset_id, now);
+            to_balance.available += amount;
+            to_balance.version += 1;
+            to_balance.updated_at = now;
+        }
+
+        Ok(())
+    }
+
+    /// 结算盈亏
+    #[inline]
+    fn do_settle_pnl(
+        &mut self,
+        account_id: crate::AccountId,
+        asset_id: crate::AssetId,
+        pnl: i64,
+        now: Timestamp,
+    ) -> Result<crate::Balance, BalanceError> {
+        let balance = self.balance_repo.get_or_create(account_id, asset_id, now);
+
+        if pnl >= 0 {
+            balance.available = balance
+                .available
+                .checked_add(pnl as u64)
+                .ok_or(BalanceError::Overflow)?;
+        } else {
+            let loss = (-pnl) as u64;
+            if balance.available < loss {
+                return Err(BalanceError::InsufficientAvailable {
+                    required: loss,
+                    available: balance.available,
+                });
+            }
+            balance.available -= loss;
+        }
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(balance.clone())
     }
 
     /// 预验证命令（用于批量执行的预检查）
@@ -249,7 +498,7 @@ where
                     Side::Sell => (pair.base_asset, quantity),
                 };
 
-                match self.balance_repo.freeze(account_id, asset_id, amount, now) {
+                match self.do_freeze(account_id, asset_id, amount, now) {
                     Ok(balance) => AccountCommandResult::Frozen {
                         reference_id: order_id,
                         asset_id,
@@ -277,7 +526,7 @@ where
                     Side::Sell => (pair.base_asset, quantity),
                 };
 
-                match self.balance_repo.unfreeze(account_id, asset_id, amount, now) {
+                match self.do_unfreeze(account_id, asset_id, amount, now) {
                     Ok(balance) => AccountCommandResult::Unfrozen {
                         reference_id: order_id,
                         asset_id,
@@ -295,7 +544,7 @@ where
                 asset_id,
                 amount,
                 reference_id,
-            } => match self.balance_repo.freeze(account_id, asset_id, amount, now) {
+            } => match self.do_freeze(account_id, asset_id, amount, now) {
                 Ok(balance) => AccountCommandResult::Frozen {
                     reference_id,
                     asset_id,
@@ -311,7 +560,7 @@ where
                 asset_id,
                 amount,
                 reference_id,
-            } => match self.balance_repo.unfreeze(account_id, asset_id, amount, now) {
+            } => match self.do_unfreeze(account_id, asset_id, amount, now) {
                 Ok(balance) => AccountCommandResult::Unfrozen {
                     reference_id,
                     asset_id,
@@ -327,7 +576,7 @@ where
                 asset_id,
                 amount,
                 reference_id,
-            } => match self.balance_repo.credit(account_id, asset_id, amount, now) {
+            } => match self.do_credit(account_id, asset_id, amount, now) {
                 Ok(balance) => AccountCommandResult::Credited {
                     reference_id,
                     asset_id,
@@ -342,7 +591,7 @@ where
                 asset_id,
                 amount,
                 reference_id,
-            } => match self.balance_repo.debit(account_id, asset_id, amount, now) {
+            } => match self.do_debit(account_id, asset_id, amount, now) {
                 Ok(balance) => AccountCommandResult::Debited {
                     reference_id,
                     asset_id,
@@ -359,10 +608,7 @@ where
                 asset_id,
                 amount,
                 reference_id,
-            } => match self
-                .balance_repo
-                .debit_frozen(account_id, asset_id, amount, now)
-            {
+            } => match self.do_debit_frozen(account_id, asset_id, amount, now) {
                 Ok(balance) => AccountCommandResult::Debited {
                     reference_id,
                     asset_id,
@@ -385,10 +631,7 @@ where
                     return AccountCommandResult::Error(e);
                 }
 
-                match self
-                    .balance_repo
-                    .transfer(from_account_id, to_account_id, asset_id, amount, now)
-                {
+                match self.do_transfer(from_account_id, to_account_id, asset_id, amount, now) {
                     Ok(_) => AccountCommandResult::Transferred {
                         reference_id,
                         from_account_id,
@@ -405,7 +648,7 @@ where
                 asset_id,
                 pnl,
                 reference_id,
-            } => match self.balance_repo.settle_pnl(account_id, asset_id, pnl, now) {
+            } => match self.do_settle_pnl(account_id, asset_id, pnl, now) {
                 Ok(balance) => AccountCommandResult::PnlSettled {
                     reference_id,
                     asset_id,

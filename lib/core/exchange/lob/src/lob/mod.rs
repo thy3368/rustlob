@@ -80,13 +80,9 @@
 //! assert_eq!(trades[0].quantity, 50);
 //! ```
 
-pub mod arena; // 内存池分配器
-pub mod handler; // 订单命令处理器trait
-pub mod market_data_service; // 市场数据服务
-pub mod matching_service; // 匹配服务
-pub mod repository; // 仓储接口和实现
-pub mod types;
-pub mod order_query_service_v2; // OrderQueryService CQRS 重构版本
+mod domain;
+mod adaptor;
+// OrderQueryService CQRS 重构版本
 // 数据类型定义
 // pub mod level_types; // Level 1-3 市场数据类型
 
@@ -97,9 +93,15 @@ pub mod order_query_service_v2; // OrderQueryService CQRS 重构版本
 // pub use level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
 
 // 导出服务和仓储（供高级用户使用）
-pub use handler::{
+pub use domain::service::handler::{
     AuctionType, Command, CommandResult, OrderCommandHandler, PegType, UrgencyLevel,
 };
-pub use market_data_service::MarketDataService;
-pub use matching_service::MatchingService;
-pub use repository::{InMemoryOrderRepository, OrderRepository, RepositoryError};
+pub use domain::service::market_data_service::MarketDataService;
+pub use domain::service::matching_service::MatchingService;
+pub use domain::repository::{InMemoryOrderRepository, OrderRepository, RepositoryError};
+
+// 导出基础类型
+pub use domain::entity::lob_types::{
+    EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price,
+    PricePoint, Quantity, RecordChange, Side, Trade, TraderId,
+};

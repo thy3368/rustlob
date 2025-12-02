@@ -2,40 +2,55 @@
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-use super::handler::{Command, CommandResult, OrderCommandHandler};
-use super::repository::{OrderRepository, RepositoryAccessor};
+use crate::lob::domain::service::handler::{Command, CommandResult, OrderCommandHandler};
+use crate::lob::domain::repository::{OrderRepository, RepositoryAccessor};
 use crate::event;
-use crate::lob::repository::entity_repo::EntityRepo;
-use crate::lob::repository::event_repo::EventRepo;
-use crate::lob::repository::id_repo::IdRepo;
-use crate::lob::types::lob_types::Side::{Buy, Sell};
-use crate::lob::types::lob_types::{EntityEvent, Trade};
-use crate::lob::types::lob_types::{
+use crate::lob::adaptor::outbound::entity_repo::EntityRepo;
+use crate::lob::adaptor::outbound::event_repo::EventRepo;
+use crate::lob::adaptor::outbound::id_repo::IdRepo;
+use crate::lob::domain::entity::lob_types::Side::{Buy, Sell};
+use crate::lob::domain::entity::lob_types::{EntityEvent, Trade};
+use crate::lob::domain::entity::lob_types::{
     EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
+};
+use account::{
+    AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
 };
 
 
 /// 匹配服务
 ///
 /// 负责订单匹配逻辑，持有OrderRepository引用
-pub struct MatchingService<R>
+/// 遵循Clean Architecture：通过trait注入AccountService依赖
+pub struct MatchingService<R, A>
 where
     R: OrderRepository + RepositoryAccessor,
+    A: AccountService,
 {
     lob_repo: R,
+    account_service: A,
+    trading_pair: TradingPair,
     event_repo: EventRepo,
     entity_repo: EntityRepo,
     id_repo: IdRepo,
 }
 
-impl<R> MatchingService<R>
+impl<R, A> MatchingService<R, A>
 where
     R: OrderRepository + RepositoryAccessor,
+    A: AccountService,
 {
     /// 创建新的匹配服务
-    pub fn new(repository: R) -> Self {
+    ///
+    /// # 参数
+    /// - `repository`: 订单仓储
+    /// - `account_service`: 账户服务（用于余额检查和冻结）
+    /// - `trading_pair`: 交易对配置
+    pub fn new(repository: R, account_service: A, trading_pair: TradingPair) -> Self {
         Self {
             lob_repo: repository,
+            account_service,
+            trading_pair,
             event_repo: EventRepo {},
             id_repo: IdRepo {
                 event_id_counter: 1,
@@ -43,6 +58,11 @@ where
             },
             entity_repo: EntityRepo {},
         }
+    }
+
+    /// 获取 account_service 的可变引用
+    pub fn account_service_mut(&mut self) -> &mut A {
+        &mut self.account_service
     }
 
     /// 创建交易事件
@@ -144,9 +164,10 @@ where
     }
 }
 
-impl<R> OrderCommandHandler for MatchingService<R>
+impl<R, A> OrderCommandHandler for MatchingService<R, A>
 where
     R: OrderRepository + RepositoryAccessor + Send + Sync,
+    A: AccountService,
 {
     fn handle(&mut self, command: Command) -> CommandResult {
         match command {
@@ -196,21 +217,50 @@ where
             quantity,
         } = command
         {
-            //如果是买单 检查账户余客，如果是卖单 检查库存股数
-            match side {
-                Sell => {
+            // 生成订单ID（用于账户冻结关联）
+            let new_order_id = self.lob_repo.allocate_order_id();
 
-                    //检查库存是否> quantity
+            // 将 TraderId 转换为 AccountId（取前8字节作为u64）
+            let account_id = AccountId(u64::from_le_bytes(*trader.as_bytes()));
+
+            // 将 LOB 的 Side 转换为 Account 的 Side
+            let account_side = match side {
+                Buy => account::Side::Buy,
+                Sell => account::Side::Sell,
+            };
+
+            // 下单前检查并冻结账户余额（原子操作）
+            // Buy: 冻结 quote_asset (如 USDT), 金额 = price * quantity
+            // Sell: 冻结 base_asset (如 BTC), 金额 = quantity
+            let freeze_cmd = AccountCommand::CheckAndFreeze {
+                account_id,
+                order_id: new_order_id,
+                pair: self.trading_pair,
+                side: account_side,
+                price: price as u64,
+                quantity: quantity as u64,
+            };
+
+            let freeze_result = self.account_service.execute(freeze_cmd);
+
+            // 检查冻结结果
+            match freeze_result {
+                AccountCommandResult::Frozen { .. } => {
+                    // 冻结成功，继续下单流程
                 }
-
-                Buy => {
-
-                    //check money
+                AccountCommandResult::Error(err) => {
+                    // 余额不足或其他错误，返回失败
+                    return CommandResult::AccountCheckFailed { error: err };
+                }
+                _ => {
+                    // 不应发生的情况
+                    return CommandResult::AccountCheckFailed {
+                        error: BalanceError::Overflow,
+                    };
                 }
             }
 
-            let new_order_id = self.lob_repo.allocate_order_id();
-
+            // 账户冻结成功，继续撮合流程
             let orders = self.lob_repo.match_Orders(side, price, quantity);
 
             if orders.is_some() && orders.as_ref().unwrap().len() > 0 {
