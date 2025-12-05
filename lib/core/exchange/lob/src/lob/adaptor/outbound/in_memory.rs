@@ -281,6 +281,65 @@ impl OrderRepository for InMemoryOrderRepository {
         self.ask_min
     }
 
+    fn get_available_quantity(&self, side: Side, price_limit: Option<Price>) -> Quantity {
+        let mut total_quantity = 0u32;
+
+        match side {
+            Side::Buy => {
+                // 买单：查询卖方深度（Ask侧）
+                // 从最低卖价开始累加，直到超过 price_limit
+                if let Some(min_ask) = self.ask_min {
+                    let max_price = price_limit.unwrap_or(u32::MAX);
+
+                    // 遍历价格从 min_ask 到 max_price
+                    for price in min_ask..=max_price {
+                        if let Some(price_point) = self.asks.get(price as usize) {
+                            if let Some(mut current_idx) = price_point.first_order_idx {
+                                // 遍历该价格的订单链表
+                                while let Some(order) = self.arena.get(current_idx) {
+                                    if order.is_active() {
+                                        total_quantity = total_quantity.saturating_add(order.unfilled_quantity);
+                                    }
+                                    current_idx = match order.next_idx {
+                                        Some(idx) => idx,
+                                        None => break,
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Side::Sell => {
+                // 卖单：查询买方深度（Bid侧）
+                // 从最高买价开始累加，直到低于 price_limit
+                if let Some(max_bid) = self.bid_max {
+                    let min_price = price_limit.unwrap_or(0);
+
+                    // 遍历价格从 max_bid 到 min_price（递减）
+                    for price in (min_price..=max_bid).rev() {
+                        if let Some(price_point) = self.bids.get(price as usize) {
+                            if let Some(mut current_idx) = price_point.first_order_idx {
+                                // 遍历该价格的订单链表
+                                while let Some(order) = self.arena.get(current_idx) {
+                                    if order.is_active() {
+                                        total_quantity = total_quantity.saturating_add(order.unfilled_quantity);
+                                    }
+                                    current_idx = match order.next_idx {
+                                        Some(idx) => idx,
+                                        None => break,
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        total_quantity
+    }
+
     fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError> {
         for event in events {
             self.apply_event(event)?;

@@ -892,6 +892,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "id_generator"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "idna"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1045,6 +1052,8 @@ dependencies = [
  "account",
  "async-trait",
  "cqrs",
+ "id_generator",
+ "once_cell",
  "rand",
  "serde",
  "tokio",

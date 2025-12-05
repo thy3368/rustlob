@@ -49,6 +49,21 @@ pub trait OrderRepository {
     /// 获取最佳卖价（O(1) 缓存访问）
     fn best_ask(&self) -> Option<Price>;
 
+    /// 获取指定方向和价格限制下的可用数量
+    ///
+    /// # 参数
+    /// - `side`: 订单方向（Buy=查询卖方深度, Sell=查询买方深度）
+    /// - `price_limit`: 价格限制（买单最高价/卖单最低价），None表示无限制
+    ///
+    /// # 返回
+    /// 可用的总数量
+    fn get_available_quantity(&self, side: Side, price_limit: Option<Price>) -> Quantity;
+
+    /// 获取最佳卖价（别名方法，用于市价单逻辑）
+    fn get_best_ask(&self) -> Option<Price> {
+        self.best_ask()
+    }
+
     /// 获取活跃订单数量
     fn active_order_count(&self) -> usize;
 

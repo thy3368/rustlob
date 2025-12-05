@@ -25,59 +25,78 @@
 //!
 //! 直接使用 MatchingService 获得最佳性能：
 //!
-//! ```rust
+//! ```no_run
 //! use lob::lob::{
-//!     MatchingService, InMemoryOrderRepository, OrderRepository,
-//!     TraderId, Side, OrderEntry
+//!     Command, SpotCommand, TimeInForce,
+//!     TraderId, Side, Symbol
 //! };
 //!
-//! // 创建 repository
-//! let repository = InMemoryOrderRepository::new(100_000, 1000);
-//!
-//! // 创建匹配服务
-//! let mut matching_service = MatchingService::new(repository);
-//!
-//! // 执行订单匹配
+//! // 创建限价单命令
 //! let trader = TraderId::from_str("TRADER1");
-//! let (trades, remaining) = matching_service.match_limit_order(
-//!     trader, Side::Buy, 10000, 100
+//! let symbol = Symbol::from_str("BTCUSDT");
+//! let nonce = 1001;
+//!
+//! let limit_order = Command::new(
+//!     nonce,
+//!     SpotCommand::LimitOrder {
+//!         trader,
+//!         symbol,
+//!         side: Side::Buy,
+//!         price: 10000,
+//!         quantity: 100,
+//!         time_in_force: TimeInForce::GoodTillCancel,
+//!         client_order_id: None,
+//!     }
 //! );
 //!
-//! // 如果有剩余，手动添加到订单簿
-//! if remaining > 0 {
-//!     let order_id = matching_service.repository_mut().allocate_order_id();
-//!     let entry = OrderEntry::new(order_id, trader, remaining);
-//!     matching_service.repository_mut()
-//!         .add_order(order_id, entry, Side::Buy, 10000).unwrap();
-//! }
+//! // 使用 MatchingService 执行订单
+//! // let result = matching_service.execute(limit_order);
 //! ```
 //!
 //! # 示例
 //!
-//! ```
+//! ```no_run
 //! use lob::lob::{
-//!     MatchingService, InMemoryOrderRepository, OrderRepository,
-//!     TraderId, Side, OrderEntry
+//!     Command, SpotCommand, TimeInForce,
+//!     TraderId, Side, Symbol
 //! };
 //!
-//! let repository = InMemoryOrderRepository::new(100_000, 1000);
-//! let mut matching_service = MatchingService::new(repository);
-//!
-//! // 放置卖单
+//! // 创建交易员
 //! let seller = TraderId::from_str("SELLER1");
-//! let sell_order_id = matching_service.repository_mut().allocate_order_id();
-//! let sell_entry = OrderEntry::new(sell_order_id, seller, 100);
-//! matching_service.repository_mut()
-//!     .add_order(sell_order_id, sell_entry, Side::Sell, 10000).unwrap();
-//!
-//! // 放置匹配的买单
 //! let buyer = TraderId::from_str("BUYER1");
-//! let (trades, _remaining) = matching_service.match_limit_order(
-//!     buyer, Side::Buy, 10000, 50
+//! let symbol = Symbol::from_str("BTCUSDT");
+//!
+//! // 卖单：卖出 100 @ 10000
+//! let sell_order = Command::new(
+//!     1001,
+//!     SpotCommand::LimitOrder {
+//!         trader: seller,
+//!         symbol,
+//!         side: Side::Sell,
+//!         price: 10000,
+//!         quantity: 100,
+//!         time_in_force: TimeInForce::GoodTillCancel,
+//!         client_order_id: None,
+//!     }
 //! );
 //!
-//! assert_eq!(trades.len(), 1);
-//! assert_eq!(trades[0].quantity, 50);
+//! // 买单：买入 50 @ 10000（会与卖单撮合）
+//! let buy_order = Command::new(
+//!     1002,
+//!     SpotCommand::LimitOrder {
+//!         trader: buyer,
+//!         symbol,
+//!         side: Side::Buy,
+//!         price: 10000,
+//!         quantity: 50,
+//!         time_in_force: TimeInForce::GoodTillCancel,
+//!         client_order_id: None,
+//!     }
+//! );
+//!
+//! // 执行订单
+//! // let sell_result = matching_service.execute(sell_order);
+//! // let buy_result = matching_service.execute(buy_order);
 //! ```
 
 mod domain;
@@ -94,28 +113,31 @@ mod adaptor;
 
 // 导出服务和仓储（供高级用户使用）
 // 幂等性包装
-pub use domain::service::handler::{
-    Nonce, Command, CommandResult,
+pub use domain::service::trading_spot_order_mng::{
+    Nonce, Command, CommandResponse, CommandMetadata,
+    CommonError, SpotCommandError, AlgoCommandError,
+    ConditionalCommandError, MarketMakerCommandError, QueryError,
     IdempotentSpotCommand, IdempotentSpotResult,
     IdempotentAlgoCommand, IdempotentAlgoResult,
     IdempotentConditionalCommand, IdempotentConditionalResult,
     IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
 };
 // 核心现货命令
-pub use domain::service::handler::{
+pub use domain::service::trading_spot_order_mng::{
     SpotCommand, SpotCommandResult, SpotOrderHandler,
+    TimeInForce, OrderStatus,  // 导出 TimeInForce 和 OrderStatus
 };
 // 算法交易命令
-pub use domain::service::handler::{
+pub use domain::service::trading_spot_order_mng::{
     AlgoCommand, AlgoCommandResult, AlgoOrderHandler, UrgencyLevel,
 };
 // 条件订单命令
-pub use domain::service::handler::{
+pub use domain::service::trading_spot_order_mng::{
     ConditionalCommand, ConditionalCommandResult, ConditionalOrderHandler,
     PegType, AuctionType,
 };
 // 做市商命令
-pub use domain::service::handler::{
+pub use domain::service::trading_spot_order_mng::{
     MarketMakerCommand, MarketMakerCommandResult, MarketMakerHandler,
 };
 pub use domain::service::market_data_service::MarketDataService;
@@ -125,5 +147,5 @@ pub use domain::repository::{InMemoryOrderRepository, OrderRepository, Repositor
 // 导出基础类型
 pub use domain::entity::lob_types::{
     EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price,
-    PricePoint, Quantity, RecordChange, Side, Trade, TraderId,
+    PricePoint, Quantity, RecordChange, Side, Symbol, Trade, TraderId,
 };

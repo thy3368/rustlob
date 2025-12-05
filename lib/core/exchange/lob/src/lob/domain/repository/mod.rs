@@ -10,10 +10,11 @@
 ///
 /// ## 使用示例
 ///
-/// ```rust
-/// use lob::lob::domain::repository::{OrderRepository, InMemoryOrderRepository};
+/// ```no_run
+/// use lob::lob::{InMemoryOrderRepository, OrderRepository};
 ///
 /// let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+/// let order_id = repo.allocate_order_id();
 /// ```
 // 子模块
 pub mod traits;

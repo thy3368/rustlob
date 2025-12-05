@@ -95,6 +95,43 @@ impl fmt::Display for TraderId {
     }
 }
 
+/// 交易对符号（8字节固定长度，如 "BTCUSDT"）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(align(8))]
+pub struct Symbol([u8; 8]);
+
+impl Symbol {
+    /// 从字节数组创建交易对符号
+    #[inline]
+    pub fn new(bytes: [u8; 8]) -> Self {
+        Self(bytes)
+    }
+
+    /// 从字符串创建交易对符号（最多8字节）
+    #[inline]
+    pub fn from_str(s: &str) -> Self {
+        let mut bytes = [0u8; 8];
+        let len = s.len().min(8);
+        bytes[..len].copy_from_slice(&s.as_bytes()[..len]);
+        Self(bytes)
+    }
+
+    /// 获取底层字节数组的引用
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8; 8] {
+        &self.0
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = std::str::from_utf8(&self.0)
+            .unwrap_or("INVALID")
+            .trim_end_matches('\0');
+        write!(f, "{}", s)
+    }
+}
+
 /// 订单方向（买入或卖出）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -148,6 +185,7 @@ pub enum FieldValue {
     U64(u64),
     OptionUsize(Option<usize>),
     TraderId(TraderId),
+    Symbol(Symbol),
     OrderId(OrderId),
     Quantity(Quantity),
     Side(Side),

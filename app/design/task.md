@@ -1,3 +1,8 @@
 # task
 
 - 分析 加密交易所 如币安/ok的 流程域 流程组 流程 任务(command)； 任务由不同角色触发生成entitychangelog并驱动流程的状态 ;写到 /Users/hongyaotang/src/rustlob/app/design/process.md
+
+
+- 现货对应了 现货账户 杠杆账户（全仓，逐仓） 什么意思 分析一下/Users/hongyaotang/src/rustlob/app/design/process/spot_account.md
+- 生成现货流程的任务方法文档/Users/hongyaotang/src/rustlob/app/design/process/spot_api.md 以 方便开发者看  根据/Users/hongyaotang/src/rustlob/lib/core/exchange/lob/src/lob/domain/service/handler.rs的定义
+- 分析头部交易所的order id生成机制 设计orderid生成方案到 /Users/hongyaotang/src/rustlob/app/design/process/story/orderid.md
