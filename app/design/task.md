@@ -6,3 +6,6 @@
 - 现货对应了 现货账户 杠杆账户（全仓，逐仓） 什么意思 分析一下/Users/hongyaotang/src/rustlob/app/design/process/spot_account.md
 - 生成现货流程的任务方法文档/Users/hongyaotang/src/rustlob/app/design/process/spot_api.md 以 方便开发者看  根据/Users/hongyaotang/src/rustlob/lib/core/exchange/lob/src/lob/domain/service/handler.rs的定义
 - 分析头部交易所的order id生成机制 设计orderid生成方案到 /Users/hongyaotang/src/rustlob/app/design/process/story/orderid.md
+- 分析头部交易所cex, 纽交所，大综期货等交易系统 评估时延 设计交易指令支持的网络的协议方案到 /Users/hongyaotang/src/rustlob/app/design/process/story/command_proto.md
+- 竞品分析头部交易所cex, 纽交所，大综期货等交易系统 评估超低时延 cex需要的硬件 /Users/hongyaotang/src/rustlob/app/design/process/story/hard.md
+- 竞品分析头部交易所cex, 纽交所，大综期货等交易系统 评估超低时延 cex需要的操作系统 /Users/hongyaotang/src/rustlob/app/design/process/story/os.md
