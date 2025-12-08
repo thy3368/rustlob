@@ -9,3 +9,4 @@
 - 分析头部交易所cex, 纽交所，大综期货等交易系统 评估时延 设计交易指令支持的网络的协议方案到 /Users/hongyaotang/src/rustlob/app/design/process/story/command_proto.md
 - 竞品分析头部交易所cex, 纽交所，大综期货等交易系统 评估超低时延 cex需要的硬件 /Users/hongyaotang/src/rustlob/app/design/process/story/hard.md
 - 竞品分析头部交易所cex, 纽交所，大综期货等交易系统 评估超低时延 cex需要的操作系统 /Users/hongyaotang/src/rustlob/app/design/process/story/os.md
+- 分析 tps/qps cqrs 关系 写文档/Users/hongyaotang/src/rustlob/app/design/process/story/cqrs.md
