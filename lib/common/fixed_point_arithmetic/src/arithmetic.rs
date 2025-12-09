@@ -178,7 +178,7 @@ impl std::error::Error for FixedPointError {}
  */
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct FixedPointArithmetic {
+pub struct FixedPoint {
     /// 紧凑存储: 高4位=tick_power(映射0-15), 低28位=value
     packed: u32,
 }
@@ -187,7 +187,7 @@ pub struct FixedPointArithmetic {
 // 核心方法 - 终极优化
 // ============================================================================
 
-impl FixedPointArithmetic {
+impl FixedPoint {
     /// 从f64创建 - 优化版本（查表法）
     ///
     /// 性能: ~15ns (优化查表)
@@ -565,7 +565,7 @@ impl FixedPointArithmetic {
 // 运算符重载
 // ============================================================================
 
-impl Add for FixedPointArithmetic {
+impl Add for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
@@ -574,7 +574,7 @@ impl Add for FixedPointArithmetic {
     }
 }
 
-impl Sub for FixedPointArithmetic {
+impl Sub for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
@@ -583,7 +583,7 @@ impl Sub for FixedPointArithmetic {
     }
 }
 
-impl Mul for FixedPointArithmetic {
+impl Mul for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
@@ -592,7 +592,7 @@ impl Mul for FixedPointArithmetic {
     }
 }
 
-impl Div for FixedPointArithmetic {
+impl Div for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
@@ -601,14 +601,14 @@ impl Div for FixedPointArithmetic {
     }
 }
 
-impl PartialOrd for FixedPointArithmetic {
+impl PartialOrd for FixedPoint {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.cmp_same_precision(*other)
     }
 }
 
-impl fmt::Debug for FixedPointArithmetic {
+impl fmt::Debug for FixedPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FixedPointArithmetic")
             .field("value", &self.value())
@@ -619,7 +619,7 @@ impl fmt::Debug for FixedPointArithmetic {
     }
 }
 
-impl fmt::Display for FixedPointArithmetic {
+impl fmt::Display for FixedPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let precision = (-self.tick_power()).max(0) as usize;
         write!(f, "{:.prec$}", self.to_f64(), prec = precision)
@@ -631,7 +631,7 @@ impl fmt::Display for FixedPointArithmetic {
 // ============================================================================
 
 #[cfg(target_arch = "x86_64")]
-impl FixedPointArithmetic {
+impl FixedPoint {
     /// 批量转换4个价格到f64（AVX2优化提示）
     ///
     /// 性能: ~20ns for 4 conversions (~5ns each)
@@ -665,7 +665,7 @@ mod tests {
 
     #[test]
     fn test_basic_creation() {
-        let fp = FixedPointArithmetic::from_f64(123.45, -2).unwrap();
+        let fp = FixedPoint::from_f64(123.45, -2).unwrap();
         assert_eq!(fp.tick_power(), -2);
         assert_eq!(fp.value(), 12345);
         assert!((fp.to_f64() - 123.45).abs() < 1e-10);
@@ -673,14 +673,14 @@ mod tests {
 
     #[test]
     fn test_unsafe_fast_creation() {
-        let fp = unsafe { FixedPointArithmetic::from_f64_unchecked(123.45, -2) };
+        let fp = unsafe { FixedPoint::from_f64_unchecked(123.45, -2) };
         assert_eq!(fp.value(), 12345);
         assert!((fp.to_f64() - 123.45).abs() < 1e-10);
     }
 
     #[test]
     fn test_bit_packing() {
-        let fp = FixedPointArithmetic::from_raw_parts_unchecked(12345, -2);
+        let fp = FixedPoint::from_raw_parts_unchecked(12345, -2);
         let packed = fp.to_u32();
 
         let extracted_value = packed & VALUE_MASK;
@@ -700,32 +700,32 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let fp = FixedPointArithmetic::from_f64(123.45, -2).unwrap();
+        let fp = FixedPoint::from_f64(123.45, -2).unwrap();
         let bytes = fp.to_bytes();
-        let fp2 = FixedPointArithmetic::from_bytes(bytes);
+        let fp2 = FixedPoint::from_bytes(bytes);
         assert_eq!(fp, fp2);
     }
 
     #[test]
     fn test_addition() {
-        let fp1 = FixedPointArithmetic::from_f64(100.50, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(23.45, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(100.50, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(23.45, -2).unwrap();
         let sum = fp1.checked_add(fp2).unwrap();
         assert!((sum.to_f64() - 123.95).abs() < 1e-10);
     }
 
     #[test]
     fn test_unsafe_addition() {
-        let fp1 = FixedPointArithmetic::from_f64(100.50, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(23.45, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(100.50, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(23.45, -2).unwrap();
         let sum = unsafe { fp1.add_unchecked(fp2) };
         assert!((sum.to_f64() - 123.95).abs() < 1e-10);
     }
 
     #[test]
     fn test_subtraction() {
-        let fp1 = FixedPointArithmetic::from_f64(123.45, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(23.45, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(123.45, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(23.45, -2).unwrap();
         let diff = fp1.checked_sub(fp2).unwrap();
         assert!((diff.to_f64() - 100.0).abs() < 1e-10);
     }
@@ -733,44 +733,44 @@ mod tests {
     #[test]
     fn test_fast_div() {
         // 测试魔数除法
-        assert_eq!(FixedPointArithmetic::fast_div10(100), 10);
-        assert_eq!(FixedPointArithmetic::fast_div100(1000), 10);
-        assert_eq!(FixedPointArithmetic::fast_div1000(10000), 10);
+        assert_eq!(FixedPoint::fast_div10(100), 10);
+        assert_eq!(FixedPoint::fast_div100(1000), 10);
+        assert_eq!(FixedPoint::fast_div1000(10000), 10);
     }
 
     #[test]
     fn test_multiplication() {
-        let fp1 = FixedPointArithmetic::from_f64(10.5, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(2.0, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(10.5, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(2.0, -2).unwrap();
         let product = fp1.checked_mul(fp2).unwrap();
         assert!((product.to_f64() - 21.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_division() {
-        let fp1 = FixedPointArithmetic::from_f64(100.0, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(4.0, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(100.0, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(4.0, -2).unwrap();
         let quotient = fp1.checked_div(fp2).unwrap();
         assert!((quotient.to_f64() - 25.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_precision_mismatch() {
-        let fp1 = FixedPointArithmetic::from_f64(100.0, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(100.0, -3).unwrap();
+        let fp1 = FixedPoint::from_f64(100.0, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(100.0, -3).unwrap();
         assert!(fp1.checked_add(fp2).is_err());
     }
 
     #[test]
     fn test_overflow() {
-        let result = FixedPointArithmetic::from_f64(300_000_000.0, -2);
+        let result = FixedPoint::from_f64(300_000_000.0, -2);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_comparison() {
-        let fp1 = FixedPointArithmetic::from_f64(100.0, -2).unwrap();
-        let fp2 = FixedPointArithmetic::from_f64(200.0, -2).unwrap();
+        let fp1 = FixedPoint::from_f64(100.0, -2).unwrap();
+        let fp2 = FixedPoint::from_f64(200.0, -2).unwrap();
 
         assert!(fp1 < fp2);
         assert!(fp2 > fp1);
@@ -778,33 +778,33 @@ mod tests {
 
     #[test]
     fn test_zero() {
-        let zero = FixedPointArithmetic::zero(-2);
+        let zero = FixedPoint::zero(-2);
         assert!(zero.is_zero());
         assert_eq!(zero.to_f64(), 0.0);
     }
 
     #[test]
     fn test_max_value() {
-        let max = FixedPointArithmetic::max_value(-2);
+        let max = FixedPoint::max_value(-2);
         assert_eq!(max.value(), MAX_VALUE);
         assert!((max.to_f64() - 2_684_354.55).abs() < 1e-6);
     }
 
     #[test]
     fn test_size() {
-        assert_eq!(std::mem::size_of::<FixedPointArithmetic>(), 4);
-        assert_eq!(std::mem::align_of::<FixedPointArithmetic>(), 4);
+        assert_eq!(std::mem::size_of::<FixedPoint>(), 4);
+        assert_eq!(std::mem::align_of::<FixedPoint>(), 4);
     }
 
     #[test]
     fn test_batch_conversion() {
         let prices = vec![
-            FixedPointArithmetic::from_f64(100.0, -2).unwrap(),
-            FixedPointArithmetic::from_f64(200.0, -2).unwrap(),
-            FixedPointArithmetic::from_f64(300.0, -2).unwrap(),
+            FixedPoint::from_f64(100.0, -2).unwrap(),
+            FixedPoint::from_f64(200.0, -2).unwrap(),
+            FixedPoint::from_f64(300.0, -2).unwrap(),
         ];
 
-        let f64_prices = FixedPointArithmetic::batch_to_f64(&prices);
+        let f64_prices = FixedPoint::batch_to_f64(&prices);
         assert_eq!(f64_prices.len(), 3);
         assert!((f64_prices[0] - 100.0).abs() < 1e-10);
         assert!((f64_prices[1] - 200.0).abs() < 1e-10);
@@ -815,20 +815,20 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     fn test_batch_x4() {
         let prices = [
-            FixedPointArithmetic::from_f64(100.0, -2).unwrap(),
-            FixedPointArithmetic::from_f64(200.0, -2).unwrap(),
-            FixedPointArithmetic::from_f64(300.0, -2).unwrap(),
-            FixedPointArithmetic::from_f64(400.0, -2).unwrap(),
+            FixedPoint::from_f64(100.0, -2).unwrap(),
+            FixedPoint::from_f64(200.0, -2).unwrap(),
+            FixedPoint::from_f64(300.0, -2).unwrap(),
+            FixedPoint::from_f64(400.0, -2).unwrap(),
         ];
 
-        let result = FixedPointArithmetic::batch_to_f64_x4(&prices);
+        let result = FixedPoint::batch_to_f64_x4(&prices);
         assert!((result[0] - 100.0).abs() < 1e-10);
         assert!((result[3] - 400.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_to_f64_fast() {
-        let fp = FixedPointArithmetic::from_f64(123.45, -2).unwrap();
+        let fp = FixedPoint::from_f64(123.45, -2).unwrap();
         let result1 = fp.to_f64();
         let result2 = fp.to_f64_fast();
         assert!((result1 - result2).abs() < 1e-10);
