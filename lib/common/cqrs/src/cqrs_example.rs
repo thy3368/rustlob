@@ -144,7 +144,7 @@ pub enum OrderStatus {
 /// 订单命令处理器
 pub struct OrderCommandService {
     // 这里注入依赖（Repository、EventBus等）
-    // repository: Arc<dyn OrderRepository>,
+    // repo: Arc<dyn OrderRepository>,
     // event_bus: Arc<dyn EventBus>,
 }
 
@@ -171,11 +171,11 @@ impl CommandHandler<PlaceOrder> for OrderCommandService {
         // }
 
         // 2. 业务逻辑（这里是示例）
-        let order_id = 12345; // 实际应从 repository 分配
+        let order_id = 12345; // 实际应从 repo 分配
         let status = OrderStatus::Pending;
 
         // 3. 持久化订单（示例）
-        // self.repository.save_order(...).await?;
+        // self.repo.save_order(...).await?;
 
         // 4. 发布领域事件（示例）
         // self.event_bus.publish(OrderPlacedEvent { ... }).await?;
@@ -208,7 +208,7 @@ impl CommandHandler<CancelOrder> for OrderCommandService {
 
 /// 订单查询处理器
 pub struct OrderQueryService {
-    // repository: Arc<dyn OrderRepository>,
+    // repo: Arc<dyn OrderRepository>,
 }
 
 impl OrderQueryService {

@@ -16,7 +16,7 @@
 //! ## Clean Architecture 分层
 //!
 //! - **types**: 领域实体和值对象
-//! - **repository**: 仓储接口和实现（数据访问层）
+//! - **repo**: 仓储接口和实现（数据访问层）
 //! - **matching_service**: 匹配服务（领域服务层） - **核心服务**
 //! - **market_data_service**: 市场数据查询服务（领域服务层）
 //! - **arena**: 内存池分配器（基础设施层）
@@ -142,7 +142,7 @@ pub use domain::service::trading_spot_order_bp::{
 };
 pub use domain::service::market_data_service::MarketDataService;
 pub use domain::service::matching_service::MatchingService;
-pub use domain::repository::{MemoryOrderRepo, OrderRepo, RepositoryError};
+pub use domain::repo::{MemoryOrderRepo, OrderRepo, RepositoryError};
 
 // 导出基础类型
 pub use domain::entity::lob_types::{

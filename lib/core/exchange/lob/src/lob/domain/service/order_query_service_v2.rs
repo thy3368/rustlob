@@ -397,7 +397,7 @@ pub trait OrderQueryServiceV2: Send + Sync {
 
 /// 示例实现
 pub struct OrderQueryServiceImpl {
-    // repository: Arc<dyn OrderRepository>,
+    // repo: Arc<dyn OrderRepository>,
 }
 
 impl OrderQueryServiceImpl {
@@ -412,11 +412,11 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
         &self,
         query: Query<GetOrderById>,
     ) -> Result<QueryResult<GetOrderByIdData>, CqrsError> {
-        // 从 repository 查询
-        // let order = self.repository.find_by_id(query.payload.order_id).await?;
+        // 从 repo 查询
+        // let order = self.repo.find_by_id(query.payload.order_id).await?;
 
         // 示例数据
-        let order = None; // 实际应从 repository 查询
+        let order = None; // 实际应从 repo 查询
 
         let data = GetOrderByIdData { order };
 
@@ -427,8 +427,8 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
         &self,
         query: Query<GetOrdersByTrader>,
     ) -> Result<QueryResult<GetOrdersByTraderData>, CqrsError> {
-        // 从 repository 查询
-        // let orders = self.repository
+        // 从 repo 查询
+        // let orders = self.repo
         //     .find_by_trader(query.payload.trader_id)
         //     .await?;
 
@@ -450,7 +450,7 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
         &self,
         _query: Query<GetOrderStatistics>,
     ) -> Result<QueryResult<OrderStatisticsData>, CqrsError> {
-        // 从 repository 统计
+        // 从 repo 统计
         let data = OrderStatisticsData {
             total_orders: 0,
             active_orders: 0,
@@ -467,7 +467,7 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
         &self,
         _query: Query<GetBestBid>,
     ) -> Result<QueryResult<BestBidData>, CqrsError> {
-        // 从 repository 查询
+        // 从 repo 查询
         let data = BestBidData {
             price: Some(9900),
             quantity: Some(1000),

@@ -157,7 +157,7 @@ impl QueryHandler<GetOrderById> for OrderQueryService {
         &self,
         query: Query<GetOrderById>,
     ) -> Result<QueryResult<Self::Result>, CqrsError> {
-        // 从 repository 查询
+        // 从 repo 查询
         let order = self.repository
             .find_by_id(query.payload.order_id)
             .await?;

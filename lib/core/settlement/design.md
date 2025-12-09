@@ -618,7 +618,7 @@ pub enum CommandResult {
 ///
 /// Following Clean Architecture:
 /// - Handler focuses on business logic
-/// - No dependency on concrete repository implementations
+/// - No dependency on concrete repo implementations
 /// - Obtain external services via dependency injection
 pub trait SettlementCommandHandler: Send + Sync {
     /// Handle single command

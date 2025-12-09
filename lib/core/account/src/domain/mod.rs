@@ -1,6 +1,6 @@
 //! Domain layer module
 //!
-//! Contains entity, service and repository interface definitions
+//! Contains entity, service and repo interface definitions
 
 pub mod entity;
 pub mod repository;

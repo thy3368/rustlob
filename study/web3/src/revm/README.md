@@ -147,7 +147,7 @@ fn decode_uint256(data: &[u8]) -> U256 {
 brew install solidity
 
 # Ubuntu/Debian
-sudo add-apt-repository ppa:ethereum/ethereum
+sudo add-apt-repo ppa:ethereum/ethereum
 sudo apt-get update
 sudo apt-get install solc
 

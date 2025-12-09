@@ -6,7 +6,7 @@ use crate::lob::domain::entity::lob_types::{
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-use crate::lob::domain::repository::traits::{OrderRepo, RepositoryError};
+use crate::lob::domain::repo::traits::{OrderRepo, RepositoryError};
 use std::collections::HashMap;
 
 /// 内存仓储实现

@@ -1,7 +1,7 @@
 /// 市场数据查询服务，提供行情数据服务
 ///
 /// 提供订单簿市场数据查询功能
-use crate::lob::domain::repository::OrderRepo;
+use crate::lob::domain::repo::OrderRepo;
 use crate::lob::domain::entity::lob_types::Price;
 
 
@@ -59,7 +59,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lob::domain::repository::MemoryOrderRepo;
+    use crate::lob::domain::repo::MemoryOrderRepo;
     use crate::lob::domain::entity::lob_types::{OrderEntry, Side, TraderId};
 
     #[test]

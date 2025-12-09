@@ -7,7 +7,7 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, Trade};
 use crate::lob::domain::entity::lob_types::{
     EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
 };
-use crate::lob::domain::repository::OrderRepo;
+use crate::lob::domain::repo::OrderRepo;
 /// 订单匹配服务
 ///
 /// 实现价格-时间优先的订单匹配算法
@@ -45,7 +45,7 @@ where
     /// 创建新的匹配服务
     ///
     /// # 参数
-    /// - `repository`: 订单仓储
+    /// - `repo`: 订单仓储
     /// - `account_service`: 账户服务（用于余额检查和冻结）
     /// - `trading_pair`: 交易对配置
     pub fn new(repository: R, account_service: A, trading_pair: TradingPair) -> Self {
