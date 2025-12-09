@@ -113,7 +113,7 @@ mod adaptor;
 
 // 导出服务和仓储（供高级用户使用）
 // 幂等性包装
-pub use domain::service::trading_spot_order_mng::{
+pub use domain::service::trading_spot_order_bp::{
     Nonce, Command, CommandResponse, CommandMetadata,
     CommonError, SpotCommandError, AlgoCommandError,
     ConditionalCommandError, MarketMakerCommandError, QueryError,
@@ -123,29 +123,42 @@ pub use domain::service::trading_spot_order_mng::{
     IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
 };
 // 核心现货命令
-pub use domain::service::trading_spot_order_mng::{
+pub use domain::service::trading_spot_order_bp::{
     SpotCommand, SpotCommandResult, SpotOrderHandler,
     TimeInForce, OrderStatus,  // 导出 TimeInForce 和 OrderStatus
 };
 // 算法交易命令
-pub use domain::service::trading_spot_order_mng::{
+pub use domain::service::trading_spot_order_bp::{
     AlgoCommand, AlgoCommandResult, AlgoOrderHandler, UrgencyLevel,
 };
 // 条件订单命令
-pub use domain::service::trading_spot_order_mng::{
+pub use domain::service::trading_spot_order_bp::{
     ConditionalCommand, ConditionalCommandResult, ConditionalOrderHandler,
     PegType, AuctionType,
 };
 // 做市商命令
-pub use domain::service::trading_spot_order_mng::{
+pub use domain::service::trading_spot_order_bp::{
     MarketMakerCommand, MarketMakerCommandResult, MarketMakerHandler,
 };
 pub use domain::service::market_data_service::MarketDataService;
 pub use domain::service::matching_service::MatchingService;
-pub use domain::repository::{InMemoryOrderRepository, OrderRepository, RepositoryError};
+pub use domain::repository::{MemoryOrderRepository, OrderRepository, RepositoryError};
 
 // 导出基础类型
 pub use domain::entity::lob_types::{
     EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price,
     PricePoint, Quantity, RecordChange, Side, Symbol, Trade, TraderId,
 };
+
+// 导出 Level 1-3 市场数据类型
+pub use domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
+
+// 导出行情查询服务
+pub use domain::service::trading_market_data_bp::{
+    BboChangeEvent, IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo,
+    Level2SnapshotRepo, Level3SnapshotRepo, MarketDataDelta, MarketDataQueryError,
+    MarketDataQueryProcessor, OrderBookChangeType, OrderBookDelta, QueryIncrementalData,
+    QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3, SymbolId, TradeEvent,
+};
+
+pub use domain::service::trading_market_data_bp_impl::MarketDataQueryProcessorImpl;

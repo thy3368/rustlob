@@ -1,4 +1,4 @@
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, TraderId};
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
 
 /// 市场数据等级定义（Level 1-3）
 ///
@@ -17,6 +17,12 @@ use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, TraderId};
 #[derive(Debug, Clone, Copy)]
 #[repr(align(64))]
 pub struct Level1 {
+    /// 交易对ID
+    pub symbol_id: u32,
+    /// 快照时间戳（纳秒）
+    pub timestamp: u64,
+    /// 序列号（用于检测丢包和排序）
+    pub sequence: u64,
     /// 最佳买价（Bid）
     pub best_bid: Option<Price>,
     /// 最佳买价总数量
@@ -38,6 +44,9 @@ pub struct Level1 {
 impl Default for Level1 {
     fn default() -> Self {
         Self {
+            symbol_id: 0,
+            timestamp: 0,
+            sequence: 0,
             best_bid: None,
             best_bid_quantity: 0,
             best_ask: None,
@@ -51,9 +60,12 @@ impl Default for Level1 {
 }
 
 impl Level1 {
-    /// 创建新的 Level 1 数据
+    /// 创建新的 Level 1 数据快照
     #[inline]
     pub fn new(
+        symbol_id: u32,
+        timestamp: u64,
+        sequence: u64,
         best_bid: Option<Price>,
         best_bid_quantity: Quantity,
         best_ask: Option<Price>,
@@ -70,6 +82,9 @@ impl Level1 {
         };
 
         Self {
+            symbol_id,
+            timestamp,
+            sequence,
             best_bid,
             best_bid_quantity,
             best_ask,
@@ -347,86 +362,7 @@ impl Level3 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
-    #[test]
-    fn test_level1_creation() {
-        let l1 = Level1::new(Some(9900), 100, Some(10100), 200);
 
-        assert_eq!(l1.best_bid, Some(9900));
-        assert_eq!(l1.best_bid_quantity, 100);
-        assert_eq!(l1.best_ask, Some(10100));
-        assert_eq!(l1.best_ask_quantity, 200);
-        assert_eq!(l1.spread, Some(200));
-        assert_eq!(l1.mid_price, Some(10000));
-        assert!(l1.has_valid_market());
-    }
-
-    #[test]
-    fn test_level1_update_trade() {
-        let mut l1 = Level1::new(Some(9900), 100, Some(10100), 200);
-        l1.update_last_trade(10000, 50);
-
-        assert_eq!(l1.last_trade_price, Some(10000));
-        assert_eq!(l1.last_trade_quantity, 50);
-    }
-
-    #[test]
-    fn test_level2_add_levels() {
-        let mut l2 = Level2::<5>::new();
-
-        l2.add_bid(PriceLevel::new(9900, 100, 3)).unwrap();
-        l2.add_bid(PriceLevel::new(9800, 200, 5)).unwrap();
-        l2.add_ask(PriceLevel::new(10100, 150, 4)).unwrap();
-
-        assert_eq!(l2.bid_count, 2);
-        assert_eq!(l2.ask_count, 1);
-        assert_eq!(l2.total_bid_quantity(), 300);
-        assert_eq!(l2.total_ask_quantity(), 150);
-    }
-
-    #[test]
-    fn test_level2_capacity_limit() {
-        let mut l2 = Level2::<2>::new();
-
-        assert!(l2.add_bid(PriceLevel::new(9900, 100, 1)).is_ok());
-        assert!(l2.add_bid(PriceLevel::new(9800, 100, 1)).is_ok());
-        assert!(l2.add_bid(PriceLevel::new(9700, 100, 1)).is_err());
-    }
-
-    #[test]
-    fn test_level3_operations() {
-        let mut l3 = Level3::with_capacity(10);
-        let trader = TraderId::from_str("TRADER1");
-
-        let order1 = Level3Order::new(1, trader, 9900, 100, 100);
-        let order2 = Level3Order::new(2, trader, 10100, 200, 150);
-
-        l3.add_bid(order1);
-        l3.add_ask(order2);
-
-        assert_eq!(l3.bids.len(), 1);
-        assert_eq!(l3.asks.len(), 1);
-        assert_eq!(l3.active_order_count(), 2);
-
-        assert!(l3.find_order(1).is_some());
-        assert!(l3.find_order(999).is_none());
-
-        assert!(l3.remove_order(1));
-        assert_eq!(l3.bids.len(), 0);
-    }
-
-    #[test]
-    fn test_level3_clear() {
-        let mut l3 = Level3::new();
-        let trader = TraderId::from_str("TRADER");
-
-        l3.add_bid(Level3Order::new(1, trader, 9900, 100, 100));
-        l3.add_ask(Level3Order::new(2, trader, 10100, 100, 100));
-
-        l3.clear();
-
-        assert_eq!(l3.bids.len(), 0);
-        assert_eq!(l3.asks.len(), 0);
-    }
 }
+

@@ -11,3 +11,5 @@
 - 竞品分析头部交易所cex, 纽交所，大综期货等交易系统 评估超低时延 cex需要的操作系统 /Users/hongyaotang/src/rustlob/app/design/process/story/os.md
 - 分析 tps/qps cqrs 关系 写文档/Users/hongyaotang/src/rustlob/app/design/process/story/cqrs.md
 - 借鉴币安的行情，定义行情的读模型，标注读模型的用途如app k线等 使用场景 如散户 量化机构 写文档/Users/hongyaotang/src/rustlob/app/design/process/story/mkdata.md
+
+- 翻译 https://www.coinapi.io/blog/level-1-vs-level-2-vs-level-3-market-data-how-to-read-the-crypto-order-book  写文档/Users/hongyaotang/src/rustlob/app/design/process/story/mkdata123.md

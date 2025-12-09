@@ -12,7 +12,7 @@ use crate::lob::domain::repository::OrderRepository;
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-use crate::lob::domain::service::trading_spot_order_mng::{
+use crate::lob::domain::service::trading_spot_order_bp::{
     CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, OrderStatus,
     SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderHandler, TimeInForce,
 };

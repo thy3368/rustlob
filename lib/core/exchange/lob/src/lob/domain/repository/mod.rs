@@ -11,14 +11,14 @@
 /// ## 使用示例
 ///
 /// ```no_run
-/// use lob::lob::{InMemoryOrderRepository, OrderRepository};
+/// use lob::lob::{MemoryOrderRepository, OrderRepository};
 ///
-/// let mut repo = InMemoryOrderRepository::new(100_000, 1000);
+/// let mut repo = MemoryOrderRepository::new(100_000, 1000);
 /// let order_id = repo.allocate_order_id();
 /// ```
 // 子模块
 pub mod traits;
 
 // 重新导出公共接口
-pub use crate::lob::adaptor::outbound::in_memory::InMemoryOrderRepository;
+pub use crate::lob::adaptor::outbound::order_memory_repo::MemoryOrderRepository;
 pub use traits::{OrderRepository, RepositoryError};
