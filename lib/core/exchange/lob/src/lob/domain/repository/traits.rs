@@ -6,7 +6,7 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Pr
 ///
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
-pub trait OrderRepository {
+pub trait OrderRepo {
     // === 核心写操作 ===
 
     /// 添加订单到仓储

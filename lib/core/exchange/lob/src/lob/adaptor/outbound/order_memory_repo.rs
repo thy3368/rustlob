@@ -6,13 +6,13 @@ use crate::lob::domain::entity::lob_types::{
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-use crate::lob::domain::repository::traits::{OrderRepository, RepositoryError};
+use crate::lob::domain::repository::traits::{OrderRepo, RepositoryError};
 use std::collections::HashMap;
 
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-pub struct MemoryOrderRepository {
+pub struct MemoryOrderRepo {
     /// 买单价格点（出价）
     bids: Vec<PricePoint>,
     /// 卖单价格点（要价）
@@ -30,7 +30,7 @@ pub struct MemoryOrderRepository {
     ask_min: Option<Price>,
 }
 
-impl MemoryOrderRepository {
+impl MemoryOrderRepo {
     /// 创建新的内存仓储
     pub fn new(max_price: usize, max_orders: usize) -> Self {
         Self {
@@ -109,7 +109,7 @@ impl MemoryOrderRepository {
     }
 }
 
-impl OrderRepository for MemoryOrderRepository {
+impl OrderRepo for MemoryOrderRepo {
     fn add_order(
         &mut self,
         order_id: OrderId,
@@ -348,7 +348,7 @@ impl OrderRepository for MemoryOrderRepository {
     }
 }
 
-impl MemoryOrderRepository {
+impl MemoryOrderRepo {
     /// 应用单个事件
     fn apply_event(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
         match (event.entity_name, event.operation) {
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_add_and_find_order() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER1");
         let order_id = 1;
         let entry = OrderEntry::new(order_id, trader, 100);
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_replay_create_order() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER1");
 
         // 构造 Create 事件
@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_replay_update_order() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER1");
 
         // 先添加订单
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn test_replay_delete_order() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER1");
 
         // 先添加订单
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_replay_multiple_events() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader1 = TraderId::from_str("TRADER1");
         let trader2 = TraderId::from_str("TRADER2");
 

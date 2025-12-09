@@ -1,7 +1,7 @@
 /// 市场数据查询服务，提供行情数据服务
 ///
 /// 提供订单簿市场数据查询功能
-use crate::lob::domain::repository::OrderRepository;
+use crate::lob::domain::repository::OrderRepo;
 use crate::lob::domain::entity::lob_types::Price;
 
 
@@ -10,14 +10,14 @@ use crate::lob::domain::entity::lob_types::Price;
 /// 提供订单簿市场数据查询功能
 pub struct MarketDataService<R>
 where
-    R: OrderRepository,
+    R: OrderRepo,
 {
     repository: R,
 }
 
 impl<R> MarketDataService<R>
 where
-    R: OrderRepository,
+    R: OrderRepo,
 {
     /// 创建新的市场数据服务
     pub fn new(repository: R) -> Self {
@@ -59,12 +59,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lob::domain::repository::MemoryOrderRepository;
+    use crate::lob::domain::repository::MemoryOrderRepo;
     use crate::lob::domain::entity::lob_types::{OrderEntry, Side, TraderId};
 
     #[test]
     fn test_market_data_service() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
 
         let trader = TraderId::from_str("TRADER");
 
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_empty_book() {
-        let repo = MemoryOrderRepository::new(100_000, 1000);
+        let repo = MemoryOrderRepo::new(100_000, 1000);
         let md_service = MarketDataService::new(repo);
 
         assert_eq!(md_service.find_best_bid(), None);
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_only_bids() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER");
 
         let buy_id = repo.allocate_order_id();
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_only_asks() {
-        let mut repo = MemoryOrderRepository::new(100_000, 1000);
+        let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER");
 
         let sell_id = repo.allocate_order_id();

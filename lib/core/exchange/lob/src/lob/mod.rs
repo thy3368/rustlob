@@ -142,7 +142,7 @@ pub use domain::service::trading_spot_order_bp::{
 };
 pub use domain::service::market_data_service::MarketDataService;
 pub use domain::service::matching_service::MatchingService;
-pub use domain::repository::{MemoryOrderRepository, OrderRepository, RepositoryError};
+pub use domain::repository::{MemoryOrderRepo, OrderRepo, RepositoryError};
 
 // 导出基础类型
 pub use domain::entity::lob_types::{

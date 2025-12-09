@@ -8,7 +8,7 @@
 //! - 错误处理
 
 use lob::lob::{
-    Command, CommandResponse, MemoryOrderRepository, MatchingService, OrderId, OrderRepository,
+    Command, CommandResponse, MemoryOrderRepo, MatchingService, OrderId, OrderRepo,
     OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandError, SpotCommandResult,
     SpotOrderHandler, Symbol, TimeInForce, TraderId,
 };
@@ -51,7 +51,7 @@ impl Trader {
         quantity: Quantity,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景1: 限价买单 (GTC) ===");
@@ -91,7 +91,7 @@ impl Trader {
         quantity: Quantity,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景2: 限价卖单 (PostOnly) ===");
@@ -131,7 +131,7 @@ impl Trader {
         quantity: Quantity,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景3: 限价买单 (IOC) ===");
@@ -171,7 +171,7 @@ impl Trader {
         quantity: Quantity,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景4: 限价买单 (FOK) ===");
@@ -211,7 +211,7 @@ impl Trader {
         price_limit: Option<Price>, // 价格保护：最高愿意支付的价格
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景5: 市价买单 ===");
@@ -253,7 +253,7 @@ impl Trader {
         price_limit: Option<Price>, // 价格保护：最低愿意接受的价格
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景6: 市价卖单 (FOK) ===");
@@ -292,7 +292,7 @@ impl Trader {
         order_id: OrderId,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
-        R: OrderRepository + Send + Sync,
+        R: OrderRepo + Send + Sync,
         A: AccountService,
     {
         println!("\n=== 场景7: 取消订单 ===");
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn test_trader_workflow() {
         // 1. 初始化交易系统
-        let order_repo = MemoryOrderRepository::new(100000, 10000);
+        let order_repo = MemoryOrderRepo::new(100000, 10000);
         let account_service = mocks::MockAccountService::new();
         let trading_pair = TradingPair {
             base_asset: account::AssetId(1), // BTC
@@ -490,7 +490,7 @@ mod tests {
         println!("========================================");
 
         // 模拟各种错误场景
-        let order_repo = MemoryOrderRepository::new(100000, 10000);
+        let order_repo = MemoryOrderRepo::new(100000, 10000);
         let account_service = mocks::MockAccountService::new();
         let trading_pair = TradingPair {
             base_asset: account::AssetId(1), // BTC
