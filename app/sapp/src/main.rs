@@ -3,22 +3,22 @@ mod models;
 mod server;
 
 use account::{
-    AccountServiceImpl, InMemoryAccountRepository, InMemoryBalanceRepository, TradingPair,
+    AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo, TradingPair,
 };
 use lob::lob::{MemoryOrderRepo, SpotMatchingService};
 use models::RpcServiceConfig;
-use server::json_rpc_service::LobRpcService;
+use server::spot_order_proc::json_rpc_service::LobRpcService;
 use std::env;
 
 /// 创建 MatchingService 实例
 fn create_matching_service(
     order_capacity: usize,
     price_range: usize,
-) -> SpotMatchingService<MemoryOrderRepo, AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository>>
+) -> SpotMatchingService<MemoryOrderRepo, AccountServiceImpl<MemoryAccountRepo, MemoryBalanceRepo>>
 {
     let lob_repo = MemoryOrderRepo::new(order_capacity, price_range);
-    let account_repo = InMemoryAccountRepository::new();
-    let balance_repo = InMemoryBalanceRepository::with_default_timestamp();
+    let account_repo = MemoryAccountRepo::new();
+    let balance_repo = MemoryBalanceRepo::with_default_timestamp();
     let account_service = AccountServiceImpl::new(
         account_repo,
         balance_repo,

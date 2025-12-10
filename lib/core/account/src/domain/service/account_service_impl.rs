@@ -687,13 +687,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adaptor::outbound::{InMemoryAccountRepository, InMemoryBalanceRepository};
+    use crate::adaptor::outbound::{MemoryAccountRepo, MemoryBalanceRepo};
     use crate::domain::entity::{Account, AccountId, AccountType, AssetId, TradingPair, UserId};
 
     fn create_test_service(
-    ) -> AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository> {
-        let account_repo = InMemoryAccountRepository::new();
-        let balance_repo = InMemoryBalanceRepository::new(|| 1000);
+    ) -> AccountServiceImpl<MemoryAccountRepo, MemoryBalanceRepo> {
+        let account_repo = MemoryAccountRepo::new();
+        let balance_repo = MemoryBalanceRepo::new(|| 1000);
 
         let mut service = AccountServiceImpl::new(account_repo, balance_repo, || 1000);
 

@@ -61,4 +61,4 @@ pub use domain::repository::{AccountRepository, BalanceRepository};
 pub use domain::service::AccountService;
 
 // Re-export adaptor implementations
-pub use adaptor::{AccountServiceImpl, InMemoryAccountRepository, InMemoryBalanceRepository};
+pub use adaptor::{AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo};

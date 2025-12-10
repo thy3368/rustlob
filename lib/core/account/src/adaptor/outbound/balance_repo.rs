@@ -8,14 +8,14 @@ use crate::domain::entity::{AccountId, AssetId, Balance, Timestamp};
 use crate::domain::repository::BalanceRepository;
 
 /// 内存余额仓储实现
-pub struct InMemoryBalanceRepository {
+pub struct MemoryBalanceRepo {
     /// 余额缓存 ((account_id, asset_id) -> Balance)
     balances: HashMap<(AccountId, AssetId), Balance>,
     /// 时间戳生成器
     timestamp_fn: fn() -> Timestamp,
 }
 
-impl InMemoryBalanceRepository {
+impl MemoryBalanceRepo {
     /// 创建新的内存余额仓储
     pub fn new(timestamp_fn: fn() -> Timestamp) -> Self {
         Self {
@@ -50,7 +50,7 @@ impl InMemoryBalanceRepository {
     }
 }
 
-impl BalanceRepository for InMemoryBalanceRepository {
+impl BalanceRepository for MemoryBalanceRepo {
     fn get(&self, account_id: AccountId, asset_id: AssetId) -> Option<&Balance> {
         self.balances.get(&(account_id, asset_id))
     }

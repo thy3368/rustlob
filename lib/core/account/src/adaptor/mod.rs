@@ -7,5 +7,5 @@ pub mod outbound;
 
 // Re-export for convenience
 pub use inbound::AccountServiceImpl;
-pub use outbound::{InMemoryAccountRepository, InMemoryBalanceRepository};
+pub use outbound::{MemoryAccountRepo, MemoryBalanceRepo};
 

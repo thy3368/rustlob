@@ -6,12 +6,12 @@ use crate::domain::entity::{Account, AccountId, AccountStatus};
 use crate::domain::repository::AccountRepository;
 
 /// 内存账户仓储实现
-pub struct InMemoryAccountRepository {
+pub struct MemoryAccountRepo {
     /// 账户缓存 (account_id -> Account)
     accounts: HashMap<AccountId, Account>,
 }
 
-impl InMemoryAccountRepository {
+impl MemoryAccountRepo {
     /// 创建新的内存账户仓储
     pub fn new() -> Self {
         Self {
@@ -20,13 +20,13 @@ impl InMemoryAccountRepository {
     }
 }
 
-impl Default for InMemoryAccountRepository {
+impl Default for MemoryAccountRepo {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AccountRepository for InMemoryAccountRepository {
+impl AccountRepository for MemoryAccountRepo {
     fn get(&self, account_id: AccountId) -> Option<&Account> {
         self.accounts.get(&account_id)
     }
