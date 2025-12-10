@@ -249,7 +249,7 @@ cargo run --example ws_client --release
 - FPGA 订单簿加速
 - RDMA 网络 (< 2μs)
 
-参考文档：[技术路线图详情](app/design/process/story/)
+参考文档：[技术路线图详情](design/process/story/)
 
 ---
 
@@ -336,9 +336,9 @@ Ping/Pong 延迟:
 | 文档 | 说明 |
 |------|------|
 | [CLAUDE.md](CLAUDE.md) | 开发规范（低延迟标准 + Clean Architecture） |
-| [hard.md](app/design/process/story/hard.md) | 硬件需求分析（三级配置方案） |
-| [futures_design.md](app/design/process/story/futures_design.md) | 永续合约设计 |
-| [options_design.md](app/design/process/story/options_design.md) | 期权交易设计 |
+| [hard.md](design/process/story/hardware/hard.md) | 硬件需求分析（三级配置方案） |
+| [futures_design.md](design/process/story/futures_design.md) | 永续合约设计 |
+| [options_design.md](design/process/story/options_design.md) | 期权交易设计 |
 | [WEBSOCKET.md](app/sapp/WEBSOCKET.md) | WebSocket API 详细文档 |
 
 ---

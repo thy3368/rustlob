@@ -3399,8 +3399,8 @@ Response 200 OK:
 **文档版本**: v1.6.0
 **最后更新**: 2025-12-09
 **参考文档**:
-- [CQRS架构分析](./cqrs.md)
-- [行情数据协议](./market_data_proto.md)
+- [CQRS架构分析](cqrs.md)
+- [行情数据协议](market_data_proto.md)
 - [币安API文档](https://binance-docs.github.io/apidocs/spot/en/)
 - [NautilusTrader数据模型](https://nautilustrader.io/docs/latest/concepts/data)
 - [NASDAQ TotalView-ITCH 5.0规范](https://www.nasdaqtrader.com/content/technicalsupport/specifications/dataproducts/NQTVITCHSpecification.pdf)

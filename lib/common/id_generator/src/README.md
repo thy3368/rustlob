@@ -305,8 +305,8 @@ ID重复通常由以下原因导致：
 
 ## 相关文档
 
-- [orderid.md](../../../../app/design/process/story/orderid.md) - 完整设计文档
-- [orderid_simple_example.md](../../../../app/design/process/story/orderid_simple_example.md) - 简洁示例
+- [orderid.md](../../../../design/process/story/id_gen/orderid.md) - 完整设计文档
+- [orderid_simple_example.md](../../../../design/process/story/id_gen/orderid_simple_example.md) - 简洁示例
 
 ## License
 
