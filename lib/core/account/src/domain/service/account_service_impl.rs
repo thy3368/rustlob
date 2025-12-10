@@ -6,7 +6,7 @@
 use crate::domain::entity::{
     AccountCommand, AccountCommandResult, BalanceError, Side, Timestamp,
 };
-use crate::domain::repository::{AccountRepository, BalanceRepository};
+use crate::domain::repo::{AccountRepo, BalanceRepo};
 use crate::domain::service::AccountService;
 
 /// 账户服务实现
@@ -14,8 +14,8 @@ use crate::domain::service::AccountService;
 /// 依赖注入 AccountRepository 和 BalanceRepository
 pub struct AccountServiceImpl<A, B>
 where
-    A: AccountRepository,
-    B: BalanceRepository,
+    A: AccountRepo,
+    B: BalanceRepo,
 {
     /// 账户仓储
     account_repo: A,
@@ -27,8 +27,8 @@ where
 
 impl<A, B> AccountServiceImpl<A, B>
 where
-    A: AccountRepository,
-    B: BalanceRepository,
+    A: AccountRepo,
+    B: BalanceRepo,
 {
     /// 创建新的账户服务
     pub fn new(account_repo: A, balance_repo: B, timestamp_fn: fn() -> Timestamp) -> Self {
@@ -466,8 +466,8 @@ where
 
 impl<A, B> AccountService for AccountServiceImpl<A, B>
 where
-    A: AccountRepository,
-    B: BalanceRepository,
+    A: AccountRepo,
+    B: BalanceRepo,
 {
     fn execute(&mut self, cmd: AccountCommand) -> AccountCommandResult {
         let now = self.now();

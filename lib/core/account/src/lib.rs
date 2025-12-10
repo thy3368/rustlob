@@ -57,7 +57,7 @@ pub use domain::entity::{
     Account, AccountCommand, AccountCommandResult, AccountId, AccountStatus, AccountType, AssetId,
     Balance, BalanceError, BalanceOp, OrderId, Side, Timestamp, TradingPair, UserId,
 };
-pub use domain::repository::{AccountRepository, BalanceRepository};
+pub use domain::repo::{AccountRepo, BalanceRepo};
 pub use domain::service::AccountService;
 
 // Re-export adaptor implementations

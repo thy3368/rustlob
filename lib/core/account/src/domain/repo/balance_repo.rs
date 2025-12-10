@@ -8,7 +8,7 @@ use crate::domain::entity::{AccountId, AssetId, Balance, Timestamp};
 /// 余额仓储接口
 ///
 /// 提供余额的持久化操作（纯 CRUD）
-pub trait BalanceRepository: Send + Sync {
+pub trait BalanceRepo: Send + Sync {
     /// 获取余额
     fn get(&self, account_id: AccountId, asset_id: AssetId) -> Option<&Balance>;
 

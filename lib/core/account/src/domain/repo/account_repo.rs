@@ -5,7 +5,7 @@ use crate::domain::entity::{Account, AccountId, AccountStatus, BalanceError};
 /// 账户仓储接口
 ///
 /// 提供账户的持久化操作
-pub trait AccountRepository: Send + Sync {
+pub trait AccountRepo: Send + Sync {
     /// 获取账户
     fn get(&self, account_id: AccountId) -> Option<&Account>;
 

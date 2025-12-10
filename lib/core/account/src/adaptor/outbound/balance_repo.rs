@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::domain::entity::{AccountId, AssetId, Balance, Timestamp};
-use crate::domain::repository::BalanceRepository;
+use crate::domain::repo::BalanceRepo;
 
 /// 内存余额仓储实现
 pub struct MemoryBalanceRepo {
@@ -50,7 +50,7 @@ impl MemoryBalanceRepo {
     }
 }
 
-impl BalanceRepository for MemoryBalanceRepo {
+impl BalanceRepo for MemoryBalanceRepo {
     fn get(&self, account_id: AccountId, asset_id: AssetId) -> Option<&Balance> {
         self.balances.get(&(account_id, asset_id))
     }

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::domain::entity::{Account, AccountId, AccountStatus};
-use crate::domain::repository::AccountRepository;
+use crate::domain::repo::AccountRepo;
 
 /// 内存账户仓储实现
 pub struct MemoryAccountRepo {
@@ -26,7 +26,7 @@ impl Default for MemoryAccountRepo {
     }
 }
 
-impl AccountRepository for MemoryAccountRepo {
+impl AccountRepo for MemoryAccountRepo {
     fn get(&self, account_id: AccountId) -> Option<&Account> {
         self.accounts.get(&account_id)
     }
