@@ -7,14 +7,16 @@
 //! 2. 做市商策略：分析 L2 深度数据，动态调整报价
 //! 3. 大单追踪策略：监控 L3 订单簿，识别大额订单
 
-use lob::lob::{
-    BboChangeEvent, IncrementalDataRepo, IncrementalDataResult, Level1, Level1SnapshotRepo,
-    Level2, Level2SnapshotRepo, Level3, Level3Order, Level3SnapshotRepo, MarketDataDelta,
-    MarketDataQueryError, MarketDataQueryProc, MarketDataQueryProcessorImpl,
-    OrderBookChangeType, OrderBookDelta, OrderId, Price, PriceLevel, Quantity,
-    QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3, Side,
-    SymbolId, TradeEvent, TraderId,
+use lob::lob::{Price, Quantity, Side, TraderId};
+use spot_market_data::domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
+use spot_market_data_proc::proc::trading_market_data_proc::{
+    BboChangeEvent, IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo,
+    Level2SnapshotRepo, Level3SnapshotRepo, MarketDataDelta, MarketDataQueryError,
+    MarketDataQueryProc, OrderBookChangeType, OrderBookDelta,
+    QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3, SymbolId,
+    TradeEvent,
 };
+use spot_market_data_proc::proc::trading_market_data_proc_impl::MarketDataQueryProcessorImpl;
 
 // ============================================================================
 // Mock 数据仓储实现（用于演示）

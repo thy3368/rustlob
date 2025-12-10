@@ -2,12 +2,7 @@
 // 行情查询处理器
 // ============================================================================
 
-use crate::lob::domain::service::trading_market_data_proc::{
-    IncrementalDataRepo, IncrementalDataResult, Level1BatchQueryResult, Level1QueryResult,
-    Level2QueryResult, Level3QueryResult, Level3SnapshotRepo, MarketDataQueryError,
-    MarketDataQueryProc, QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2,
-    QueryLevel3,
-};
+use crate::proc::trading_market_data_proc::*;
 
 /// 行情查询处理器
 ///

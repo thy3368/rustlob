@@ -9,7 +9,3 @@ pub mod order_query_service_v2;
 pub mod trading_spot_order_proc;
 pub mod trading_spot_order_proc_impl;
 
-// 市场数据服务
-pub mod trading_market_data_proc;
-
-pub mod trading_market_data_proc_impl;

@@ -10,10 +10,13 @@ pub struct CommandRequest {
     /// 命令类型: LimitOrder, MarketOrder, CancelOrder
     pub command: String,
     pub trader_id: Option<String>,
+    pub symbol: Option<String>,
     pub side: Option<String>,
     pub price: Option<u32>,
     pub quantity: Option<u32>,
+    pub price_limit: Option<u32>,
     pub order_id: Option<u64>,
+    pub client_order_id: Option<String>,
 }
 
 /// 统一命令响应
@@ -27,6 +30,10 @@ pub struct CommandResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filled_quantity: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_quantity: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trades: Option<Vec<TradeInfo>>,
     #[serde(skip_serializing_if = "Option::is_none")]

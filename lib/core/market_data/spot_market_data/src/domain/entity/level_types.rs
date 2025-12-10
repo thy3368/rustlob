@@ -1,4 +1,3 @@
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
 
 /// 市场数据等级定义（Level 1-3）
 ///
@@ -7,7 +6,7 @@ use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Trad
 /// - Level 2: 市场深度（多档价格，不含订单详情）
 /// - Level 3: 完整订单簿（包含所有订单详情）
 
-// use super::types::{OrderId, Price, Quantity, TraderId};
+use lob::lob::{OrderId, Price, Quantity, TraderId};
 
 /// Level 1 市场数据 - 顶层报价（Top of Book）
 ///
@@ -362,7 +361,145 @@ impl Level3 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
+    #[test]
+    fn test_level1_creation() {
+        let level1 = Level1::new(
+            1,      // symbol_id
+            1000,   // timestamp
+            1,      // sequence
+            Some(50000), // best_bid
+            100,    // best_bid_quantity
+            Some(50100), // best_ask
+            200,    // best_ask_quantity
+        );
 
+        assert_eq!(level1.symbol_id, 1);
+        assert_eq!(level1.best_bid, Some(50000));
+        assert_eq!(level1.best_ask, Some(50100));
+        assert_eq!(level1.spread, Some(100));
+        assert_eq!(level1.mid_price, Some(50050));
+        assert!(level1.has_valid_market());
+    }
+
+    #[test]
+    fn test_level1_only_asks() {
+        let level1 = Level1::new(
+            1,      // symbol_id
+            1000,   // timestamp
+            1,      // sequence
+            None,   // best_bid
+            0,      // best_bid_quantity
+            Some(10100), // best_ask
+            200,    // best_ask_quantity
+        );
+
+        assert_eq!(level1.best_bid, None);
+        assert_eq!(level1.best_ask, Some(10100));
+        assert_eq!(level1.spread, None);
+        assert_eq!(level1.mid_price, None);
+        assert!(!level1.has_valid_market());
+    }
+
+    #[test]
+    fn test_level1_update_last_trade() {
+        let mut level1 = Level1::default();
+        level1.update_last_trade(50050, 10);
+
+        assert_eq!(level1.last_trade_price, Some(50050));
+        assert_eq!(level1.last_trade_quantity, 10);
+    }
+
+    #[test]
+    fn test_level2_add_levels() {
+        let mut level2 = Level2::<5>::new();
+
+        // 添加买方档位
+        let bid1 = PriceLevel::new(50000, 100, 5);
+        let bid2 = PriceLevel::new(49900, 200, 10);
+        assert!(level2.add_bid(bid1).is_ok());
+        assert!(level2.add_bid(bid2).is_ok());
+        assert_eq!(level2.bid_count, 2);
+
+        // 添加卖方档位
+        let ask1 = PriceLevel::new(50100, 150, 7);
+        let ask2 = PriceLevel::new(50200, 250, 12);
+        assert!(level2.add_ask(ask1).is_ok());
+        assert!(level2.add_ask(ask2).is_ok());
+        assert_eq!(level2.ask_count, 2);
+
+        // 测试总深度
+        assert_eq!(level2.total_bid_quantity(), 300);
+        assert_eq!(level2.total_ask_quantity(), 400);
+    }
+
+    #[test]
+    fn test_level2_full() {
+        let mut level2 = Level2::<2>::new();
+
+        let level = PriceLevel::new(50000, 100, 5);
+        assert!(level2.add_bid(level).is_ok());
+        assert!(level2.add_bid(level).is_ok());
+        assert!(level2.add_bid(level).is_err()); // 应该失败
+    }
+
+    #[test]
+    fn test_level3_order_management() {
+        let mut level3 = Level3::with_capacity(10);
+
+        // 添加订单
+        let trader1 = TraderId::new([1, 0, 0, 0, 0, 0, 0, 0]);
+        let trader2 = TraderId::new([2, 0, 0, 0, 0, 0, 0, 0]);
+        let order1 = Level3Order::new(1, trader1, 50000, 10, 10);
+        let order2 = Level3Order::new(2, trader2, 50100, 20, 15);
+        level3.add_bid(order1);
+        level3.add_ask(order2);
+
+        // 查找订单
+        assert!(level3.find_order(1).is_some());
+        assert!(level3.find_order(2).is_some());
+        assert!(level3.find_order(999).is_none());
+
+        // 移除订单
+        assert!(level3.remove_order(1));
+        assert!(!level3.remove_order(1)); // 已经移除
+        assert!(level3.find_order(1).is_none());
+
+        // 统计活跃订单
+        assert_eq!(level3.active_order_count(), 1);
+    }
+
+    #[test]
+    fn test_level3_clear() {
+        let mut level3 = Level3::new();
+        let trader = TraderId::new([1, 0, 0, 0, 0, 0, 0, 0]);
+        let order = Level3Order::new(1, trader, 50000, 10, 10);
+        level3.add_bid(order);
+        level3.add_ask(order);
+
+        level3.clear();
+        assert_eq!(level3.bids.len(), 0);
+        assert_eq!(level3.asks.len(), 0);
+    }
+
+    #[test]
+    fn test_price_level_creation() {
+        let level = PriceLevel::new(50000, 100, 5);
+        assert_eq!(level.price, 50000);
+        assert_eq!(level.quantity, 100);
+        assert_eq!(level.order_count, 5);
+    }
+
+    #[test]
+    fn test_level3_order_active() {
+        let trader1 = TraderId::new([1, 0, 0, 0, 0, 0, 0, 0]);
+        let trader2 = TraderId::new([2, 0, 0, 0, 0, 0, 0, 0]);
+        let active_order = Level3Order::new(1, trader1, 50000, 10, 5);
+        assert!(active_order.is_active());
+
+        let filled_order = Level3Order::new(2, trader2, 50100, 10, 0);
+        assert!(!filled_order.is_active());
+    }
 }
 

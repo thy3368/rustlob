@@ -416,6 +416,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "exchange_spot"
+version = "0.1.0"
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1772,7 +1776,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
-name = "spot"
+name = "spot_market_data"
+version = "0.1.0"
+dependencies = [
+ "lob",
+]
+
+[[package]]
+name = "spot_market_data_proc"
+version = "0.1.0"
+dependencies = [
+ "account",
+ "lob",
+ "spot_market_data",
+]
+
+[[package]]
+name = "spot_proc"
 version = "0.1.0"
 
 [[package]]

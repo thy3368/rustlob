@@ -34,8 +34,8 @@
 //! let result = processor.handle_query_incremental_data(query)?;
 //! ```
 
-use crate::lob::domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
+use lob::lob::*;
+use spot_market_data::domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
 use std::fmt;
 
 // ============================================================================

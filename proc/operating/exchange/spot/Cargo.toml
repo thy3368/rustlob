@@ -1,5 +1,5 @@
 [package]
-name = "exchange_spot"
+name = "spot_proc"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
