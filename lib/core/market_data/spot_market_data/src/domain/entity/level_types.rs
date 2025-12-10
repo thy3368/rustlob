@@ -6,7 +6,23 @@
 /// - Level 2: 市场深度（多档价格，不含订单详情）
 /// - Level 3: 完整订单簿（包含所有订单详情）
 
-use lob::lob::{OrderId, Price, Quantity, TraderId};
+use lob::lob::{OrderId, Price, Quantity, Side, TraderId};
+
+
+// ============================================================================
+// 类型别名
+// ============================================================================
+
+/// 交易对ID类型别名
+///
+/// 使用 u32 类型表示交易对ID，支持最多 4,294,967,295 个交易对
+pub type SymbolId = u32;
+
+/// 序列号类型别名
+///
+/// 用于标识事件的顺序，确保数据一致性
+pub type SequenceNumber = u64;
+
 
 /// Level 1 市场数据 - 顶层报价（Top of Book）
 ///
@@ -357,6 +373,98 @@ impl Level3 {
         self.bids.iter().filter(|o| o.is_active()).count()
             + self.asks.iter().filter(|o| o.is_active()).count()
     }
+}
+
+
+// ============================================================================
+// 增量数据事件定义
+// ============================================================================
+
+/// 订单簿变更类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderChangeType {
+    /// 新增订单
+    Add,
+    /// 修改订单（数量变化）
+    Modify,
+    /// 删除订单
+    Delete,
+}
+
+/// 订单簿增量变更事件
+#[derive(Debug, Clone, Copy)]
+pub struct OrderDelta {
+    /// 交易对ID
+    pub symbol_id: SymbolId,
+    /// 事件时间戳（纳秒）
+    pub timestamp: u64,
+    /// 序列号
+    pub sequence: u64,
+    /// 变更类型
+    pub change_type: OrderChangeType,
+    /// 订单ID
+    pub order_id: OrderId,
+    /// 买卖方向
+    pub side: Side,
+    /// 价格
+    pub price: Price,
+    /// 数量（新数量或变化量）
+    pub quantity: Quantity,
+    /// 交易者ID（可选）
+    pub trader_id: Option<TraderId>,
+}
+
+/// 成交事件
+#[derive(Debug, Clone, Copy)]
+pub struct TradeEvent {
+    /// 交易对ID
+    pub symbol_id: SymbolId,
+    /// 成交时间戳（纳秒）
+    pub timestamp: u64,
+    /// 序列号
+    pub sequence: u64,
+    /// 成交ID
+    pub trade_id: u64,
+    /// 买方订单ID
+    pub buyer_order_id: OrderId,
+    /// 卖方订单ID
+    pub seller_order_id: OrderId,
+    /// 成交价格
+    pub price: Price,
+    /// 成交数量
+    pub quantity: Quantity,
+    /// 主动方（买方或卖方）
+    pub aggressor_side: Side,
+}
+
+/// 最优买卖价变更事件
+#[derive(Debug, Clone, Copy)]
+pub struct BboChangeEvent {
+    /// 交易对ID
+    pub symbol_id: SymbolId,
+    /// 事件时间戳（纳秒）
+    pub timestamp: u64,
+    /// 序列号
+    pub sequence: u64,
+    /// 最优买价
+    pub best_bid: Option<Price>,
+    /// 最优买价数量
+    pub best_bid_quantity: Quantity,
+    /// 最优卖价
+    pub best_ask: Option<Price>,
+    /// 最优卖价数量
+    pub best_ask_quantity: Quantity,
+}
+
+/// 市场数据增量事件（统一枚举）
+#[derive(Debug, Clone, Copy)]
+pub enum MarketDataDelta {
+    /// 订单簿变更
+    OrderChange(OrderDelta),
+    /// 成交事件
+    Trade(TradeEvent),
+    /// 最优买卖价变更
+    BboChange(BboChangeEvent),
 }
 
 #[cfg(test)]

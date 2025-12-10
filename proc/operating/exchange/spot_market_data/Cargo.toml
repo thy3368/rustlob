@@ -9,3 +9,10 @@ license.workspace = true
 lob = { path = "../../../../lib/core/exchange/lob" }
 spot_market_data = { path = "../../../../lib/core/market_data/spot_market_data" }
 account = { path = "../../../../lib/core/account" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "orderbook_delta_allocation"
+harness = false

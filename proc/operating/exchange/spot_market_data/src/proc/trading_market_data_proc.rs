@@ -35,22 +35,10 @@
 //! ```
 
 use lob::lob::*;
-use spot_market_data::domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
+use spot_market_data::domain::entity::level_types::{BboChangeEvent, Level1, Level2, Level3, Level3Order, MarketDataDelta, OrderDelta, PriceLevel, SequenceNumber, SymbolId, TradeEvent};
 use std::fmt;
 
-// ============================================================================
-// 类型别名
-// ============================================================================
 
-/// 交易对ID类型别名
-///
-/// 使用 u32 类型表示交易对ID，支持最多 4,294,967,295 个交易对
-pub type SymbolId = u32;
-
-/// 序列号类型别名
-///
-/// 用于标识事件的顺序，确保数据一致性
-pub type SequenceNumber = u64;
 
 // ============================================================================
 // 数据提供者 Trait 定义
@@ -746,96 +734,7 @@ pub struct Level3QueryResult {
 
 
 
-// ============================================================================
-// 增量数据事件定义
-// ============================================================================
 
-/// 订单簿变更类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OrderBookChangeType {
-    /// 新增订单
-    Add,
-    /// 修改订单（数量变化）
-    Modify,
-    /// 删除订单
-    Delete,
-}
-
-/// 订单簿增量变更事件
-#[derive(Debug, Clone, Copy)]
-pub struct OrderBookDelta {
-    /// 交易对ID
-    pub symbol_id: SymbolId,
-    /// 事件时间戳（纳秒）
-    pub timestamp: u64,
-    /// 序列号
-    pub sequence: u64,
-    /// 变更类型
-    pub change_type: OrderBookChangeType,
-    /// 订单ID
-    pub order_id: OrderId,
-    /// 买卖方向
-    pub side: Side,
-    /// 价格
-    pub price: Price,
-    /// 数量（新数量或变化量）
-    pub quantity: Quantity,
-    /// 交易者ID（可选）
-    pub trader_id: Option<TraderId>,
-}
-
-/// 成交事件
-#[derive(Debug, Clone, Copy)]
-pub struct TradeEvent {
-    /// 交易对ID
-    pub symbol_id: SymbolId,
-    /// 成交时间戳（纳秒）
-    pub timestamp: u64,
-    /// 序列号
-    pub sequence: u64,
-    /// 成交ID
-    pub trade_id: u64,
-    /// 买方订单ID
-    pub buyer_order_id: OrderId,
-    /// 卖方订单ID
-    pub seller_order_id: OrderId,
-    /// 成交价格
-    pub price: Price,
-    /// 成交数量
-    pub quantity: Quantity,
-    /// 主动方（买方或卖方）
-    pub aggressor_side: Side,
-}
-
-/// 最优买卖价变更事件
-#[derive(Debug, Clone, Copy)]
-pub struct BboChangeEvent {
-    /// 交易对ID
-    pub symbol_id: SymbolId,
-    /// 事件时间戳（纳秒）
-    pub timestamp: u64,
-    /// 序列号
-    pub sequence: u64,
-    /// 最优买价
-    pub best_bid: Option<Price>,
-    /// 最优买价数量
-    pub best_bid_quantity: Quantity,
-    /// 最优卖价
-    pub best_ask: Option<Price>,
-    /// 最优卖价数量
-    pub best_ask_quantity: Quantity,
-}
-
-/// 市场数据增量事件（统一枚举）
-#[derive(Debug, Clone, Copy)]
-pub enum MarketDataDelta {
-    /// 订单簿变更
-    OrderBookChange(OrderBookDelta),
-    /// 成交事件
-    Trade(TradeEvent),
-    /// 最优买卖价变更
-    BboChange(BboChangeEvent),
-}
 
 // ============================================================================
 // 增量数据查询命令
@@ -1134,11 +1033,11 @@ impl IncrementalDataResult {
     }
 
     /// 过滤订单簿变更事件
-    pub fn filter_orderbook_changes(&self) -> Vec<&OrderBookDelta> {
+    pub fn filter_orderbook_changes(&self) -> Vec<&OrderDelta> {
         self.deltas
             .iter()
             .filter_map(|delta| match delta {
-                MarketDataDelta::OrderBookChange(change) => Some(change),
+                MarketDataDelta::OrderChange(change) => Some(change),
                 _ => None,
             })
             .collect()
@@ -1171,7 +1070,7 @@ impl IncrementalDataResult {
         let mut count = EventTypeCount::default();
         for delta in &self.deltas {
             match delta {
-                MarketDataDelta::OrderBookChange(_) => count.orderbook_changes += 1,
+                MarketDataDelta::OrderChange(_) => count.orderbook_changes += 1,
                 MarketDataDelta::Trade(_) => count.trades += 1,
                 MarketDataDelta::BboChange(_) => count.bbo_changes += 1,
             }
@@ -1182,7 +1081,7 @@ impl IncrementalDataResult {
     /// 获取第一个事件的序列号
     pub fn first_sequence(&self) -> Option<SequenceNumber> {
         self.deltas.first().map(|delta| match delta {
-            MarketDataDelta::OrderBookChange(d) => d.sequence,
+            MarketDataDelta::OrderChange(d) => d.sequence,
             MarketDataDelta::Trade(t) => t.sequence,
             MarketDataDelta::BboChange(b) => b.sequence,
         })
@@ -1191,7 +1090,7 @@ impl IncrementalDataResult {
     /// 获取最后一个事件的序列号
     pub fn last_sequence(&self) -> Option<SequenceNumber> {
         self.deltas.last().map(|delta| match delta {
-            MarketDataDelta::OrderBookChange(d) => d.sequence,
+            MarketDataDelta::OrderChange(d) => d.sequence,
             MarketDataDelta::Trade(t) => t.sequence,
             MarketDataDelta::BboChange(b) => b.sequence,
         })
@@ -1269,6 +1168,7 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
+    use spot_market_data::domain::entity::level_types::OrderChangeType;
     use super::*;
 
     #[test]
@@ -1288,18 +1188,18 @@ mod tests {
 
     #[test]
     fn test_orderbook_change_type() {
-        assert_eq!(OrderBookChangeType::Add, OrderBookChangeType::Add);
-        assert_ne!(OrderBookChangeType::Add, OrderBookChangeType::Modify);
-        assert_ne!(OrderBookChangeType::Modify, OrderBookChangeType::Delete);
+        assert_eq!(OrderChangeType::Add, OrderChangeType::Add);
+        assert_ne!(OrderChangeType::Add, OrderChangeType::Modify);
+        assert_ne!(OrderChangeType::Modify, OrderChangeType::Delete);
     }
 
     #[test]
     fn test_orderbook_delta_creation() {
-        let delta = OrderBookDelta {
+        let delta = OrderDelta {
             symbol_id: 1,
             timestamp: 1234567890,
             sequence: 100,
-            change_type: OrderBookChangeType::Add,
+            change_type: OrderChangeType::Add,
             order_id: 12345,
             side: Side::Buy,
             price: 50000,
@@ -1308,7 +1208,7 @@ mod tests {
         };
 
         assert_eq!(delta.symbol_id, 1);
-        assert_eq!(delta.change_type, OrderBookChangeType::Add);
+        assert_eq!(delta.change_type, OrderChangeType::Add);
         assert_eq!(delta.order_id, 12345);
     }
 
@@ -1350,11 +1250,11 @@ mod tests {
 
     #[test]
     fn test_market_data_delta_variants() {
-        let orderbook_delta = OrderBookDelta {
+        let orderbook_delta = OrderDelta {
             symbol_id: 1,
             timestamp: 1234567890,
             sequence: 100,
-            change_type: OrderBookChangeType::Add,
+            change_type: OrderChangeType::Add,
             order_id: 12345,
             side: Side::Buy,
             price: 50000,
@@ -1362,9 +1262,9 @@ mod tests {
             trader_id: None,
         };
 
-        let delta = MarketDataDelta::OrderBookChange(orderbook_delta);
+        let delta = MarketDataDelta::OrderChange(orderbook_delta);
         match delta {
-            MarketDataDelta::OrderBookChange(d) => {
+            MarketDataDelta::OrderChange(d) => {
                 assert_eq!(d.order_id, 12345);
             }
             _ => panic!("Expected OrderBookChange variant"),

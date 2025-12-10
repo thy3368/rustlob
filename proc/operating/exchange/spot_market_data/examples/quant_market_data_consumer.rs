@@ -8,13 +8,12 @@
 //! 3. 大单追踪策略：监控 L3 订单簿，识别大额订单
 
 use lob::lob::{Price, Quantity, Side, TraderId};
-use spot_market_data::domain::entity::level_types::{Level1, Level2, Level3, Level3Order, PriceLevel};
-use spot_market_data_proc::proc::trading_market_data_proc::{
-    BboChangeEvent, IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo,
-    Level2SnapshotRepo, Level3SnapshotRepo, MarketDataDelta, MarketDataQueryError,
-    MarketDataQueryProc, OrderBookChangeType, OrderBookDelta,
-    QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3, SymbolId,
-    TradeEvent,
+use spot_market_data::domain::entity::level_types::{BboChangeEvent, Level1, Level2, Level3, Level3Order, MarketDataDelta, OrderChangeType, OrderDelta, PriceLevel, SymbolId, TradeEvent};
+use spot_market_data_proc::proc::trading_market_data_proc::{ IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo,
+    Level2SnapshotRepo, Level3SnapshotRepo, MarketDataQueryError,
+    MarketDataQueryProc,
+    QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3,
+    
 };
 use spot_market_data_proc::proc::trading_market_data_proc_impl::MarketDataQueryProcessorImpl;
 
@@ -139,11 +138,11 @@ impl MockIncrementalRepo {
 
         // 模拟一些增量事件
         // 1. 新增订单
-        deltas.push(MarketDataDelta::OrderBookChange(OrderBookDelta {
+        deltas.push(MarketDataDelta::OrderChange(OrderDelta {
             symbol_id,
             timestamp: 1234567890100,
             sequence: 1001,
-            change_type: OrderBookChangeType::Add,
+            change_type: OrderChangeType::Add,
             order_id: 30001,
             side: Side::Buy,
             price: 49998,
@@ -165,11 +164,11 @@ impl MockIncrementalRepo {
         }));
 
         // 3. 修改订单
-        deltas.push(MarketDataDelta::OrderBookChange(OrderBookDelta {
+        deltas.push(MarketDataDelta::OrderChange(OrderDelta {
             symbol_id,
             timestamp: 1234567890300,
             sequence: 1003,
-            change_type: OrderBookChangeType::Modify,
+            change_type: OrderChangeType::Modify,
             order_id: 10001,
             side: Side::Buy,
             price: 49999,
@@ -189,11 +188,11 @@ impl MockIncrementalRepo {
         }));
 
         // 5. 删除订单
-        deltas.push(MarketDataDelta::OrderBookChange(OrderBookDelta {
+        deltas.push(MarketDataDelta::OrderChange(OrderDelta {
             symbol_id,
             timestamp: 1234567890500,
             sequence: 1005,
-            change_type: OrderBookChangeType::Delete,
+            change_type: OrderChangeType::Delete,
             order_id: 20002,
             side: Side::Sell,
             price: 50011,
@@ -225,7 +224,7 @@ impl IncrementalDataRepo for MockIncrementalRepo {
             .iter()
             .filter(|delta| {
                 let seq = match delta {
-                    MarketDataDelta::OrderBookChange(d) => d.sequence,
+                    MarketDataDelta::OrderChange(d) => d.sequence,
                     MarketDataDelta::Trade(t) => t.sequence,
                     MarketDataDelta::BboChange(b) => b.sequence,
                 };
@@ -487,7 +486,7 @@ impl IncrementalDataMonitor {
 
         for delta in &result.deltas {
             match delta {
-                MarketDataDelta::OrderBookChange(change) => {
+                MarketDataDelta::OrderChange(change) => {
                     self.orderbook_changes += 1;
                     println!("\n📝 订单簿变更:");
                     println!("  序列号: {}", change.sequence);
@@ -499,13 +498,13 @@ impl IncrementalDataMonitor {
                     println!("  数量: {}", change.quantity);
 
                     match change.change_type {
-                        OrderBookChangeType::Add => {
+                        OrderChangeType::Add => {
                             println!("  ✅ 新增订单");
                         }
-                        OrderBookChangeType::Modify => {
+                        OrderChangeType::Modify => {
                             println!("  🔄 修改订单");
                         }
-                        OrderBookChangeType::Delete => {
+                        OrderChangeType::Delete => {
                             println!("  ❌ 删除订单");
                         }
                     }
@@ -543,7 +542,7 @@ impl IncrementalDataMonitor {
             }
 
             self.last_sequence = match delta {
-                MarketDataDelta::OrderBookChange(d) => d.sequence,
+                MarketDataDelta::OrderChange(d) => d.sequence,
                 MarketDataDelta::Trade(t) => t.sequence,
                 MarketDataDelta::BboChange(b) => b.sequence,
             };
