@@ -10,7 +10,7 @@
 use lob::lob::{
     BboChangeEvent, IncrementalDataRepo, IncrementalDataResult, Level1, Level1SnapshotRepo,
     Level2, Level2SnapshotRepo, Level3, Level3Order, Level3SnapshotRepo, MarketDataDelta,
-    MarketDataQueryError, MarketDataQueryProcessor, MarketDataQueryProcessorImpl,
+    MarketDataQueryError, MarketDataQueryProc, MarketDataQueryProcessorImpl,
     OrderBookChangeType, OrderBookDelta, OrderId, Price, PriceLevel, Quantity,
     QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3, Side,
     SymbolId, TradeEvent, TraderId,

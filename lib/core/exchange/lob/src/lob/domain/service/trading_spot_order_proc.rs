@@ -490,7 +490,7 @@ pub enum SpotCommandResult {
 ///
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
-pub trait SpotOrderHandler: Send + Sync {
+pub trait SpotOrderProc: Send + Sync {
     fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult;
 }
 
@@ -589,7 +589,7 @@ pub enum AlgoCommandResult {
 }
 
 /// 算法订单处理器
-pub trait AlgoOrderHandler: Send + Sync {
+pub trait AlgoOrderProc: Send + Sync {
     fn handle(&mut self, cmd: IdempotentAlgoCommand) -> IdempotentAlgoResult;
 }
 
@@ -795,7 +795,7 @@ pub enum ConditionalCommandResult {
 }
 
 /// 条件订单处理器
-pub trait ConditionalOrderHandler: Send + Sync {
+pub trait ConditionalOrderProc: Send + Sync {
     fn handle(&mut self, cmd: IdempotentConditionalCommand) -> IdempotentConditionalResult;
 }
 
@@ -845,7 +845,7 @@ pub enum MarketMakerCommandResult {
 }
 
 /// 做市商处理器
-pub trait MarketMakerHandler: Send + Sync {
+pub trait MarketMakerProc: Send + Sync {
     fn handle(&mut self, cmd: IdempotentMarketMakerCommand) -> IdempotentMarketMakerResult;
 }
 
@@ -998,6 +998,6 @@ pub enum OrderQueryResult {
 /// 订单查询处理器接口
 ///
 /// 负责处理所有只读查询操作（CQRS 读侧）
-pub trait OrderQueryHandler: Send + Sync {
+pub trait OrderQueryProc: Send + Sync {
     fn handle(&self, query: OrderQueryCommand) -> Result<OrderQueryResult, QueryError>;
 }

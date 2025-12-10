@@ -1,12 +1,15 @@
 // 内存池分配器
-pub mod trading_spot_order_bp;
-// 订单命令处理器trait
+
 pub mod market_data_service;
-// 市场数据服务
-pub mod matching_service;
+
 // 仓储接口和实现
 pub mod order_query_service_v2;
 
-pub mod trading_market_data_bp;
+// 订单命令处理器trait
+pub mod trading_spot_order_proc;
+pub mod trading_spot_order_proc_impl;
 
-pub mod trading_market_data_bp_impl;
+// 市场数据服务
+pub mod trading_market_data_proc;
+
+pub mod trading_market_data_proc_impl;

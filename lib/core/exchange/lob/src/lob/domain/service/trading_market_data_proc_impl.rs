@@ -2,10 +2,10 @@
 // 行情查询处理器
 // ============================================================================
 
-use crate::lob::domain::service::trading_market_data_bp::{
+use crate::lob::domain::service::trading_market_data_proc::{
     IncrementalDataRepo, IncrementalDataResult, Level1BatchQueryResult, Level1QueryResult,
     Level2QueryResult, Level3QueryResult, Level3SnapshotRepo, MarketDataQueryError,
-    MarketDataQueryProcessor, QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2,
+    MarketDataQueryProc, QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2,
     QueryLevel3,
 };
 
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<S, I> MarketDataQueryProcessor for MarketDataQueryProcessorImpl<S, I>
+impl<S, I> MarketDataQueryProc for MarketDataQueryProcessorImpl<S, I>
 where
     S: Level3SnapshotRepo,
     I: IncrementalDataRepo,

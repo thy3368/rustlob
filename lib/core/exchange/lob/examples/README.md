@@ -365,6 +365,6 @@ impl MyCustomStrategy {
 
 ## 相关文档
 
-- [行情数据接口设计](../src/lob/domain/service/trading_market_data_bp.rs)
-- [查询处理器实现](../src/lob/domain/service/trading_market_data_bp_impl.rs)
+- [行情数据接口设计](lob/domain/service/trading_market_data_proc.rs)
+- [查询处理器实现](lob/domain/service/trading_market_data_proc_impl.rs)
 - [Level 1-3 数据类型](../src/lob/domain/entity/level_types.rs)

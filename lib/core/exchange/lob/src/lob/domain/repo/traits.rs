@@ -16,7 +16,7 @@ pub trait OrderRepo {
         entry: OrderEntry,
         side: Side,
         price: Price,
-    ) -> Result<(), RepositoryError>;
+    ) -> Result<(), RepoError>;
 
     /// 取消订单
     fn cancel_order(&mut self, order_id: OrderId) -> bool;
@@ -82,14 +82,14 @@ pub trait OrderRepo {
     /// # 返回
     /// - `Ok(())`: 成功应用所有事件
     /// - `Err(RepositoryError)`: 应用事件失败
-    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError>;
+    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepoError>;
 }
 
 /// 仓储错误类型
 
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RepositoryError {
+pub enum RepoError {
     /// 容量已满
     CapacityExceeded,
     /// 订单已存在
@@ -100,15 +100,15 @@ pub enum RepositoryError {
     PriceOutOfRange,
 }
 
-impl std::fmt::Display for RepositoryError {
+impl std::fmt::Display for RepoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RepositoryError::CapacityExceeded => write!(f, "订单容量已满"),
-            RepositoryError::OrderAlreadyExists => write!(f, "订单已存在"),
-            RepositoryError::OrderNotFound => write!(f, "订单未找到"),
-            RepositoryError::PriceOutOfRange => write!(f, "价格超出范围"),
+            RepoError::CapacityExceeded => write!(f, "订单容量已满"),
+            RepoError::OrderAlreadyExists => write!(f, "订单已存在"),
+            RepoError::OrderNotFound => write!(f, "订单未找到"),
+            RepoError::PriceOutOfRange => write!(f, "价格超出范围"),
         }
     }
 }
 
-impl std::error::Error for RepositoryError {}
+impl std::error::Error for RepoError {}

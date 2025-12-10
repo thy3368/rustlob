@@ -8,9 +8,9 @@
 //! - 错误处理
 
 use lob::lob::{
-    Command, CommandResponse, MemoryOrderRepo, MatchingService, OrderId, OrderRepo,
+    Command, CommandResponse, MemoryOrderRepo, SpotMatchingService, OrderId, OrderRepo,
     OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandError, SpotCommandResult,
-    SpotOrderHandler, Symbol, TimeInForce, TraderId,
+    SpotOrderProc, Symbol, TimeInForce, TraderId,
 };
 
 // 模拟的账户服务（实际使用时需要真实实现）
@@ -45,7 +45,7 @@ impl Trader {
     /// 如果无法立即成交，订单会挂在订单簿上等待
     pub fn place_limit_buy_gtc<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         price: Price,
         quantity: Quantity,
@@ -85,7 +85,7 @@ impl Trader {
     /// PostOnly 确保订单不会立即成交（只做流动性提供者）
     pub fn place_limit_sell_post_only<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         price: Price,
         quantity: Quantity,
@@ -125,7 +125,7 @@ impl Trader {
     /// 适合需要快速执行但不想挂单的场景
     pub fn place_limit_buy_ioc<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         price: Price,
         quantity: Quantity,
@@ -165,7 +165,7 @@ impl Trader {
     /// 适合大单执行，避免部分成交的风险
     pub fn place_limit_buy_fok<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         price: Price,
         quantity: Quantity,
@@ -205,7 +205,7 @@ impl Trader {
     /// 适合需要快速建仓的场景
     pub fn place_market_buy<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         quantity: Quantity,
         price_limit: Option<Price>, // 价格保护：最高愿意支付的价格
@@ -247,7 +247,7 @@ impl Trader {
     /// 交易员想立即卖出全部数量，否则不卖
     pub fn place_market_sell_fok<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         quantity: Quantity,
         price_limit: Option<Price>, // 价格保护：最低愿意接受的价格
@@ -288,7 +288,7 @@ impl Trader {
     /// 交易员想取消之前挂的订单
     pub fn cancel_order<R, A>(
         &mut self,
-        matching_service: &mut MatchingService<R, A>,
+        matching_service: &mut SpotMatchingService<R, A>,
         order_id: OrderId,
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
@@ -404,7 +404,7 @@ mod tests {
             quote_asset: account::AssetId(2), // USDT
         };
 
-        let mut matching_service = MatchingService::new(order_repo, account_service, trading_pair);
+        let mut matching_service = SpotMatchingService::new(order_repo, account_service, trading_pair);
 
         // 2. 创建交易员
         let trader_id = TraderId::new([1u8; 8]);
@@ -497,7 +497,7 @@ mod tests {
             quote_asset: account::AssetId(2), // USDT
         };
 
-        let mut matching_service = MatchingService::new(order_repo, account_service, trading_pair);
+        let mut matching_service = SpotMatchingService::new(order_repo, account_service, trading_pair);
         let trader_id = TraderId::new([2u8; 8]);
         let mut trader = Trader::new(trader_id);
         let symbol = Symbol::from_str("BTCUSDT");

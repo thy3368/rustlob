@@ -6,7 +6,7 @@ use crate::lob::domain::entity::lob_types::{
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
-use crate::lob::domain::repo::traits::{OrderRepo, RepositoryError};
+use crate::lob::domain::repo::traits::{OrderRepo, RepoError};
 use std::collections::HashMap;
 
 /// 内存仓储实现
@@ -116,20 +116,20 @@ impl OrderRepo for MemoryOrderRepo {
         entry: OrderEntry,
         side: Side,
         price: Price,
-    ) -> Result<(), RepositoryError> {
+    ) -> Result<(), RepoError> {
         // === 1. 前置验证（不分配资源）===
         if self.order_index.contains_key(&order_id) {
-            return Err(RepositoryError::OrderAlreadyExists);
+            return Err(RepoError::OrderAlreadyExists);
         }
         if self.get_price_point(price, side).is_none() {
-            return Err(RepositoryError::PriceOutOfRange);
+            return Err(RepoError::PriceOutOfRange);
         }
 
         // === 2. 分配 arena 槽位 ===
         let idx = self
             .arena
             .allocate(entry)
-            .ok_or(RepositoryError::CapacityExceeded)?;
+            .ok_or(RepoError::CapacityExceeded)?;
 
         // === 3. 更新索引和链表 ===
         self.order_index.insert(order_id, idx);
@@ -340,7 +340,7 @@ impl OrderRepo for MemoryOrderRepo {
         total_quantity
     }
 
-    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepositoryError> {
+    fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepoError> {
         for event in events {
             self.apply_event(event)?;
         }
@@ -350,7 +350,7 @@ impl OrderRepo for MemoryOrderRepo {
 
 impl MemoryOrderRepo {
     /// 应用单个事件
-    fn apply_event(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+    fn apply_event(&mut self, event: EntityEvent) -> Result<(), RepoError> {
         match (event.entity_name, event.operation) {
             ("Order", EventOperation::Create) => self.apply_order_create(event),
             ("Order", EventOperation::Update) => self.apply_order_update(event),
@@ -360,7 +360,7 @@ impl MemoryOrderRepo {
     }
 
     /// 应用订单创建事件
-    fn apply_order_create(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+    fn apply_order_create(&mut self, event: EntityEvent) -> Result<(), RepoError> {
         for change in event.changes {
             let order_id = change.entity_id;
 
@@ -403,7 +403,7 @@ impl MemoryOrderRepo {
     }
 
     /// 应用订单更新事件
-    fn apply_order_update(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+    fn apply_order_update(&mut self, event: EntityEvent) -> Result<(), RepoError> {
         for change in event.changes {
             let order_id = change.entity_id;
 
@@ -434,7 +434,7 @@ impl MemoryOrderRepo {
     }
 
     /// 应用订单删除事件
-    fn apply_order_delete(&mut self, event: EntityEvent) -> Result<(), RepositoryError> {
+    fn apply_order_delete(&mut self, event: EntityEvent) -> Result<(), RepoError> {
         for change in event.changes {
             self.cancel_order(change.entity_id);
         }

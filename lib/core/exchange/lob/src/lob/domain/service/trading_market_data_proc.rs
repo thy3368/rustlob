@@ -1239,7 +1239,7 @@ pub trait IncrementalDataRepo {
 // 查询处理器接口
 // ============================================================================
 
-pub trait MarketDataQueryProcessor {
+pub trait MarketDataQueryProc {
     /// 处理 Level 1 查询
     fn handle_query_level1(
         &self,

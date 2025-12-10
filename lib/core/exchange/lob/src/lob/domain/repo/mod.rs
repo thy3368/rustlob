@@ -21,4 +21,4 @@ pub mod traits;
 
 // 重新导出公共接口
 pub use crate::lob::adaptor::outbound::order_memory_repo::MemoryOrderRepo;
-pub use traits::{OrderRepo, RepositoryError};
+pub use traits::{OrderRepo, RepoError};

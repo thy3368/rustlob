@@ -1,9 +1,9 @@
-use lob::lob::{IdempotentSpotCommand, IdempotentSpotResult, SpotOrderHandler};
+use lob::lob::{IdempotentSpotCommand, IdempotentSpotResult, SpotOrderProc};
 
 //实现websocket的client
 pub struct WebSocketClient {}
 
-impl SpotOrderHandler for WebSocketClient {
+impl SpotOrderProc for WebSocketClient {
     fn handle(&mut self, _command: IdempotentSpotCommand) -> IdempotentSpotResult {
         todo!()
     }

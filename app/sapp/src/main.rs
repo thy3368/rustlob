@@ -5,7 +5,7 @@ mod server;
 use account::{
     AccountServiceImpl, InMemoryAccountRepository, InMemoryBalanceRepository, TradingPair,
 };
-use lob::lob::{MemoryOrderRepo, MatchingService};
+use lob::lob::{MemoryOrderRepo, SpotMatchingService};
 use models::RpcServiceConfig;
 use server::json_rpc_service::LobRpcService;
 use std::env;
@@ -14,7 +14,7 @@ use std::env;
 fn create_matching_service(
     order_capacity: usize,
     price_range: usize,
-) -> MatchingService<MemoryOrderRepo, AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository>>
+) -> SpotMatchingService<MemoryOrderRepo, AccountServiceImpl<InMemoryAccountRepository, InMemoryBalanceRepository>>
 {
     let lob_repo = MemoryOrderRepo::new(order_capacity, price_range);
     let account_repo = InMemoryAccountRepository::new();
@@ -29,7 +29,7 @@ fn create_matching_service(
     );
     let trading_pair = TradingPair::BTC_USDT;
 
-    MatchingService::new(lob_repo, account_service, trading_pair)
+    SpotMatchingService::new(lob_repo, account_service, trading_pair)
 }
 
 #[tokio::main]

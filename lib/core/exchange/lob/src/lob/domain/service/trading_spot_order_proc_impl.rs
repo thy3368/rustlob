@@ -12,9 +12,9 @@ use crate::lob::domain::repo::OrderRepo;
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
-use crate::lob::domain::service::trading_spot_order_bp::{
+use crate::lob::domain::service::trading_spot_order_proc::{
     CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, OrderStatus,
-    SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderHandler, TimeInForce,
+    SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderProc, TimeInForce,
 };
 use account::{
     AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
@@ -24,7 +24,7 @@ use account::{
 ///
 /// 负责订单匹配逻辑，持有OrderRepository引用
 /// 遵循Clean Architecture：通过trait注入AccountService依赖
-pub struct MatchingService<R, A>
+pub struct SpotMatchingService<R, A>
 where
     R: OrderRepo,
     A: AccountService,
@@ -37,7 +37,7 @@ where
     id_repo: IdRepo,
 }
 
-impl<R, A> MatchingService<R, A>
+impl<R, A> SpotMatchingService<R, A>
 where
     R: OrderRepo,
     A: AccountService,
@@ -148,7 +148,7 @@ where
     }
 }
 
-impl<R, A> SpotOrderHandler for MatchingService<R, A>
+impl<R, A> SpotOrderProc for SpotMatchingService<R, A>
 where
     R: OrderRepo + Send + Sync,
     A: AccountService,
@@ -192,7 +192,7 @@ where
     }
 }
 
-impl<R, A> MatchingService<R, A>
+impl<R, A> SpotMatchingService<R, A>
 where
     R: OrderRepo + Send + Sync,
     A: AccountService,
