@@ -13,3 +13,4 @@
 - 借鉴币安的行情，定义行情的读模型，标注读模型的用途如app k线等 使用场景 如散户 量化机构 写文档/Users/hongyaotang/src/rustlob/app/design/process/story/mkdata.md
 
 - 翻译 https://www.coinapi.io/blog/level-1-vs-level-2-vs-level-3-market-data-how-to-read-the-crypto-order-book  写文档/Users/hongyaotang/src/rustlob/app/design/process/story/mkdata123.md
+- 写个教程给开发者 “介绍   bdd用于流程建模   ddd用于实体建模 异同”
