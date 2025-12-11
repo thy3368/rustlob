@@ -30,6 +30,7 @@
 - command/entity_event/entity 结构体优化，和网络转发中进量少转化零copy
 - process service 无状态化，避免加锁
 - 联机调用中不出现malloc操作
+- 基准测试
 - 其它
 
 ## 四，布署模型设计（根据CEX不同的业务场景）
