@@ -438,7 +438,7 @@ impl ClosePositionCommand {
     pub fn market_close_long(symbol: Symbol, quantity: Option<Quantity>) -> Self {
         Self {
             symbol,
-            side: Side::Sell,  // 平多用卖
+            side: Side::Sell, // 平多用卖
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -452,7 +452,7 @@ impl ClosePositionCommand {
     pub fn market_close_short(symbol: Symbol, quantity: Option<Quantity>) -> Self {
         Self {
             symbol,
-            side: Side::Buy,  // 平空用买
+            side: Side::Buy, // 平空用买
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -798,11 +798,7 @@ impl OpenPositionResult {
     }
 
     /// 创建已成交状态的响应
-    pub fn filled(
-        order_id: OrderId,
-        trades: Vec<Trade>,
-        match_seq: u64,
-    ) -> Self {
+    pub fn filled(order_id: OrderId, trades: Vec<Trade>, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -821,11 +817,7 @@ impl OpenPositionResult {
     }
 
     /// 创建部分成交状态的响应
-    pub fn partially_filled(
-        order_id: OrderId,
-        trades: Vec<Trade>,
-        match_seq: u64,
-    ) -> Self {
+    pub fn partially_filled(order_id: OrderId, trades: Vec<Trade>, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -1196,6 +1188,130 @@ impl PositionInfo {
     /// 是否为空头
     pub fn is_short(&self) -> bool {
         self.position_side == PositionSide::Short && self.quantity.is_positive()
+    }
+
+    // ========================================================================
+    // 资金费用计算方法
+    // ========================================================================
+
+    /// 计算下次资金费用
+    ///
+    /// # 参数
+    /// - `funding_rate`: 资金费率
+    ///
+    /// # 返回
+    /// - 资金费用（正数=收入，负数=支出）
+    ///
+    /// # 计算公式
+    /// ```text
+    /// 资金费用 = 持仓名义价值 × 资金费率
+    /// 持仓名义价值 = 标记价格 × 持仓数量
+    ///
+    /// 正费率时：
+    /// - 多头持仓：支付费用（返回负数）
+    /// - 空头持仓：收取费用（返回正数）
+    ///
+    /// 负费率时：
+    /// - 多头持仓：收取费用（返回正数）
+    /// - 空头持仓：支付费用（返回负数）
+    /// ```
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let position = query_position(Symbol::new("BTCUSDT"))?;
+    /// let mark_price = query_mark_price(Symbol::new("BTCUSDT"))?[0];
+    ///
+    /// let next_fee = position.calculate_next_funding_fee(mark_price.funding_rate);
+    ///
+    /// if next_fee.raw() > 0 {
+    ///     println!("下次将收取: {} USDT", next_fee.to_f64());
+    /// } else {
+    ///     println!("下次将支付: {} USDT", next_fee.to_f64().abs());
+    /// }
+    /// ```
+    pub fn calculate_next_funding_fee(&self, funding_rate: Price) -> Price {
+        if !self.has_position() {
+            return Price::from_raw(0);
+        }
+
+        // 持仓名义价值 = 标记价格 × 持仓数量
+        let notional = self.mark_price.to_f64() * self.quantity.to_f64();
+
+        // 基础费用 = 名义价值 × 费率
+        let base_fee = notional * funding_rate.to_f64();
+
+        // 根据持仓方向调整符号
+        // 正费率时：多头支付（负），空头收取（正）
+        // 负费率时：多头收取（正），空头支付（负）
+        let fee = if self.position_side == PositionSide::Long {
+            -base_fee  // 多头：费率为正时支付，为负时收取
+        } else {
+            base_fee   // 空头：费率为正时收取，为负时支付
+        };
+
+        Price::from_f64(fee)
+    }
+
+    /// 预估持仓期间总资金费用
+    ///
+    /// # 参数
+    /// - `avg_funding_rate`: 平均资金费率（可从历史费率计算）
+    /// - `hours`: 持仓小时数
+    ///
+    /// # 返回
+    /// - 预估总资金费用（正数=收入，负数=支出）
+    ///
+    /// # 说明
+    /// - 资金费率每8小时结算一次
+    /// - 此方法假设费率保持不变，实际费率会波动
+    /// - 用于开仓前评估持仓成本
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let position = query_position(Symbol::new("BTCUSDT"))?;
+    ///
+    /// // 查询最近30天平均费率
+    /// let history = query_funding_rate_history(
+    ///     Symbol::new("BTCUSDT"),
+    ///     30天前, 现在
+    /// )?;
+    /// let avg_rate = calculate_avg_funding_rate(&history);
+    ///
+    /// // 预估7天持仓成本
+    /// let estimated_cost = position.estimate_funding_cost(
+    ///     avg_rate,
+    ///     7 * 24  // 7天 = 168小时
+    /// );
+    ///
+    /// println!("预估7天资金费用: {} USDT", estimated_cost.to_f64());
+    /// ```
+    pub fn estimate_funding_cost(&self, avg_funding_rate: Price, hours: u64) -> Price {
+        if !self.has_position() {
+            return Price::from_raw(0);
+        }
+
+        // 计算结算次数（每8小时结算一次）
+        let settlements = hours / 8;
+
+        // 单次费用
+        let single_fee = self.calculate_next_funding_fee(avg_funding_rate);
+
+        // 总费用 = 单次费用 × 结算次数
+        Price::from_f64(single_fee.to_f64() * settlements as f64)
+    }
+
+    /// 计算持仓名义价值
+    ///
+    /// # 返回
+    /// - 持仓名义价值（标记价格 × 持仓数量）
+    ///
+    /// # 用途
+    /// - 计算资金费用
+    /// - 计算保证金占用
+    /// - 风险评估
+    pub fn notional_value(&self) -> Price {
+        let value = self.mark_price.to_f64() * self.quantity.to_f64();
+        Price::from_f64(value)
     }
 }
 
@@ -1916,6 +2032,295 @@ impl MarkPriceInfo {
     }
 }
 
+/// 7. 查询历史资金费率命令
+///
+/// # 使用场景
+/// - **趋势分析**：分析历史资金费率趋势，判断市场情绪
+/// - **成本预估**：预估持仓期间的资金费用成本
+/// - **策略回测**：回测资金费率套利策略
+/// - **市场研究**：研究资金费率与价格走势的关系
+///
+/// # 资金费率趋势分析
+/// - 持续正费率且偏高：市场过度看多，考虑做空套利
+/// - 持续负费率且偏低：市场过度看空，考虑做多套利
+/// - 费率波动剧烈：市场情绪不稳定，谨慎操作
+///
+/// # 示例
+/// ```ignore
+/// // 查询BTCUSDT最近100次资金费率
+/// let cmd = QueryFundingRateHistoryCommand::new(Symbol::new("BTCUSDT"))
+///     .with_limit(100);
+/// let history = engine.query_funding_rate_history(cmd)?;
+///
+/// // 计算平均资金费率
+/// let avg_rate: f64 = history.iter()
+///     .map(|r| r.funding_rate.to_f64())
+///     .sum::<f64>() / history.len() as f64;
+///
+/// println!("平均资金费率: {:.4}%", avg_rate * 100.0);
+///
+/// // 判断市场情绪
+/// if avg_rate > 0.001 {
+///     println!("市场过度看多，考虑做空套利");
+/// } else if avg_rate < -0.001 {
+///     println!("市场过度看空，考虑做多套利");
+/// }
+///
+/// // 预估7天持仓成本
+/// let position_value = 50000.0;  // 1 BTC @ 50000
+/// let estimated_cost = position_value * avg_rate * (7 * 3);  // 7天×3次/天
+/// println!("预估7天资金费用: {} USDT", estimated_cost);
+/// ```
+#[derive(Debug, Clone)]
+pub struct QueryFundingRateHistoryCommand {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 开始时间（毫秒时间戳，可选）
+    pub start_time: Option<u64>,
+    /// 结束时间（毫秒时间戳，可选）
+    pub end_time: Option<u64>,
+    /// 返回数量限制（默认100，最大1000）
+    pub limit: usize,
+}
+
+impl QueryFundingRateHistoryCommand {
+    /// 创建查询历史资金费率命令
+    pub fn new(symbol: Symbol) -> Self {
+        Self {
+            symbol,
+            start_time: None,
+            end_time: None,
+            limit: 100,
+        }
+    }
+
+    /// 设置时间范围
+    pub fn with_time_range(mut self, start_time: u64, end_time: u64) -> Self {
+        self.start_time = Some(start_time);
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// 设置开始时间
+    pub fn with_start_time(mut self, start_time: u64) -> Self {
+        self.start_time = Some(start_time);
+        self
+    }
+
+    /// 设置结束时间
+    pub fn with_end_time(mut self, end_time: u64) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// 设置返回数量限制
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit.min(1000);  // 最大1000
+        self
+    }
+}
+
+/// 历史资金费率记录
+#[derive(Debug, Clone)]
+pub struct FundingRateRecord {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 资金费率
+    pub funding_rate: Price,
+    /// 结算时间（毫秒时间戳）
+    pub funding_time: u64,
+}
+
+impl FundingRateRecord {
+    /// 创建资金费率记录
+    pub fn new(symbol: Symbol, funding_rate: Price, funding_time: u64) -> Self {
+        Self {
+            symbol,
+            funding_rate,
+            funding_time,
+        }
+    }
+
+    /// 判断费率方向
+    pub fn direction(&self) -> &'static str {
+        if self.funding_rate.raw() > 0 {
+            "多头支付空头"
+        } else if self.funding_rate.raw() < 0 {
+            "空头支付多头"
+        } else {
+            "无资金费率"
+        }
+    }
+
+    /// 判断费率是否偏高（绝对值 > 0.1%）
+    pub fn is_high(&self) -> bool {
+        self.funding_rate.to_f64().abs() > 0.001
+    }
+}
+
+/// 8. 查询资金费用收支记录命令
+///
+/// # 使用场景
+/// - **费用统计**：查看持仓期间实际支付/收取的资金费用
+/// - **盈亏分析**：计算扣除资金费用后的真实盈亏
+/// - **对账审计**：核对资金费用扣费明细
+/// - **策略评估**：评估套利策略的资金费用收益
+///
+/// # 资金费用计算
+/// ```text
+/// 资金费用 = 持仓名义价值 × 资金费率
+/// 持仓名义价值 = 标记价格 × 持仓数量
+///
+/// 正费率时：
+/// - 多头持仓：支付费用（income为负）
+/// - 空头持仓：收取费用（income为正）
+///
+/// 负费率时：
+/// - 多头持仓：收取费用（income为正）
+/// - 空头持仓：支付费用（income为负）
+/// ```
+///
+/// # 示例
+/// ```ignore
+/// // 查询BTCUSDT的资金费用记录
+/// let cmd = QueryFundingFeeCommand::by_symbol(Symbol::new("BTCUSDT"))
+///     .with_limit(50);
+/// let fees = engine.query_funding_fee(cmd)?;
+///
+/// // 统计总收支
+/// let total_income: f64 = fees.iter()
+///     .map(|f| f.income.to_f64())
+///     .sum();
+///
+/// if total_income > 0.0 {
+///     println!("总收入: {} USDT", total_income);
+/// } else {
+///     println!("总支出: {} USDT", total_income.abs());
+/// }
+///
+/// // 计算真实盈亏
+/// let position = query_position(Symbol::new("BTCUSDT"))?;
+/// let unrealized_pnl = position.unrealized_pnl.to_f64();
+/// let real_pnl = unrealized_pnl + total_income;
+///
+/// println!("未实现盈亏: {}", unrealized_pnl);
+/// println!("资金费用: {}", total_income);
+/// println!("真实盈亏: {}", real_pnl);
+/// ```
+#[derive(Debug, Clone)]
+pub struct QueryFundingFeeCommand {
+    /// 交易对（可选，None=查询所有）
+    pub symbol: Option<Symbol>,
+    /// 开始时间（毫秒时间戳，可选）
+    pub start_time: Option<u64>,
+    /// 结束时间（毫秒时间戳，可选）
+    pub end_time: Option<u64>,
+    /// 返回数量限制（默认100）
+    pub limit: usize,
+}
+
+impl QueryFundingFeeCommand {
+    /// 创建查询所有交易对的资金费用命令
+    pub fn all() -> Self {
+        Self {
+            symbol: None,
+            start_time: None,
+            end_time: None,
+            limit: 100,
+        }
+    }
+
+    /// 创建查询指定交易对的资金费用命令
+    pub fn by_symbol(symbol: Symbol) -> Self {
+        Self {
+            symbol: Some(symbol),
+            start_time: None,
+            end_time: None,
+            limit: 100,
+        }
+    }
+
+    /// 设置时间范围
+    pub fn with_time_range(mut self, start_time: u64, end_time: u64) -> Self {
+        self.start_time = Some(start_time);
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// 设置开始时间
+    pub fn with_start_time(mut self, start_time: u64) -> Self {
+        self.start_time = Some(start_time);
+        self
+    }
+
+    /// 设置结束时间
+    pub fn with_end_time(mut self, end_time: u64) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// 设置返回数量限制
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+}
+
+impl Default for QueryFundingFeeCommand {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
+/// 资金费用记录
+#[derive(Debug, Clone)]
+pub struct FundingFeeRecord {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 费用金额（正数=收入，负数=支出）
+    pub income: Price,
+    /// 资产类型（通常是USDT）
+    pub asset: Symbol,
+    /// 结算时间（毫秒时间戳）
+    pub time: u64,
+    /// 交易ID
+    pub tran_id: String,
+}
+
+impl FundingFeeRecord {
+    /// 创建资金费用记录
+    pub fn new(
+        symbol: Symbol,
+        income: Price,
+        asset: Symbol,
+        time: u64,
+        tran_id: String,
+    ) -> Self {
+        Self {
+            symbol,
+            income,
+            asset,
+            time,
+            tran_id,
+        }
+    }
+
+    /// 是否为收入
+    pub fn is_income(&self) -> bool {
+        self.income.raw() > 0
+    }
+
+    /// 是否为支出
+    pub fn is_expense(&self) -> bool {
+        self.income.raw() < 0
+    }
+
+    /// 获取绝对金额
+    pub fn abs_amount(&self) -> Price {
+        Price::from_raw(self.income.raw().abs())
+    }
+}
+
 /// 查询成交记录命令
 #[derive(Debug, Clone)]
 pub struct QueryTradesCommand {
@@ -2135,9 +2540,7 @@ impl OrderBookSnapshot {
     /// 获取买卖价差
     pub fn spread(&self) -> Option<Price> {
         match (self.best_bid, self.best_ask) {
-            (Some(bid), Some(ask)) => {
-                Some(Price::from_raw(ask.raw() - bid.raw()))
-            }
+            (Some(bid), Some(ask)) => Some(Price::from_raw(ask.raw() - bid.raw())),
             _ => None,
         }
     }
@@ -2145,9 +2548,7 @@ impl OrderBookSnapshot {
     /// 获取中间价
     pub fn mid_price(&self) -> Option<Price> {
         match (self.best_bid, self.best_ask) {
-            (Some(bid), Some(ask)) => {
-                Some(Price::from_raw((bid.raw() + ask.raw()) / 2))
-            }
+            (Some(bid), Some(ask)) => Some(Price::from_raw((bid.raw() + ask.raw()) / 2)),
             _ => None,
         }
     }
@@ -2280,7 +2681,6 @@ impl OrderBookSnapshot {
 /// }
 /// ```
 
-
 pub trait PerpOrderExchangeProc: Send + Sync {
     /// 处理开仓命令（本地撮合）
     ///
@@ -2297,7 +2697,7 @@ pub trait PerpOrderExchangeProc: Send + Sync {
     /// - `DuplicateOrderId`: 订单ID重复
     /// - `RiskControlRejected`: 风控拒绝
     /// - `MatchingEngineError`: 撮合引擎内部错误
-    fn handle_open_position(
+    fn open_position(
         &mut self,
         cmd: OpenPositionCommand,
     ) -> Result<OpenPositionResult, PrepCommandError>;
@@ -2315,7 +2715,7 @@ pub trait PerpOrderExchangeProc: Send + Sync {
     /// - `ValidationError`: 命令验证失败
     /// - `InsufficientPosition`: 持仓不足
     /// - `MatchingEngineError`: 撮合引擎内部错误
-    fn handle_close_position(
+    fn close_position(
         &mut self,
         cmd: ClosePositionCommand,
     ) -> Result<ClosePositionResult, PrepCommandError>;
@@ -2340,39 +2740,6 @@ pub trait PerpOrderExchangeProc: Send + Sync {
         &mut self,
         cmd: CancelOrderCommand,
     ) -> Result<CancelOrderResult, PrepCommandError>;
-
-    /// 查询订单状态（从本地订单簿）
-    ///
-    /// # 参数
-    /// - `cmd`: 查询订单命令
-    ///
-    /// # 返回
-    /// - `Ok(OrderQueryResult)`: 订单详细信息
-    /// - `Err(PrepCommandError)`: 查询失败
-    ///
-    /// # 错误
-    /// - `OrderNotFound`: 订单不存在
-    fn query_order(
-        &self,
-        cmd: QueryOrderCommand,
-    ) -> Result<OrderQueryResult, PrepCommandError>;
-
-    /// 查询持仓信息（从本地持仓管理器）
-    ///
-    /// # 参数
-    /// - `cmd`: 查询持仓命令
-    ///
-    /// # 返回
-    /// - `Ok(PositionInfo)`: 持仓详细信息（无持仓返回空持仓）
-    /// - `Err(PrepCommandError)`: 查询失败
-    ///
-    /// # 注意
-    /// - 无持仓时返回 `PositionInfo::empty()`，而不是返回错误
-    /// - 可通过 `has_position()` 判断是否有持仓
-    fn query_position(
-        &self,
-        cmd: QueryPositionCommand,
-    ) -> Result<PositionInfo, PrepCommandError>;
 
     /// 修改订单（价格和/或数量）
     ///
@@ -2419,57 +2786,6 @@ pub trait PerpOrderExchangeProc: Send + Sync {
         &mut self,
         cmd: CancelAllOrdersCommand,
     ) -> Result<CancelAllOrdersResult, PrepCommandError>;
-
-    /// 查询订单簿深度
-    ///
-    /// # 参数
-    /// - `cmd`: 查询订单簿命令
-    ///
-    /// # 返回
-    /// - `Ok(OrderBookSnapshot)`: 订单簿快照（含买卖盘深度）
-    /// - `Err(PrepCommandError)`: 查询失败
-    ///
-    /// # 快照内容
-    /// - 买盘档位（按价格从高到低排序）
-    /// - 卖盘档位（按价格从低到高排序）
-    /// - 最佳买价和最佳卖价
-    /// - 快照时间戳
-    ///
-    /// # 注意
-    /// - 返回的是快照数据，可能与实时订单簿有延迟
-    /// - 深度档位数量由命令参数指定
-    fn query_order_book(
-        &self,
-        cmd: QueryOrderBookCommand,
-    ) -> Result<OrderBookSnapshot, PrepCommandError>;
-
-    /// 查询成交记录
-    ///
-    /// # 参数
-    /// - `cmd`: 查询成交记录命令
-    ///
-    /// # 返回
-    /// - `Ok(TradesQueryResult)`: 成交记录列表
-    /// - `Err(PrepCommandError)`: 查询失败
-    ///
-    /// # 查询条件
-    /// - 支持按订单ID、交易对、时间范围过滤
-    /// - 支持限制返回数量（分页）
-    /// - 成交记录按时间降序排列（最新的在前）
-    ///
-    /// # 用途
-    /// - 查看订单的成交明细
-    /// - 统计交易手续费
-    /// - 对账和调试
-    /// - 生成交易报表
-    ///
-    /// # 注意
-    /// - 返回的是历史成交记录
-    /// - 建议设置合理的limit避免性能问题
-    fn query_trades(
-        &self,
-        cmd: QueryTradesCommand,
-    ) -> Result<TradesQueryResult, PrepCommandError>;
 
     // ========================================================================
     // 第一优先级核心方法 - 账户配置和查询
@@ -2549,6 +2865,83 @@ pub trait PerpOrderExchangeProc: Send + Sync {
         &mut self,
         cmd: SetPositionModeCommand,
     ) -> Result<SetPositionModeResult, PrepCommandError>;
+}
+
+pub trait PerpOrderExchQueryProc: Send + Sync {
+    /// 查询订单状态（从本地订单簿）
+    ///
+    /// # 参数
+    /// - `cmd`: 查询订单命令
+    ///
+    /// # 返回
+    /// - `Ok(OrderQueryResult)`: 订单详细信息
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 错误
+    /// - `OrderNotFound`: 订单不存在
+    fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError>;
+
+    /// 查询持仓信息（从本地持仓管理器）
+    ///
+    /// # 参数
+    /// - `cmd`: 查询持仓命令
+    ///
+    /// # 返回
+    /// - `Ok(PositionInfo)`: 持仓详细信息（无持仓返回空持仓）
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 注意
+    /// - 无持仓时返回 `PositionInfo::empty()`，而不是返回错误
+    /// - 可通过 `has_position()` 判断是否有持仓
+    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError>;
+
+    /// 查询订单簿深度
+    ///
+    /// # 参数
+    /// - `cmd`: 查询订单簿命令
+    ///
+    /// # 返回
+    /// - `Ok(OrderBookSnapshot)`: 订单簿快照（含买卖盘深度）
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 快照内容
+    /// - 买盘档位（按价格从高到低排序）
+    /// - 卖盘档位（按价格从低到高排序）
+    /// - 最佳买价和最佳卖价
+    /// - 快照时间戳
+    ///
+    /// # 注意
+    /// - 返回的是快照数据，可能与实时订单簿有延迟
+    /// - 深度档位数量由命令参数指定
+    fn query_order_book(
+        &self,
+        cmd: QueryOrderBookCommand,
+    ) -> Result<OrderBookSnapshot, PrepCommandError>;
+
+    /// 查询成交记录
+    ///
+    /// # 参数
+    /// - `cmd`: 查询成交记录命令
+    ///
+    /// # 返回
+    /// - `Ok(TradesQueryResult)`: 成交记录列表
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 查询条件
+    /// - 支持按订单ID、交易对、时间范围过滤
+    /// - 支持限制返回数量（分页）
+    /// - 成交记录按时间降序排列（最新的在前）
+    ///
+    /// # 用途
+    /// - 查看订单的成交明细
+    /// - 统计交易手续费
+    /// - 对账和调试
+    /// - 生成交易报表
+    ///
+    /// # 注意
+    /// - 返回的是历史成交记录
+    /// - 建议设置合理的limit避免性能问题
+    fn query_trades(&self, cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError>;
 
     /// 查询账户余额
     ///
@@ -2620,8 +3013,54 @@ pub trait PerpOrderExchangeProc: Send + Sync {
         &self,
         cmd: QueryMarkPriceCommand,
     ) -> Result<Vec<MarkPriceInfo>, PrepCommandError>;
-}
 
+    /// 查询历史资金费率
+    ///
+    /// # 使用场景
+    /// - 趋势分析：分析历史费率趋势，判断市场情绪
+    /// - 成本预估：预估持仓期间的资金费用成本
+    /// - 策略回测：回测资金费率套利策略
+    ///
+    /// # 参数
+    /// - `cmd`: 查询历史资金费率命令
+    ///
+    /// # 返回
+    /// - `Ok(Vec<FundingRateRecord>)`: 历史资金费率列表
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 注意
+    /// - 返回按时间降序排列（最新的在前）
+    /// - 最多返回1000条记录
+    /// - 可用于计算平均费率预估持仓成本
+    fn query_funding_rate_history(
+        &self,
+        cmd: QueryFundingRateHistoryCommand,
+    ) -> Result<Vec<FundingRateRecord>, PrepCommandError>;
+
+    /// 查询资金费用收支记录
+    ///
+    /// # 使用场景
+    /// - 费用统计：查看实际支付/收取的资金费用
+    /// - 盈亏分析：计算扣除资金费用后的真实盈亏
+    /// - 对账审计：核对资金费用扣费明细
+    /// - 策略评估：评估套利策略的资金费用收益
+    ///
+    /// # 参数
+    /// - `cmd`: 查询资金费用记录命令
+    ///
+    /// # 返回
+    /// - `Ok(Vec<FundingFeeRecord>)`: 资金费用记录列表
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 注意
+    /// - income为正表示收入，为负表示支出
+    /// - 可查询单个交易对或所有交易对
+    /// - 用于计算真实盈亏（未实现盈亏 + 资金费用）
+    fn query_funding_fee(
+        &self,
+        cmd: QueryFundingFeeCommand,
+    ) -> Result<Vec<FundingFeeRecord>, PrepCommandError>;
+}
 // ============================================================================
 // 测试
 // ============================================================================
@@ -2633,8 +3072,8 @@ mod tests {
     #[test]
     fn test_open_position_market_long() {
         let symbol = Symbol::new("BTCUSDT");
-        let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0))
-            .with_leverage(10);
+        let cmd =
+            OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
         assert!(cmd.validate().is_ok());
         assert_eq!(cmd.side, Side::Buy);
@@ -2647,8 +3086,8 @@ mod tests {
     #[test]
     fn test_open_position_market_short() {
         let symbol = Symbol::new("ETHUSDT");
-        let cmd = OpenPositionCommand::market_short(symbol, Quantity::from_f64(2.0))
-            .with_leverage(5);
+        let cmd =
+            OpenPositionCommand::market_short(symbol, Quantity::from_f64(2.0)).with_leverage(5);
 
         assert!(cmd.validate().is_ok());
         assert_eq!(cmd.side, Side::Sell);
@@ -2709,7 +3148,7 @@ mod tests {
         let cmd = ClosePositionCommand::market_close_short(symbol, None);
 
         assert!(cmd.validate().is_ok());
-        assert_eq!(cmd.side, Side::Buy);  // 平空用买
+        assert_eq!(cmd.side, Side::Buy); // 平空用买
         assert_eq!(cmd.position_side, PositionSide::Short);
     }
 
@@ -2750,8 +3189,8 @@ mod tests {
     #[test]
     fn test_validation_invalid_leverage() {
         let symbol = Symbol::new("BTCUSDT");
-        let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0))
-            .with_leverage(200);  // 超过125
+        let cmd =
+            OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(200); // 超过125
         assert!(cmd.validate().is_err());
     }
 
@@ -3013,7 +3452,7 @@ mod tests {
             order_id.clone(),
             trades.clone(),
             Price::from_f64(5000.0), // 盈利5000
-            12347,                    // match_seq
+            12347,                   // match_seq
         );
 
         assert_eq!(result.status, OrderStatus::Filled);
@@ -3062,8 +3501,8 @@ mod tests {
         let order_id = OrderId::new("TEST-ORD-100");
         let symbol = Symbol::new("BTCUSDT");
 
-        let cmd = ModifyOrderCommand::new(order_id.clone(), symbol)
-            .with_price(Price::from_f64(51000.0));
+        let cmd =
+            ModifyOrderCommand::new(order_id.clone(), symbol).with_price(Price::from_f64(51000.0));
 
         assert_eq!(cmd.order_id.as_str(), "TEST-ORD-100");
         assert_eq!(cmd.symbol.as_str(), "BTCUSDT");
@@ -3077,8 +3516,7 @@ mod tests {
         let order_id = OrderId::new("TEST-ORD-101");
         let symbol = Symbol::new("ETHUSDT");
 
-        let cmd = ModifyOrderCommand::new(order_id, symbol)
-            .with_quantity(Quantity::from_f64(2.5));
+        let cmd = ModifyOrderCommand::new(order_id, symbol).with_quantity(Quantity::from_f64(2.5));
 
         assert!(cmd.new_price.is_none());
         assert!(cmd.new_quantity.is_some());
@@ -3116,8 +3554,7 @@ mod tests {
         let order_id = OrderId::new("TEST-ORD-104");
         let symbol = Symbol::new("BTCUSDT");
 
-        let cmd = ModifyOrderCommand::new(order_id, symbol)
-            .with_price(Price::from_raw(0));  // 无效价格
+        let cmd = ModifyOrderCommand::new(order_id, symbol).with_price(Price::from_raw(0)); // 无效价格
 
         assert!(cmd.validate().is_err());
         assert_eq!(cmd.validate().unwrap_err(), "新价格必须大于0");
@@ -3128,8 +3565,7 @@ mod tests {
         let order_id = OrderId::new("TEST-ORD-105");
         let symbol = Symbol::new("BTCUSDT");
 
-        let cmd = ModifyOrderCommand::new(order_id, symbol)
-            .with_quantity(Quantity::from_raw(-100));  // 负数数量
+        let cmd = ModifyOrderCommand::new(order_id, symbol).with_quantity(Quantity::from_raw(-100)); // 负数数量
 
         assert!(cmd.validate().is_err());
         assert_eq!(cmd.validate().unwrap_err(), "新数量必须大于0");
@@ -3141,11 +3577,8 @@ mod tests {
         let new_price = Price::from_f64(53000.0);
         let new_quantity = Quantity::from_f64(2.0);
 
-        let result = ModifyOrderResult::success(
-            order_id.clone(),
-            Some(new_price),
-            Some(new_quantity),
-        );
+        let result =
+            ModifyOrderResult::success(order_id.clone(), Some(new_price), Some(new_quantity));
 
         assert!(result.modified);
         assert_eq!(result.order_id.as_str(), "TEST-ORD-106");
@@ -3245,16 +3678,12 @@ mod tests {
         let cmd = QueryOrderBookCommand::default_depth(symbol);
 
         assert_eq!(cmd.symbol.as_str(), "ETHUSDT");
-        assert_eq!(cmd.depth, 20);  // 默认20档
+        assert_eq!(cmd.depth, 20); // 默认20档
     }
 
     #[test]
     fn test_price_level() {
-        let level = PriceLevel::new(
-            Price::from_f64(50000.0),
-            Quantity::from_f64(10.5),
-            5,
-        );
+        let level = PriceLevel::new(Price::from_f64(50000.0), Quantity::from_f64(10.5), 5);
 
         assert_eq!(level.price.to_f64(), 50000.0);
         assert_eq!(level.quantity.to_f64(), 10.5);
@@ -3302,13 +3731,17 @@ mod tests {
     fn test_order_book_snapshot_spread() {
         let symbol = Symbol::new("BTCUSDT");
 
-        let bids = vec![
-            PriceLevel::new(Price::from_f64(50000.0), Quantity::from_f64(1.0), 1),
-        ];
+        let bids = vec![PriceLevel::new(
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            1,
+        )];
 
-        let asks = vec![
-            PriceLevel::new(Price::from_f64(50100.0), Quantity::from_f64(1.0), 1),
-        ];
+        let asks = vec![PriceLevel::new(
+            Price::from_f64(50100.0),
+            Quantity::from_f64(1.0),
+            1,
+        )];
 
         let snapshot = OrderBookSnapshot::new(symbol, bids, asks);
         let spread = snapshot.spread().unwrap();
@@ -3321,13 +3754,17 @@ mod tests {
     fn test_order_book_snapshot_mid_price() {
         let symbol = Symbol::new("BTCUSDT");
 
-        let bids = vec![
-            PriceLevel::new(Price::from_f64(50000.0), Quantity::from_f64(1.0), 1),
-        ];
+        let bids = vec![PriceLevel::new(
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            1,
+        )];
 
-        let asks = vec![
-            PriceLevel::new(Price::from_f64(50100.0), Quantity::from_f64(1.0), 1),
-        ];
+        let asks = vec![PriceLevel::new(
+            Price::from_f64(50100.0),
+            Quantity::from_f64(1.0),
+            1,
+        )];
 
         let snapshot = OrderBookSnapshot::new(symbol, bids, asks);
         let mid_price = snapshot.mid_price().unwrap();

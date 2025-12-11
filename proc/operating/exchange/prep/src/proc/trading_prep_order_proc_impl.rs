@@ -1,15 +1,15 @@
-use crate::proc::trading_prep_order_proc::{AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand, CancelOrderResult, ClosePositionCommand, ClosePositionResult, MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult, OrderBookSnapshot, OrderQueryResult, PerpOrderExchangeProc, PositionInfo, PrepCommandError, QueryAccountBalanceCommand, QueryAccountInfoCommand, QueryMarkPriceCommand, QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand, SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult, TradesQueryResult};
+use crate::proc::trading_prep_order_proc::{AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand, CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord, MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult, OrderBookSnapshot, OrderQueryResult, PerpOrderExchQueryProc, PerpOrderExchangeProc, PositionInfo, PrepCommandError, QueryAccountBalanceCommand, QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand, QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand, SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult, TradesQueryResult};
 
 pub struct MatchingService {
 
 }
 
 impl PerpOrderExchangeProc for MatchingService {
-    fn handle_open_position(&mut self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+    fn open_position(&mut self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
         todo!()
     }
 
-    fn handle_close_position(&mut self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
+    fn close_position(&mut self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
         todo!()
     }
 
@@ -17,13 +17,6 @@ impl PerpOrderExchangeProc for MatchingService {
         todo!()
     }
 
-    fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
-        todo!()
-    }
-
-    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError> {
-        todo!()
-    }
 
     fn modify_order(&mut self, cmd: ModifyOrderCommand) -> Result<ModifyOrderResult, PrepCommandError> {
         todo!()
@@ -33,13 +26,6 @@ impl PerpOrderExchangeProc for MatchingService {
         todo!()
     }
 
-    fn query_order_book(&self, cmd: QueryOrderBookCommand) -> Result<OrderBookSnapshot, PrepCommandError> {
-        todo!()
-    }
-
-    fn query_trades(&self, cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError> {
-        todo!()
-    }
 
     fn set_leverage(&mut self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
         todo!()
@@ -53,6 +39,25 @@ impl PerpOrderExchangeProc for MatchingService {
         todo!()
     }
 
+}
+
+impl PerpOrderExchQueryProc for MatchingService {
+    fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
+        todo!()
+    }
+
+    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError> {
+        todo!()
+    }
+
+    fn query_order_book(&self, cmd: QueryOrderBookCommand) -> Result<OrderBookSnapshot, PrepCommandError> {
+        todo!()
+    }
+
+    fn query_trades(&self, cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError> {
+        todo!()
+    }
+
     fn query_account_balance(&self, cmd: QueryAccountBalanceCommand) -> Result<Vec<AccountBalance>, PrepCommandError> {
         todo!()
     }
@@ -62,6 +67,14 @@ impl PerpOrderExchangeProc for MatchingService {
     }
 
     fn query_mark_price(&self, cmd: QueryMarkPriceCommand) -> Result<Vec<MarkPriceInfo>, PrepCommandError> {
+        todo!()
+    }
+
+    fn query_funding_rate_history(&self, cmd: QueryFundingRateHistoryCommand) -> Result<Vec<FundingRateRecord>, PrepCommandError> {
+        todo!()
+    }
+
+    fn query_funding_fee(&self, cmd: QueryFundingFeeCommand) -> Result<Vec<FundingFeeRecord>, PrepCommandError> {
         todo!()
     }
 }
