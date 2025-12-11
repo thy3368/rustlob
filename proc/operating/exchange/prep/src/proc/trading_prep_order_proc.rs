@@ -1395,6 +1395,527 @@ impl CancelAllOrdersResult {
     }
 }
 
+// ============================================================================
+// 第一优先级核心命令 - 账户配置和查询
+// ============================================================================
+
+/// 保证金类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum MarginType {
+    /// 全仓模式（共享保证金）
+    Cross = 1,
+    /// 逐仓模式（独立保证金）
+    Isolated = 2,
+}
+
+impl MarginType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            MarginType::Cross => "CROSSED",
+            MarginType::Isolated => "ISOLATED",
+        }
+    }
+}
+
+/// 1. 设置杠杆命令
+///
+/// # 使用场景
+/// - **首次交易前必需**：每个交易对首次交易前必须设置杠杆
+/// - **调整风险水平**：盈利后降低杠杆锁定利润，或市场波动时降低风险
+/// - **优化资金利用率**：提高杠杆释放保证金，用于开新仓位
+/// - **策略切换**：不同策略需要不同杠杆（网格3-5倍，日内10-20倍）
+///
+/// # 保证金影响
+/// - 降低杠杆：🔒 锁定更多保证金，可用余额减少，强平价格变远（更安全）
+/// - 提高杠杆：🔓 释放保证金，可用余额增加，强平价格变近（风险增加）
+///
+/// # 示例
+/// ```ignore
+/// // 首次交易BTCUSDT前设置20倍杠杆
+/// let cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 20);
+/// let result = engine.set_leverage(cmd)?;
+///
+/// // 盈利后降低杠杆到5倍，锁定利润
+/// let cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 5);
+/// let result = engine.set_leverage(cmd)?;
+/// // result.position_margin_change > 0 表示锁定了更多保证金
+/// ```
+#[derive(Debug, Clone)]
+pub struct SetLeverageCommand {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 杠杆倍数（1-125）
+    pub leverage: u8,
+}
+
+impl SetLeverageCommand {
+    /// 创建设置杠杆命令
+    pub fn new(symbol: Symbol, leverage: u8) -> Self {
+        Self { symbol, leverage }
+    }
+
+    /// 验证杠杆有效性
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.leverage == 0 || self.leverage > 125 {
+            return Err("杠杆倍数必须在1-125之间");
+        }
+        Ok(())
+    }
+}
+
+/// 设置杠杆结果
+#[derive(Debug, Clone)]
+pub struct SetLeverageResult {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 旧杠杆倍数
+    pub old_leverage: u8,
+    /// 新杠杆倍数
+    pub new_leverage: u8,
+    /// 仓位保证金变化（正数=锁定更多，负数=释放）
+    pub position_margin_change: Price,
+    /// 新的可用余额
+    pub available_balance: Price,
+    /// 新的强平价格（如果有持仓）
+    pub liquidation_price: Option<Price>,
+    /// 最大可开仓数量（基于新杠杆）
+    pub max_open_quantity: Quantity,
+}
+
+/// 2. 设置保证金类型命令
+///
+/// # 使用场景
+/// - **风险隔离**：使用逐仓模式隔离不同交易对的风险，一个爆仓不影响其他
+/// - **资金共享**：使用全仓模式共享保证金，提高资金利用率
+/// - **策略组合**：稳健策略用逐仓，激进策略用全仓
+/// - **新手保护**：新手建议用逐仓，限制单次最大亏损
+///
+/// # 全仓 vs 逐仓对比
+/// | 特性 | 全仓 (Cross) | 逐仓 (Isolated) |
+/// |------|--------------|-----------------|
+/// | 保证金 | 所有持仓共享账户余额 | 每个持仓独立保证金 |
+/// | 风险 | 一个爆仓可能影响全部 | 风险隔离，最多亏损该仓位保证金 |
+/// | 资金利用率 | 高（共享余额） | 低（独立锁定） |
+/// | 适用场景 | 经验丰富，多品种套利 | 新手，高风险单边 |
+///
+/// # 示例
+/// ```ignore
+/// // 高风险交易用逐仓，限制最大亏损
+/// let cmd = SetMarginTypeCommand::new(
+///     Symbol::new("BTCUSDT"),
+///     MarginType::Isolated
+/// );
+/// engine.set_margin_type(cmd)?;
+///
+/// // 稳健套利策略用全仓，提高资金效率
+/// let cmd = SetMarginTypeCommand::new(
+///     Symbol::new("ETHUSDT"),
+///     MarginType::Cross
+/// );
+/// engine.set_margin_type(cmd)?;
+/// ```
+#[derive(Debug, Clone)]
+pub struct SetMarginTypeCommand {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 保证金类型
+    pub margin_type: MarginType,
+}
+
+impl SetMarginTypeCommand {
+    /// 创建设置保证金类型命令
+    pub fn new(symbol: Symbol, margin_type: MarginType) -> Self {
+        Self {
+            symbol,
+            margin_type,
+        }
+    }
+}
+
+/// 设置保证金类型结果
+#[derive(Debug, Clone)]
+pub struct SetMarginTypeResult {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 新的保证金类型
+    pub margin_type: MarginType,
+    /// 是否成功
+    pub success: bool,
+}
+
+/// 3. 设置持仓模式命令
+///
+/// # 使用场景
+/// - **对冲策略**：同时持有多空仓位，用于套利或对冲风险
+/// - **单向交易**：只做多或只做空，简化操作
+/// - **网格交易**：对冲模式支持同时挂多空网格
+/// - **趋势跟踪**：单向模式适合明确方向的趋势交易
+///
+/// # 单向 vs 对冲模式对比
+/// | 特性 | 单向模式 (One-Way) | 对冲模式 (Hedge) |
+/// |------|-------------------|------------------|
+/// | 持仓方式 | 只能持有一个方向 | 可同时持有多空 |
+/// | 开平仓 | 反向开仓=平仓 | 多空独立开平 |
+/// | 适用策略 | 趋势跟踪，单边交易 | 套利，对冲，网格 |
+/// | 复杂度 | 简单 | 复杂 |
+/// | 手续费 | 较低（开平合并） | 较高（独立计算） |
+///
+/// # 示例
+/// ```ignore
+/// // 对冲模式：用于网格套利
+/// let cmd = SetPositionModeCommand::hedge();
+/// engine.set_position_mode(cmd)?;
+/// // 可以同时开多单和空单
+/// open_long(...);
+/// open_short(...);
+///
+/// // 单向模式：用于趋势交易
+/// let cmd = SetPositionModeCommand::one_way();
+/// engine.set_position_mode(cmd)?;
+/// // 开反向单会自动平仓
+/// open_long(...);
+/// open_short(...);  // 自动平掉多单
+/// ```
+///
+/// # 注意
+/// - ⚠️ 切换模式前必须平掉所有持仓
+/// - ⚠️ 这是全局设置，影响所有交易对
+/// - ⚠️ 切换后无法撤销，需谨慎操作
+#[derive(Debug, Clone)]
+pub struct SetPositionModeCommand {
+    /// true=对冲模式（可同时持有多空），false=单向模式
+    pub dual_side: bool,
+}
+
+impl SetPositionModeCommand {
+    /// 创建对冲模式命令
+    pub fn hedge() -> Self {
+        Self { dual_side: true }
+    }
+
+    /// 创建单向模式命令
+    pub fn one_way() -> Self {
+        Self { dual_side: false }
+    }
+}
+
+/// 设置持仓模式结果
+#[derive(Debug, Clone)]
+pub struct SetPositionModeResult {
+    /// 是否为对冲模式
+    pub dual_side: bool,
+    /// 是否成功
+    pub success: bool,
+}
+
+/// 4. 查询账户余额命令
+///
+/// # 使用场景
+/// - **开仓前检查**：确认可用余额是否足够开仓
+/// - **风控监控**：实时监控账户余额，防止过度杠杆
+/// - **资金管理**：计算仓位大小，控制风险敞口
+/// - **对账核对**：定期核对账户余额，发现异常
+///
+/// # 余额类型说明
+/// - **总余额 (balance)**: 账户总资产
+/// - **可用余额 (available_balance)**: 可用于开新仓的余额
+/// - **仓位保证金 (position_margin)**: 已持仓锁定的保证金
+/// - **挂单保证金 (order_margin)**: 未成交订单锁定的保证金
+///
+/// # 计算关系
+/// ```text
+/// 总余额 = 可用余额 + 仓位保证金 + 挂单保证金 + 未实现盈亏
+/// 可用余额 = 总余额 - 仓位保证金 - 挂单保证金
+/// ```
+///
+/// # 示例
+/// ```ignore
+/// // 查询USDT余额
+/// let cmd = QueryAccountBalanceCommand::by_asset(Symbol::new("USDT"));
+/// let balances = engine.query_account_balance(cmd)?;
+///
+/// for balance in balances {
+///     println!("资产: {}", balance.asset.as_str());
+///     println!("总余额: {}", balance.balance.to_f64());
+///     println!("可用: {}", balance.available_balance.to_f64());
+///     println!("仓位保证金: {}", balance.position_margin.to_f64());
+/// }
+///
+/// // 查询所有资产余额
+/// let cmd = QueryAccountBalanceCommand::all();
+/// let balances = engine.query_account_balance(cmd)?;
+/// ```
+#[derive(Debug, Clone)]
+pub struct QueryAccountBalanceCommand {
+    /// 资产类型（None=查询所有）
+    pub asset: Option<Symbol>,
+}
+
+impl QueryAccountBalanceCommand {
+    /// 查询所有资产余额
+    pub fn all() -> Self {
+        Self { asset: None }
+    }
+
+    /// 查询指定资产余额
+    pub fn by_asset(asset: Symbol) -> Self {
+        Self { asset: Some(asset) }
+    }
+}
+
+/// 账户余额信息
+#[derive(Debug, Clone)]
+pub struct AccountBalance {
+    /// 资产类型（如USDT）
+    pub asset: Symbol,
+    /// 总余额
+    pub balance: Price,
+    /// 可用余额（可用于开新仓）
+    pub available_balance: Price,
+    /// 仓位保证金（已持仓锁定）
+    pub position_margin: Price,
+    /// 挂单保证金（未成交订单锁定）
+    pub order_margin: Price,
+    /// 未实现盈亏
+    pub unrealized_pnl: Price,
+}
+
+impl AccountBalance {
+    /// 创建账户余额
+    pub fn new(
+        asset: Symbol,
+        balance: Price,
+        available_balance: Price,
+        position_margin: Price,
+        order_margin: Price,
+        unrealized_pnl: Price,
+    ) -> Self {
+        Self {
+            asset,
+            balance,
+            available_balance,
+            position_margin,
+            order_margin,
+            unrealized_pnl,
+        }
+    }
+}
+
+/// 5. 查询账户信息命令
+///
+/// # 使用场景
+/// - **全局风控**：监控总资产、总保证金、总盈亏
+/// - **仓位总览**：查看所有持仓和资产分布
+/// - **风险评估**：计算账户风险率、杠杆率
+/// - **报表生成**：生成账户日报、月报
+///
+/// # 包含信息
+/// - 账户总资产和可用余额
+/// - 所有持仓列表（多空分开）
+/// - 所有资产余额
+/// - 总未实现盈亏
+/// - 总保证金占用
+///
+/// # 示例
+/// ```ignore
+/// let cmd = QueryAccountInfoCommand::new();
+/// let info = engine.query_account_info(cmd)?;
+///
+/// println!("总资产: {}", info.total_wallet_balance.to_f64());
+/// println!("可用余额: {}", info.available_balance.to_f64());
+/// println!("未实现盈亏: {}", info.total_unrealized_pnl.to_f64());
+/// println!("持仓数量: {}", info.positions.len());
+///
+/// // 计算账户风险率
+/// let risk_ratio = info.total_margin_balance.to_f64()
+///     / info.total_wallet_balance.to_f64();
+/// println!("风险率: {:.2}%", risk_ratio * 100.0);
+/// ```
+#[derive(Debug, Clone)]
+pub struct QueryAccountInfoCommand {}
+
+impl QueryAccountInfoCommand {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for QueryAccountInfoCommand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 账户完整信息
+#[derive(Debug, Clone)]
+pub struct AccountInfo {
+    /// 总钱包余额（含未实现盈亏）
+    pub total_wallet_balance: Price,
+    /// 总保证金余额
+    pub total_margin_balance: Price,
+    /// 总未实现盈亏
+    pub total_unrealized_pnl: Price,
+    /// 可用余额
+    pub available_balance: Price,
+    /// 所有持仓列表
+    pub positions: Vec<PositionInfo>,
+    /// 所有资产余额
+    pub assets: Vec<AccountBalance>,
+    /// 更新时间戳
+    pub updated_at: u64,
+}
+
+impl AccountInfo {
+    /// 创建账户信息
+    pub fn new(
+        total_wallet_balance: Price,
+        total_margin_balance: Price,
+        total_unrealized_pnl: Price,
+        available_balance: Price,
+        positions: Vec<PositionInfo>,
+        assets: Vec<AccountBalance>,
+    ) -> Self {
+        Self {
+            total_wallet_balance,
+            total_margin_balance,
+            total_unrealized_pnl,
+            available_balance,
+            positions,
+            assets,
+            updated_at: current_timestamp_ms(),
+        }
+    }
+
+    /// 计算账户风险率
+    pub fn risk_ratio(&self) -> f64 {
+        if self.total_wallet_balance.raw() == 0 {
+            return 0.0;
+        }
+        self.total_margin_balance.to_f64() / self.total_wallet_balance.to_f64()
+    }
+
+    /// 计算账户杠杆率
+    pub fn leverage_ratio(&self) -> f64 {
+        if self.total_margin_balance.raw() == 0 {
+            return 0.0;
+        }
+        let total_notional: f64 = self
+            .positions
+            .iter()
+            .map(|p| p.entry_price.to_f64() * p.quantity.to_f64())
+            .sum();
+        total_notional / self.total_margin_balance.to_f64()
+    }
+}
+
+/// 6. 查询标记价格命令
+///
+/// # 使用场景
+/// - **计算未实现盈亏**：使用标记价格而非最新价，更准确
+/// - **强平价格计算**：标记价格用于判断是否触发强平
+/// - **资金费率查询**：获取当前和下次资金费率
+/// - **风控监控**：监控标记价格与最新价的偏离度
+///
+/// # 标记价格 vs 最新价
+/// | 价格类型 | 用途 | 特点 |
+/// |---------|------|------|
+/// | 最新价 (Last Price) | 订单成交 | 实时波动，可能被操纵 |
+/// | 标记价格 (Mark Price) | 强平判断、盈亏计算 | 平滑处理，防止恶意爆仓 |
+/// | 指数价格 (Index Price) | 标记价格基准 | 多交易所加权平均 |
+///
+/// # 资金费率说明
+/// - 正费率：多头支付空头（做多成本高）
+/// - 负费率：空头支付多头（做空成本高）
+/// - 每8小时结算一次（00:00, 08:00, 16:00 UTC）
+///
+/// # 示例
+/// ```ignore
+/// // 查询BTCUSDT标记价格
+/// let cmd = QueryMarkPriceCommand::by_symbol(Symbol::new("BTCUSDT"));
+/// let mark_price = engine.query_mark_price(cmd)?;
+///
+/// println!("标记价格: {}", mark_price.mark_price.to_f64());
+/// println!("指数价格: {}", mark_price.index_price.to_f64());
+/// println!("资金费率: {:.4}%", mark_price.funding_rate.to_f64() * 100.0);
+/// println!("下次结算: {}", mark_price.next_funding_time);
+///
+/// // 计算未实现盈亏
+/// let unrealized_pnl = (mark_price.mark_price.to_f64() - entry_price)
+///     * position_quantity;
+/// ```
+#[derive(Debug, Clone)]
+pub struct QueryMarkPriceCommand {
+    /// 交易对（None=查询所有）
+    pub symbol: Option<Symbol>,
+}
+
+impl QueryMarkPriceCommand {
+    /// 查询所有交易对标记价格
+    pub fn all() -> Self {
+        Self { symbol: None }
+    }
+
+    /// 查询指定交易对标记价格
+    pub fn by_symbol(symbol: Symbol) -> Self {
+        Self {
+            symbol: Some(symbol),
+        }
+    }
+}
+
+/// 标记价格信息
+#[derive(Debug, Clone)]
+pub struct MarkPriceInfo {
+    /// 交易对
+    pub symbol: Symbol,
+    /// 标记价格（用于强平和盈亏计算）
+    pub mark_price: Price,
+    /// 指数价格（多交易所加权平均）
+    pub index_price: Price,
+    /// 当前资金费率
+    pub funding_rate: Price,
+    /// 下次资金费率结算时间（毫秒时间戳）
+    pub next_funding_time: u64,
+    /// 预估下次资金费率
+    pub estimated_settle_price: Price,
+    /// 更新时间戳
+    pub timestamp: u64,
+}
+
+impl MarkPriceInfo {
+    /// 创建标记价格信息
+    pub fn new(
+        symbol: Symbol,
+        mark_price: Price,
+        index_price: Price,
+        funding_rate: Price,
+        next_funding_time: u64,
+        estimated_settle_price: Price,
+    ) -> Self {
+        Self {
+            symbol,
+            mark_price,
+            index_price,
+            funding_rate,
+            next_funding_time,
+            estimated_settle_price,
+            timestamp: current_timestamp_ms(),
+        }
+    }
+
+    /// 判断资金费率方向
+    pub fn funding_direction(&self) -> &'static str {
+        if self.funding_rate.raw() > 0 {
+            "多头支付空头"
+        } else if self.funding_rate.raw() < 0 {
+            "空头支付多头"
+        } else {
+            "无资金费率"
+        }
+    }
+}
+
 /// 查询成交记录命令
 #[derive(Debug, Clone)]
 pub struct QueryTradesCommand {
@@ -1949,6 +2470,156 @@ pub trait PerpOrderExchangeProc: Send + Sync {
         &self,
         cmd: QueryTradesCommand,
     ) -> Result<TradesQueryResult, PrepCommandError>;
+
+    // ========================================================================
+    // 第一优先级核心方法 - 账户配置和查询
+    // ========================================================================
+
+    /// 设置杠杆倍数
+    ///
+    /// # 使用场景
+    /// - 首次交易前必需设置
+    /// - 调整风险水平（盈利后降低杠杆）
+    /// - 优化资金利用率（提高杠杆释放保证金）
+    ///
+    /// # 参数
+    /// - `cmd`: 设置杠杆命令
+    ///
+    /// # 返回
+    /// - `Ok(SetLeverageResult)`: 设置成功，返回保证金变化信息
+    /// - `Err(PrepCommandError)`: 设置失败
+    ///
+    /// # 错误
+    /// - `ValidationError`: 杠杆倍数无效（必须1-125）
+    /// - `InsufficientBalance`: 降低杠杆时可用余额不足
+    ///
+    /// # 注意
+    /// - 降低杠杆会锁定更多保证金
+    /// - 提高杠杆会释放保证金但增加强平风险
+    fn set_leverage(
+        &mut self,
+        cmd: SetLeverageCommand,
+    ) -> Result<SetLeverageResult, PrepCommandError>;
+
+    /// 设置保证金类型
+    ///
+    /// # 使用场景
+    /// - 风险隔离：逐仓模式隔离不同交易对风险
+    /// - 资金共享：全仓模式提高资金利用率
+    ///
+    /// # 参数
+    /// - `cmd`: 设置保证金类型命令
+    ///
+    /// # 返回
+    /// - `Ok(SetMarginTypeResult)`: 设置成功
+    /// - `Err(PrepCommandError)`: 设置失败
+    ///
+    /// # 错误
+    /// - `InvalidOrderState`: 有持仓时无法切换保证金类型
+    ///
+    /// # 注意
+    /// - 必须在无持仓时设置
+    /// - 每个交易对独立设置
+    fn set_margin_type(
+        &mut self,
+        cmd: SetMarginTypeCommand,
+    ) -> Result<SetMarginTypeResult, PrepCommandError>;
+
+    /// 设置持仓模式
+    ///
+    /// # 使用场景
+    /// - 对冲策略：同时持有多空仓位
+    /// - 单向交易：简化操作，只做一个方向
+    ///
+    /// # 参数
+    /// - `cmd`: 设置持仓模式命令
+    ///
+    /// # 返回
+    /// - `Ok(SetPositionModeResult)`: 设置成功
+    /// - `Err(PrepCommandError)`: 设置失败
+    ///
+    /// # 错误
+    /// - `InvalidOrderState`: 有持仓时无法切换模式
+    ///
+    /// # 注意
+    /// - ⚠️ 全局设置，影响所有交易对
+    /// - ⚠️ 必须在无持仓时设置
+    /// - ⚠️ 切换后无法撤销
+    fn set_position_mode(
+        &mut self,
+        cmd: SetPositionModeCommand,
+    ) -> Result<SetPositionModeResult, PrepCommandError>;
+
+    /// 查询账户余额
+    ///
+    /// # 使用场景
+    /// - 开仓前检查可用余额
+    /// - 风控监控账户余额
+    /// - 资金管理和仓位计算
+    ///
+    /// # 参数
+    /// - `cmd`: 查询账户余额命令
+    ///
+    /// # 返回
+    /// - `Ok(Vec<AccountBalance>)`: 账户余额列表
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 注意
+    /// - 可查询单个资产或所有资产
+    /// - 包含可用余额、仓位保证金、挂单保证金
+    fn query_account_balance(
+        &self,
+        cmd: QueryAccountBalanceCommand,
+    ) -> Result<Vec<AccountBalance>, PrepCommandError>;
+
+    /// 查询账户完整信息
+    ///
+    /// # 使用场景
+    /// - 全局风控监控
+    /// - 仓位总览
+    /// - 风险评估
+    /// - 报表生成
+    ///
+    /// # 参数
+    /// - `cmd`: 查询账户信息命令
+    ///
+    /// # 返回
+    /// - `Ok(AccountInfo)`: 账户完整信息
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 包含信息
+    /// - 总资产、可用余额、总盈亏
+    /// - 所有持仓列表
+    /// - 所有资产余额
+    /// - 风险率、杠杆率计算
+    fn query_account_info(
+        &self,
+        cmd: QueryAccountInfoCommand,
+    ) -> Result<AccountInfo, PrepCommandError>;
+
+    /// 查询标记价格
+    ///
+    /// # 使用场景
+    /// - 计算未实现盈亏（使用标记价格）
+    /// - 强平价格计算
+    /// - 资金费率查询
+    /// - 风控监控
+    ///
+    /// # 参数
+    /// - `cmd`: 查询标记价格命令
+    ///
+    /// # 返回
+    /// - `Ok(Vec<MarkPriceInfo>)`: 标记价格列表
+    /// - `Err(PrepCommandError)`: 查询失败
+    ///
+    /// # 注意
+    /// - 标记价格用于强平判断，不是最新成交价
+    /// - 包含资金费率和下次结算时间
+    /// - 可查询单个交易对或所有交易对
+    fn query_mark_price(
+        &self,
+        cmd: QueryMarkPriceCommand,
+    ) -> Result<Vec<MarkPriceInfo>, PrepCommandError>;
 }
 
 // ============================================================================
