@@ -8,5 +8,5 @@
 
 ## 全内存交易，RPO=0，极致性能，极致可维护性，rust CEX的标杆之作
 
+## https://developers.binance.com/docs/derivatives/usds-margined-futures/account/rest-api 币安api设计
 
-FixedPointArithmetic(123.45, -2) 
