@@ -2,7 +2,7 @@
 members = [
     "lib/core/exchange/lob",
     "app/dapp",
-    "app/sapp", "lib/support/algo", "lib/common/cqrs", "study/hotstuff", "lib/core/account", "lib/core/exchange/prep", "lib/core/exchange/spot", "lib/core/exchange/option", "lib/core/settlement", "lib/core/funds", "lib/common/id_generator", "lib/common/fixed_point_arithmetic", "proc/operating/exchange/spot", "proc/operating/exchange/spot_market_data", "lib/core/market_data/spot_market_data",
+    "app/sapp", "lib/support/algo", "lib/common/cqrs", "study/hotstuff", "lib/core/account", "lib/core/exchange/prep", "lib/core/exchange/spot", "lib/core/exchange/option", "lib/core/settlement", "lib/core/funds", "lib/common/id_generator", "lib/common/fixed_point_arithmetic", "proc/operating/exchange/spot", "proc/operating/exchange/spot_market_data", "lib/core/market_data/spot_market_data", "proc/operating/exchange/prep",
 ]
 
 exclude = [
