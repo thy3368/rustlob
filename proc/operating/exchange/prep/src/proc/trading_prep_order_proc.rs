@@ -2681,7 +2681,7 @@ impl OrderBookSnapshot {
 /// }
 /// ```
 
-pub trait PerpOrderExchangeProc: Send + Sync {
+pub trait PerpOrderExchProc: Send + Sync {
     /// 处理开仓命令（本地撮合）
     ///
     /// # 参数
