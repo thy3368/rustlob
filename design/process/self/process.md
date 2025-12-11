@@ -24,6 +24,14 @@
 - 线程actor；学习借签nginx，redis，clickhouse等
 - 服务无状态，线程间通过channel通信，避免内在竞争
 
+## 优化
+
+- 代码优化 command/entity_event/entity等短生命周期对象全池化
+- command/entity_event/entity 结构体优化，和网络转发中进量少转化零copy
+- process service 无状态化，避免加锁
+- 联机调用中不出现malloc操作
+- 其它
+
 ## 四，布署模型设计（根据CEX不同的业务场景）
 
 - 以业务流程为单元进行布署；规避rpc时延和分布式一致性问题
