@@ -10,7 +10,7 @@
 use lob::lob::{
     Command, CommandResponse, MemoryOrderRepo, SpotMatchingService, OrderId, OrderRepo,
     OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandError, SpotCommandResult,
-    SpotOrderProc, Symbol, TimeInForce, TraderId,
+    SpotOrderExchangeProc, Symbol, TimeInForce, TraderId,
 };
 
 // 模拟的账户服务（实际使用时需要真实实现）

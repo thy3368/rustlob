@@ -124,7 +124,7 @@ pub use domain::service::trading_spot_order_proc::{
 };
 // 核心现货命令
 pub use domain::service::trading_spot_order_proc::{
-    SpotCommand, SpotCommandResult, SpotOrderProc,
+    SpotCommand, SpotCommandResult, SpotOrderExchangeProc,
     TimeInForce, OrderStatus,  // 导出 TimeInForce 和 OrderStatus
 };
 // 算法交易命令

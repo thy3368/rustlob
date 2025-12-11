@@ -14,7 +14,7 @@ use crate::lob::domain::repo::OrderRepo;
 /// 遵循Clean Architecture的领域服务模式
 use crate::lob::domain::service::trading_spot_order_proc::{
     CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, OrderStatus,
-    SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderProc, TimeInForce,
+    SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderExchangeProc, TimeInForce,
 };
 use account::{
     AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
@@ -148,7 +148,7 @@ where
     }
 }
 
-impl<R, A> SpotOrderProc for SpotMatchingService<R, A>
+impl<R, A> SpotOrderExchangeProc for SpotMatchingService<R, A>
 where
     R: OrderRepo + Send + Sync,
     A: AccountService,

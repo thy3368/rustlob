@@ -6,7 +6,7 @@ use crate::models::*;
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderProc, Side, TraderId, Command};
+use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderExchangeProc, Side, TraderId, Command};
 use std::sync::{Arc, Mutex};
 
 /// 解析 Side 字符串
@@ -31,11 +31,11 @@ pub trait LobRpc {
 }
 
 /// LOB RPC 服务实现
-pub struct LobRpcImpl<H: SpotOrderProc + Send + 'static> {
+pub struct LobRpcImpl<H: SpotOrderExchangeProc + Send + 'static> {
     handler: Arc<Mutex<H>>,
 }
 
-impl<H: SpotOrderProc + Send + 'static> LobRpcImpl<H> {
+impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
     pub fn new(handler: H) -> Self {
         Self {
             handler: Arc::new(Mutex::new(handler)),
@@ -126,7 +126,7 @@ impl<H: SpotOrderProc + Send + 'static> LobRpcImpl<H> {
     }
 }
 
-impl<H: SpotOrderProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
+impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
     fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse> {
         let spot_command = Self::parse_command(&cmd)?;
         // 使用请求中的 nonce，如果没有则生成一个
@@ -173,7 +173,7 @@ impl LobRpcService {
         Self { config }
     }
 
-    pub fn start<H: SpotOrderProc + Send + Sync + 'static>(self, handler: H) -> Server {
+    pub fn start<H: SpotOrderExchangeProc + Send + Sync + 'static>(self, handler: H) -> Server {
         let rpc_impl = LobRpcImpl::new(handler);
         let mut io = jsonrpc_core::IoHandler::new();
         io.extend_with(rpc_impl.to_delegate());
