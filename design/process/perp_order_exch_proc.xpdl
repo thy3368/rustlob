@@ -365,10 +365,97 @@
         <!-- MAX_NUM_ALGO_ORDERS -->
         <Member Name="max_num_algo_orders" Type="INTEGER"/>
         <Description>最大条件订单数</Description>
+
+        <!-- 资金费率配置 -->
+        <Member Name="funding_interval_hours" Type="INTEGER"/>
+        <Description>资金费率结算间隔（小时）：4 | 8（默认8小时）</Description>
       </RecordType>
       <Description>
         对应币安API: GET /fapi/v1/exchangeInfo
         返回所有交易对的交易规则和交易对信息
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 强平类型枚举 -->
+    <TypeDeclaration Id="LiquidationType" Name="强平类型">
+      <EnumerationType>
+        <EnumerationValue Name="MARKET">市场强平（市价单成交）</EnumerationValue>
+        <EnumerationValue Name="INSURANCE_FUND">风险保障基金接管</EnumerationValue>
+        <EnumerationValue Name="ADL">自动减仓（ADL）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安三级强平机制：
+        1. MARKET: 优先尝试市场强平
+        2. INSURANCE_FUND: 市场流动性不足时，由保险基金接管
+        3. ADL: 保险基金不足时，触发自动减仓
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 强平结果实体 -->
+    <TypeDeclaration Id="LiquidationResult" Name="强平结果">
+      <RecordType>
+        <Member Name="position_id" Type="PositionId"/>
+        <Member Name="liquidation_type" Type="STRING"/>
+        <Description>MARKET | INSURANCE_FUND | ADL</Description>
+        <Member Name="liquidation_price" Type="STRING"/>
+        <Description>实际强平价格</Description>
+        <Member Name="liquidated_quantity" Type="STRING"/>
+        <Description>强平数量</Description>
+        <Member Name="margin_loss" Type="STRING"/>
+        <Description>保证金损失</Description>
+        <Member Name="insurance_fund_loss" Type="STRING"/>
+        <Description>保险基金承担的损失</Description>
+        <Member Name="order_status" Type="STRING"/>
+        <Description>订单最终状态：FILLED | NEW_INSURANCE | NEW_ADL</Description>
+      </RecordType>
+    </TypeDeclaration>
+
+    <!-- API错误码 -->
+    <TypeDeclaration Id="ApiErrorCode" Name="API错误码">
+      <EnumerationType>
+        <!-- 通用错误 -1xxx -->
+        <EnumerationValue Name="UNKNOWN">-1000: 未知错误</EnumerationValue>
+        <EnumerationValue Name="DISCONNECTED">-1001: 内部错误（断开连接）</EnumerationValue>
+        <EnumerationValue Name="UNAUTHORIZED">-1002: 未授权</EnumerationValue>
+        <EnumerationValue Name="TOO_MANY_REQUESTS">-1003: 请求过多（触发限频）</EnumerationValue>
+        <EnumerationValue Name="UNEXPECTED_RESP">-1006: 服务器响应异常</EnumerationValue>
+        <EnumerationValue Name="TIMEOUT">-1007: 超时</EnumerationValue>
+
+        <!-- 请求格式错误 -10xx -->
+        <EnumerationValue Name="INVALID_MESSAGE">-1013: 非法参数</EnumerationValue>
+        <EnumerationValue Name="UNKNOWN_ORDER_COMPOSITION">-1014: 不支持的订单组合</EnumerationValue>
+        <EnumerationValue Name="TOO_MANY_ORDERS">-1015: 订单过多</EnumerationValue>
+
+        <!-- 订单相关错误 -20xx -->
+        <EnumerationValue Name="UNKNOWN_ORDER">-2013: 订单不存在</EnumerationValue>
+        <EnumerationValue Name="BAD_API_KEY">-2015: 无效的API密钥</EnumerationValue>
+        <EnumerationValue Name="NO_TRADING_WINDOW">-2016: 当前时间不在交易窗口</EnumerationValue>
+        <EnumerationValue Name="BALANCE_NOT_SUFFICIENT">-2019: 余额不足</EnumerationValue>
+
+        <!-- 合约特定错误 -40xx -->
+        <EnumerationValue Name="INVALID_LEVERAGE">-4028: 杠杆倍数无效</EnumerationValue>
+        <EnumerationValue Name="INVALID_ORDER_STATUS">-4044: 订单状态不允许此操作</EnumerationValue>
+        <EnumerationValue Name="NO_NEED_TO_CHANGE_MARGIN_TYPE">-4046: 无需更改保证金类型</EnumerationValue>
+        <EnumerationValue Name="POSITION_SIDE_NOT_MATCH">-4059: 持仓方向不匹配</EnumerationValue>
+        <EnumerationValue Name="REDUCE_ONLY_REJECT">-4061: 只减仓订单被拒绝</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API标准错误码
+        参考: https://binance-docs.github.io/apidocs/futures/en/#error-codes
+      </Description>
+    </TypeDeclaration>
+
+    <!-- API错误响应实体 -->
+    <TypeDeclaration Id="ApiError" Name="API错误响应">
+      <RecordType>
+        <Member Name="code" Type="INTEGER"/>
+        <Description>错误代码</Description>
+        <Member Name="msg" Type="STRING"/>
+        <Description>错误消息</Description>
+      </RecordType>
+      <Description>
+        币安API统一错误响应格式：
+        {"code": -1003, "msg": "Too many requests."}
       </Description>
     </TypeDeclaration>
   </TypeDeclarations>
@@ -438,12 +525,22 @@
         <DataField Id="symbol" Name="合约符号">
           <DataType><BasicType Type="STRING"/></DataType>
         </DataField>
-        <DataField Id="position_side" Name="持仓方向">
+        <DataField Id="position_mode" Name="持仓模式">
           <DataType><BasicType Type="STRING"/></DataType>
-          <Description>LONG | SHORT</Description>
+          <InitialValue>ONE_WAY</InitialValue>
+          <Description>ONE_WAY | HEDGE（对冲模式）</Description>
+        </DataField>
+        <DataField Id="position_side" Name="仓位方向">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>BOTH（单向模式）| LONG（多仓）| SHORT（空仓）- 取决于持仓模式</Description>
+        </DataField>
+        <DataField Id="order_side" Name="订单方向">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>BUY | SELL</Description>
         </DataField>
         <DataField Id="quantity" Name="数量">
-          <DataType><BasicType Type="INTEGER"/></DataType>
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
         </DataField>
         <DataField Id="leverage" Name="杠杆倍数">
           <DataType><BasicType Type="INTEGER"/></DataType>
@@ -451,14 +548,20 @@
         </DataField>
         <DataField Id="order_type" Name="订单类型">
           <DataType><BasicType Type="STRING"/></DataType>
-          <Description>LIMIT | MARKET</Description>
+          <Description>LIMIT | MARKET | STOP | STOP_MARKET | TAKE_PROFIT | TAKE_PROFIT_MARKET | TRAILING_STOP_MARKET</Description>
+        </DataField>
+        <DataField Id="order_category" Name="订单分类">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>REGULAR（普通订单）| CONDITIONAL（条件订单，Algo Service处理）</Description>
         </DataField>
         <DataField Id="price" Name="委托价格">
-          <DataType><BasicType Type="INTEGER"/></DataType>
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
         </DataField>
         <DataField Id="margin_mode" Name="保证金模式">
           <DataType><BasicType Type="STRING"/></DataType>
           <InitialValue>ISOLATED</InitialValue>
+          <Description>ISOLATED（逐仓）| CROSSED（全仓）</Description>
         </DataField>
 
         <!-- 持仓相关 -->
@@ -471,13 +574,16 @@
 
         <!-- 保证金和盈亏 -->
         <DataField Id="required_margin" Name="所需保证金">
-          <DataType><BasicType Type="INTEGER"/></DataType>
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
         </DataField>
         <DataField Id="available_balance" Name="可用余额">
-          <DataType><BasicType Type="INTEGER"/></DataType>
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
         </DataField>
         <DataField Id="realized_pnl" Name="已实现盈亏">
-          <DataType><BasicType Type="INTEGER"/></DataType>
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
         </DataField>
 
         <!-- 订单相关 -->
@@ -1026,103 +1132,259 @@
           <Description>由风控引擎实时监控触发</Description>
         </Activity>
 
-        <Activity Id="ExecuteLiquidation" Name="执行强平">
+        <Activity Id="ExecuteLiquidation" Name="执行三级强平">
           <Implementation>
             <Task>
               <TaskScript>
                 <Script Type="rust/composite">
                   <![CDATA[
-                  // 强制平仓流程
-                  async fn execute_liquidation(position_id: PositionId) -> Result<(), Error> {
-                      // 1. 冻结持仓
+                  // 币安三级强平机制实现
+                  async fn execute_three_tier_liquidation(position_id: PositionId) -> Result<LiquidationResult, Error> {
+                      // 0. 冻结持仓
                       update_position_status(position_id, PositionStatus::Liquidating).await?;
-                      publish_event(PositionFrozenEvent { position_id, reason: "LIQUIDATION" }).await?;
+                      publish_event(PositionFrozenEvent {
+                          position_id,
+                          reason: "LIQUIDATION",
+                      }).await?;
 
-                      // 2. 获取持仓信息
+                      // 获取持仓信息
                       let position = get_position(position_id).await?;
 
-                      // 3. 提交强平订单（市价单，优先级最高）
-                      let liquidation_side = match position.side {
-                          PositionSide::Long => Side::Sell,
-                          PositionSide::Short => Side::Buy,
+                      // 确定平仓方向（与持仓方向相反）
+                      let liquidation_side = match position.position_side.as_str() {
+                          "LONG" | "BOTH" => "SELL",
+                          "SHORT" => "BUY",
+                          _ => return Err(Error::InvalidPositionSide),
                       };
 
+                      // ========================================
+                      // 1️⃣ 第一级：市场强平（Market Liquidation）
+                      // ========================================
                       let order_id = submit_liquidation_order(LiquidationOrder {
                           position_id,
                           trader: position.trader,
                           symbol: position.symbol,
                           side: liquidation_side,
-                          quantity: position.quantity,
-                          order_type: OrderType::Market,
+                          position_side: position.position_side.clone(),
+                          quantity: position.position_amount.clone(),
+                          order_type: "MARKET",
                           is_liquidation: true,
-                          priority: Priority::Urgent,
+                          priority: "URGENT",
                       }).await?;
 
                       publish_event(LiquidationOrderSubmittedEvent {
                           order_id,
                           position_id,
-                          trigger_price: position.liquidation_price,
+                          liquidation_type: "MARKET",
+                          trigger_price: position.liquidation_price.clone(),
                       }).await?;
 
-                      // 4. 执行撮合（优先级最高）
-                      let trades = match_urgent_order(order_id).await?;
-                      if trades.is_empty() {
-                          return Err(Error::LiquidationFailedNoLiquidity);
+                      // 尝试市场撮合（设置5秒超时）
+                      let market_result = match_urgent_order(order_id, timeout_secs: 5).await;
+
+                      match market_result {
+                          Ok(trades) if is_fully_filled(&trades, &position.position_amount) => {
+                              // ✅ 市场强平成功
+                              let avg_price = calculate_avg_price(&trades);
+                              let loss = calculate_liquidation_loss(&position, &avg_price);
+
+                              let result = settle_market_liquidation(
+                                  position_id,
+                                  &position,
+                                  avg_price,
+                                  loss,
+                              ).await?;
+
+                              publish_event(LiquidationCompletedEvent {
+                                  position_id,
+                                  liquidation_type: "MARKET",
+                                  liquidation_price: avg_price,
+                                  order_status: "FILLED",
+                              }).await?;
+
+                              return Ok(result);
+                          }
+                          _ => {
+                              // ❌ 市场流动性不足，进入第二级
+                              log::warn!("Market liquidation failed for position {}: insufficient liquidity", position_id);
+                          }
                       }
 
-                      // 5. 计算强平损失
-                      let avg_liq_price = calculate_avg_price(&trades);
-                      let loss = calculate_liquidation_loss(
-                          position.entry_price,
-                          avg_liq_price,
-                          position.quantity,
-                          position.side,
-                          position.leverage
-                      );
+                      // ========================================
+                      // 2️⃣ 第二级：风险保障基金接管（Insurance Fund）
+                      // ========================================
+                      let insurance_capacity = check_insurance_fund_capacity().await?;
 
-                      // 保证金全部损失
-                      let margin_loss = position.initial_margin;
+                      if insurance_capacity.has_sufficient_balance(&position) {
+                          // ✅ 风险保障基金充足，接管持仓
+                          let takeover_result = insurance_fund_takeover(position_id, &position).await?;
 
-                      // 超出保证金的损失由保险基金承担
+                          // 标记订单状态为 NEW_INSURANCE
+                          update_order_status(order_id, "NEW_INSURANCE").await?;
+
+                          let result = settle_insurance_fund_liquidation(
+                              position_id,
+                              &position,
+                              takeover_result,
+                          ).await?;
+
+                          publish_event(LiquidationCompletedEvent {
+                              position_id,
+                              liquidation_type: "INSURANCE_FUND",
+                              liquidation_price: position.liquidation_price.clone(),
+                              order_status: "NEW_INSURANCE",
+                          }).await?;
+
+                          return Ok(result);
+                      } else {
+                          // ❌ 风险保障基金不足，进入第三级
+                          log::error!("Insurance fund insufficient for position {}", position_id);
+                      }
+
+                      // ========================================
+                      // 3️⃣ 第三级：自动减仓（Auto-Deleveraging, ADL）
+                      // ========================================
+                      // 查找对手方的盈利仓位（按ADL队列优先级）
+                      let counterparty_positions = get_adl_counterparties(
+                          &position.symbol,
+                          liquidation_side,
+                      ).await?;
+
+                      if counterparty_positions.is_empty() {
+                          return Err(Error::NoCounterpartiesForADL);
+                      }
+
+                      // 触发自动减仓
+                      let adl_result = trigger_auto_deleveraging(
+                          position_id,
+                          &position,
+                          counterparty_positions,
+                      ).await?;
+
+                      // 标记订单状态为 NEW_ADL
+                      update_order_status(order_id, "NEW_ADL").await?;
+
+                      let result = settle_adl_liquidation(
+                          position_id,
+                          &position,
+                          adl_result,
+                      ).await?;
+
+                      // 通知被ADL的对手方
+                      for counterparty_id in adl_result.affected_positions {
+                          notify_adl_counterparty(counterparty_id).await?;
+                      }
+
+                      publish_event(LiquidationCompletedEvent {
+                          position_id,
+                          liquidation_type: "ADL",
+                          liquidation_price: position.liquidation_price.clone(),
+                          order_status: "NEW_ADL",
+                      }).await?;
+
+                      Ok(result)
+                  }
+
+                  // ========================================
+                  // 辅助函数
+                  // ========================================
+
+                  /// 结算市场强平
+                  async fn settle_market_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      avg_price: String,
+                      loss: i64,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
                       let insurance_fund_loss = if loss > margin_loss {
                           loss - margin_loss
                       } else {
                           0
                       };
 
-                      // 6. 结算强平
-                      deduct_all_margin(position.trader, margin_loss).await?;
+                      // 扣除保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
 
+                      // 如有超出部分，从保险基金扣除
                       if insurance_fund_loss > 0 {
-                          insurance_fund_deduct(insurance_fund_loss).await?;
+                          insurance_fund_deduct(insurance_fund_loss as u64).await?;
                       }
 
-                      publish_event(LiquidationSettledEvent {
-                          position_id,
-                          trader: position.trader,
-                          margin_loss,
-                          insurance_fund_loss,
-                      }).await?;
-
-                      // 7. 标记持仓为已强平
+                      // 更新持仓状态
                       update_position_status(position_id, PositionStatus::Liquidated).await?;
 
-                      publish_event(PositionLiquidatedEvent {
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
                           position_id,
-                          liquidated_at: now(),
-                          liquidation_price: avg_liq_price,
-                      }).await?;
+                          liquidation_type: "MARKET".to_string(),
+                          liquidation_price: avg_price,
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: insurance_fund_loss.to_string(),
+                          order_status: "FILLED".to_string(),
+                      })
+                  }
 
-                      // 8. 通知用户
-                      send_notification(Notification {
-                          user: position.trader,
-                          type: NotificationType::Liquidation,
-                          title: "持仓已被强制平仓",
-                          content: format!("持仓 {} 已被强平，损失 {} USDT", position_id, margin_loss),
-                          priority: Priority::High,
-                      }).await?;
+                  /// 结算保险基金接管
+                  async fn settle_insurance_fund_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      takeover_result: InsuranceFundTakeover,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
 
-                      Ok(())
+                      // 扣除保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
+
+                      // 保险基金承担全部损失
+                      insurance_fund_deduct(takeover_result.total_loss).await?;
+
+                      // 更新持仓状态
+                      update_position_status(position_id, PositionStatus::Liquidated).await?;
+
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
+                          position_id,
+                          liquidation_type: "INSURANCE_FUND".to_string(),
+                          liquidation_price: position.liquidation_price.clone(),
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: takeover_result.total_loss.to_string(),
+                          order_status: "NEW_INSURANCE".to_string(),
+                      })
+                  }
+
+                  /// 结算ADL强平
+                  async fn settle_adl_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      adl_result: ADLResult,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
+
+                      // 扣除被强平方的保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
+
+                      // 更新持仓状态
+                      update_position_status(position_id, PositionStatus::Liquidated).await?;
+
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
+                          position_id,
+                          liquidation_type: "ADL".to_string(),
+                          liquidation_price: position.liquidation_price.clone(),
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: "0".to_string(),
+                          order_status: "NEW_ADL".to_string(),
+                      })
                   }
                   ]]>
                 </Script>
@@ -1130,6 +1392,15 @@
             </Task>
           </Implementation>
           <Performer>RISK_ENGINE</Performer>
+          <Description>
+            币安三级强平机制：
+            1. 市场强平：优先尝试在市场中平仓
+            2. 风险保障基金：市场流动性不足时，由保险基金接管
+            3. 自动减仓（ADL）：保险基金不足时，对手方盈利仓位被强制平仓
+
+            对应API：GET /fapi/v1/allForceOrders
+            订单状态：FILLED | NEW_INSURANCE | NEW_ADL
+          </Description>
         </Activity>
 
         <Activity Id="End" Name="强平完成">
@@ -1165,11 +1436,16 @@
           <Event>
             <StartEvent Trigger="Timer">
               <TriggerTimer>
-                <TimeCycle>0 */8 * * *</TimeCycle>
+                <TimeCycle>0 */4 * * *</TimeCycle>
               </TriggerTimer>
             </StartEvent>
           </Event>
-          <Description>每8小时触发一次 (00:00, 08:00, 16:00 UTC)</Description>
+          <Description>
+            每4小时触发一次 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+            实际结算根据每个合约的funding_interval_hours配置执行：
+            - 8小时合约：仅在00:00, 08:00, 16:00执行
+            - 4小时合约：每4小时执行
+          </Description>
         </Activity>
 
         <Activity Id="SettleFunding" Name="结算资金费率">
@@ -1178,19 +1454,38 @@
               <TaskScript>
                 <Script Type="rust/composite">
                   <![CDATA[
-                  // 资金费率结算流程
+                  // 资金费率结算流程（支持动态间隔）
                   async fn settle_funding_rates(settlement_time: DateTime) -> Result<(), Error> {
                       // 获取所有交易对
                       let symbols = get_all_active_symbols().await?;
 
+                      // 获取当前UTC小时
+                      let current_hour = settlement_time.hour();
+
                       for symbol in symbols {
+                          // 获取合约规格
+                          let contract_specs = get_contract_specs(symbol).await?;
+                          let funding_interval_hours = contract_specs.funding_interval_hours;
+
+                          // 检查是否到达该合约的结算时间
+                          if !should_settle_funding(current_hour, funding_interval_hours) {
+                              continue;  // 跳过不需要结算的合约
+                          }
+
                           // 1. 计算资金费率
                           let mark_price = get_mark_price(symbol).await?;
                           let index_price = get_index_price(symbol).await?;
 
                           // Premium Index = (Mark Price - Index Price) / Index Price
                           let premium_index = (mark_price as f64 - index_price as f64) / index_price as f64;
-                          let interest_rate = 0.0001; // 0.01% per 8h
+
+                          // 根据结算间隔调整Interest Rate
+                          // 默认年化利率0.03%（日利率0.03%），按间隔分摊
+                          let interest_rate = match funding_interval_hours {
+                              4 => 0.0001 / 2.0,  // 0.005% per 4h（日利率的1/6）
+                              8 => 0.0001,        // 0.01% per 8h（日利率的1/3，默认）
+                              _ => 0.0001,        // 默认8小时
+                          };
 
                           // Funding Rate = Premium Index + clamp(Interest - Premium, -0.05%, 0.05%)
                           let clamped_diff = (interest_rate - premium_index).clamp(-0.0005, 0.0005);
@@ -1236,11 +1531,21 @@
                           save_funding_rate_history(FundingRateRecord {
                               symbol,
                               funding_rate,
+                              funding_interval_hours,
                               settlement_time,
                           }).await?;
                       }
 
                       Ok(())
+                  }
+
+                  // 辅助函数：判断当前时间是否为合约的结算时间
+                  fn should_settle_funding(current_hour: u32, interval_hours: u32) -> bool {
+                      match interval_hours {
+                          4 => current_hour % 4 == 0,  // 每4小时（0, 4, 8, 12, 16, 20）
+                          8 => current_hour % 8 == 0,  // 每8小时（0, 8, 16）
+                          _ => current_hour % 8 == 0,  // 默认8小时
+                      }
                   }
                   ]]>
                 </Script>
@@ -1289,6 +1594,70 @@
       <ExtendedAttribute Name="MainProcess" Value="永续合约交易流程 - 包含所有用户发起的交易活动"/>
       <ExtendedAttribute Name="Activities" Value="开仓、平仓、调整杠杆、追加保证金、减少保证金 - 作为主流程中的活动"/>
       <ExtendedAttribute Name="SubProcesses" Value="强平流程、资金费率结算 - 系统自动触发的独立流程"/>
+    </ExtendedAttribute>
+
+    <!-- 币安API限频规则 -->
+    <ExtendedAttribute Name="BinanceAPILimits">
+      <!-- 订单频率限制 -->
+      <ExtendedAttribute Name="OrderRateLimit" Value="300 orders/10s per account"/>
+      <ExtendedAttribute Name="OrderRateLimit-Description" Value="每个账户10秒内最多300个订单（包括下单、撤单、修改订单）"/>
+
+      <!-- 请求权重限制 -->
+      <ExtendedAttribute Name="RequestWeight" Value="2400 weight/1min per IP"/>
+      <ExtendedAttribute Name="RequestWeight-Description" Value="每个IP每分钟请求权重上限2400，超出后触发418或429错误"/>
+
+      <!-- 原始请求数限制 -->
+      <ExtendedAttribute Name="RawRequests" Value="6000 requests/5min per IP"/>
+      <ExtendedAttribute Name="RawRequests-Description" Value="每个IP 5分钟内最多6000次请求"/>
+
+      <!-- 具体端点权重 -->
+      <ExtendedAttribute Name="POST_order_weight" Value="0 or 1"/>
+      <ExtendedAttribute Name="POST_order_description" Value="下单权重：GTC订单=0，其他=1"/>
+
+      <ExtendedAttribute Name="GET_positionRisk_weight" Value="5"/>
+      <ExtendedAttribute Name="GET_positionRisk_description" Value="查询持仓风险权重=5"/>
+
+      <ExtendedAttribute Name="POST_leverage_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_leverage_description" Value="调整杠杆权重=1"/>
+
+      <ExtendedAttribute Name="POST_marginType_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_marginType_description" Value="变更保证金类型权重=1"/>
+
+      <ExtendedAttribute Name="POST_positionMargin_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_positionMargin_description" Value="调整逐仓保证金权重=1"/>
+
+      <ExtendedAttribute Name="GET_allOrders_weight" Value="5"/>
+      <ExtendedAttribute Name="GET_allOrders_description" Value="查询所有订单权重=5"/>
+
+      <ExtendedAttribute Name="DELETE_order_weight" Value="1"/>
+      <ExtendedAttribute Name="DELETE_order_description" Value="撤销订单权重=1"/>
+
+      <!-- WebSocket限制 -->
+      <ExtendedAttribute Name="WebSocketConnections" Value="5 connections/s per IP"/>
+      <ExtendedAttribute Name="WebSocketConnections-Description" Value="每个IP每秒最多建立5个WebSocket连接"/>
+
+      <ExtendedAttribute Name="WebSocketSubscriptions" Value="200 streams per connection"/>
+      <ExtendedAttribute Name="WebSocketSubscriptions-Description" Value="每个连接最多订阅200个数据流"/>
+
+      <ExtendedAttribute Name="WebSocketMessageRate" Value="10 messages/s per connection"/>
+      <ExtendedAttribute Name="WebSocketMessageRate-Description" Value="每个连接每秒最多发送10条消息"/>
+    </ExtendedAttribute>
+
+    <!-- 限频响应头 -->
+    <ExtendedAttribute Name="RateLimitHeaders">
+      <ExtendedAttribute Name="X-MBX-USED-WEIGHT-1M" Value="当前1分钟内已使用的请求权重"/>
+      <ExtendedAttribute Name="X-MBX-ORDER-COUNT-10S" Value="当前10秒内的下单次数"/>
+      <ExtendedAttribute Name="X-SAPI-USED-UID-WEIGHT-1M" Value="当前UID 1分钟内已使用权重"/>
+      <ExtendedAttribute Name="Retry-After" Value="触发限频后建议的重试等待时间（秒）"/>
+      <ExtendedAttribute Name="Header-Usage" Value="客户端应监控这些响应头，主动控制请求频率，避免触发418/429限频错误"/>
+    </ExtendedAttribute>
+
+    <!-- 限频错误处理策略 -->
+    <ExtendedAttribute Name="RateLimitErrorHandling">
+      <ExtendedAttribute Name="HTTP-418" Value="IP被封禁，需等待自动解封（通常2分钟 - 3天）"/>
+      <ExtendedAttribute Name="HTTP-429" Value="请求过多，应实施指数退避策略"/>
+      <ExtendedAttribute Name="ExponentialBackoff" Value="建议退避序列：100ms, 200ms, 400ms, 800ms, 1.6s, 3.2s"/>
+      <ExtendedAttribute Name="CircuitBreaker" Value="连续触发限频5次后应启动熔断器，暂停请求60秒"/>
     </ExtendedAttribute>
   </ExtendedAttributes>
 
