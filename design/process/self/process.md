@@ -6,8 +6,8 @@
 
 1. 收集相关领域知识 用例 story
 2. 用例转成业务流程，转成对应的流程文件
-3. 完整定义流程域/流程组/流程/command/step
-4. 用BDD通过业务场景验证Command
+3. 完整定义流程域/流程组/流程(process/workflow)/command(activity)/step(task) 定义完整的xpdl文件
+4. 生成流程接口源码，用BDD通过业务场景验证源码process/command
 
 ### 职能域设计：实体建模 DDD
 

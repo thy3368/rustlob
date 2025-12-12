@@ -53,12 +53,13 @@
     </TypeDeclaration>
 
     <TypeDeclaration Id="Price" Name="价格">
-      <BasicType Type="INTEGER"/>
-      <Description>以分为单位，避免浮点运算</Description>
+      <BasicType Type="STRING"/>
+      <Description>字符串类型，内部使用定点数表示，保持精度。币安API使用字符串避免浮点误差</Description>
     </TypeDeclaration>
 
     <TypeDeclaration Id="Quantity" Name="数量">
-      <BasicType Type="INTEGER"/>
+      <BasicType Type="STRING"/>
+      <Description>字符串类型，内部使用定点数表示，保持精度</Description>
     </TypeDeclaration>
 
     <TypeDeclaration Id="Leverage" Name="杠杆倍数">
@@ -67,10 +68,38 @@
     </TypeDeclaration>
 
     <!-- 枚举类型 -->
-    <TypeDeclaration Id="PositionSide" Name="持仓方向">
+    <!-- 持仓模式：单向 vs 对冲 -->
+    <TypeDeclaration Id="PositionMode" Name="持仓模式">
       <EnumerationType>
-        <EnumerationValue Name="LONG">多仓</EnumerationValue>
-        <EnumerationValue Name="SHORT">空仓</EnumerationValue>
+        <EnumerationValue Name="ONE_WAY">单向持仓模式（默认）</EnumerationValue>
+        <EnumerationValue Name="HEDGE">对冲持仓模式（可同时持有多空）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API: GET/POST /fapi/v1/positionSide/dual
+        - ONE_WAY: 一个合约只能持有一个方向
+        - HEDGE: 同一合约可同时持有多空双向仓位
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 仓位方向（用于对冲模式） -->
+    <TypeDeclaration Id="PositionSideEnum" Name="仓位方向">
+      <EnumerationType>
+        <EnumerationValue Name="BOTH">单向持仓（One-Way模式）</EnumerationValue>
+        <EnumerationValue Name="LONG">多仓（Hedge模式）</EnumerationValue>
+        <EnumerationValue Name="SHORT">空仓（Hedge模式）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API字段：positionSide
+        - BOTH: 单向持仓模式下使用
+        - LONG/SHORT: 对冲模式下区分多空仓位
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单方向 -->
+    <TypeDeclaration Id="OrderSide" Name="订单方向">
+      <EnumerationType>
+        <EnumerationValue Name="BUY">买入</EnumerationValue>
+        <EnumerationValue Name="SELL">卖出</EnumerationValue>
       </EnumerationType>
     </TypeDeclaration>
 
@@ -78,18 +107,43 @@
       <EnumerationType>
         <EnumerationValue Name="LIMIT">限价单</EnumerationValue>
         <EnumerationValue Name="MARKET">市价单</EnumerationValue>
-        <EnumerationValue Name="STOP_MARKET">止损市价单</EnumerationValue>
-        <EnumerationValue Name="STOP_LIMIT">止损限价单</EnumerationValue>
-        <EnumerationValue Name="TAKE_PROFIT_MARKET">止盈市价单</EnumerationValue>
-        <EnumerationValue Name="TAKE_PROFIT_LIMIT">止盈限价单</EnumerationValue>
+        <EnumerationValue Name="STOP">止损限价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="STOP_MARKET">止损市价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TAKE_PROFIT">止盈限价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TAKE_PROFIT_MARKET">止盈市价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TRAILING_STOP_MARKET">追踪止损市价单（条件单）</EnumerationValue>
       </EnumerationType>
+      <Description>
+        币安API 2025-12-09重大变更：
+        - 普通订单（LIMIT, MARKET）：POST /fapi/v1/order
+        - 条件订单（STOP_*, TAKE_PROFIT_*, TRAILING_*）：迁移至Algo Service
+        条件订单下单前不检查保证金，触发时才检查
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单分类：普通订单 vs Algo订单 -->
+    <TypeDeclaration Id="OrderCategory" Name="订单分类">
+      <EnumerationType>
+        <EnumerationValue Name="REGULAR">普通订单（LIMIT, MARKET）</EnumerationValue>
+        <EnumerationValue Name="CONDITIONAL">条件订单（Algo Service处理）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        2025-12-09起生效：
+        - REGULAR: 使用 POST /fapi/v1/order
+        - CONDITIONAL: 使用 Algo Service 独立端点
+      </Description>
     </TypeDeclaration>
 
     <TypeDeclaration Id="MarginMode" Name="保证金模式">
       <EnumerationType>
         <EnumerationValue Name="ISOLATED">逐仓</EnumerationValue>
-        <EnumerationValue Name="CROSS">全仓</EnumerationValue>
+        <EnumerationValue Name="CROSSED">全仓</EnumerationValue>
       </EnumerationType>
+      <Description>
+        币安API: POST /fapi/v1/marginType
+        参数: marginType = "ISOLATED" | "CROSSED"
+        注意：币安使用CROSSED而非CROSS
+      </Description>
     </TypeDeclaration>
 
     <TypeDeclaration Id="PositionStatus" Name="持仓状态">
@@ -115,22 +169,207 @@
     <!-- 复合数据类型 -->
     <TypeDeclaration Id="Position" Name="持仓实体">
       <RecordType>
-        <Member Name="position_id" Type="PositionId"/>
-        <Member Name="trader" Type="TraderId"/>
+        <!-- 基础信息 -->
         <Member Name="symbol" Type="Symbol"/>
-        <Member Name="side" Type="PositionSide"/>
-        <Member Name="quantity" Type="Quantity"/>
-        <Member Name="entry_price" Type="Price"/>
-        <Member Name="leverage" Type="Leverage"/>
-        <Member Name="margin_mode" Type="MarginMode"/>
-        <Member Name="initial_margin" Type="INTEGER"/>
-        <Member Name="maintenance_margin" Type="INTEGER"/>
-        <Member Name="unrealized_pnl" Type="INTEGER"/>
-        <Member Name="liquidation_price" Type="Price"/>
+        <Member Name="position_side" Type="STRING"/>
+        <Description>positionSide: BOTH(单向) | LONG(多仓) | SHORT(空仓)</Description>
+
+        <!-- 持仓数量和价格 -->
+        <Member Name="position_amount" Type="STRING"/>
+        <Description>持仓数量，正数=多仓，负数=空仓</Description>
+        <Member Name="entry_price" Type="STRING"/>
+        <Description>开仓均价</Description>
+        <Member Name="break_even_price" Type="STRING"/>
+        <Description>盈亏平衡价</Description>
+        <Member Name="mark_price" Type="STRING"/>
+        <Description>当前标记价格</Description>
+        <Member Name="liquidation_price" Type="STRING"/>
+        <Description>强平价格</Description>
+
+        <!-- 盈亏 -->
+        <Member Name="unrealized_profit" Type="STRING"/>
+        <Description>未实现盈亏（基于标记价格）</Description>
+
+        <!-- 杠杆和保证金 -->
+        <Member Name="leverage" Type="INTEGER"/>
+        <Description>当前杠杆倍数</Description>
+        <Member Name="margin_type" Type="STRING"/>
+        <Description>保证金类型: isolated | cross</Description>
+        <Member Name="isolated_margin" Type="STRING"/>
+        <Description>逐仓保证金额</Description>
+        <Member Name="is_auto_add_margin" Type="BOOLEAN"/>
+        <Description>是否自动追加保证金（逐仓模式）</Description>
+        <Member Name="position_initial_margin" Type="STRING"/>
+        <Description>持仓起始保证金</Description>
+        <Member Name="open_order_initial_margin" Type="STRING"/>
+        <Description>挂单起始保证金</Description>
+        <Member Name="max_notional_value" Type="STRING"/>
+        <Description>当前杠杆下允许的最大名义价值</Description>
+
+        <!-- 风控 -->
+        <Member Name="adl" Type="INTEGER"/>
+        <Description>自动减仓队列等级(1-5)，数字越大优先级越高</Description>
+
+        <!-- 时间戳 -->
+        <Member Name="update_time" Type="DATETIME"/>
+        <Description>更新时间（Unix毫秒时间戳）</Description>
+
+        <!-- 内部状态字段（非币安API） -->
+        <Member Name="position_id" Type="PositionId"/>
+        <Description>内部持仓ID（用于事件溯源）</Description>
+        <Member Name="trader" Type="TraderId"/>
+        <Description>交易员ID</Description>
         <Member Name="status" Type="PositionStatus"/>
+        <Description>内部状态：OPEN | CLOSING | CLOSED | LIQUIDATING | LIQUIDATED</Description>
         <Member Name="created_at" Type="DATETIME"/>
-        <Member Name="updated_at" Type="DATETIME"/>
+        <Description>创建时间</Description>
       </RecordType>
+      <Description>
+        对应币安API: GET /fapi/v2/positionRisk 或 GET /fapi/v3/positionRisk
+        V3版本优化：仅返回有持仓或挂单的合约
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单实体 -->
+    <TypeDeclaration Id="Order" Name="订单实体">
+      <RecordType>
+        <!-- 订单基础信息 -->
+        <Member Name="order_id" Type="INTEGER"/>
+        <Description>系统订单ID</Description>
+        <Member Name="client_order_id" Type="STRING"/>
+        <Description>客户自定义订单ID</Description>
+        <Member Name="symbol" Type="Symbol"/>
+
+        <!-- 订单方向和类型 -->
+        <Member Name="side" Type="STRING"/>
+        <Description>BUY | SELL</Description>
+        <Member Name="position_side" Type="STRING"/>
+        <Description>BOTH | LONG | SHORT（对冲模式）</Description>
+        <Member Name="type" Type="STRING"/>
+        <Description>LIMIT | MARKET | STOP | STOP_MARKET | TAKE_PROFIT | TAKE_PROFIT_MARKET | TRAILING_STOP_MARKET</Description>
+
+        <!-- 价格和数量 -->
+        <Member Name="price" Type="STRING"/>
+        <Description>委托价格</Description>
+        <Member Name="quantity" Type="STRING"/>
+        <Description>委托数量</Description>
+        <Member Name="executed_qty" Type="STRING"/>
+        <Description>已成交数量</Description>
+        <Member Name="cumulative_quote_qty" Type="STRING"/>
+        <Description>累计成交金额</Description>
+        <Member Name="avg_price" Type="STRING"/>
+        <Description>平均成交价格</Description>
+
+        <!-- 订单状态 -->
+        <Member Name="status" Type="STRING"/>
+        <Description>NEW | PARTIALLY_FILLED | FILLED | CANCELED | EXPIRED | NEW_INSURANCE | NEW_ADL</Description>
+        <Member Name="time_in_force" Type="STRING"/>
+        <Description>GTC | IOC | FOK | GTX | GTD</Description>
+
+        <!-- 条件订单参数 -->
+        <Member Name="stop_price" Type="STRING"/>
+        <Description>触发价（条件单）</Description>
+        <Member Name="activation_price" Type="STRING"/>
+        <Description>追踪止损激活价</Description>
+        <Member Name="callback_rate" Type="STRING"/>
+        <Description>追踪止损回调比例</Description>
+        <Member Name="working_type" Type="STRING"/>
+        <Description>MARK_PRICE | CONTRACT_PRICE（触发价格类型）</Description>
+
+        <!-- 其他属性 -->
+        <Member Name="reduce_only" Type="BOOLEAN"/>
+        <Description>只减仓标记</Description>
+        <Member Name="close_position" Type="BOOLEAN"/>
+        <Description>触发后全部平仓</Description>
+        <Member Name="update_time" Type="DATETIME"/>
+        <Description>更新时间</Description>
+        <Member Name="create_time" Type="DATETIME"/>
+        <Description>创建时间</Description>
+      </RecordType>
+      <Description>
+        对应币安API:
+        - 下单: POST /fapi/v1/order（普通订单）或 Algo Service（条件订单）
+        - 查询: GET /fapi/v1/order 或 GET /fapi/v1/allOrders
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单状态枚举 -->
+    <TypeDeclaration Id="OrderStatus" Name="订单状态">
+      <EnumerationType>
+        <EnumerationValue Name="NEW">新建订单</EnumerationValue>
+        <EnumerationValue Name="PARTIALLY_FILLED">部分成交</EnumerationValue>
+        <EnumerationValue Name="FILLED">完全成交</EnumerationValue>
+        <EnumerationValue Name="CANCELED">已撤销</EnumerationValue>
+        <EnumerationValue Name="EXPIRED">已过期</EnumerationValue>
+        <EnumerationValue Name="NEW_INSURANCE">风险保障基金接管（强平）</EnumerationValue>
+        <EnumerationValue Name="NEW_ADL">自动减仓序列（强平）</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 有效方式 -->
+    <TypeDeclaration Id="TimeInForce" Name="订单有效方式">
+      <EnumerationType>
+        <EnumerationValue Name="GTC">成交为止（Good Till Cancel）</EnumerationValue>
+        <EnumerationValue Name="IOC">无法立即成交的部分就撤销（Immediate or Cancel）</EnumerationValue>
+        <EnumerationValue Name="FOK">无法全部立即成交就撤销（Fill or Kill）</EnumerationValue>
+        <EnumerationValue Name="GTX">无法成为挂单方就撤销（Good Till Crossing）</EnumerationValue>
+        <EnumerationValue Name="GTD">到指定时间撤销（Good Till Date）</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 条件价格触发类型 -->
+    <TypeDeclaration Id="WorkingType" Name="条件价格触发类型">
+      <EnumerationType>
+        <EnumerationValue Name="MARK_PRICE">标记价格</EnumerationValue>
+        <EnumerationValue Name="CONTRACT_PRICE">最新成交价</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 合约规格 -->
+    <TypeDeclaration Id="ContractSpecs" Name="合约规格">
+      <RecordType>
+        <Member Name="symbol" Type="Symbol"/>
+        <Member Name="price_precision" Type="INTEGER"/>
+        <Description>价格精度（小数位数）</Description>
+        <Member Name="quantity_precision" Type="INTEGER"/>
+        <Description>数量精度（小数位数）</Description>
+        <Member Name="base_asset_precision" Type="INTEGER"/>
+        <Description>标的资产精度</Description>
+        <Member Name="quote_precision" Type="INTEGER"/>
+        <Description>报价资产精度</Description>
+
+        <!-- PRICE_FILTER -->
+        <Member Name="tick_size" Type="STRING"/>
+        <Description>价格最小变动单位</Description>
+        <Member Name="min_price" Type="STRING"/>
+        <Description>最小价格</Description>
+        <Member Name="max_price" Type="STRING"/>
+        <Description>最大价格</Description>
+
+        <!-- LOT_SIZE -->
+        <Member Name="step_size" Type="STRING"/>
+        <Description>数量最小变动单位</Description>
+        <Member Name="min_qty" Type="STRING"/>
+        <Description>最小下单数量</Description>
+        <Member Name="max_qty" Type="STRING"/>
+        <Description>最大下单数量</Description>
+
+        <!-- MIN_NOTIONAL -->
+        <Member Name="min_notional" Type="STRING"/>
+        <Description>最小名义价值</Description>
+
+        <!-- MAX_NUM_ORDERS -->
+        <Member Name="max_num_orders" Type="INTEGER"/>
+        <Description>最大订单数</Description>
+
+        <!-- MAX_NUM_ALGO_ORDERS -->
+        <Member Name="max_num_algo_orders" Type="INTEGER"/>
+        <Description>最大条件订单数</Description>
+      </RecordType>
+      <Description>
+        对应币安API: GET /fapi/v1/exchangeInfo
+        返回所有交易对的交易规则和交易对信息
+      </Description>
     </TypeDeclaration>
   </TypeDeclarations>
 
