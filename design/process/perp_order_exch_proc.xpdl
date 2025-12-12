@@ -518,7 +518,7 @@
         </DataField>
         <DataField Id="action" Name="交易动作">
           <DataType><BasicType Type="STRING"/></DataType>
-          <Description>OPEN_POSITION | CLOSE_POSITION | ADJUST_LEVERAGE | ADD_MARGIN | REDUCE_MARGIN</Description>
+          <Description>OPEN_POSITION | CLOSE_POSITION | ADJUST_LEVERAGE | ADD_MARGIN | REDUCE_MARGIN | CHANGE_POSITION_MODE | CHANGE_MARGIN_TYPE | CANCEL_ORDER | CANCEL_ALL_ORDERS | MODIFY_ORDER | SET_AUTO_ADD_MARGIN</Description>
         </DataField>
 
         <!-- 开仓参数 -->
@@ -629,6 +629,12 @@
                   <TransitionRef Id="ToAdjustLeverage"/>
                   <TransitionRef Id="ToAddMargin"/>
                   <TransitionRef Id="ToReduceMargin"/>
+                  <TransitionRef Id="ToChangePositionMode"/>
+                  <TransitionRef Id="ToChangeMarginType"/>
+                  <TransitionRef Id="ToCancelOrder"/>
+                  <TransitionRef Id="ToCancelAllOrders"/>
+                  <TransitionRef Id="ToModifyOrder"/>
+                  <TransitionRef Id="ToSetAutoAddMargin"/>
                 </TransitionRefs>
               </Split>
             </TransitionRestriction>
@@ -702,6 +708,26 @@
             </Task>
           </Implementation>
           <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 看涨行情开多仓：交易员预期BTC价格上涨，以50000 USDT价格开10倍杠杆多仓
+            2. 看跌行情开空仓：预期ETH下跌，以3000 USDT价格开20倍杠杆空仓
+            3. 对冲套利：在对冲模式下同时开多空双向仓位进行套利
+            4. 市价快速建仓：使用MARKET订单类型快速进场
+            5. 限价精准建仓：使用LIMIT订单在目标价位挂单等待成交
+
+            【前置条件】
+            - 账户可用余额充足
+            - 已设置持仓模式（单向/对冲）
+            - 已设置保证金类型（逐仓/全仓）
+            - 订单参数符合合约规格（最小数量、价格精度等）
+
+            【业务规则】
+            - 单向模式：同一合约只能持有一个方向（LONG或SHORT）
+            - 对冲模式：可同时持有多空双向仓位
+            - 杠杆倍数：1-125倍（依合约而定）
+            - 保证金计算：名义价值 / 杠杆倍数
+          </Description>
           <TransitionRestrictions>
             <TransitionRestriction>
               <Join Type="XOR"/>
@@ -789,6 +815,26 @@
             </Task>
           </Implementation>
           <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 止盈出场：持仓达到目标盈利，全部或部分平仓锁定利润
+            2. 止损出场：亏损达到止损线，及时平仓控制风险
+            3. 反向操作：看反行情，平掉原有持仓后开反向仓位
+            4. 降低风险敞口：部分平仓减少持仓规模，降低风险暴露
+            5. 市场波动避险：重大事件前临时平仓规避不确定性
+
+            【前置条件】
+            - 存在未平仓的持仓
+            - 平仓数量 ≤ 当前持仓数量
+            - 对冲模式下需指定正确的positionSide
+
+            【业务规则】
+            - 全部平仓：平仓数量 = 持仓数量，持仓状态变为CLOSED
+            - 部分平仓：平仓数量 < 持仓数量，持仓继续保留
+            - 平仓方向：多仓平仓=SELL，空仓平仓=BUY
+            - 盈亏计算：(平仓价 - 开仓价) × 数量 × 杠杆倍数（多仓）
+            - 保证金释放：平仓后自动释放对应的保证金
+          </Description>
           <TransitionRestrictions>
             <TransitionRestriction>
               <Join Type="XOR"/>
@@ -885,6 +931,26 @@
             </Task>
           </Implementation>
           <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 降低风险：行情不明朗时降低杠杆倍数，减少强平风险
+            2. 提高收益：对趋势有信心时提高杠杆倍数，放大盈利
+            3. 接近强平调整：当前价格接近强平价时，降低杠杆远离强平线
+            4. 资金利用优化：释放保证金用于其他交易机会
+            5. 风控要求：满足风险管理策略的杠杆限制
+
+            【前置条件】
+            - 存在持仓
+            - 新杠杆倍数在允许范围内（1-125倍）
+            - 可用余额足够支付额外保证金（降低杠杆时）
+
+            【业务规则】
+            - 降低杠杆（如20x→10x）：需追加保证金，强平价格远离当前价
+            - 提高杠杆（如10x→20x）：释放部分保证金，强平价格靠近当前价
+            - 保证金调整：自动计算并冻结/释放保证金差额
+            - 强平价格更新：根据新杠杆重新计算强平价格
+            - 风险检查：不能调整到会立即触发强平的杠杆
+          </Description>
           <TransitionRestrictions>
             <TransitionRestriction>
               <Join Type="XOR"/>
@@ -947,6 +1013,25 @@
             </Task>
           </Implementation>
           <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 避免强平：当前价格接近强平价，追加保证金拉远强平线
+            2. 降低风险：市场波动加剧时主动增加保证金缓冲
+            3. 维持杠杆：价格波动导致实际杠杆变化，追加保证金恢复目标杠杆
+            4. 接收预警后补仓：收到强平预警后及时追加保证金
+            5. 策略调整：从高杠杆策略转向稳健策略
+
+            【前置条件】
+            - 存在逐仓模式的持仓（全仓模式不支持）
+            - 账户可用余额充足
+            - 追加金额 > 0
+
+            【业务规则】
+            - 仅逐仓模式：全仓模式共享账户余额，不支持单独追加
+            - 强平价格变化：追加保证金后强平价格远离当前价
+            - 资金转移：从可用余额转移到持仓保证金
+            - 即时生效：追加后立即更新强平价格和风控参数
+          </Description>
           <TransitionRestrictions>
             <TransitionRestriction>
               <Join Type="XOR"/>
@@ -1015,6 +1100,476 @@
             </Task>
           </Implementation>
           <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 释放资金：行情有利时减少保证金，释放资金用于其他交易
+            2. 提高杠杆：通过减少保证金变相提高杠杆倍数
+            3. 资金周转：需要资金进行其他操作时适度减少保证金
+            4. 利润保护：持仓盈利后适度减少保证金，锁定部分利润
+            5. 策略调整：从保守策略转向激进策略
+
+            【前置条件】
+            - 存在逐仓模式的持仓（全仓模式不支持）
+            - 减少后保证金仍满足最低要求
+            - 不会导致立即触发强平
+
+            【业务规则】
+            - 仅逐仓模式：全仓模式不支持减少保证金
+            - 最低保证金限制：不能减少到低于维持保证金要求
+            - 强平价格变化：减少保证金后强平价格靠近当前价
+            - 风险检查：如果会导致立即强平则拒绝操作
+            - 资金返还：保证金返回到可用余额
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 切换持仓模式 ============ -->
+        <Activity Id="ChangePositionMode" Name="切换持仓模式">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 切换持仓模式（单向 ↔ 对冲）
+                  async fn execute_change_position_mode(request: ChangePositionModeRequest) -> Result<(), Error> {
+                      let trader = request.trader;
+                      let new_mode = request.position_mode;  // ONE_WAY | HEDGE
+
+                      // 1. 检查是否有持仓
+                      let positions = get_all_positions(trader).await?;
+                      if !positions.is_empty() {
+                          return Err(Error::CannotChangeModeWithOpenPositions);
+                      }
+
+                      // 2. 检查是否有挂单
+                      let open_orders = get_open_orders(trader).await?;
+                      if !open_orders.is_empty() {
+                          return Err(Error::CannotChangeModeWithOpenOrders);
+                      }
+
+                      // 3. 调用币安API切换持仓模式
+                      // POST /fapi/v1/positionSide/dual
+                      let dual_side_position = match new_mode {
+                          PositionMode::OneWay => false,
+                          PositionMode::Hedge => true,
+                      };
+
+                      binance_api_change_position_mode(trader, dual_side_position).await?;
+
+                      // 4. 更新本地配置
+                      update_trader_position_mode(trader, new_mode).await?;
+
+                      publish_event(PositionModeChangedEvent {
+                          trader,
+                          old_mode: get_current_position_mode(trader).await?,
+                          new_mode,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>TRADER</Performer>
+          <Description>
+            币安API: POST /fapi/v1/positionSide/dual
+            参数: dualSidePosition (true=对冲模式, false=单向模式)
+            注意：必须在无持仓、无挂单的情况下才能切换
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 变更保证金类型 ============ -->
+        <Activity Id="ChangeMarginType" Name="变更保证金类型">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 变更保证金类型（逐仓 ↔ 全仓）
+                  async fn execute_change_margin_type(request: ChangeMarginTypeRequest) -> Result<(), Error> {
+                      let symbol = request.symbol;
+                      let new_margin_type = request.margin_type;  // ISOLATED | CROSSED
+
+                      // 1. 检查该合约是否有持仓
+                      let position = get_position_by_symbol(request.trader, symbol).await?;
+                      if position.is_some() {
+                          return Err(Error::CannotChangeMarginTypeWithPosition);
+                      }
+
+                      // 2. 检查是否有该合约的挂单
+                      let open_orders = get_open_orders_by_symbol(request.trader, symbol).await?;
+                      if !open_orders.is_empty() {
+                          return Err(Error::CannotChangeMarginTypeWithOrders);
+                      }
+
+                      // 3. 调用币安API变更保证金类型
+                      // POST /fapi/v1/marginType
+                      binance_api_change_margin_type(
+                          request.trader,
+                          symbol,
+                          new_margin_type
+                      ).await?;
+
+                      // 4. 更新本地配置
+                      update_symbol_margin_type(request.trader, symbol, new_margin_type).await?;
+
+                      publish_event(MarginTypeChangedEvent {
+                          trader: request.trader,
+                          symbol,
+                          new_margin_type,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>TRADER</Performer>
+          <Description>
+            币安API: POST /fapi/v1/marginType
+            参数: symbol, marginType (ISOLATED | CROSSED)
+            注意：必须在该合约无持仓、无挂单的情况下才能变更
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 撤销订单 ============ -->
+        <Activity Id="CancelOrder" Name="撤销订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 撤销单个订单
+                  async fn execute_cancel_order(request: CancelOrderRequest) -> Result<Order, Error> {
+                      let symbol = request.symbol;
+                      let order_id = request.order_id.or(request.client_order_id);
+
+                      if order_id.is_none() {
+                          return Err(Error::OrderIdRequired);
+                      }
+
+                      // 1. 查询订单状态
+                      let order = get_order(request.trader, symbol, order_id).await?;
+
+                      // 2. 验证订单状态是否可撤销
+                      match order.status {
+                          OrderStatus::New | OrderStatus::PartiallyFilled => {
+                              // 可撤销
+                          }
+                          OrderStatus::Filled => {
+                              return Err(Error::OrderAlreadyFilled);
+                          }
+                          OrderStatus::Cancelled | OrderStatus::Expired => {
+                              return Err(Error::OrderAlreadyCancelled);
+                          }
+                          _ => {
+                              return Err(Error::InvalidOrderStatus);
+                          }
+                      }
+
+                      // 3. 调用币安API撤销订单
+                      // DELETE /fapi/v1/order
+                      let cancelled_order = binance_api_cancel_order(
+                          request.trader,
+                          symbol,
+                          order_id
+                      ).await?;
+
+                      // 4. 释放冻结的保证金（如果是开仓单）
+                      if cancelled_order.position_side != "BOTH" || cancelled_order.is_opening_order() {
+                          let frozen_margin = calculate_frozen_margin(&cancelled_order);
+                          release_margin(request.trader, frozen_margin).await?;
+                      }
+
+                      // 5. 更新订单状态
+                      update_order_status(order.order_id, OrderStatus::Cancelled).await?;
+
+                      publish_event(OrderCancelledEvent {
+                          trader: request.trader,
+                          order_id: order.order_id,
+                          symbol,
+                          cancelled_qty: order.quantity - order.executed_qty,
+                      }).await?;
+
+                      Ok(cancelled_order)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: DELETE /fapi/v1/order
+            参数: symbol, orderId 或 origClientOrderId
+            权重: 1
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 批量撤销订单 ============ -->
+        <Activity Id="CancelAllOrders" Name="批量撤销订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 批量撤销某个合约的所有挂单
+                  async fn execute_cancel_all_orders(request: CancelAllOrdersRequest) -> Result<Vec<Order>, Error> {
+                      let symbol = request.symbol;
+                      let trader = request.trader;
+
+                      // 1. 查询该合约的所有挂单
+                      let open_orders = get_open_orders_by_symbol(trader, symbol).await?;
+
+                      if open_orders.is_empty() {
+                          return Ok(vec![]);
+                      }
+
+                      // 2. 调用币安API批量撤单
+                      // DELETE /fapi/v1/allOpenOrders
+                      let cancelled_orders = binance_api_cancel_all_orders(trader, symbol).await?;
+
+                      // 3. 释放所有冻结的保证金
+                      let mut total_frozen_margin = 0u64;
+                      for order in &cancelled_orders {
+                          total_frozen_margin += calculate_frozen_margin(order);
+                      }
+                      release_margin(trader, total_frozen_margin).await?;
+
+                      // 4. 批量更新订单状态
+                      for order in &cancelled_orders {
+                          update_order_status(order.order_id, OrderStatus::Cancelled).await?;
+                      }
+
+                      publish_event(AllOrdersCancelledEvent {
+                          trader,
+                          symbol,
+                          cancelled_count: cancelled_orders.len(),
+                      }).await?;
+
+                      Ok(cancelled_orders)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: DELETE /fapi/v1/allOpenOrders
+            参数: symbol
+            权重: 1
+            用途: 紧急情况下快速清空某个合约的所有挂单
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 修改订单 ============ -->
+        <Activity Id="ModifyOrder" Name="修改订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 修改订单（2024年新增功能）
+                  async fn execute_modify_order(request: ModifyOrderRequest) -> Result<Order, Error> {
+                      let symbol = request.symbol;
+                      let order_id = request.order_id;
+
+                      // 1. 查询原订单
+                      let original_order = get_order(request.trader, symbol, order_id).await?;
+
+                      // 2. 验证订单状态
+                      match original_order.status {
+                          OrderStatus::New | OrderStatus::PartiallyFilled => {
+                              // 可修改
+                          }
+                          _ => {
+                              return Err(Error::OrderCannotBeModified);
+                          }
+                      }
+
+                      // 3. 验证修改参数
+                      let new_quantity = request.quantity.unwrap_or(original_order.quantity);
+                      let new_price = request.price.unwrap_or(original_order.price);
+
+                      if new_quantity == original_order.quantity && new_price == original_order.price {
+                          return Err(Error::NoChangesToOrder);
+                      }
+
+                      // 4. 调用币安API修改订单
+                      // PUT /fapi/v1/order
+                      let modified_order = binance_api_modify_order(
+                          request.trader,
+                          symbol,
+                          order_id,
+                          new_quantity,
+                          new_price
+                      ).await?;
+
+                      // 5. 重新计算保证金需求
+                      let old_margin = calculate_frozen_margin(&original_order);
+                      let new_margin = calculate_frozen_margin(&modified_order);
+
+                      if new_margin > old_margin {
+                          // 需要追加冻结保证金
+                          freeze_additional_margin(request.trader, new_margin - old_margin).await?;
+                      } else if new_margin < old_margin {
+                          // 释放多余的保证金
+                          release_margin(request.trader, old_margin - new_margin).await?;
+                      }
+
+                      // 6. 更新订单
+                      update_order(modified_order.clone()).await?;
+
+                      publish_event(OrderModifiedEvent {
+                          trader: request.trader,
+                          order_id,
+                          symbol,
+                          old_quantity: original_order.quantity,
+                          new_quantity,
+                          old_price: original_order.price,
+                          new_price,
+                      }).await?;
+
+                      Ok(modified_order)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: PUT /fapi/v1/order（2024年新增）
+            参数: symbol, orderId, quantity, price
+            权重: 1
+            优势: 无需撤单重挂，保留队列优先级
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 设置自动追加保证金 ============ -->
+        <Activity Id="SetAutoAddMargin" Name="设置自动追加保证金">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 设置自动追加保证金（逐仓模式）
+                  async fn execute_set_auto_add_margin(request: SetAutoAddMarginRequest) -> Result<(), Error> {
+                      let symbol = request.symbol;
+                      let position_side = request.position_side;  // BOTH | LONG | SHORT
+                      let auto_add_margin = request.auto_add_margin;  // true | false
+
+                      // 1. 验证保证金模式
+                      let position = get_position(request.trader, symbol, position_side).await?;
+                      if position.margin_type != MarginMode::Isolated {
+                          return Err(Error::OnlyIsolatedModeSupportsAutoAddMargin);
+                      }
+
+                      // 2. 调用币安API设置自动追加保证金
+                      // POST /fapi/v1/positionMargin
+                      binance_api_set_auto_add_margin(
+                          request.trader,
+                          symbol,
+                          position_side,
+                          auto_add_margin
+                      ).await?;
+
+                      // 3. 更新本地持仓配置
+                      update_position_auto_add_margin(
+                          position.position_id,
+                          auto_add_margin
+                      ).await?;
+
+                      publish_event(AutoAddMarginChangedEvent {
+                          trader: request.trader,
+                          symbol,
+                          position_side,
+                          auto_add_margin,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            币安API: POST /fapi/v1/positionMargin
+            参数: symbol, positionSide, autoAddMargin (true | false)
+            仅逐仓模式可用：当保证金不足时自动从可用余额补充
+          </Description>
           <TransitionRestrictions>
             <TransitionRestriction>
               <Join Type="XOR"/>
@@ -1064,6 +1619,24 @@
         <Transition Id="ToReduceMargin" From="RouteAction" To="ReduceMargin">
           <Condition Type="CONDITION">action == "REDUCE_MARGIN"</Condition>
         </Transition>
+        <Transition Id="ToChangePositionMode" From="RouteAction" To="ChangePositionMode">
+          <Condition Type="CONDITION">action == "CHANGE_POSITION_MODE"</Condition>
+        </Transition>
+        <Transition Id="ToChangeMarginType" From="RouteAction" To="ChangeMarginType">
+          <Condition Type="CONDITION">action == "CHANGE_MARGIN_TYPE"</Condition>
+        </Transition>
+        <Transition Id="ToCancelOrder" From="RouteAction" To="CancelOrder">
+          <Condition Type="CONDITION">action == "CANCEL_ORDER"</Condition>
+        </Transition>
+        <Transition Id="ToCancelAllOrders" From="RouteAction" To="CancelAllOrders">
+          <Condition Type="CONDITION">action == "CANCEL_ALL_ORDERS"</Condition>
+        </Transition>
+        <Transition Id="ToModifyOrder" From="RouteAction" To="ModifyOrder">
+          <Condition Type="CONDITION">action == "MODIFY_ORDER"</Condition>
+        </Transition>
+        <Transition Id="ToSetAutoAddMargin" From="RouteAction" To="SetAutoAddMargin">
+          <Condition Type="CONDITION">action == "SET_AUTO_ADD_MARGIN"</Condition>
+        </Transition>
 
         <!-- 各活动到结束节点（每个活动都可能成功或失败） -->
         <Transition Id="FromOpenToSuccess" From="OpenPosition" To="EndSuccess">
@@ -1098,6 +1671,48 @@
           <Condition Type="CONDITION">execution_success == true</Condition>
         </Transition>
         <Transition Id="FromReduceMarginToFailure" From="ReduceMargin" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromChangePositionModeToSuccess" From="ChangePositionMode" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromChangePositionModeToFailure" From="ChangePositionMode" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromChangeMarginTypeToSuccess" From="ChangeMarginType" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromChangeMarginTypeToFailure" From="ChangeMarginType" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromCancelOrderToSuccess" From="CancelOrder" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromCancelOrderToFailure" From="CancelOrder" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromCancelAllOrdersToSuccess" From="CancelAllOrders" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromCancelAllOrdersToFailure" From="CancelAllOrders" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromModifyOrderToSuccess" From="ModifyOrder" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromModifyOrderToFailure" From="ModifyOrder" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromSetAutoAddMarginToSuccess" From="SetAutoAddMargin" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromSetAutoAddMarginToFailure" From="SetAutoAddMargin" To="EndFailure">
           <Condition Type="OTHERWISE"/>
         </Transition>
       </Transitions>
