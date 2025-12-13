@@ -140,14 +140,12 @@ mod trading_lifecycle {
 
         let close_result = matching_service.close_position(partial_close_cmd).unwrap();
 
-        // 注意：当前close_position返回Pending状态（简化实现）
-        // 实际系统中应该返回Filled
-        assert_eq!(close_result.status, OrderStatus::Pending);
-        println!("✅ Step 6: 部分平仓提交成功");
+        // 验证真实平仓成功
+        assert_eq!(close_result.status, OrderStatus::Filled);
+        println!("✅ Step 6: 部分平仓成功");
         println!("   平仓数量: 0.5 BTC");
-        println!("   订单状态: {:?}（等待成交）", close_result.status);
-        println!("   注意: 当前为简化实现，订单状态为Pending\n");
         println!("   平仓价: {} USDT", close_result.avg_price.unwrap().to_f64());
+        println!("   已实现盈亏: {} USDT", close_result.realized_pnl.unwrap().to_f64());
         println!("   订单状态: {:?}\n", close_result.status);
 
         // ====================================================================

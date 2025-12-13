@@ -348,12 +348,146 @@ impl PerpOrderExchProc for MatchingService {
     }
 
     fn close_position(&self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
+        // ========================================================================
+        // 1. 命令验证
+        // ========================================================================
         cmd.validate()
             .map_err(PrepCommandError::ValidationError)?;
 
-        // 简化实现：返回pending状态
-        // 实际实现需要查询持仓、撮合平仓订单、计算盈亏等
-        Ok(ClosePositionResult::pending(OrderId::generate()))
+        // ========================================================================
+        // 2. 查询持仓并克隆数据
+        // ========================================================================
+        let mut positions = self.positions.write().unwrap();
+        let position = positions.get(&cmd.symbol)
+            .ok_or(PrepCommandError::InsufficientPosition)?
+            .clone();
+
+        // 验证持仓方向
+        if position.position_side != cmd.position_side {
+            return Err(PrepCommandError::InsufficientPosition);
+        }
+
+        // 验证持仓数量
+        if !position.has_position() {
+            return Err(PrepCommandError::InsufficientPosition);
+        }
+
+        // 确定平仓数量
+        let close_qty = cmd.quantity.unwrap_or(position.quantity);
+        if close_qty > position.quantity {
+            return Err(PrepCommandError::InsufficientPosition);
+        }
+
+        // ========================================================================
+        // 3. 生成平仓订单ID
+        // ========================================================================
+        let order_id = OrderId::generate();
+
+        // ========================================================================
+        // 4. 模拟平仓成交
+        // ========================================================================
+        let fill_price = match cmd.side {
+            Side::Buy => Price::from_f64(50000.0),  // 平空用买，使用卖一价
+            Side::Sell => Price::from_f64(49990.0), // 平多用卖，使用买一价
+        };
+
+        // 计算手续费 (0.04% Taker费率)
+        let notional = fill_price.to_f64() * close_qty.to_f64();
+        let fee = Price::from_f64(notional * 0.0004);
+
+        let trade = Trade::new(
+            TradeId::generate(),
+            order_id.clone(),
+            cmd.symbol,
+            cmd.side,
+            fill_price,
+            close_qty,
+            fee,
+            Symbol::new("USDT"),
+            false, // 市价单为Taker
+        );
+
+        // ========================================================================
+        // 5. 计算已实现盈亏
+        // ========================================================================
+        let entry_price = position.entry_price.to_f64();
+        let close_price = fill_price.to_f64();
+        let qty = close_qty.to_f64();
+
+        let realized_pnl = match position.position_side {
+            crate::proc::trading_prep_order_proc::PositionSide::Long => {
+                // 多仓平仓盈亏 = (平仓价 - 开仓价) × 数量
+                (close_price - entry_price) * qty
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Short => {
+                // 空仓平仓盈亏 = (开仓价 - 平仓价) × 数量
+                (entry_price - close_price) * qty
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Both => {
+                // 单向模式，根据side判断
+                if cmd.side == Side::Sell {
+                    (close_price - entry_price) * qty
+                } else {
+                    (entry_price - close_price) * qty
+                }
+            }
+        };
+
+        let realized_pnl_price = Price::from_f64(realized_pnl);
+
+        // ========================================================================
+        // 6. 更新持仓
+        // ========================================================================
+        let is_full_close = close_qty == position.quantity;
+
+        if is_full_close {
+            // 完全平仓 - 移除持仓
+            positions.remove(&cmd.symbol);
+        } else {
+            // 部分平仓 - 减少数量，保证金按比例减少
+            let position = positions.get_mut(&cmd.symbol).unwrap();
+            let close_ratio = close_qty.to_f64() / position.quantity.to_f64();
+
+            position.quantity = Quantity::from_f64(position.quantity.to_f64() - close_qty.to_f64());
+            position.margin = Price::from_f64(position.margin.to_f64() * (1.0 - close_ratio));
+            position.updated_at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+        }
+
+        // ========================================================================
+        // 7. 更新账户余额
+        // ========================================================================
+        {
+            let mut balance = self.balance.write().unwrap();
+            // 归还保证金 + 盈亏 - 手续费
+            let margin_return = if is_full_close {
+                position.margin.to_f64()
+            } else {
+                let close_ratio = close_qty.to_f64() / position.quantity.to_f64();
+                position.margin.to_f64() * close_ratio
+            };
+
+            *balance = Price::from_f64(
+                balance.to_f64() + margin_return + realized_pnl - fee.to_f64()
+            );
+        }
+
+        // ========================================================================
+        // 8. 获取撮合序列号
+        // ========================================================================
+        let match_seq = self.next_match_seq();
+
+        // ========================================================================
+        // 9. 返回平仓结果
+        // ========================================================================
+        Ok(ClosePositionResult::filled(
+            order_id,
+            vec![trade],
+            realized_pnl_price,
+            match_seq,
+        ))
     }
 
     fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
