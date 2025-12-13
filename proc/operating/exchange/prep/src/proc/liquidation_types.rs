@@ -5,39 +5,6 @@
 use crate::proc::trading_prep_order_proc::*;
 
 // ============================================================================
-// 持仓ID类型
-// ============================================================================
-
-/// 持仓ID（用于唯一标识持仓）
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PositionId(String);
-
-impl PositionId {
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    pub fn generate() -> Self {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        Self(format!("POS-{}", timestamp))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for PositionId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// ============================================================================
 // 强平类型
 // ============================================================================
 

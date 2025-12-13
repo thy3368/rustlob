@@ -5,8 +5,8 @@
 //! 2. 风险保障基金接管（Insurance Fund）
 //! 3. 自动减仓（ADL）
 
-use crate::proc::trading_prep_order_proc::*;
 use crate::proc::liquidation_types::*;
+use crate::proc::trading_prep_order_proc::*;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -50,7 +50,8 @@ impl LiquidationProcessor {
         // 获取持仓信息
         let position = self.get_position(&position_id).await?;
 
-        self.execute_liquidation_with_position(position, trigger_price).await
+        self.execute_liquidation_with_position(position, trigger_price)
+            .await
     }
 
     /// 使用持仓信息执行强平（用于测试或已有持仓数据的场景）
@@ -66,7 +67,6 @@ impl LiquidationProcessor {
         position: PositionInfo,
         trigger_price: Price,
     ) -> Result<LiquidationResult, PrepCommandError> {
-
         // 确定平仓方向（与持仓方向相反）
         let liquidation_side = match position.position_side {
             PositionSide::Long => Side::Sell,
@@ -111,9 +111,7 @@ impl LiquidationProcessor {
         // ========================================
         // 2️⃣ 第二级：风险保障基金接管（Insurance Fund）
         // ========================================
-        let insurance_result = self
-            .try_insurance_fund_takeover(&position)
-            .await;
+        let insurance_result = self.try_insurance_fund_takeover(&position).await;
 
         if let Ok(result) = insurance_result {
             log::info!(
@@ -165,12 +163,9 @@ impl LiquidationProcessor {
         };
 
         // 设置5秒超时等待成交
-        let order_result = tokio::time::timeout(
-            Duration::from_secs(5),
-            async {
-                self.matching_service.open_position(order_cmd)
-            },
-        )
+        let order_result = tokio::time::timeout(Duration::from_secs(5), async {
+            self.matching_service.open_position(order_cmd)
+        })
         .await;
 
         match order_result {
@@ -224,7 +219,10 @@ impl LiquidationProcessor {
         }
 
         // 执行ADL
-        let adl_result = self.adl_engine.execute_adl(position, counterparties).await?;
+        let adl_result = self
+            .adl_engine
+            .execute_adl(position, counterparties)
+            .await?;
 
         // 通知被ADL的对手方
         for counterparty_id in &adl_result.affected_positions {
@@ -245,19 +243,26 @@ impl LiquidationProcessor {
     }
 
     /// 获取持仓信息
-    async fn get_position(&self, position_id: &PositionId) -> Result<PositionInfo, PrepCommandError> {
+    async fn get_position(
+        &self,
+        position_id: &PositionId,
+    ) -> Result<PositionInfo, PrepCommandError> {
         // 尝试从 matching_service 查询持仓
         // 但是 query_position 需要 Symbol，而我们只有 position_id
         // 这是一个设计问题：需要一个 position_id -> Symbol 的映射
 
         // 临时解决方案：从 position_id 中提取信息
         // 或者在实际系统中，应该有一个 PositionRepository 来管理这个映射
-        log::warn!("TODO: Implement proper get_position by position_id: {}", position_id);
+        log::warn!(
+            "TODO: Implement proper get_position by position_id: {}",
+            position_id
+        );
 
         // 返回错误，提示需要实现
-        Err(PrepCommandError::Unknown(
-            format!("Position lookup by ID not implemented. Need PositionRepository. ID: {}", position_id)
-        ))
+        Err(PrepCommandError::Unknown(format!(
+            "Position lookup by ID not implemented. Need PositionRepository. ID: {}",
+            position_id
+        )))
     }
 
     /// 计算强平损失
@@ -347,7 +352,10 @@ impl LiquidationProcessor {
         })
     }
 
-    async fn notify_adl_counterparty(&self, position_id: &PositionId) -> Result<(), PrepCommandError> {
+    async fn notify_adl_counterparty(
+        &self,
+        position_id: &PositionId,
+    ) -> Result<(), PrepCommandError> {
         // 发送通知给被ADL的用户
         log::info!("📧 Sending ADL notification to position {}", position_id);
         // TODO: 实际实现：发送邮件/推送通知
@@ -424,22 +432,5 @@ mod tests {
         let liq_price = calculate_liquidation_price(entry_price, leverage, PositionSide::Short);
 
         assert!((liq_price.to_f64() - 54500.0).abs() < 1.0);
-    }
-
-    #[test]
-    fn test_position_id_generation() {
-        let id1 = PositionId::generate();
-        // Small delay to ensure different timestamp
-        std::thread::sleep(std::time::Duration::from_nanos(100));
-        let id2 = PositionId::generate();
-
-        // Both should start with POS-
-        assert!(id1.as_str().starts_with("POS-"));
-        assert!(id2.as_str().starts_with("POS-"));
-
-        // They should be different (though in rare cases might be the same)
-        // This is acceptable for a simple timestamp-based ID generator
-        println!("ID1: {}", id1.as_str());
-        println!("ID2: {}", id2.as_str());
     }
 }

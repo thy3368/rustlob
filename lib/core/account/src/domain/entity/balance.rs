@@ -73,6 +73,25 @@ impl Balance {
         self.frozen >= amount
     }
 
+    #[inline]
+    pub fn add_balance(&mut self, amount: u64, now: Timestamp) {
+        self.available += amount;
+        self.version += 1;
+        self.updated_at = now;
+    }
+
+    #[inline]
+    pub fn deduct_balance(&mut self, amount: u64, now: Timestamp) {
+
+        // if self.available < amount {
+        //     return Err(PrepCommandError::InsufficientBalance);
+        // }
+        self.available -= amount;
+
+        self.version += 1;
+        self.updated_at = now;
+    }
+
     /// 检查余额是否为空
     #[inline]
     pub fn is_empty(&self) -> bool {

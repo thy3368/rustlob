@@ -16,3 +16,4 @@ pub use balance::{Balance, BalanceOp};
 pub use command::{AccountCommand, AccountCommandResult};
 pub use error::BalanceError;
 pub use types::{AccountId, AssetId, OrderId, Side, Timestamp, TradingPair, UserId};
+pub use position::{PositionId, PositionInfo, PositionSide, Price, Quantity, Symbol};

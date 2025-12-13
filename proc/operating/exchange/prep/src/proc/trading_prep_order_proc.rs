@@ -4,7 +4,13 @@
 //! 遵循Clean Architecture和低延迟优化标准
 
 use std::fmt;
-use crate::proc::liquidation_types::PositionId;
+
+// ============================================================================
+// 从 account crate 导入持仓相关类型（Clean Architecture - 统一类型管理）
+// ============================================================================
+pub use account::{
+    PositionId, PositionInfo, PositionSide, Price, Quantity, Symbol,
+};
 
 // ============================================================================
 // 核心枚举类型
@@ -61,30 +67,6 @@ impl OrderType {
     }
 }
 
-/// 持仓方向（币安对冲模式）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum PositionSide {
-    /// 单向持仓模式
-    Both = 1,
-    /// 多头持仓
-    Long = 2,
-    /// 空头持仓
-    Short = 3,
-}
-
-impl PositionSide {
-    /// 转换为字符串
-    #[inline(always)]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            PositionSide::Both => "BOTH",
-            PositionSide::Long => "LONG",
-            PositionSide::Short => "SHORT",
-        }
-    }
-}
-
 /// 订单有效期类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -109,141 +91,6 @@ impl TimeInForce {
             TimeInForce::FOK => "FOK",
             TimeInForce::GTX => "GTX",
         }
-    }
-}
-
-// ============================================================================
-// 值对象 - 固定精度算术
-// ============================================================================
-
-/// 价格（8位小数精度）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(transparent)]
-pub struct Price(i64);
-
-impl Price {
-    const SCALE: i64 = 100_000_000;
-
-    /// 从原始值创建
-    #[inline(always)]
-    pub const fn from_raw(raw: i64) -> Self {
-        Self(raw)
-    }
-
-    /// 从浮点数创建
-    #[inline(always)]
-    pub fn from_f64(value: f64) -> Self {
-        Self((value * Self::SCALE as f64) as i64)
-    }
-
-    /// 获取原始值
-    #[inline(always)]
-    pub const fn raw(self) -> i64 {
-        self.0
-    }
-
-    /// 转换为浮点数
-    #[inline(always)]
-    pub fn to_f64(self) -> f64 {
-        self.0 as f64 / Self::SCALE as f64
-    }
-
-    /// 是否为正数
-    #[inline(always)]
-    pub const fn is_positive(self) -> bool {
-        self.0 > 0
-    }
-}
-
-impl fmt::Display for Price {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.8}", self.to_f64())
-    }
-}
-
-/// 数量（8位小数精度）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(transparent)]
-pub struct Quantity(i64);
-
-impl Quantity {
-    const SCALE: i64 = 100_000_000;
-
-    /// 从原始值创建
-    #[inline(always)]
-    pub const fn from_raw(raw: i64) -> Self {
-        Self(raw)
-    }
-
-    /// 从浮点数创建
-    #[inline(always)]
-    pub fn from_f64(value: f64) -> Self {
-        Self((value * Self::SCALE as f64) as i64)
-    }
-
-    /// 获取原始值
-    #[inline(always)]
-    pub const fn raw(self) -> i64 {
-        self.0
-    }
-
-    /// 转换为浮点数
-    #[inline(always)]
-    pub fn to_f64(self) -> f64 {
-        self.0 as f64 / Self::SCALE as f64
-    }
-
-    /// 是否为正数
-    #[inline(always)]
-    pub const fn is_positive(self) -> bool {
-        self.0 > 0
-    }
-
-    /// 是否为零
-    #[inline(always)]
-    pub const fn is_zero(self) -> bool {
-        self.0 == 0
-    }
-}
-
-impl fmt::Display for Quantity {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.8}", self.to_f64())
-    }
-}
-
-/// 交易对符号
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol([u8; 16]);
-
-impl Symbol {
-    /// 创建新的交易对符号
-    #[inline]
-    pub fn new(s: &str) -> Self {
-        let mut data = [0u8; 16];
-        let bytes = s.as_bytes();
-        let len = bytes.len().min(16);
-        data[..len].copy_from_slice(&bytes[..len]);
-        Self(data)
-    }
-
-    /// 转换为字符串
-    #[inline]
-    pub fn as_str(&self) -> &str {
-        let len = self.0.iter().position(|&b| b == 0).unwrap_or(16);
-        unsafe { std::str::from_utf8_unchecked(&self.0[..len]) }
-    }
-}
-
-impl fmt::Debug for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-impl fmt::Display for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }
 
@@ -1131,204 +978,6 @@ impl QueryPositionCommand {
     }
 }
 
-/// 持仓信息
-#[derive(Debug, Clone)]
-pub struct PositionInfo {
-    /// 所属用户ID
-    pub user_id: UserId,
-    /// 持仓ID
-    pub position_id: PositionId,
-    /// 交易对
-    pub symbol: Symbol,
-    /// 持仓方向
-    pub position_side: PositionSide,
-    /// 持仓数量（正数表示多头，负数表示空头）
-    pub quantity: Quantity,
-    /// 持仓均价
-    pub entry_price: Price,
-    /// 标记价格（用于计算未实现盈亏）
-    pub mark_price: Price,
-    /// 未实现盈亏
-    pub unrealized_pnl: Price,
-    /// 已实现盈亏
-    pub realized_pnl: Price,
-    /// 杠杆倍数
-    pub leverage: u8,
-    /// 保证金
-    pub margin: Price,
-    /// 强平价格
-    pub liquidation_price: Option<Price>,
-    /// 更新时间戳（毫秒）
-    pub updated_at: u64,
-}
-
-impl PositionInfo {
-    /// 创建空持仓
-    pub fn empty(symbol: Symbol, position_side: PositionSide) -> Self {
-        Self {
-            position_id: PositionId::generate(),
-            symbol,
-            position_side,
-            quantity: Quantity::from_raw(0),
-            entry_price: Price::from_raw(0),
-            mark_price: Price::from_raw(0),
-            unrealized_pnl: Price::from_raw(0),
-            realized_pnl: Price::from_raw(0),
-            leverage: 1,
-            margin: Price::from_raw(0),
-            liquidation_price: None,
-            updated_at: current_timestamp_ms(),
-        }
-    }
-
-    /// 是否有持仓
-    pub fn has_position(&self) -> bool {
-        self.quantity.is_positive()
-    }
-
-    /// 是否为多头
-    pub fn is_long(&self) -> bool {
-        self.position_side == PositionSide::Long && self.quantity.is_positive()
-    }
-
-    /// 是否为空头
-    pub fn is_short(&self) -> bool {
-        self.position_side == PositionSide::Short && self.quantity.is_positive()
-    }
-
-    // ========================================================================
-    // 资金费用计算方法
-    // ========================================================================
-
-    /// 计算下次资金费用
-    ///
-    /// # 参数
-    /// - `funding_rate`: 资金费率
-    ///
-    /// # 返回
-    /// - 资金费用（正数=收入，负数=支出）
-    ///
-    /// # 计算公式
-    /// ```text
-    /// 资金费用 = 持仓名义价值 × 资金费率
-    /// 持仓名义价值 = 标记价格 × 持仓数量
-    ///
-    /// 正费率时：
-    /// - 多头持仓：支付费用（返回负数）
-    /// - 空头持仓：收取费用（返回正数）
-    ///
-    /// 负费率时：
-    /// - 多头持仓：收取费用（返回正数）
-    /// - 空头持仓：支付费用（返回负数）
-    /// ```
-    ///
-    /// # 示例
-    /// ```ignore
-    /// let position = query_position(Symbol::new("BTCUSDT"))?;
-    /// let mark_price = query_mark_price(Symbol::new("BTCUSDT"))?[0];
-    ///
-    /// let next_fee = position.calculate_next_funding_fee(mark_price.funding_rate);
-    ///
-    /// if next_fee.raw() > 0 {
-    ///     println!("下次将收取: {} USDT", next_fee.to_f64());
-    /// } else {
-    ///     println!("下次将支付: {} USDT", next_fee.to_f64().abs());
-    /// }
-    /// ```
-    pub fn calculate_next_funding_fee(&self, funding_rate: Price) -> Price {
-        if !self.has_position() {
-            return Price::from_raw(0);
-        }
-
-        // 持仓名义价值 = 标记价格 × 持仓数量
-        let notional = self.mark_price.to_f64() * self.quantity.to_f64();
-
-        // 基础费用 = 名义价值 × 费率
-        let base_fee = notional * funding_rate.to_f64();
-
-        // 根据持仓方向调整符号
-        // 正费率时：多头支付（负），空头收取（正）
-        // 负费率时：多头收取（正），空头支付（负）
-        let fee = if self.position_side == PositionSide::Long {
-            -base_fee  // 多头：费率为正时支付，为负时收取
-        } else {
-            base_fee   // 空头：费率为正时收取，为负时支付
-        };
-
-        Price::from_f64(fee)
-    }
-
-    /// 预估持仓期间总资金费用
-    ///
-    /// # 参数
-    /// - `avg_funding_rate`: 平均资金费率（可从历史费率计算）
-    /// - `hours`: 持仓小时数
-    ///
-    /// # 返回
-    /// - 预估总资金费用（正数=收入，负数=支出）
-    ///
-    /// # 说明
-    /// - 资金费率每8小时结算一次
-    /// - 此方法假设费率保持不变，实际费率会波动
-    /// - 用于开仓前评估持仓成本
-    ///
-    /// # 示例
-    /// ```ignore
-    /// let position = query_position(Symbol::new("BTCUSDT"))?;
-    ///
-    /// // 查询最近30天平均费率
-    /// let history = query_funding_rate_history(
-    ///     Symbol::new("BTCUSDT"),
-    ///     30天前, 现在
-    /// )?;
-    /// let avg_rate = calculate_avg_funding_rate(&history);
-    ///
-    /// // 预估7天持仓成本
-    /// let estimated_cost = position.estimate_funding_cost(
-    ///     avg_rate,
-    ///     7 * 24  // 7天 = 168小时
-    /// );
-    ///
-    /// println!("预估7天资金费用: {} USDT", estimated_cost.to_f64());
-    /// ```
-    pub fn estimate_funding_cost(&self, avg_funding_rate: Price, hours: u64) -> Price {
-        if !self.has_position() {
-            return Price::from_raw(0);
-        }
-
-        // 计算结算次数（每8小时结算一次）
-        let settlements = hours / 8;
-
-        // 单次费用
-        let single_fee = self.calculate_next_funding_fee(avg_funding_rate);
-
-        // 总费用 = 单次费用 × 结算次数
-        Price::from_f64(single_fee.to_f64() * settlements as f64)
-    }
-
-    /// 计算持仓名义价值
-    ///
-    /// # 返回
-    /// - 持仓名义价值（标记价格 × 持仓数量）
-    ///
-    /// # 用途
-    /// - 计算资金费用
-    /// - 计算保证金占用
-    /// - 风险评估
-    pub fn notional_value(&self) -> Price {
-        let value = self.mark_price.to_f64() * self.quantity.to_f64();
-        Price::from_f64(value)
-    }
-}
-
-/// 获取当前时间戳（毫秒）
-fn current_timestamp_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
-}
 
 // ============================================================================
 // 订单管理命令
@@ -1520,6 +1169,15 @@ impl CancelAllOrdersResult {
 // ============================================================================
 // 第一优先级核心命令 - 账户配置和查询
 // ============================================================================
+
+/// 获取当前时间戳（毫秒）
+fn current_timestamp_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
 
 /// 保证金类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

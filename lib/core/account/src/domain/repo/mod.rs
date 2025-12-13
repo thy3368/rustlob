@@ -9,3 +9,4 @@ pub mod position_repo;
 
 pub use account_repo::AccountRepo;
 pub use balance_repo::BalanceRepo;
+pub use position_repo::{Position, PositionRepo};
