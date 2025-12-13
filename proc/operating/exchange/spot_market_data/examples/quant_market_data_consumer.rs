@@ -583,7 +583,7 @@ fn main() {
 
     // 查询 L1 数据
     let query_l1 = QueryLevel1::new(symbol_id, 1000);
-    match processor.handle_query_level1(query_l1) {
+    match processor.query_level1(query_l1) {
         Ok(result) => {
             hft_strategy.analyze_level1(&result.snapshot);
         }
@@ -595,7 +595,7 @@ fn main() {
     // 批量查询多个交易对的 L1 数据
     println!("\n\n批量查询多个交易对:");
     let query_batch = QueryLevel1Batch::new(vec![1, 2, 3], 1000);
-    let batch_result = processor.handle_query_level1_batch(query_batch);
+    let batch_result = processor.query_level1_batch(query_batch);
     println!("成功查询: {} 个交易对", batch_result.snapshots.len());
     println!("失败查询: {} 个交易对", batch_result.failed_symbols.len());
 
@@ -609,7 +609,7 @@ fn main() {
 
     // 查询 L2 数据（10档深度）
     let query_l2 = QueryLevel2::depth_10(symbol_id, 1000);
-    let l2_result = processor.handle_query_level2(query_l2);
+    let l2_result = processor.query_level2(query_l2);
     mm_strategy.analyze_level2(&l2_result.snapshot);
 
     // ========================================================================
@@ -622,7 +622,7 @@ fn main() {
 
     // 查询 L3 数据（完整订单簿）
     let query_l3 = QueryLevel3::new(symbol_id, 1000);
-    let l3_result = processor.handle_query_level3(query_l3);
+    let l3_result = processor.query_level3(query_l3);
     large_order_strategy.analyze_level3(&l3_result.snapshot);
 
     // ========================================================================
@@ -635,7 +635,7 @@ fn main() {
 
     // 查询增量数据
     let query_incremental = QueryIncrementalData::new(symbol_id, 1000, 1005);
-    match processor.handle_query_incremental_data(query_incremental) {
+    match processor.query_incremental_data(query_incremental) {
         Ok(result) => {
             monitor.process_incremental_data(&result);
 

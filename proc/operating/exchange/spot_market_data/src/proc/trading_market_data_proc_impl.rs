@@ -42,7 +42,7 @@ where
     // ========================================================================
 
     /// 处理 Level 1 查询
-    fn handle_query_level1(
+    fn query_level1(
         &self,
         query: QueryLevel1,
     ) -> Result<Level1QueryResult, MarketDataQueryError> {
@@ -55,7 +55,7 @@ where
     }
 
     /// 处理 Level 1 批量查询
-    fn handle_query_level1_batch(&self, query: QueryLevel1Batch) -> Level1BatchQueryResult {
+    fn query_level1_batch(&self, query: QueryLevel1Batch) -> Level1BatchQueryResult {
         let mut snapshots = Vec::new();
         let mut failed_symbols = Vec::new();
 
@@ -80,7 +80,7 @@ where
     // ========================================================================
 
     /// 处理 Level 2 查询
-    fn handle_query_level2(&self, query: QueryLevel2) -> Level2QueryResult {
+    fn query_level2(&self, query: QueryLevel2) -> Level2QueryResult {
         let snapshot = self.snapshot_repo.query_level2(
             query.symbol_id,
             query.sequence,
@@ -95,7 +95,7 @@ where
     // ========================================================================
 
     /// 处理 Level 3 查询
-    fn handle_query_level3(&self, query: QueryLevel3) -> Level3QueryResult {
+    fn query_level3(&self, query: QueryLevel3) -> Level3QueryResult {
         let snapshot = self
             .snapshot_repo
             .query_level3(query.symbol_id, query.sequence);
@@ -108,7 +108,7 @@ where
     // ========================================================================
 
     /// 处理增量数据查询
-    fn handle_query_incremental_data(
+    fn query_incremental_data(
         &self,
         query: QueryIncrementalData,
     ) -> Result<IncrementalDataResult, MarketDataQueryError> {
