@@ -834,13 +834,80 @@ impl XPDLWorkflowEngine {
 
 ## 12. 参考资料
 
+### 12.1 外部标准和文档
+
 - **XPDL 2.2 规范**：http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd
+- **WFMC 官方网站**：http://www.wfmc.org/
 - **币安 API 文档**：https://binance-docs.github.io/apidocs/futures/en/
 - **CQRS 模式**：https://martinfowler.com/bliki/CQRS.html
 - **事件溯源**：https://martinfowler.com/eaaDev/EventSourcing.html
 
+### 12.2 本项目相关文件
+
+**XPDL 流程定义**：
+```
+/design/process/perp_order_exch_proc.xpdl
+```
+- 完整的永续合约交易流程 XPDL 定义
+- 包含主流程、强平子流程、资金费率子流程
+- 包含所有类型定义和活动实现
+
+**业务流程文档**：
+```
+/从开仓到资金费率完整流程.md
+```
+- 业务流程全景图和详细说明
+- 各个活动的前置条件和后置条件
+- 风控机制和资金费率计算逻辑
+
+**代码实现目录**：
+
+| 层次 | 路径 | 说明 |
+|------|------|------|
+| **领域层** | `/lib/core/account/src/domain/` | 实体、值对象、领域服务 |
+| **用例层** | `/lib/core/account/src/application/` | 用例实现（OpenPosition 等） |
+| **基础设施层** | `/lib/core/account/src/infrastructure/` | 仓储实现、事件发布 |
+| **流程引擎** | `/proc/operating/exchange/prep/` | XPDL 流程引擎和编排逻辑 |
+| **测试用例** | `/lib/core/account/tests/` | BDD 行为测试 |
+
+**配置文件**：
+```
+/lib/core/exchange/lob/Cargo.toml          # 撮合引擎配置
+/lib/core/account/Cargo.toml               # 账户模块配置
+/proc/operating/exchange/prep/Cargo.toml   # 流程引擎配置
+```
+
+### 12.3 架构设计文档
+
+**Clean Architecture 指南**：
+```
+~/.claude/CLAUDE.md
+```
+- Clean Architecture 架构要求（第二部分）
+- 依赖注入、分层设计、测试策略
+
+**低延迟优化指南**：
+```
+~/.claude/CLAUDE.md
+ld/CPP_LOW_LATENCY_GUIDE.md
+ld/RUST_LOW_LATENCY_GUIDE.md
+ld/X86_LOW_LATENCY_GUIDE.md
+ld/ARM64_LOW_LATENCY_GUIDE.md
+```
+- 超低延迟性能优化标准
+- 编译器优化、缓存对齐、SIMD 指令
+
 ---
 
-**文档版本**：v1.0
+**文档版本**：v1.1
 **创建日期**：2025-12-14
+**最后更新**：2025-12-14
 **作者**：RustLOB Exchange Team
+
+**更新记录**：
+- v1.1 (2025-12-14):
+  - 添加完整流程图示例（第 5.3 节）
+  - 扩展事件溯源部分，增加事件定义和事件流示例（第 9.3 节）
+  - 将建模检查清单改为表格格式（第 11.3 节）
+  - 新增本项目相关文件索引（第 12.2 节）
+- v1.0 (2025-12-14): 初始版本
