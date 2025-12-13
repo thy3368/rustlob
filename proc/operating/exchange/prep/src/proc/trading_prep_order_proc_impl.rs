@@ -114,6 +114,7 @@ impl<R: BalanceRepo> MatchingService<R> {
         let mut repo = self.balance_repo.lock().unwrap();
 
         let balance = repo.get_or_create(self.account_id, self.asset_id, now);
+        balance.add_balance(amount,now);
         balance.available += amount;
         balance.version += 1;
         balance.updated_at = now;
@@ -424,14 +425,11 @@ impl PerpOrderExchProc for MatchingService {
         let required_margin = self.calculate_required_margin(estimate_price, cmd.quantity, leverage);
 
         // 检查余额并立即扣除保证金（冻结效果）
-        {
-            let mut balance = self.balance.write().unwrap();
-            if *balance < required_margin {
-                return Err(PrepCommandError::InsufficientBalance);
-            }
-            // 扣除保证金（订单提交即冻结）
-            *balance = Price::from_f64(balance.to_f64() - required_margin.to_f64());
-        }
+        let now = self.now();
+        let required_margin_u64 = Self::price_to_u64(required_margin);
+
+        // 使用 BalanceRepo 扣除保证金
+        self.deduct_balance(required_margin_u64, now)?;
 
         // ========================================================================
         // 4. 生成订单ID
@@ -523,10 +521,15 @@ impl PerpOrderExchProc for MatchingService {
 
             // 扣除手续费
             let total_fee: f64 = trades.iter().map(|t| t.fee.to_f64()).sum();
-            {
-                let mut balance = self.balance.write().unwrap();
-                *balance = Price::from_f64(balance.to_f64() - total_fee);
-            }
+            let total_fee_u64 = Self::price_to_u64(Price::from_f64(total_fee));
+            let now = self.now();
+
+            // 使用 BalanceRepo 扣除手续费
+            self.deduct_balance(total_fee_u64, now)
+                .unwrap_or_else(|_| {
+                    // 手续费扣除失败（理论上不应该发生，因为保证金已经冻结）
+                    log::error!("Failed to deduct fee {} for order {:?}", total_fee, order_id);
+                });
 
             // 获取撮合序列号
             let match_seq = self.next_match_seq();
@@ -651,20 +654,40 @@ impl PerpOrderExchProc for MatchingService {
         // ========================================================================
         // 7. 更新账户余额
         // ========================================================================
-        {
-            let mut balance = self.balance.write().unwrap();
-            // 归还保证金 + 盈亏 - 手续费
-            let margin_return = if is_full_close {
-                position.margin.to_f64()
-            } else {
-                let close_ratio = close_qty.to_f64() / position.quantity.to_f64();
-                position.margin.to_f64() * close_ratio
-            };
+        let now = self.now();
 
-            *balance = Price::from_f64(
-                balance.to_f64() + margin_return + realized_pnl - fee.to_f64()
-            );
+        // 计算归还的保证金
+        let margin_return = if is_full_close {
+            position.margin.to_f64()
+        } else {
+            let close_ratio = close_qty.to_f64() / position.quantity.to_f64();
+            position.margin.to_f64() * close_ratio
+        };
+
+        // 归还保证金
+        let margin_return_u64 = Self::price_to_u64(Price::from_f64(margin_return));
+        self.add_balance(margin_return_u64, now);
+
+        // 结算盈亏（可能为负）
+        if realized_pnl >= 0.0 {
+            // 盈利入账
+            let pnl_u64 = Self::price_to_u64(Price::from_f64(realized_pnl));
+            self.add_balance(pnl_u64, now);
+        } else {
+            // 亏损扣除
+            let loss_u64 = Self::price_to_u64(Price::from_f64(-realized_pnl));
+            self.deduct_balance(loss_u64, now)
+                .unwrap_or_else(|_| {
+                    log::error!("Failed to deduct loss {} for position {:?}", -realized_pnl, cmd.symbol);
+                });
         }
+
+        // 扣除手续费
+        let fee_u64 = Self::price_to_u64(fee);
+        self.deduct_balance(fee_u64, now)
+            .unwrap_or_else(|_| {
+                log::error!("Failed to deduct fee {} for close position {:?}", fee.to_f64(), cmd.symbol);
+            });
 
         // ========================================================================
         // 8. 获取撮合序列号
@@ -695,9 +718,10 @@ impl PerpOrderExchProc for MatchingService {
             if unfilled_quantity > 0.0 {
                 let refund_ratio = unfilled_quantity / order.quantity.to_f64();
                 let refund_margin = Price::from_f64(order.frozen_margin.to_f64() * refund_ratio);
+                let refund_u64 = Self::price_to_u64(refund_margin);
 
-                let mut balance = self.balance.write().unwrap();
-                *balance = Price::from_f64(balance.to_f64() + refund_margin.to_f64());
+                let now = self.now();
+                self.add_balance(refund_u64, now);
             }
 
             order.status = OrderStatus::Cancelled;
@@ -736,7 +760,7 @@ impl PerpOrderExchProc for MatchingService {
         let mut orders = self.orders.write().unwrap();
         let mut cancelled_ids = Vec::new();
         let mut failed_count = 0;
-        let mut total_refund = 0.0;
+        let mut total_refund_u64 = 0u64;
 
         for (order_id, order) in orders.iter_mut() {
             let should_cancel = match (&cmd.symbol, &cmd.position_side) {
@@ -751,7 +775,8 @@ impl PerpOrderExchProc for MatchingService {
                 let unfilled_quantity = order.quantity.to_f64() - order.filled_quantity.to_f64();
                 if unfilled_quantity > 0.0 {
                     let refund_ratio = unfilled_quantity / order.quantity.to_f64();
-                    total_refund += order.frozen_margin.to_f64() * refund_ratio;
+                    let refund_margin = order.frozen_margin.to_f64() * refund_ratio;
+                    total_refund_u64 += Self::price_to_u64(Price::from_f64(refund_margin));
                 }
 
                 order.status = OrderStatus::Cancelled;
@@ -762,9 +787,9 @@ impl PerpOrderExchProc for MatchingService {
         }
 
         // 归还总保证金
-        if total_refund > 0.0 {
-            let mut balance = self.balance.write().unwrap();
-            *balance = Price::from_f64(balance.to_f64() + total_refund);
+        if total_refund_u64 > 0 {
+            let now = self.now();
+            self.add_balance(total_refund_u64, now);
         }
 
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
@@ -778,12 +803,16 @@ impl PerpOrderExchProc for MatchingService {
         let old_leverage = *config.get(&cmd.symbol).unwrap_or(&1);
         config.insert(cmd.symbol, cmd.leverage);
 
+        // 获取当前余额
+        let balance_u64 = self.get_balance();
+        let balance = Self::u64_to_price(balance_u64);
+
         Ok(SetLeverageResult {
             symbol: cmd.symbol,
             old_leverage,
             new_leverage: cmd.leverage,
             position_margin_change: Price::from_raw(0),
-            available_balance: *self.balance.read().unwrap(),
+            available_balance: balance,
             liquidation_price: None,
             max_open_quantity: Quantity::from_f64(1000.0),
         })
@@ -855,12 +884,13 @@ impl PerpOrderExchQueryProc for MatchingService {
     }
 
     fn query_account_balance(&self, cmd: QueryAccountBalanceCommand) -> Result<Vec<AccountBalance>, PrepCommandError> {
-        let balance = self.balance.read().unwrap();
+        let balance_u64 = self.get_balance();
+        let balance = Self::u64_to_price(balance_u64);
 
         let account_balance = AccountBalance::new(
             cmd.asset.unwrap_or_else(|| Symbol::new("USDT")),
-            *balance,
-            *balance,
+            balance,
+            balance,
             Price::from_raw(0),
             Price::from_raw(0),
             Price::from_raw(0),
@@ -869,17 +899,18 @@ impl PerpOrderExchQueryProc for MatchingService {
         Ok(vec![account_balance])
     }
 
-    fn query_account_info(&self, cmd: QueryAccountInfoCommand) -> Result<AccountInfo, PrepCommandError> {
-        let balance = self.balance.read().unwrap();
-        let positions = self.positions.read().unwrap();
+    fn query_account_info(&self, _cmd: QueryAccountInfoCommand) -> Result<AccountInfo, PrepCommandError> {
+        let balance_u64 = self.get_balance();
+        let balance = Self::u64_to_price(balance_u64);
 
+        let positions = self.positions.read().unwrap();
         let positions_vec: Vec<PositionInfo> = positions.values().cloned().collect();
 
         Ok(AccountInfo::new(
-            *balance,
+            balance,
             Price::from_raw(0),
             Price::from_raw(0),
-            *balance,
+            balance,
             positions_vec,
             Vec::new(),
         ))
