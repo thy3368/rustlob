@@ -4,6 +4,7 @@
 //! 遵循Clean Architecture和低延迟优化标准
 
 use std::fmt;
+use crate::proc::liquidation_types::PositionId;
 
 // ============================================================================
 // 核心枚举类型
@@ -1133,6 +1134,8 @@ impl QueryPositionCommand {
 /// 持仓信息
 #[derive(Debug, Clone)]
 pub struct PositionInfo {
+    /// 持仓ID
+    pub position_id: PositionId,
     /// 交易对
     pub symbol: Symbol,
     /// 持仓方向
@@ -1161,6 +1164,7 @@ impl PositionInfo {
     /// 创建空持仓
     pub fn empty(symbol: Symbol, position_side: PositionSide) -> Self {
         Self {
+            position_id: PositionId::generate(),
             symbol,
             position_side,
             quantity: Quantity::from_raw(0),
@@ -2586,7 +2590,7 @@ impl OrderBookSnapshot {
 /// }
 ///
 /// impl PerpOrderProc for LocalMatchingEngine {
-///     fn handle_open_position(&mut self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+///     fn handle_open_position(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
 ///         // 1. 验证命令
 ///         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 ///
@@ -2629,7 +2633,7 @@ impl OrderBookSnapshot {
 ///         }
 ///     }
 ///
-///     fn handle_close_position(&mut self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
+///     fn handle_close_position(&self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
 ///         // 1. 验证命令
 ///         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 ///
@@ -2660,7 +2664,7 @@ impl OrderBookSnapshot {
 ///         ))
 ///     }
 ///
-///     fn cancel_order(&mut self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
+///     fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
 ///         // 从订单簿中移除订单
 ///         self.order_book.cancel_order(&cmd.order_id)?;
 ///         Ok(CancelOrderResult::success(cmd.order_id))
@@ -2698,7 +2702,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - `RiskControlRejected`: 风控拒绝
     /// - `MatchingEngineError`: 撮合引擎内部错误
     fn open_position(
-        &mut self,
+        &self,
         cmd: OpenPositionCommand,
     ) -> Result<OpenPositionResult, PrepCommandError>;
 
@@ -2716,7 +2720,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - `InsufficientPosition`: 持仓不足
     /// - `MatchingEngineError`: 撮合引擎内部错误
     fn close_position(
-        &mut self,
+        &self,
         cmd: ClosePositionCommand,
     ) -> Result<ClosePositionResult, PrepCommandError>;
 
@@ -2737,7 +2741,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - 已成交的订单无法取消，返回 `CancelOrderResult::failed`
     /// - 已取消的订单重复取消，返回成功
     fn cancel_order(
-        &mut self,
+        &self,
         cmd: CancelOrderCommand,
     ) -> Result<CancelOrderResult, PrepCommandError>;
 
@@ -2760,7 +2764,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - 修改订单会重新进入订单簿撮合队列
     /// - 至少要修改价格或数量中的一项
     fn modify_order(
-        &mut self,
+        &self,
         cmd: ModifyOrderCommand,
     ) -> Result<ModifyOrderResult, PrepCommandError>;
 
@@ -2783,7 +2787,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - 已成交的订单无法取消
     /// - 返回成功取消的订单数量和失败的订单数量
     fn cancel_all_orders(
-        &mut self,
+        &self,
         cmd: CancelAllOrdersCommand,
     ) -> Result<CancelAllOrdersResult, PrepCommandError>;
 
@@ -2813,7 +2817,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - 降低杠杆会锁定更多保证金
     /// - 提高杠杆会释放保证金但增加强平风险
     fn set_leverage(
-        &mut self,
+        &self,
         cmd: SetLeverageCommand,
     ) -> Result<SetLeverageResult, PrepCommandError>;
 
@@ -2837,7 +2841,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - 必须在无持仓时设置
     /// - 每个交易对独立设置
     fn set_margin_type(
-        &mut self,
+        &self,
         cmd: SetMarginTypeCommand,
     ) -> Result<SetMarginTypeResult, PrepCommandError>;
 
@@ -2862,7 +2866,7 @@ pub trait PerpOrderExchProc: Send + Sync {
     /// - ⚠️ 必须在无持仓时设置
     /// - ⚠️ 切换后无法撤销
     fn set_position_mode(
-        &mut self,
+        &self,
         cmd: SetPositionModeCommand,
     ) -> Result<SetPositionModeResult, PrepCommandError>;
 }
