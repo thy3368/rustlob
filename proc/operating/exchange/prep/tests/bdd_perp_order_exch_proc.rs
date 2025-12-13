@@ -137,7 +137,7 @@ impl MockMatchingService {
 }
 
 impl PerpOrderExchProc for MockMatchingService {
-    fn open_position(&mut self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+    fn open_position(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
         // 验证命令
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
@@ -194,7 +194,7 @@ impl PerpOrderExchProc for MockMatchingService {
         }
     }
 
-    fn close_position(&mut self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
+    fn close_position(&self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
         // 验证命令
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
@@ -255,7 +255,7 @@ impl PerpOrderExchProc for MockMatchingService {
         }
     }
 
-    fn cancel_order(&mut self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
+    fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
         if let Some(order) = self.orders.remove(&cmd.order_id) {
             if order.status.is_final() {
                 return Ok(CancelOrderResult::failed(cmd.order_id, order.status));
@@ -266,7 +266,7 @@ impl PerpOrderExchProc for MockMatchingService {
         }
     }
 
-    fn modify_order(&mut self, cmd: ModifyOrderCommand) -> Result<ModifyOrderResult, PrepCommandError> {
+    fn modify_order(&self, cmd: ModifyOrderCommand) -> Result<ModifyOrderResult, PrepCommandError> {
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
         if let Some(order) = self.orders.get_mut(&cmd.order_id) {
@@ -285,7 +285,7 @@ impl PerpOrderExchProc for MockMatchingService {
         }
     }
 
-    fn cancel_all_orders(&mut self, cmd: CancelAllOrdersCommand) -> Result<CancelAllOrdersResult, PrepCommandError> {
+    fn cancel_all_orders(&self, cmd: CancelAllOrdersCommand) -> Result<CancelAllOrdersResult, PrepCommandError> {
         let mut cancelled_ids = Vec::new();
         let mut failed_count = 0;
 
@@ -311,7 +311,7 @@ impl PerpOrderExchProc for MockMatchingService {
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
     }
 
-    fn set_leverage(&mut self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
+    fn set_leverage(&self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
         let old_leverage = *self.leverage_config.get(&cmd.symbol).unwrap_or(&1);
@@ -337,7 +337,7 @@ impl PerpOrderExchProc for MockMatchingService {
         })
     }
 
-    fn set_margin_type(&mut self, cmd: SetMarginTypeCommand) -> Result<SetMarginTypeResult, PrepCommandError> {
+    fn set_margin_type(&self, cmd: SetMarginTypeCommand) -> Result<SetMarginTypeResult, PrepCommandError> {
         // 检查是否有持仓
         if self.positions.contains_key(&cmd.symbol) {
             return Err(PrepCommandError::InvalidOrderState("有持仓时无法切换保证金类型".to_string()));
@@ -352,7 +352,7 @@ impl PerpOrderExchProc for MockMatchingService {
         })
     }
 
-    fn set_position_mode(&mut self, cmd: SetPositionModeCommand) -> Result<SetPositionModeResult, PrepCommandError> {
+    fn set_position_mode(&self, cmd: SetPositionModeCommand) -> Result<SetPositionModeResult, PrepCommandError> {
         // 检查是否有持仓
         if !self.positions.is_empty() {
             return Err(PrepCommandError::InvalidOrderState("有持仓时无法切换持仓模式".to_string()));
