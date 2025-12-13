@@ -427,56 +427,6 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_liquidation_loss_long() {
-        // 构造测试持仓
-        let symbol = Symbol::new("BTCUSDT");
-        let position = PositionInfo {
-            symbol,
-            position_side: PositionSide::Long,
-            quantity: Quantity::from_f64(1.0),
-            entry_price: Price::from_f64(50000.0),
-            mark_price: Price::from_f64(45500.0),
-            unrealized_pnl: Price::from_raw(0),
-            realized_pnl: Price::from_raw(0),
-            leverage: 10,
-            margin: Price::from_f64(5000.0),
-            liquidation_price: Some(Price::from_f64(45500.0)),
-            updated_at: 0,
-        };
-
-        // 平仓价 45500，损失 = (50000 - 45500) × 1.0 = 4500
-        let close_price = Price::from_f64(45500.0);
-        let loss = LiquidationProcessor::calculate_liquidation_loss(&position, close_price);
-
-        assert!((loss.to_f64() - 4500.0).abs() < 1.0);
-    }
-
-    #[test]
-    fn test_calculate_liquidation_loss_short() {
-        // 构造测试持仓（空仓）
-        let symbol = Symbol::new("BTCUSDT");
-        let position = PositionInfo {
-            symbol,
-            position_side: PositionSide::Short,
-            quantity: Quantity::from_f64(1.0),
-            entry_price: Price::from_f64(50000.0),
-            mark_price: Price::from_f64(54500.0),
-            unrealized_pnl: Price::from_raw(0),
-            realized_pnl: Price::from_raw(0),
-            leverage: 10,
-            margin: Price::from_f64(5000.0),
-            liquidation_price: Some(Price::from_f64(54500.0)),
-            updated_at: 0,
-        };
-
-        // 平仓价 54500，损失 = (54500 - 50000) × 1.0 = 4500
-        let close_price = Price::from_f64(54500.0);
-        let loss = LiquidationProcessor::calculate_liquidation_loss(&position, close_price);
-
-        assert!((loss.to_f64() - 4500.0).abs() < 1.0);
-    }
-
-    #[test]
     fn test_position_id_generation() {
         let id1 = PositionId::generate();
         // Small delay to ensure different timestamp

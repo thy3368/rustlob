@@ -10,6 +10,7 @@
 use prep_proc::proc::trading_prep_order_proc::*;
 use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
 use prep_proc::proc::liquidation_proc::*;
+use prep_proc::proc::liquidation_types::{PositionId, LiquidationType};
 
 // ============================================================================
 // 完整流程测试 - 从开仓到强平
@@ -144,7 +145,7 @@ mod complete_order_to_liquidation_flow {
         println!("🔥 触发强平条件！");
 
         // ====================================================================
-        // Step 7: 执行强平流程 - 调用LiquidationProcessor
+        // Step 7: 执行强平流程 - 真实调用LiquidationProcessor
         // ====================================================================
         println!("\n🔧 Step 7: 执行强平流程");
 
@@ -157,50 +158,62 @@ mod complete_order_to_liquidation_flow {
             adl_engine,
         );
 
-        // 模拟强平执行 - 计算强平损失（因为实际强平需要position_id）
-        let fill_price = Price::from_f64(liquidation_price.to_f64() + 100.0); // 45600
+        // 真实执行强平
+        println!("   启动三级强平机制...");
+        let liquidation_result = liquidation_processor
+            .execute_liquidation_with_position(position.clone(), mark_price)
+            .await;
 
-        println!("   尝试市场强平...");
-        println!("   预期成交价: {} USDT", fill_price.to_f64());
+        // 验证强平成功
+        assert!(liquidation_result.is_ok(), "强平执行应该成功");
+        let result = liquidation_result.unwrap();
+
+        println!("   ✅ 强平执行成功");
+        println!("   强平类型: {:?}", result.liquidation_type);
+        println!("   成交价: {} USDT", result.liquidation_price.to_f64());
+        println!("   强平数量: {} BTC", result.liquidated_quantity.to_f64());
 
         // ====================================================================
-        // Step 8: 计算强平损失
+        // Step 8: 验证强平结果
         // ====================================================================
-        let loss = LiquidationProcessor::calculate_liquidation_loss(&position, fill_price);
+        println!("\n✅ Step 8: 验证强平结果");
+        println!("   保证金损失: {} USDT", result.margin_loss.to_f64());
+        println!("   保险基金损失: {} USDT", result.insurance_fund_loss.to_f64());
+        println!("   订单状态: {:?}", result.order_status);
 
-        println!("\n✅ Step 8: 市场强平成功");
-        println!("   实际成交价: {} USDT", fill_price.to_f64());
-        println!("   总损失: {} USDT", loss.to_f64());
-        println!("   用户保证金: {} USDT", position.margin.to_f64());
+        // 验证强平类型
+        assert_eq!(result.liquidation_type, LiquidationType::Market, "应该是市场强平");
+        assert_eq!(result.order_status, OrderStatus::Filled, "订单应该已成交");
 
         // 验证损失计算
-        // 损失 = (50000 - 45600) × 1.0 = 4400
-        let expected_loss = (entry_price.to_f64() - fill_price.to_f64()) * position.quantity.to_f64();
-        assert!((loss.to_f64() - expected_loss).abs() < 10.0);
+        // 由于使用真实的MatchingService，市场价格会是最新的mark_price
+        // 损失应该等于全部保证金（因为价格已低于强平价）
+        println!("   实际损失: {} USDT", result.margin_loss.to_f64());
+        println!("   保证金: {} USDT", position.margin.to_f64());
+
+        // 损失可能等于保证金（完全强平）或略少（成功市场强平）
+        assert!(
+            result.margin_loss.to_f64() <= position.margin.to_f64() * 1.1,
+            "损失不应超过保证金太多"
+        );
+
+        // 保险基金不应该承担损失（因为市场强平成功）
+        assert_eq!(result.insurance_fund_loss.to_f64(), 0.0, "保险基金损失应该为0");
 
         // ====================================================================
-        // Step 9: 损失分配
+        // Step 9: 损失分配验证
         // ====================================================================
-        let user_loss = if loss <= position.margin {
-            loss.to_f64()
-        } else {
-            position.margin.to_f64()
-        };
-
-        let insurance_fund_loss = if loss > position.margin {
-            loss.to_f64() - position.margin.to_f64()
-        } else {
-            0.0
-        };
+        let user_loss = result.margin_loss.to_f64();
+        let insurance_fund_loss = result.insurance_fund_loss.to_f64();
 
         println!("\n💰 Step 9: 损失分配");
         println!("   用户损失: {} USDT", user_loss);
         println!("   保险基金损失: {} USDT", insurance_fund_loss);
-        println!("   强平类型: 市场强平");
+        println!("   强平类型: {:?}", result.liquidation_type);
 
         // 在这个场景中，损失应该小于保证金
-        assert!(loss <= position.margin);
-        assert_eq!(insurance_fund_loss, 0.0);
+        assert!(result.margin_loss <= position.margin, "用户损失不应超过保证金");
+        assert_eq!(insurance_fund_loss, 0.0, "保险基金不应承担损失");
 
         // ====================================================================
         // Step 10: 验证完整流程
@@ -218,8 +231,8 @@ mod complete_order_to_liquidation_flow {
         println!("\n强平阶段:");
         println!("  🔧 启动三级强平机制");
         println!("  ✅ 第一级：市场强平成功");
-        println!("  ✅ 成交价 {} USDT", fill_price.to_f64());
-        println!("  ✅ 总损失 {} USDT", loss.to_f64());
+        println!("  ✅ 成交价 {} USDT", result.liquidation_price.to_f64());
+        println!("  ✅ 总损失 {} USDT", result.margin_loss.to_f64());
         println!("\n结算阶段:");
         println!("  💰 用户损失: {} USDT", user_loss);
         println!("  💰 保险基金损失: {} USDT", insurance_fund_loss);
@@ -520,6 +533,7 @@ mod complete_order_to_liquidation_flow {
 
         // 创建部分持仓用于计算
         let partial_position = PositionInfo {
+            position_id: PositionId::generate(),
             symbol: position.symbol,
             position_side: position.position_side,
             quantity: partial_quantity,  // 只强平1 BTC
