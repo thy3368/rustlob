@@ -7,6 +7,8 @@ pub mod balance;
 pub mod command;
 pub mod error;
 pub mod types;
+pub mod user;
+pub mod position;
 
 // Re-export commonly used types
 pub use account::{Account, AccountStatus, AccountType};

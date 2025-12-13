@@ -1134,6 +1134,8 @@ impl QueryPositionCommand {
 /// 持仓信息
 #[derive(Debug, Clone)]
 pub struct PositionInfo {
+    /// 所属用户ID
+    pub user_id: UserId,
     /// 持仓ID
     pub position_id: PositionId,
     /// 交易对

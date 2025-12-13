@@ -1,17 +1,28 @@
 use crate::proc::trading_prep_order_proc::{AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand, CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord, MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult, OrderBookSnapshot, OrderQueryResult, PerpOrderExchQueryProc, PerpOrderExchProc, PositionInfo, PrepCommandError, QueryAccountBalanceCommand, QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand, QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand, SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult, TradesQueryResult};
 use crate::proc::trading_prep_order_proc::{OrderId, OrderStatus, OrderType, Price, Quantity, Side, Symbol, Trade, TradeId};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
+
+// Clean Architecture: 引入 BalanceRepo 接口
+use account::domain::entity::{AccountId, AssetId, Timestamp};
+use account::domain::repo::BalanceRepo;
 
 /// 本地撮合引擎服务
 ///
 /// 遵循Clean Architecture原则的撮合引擎实现
-/// - 无外部依赖，纯内存状态管理
+/// - 依赖注入：通过 BalanceRepo 接口管理余额
 /// - 支持价格-时间优先的订单匹配
 /// - 维护持仓、余额、订单状态
-pub struct MatchingService {
-    /// 账户余额（USDT）
-    balance: Arc<RwLock<Price>>,
+pub struct MatchingService<R: BalanceRepo> {
+    /// 余额仓储（依赖注入）
+    balance_repo: Arc<Mutex<R>>,
+
+    /// 账户ID（固定账户）
+    account_id: AccountId,
+
+    /// 资产ID（USDT）
+    asset_id: AssetId,
+
     /// 持仓映射（交易对 -> 持仓信息）
     positions: Arc<RwLock<HashMap<Symbol, PositionInfo>>>,
     /// 订单映射（订单ID -> 订单信息）
@@ -34,21 +45,103 @@ struct InternalOrder {
     filled_quantity: Quantity,
     status: OrderStatus,
     created_at: u64,
+    /// 冻结的保证金金额（用于订单取消时归还）
+    frozen_margin: Price,
 }
 
-impl MatchingService {
+impl<R: BalanceRepo> MatchingService<R> {
     /// 创建新的撮合服务实例
     ///
     /// # 参数
-    /// - `initial_balance`: 初始账户余额（USDT）
-    pub fn new(initial_balance: Price) -> Self {
+    /// - `balance_repo`: 余额仓储实现（依赖注入）
+    /// - `account_id`: 账户ID
+    /// - `asset_id`: 资产ID（如 USDT）
+    pub fn new(balance_repo: R, account_id: AccountId, asset_id: AssetId) -> Self {
         Self {
-            balance: Arc::new(RwLock::new(initial_balance)),
+            balance_repo: Arc::new(Mutex::new(balance_repo)),
+            account_id,
+            asset_id,
             positions: Arc::new(RwLock::new(HashMap::new())),
             orders: Arc::new(RwLock::new(HashMap::new())),
             leverage_config: Arc::new(RwLock::new(HashMap::new())),
             match_seq: Arc::new(RwLock::new(0)),
         }
+    }
+
+    /// 获取当前余额
+    ///
+    /// # 返回
+    /// 可用余额（u64 原始值）
+    ///
+    /// # 说明
+    /// 从 BalanceRepo 获取余额，如果不存在返回 0
+    fn get_balance(&self) -> u64 {
+        let repo = self.balance_repo.lock().unwrap();
+        repo.get(self.account_id, self.asset_id)
+            .map(|b| b.available)
+            .unwrap_or(0)
+    }
+
+    /// 扣减余额（冻结保证金、支付手续费）
+    ///
+    /// # 参数
+    /// - `amount`: 扣减金额（u64）
+    ///
+    /// # 返回
+    /// - `Ok(())`: 扣减成功
+    /// - `Err(InsufficientBalance)`: 余额不足
+    fn deduct_balance(&self, amount: u64, now: Timestamp) -> Result<(), PrepCommandError> {
+        let mut repo = self.balance_repo.lock().unwrap();
+
+        let balance = repo.get_or_create(self.account_id, self.asset_id, now);
+
+        if balance.available < amount {
+            return Err(PrepCommandError::InsufficientBalance);
+        }
+
+        balance.available -= amount;
+        balance.version += 1;
+        balance.updated_at = now;
+
+        Ok(())
+    }
+
+    /// 增加余额（归还保证金、盈利入账）
+    ///
+    /// # 参数
+    /// - `amount`: 增加金额（u64）
+    fn add_balance(&self, amount: u64, now: Timestamp) {
+        let mut repo = self.balance_repo.lock().unwrap();
+
+        let balance = repo.get_or_create(self.account_id, self.asset_id, now);
+        balance.available += amount;
+        balance.version += 1;
+        balance.updated_at = now;
+    }
+
+    /// 获取当前时间戳（纳秒）
+    #[inline]
+    fn now(&self) -> Timestamp {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64
+    }
+
+    /// Price 转 u64（假设 Price 内部是 8 位小数）
+    ///
+    /// # 说明
+    /// Price 内部存储为 raw 值，通常是整数表示（如 100_000_000 = 1.0）
+    /// 这里假设 Price 的精度与 u64 精度一致
+    #[inline]
+    fn price_to_u64(price: Price) -> u64 {
+        price.raw() as u64
+    }
+
+    /// u64 转 Price
+    #[inline]
+    fn u64_to_price(value: u64) -> Price {
+        Price::from_raw(value as i64)
     }
 
     /// 计算所需保证金
@@ -158,20 +251,24 @@ impl MatchingService {
     ///
     /// # 参数
     /// - `symbol`: 交易对
-    /// - `side`: 订单方向
+    /// - `_side`: 订单方向（仅用于向后兼容）
+    /// - `position_side`: 持仓方向
     /// - `quantity`: 成交数量
     /// - `avg_price`: 成交均价
     /// - `leverage`: 杠杆倍数
-    fn update_position(&self, symbol: Symbol, side: Side, quantity: Quantity, avg_price: Price, leverage: u8) {
+    fn update_position(
+        &self,
+        symbol: Symbol,
+        _side: Side,
+        position_side: crate::proc::trading_prep_order_proc::PositionSide,
+        quantity: Quantity,
+        avg_price: Price,
+        leverage: u8,
+    ) {
         let mut positions = self.positions.write().unwrap();
 
         let position = positions.entry(symbol).or_insert_with(|| {
-            PositionInfo::empty(symbol,
-                if side == Side::Buy {
-                    crate::proc::trading_prep_order_proc::PositionSide::Long
-                } else {
-                    crate::proc::trading_prep_order_proc::PositionSide::Short
-                })
+            PositionInfo::empty(symbol, position_side)
         });
 
         // 更新持仓数量和均价
@@ -180,7 +277,7 @@ impl MatchingService {
         let new_qty_val = quantity.to_f64();
         let new_price = avg_price.to_f64();
 
-        // 计算新的持仓均价
+        // 计算新的持仓均价（加权平均）
         let total_cost = old_qty * old_price + new_qty_val * new_price;
         let total_qty = old_qty + new_qty_val;
 
@@ -197,9 +294,95 @@ impl MatchingService {
             .unwrap()
             .as_millis() as u64;
 
-        // 计算保证金
+        // 计算保证金 = (持仓价值) / 杠杆倍数
         let notional = position.entry_price.to_f64() * position.quantity.to_f64();
         position.margin = Price::from_f64(notional / leverage as f64);
+
+        // 计算未实现盈亏
+        position.unrealized_pnl = self.calculate_unrealized_pnl(position);
+
+        // 计算强平价格
+        position.liquidation_price = self.calculate_liquidation_price(position);
+    }
+
+    /// 计算未实现盈亏
+    ///
+    /// # 参数
+    /// - `position`: 持仓信息
+    ///
+    /// # 返回
+    /// 未实现盈亏金额
+    ///
+    /// # 计算公式
+    /// ```text
+    /// 多仓未实现盈亏 = (标记价格 - 开仓均价) × 持仓数量
+    /// 空仓未实现盈亏 = (开仓均价 - 标记价格) × 持仓数量
+    /// ```
+    fn calculate_unrealized_pnl(&self, position: &PositionInfo) -> Price {
+        if !position.has_position() {
+            return Price::from_raw(0);
+        }
+
+        let entry = position.entry_price.to_f64();
+        let mark = position.mark_price.to_f64();
+        let qty = position.quantity.to_f64();
+
+        let pnl = match position.position_side {
+            crate::proc::trading_prep_order_proc::PositionSide::Long => {
+                (mark - entry) * qty
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Short => {
+                (entry - mark) * qty
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Both => {
+                // 单向持仓模式，根据数量符号判断
+                (mark - entry) * qty
+            }
+        };
+
+        Price::from_f64(pnl)
+    }
+
+    /// 计算强平价格
+    ///
+    /// # 参数
+    /// - `position`: 持仓信息
+    ///
+    /// # 返回
+    /// 强平价格（如果有持仓）
+    ///
+    /// # 计算公式
+    /// ```text
+    /// 多仓强平价 = 开仓均价 × (1 - 1/杠杆倍数 + 维持保证金率)
+    /// 空仓强平价 = 开仓均价 × (1 + 1/杠杆倍数 - 维持保证金率)
+    ///
+    /// 其中维持保证金率假设为 0.4% (Binance标准)
+    /// ```
+    fn calculate_liquidation_price(&self, position: &PositionInfo) -> Option<Price> {
+        if !position.has_position() {
+            return None;
+        }
+
+        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
+        let entry = position.entry_price.to_f64();
+        let leverage = position.leverage as f64;
+
+        let liq_price = match position.position_side {
+            crate::proc::trading_prep_order_proc::PositionSide::Long => {
+                // 多仓：价格下跌到此价格时强平
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Short => {
+                // 空仓：价格上涨到此价格时强平
+                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
+            }
+            crate::proc::trading_prep_order_proc::PositionSide::Both => {
+                // 单向模式，暂时按多仓处理
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+        };
+
+        Some(Price::from_f64(liq_price.max(0.0)))
     }
 }
 
@@ -235,19 +418,20 @@ impl PerpOrderExchProc for MatchingService {
         }
 
         // ========================================================================
-        // 3. 风控检查 - 余额检查
+        // 3. 风控检查 - 余额检查并冻结保证金
         // ========================================================================
         let estimate_price = cmd.price.unwrap_or_else(|| Price::from_f64(50000.0));
         let required_margin = self.calculate_required_margin(estimate_price, cmd.quantity, leverage);
 
+        // 检查余额并立即扣除保证金（冻结效果）
         {
-            let balance = self.balance.read().unwrap();
+            let mut balance = self.balance.write().unwrap();
             if *balance < required_margin {
                 return Err(PrepCommandError::InsufficientBalance);
             }
+            // 扣除保证金（订单提交即冻结）
+            *balance = Price::from_f64(balance.to_f64() - required_margin.to_f64());
         }
-
-        // todo 冻结保证金
 
         // ========================================================================
         // 4. 生成订单ID
@@ -297,6 +481,7 @@ impl PerpOrderExchProc for MatchingService {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
+            frozen_margin: required_margin, // 保存冻结的保证金金额
         };
 
         {
@@ -326,8 +511,15 @@ impl PerpOrderExchProc for MatchingService {
 
             let total_qty = Quantity::from_f64(total_quantity);
 
-            // 更新持仓
-            self.update_position(cmd.symbol, cmd.side, total_qty, avg_price, leverage);
+            // 更新持仓（使用命令中的持仓方向）
+            self.update_position(
+                cmd.symbol,
+                cmd.side,
+                cmd.position_side,
+                total_qty,
+                avg_price,
+                leverage,
+            );
 
             // 扣除手续费
             let total_fee: f64 = trades.iter().map(|t| t.fee.to_f64()).sum();
@@ -498,6 +690,16 @@ impl PerpOrderExchProc for MatchingService {
                 return Ok(CancelOrderResult::failed(cmd.order_id, order.status));
             }
 
+            // 归还冻结的保证金（仅限未成交或部分成交的订单）
+            let unfilled_quantity = order.quantity.to_f64() - order.filled_quantity.to_f64();
+            if unfilled_quantity > 0.0 {
+                let refund_ratio = unfilled_quantity / order.quantity.to_f64();
+                let refund_margin = Price::from_f64(order.frozen_margin.to_f64() * refund_ratio);
+
+                let mut balance = self.balance.write().unwrap();
+                *balance = Price::from_f64(balance.to_f64() + refund_margin.to_f64());
+            }
+
             order.status = OrderStatus::Cancelled;
             Ok(CancelOrderResult::success(cmd.order_id))
         } else {
@@ -534,6 +736,7 @@ impl PerpOrderExchProc for MatchingService {
         let mut orders = self.orders.write().unwrap();
         let mut cancelled_ids = Vec::new();
         let mut failed_count = 0;
+        let mut total_refund = 0.0;
 
         for (order_id, order) in orders.iter_mut() {
             let should_cancel = match (&cmd.symbol, &cmd.position_side) {
@@ -544,11 +747,24 @@ impl PerpOrderExchProc for MatchingService {
             };
 
             if should_cancel && !order.status.is_final() {
+                // 归还保证金
+                let unfilled_quantity = order.quantity.to_f64() - order.filled_quantity.to_f64();
+                if unfilled_quantity > 0.0 {
+                    let refund_ratio = unfilled_quantity / order.quantity.to_f64();
+                    total_refund += order.frozen_margin.to_f64() * refund_ratio;
+                }
+
                 order.status = OrderStatus::Cancelled;
                 cancelled_ids.push(order_id.clone());
             } else if should_cancel {
                 failed_count += 1;
             }
+        }
+
+        // 归还总保证金
+        if total_refund > 0.0 {
+            let mut balance = self.balance.write().unwrap();
+            *balance = Price::from_f64(balance.to_f64() + total_refund);
         }
 
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
