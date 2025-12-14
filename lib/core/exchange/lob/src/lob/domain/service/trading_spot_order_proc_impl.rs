@@ -1,23 +1,26 @@
-use crate::event;
-use crate::lob::adaptor::outbound::entity_repo::EntityRepo;
-use crate::lob::adaptor::outbound::event_repo::EventRepo;
-use crate::lob::adaptor::outbound::id_repo::IdRepo;
-use crate::lob::domain::entity::lob_types::Side::{Buy, Sell};
-use crate::lob::domain::entity::lob_types::{EntityEvent, Trade};
-use crate::lob::domain::entity::lob_types::{
-    EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
-};
-use crate::lob::domain::repo::OrderRepo;
+use account::{AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair};
+
 /// 订单匹配服务
 ///
 /// 实现价格-时间优先的订单匹配算法
 /// 遵循Clean Architecture的领域服务模式
 use crate::lob::domain::service::trading_spot_order_proc::{
-    CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, OrderStatus,
-    SpotCommand, SpotCommandError, SpotCommandResult, SpotOrderExchangeProc, TimeInForce,
+    CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, OrderStatus, SpotCommand,
+    SpotCommandError, SpotCommandResult, SpotOrderExchangeProc, TimeInForce
 };
-use account::{
-    AccountCommand, AccountCommandResult, AccountId, AccountService, BalanceError, TradingPair,
+use crate::{
+    event,
+    lob::{
+        adaptor::outbound::{entity_repo::EntityRepo, event_repo::EventRepo, id_repo::IdRepo},
+        domain::{
+            entity::lob_types::{
+                EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
+                Side::{Buy, Sell},
+                Trade
+            },
+            repo::OrderRepo
+        }
+    }
 };
 
 /// 匹配服务
@@ -27,20 +30,20 @@ use account::{
 pub struct SpotMatchingService<R, A>
 where
     R: OrderRepo,
-    A: AccountService,
+    A: AccountService
 {
     lob_repo: R,
     account_service: A,
     trading_pair: TradingPair,
     event_repo: EventRepo,
     entity_repo: EntityRepo,
-    id_repo: IdRepo,
+    id_repo: IdRepo
 }
 
 impl<R, A> SpotMatchingService<R, A>
 where
     R: OrderRepo,
-    A: AccountService,
+    A: AccountService
 {
     /// 创建新的匹配服务
     ///
@@ -55,7 +58,7 @@ where
             trading_pair,
             event_repo: EventRepo {},
             id_repo: IdRepo {},
-            entity_repo: EntityRepo {},
+            entity_repo: EntityRepo {}
         }
     }
 
@@ -69,10 +72,7 @@ where
     /// # 返回
     /// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
     fn create_events(
-        &self,
-        matched_orders: Option<Vec<&OrderEntry>>,
-        price: Price,
-        quantity: Quantity,
+        &self, matched_orders: Option<Vec<&OrderEntry>>, price: Price, quantity: Quantity
     ) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
         let mut order_events = Vec::new();
         let mut trade_events = Vec::new();
@@ -121,17 +121,9 @@ where
 
         let unfilled_amount = remaining;
 
-        let order_events_opt = if order_events.is_empty() {
-            None
-        } else {
-            Some(order_events)
-        };
+        let order_events_opt = if order_events.is_empty() { None } else { Some(order_events) };
 
-        let trade_events_opt = if trade_events.is_empty() {
-            None
-        } else {
-            Some(trade_events)
-        };
+        let trade_events_opt = if trade_events.is_empty() { None } else { Some(trade_events) };
 
         (order_events_opt, trade_events_opt, unfilled_amount)
     }
@@ -143,15 +135,13 @@ where
     ///
     /// # 返回
     /// - `bool`: 取消是否成功
-    pub fn cancel_order(&mut self, order_id: OrderId) -> bool {
-        self.lob_repo.cancel_order(order_id)
-    }
+    pub fn cancel_order(&mut self, order_id: OrderId) -> bool { self.lob_repo.cancel_order(order_id) }
 }
 
 impl<R, A> SpotOrderExchangeProc for SpotMatchingService<R, A>
 where
     R: OrderRepo + Send + Sync,
-    A: AccountService,
+    A: AccountService
 {
     fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult {
         let nonce = cmd.nonce;
@@ -163,24 +153,32 @@ where
 
         // 执行命令，获取Result
         let result = match cmd.payload {
-            SpotCommand::LimitOrder { .. } => self.handle_limit_order(cmd.payload)?,
-            SpotCommand::MarketOrder { .. } => self.handle_market_order(cmd.payload)?,
-            SpotCommand::CancelOrder { order_id } => {
+            SpotCommand::LimitOrder {
+                ..
+            } => self.handle_limit_order(cmd.payload)?,
+            SpotCommand::MarketOrder {
+                ..
+            } => self.handle_market_order(cmd.payload)?,
+            SpotCommand::CancelOrder {
+                order_id
+            } => {
                 let success = self.cancel_order(order_id);
                 if !success {
                     return Err(SpotCommandError::Common(CommonError::OrderNotFound {
-                        order_id,
+                        order_id
                     }));
                 }
                 SpotCommandResult::CancelOrder {
                     order_id,
-                    status: OrderStatus::Cancelled,
+                    status: OrderStatus::Cancelled
                 }
             }
-            SpotCommand::CancelAllOrders { .. } => {
+            SpotCommand::CancelAllOrders {
+                ..
+            } => {
                 return Err(SpotCommandError::Common(CommonError::InvalidParameter {
                     field: "command",
-                    reason: "CancelAllOrders not implemented yet",
+                    reason: "CancelAllOrders not implemented yet"
                 }));
             }
         };
@@ -195,12 +193,9 @@ where
 impl<R, A> SpotMatchingService<R, A>
 where
     R: OrderRepo + Send + Sync,
-    A: AccountService,
+    A: AccountService
 {
-    fn handle_limit_order(
-        &mut self,
-        command: SpotCommand,
-    ) -> Result<SpotCommandResult, SpotCommandError> {
+    fn handle_limit_order(&mut self, command: SpotCommand) -> Result<SpotCommandResult, SpotCommandError> {
         let _trades: Vec<Trade> = Vec::new(); // TODO: 从 trade_events 转换
 
         if let SpotCommand::LimitOrder {
@@ -210,7 +205,7 @@ where
             price,
             quantity,
             time_in_force,
-            client_order_id: _client_order_id, // TODO: 存储 client_order_id
+            client_order_id: _client_order_id // TODO: 存储 client_order_id
         } = command
         {
             // 生成订单ID（用于账户冻结关联）
@@ -222,7 +217,7 @@ where
             // 将 LOB 的 Side 转换为 Account 的 Side
             let account_side = match side {
                 Buy => account::Side::Buy,
-                Sell => account::Side::Sell,
+                Sell => account::Side::Sell
             };
 
             // 下单前检查并冻结账户余额（原子操作）
@@ -234,36 +229,38 @@ where
                 pair: self.trading_pair,
                 side: account_side,
                 price: price as u64,
-                quantity: quantity as u64,
+                quantity: quantity as u64
             };
 
             let freeze_result = self.account_service.execute(freeze_cmd);
 
             // 检查冻结结果
             match freeze_result {
-                AccountCommandResult::Frozen { .. } => {
+                AccountCommandResult::Frozen {
+                    ..
+                } => {
                     // 冻结成功，继续下单流程
                 }
                 AccountCommandResult::Error(BalanceError::InsufficientAvailable {
                     required,
-                    available,
+                    available
                 }) => {
                     // 余额不足
                     return Err(SpotCommandError::Common(CommonError::InsufficientBalance {
                         required,
-                        available,
+                        available
                     }));
                 }
                 AccountCommandResult::Error(_) => {
                     // 其他错误
                     return Err(SpotCommandError::Common(CommonError::Internal {
-                        message: "Account service error".to_string(),
+                        message: "Account service error".to_string()
                     }));
                 }
                 _ => {
                     // 不应发生的情况
                     return Err(SpotCommandError::Common(CommonError::Internal {
-                        message: "Unexpected account command result".to_string(),
+                        message: "Unexpected account command result".to_string()
                     }));
                 }
             }
@@ -280,7 +277,7 @@ where
                         status: OrderStatus::Rejected,
                         filled_quantity: 0,
                         remaining_quantity: quantity,
-                        trades: Vec::new(),
+                        trades: Vec::new()
                     });
                 }
                 // 不会立即成交，继续处理为 GTC
@@ -303,7 +300,7 @@ where
                                 status: OrderStatus::Rejected,
                                 filled_quantity: 0,
                                 remaining_quantity: quantity,
-                                trades: Vec::new(),
+                                trades: Vec::new()
                             });
                         }
                         // 全部成交，继续处理
@@ -324,21 +321,15 @@ where
                         // 返回结果，不挂单
                         return Ok(SpotCommandResult::LimitOrder {
                             order_id: new_order_id,
-                            status: if unfilled_amount == 0 {
-                                OrderStatus::Filled
-                            } else {
-                                OrderStatus::Cancelled
-                            },
+                            status: if unfilled_amount == 0 { OrderStatus::Filled } else { OrderStatus::Cancelled },
                             filled_quantity,
                             remaining_quantity: unfilled_amount,
-                            trades: Vec::new(), // TODO: 从 trade_events 转换
+                            trades: Vec::new() // TODO: 从 trade_events 转换
                         });
                     }
 
                     // GTC/GTD/PostOnly: 标准流程，挂单等待
-                    TimeInForce::GoodTillCancel
-                    | TimeInForce::GoodTillDate(_)
-                    | TimeInForce::PostOnly => {
+                    TimeInForce::GoodTillCancel | TimeInForce::GoodTillDate(_) | TimeInForce::PostOnly => {
                         // 继续标准流程
                     }
                 }
@@ -378,14 +369,10 @@ where
                 // 返回成交结果
                 return Ok(SpotCommandResult::LimitOrder {
                     order_id: new_order_id,
-                    status: if unfilled_amount == 0 {
-                        OrderStatus::Filled
-                    } else {
-                        OrderStatus::PartiallyFilled
-                    },
+                    status: if unfilled_amount == 0 { OrderStatus::Filled } else { OrderStatus::PartiallyFilled },
                     filled_quantity,
                     remaining_quantity: unfilled_amount,
-                    trades: Vec::new(), // TODO: 从 trade_events 转换
+                    trades: Vec::new() // TODO: 从 trade_events 转换
                 });
             } else {
                 // ========== 无成交情况 ==========
@@ -397,7 +384,7 @@ where
                             status: OrderStatus::Rejected,
                             filled_quantity: 0,
                             remaining_quantity: quantity,
-                            trades: Vec::new(),
+                            trades: Vec::new()
                         });
                     }
 
@@ -408,14 +395,12 @@ where
                             status: OrderStatus::Cancelled,
                             filled_quantity: 0,
                             remaining_quantity: quantity,
-                            trades: Vec::new(),
+                            trades: Vec::new()
                         });
                     }
 
                     // GTC/GTD/PostOnly: 挂单等待
-                    TimeInForce::GoodTillCancel
-                    | TimeInForce::GoodTillDate(_)
-                    | TimeInForce::PostOnly => {
+                    TimeInForce::GoodTillCancel | TimeInForce::GoodTillDate(_) | TimeInForce::PostOnly => {
                         // 创建订单事件并挂单
                         let transaction_id = self.id_repo.next_transaction_id_u64();
                         let event_id = self.id_repo.next_event_id_u64();
@@ -440,7 +425,7 @@ where
                             status: OrderStatus::Pending,
                             filled_quantity: 0,
                             remaining_quantity: quantity,
-                            trades: Vec::new(),
+                            trades: Vec::new()
                         });
                     }
                 }
@@ -449,7 +434,7 @@ where
 
         // 如果不是 LimitOrder，返回错误
         Err(SpotCommandError::Common(CommonError::Internal {
-            message: "Unexpected command type".to_string(),
+            message: "Unexpected command type".to_string()
         }))
     }
 
@@ -458,10 +443,7 @@ where
     /// 市价单不会挂在订单簿上，而是立即尝试撮合：
     /// - 默认行为 (None) 或 IOC: 尽量成交，剩余取消
     /// - FOK: 全部成交或全部拒绝
-    fn handle_market_order(
-        &mut self,
-        command: SpotCommand,
-    ) -> Result<SpotCommandResult, SpotCommandError> {
+    fn handle_market_order(&mut self, command: SpotCommand) -> Result<SpotCommandResult, SpotCommandError> {
         if let SpotCommand::MarketOrder {
             trader,
             symbol: _symbol,
@@ -469,7 +451,7 @@ where
             quantity,
             price_limit,
             time_in_force,
-            client_order_id: _client_order_id,
+            client_order_id: _client_order_id
         } = command
         {
             // 1. 验证 TimeInForce（市价单只允许 None/FOK/IOC）
@@ -480,7 +462,7 @@ where
                     }
                     _ => {
                         return Err(SpotCommandError::InvalidTimeInForce {
-                            reason: "MarketOrder only supports None(IOC), FOK, or IOC",
+                            reason: "MarketOrder only supports None(IOC), FOK, or IOC"
                         });
                     }
                 }
@@ -495,7 +477,7 @@ where
                     return Ok(SpotCommandResult::MarketOrder {
                         status: OrderStatus::Rejected,
                         filled_quantity: 0,
-                        trades: Vec::new(),
+                        trades: Vec::new()
                     });
                 }
             }
@@ -507,7 +489,7 @@ where
             let account_id = AccountId(u64::from_le_bytes(*trader.as_bytes()));
             let account_side = match side {
                 Buy => account::Side::Buy,
-                Sell => account::Side::Sell,
+                Sell => account::Side::Sell
             };
 
             // 5. 市价单撮合前也需要检查和冻结账户余额
@@ -515,12 +497,10 @@ where
             // 对于市价卖单，冻结 base_asset 数量
             let (freeze_price, freeze_quantity) = match side {
                 Buy => {
-                    // 买单：使用 price_limit 作为最高价，如果没有则使用订单簿最高卖价 * 1.1（保护机制）
+                    // 买单：使用 price_limit 作为最高价，如果没有则使用订单簿最高卖价 *
+                    // 1.1（保护机制）
                     let max_price = price_limit.unwrap_or_else(|| {
-                        self.lob_repo
-                            .get_best_ask()
-                            .map(|p| (p as f64 * 1.1) as u32)
-                            .unwrap_or(u32::MAX)
+                        self.lob_repo.get_best_ask().map(|p| (p as f64 * 1.1) as u32).unwrap_or(u32::MAX)
                     });
                     (max_price as u64, quantity as u64)
                 }
@@ -536,33 +516,35 @@ where
                 pair: self.trading_pair,
                 side: account_side,
                 price: freeze_price,
-                quantity: freeze_quantity,
+                quantity: freeze_quantity
             };
 
             let freeze_result = self.account_service.execute(freeze_cmd);
 
             // 6. 检查冻结结果
             match freeze_result {
-                AccountCommandResult::Frozen { .. } => {
+                AccountCommandResult::Frozen {
+                    ..
+                } => {
                     // 冻结成功，继续撮合
                 }
                 AccountCommandResult::Error(BalanceError::InsufficientAvailable {
                     required,
-                    available,
+                    available
                 }) => {
                     return Err(SpotCommandError::Common(CommonError::InsufficientBalance {
                         required,
-                        available,
+                        available
                     }));
                 }
                 AccountCommandResult::Error(_) => {
                     return Err(SpotCommandError::Common(CommonError::Internal {
-                        message: "Account service error".to_string(),
+                        message: "Account service error".to_string()
                     }));
                 }
                 _ => {
                     return Err(SpotCommandError::Common(CommonError::Internal {
-                        message: "Unexpected account command result".to_string(),
+                        message: "Unexpected account command result".to_string()
                     }));
                 }
             }
@@ -572,7 +554,7 @@ where
             // 市价卖单：使用 0 确保吃掉所有买单
             let match_price = match side {
                 Buy => price_limit.unwrap_or(u32::MAX),
-                Sell => price_limit.unwrap_or(0),
+                Sell => price_limit.unwrap_or(0)
             };
 
             let orders = self.lob_repo.match_orders(side, match_price, quantity);
@@ -593,18 +575,14 @@ where
                             return Ok(SpotCommandResult::MarketOrder {
                                 status: OrderStatus::Rejected,
                                 filled_quantity: 0,
-                                trades: Vec::new(),
+                                trades: Vec::new()
                             });
                         }
                         OrderStatus::Filled
                     }
                     _ => {
                         // None 或 IOC: 部分成交也接受
-                        if unfilled_amount == 0 {
-                            OrderStatus::Filled
-                        } else {
-                            OrderStatus::Cancelled
-                        }
+                        if unfilled_amount == 0 { OrderStatus::Filled } else { OrderStatus::Cancelled }
                     }
                 };
 
@@ -622,7 +600,7 @@ where
                 return Ok(SpotCommandResult::MarketOrder {
                     status,
                     filled_quantity,
-                    trades: Vec::new(), // TODO: 从 trade_create_events 转换
+                    trades: Vec::new() // TODO: 从 trade_create_events 转换
                 });
             } else {
                 // 没有匹配到任何订单
@@ -633,14 +611,14 @@ where
                         OrderStatus::Cancelled
                     },
                     filled_quantity: 0,
-                    trades: Vec::new(),
+                    trades: Vec::new()
                 });
             }
         }
 
         // 如果不是 MarketOrder，返回错误
         Err(SpotCommandError::Common(CommonError::Internal {
-            message: "Unexpected command type in handle_market_order".to_string(),
+            message: "Unexpected command type in handle_market_order".to_string()
         }))
     }
 }

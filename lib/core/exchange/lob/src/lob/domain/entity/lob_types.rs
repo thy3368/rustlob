@@ -55,7 +55,7 @@ macro_rules! event {
     };
 }
 
-//快照概念，担心entity_event过长
+// 快照概念，担心entity_event过长
 pub struct Snapshot {}
 
 /// 交易员标识符（8字节固定长度）
@@ -66,9 +66,7 @@ pub struct TraderId([u8; 8]);
 impl TraderId {
     /// 从字节数组创建交易员ID
     #[inline]
-    pub fn new(bytes: [u8; 8]) -> Self {
-        Self(bytes)
-    }
+    pub fn new(bytes: [u8; 8]) -> Self { Self(bytes) }
 
     /// 从字符串创建交易员ID（最多8字节）
     #[inline]
@@ -81,16 +79,12 @@ impl TraderId {
 
     /// 获取底层字节数组的引用
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; 8] {
-        &self.0
-    }
+    pub fn as_bytes(&self) -> &[u8; 8] { &self.0 }
 }
 
 impl fmt::Display for TraderId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = std::str::from_utf8(&self.0)
-            .unwrap_or("INVALID")
-            .trim_end_matches('\0');
+        let s = std::str::from_utf8(&self.0).unwrap_or("INVALID").trim_end_matches('\0');
         write!(f, "{}", s)
     }
 }
@@ -103,9 +97,7 @@ pub struct Symbol([u8; 8]);
 impl Symbol {
     /// 从字节数组创建交易对符号
     #[inline]
-    pub fn new(bytes: [u8; 8]) -> Self {
-        Self(bytes)
-    }
+    pub fn new(bytes: [u8; 8]) -> Self { Self(bytes) }
 
     /// 从字符串创建交易对符号（最多8字节）
     #[inline]
@@ -118,16 +110,12 @@ impl Symbol {
 
     /// 获取底层字节数组的引用
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; 8] {
-        &self.0
-    }
+    pub fn as_bytes(&self) -> &[u8; 8] { &self.0 }
 }
 
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = std::str::from_utf8(&self.0)
-            .unwrap_or("INVALID")
-            .trim_end_matches('\0');
+        let s = std::str::from_utf8(&self.0).unwrap_or("INVALID").trim_end_matches('\0');
         write!(f, "{}", s)
     }
 }
@@ -137,7 +125,7 @@ impl fmt::Display for Symbol {
 #[repr(u8)]
 pub enum Side {
     Buy = b'B',  // 买入
-    Sell = b'S', // 卖出
+    Sell = b'S'  // 卖出
 }
 
 impl Side {
@@ -146,7 +134,7 @@ impl Side {
     pub fn opposite(&self) -> Side {
         match self {
             Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy,
+            Side::Sell => Side::Buy
         }
     }
 }
@@ -155,7 +143,7 @@ impl fmt::Display for Side {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Side::Buy => write!(f, "BUY"),
-            Side::Sell => write!(f, "SELL"),
+            Side::Sell => write!(f, "SELL")
         }
     }
 }
@@ -175,7 +163,7 @@ pub type Quantity = u32;
 pub enum EventOperation {
     Create = 1, // 创建
     Update = 2, // 更新
-    Delete = 3, // 删除
+    Delete = 3  // 删除
 }
 
 /// 字段值类型（支持订单簿常用数据类型）
@@ -188,8 +176,7 @@ pub enum FieldValue {
     Symbol(Symbol),
     OrderId(OrderId),
     Quantity(Quantity),
-    Side(Side),
-    // OrderEntry(OrderEntry),
+    Side(Side) // OrderEntry(OrderEntry),
 }
 
 /// 字段变更记录 (field_name, old_value, new_value)
@@ -197,7 +184,7 @@ pub enum FieldValue {
 pub struct FieldChange {
     pub field_name: &'static str,
     pub old_value: Option<FieldValue>,
-    pub new_value: Option<FieldValue>,
+    pub new_value: Option<FieldValue>
 }
 
 impl FieldChange {
@@ -207,7 +194,7 @@ impl FieldChange {
         Self {
             field_name,
             old_value: None,
-            new_value: Some(new_value),
+            new_value: Some(new_value)
         }
     }
 
@@ -217,7 +204,7 @@ impl FieldChange {
         Self {
             field_name,
             old_value: Some(old_value),
-            new_value: Some(new_value),
+            new_value: Some(new_value)
         }
     }
 
@@ -227,7 +214,7 @@ impl FieldChange {
         Self {
             field_name,
             old_value: Some(old_value),
-            new_value: None,
+            new_value: None
         }
     }
 }
@@ -238,7 +225,7 @@ pub struct RecordChange {
     /// 记录ID（如order_id, trade_id等）
     pub entity_id: u64,
     /// 该记录的字段变更列表
-    pub field_changes: Vec<FieldChange>,
+    pub field_changes: Vec<FieldChange>
 }
 
 impl RecordChange {
@@ -246,7 +233,7 @@ impl RecordChange {
     pub fn new(entity_id: u64, field_changes: Vec<FieldChange>) -> Self {
         Self {
             entity_id,
-            field_changes,
+            field_changes
         }
     }
 }
@@ -264,55 +251,45 @@ pub struct EntityEvent {
     /// 操作类型
     pub operation: EventOperation,
     /// 批量记录变更（支持多条记录）
-    pub changes: Vec<RecordChange>,
+    pub changes: Vec<RecordChange>
 }
 
 impl EntityEvent {
     /// 创建新的实体事件
     #[inline]
     pub fn new(
-        event_id: u64,
-        transaction_id: u64,
-        entity_name: &'static str,
-        operation: EventOperation,
-        changes: Vec<RecordChange>,
+        event_id: u64, transaction_id: u64, entity_name: &'static str, operation: EventOperation,
+        changes: Vec<RecordChange>
     ) -> Self {
         Self {
             event_id,
             transaction_id,
             entity_name,
             operation,
-            changes,
+            changes
         }
     }
 
     /// 创建单条记录的事件（便捷方法）
     #[inline]
     pub fn single(
-        event_id: u64,
-        transaction_id: u64,
-        entity_name: &'static str,
-        operation: EventOperation,
-        entity_id: u64,
-        field_changes: Vec<FieldChange>,
+        event_id: u64, transaction_id: u64, entity_name: &'static str, operation: EventOperation, entity_id: u64,
+        field_changes: Vec<FieldChange>
     ) -> Self {
         Self {
             event_id,
             transaction_id,
             entity_name,
             operation,
-            changes: vec![RecordChange::new(entity_id, field_changes)],
+            changes: vec![RecordChange::new(entity_id, field_changes)]
         }
     }
 
     /// 批量创建记录的事件（便捷方法）
     #[inline]
     pub fn batch(
-        event_id: u64,
-        transaction_id: u64,
-        entity_name: &'static str,
-        operation: EventOperation,
-        changes: Vec<RecordChange>,
+        event_id: u64, transaction_id: u64, entity_name: &'static str, operation: EventOperation,
+        changes: Vec<RecordChange>
     ) -> Self {
         Self::new(event_id, transaction_id, entity_name, operation, changes)
     }
@@ -340,21 +317,15 @@ pub struct Trade {
     /// Maker订单ID
     pub maker_order_id: OrderId,
     /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
-    pub taker_side: Side,
+    pub taker_side: Side
 }
 
 impl Trade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
-        trade_id: u64,
-        price: Price,
-        quantity: Quantity,
-        taker_trader: TraderId,
-        maker_trader: TraderId,
-        taker_order_id: OrderId,
-        maker_order_id: OrderId,
-        taker_side: Side,
+        trade_id: u64, price: Price, quantity: Quantity, taker_trader: TraderId, maker_trader: TraderId,
+        taker_order_id: OrderId, maker_order_id: OrderId, taker_side: Side
     ) -> Self {
         Self {
             trade_id,
@@ -364,7 +335,7 @@ impl Trade {
             maker_trader,
             taker_order_id,
             maker_order_id,
-            taker_side,
+            taker_side
         }
     }
 
@@ -373,7 +344,7 @@ impl Trade {
     pub fn buyer(&self) -> TraderId {
         match self.taker_side {
             Side::Buy => self.taker_trader,
-            Side::Sell => self.maker_trader,
+            Side::Sell => self.maker_trader
         }
     }
 
@@ -382,7 +353,7 @@ impl Trade {
     pub fn seller(&self) -> TraderId {
         match self.taker_side {
             Side::Buy => self.maker_trader,
-            Side::Sell => self.taker_trader,
+            Side::Sell => self.taker_trader
         }
     }
 
@@ -391,7 +362,7 @@ impl Trade {
     pub fn buyer_order_id(&self) -> OrderId {
         match self.taker_side {
             Side::Buy => self.taker_order_id,
-            Side::Sell => self.maker_order_id,
+            Side::Sell => self.maker_order_id
         }
     }
 
@@ -400,7 +371,7 @@ impl Trade {
     pub fn seller_order_id(&self) -> OrderId {
         match self.taker_side {
             Side::Buy => self.maker_order_id,
-            Side::Sell => self.taker_order_id,
+            Side::Sell => self.taker_order_id
         }
     }
 }
@@ -429,7 +400,7 @@ pub struct OrderEntry {
     pub trader: TraderId,            // 交易员ID
     pub total_quantity: Quantity,    // 总数量
     pub unfilled_quantity: Quantity, // 未成交数量
-    pub next_idx: Option<usize>,     // 链表中下一个订单的索引
+    pub next_idx: Option<usize>      // 链表中下一个订单的索引
 }
 
 impl OrderEntry {
@@ -441,35 +412,31 @@ impl OrderEntry {
             trader,
             total_quantity: quantity,
             unfilled_quantity: quantity,
-            next_idx: None,
+            next_idx: None
         }
     }
 
     /// 检查订单是否仍然有效（数量>0）
     #[inline]
-    pub fn is_active(&self) -> bool {
-        self.unfilled_quantity > 0
-    }
+    pub fn is_active(&self) -> bool { self.unfilled_quantity > 0 }
 
     /// 取消订单（通过将数量置零，单次内存写入，速度快）
     #[inline]
-    pub fn cancel(&mut self) {
-        self.unfilled_quantity = 0;
-    }
+    pub fn cancel(&mut self) { self.unfilled_quantity = 0; }
 }
 
 /// 订单簿中的价格点（链表头）
 #[derive(Debug, Clone, Copy)]
 pub struct PricePoint {
     pub first_order_idx: Option<usize>, // 该价格的第一个订单索引
-    pub last_order_idx: Option<usize>,  // 该价格的最后一个订单索引
+    pub last_order_idx: Option<usize>   // 该价格的最后一个订单索引
 }
 
 impl Default for PricePoint {
     fn default() -> Self {
         Self {
             first_order_idx: None,
-            last_order_idx: None,
+            last_order_idx: None
         }
     }
 }
@@ -477,9 +444,7 @@ impl Default for PricePoint {
 impl PricePoint {
     /// 检查该价格是否没有订单
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.first_order_idx.is_none()
-    }
+    pub fn is_empty(&self) -> bool { self.first_order_idx.is_none() }
 
     /// 在链表尾部添加订单
     #[inline]

@@ -29,13 +29,12 @@
 // ============================================================================
 
 use criterion::{
-    black_box,           // 防止编译器优化掉测试代码
-    criterion_group,     // 定义基准测试组
-    criterion_main,      // 定义主入口
-    BenchmarkId,         // 参数化测试的 ID
-    Criterion,           // 基准测试上下文
+    black_box,       // 防止编译器优化掉测试代码
+    criterion_group, // 定义基准测试组
+    criterion_main,  // 定义主入口
+    BenchmarkId,     // 参数化测试的 ID
+    Criterion        // 基准测试上下文
 };
-
 use lob::lob::{Side, TraderId};
 use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
 
@@ -64,11 +63,7 @@ fn create_orderbook_delta(index: u64) -> OrderDelta {
         side: if index % 2 == 0 { Side::Buy } else { Side::Sell },
         price: 50000 + (index as u32),
         quantity: 100 + (index as u32),
-        trader_id: Some(TraderId::new([
-            (index % 256) as u8,
-            ((index / 256) % 256) as u8,
-            1, 2, 3, 4, 5, 6,
-        ])),
+        trader_id: Some(TraderId::new([(index % 256) as u8, ((index / 256) % 256) as u8, 1, 2, 3, 4, 5, 6]))
     }
 }
 
@@ -140,7 +135,7 @@ fn bench_single_allocation(c: &mut Criterion) {
 fn bench_vec_allocation_no_reserve(c: &mut Criterion) {
     c.bench_function("vec_100_orderbook_deltas_no_reserve", |b| {
         b.iter(|| {
-            let mut deltas = Vec::new();  // 初始容量为 0
+            let mut deltas = Vec::new(); // 初始容量为 0
 
             for i in 0..100 {
                 // black_box(i): 防止编译器展开循环或优化掉循环
@@ -237,9 +232,7 @@ fn bench_vec_allocation_collect(c: &mut Criterion) {
         b.iter(|| {
             // 使用迭代器 + collect()
             // Range (0..100) 提供精确的大小提示
-            let deltas: Vec<OrderDelta> = (0..100)
-                .map(|i| create_orderbook_delta(black_box(i)))
-                .collect();
+            let deltas: Vec<OrderDelta> = (0..100).map(|i| create_orderbook_delta(black_box(i))).collect();
 
             black_box(deltas);
         });
@@ -275,9 +268,7 @@ fn bench_array_allocation(c: &mut Criterion) {
     c.bench_function("array_100_orderbook_deltas", |b| {
         b.iter(|| {
             // std::array::from_fn: 使用闭包初始化数组
-            let deltas: [OrderDelta; 100] = std::array::from_fn(|i| {
-                create_orderbook_delta(black_box(i as u64))
-            });
+            let deltas: [OrderDelta; 100] = std::array::from_fn(|i| create_orderbook_delta(black_box(i as u64)));
 
             black_box(deltas);
         });
@@ -317,19 +308,15 @@ fn bench_varying_sizes(c: &mut Criterion) {
     for size in [10, 50, 100, 200, 500, 1000].iter() {
         // bench_with_input: 参数化测试
         // BenchmarkId: 为每个参数创建唯一的 ID
-        group.bench_with_input(
-            BenchmarkId::new("vec_with_reserve", size),
-            size,
-            |b, &size| {
-                b.iter(|| {
-                    let mut deltas = Vec::with_capacity(size);
-                    for i in 0..size {
-                        deltas.push(create_orderbook_delta(black_box(i as u64)));
-                    }
-                    black_box(deltas);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("vec_with_reserve", size), size, |b, &size| {
+            b.iter(|| {
+                let mut deltas = Vec::with_capacity(size);
+                for i in 0..size {
+                    deltas.push(create_orderbook_delta(black_box(i as u64)));
+                }
+                black_box(deltas);
+            });
+        });
     }
 
     // 完成测试组（生成报告）
@@ -419,9 +406,7 @@ fn bench_clone_performance(c: &mut Criterion) {
 /// 约 350 ns（每个 3.5 ns），受缓存影响。
 fn bench_batch_copy(c: &mut Criterion) {
     // 预先创建源数据（不计入测量时间）
-    let source: Vec<OrderDelta> = (0..100)
-        .map(create_orderbook_delta)
-        .collect();
+    let source: Vec<OrderDelta> = (0..100).map(create_orderbook_delta).collect();
 
     c.bench_function("batch_copy_100_orderbook_deltas", |b| {
         b.iter(|| {
@@ -507,90 +492,88 @@ criterion_group!(
 ///
 /// # 为什么需要这个？
 ///
-/// Criterion 需要禁用 Rust 默认的 benchmark harness（在 Cargo.toml 中设置 `harness = false`），
-/// 所以需要自己提供 main 函数。
+/// Criterion 需要禁用 Rust 默认的 benchmark harness（在 Cargo.toml 中设置
+/// `harness = false`）， 所以需要自己提供 main 函数。
 criterion_main!(benches);
 
 // ============================================================================
 // 学习总结
 // ============================================================================
 
-/*
-# Criterion 基准测试关键要点
-
-## 1. 必须使用 black_box
-
-```rust
+// # Criterion 基准测试关键要点
+//
+// ## 1. 必须使用 black_box
+//
+// ```rust
 // ❌ 错误
-b.iter(|| compute(42));
-
+// b.iter(|| compute(42));
+//
 // ✅ 正确
-b.iter(|| {
-    let result = compute(black_box(42));
-    black_box(result);
-});
-```
-
-## 2. 理解预热的重要性
-
-Criterion 自动预热 3 秒，确保：
-- CPU 缓存已加载
-- 分支预测器已训练
-- 稳定的测量环境
-
-## 3. 参数化测试找出性能特征
-
-```rust
-for size in [10, 100, 1000, 10000].iter() {
-    group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-        // 测试代码
-    });
-}
-```
-
-## 4. 对比多个实现
-
-```rust
-group.bench_function("method_1", |b| { /* ... */ });
-group.bench_function("method_2", |b| { /* ... */ });
-group.bench_function("method_3", |b| { /* ... */ });
-```
-
-## 5. 查看 HTML 报告
-
-```bash
-cargo bench
-open target/criterion/report/index.html
-```
-
-## 6. 保存基线用于回归检测
-
-```bash
-# 保存基线
-cargo bench -- --save-baseline my-baseline
-
-# 对比基线
-cargo bench -- --baseline my-baseline
-```
-
-## 7. 常见陷阱
-
-- 忘记使用 black_box
-- 测量了不该测量的东西（如设置代码）
-- 测量时间太短（< 1ns）
-- 不稳定的测量环境
-
-## 8. 最佳实践
-
-- 在稳定环境中运行（关闭后台程序）
-- 测试多个输入大小
-- 对比多个实现
-- 记录优化前后的数据
-- 查看生成的图表和报告
-
-# 进一步学习
-
-- 📚 [Criterion.rs 官方文档](https://bheisler.github.io/criterion.rs/book/)
-- 📖 [CRITERION_TUTORIAL.md](./CRITERION_TUTORIAL.md)
-- 📊 [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md)
-*/
+// b.iter(|| {
+// let result = compute(black_box(42));
+// black_box(result);
+// });
+// ```
+//
+// ## 2. 理解预热的重要性
+//
+// Criterion 自动预热 3 秒，确保：
+// - CPU 缓存已加载
+// - 分支预测器已训练
+// - 稳定的测量环境
+//
+// ## 3. 参数化测试找出性能特征
+//
+// ```rust
+// for size in [10, 100, 1000, 10000].iter() {
+// group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
+// 测试代码
+// });
+// }
+// ```
+//
+// ## 4. 对比多个实现
+//
+// ```rust
+// group.bench_function("method_1", |b| { /* ... */ });
+// group.bench_function("method_2", |b| { /* ... */ });
+// group.bench_function("method_3", |b| { /* ... */ });
+// ```
+//
+// ## 5. 查看 HTML 报告
+//
+// ```bash
+// cargo bench
+// open target/criterion/report/index.html
+// ```
+//
+// ## 6. 保存基线用于回归检测
+//
+// ```bash
+// # 保存基线
+// cargo bench -- --save-baseline my-baseline
+//
+// # 对比基线
+// cargo bench -- --baseline my-baseline
+// ```
+//
+// ## 7. 常见陷阱
+//
+// - 忘记使用 black_box
+// - 测量了不该测量的东西（如设置代码）
+// - 测量时间太短（< 1ns）
+// - 不稳定的测量环境
+//
+// ## 8. 最佳实践
+//
+// - 在稳定环境中运行（关闭后台程序）
+// - 测试多个输入大小
+// - 对比多个实现
+// - 记录优化前后的数据
+// - 查看生成的图表和报告
+//
+// # 进一步学习
+//
+// - 📚 [Criterion.rs 官方文档](https://bheisler.github.io/criterion.rs/book/)
+// - 📖 [CRITERION_TUTORIAL.md](./CRITERION_TUTORIAL.md)
+// - 📊 [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md)

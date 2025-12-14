@@ -33,5 +33,5 @@ mod tests;
 pub use domain::{
     consensus::HotStuffConsensus,
     entities::{Block, QuorumCertificate, Vote},
-    node::Node,
+    node::Node
 };

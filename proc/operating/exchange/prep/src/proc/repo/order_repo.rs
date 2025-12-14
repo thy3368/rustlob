@@ -6,23 +6,7 @@ use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Pr
 ///
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
-pub trait OrderRepo {
-    // === 核心写操作 ===
-
-    /// 添加订单到仓储
-    fn add_order(&mut self, order_id: OrderId, entry: OrderEntry, side: Side, price: Price) -> Result<(), RepoError>;
-
-    /// 取消订单
-    fn cancel_order(&mut self, order_id: OrderId) -> bool;
-
-    // === 核心读操作 ===
-
-    /// 根据订单ID查找订单
-    fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry>;
-
-    /// 根据订单ID查找订单（可变引用）
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry>;
-
+pub trait LimitOrderBookRepo {
     /// 匹配订单，返回匹配到的订单引用列表
     ///
     /// # 参数
@@ -35,6 +19,22 @@ pub trait OrderRepo {
     /// - `None`: 无法匹配
     fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>>;
 
+
+    /// 添加订单到仓储
+    fn add_order(&mut self, order_id: OrderId, entry: OrderEntry, side: Side, price: Price) -> Result<(), RepoError>;
+
+    /// 取消订单
+    fn remove_order(&mut self, order_id: OrderId) -> bool;
+
+    // === 核心读操作 ===
+
+    /// 根据订单ID查找订单
+    fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry>;
+
+    /// 根据订单ID查找订单（可变引用）
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry>;
+
+
     // === 市场数据查询 ===
 
     /// 获取最佳买价（O(1) 缓存访问）
@@ -43,26 +43,6 @@ pub trait OrderRepo {
     /// 获取最佳卖价（O(1) 缓存访问）
     fn best_ask(&self) -> Option<Price>;
 
-    /// 获取指定方向和价格限制下的可用数量
-    ///
-    /// # 参数
-    /// - `side`: 订单方向（Buy=查询卖方深度, Sell=查询买方深度）
-    /// - `price_limit`: 价格限制（买单最高价/卖单最低价），None表示无限制
-    ///
-    /// # 返回
-    /// 可用的总数量
-    fn get_available_quantity(&self, side: Side, price_limit: Option<Price>) -> Quantity;
-
-    /// 获取最佳卖价（别名方法，用于市价单逻辑）
-    fn get_best_ask(&self) -> Option<Price> { self.best_ask() }
-
-    /// 获取活跃订单数量
-    fn active_order_count(&self) -> usize;
-
-    // === 订单ID管理 ===
-
-    /// 分配订单ID
-    fn allocate_order_id(&mut self) -> OrderId;
 
     // === 事件溯源 ===
 

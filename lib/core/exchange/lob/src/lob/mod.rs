@@ -99,8 +99,8 @@
 //! // let buy_result = matching_service.execute(buy_order);
 //! ```
 
-mod domain;
 mod adaptor;
+mod domain;
 // OrderQueryService CQRS 重构版本
 // 数据类型定义
 // pub mod level_types; // Level 1-3 市场数据类型
@@ -113,41 +113,37 @@ mod adaptor;
 
 // 导出服务和仓储（供高级用户使用）
 // 幂等性包装
-pub use domain::service::trading_spot_order_proc::{
-    Nonce, Command, CommandResponse, CommandMetadata,
-    CommonError, SpotCommandError, AlgoCommandError,
-    ConditionalCommandError, MarketMakerCommandError, QueryError,
-    IdempotentSpotCommand, IdempotentSpotResult,
-    IdempotentAlgoCommand, IdempotentAlgoResult,
-    IdempotentConditionalCommand, IdempotentConditionalResult,
-    IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
-};
-// 核心现货命令
-pub use domain::service::trading_spot_order_proc::{
-    SpotCommand, SpotCommandResult, SpotOrderExchangeProc,
-    TimeInForce, OrderStatus,  // 导出 TimeInForce 和 OrderStatus
-};
+// 导出基础类型
 // 算法交易命令
-pub use domain::service::trading_spot_order_proc::{
-    AlgoCommand, AlgoCommandResult, AlgoOrderProc, UrgencyLevel,
-};
 // 条件订单命令
 pub use domain::service::trading_spot_order_proc::{
-    ConditionalCommand, ConditionalCommandResult, ConditionalOrderProc,
-    PegType, AuctionType,
+    AuctionType, ConditionalCommand, ConditionalCommandResult, ConditionalOrderProc, PegType
 };
 // 做市商命令
+pub use domain::service::trading_spot_order_proc::{MarketMakerCommand, MarketMakerCommandResult, MarketMakerProc};
+// 核心现货命令
 pub use domain::service::trading_spot_order_proc::{
-    MarketMakerCommand, MarketMakerCommandResult, MarketMakerProc,
+    OrderStatus, // 导出 TimeInForce 和 OrderStatus
+    SpotCommand,
+    SpotCommandResult,
+    SpotOrderExchangeProc,
+    TimeInForce
 };
-pub use domain::service::market_data_service::MarketDataService;
-pub use domain::service::trading_spot_order_proc_impl::SpotMatchingService;
-pub use domain::repo::{MemoryOrderRepo, OrderRepo, RepoError};
-
-// 导出基础类型
-pub use domain::entity::lob_types::{
-    EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price,
-    PricePoint, Quantity, RecordChange, Side, Symbol, Trade, TraderId,
+pub use domain::{
+    entity::lob_types::{
+        EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity,
+        RecordChange, Side, Symbol, Trade, TraderId
+    },
+    repo::{MemoryOrderRepo, OrderRepo, RepoError},
+    service::{
+        market_data_service::MarketDataService,
+        trading_spot_order_proc::{
+            AlgoCommand, AlgoCommandError, AlgoCommandResult, AlgoOrderProc, Command, CommandMetadata, CommandResponse,
+            CommonError, ConditionalCommandError, IdempotentAlgoCommand, IdempotentAlgoResult,
+            IdempotentConditionalCommand, IdempotentConditionalResult, IdempotentMarketMakerCommand,
+            IdempotentMarketMakerResult, IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommandError, Nonce,
+            QueryError, SpotCommandError, UrgencyLevel
+        },
+        trading_spot_order_proc_impl::SpotMatchingService
+    }
 };
-
-

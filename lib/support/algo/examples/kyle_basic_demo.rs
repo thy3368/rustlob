@@ -63,10 +63,7 @@ fn main() {
         let lambda = params.price_impact();
         let price_change = lambda * 1000.0;
 
-        println!(
-            "{:20} {:6.4}    {:+.2} 元",
-            name, lambda, price_change
-        );
+        println!("{:20} {:6.4}    {:+.2} 元", name, lambda, price_change);
     }
 
     println!("\n【结论】");
@@ -94,7 +91,7 @@ fn main() {
         20.0,  // σ_v: 价值不确定性
         10.0,  // σ_u: 噪音交易波动
         100.0, // 初始价格
-        5,     // 5轮交易
+        5      // 5轮交易
     );
 
     let mut service = KyleModelService::new(params);
@@ -135,15 +132,9 @@ fn main() {
     println!("\n【结果分析】");
     println!("  ✓ 总买入股数：{:.0} 股", total_shares);
     println!("  ✓ 最终价格：{:.2} 元", service.state().current_price);
-    println!(
-        "  ✓ 价格上涨：{:.2} 元",
-        service.state().price_change()
-    );
+    println!("  ✓ 价格上涨：{:.2} 元", service.state().price_change());
     println!("  ✓ 总利润：{:.2} 元", total_profit);
-    println!(
-        "  ✓ 平均成本：{:.2} 元/股\n",
-        (service.state().current_price + 100.0) / 2.0
-    );
+    println!("  ✓ 平均成本：{:.2} 元/股\n", (service.state().current_price + 100.0) / 2.0);
 
     println!("【如果一次性买入会怎样？】");
     let naive_impact = service.lambda() * total_shares;
@@ -220,10 +211,7 @@ fn main() {
     println!("  • 价格冲击：{:.2} 元", price_impact_naive);
     println!("  • 平均成本：{:.2} 元/股", avg_price_naive);
     println!("  • 总利润：{:.2} 元", profit_naive);
-    println!(
-        "  • 每股利润：{:.2} 元\n",
-        profit_naive / total_shares
-    );
+    println!("  • 每股利润：{:.2} 元\n", profit_naive / total_shares);
 
     // 策略 2：Kyle 最优策略（分10轮）
     println!("【策略 2：Kyle 最优策略 - 分 10 轮执行】");
@@ -236,8 +224,7 @@ fn main() {
     service_kyle.simulate(120.0, &noise_kyle);
 
     let total_shares_kyle = service_kyle.state().informed_position;
-    let avg_price_kyle =
-        (100.0 + service_kyle.state().current_price) / 2.0;
+    let avg_price_kyle = (100.0 + service_kyle.state().current_price) / 2.0;
     let profit_kyle = total_shares_kyle * (120.0 - avg_price_kyle);
 
     println!("  • 实际买入：{:.0} 股", total_shares_kyle);

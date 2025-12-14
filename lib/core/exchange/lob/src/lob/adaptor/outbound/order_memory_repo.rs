@@ -1,13 +1,15 @@
-use crate::lob::adaptor::outbound::arena::OrderArena;
-use crate::lob::domain::entity::lob_types::{
-    EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity,
-    Side, TraderId,
-};
+use std::collections::HashMap;
+
 /// 内存仓储实现
 ///
 /// 使用内存池和价格索引数组实现高性能订单存储
 use crate::lob::domain::repo::traits::{OrderRepo, RepoError};
-use std::collections::HashMap;
+use crate::lob::{
+    adaptor::outbound::arena::OrderArena,
+    domain::entity::lob_types::{
+        EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side, TraderId
+    }
+};
 
 /// 内存仓储实现
 ///
@@ -27,7 +29,7 @@ pub struct MemoryOrderRepo {
     /// 最佳买价（最高买入价）
     bid_max: Option<Price>,
     /// 最佳卖价（最低卖出价）
-    ask_min: Option<Price>,
+    ask_min: Option<Price>
 }
 
 impl MemoryOrderRepo {
@@ -40,7 +42,7 @@ impl MemoryOrderRepo {
             order_index: HashMap::with_capacity(max_orders),
             next_order_id: 1,
             bid_max: None,
-            ask_min: None,
+            ask_min: None
         }
     }
 
@@ -49,7 +51,7 @@ impl MemoryOrderRepo {
         let price_idx = price as usize;
         match side {
             Side::Buy => self.bids.get_mut(price_idx),
-            Side::Sell => self.asks.get_mut(price_idx),
+            Side::Sell => self.asks.get_mut(price_idx)
         }
     }
 
@@ -58,7 +60,7 @@ impl MemoryOrderRepo {
         let price_idx = price as usize;
         match side {
             Side::Buy => self.bids.get(price_idx),
-            Side::Sell => self.asks.get(price_idx),
+            Side::Sell => self.asks.get(price_idx)
         }
     }
 
@@ -67,16 +69,13 @@ impl MemoryOrderRepo {
     /// 获取指定价格级别的第一个订单索引
     #[inline]
     fn get_first_order_at_price(&self, price: Price, side: Side) -> Option<usize> {
-        self.get_price_point(price, side)
-            .and_then(|pp| pp.first_order_idx)
+        self.get_price_point(price, side).and_then(|pp| pp.first_order_idx)
     }
 
     /// 将订单链接到价格级别的链表尾部
     fn link_order_to_price_level(&mut self, idx: usize, price: Price, side: Side) {
         // 获取当前链表尾部
-        let last_idx = self
-            .get_price_point(price, side)
-            .and_then(|pp| pp.last_order_idx);
+        let last_idx = self.get_price_point(price, side).and_then(|pp| pp.last_order_idx);
 
         // 链接到现有尾部订单
         if let Some(last_idx) = last_idx {
@@ -110,13 +109,7 @@ impl MemoryOrderRepo {
 }
 
 impl OrderRepo for MemoryOrderRepo {
-    fn add_order(
-        &mut self,
-        order_id: OrderId,
-        entry: OrderEntry,
-        side: Side,
-        price: Price,
-    ) -> Result<(), RepoError> {
+    fn add_order(&mut self, order_id: OrderId, entry: OrderEntry, side: Side, price: Price) -> Result<(), RepoError> {
         // === 1. 前置验证（不分配资源）===
         if self.order_index.contains_key(&order_id) {
             return Err(RepoError::OrderAlreadyExists);
@@ -126,10 +119,7 @@ impl OrderRepo for MemoryOrderRepo {
         }
 
         // === 2. 分配 arena 槽位 ===
-        let idx = self
-            .arena
-            .allocate(entry)
-            .ok_or(RepoError::CapacityExceeded)?;
+        let idx = self.arena.allocate(entry).ok_or(RepoError::CapacityExceeded)?;
 
         // === 3. 更新索引和链表 ===
         self.order_index.insert(order_id, idx);
@@ -141,12 +131,7 @@ impl OrderRepo for MemoryOrderRepo {
         Ok(())
     }
 
-    fn match_orders(
-        &self,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-    ) -> Option<Vec<&OrderEntry>> {
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>> {
         // 根据 side,price,quantity 匹配所有的Order
         // quantity总和要大于等于quantity, 返回匹配上的订单数组
 
@@ -169,9 +154,7 @@ impl OrderRepo for MemoryOrderRepo {
                             break;
                         }
 
-                        if let Some(first_idx) =
-                            self.get_first_order_at_price(current_price, opposite_side)
-                        {
+                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
                             let mut current_idx = Some(first_idx);
 
                             while remaining > 0 && current_idx.is_some() {
@@ -205,9 +188,7 @@ impl OrderRepo for MemoryOrderRepo {
                             break;
                         }
 
-                        if let Some(first_idx) =
-                            self.get_first_order_at_price(current_price, opposite_side)
-                        {
+                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
                             let mut current_idx = Some(first_idx);
 
                             while remaining > 0 && current_idx.is_some() {
@@ -230,24 +211,16 @@ impl OrderRepo for MemoryOrderRepo {
             }
         }
 
-        if matched_orders.is_empty() {
-            None
-        } else {
-            Some(matched_orders)
-        }
+        if matched_orders.is_empty() { None } else { Some(matched_orders) }
     }
 
-    //good
+    // good
     fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry> {
-        self.order_index
-            .get(&order_id)
-            .and_then(|&idx| self.arena.get(idx))
+        self.order_index.get(&order_id).and_then(|&idx| self.arena.get(idx))
     }
 
     fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry> {
-        self.order_index
-            .get(&order_id)
-            .and_then(|&idx| self.arena.get_mut(idx))
+        self.order_index.get(&order_id).and_then(|&idx| self.arena.get_mut(idx))
     }
 
     fn cancel_order(&mut self, order_id: OrderId) -> bool {
@@ -263,9 +236,7 @@ impl OrderRepo for MemoryOrderRepo {
         false
     }
 
-    fn active_order_count(&self) -> usize {
-        self.order_index.len()
-    }
+    fn active_order_count(&self) -> usize { self.order_index.len() }
 
     fn allocate_order_id(&mut self) -> OrderId {
         let id = self.next_order_id;
@@ -273,13 +244,9 @@ impl OrderRepo for MemoryOrderRepo {
         id
     }
 
-    fn best_bid(&self) -> Option<Price> {
-        self.bid_max
-    }
+    fn best_bid(&self) -> Option<Price> { self.bid_max }
 
-    fn best_ask(&self) -> Option<Price> {
-        self.ask_min
-    }
+    fn best_ask(&self) -> Option<Price> { self.ask_min }
 
     fn get_available_quantity(&self, side: Side, price_limit: Option<Price>) -> Quantity {
         let mut total_quantity = 0u32;
@@ -302,7 +269,7 @@ impl OrderRepo for MemoryOrderRepo {
                                     }
                                     current_idx = match order.next_idx {
                                         Some(idx) => idx,
-                                        None => break,
+                                        None => break
                                     };
                                 }
                             }
@@ -327,7 +294,7 @@ impl OrderRepo for MemoryOrderRepo {
                                     }
                                     current_idx = match order.next_idx {
                                         Some(idx) => idx,
-                                        None => break,
+                                        None => break
                                     };
                                 }
                             }
@@ -355,7 +322,7 @@ impl MemoryOrderRepo {
             ("Order", EventOperation::Create) => self.apply_order_create(event),
             ("Order", EventOperation::Update) => self.apply_order_update(event),
             ("Order", EventOperation::Delete) => self.apply_order_delete(event),
-            _ => Ok(()), // 忽略其他事件类型（如 Trade）
+            _ => Ok(()) // 忽略其他事件类型（如 Trade）
         }
     }
 
@@ -482,8 +449,8 @@ mod tests {
                     FieldChange::created("side", FieldValue::Side(Side::Buy)),
                     FieldChange::created("price", FieldValue::U32(10000)),
                     FieldChange::created("quantity", FieldValue::U32(50)),
-                ],
-            )],
+                ]
+            )]
         );
 
         // 重放事件
@@ -509,20 +476,9 @@ mod tests {
         repo.add_order(100, entry, Side::Buy, 10000).unwrap();
 
         // 构造 Update 事件
-        let event = EntityEvent::new(
-            2,
-            2,
-            "Order",
-            EventOperation::Update,
-            vec![RecordChange::new(
-                100,
-                vec![FieldChange::updated(
-                    "unfilled_quantity",
-                    FieldValue::U32(100),
-                    FieldValue::U32(30),
-                )],
-            )],
-        );
+        let event = EntityEvent::new(2, 2, "Order", EventOperation::Update, vec![RecordChange::new(100, vec![
+            FieldChange::updated("unfilled_quantity", FieldValue::U32(100), FieldValue::U32(30)),
+        ])]);
 
         // 重放事件
         let result = repo.replay(vec![event]);
@@ -544,13 +500,7 @@ mod tests {
         assert!(repo.find_order(100).is_some());
 
         // 构造 Delete 事件
-        let event = EntityEvent::new(
-            3,
-            3,
-            "Order",
-            EventOperation::Delete,
-            vec![RecordChange::new(100, vec![])],
-        );
+        let event = EntityEvent::new(3, 3, "Order", EventOperation::Delete, vec![RecordChange::new(100, vec![])]);
 
         // 重放事件
         let result = repo.replay(vec![event]);
@@ -569,60 +519,25 @@ mod tests {
         // 构造多个事件
         let events = vec![
             // 创建订单1
-            EntityEvent::new(
-                1,
-                1,
-                "Order",
-                EventOperation::Create,
-                vec![RecordChange::new(
-                    1,
-                    vec![
-                        FieldChange::created("trader", FieldValue::TraderId(trader1)),
-                        FieldChange::created("side", FieldValue::Side(Side::Buy)),
-                        FieldChange::created("price", FieldValue::U32(10000)),
-                        FieldChange::created("quantity", FieldValue::U32(100)),
-                    ],
-                )],
-            ),
+            EntityEvent::new(1, 1, "Order", EventOperation::Create, vec![RecordChange::new(1, vec![
+                FieldChange::created("trader", FieldValue::TraderId(trader1)),
+                FieldChange::created("side", FieldValue::Side(Side::Buy)),
+                FieldChange::created("price", FieldValue::U32(10000)),
+                FieldChange::created("quantity", FieldValue::U32(100)),
+            ])]),
             // 创建订单2
-            EntityEvent::new(
-                2,
-                2,
-                "Order",
-                EventOperation::Create,
-                vec![RecordChange::new(
-                    2,
-                    vec![
-                        FieldChange::created("trader", FieldValue::TraderId(trader2)),
-                        FieldChange::created("side", FieldValue::Side(Side::Sell)),
-                        FieldChange::created("price", FieldValue::U32(10100)),
-                        FieldChange::created("quantity", FieldValue::U32(50)),
-                    ],
-                )],
-            ),
+            EntityEvent::new(2, 2, "Order", EventOperation::Create, vec![RecordChange::new(2, vec![
+                FieldChange::created("trader", FieldValue::TraderId(trader2)),
+                FieldChange::created("side", FieldValue::Side(Side::Sell)),
+                FieldChange::created("price", FieldValue::U32(10100)),
+                FieldChange::created("quantity", FieldValue::U32(50)),
+            ])]),
             // 更新订单1
-            EntityEvent::new(
-                3,
-                3,
-                "Order",
-                EventOperation::Update,
-                vec![RecordChange::new(
-                    1,
-                    vec![FieldChange::updated(
-                        "unfilled_quantity",
-                        FieldValue::U32(100),
-                        FieldValue::U32(60),
-                    )],
-                )],
-            ),
+            EntityEvent::new(3, 3, "Order", EventOperation::Update, vec![RecordChange::new(1, vec![
+                FieldChange::updated("unfilled_quantity", FieldValue::U32(100), FieldValue::U32(60)),
+            ])]),
             // 删除订单2
-            EntityEvent::new(
-                4,
-                4,
-                "Order",
-                EventOperation::Delete,
-                vec![RecordChange::new(2, vec![])],
-            ),
+            EntityEvent::new(4, 4, "Order", EventOperation::Delete, vec![RecordChange::new(2, vec![])]),
         ];
 
         // 重放所有事件

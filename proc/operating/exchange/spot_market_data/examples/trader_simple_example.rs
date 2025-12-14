@@ -4,8 +4,7 @@
 //! 注意：这是一个概念演示，实际运行需要完整的基础设施实现
 
 use lob::lob::{
-    Command, OrderId, OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandResult,
-    Symbol, TimeInForce, TraderId,
+    Command, OrderId, OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandResult, Symbol, TimeInForce, TraderId
 };
 
 fn main() {
@@ -25,10 +24,10 @@ fn main() {
         trader: trader_id,
         symbol,
         side: Side::Buy,
-        price: 50000,  // 50000 USDT
+        price: 50000,   // 50000 USDT
         quantity: 1500, // 1.5 BTC (假设精度为1000)
         time_in_force: TimeInForce::GoodTillCancel,
-        client_order_id: Some("CLIENT-BUY-001".to_string()),
+        client_order_id: Some("CLIENT-BUY-001".to_string())
     };
 
     let cmd = Command::new(1001, limit_buy_order);
@@ -42,10 +41,10 @@ fn main() {
         trader: trader_id,
         symbol,
         side: Side::Sell,
-        price: 50100,  // 50100 USDT
+        price: 50100,   // 50100 USDT
         quantity: 2000, // 2.0 BTC
         time_in_force: TimeInForce::PostOnly,
-        client_order_id: Some("CLIENT-SELL-001".to_string()),
+        client_order_id: Some("CLIENT-SELL-001".to_string())
     };
 
     let cmd = Command::new(1002, limit_sell_order);
@@ -59,10 +58,10 @@ fn main() {
         trader: trader_id,
         symbol,
         side: Side::Buy,
-        quantity: 1000, // 1.0 BTC
+        quantity: 1000,           // 1.0 BTC
         price_limit: Some(51000), // 价格保护：最高 51000 USDT
-        time_in_force: None, // 默认 IOC
-        client_order_id: Some("CLIENT-MARKET-001".to_string()),
+        time_in_force: None,      // 默认 IOC
+        client_order_id: Some("CLIENT-MARKET-001".to_string())
     };
 
     let cmd = Command::new(1003, market_buy_order);
@@ -72,7 +71,7 @@ fn main() {
     // 6. 场景4：取消订单
     println!("--- 场景4: 取消订单 ---");
     let cancel_order = SpotCommand::CancelOrder {
-        order_id: 12345,
+        order_id: 12345
     };
 
     let cmd = Command::new(1004, cancel_order);

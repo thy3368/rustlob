@@ -53,14 +53,14 @@ pub mod adaptor;
 pub mod domain;
 
 // Re-export commonly used types
-pub use domain::entity::{
-    Account, AccountCommand, AccountCommandResult, AccountId, AccountStatus, AccountType, AssetId,
-    Balance, BalanceError, BalanceOp, OrderId, Side, Timestamp, TradingPair, UserId,
-    PositionId, PositionInfo, PositionSide, Price, Quantity, Symbol,
-};
-pub use domain::repo::{AccountRepo, BalanceRepo, Position, PositionRepo};
-pub use domain::service::AccountService;
-
 // Re-export adaptor implementations
 pub use adaptor::{AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo, MemoryPositionRepo};
-
+pub use domain::{
+    entity::{
+        Account, AccountCommand, AccountCommandResult, AccountId, AccountStatus, AccountType, AssetId, Balance,
+        BalanceError, BalanceOp, OrderId, PositionId, PositionInfo, PositionSide, Price, Quantity, Side, Symbol,
+        Timestamp, TradingPair, UserId
+    },
+    repo::{AccountRepo, BalanceRepo, Position, PositionRepo},
+    service::AccountService
+};

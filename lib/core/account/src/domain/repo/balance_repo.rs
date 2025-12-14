@@ -16,12 +16,7 @@ pub trait BalanceRepo: Send + Sync {
     fn get_mut(&mut self, account_id: AccountId, asset_id: AssetId) -> Option<&mut Balance>;
 
     /// 获取或创建余额
-    fn get_or_create(
-        &mut self,
-        account_id: AccountId,
-        asset_id: AssetId,
-        now: Timestamp,
-    ) -> &mut Balance;
+    fn get_or_create(&mut self, account_id: AccountId, asset_id: AssetId, now: Timestamp) -> &mut Balance;
 
     /// 保存余额
     fn save(&mut self, balance: Balance);

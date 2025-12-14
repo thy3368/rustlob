@@ -1,8 +1,8 @@
+use crate::lob::domain::entity::lob_types::Price;
 /// 市场数据查询服务，提供行情数据服务
 ///
 /// 提供订单簿市场数据查询功能
 use crate::lob::domain::repo::OrderRepo;
-use crate::lob::domain::entity::lob_types::Price;
 
 
 /// 市场数据查询服务
@@ -10,40 +10,36 @@ use crate::lob::domain::entity::lob_types::Price;
 /// 提供订单簿市场数据查询功能
 pub struct MarketDataService<R>
 where
-    R: OrderRepo,
+    R: OrderRepo
 {
-    repository: R,
+    repository: R
 }
 
 impl<R> MarketDataService<R>
 where
-    R: OrderRepo,
+    R: OrderRepo
 {
     /// 创建新的市场数据服务
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository
+        }
     }
 
     /// 获取repository的不可变引用
-    pub fn repository(&self) -> &R {
-        &self.repository
-    }
+    pub fn repository(&self) -> &R { &self.repository }
 
     /// 查找最佳买价（O(1) 缓存访问）
-    pub fn find_best_bid(&self) -> Option<Price> {
-        self.repository.best_bid()
-    }
+    pub fn find_best_bid(&self) -> Option<Price> { self.repository.best_bid() }
 
     /// 查找最佳卖价（O(1) 缓存访问）
-    pub fn find_best_ask(&self) -> Option<Price> {
-        self.repository.best_ask()
-    }
+    pub fn find_best_ask(&self) -> Option<Price> { self.repository.best_ask() }
 
     /// 计算买卖价差
     pub fn calculate_spread(&self) -> Option<Price> {
         match (self.find_best_ask(), self.find_best_bid()) {
             (Some(ask), Some(bid)) if ask > bid => Some(ask - bid),
-            _ => None,
+            _ => None
         }
     }
 
@@ -51,7 +47,7 @@ where
     pub fn calculate_mid_price(&self) -> Option<Price> {
         match (self.find_best_ask(), self.find_best_bid()) {
             (Some(ask), Some(bid)) => Some((ask + bid) / 2),
-            _ => None,
+            _ => None
         }
     }
 }
@@ -59,8 +55,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lob::domain::repo::MemoryOrderRepo;
-    use crate::lob::domain::entity::lob_types::{OrderEntry, Side, TraderId};
+    use crate::lob::domain::{
+        entity::lob_types::{OrderEntry, Side, TraderId},
+        repo::MemoryOrderRepo
+    };
 
     #[test]
     fn test_market_data_service() {
@@ -75,8 +73,7 @@ mod tests {
 
         let sell_id = repo.allocate_order_id();
         let sell_entry = OrderEntry::new(sell_id, trader, 100);
-        repo.add_order(sell_id, sell_entry, Side::Sell, 10100)
-            .unwrap();
+        repo.add_order(sell_id, sell_entry, Side::Sell, 10100).unwrap();
 
         // 创建市场数据服务
         let md_service = MarketDataService::new(repo);
@@ -123,8 +120,7 @@ mod tests {
 
         let sell_id = repo.allocate_order_id();
         let sell_entry = OrderEntry::new(sell_id, trader, 100);
-        repo.add_order(sell_id, sell_entry, Side::Sell, 10100)
-            .unwrap();
+        repo.add_order(sell_id, sell_entry, Side::Sell, 10100).unwrap();
 
         let md_service = MarketDataService::new(repo);
 

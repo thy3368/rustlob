@@ -12,9 +12,7 @@ pub struct UserId(pub u64);
 
 impl From<u64> for UserId {
     #[inline]
-    fn from(id: u64) -> Self {
-        Self(id)
-    }
+    fn from(id: u64) -> Self { Self(id) }
 }
 
 /// 账户ID
@@ -24,9 +22,7 @@ pub struct AccountId(pub u64);
 
 impl From<u64> for AccountId {
     #[inline]
-    fn from(id: u64) -> Self {
-        Self(id)
-    }
+    fn from(id: u64) -> Self { Self(id) }
 }
 
 /// 资产ID（使用 u32 高性能）
@@ -42,9 +38,7 @@ impl AssetId {
 
 impl From<u32> for AssetId {
     #[inline]
-    fn from(id: u32) -> Self {
-        Self(id)
-    }
+    fn from(id: u32) -> Self { Self(id) }
 }
 
 /// 订单ID
@@ -57,7 +51,7 @@ pub type OrderId = u64;
 #[repr(u8)]
 pub enum Side {
     Buy = 0,
-    Sell = 1,
+    Sell = 1
 }
 
 impl Side {
@@ -66,7 +60,7 @@ impl Side {
     pub fn opposite(&self) -> Side {
         match self {
             Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy,
+            Side::Sell => Side::Buy
         }
     }
 }
@@ -82,7 +76,7 @@ pub struct TradingPair {
     /// 基础资产（如 BTC）
     pub base_asset: AssetId,
     /// 计价资产（如 USDT）
-    pub quote_asset: AssetId,
+    pub quote_asset: AssetId
 }
 
 impl TradingPair {
@@ -90,19 +84,19 @@ impl TradingPair {
     pub const fn new(base_asset: AssetId, quote_asset: AssetId) -> Self {
         Self {
             base_asset,
-            quote_asset,
+            quote_asset
         }
     }
 
     /// BTC/USDT 交易对
     pub const BTC_USDT: TradingPair = TradingPair {
         base_asset: AssetId::BTC,
-        quote_asset: AssetId::USDT,
+        quote_asset: AssetId::USDT
     };
 
     /// ETH/USDT 交易对
     pub const ETH_USDT: TradingPair = TradingPair {
         base_asset: AssetId::ETH,
-        quote_asset: AssetId::USDT,
+        quote_asset: AssetId::USDT
     };
 }

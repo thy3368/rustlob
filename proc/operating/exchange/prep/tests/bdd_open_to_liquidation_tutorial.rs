@@ -12,11 +12,12 @@
 //! cargo test --test bdd_open_to_liquidation_tutorial -- --nocapture
 //! ```
 
-use prep_proc::proc::trading_prep_order_proc::*;
-use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
-use prep_proc::proc::liquidation_proc::*;
-use prep_proc::proc::liquidation_types::*;
 use std::sync::Arc;
+
+use prep_proc::proc::{
+    liquidation_proc::*, liquidation_types::*, trading_prep_order_proc::*,
+    trading_prep_order_proc_impl::MatchingService
+};
 
 #[cfg(test)]
 mod open_to_liquidation_tutorial {
@@ -49,8 +50,7 @@ mod open_to_liquidation_tutorial {
         let symbol = Symbol::new("BTCUSDT");
         let leverage = 10;
 
-        service.set_leverage(SetLeverageCommand::new(symbol, leverage))
-            .expect("设置杠杆应该成功");
+        service.set_leverage(SetLeverageCommand::new(symbol, leverage)).expect("设置杠杆应该成功");
 
         println!("✅ 张三设置 {}x 杠杆", leverage);
         println!();
@@ -62,13 +62,11 @@ mod open_to_liquidation_tutorial {
 
         let quantity = Quantity::from_f64(1.0);
 
-        let open_cmd = OpenPositionCommand::market_long(symbol, quantity)
-            .with_leverage(leverage);
+        let open_cmd = OpenPositionCommand::market_long(symbol, quantity).with_leverage(leverage);
 
         println!("→ 张三开多仓 {} BTC @ 市价", quantity.to_f64());
 
-        let open_result = service.open_position(open_cmd)
-            .expect("开仓应该成功");
+        let open_result = service.open_position(open_cmd).expect("开仓应该成功");
 
         assert_eq!(open_result.status, OrderStatus::Filled, "订单应该成交");
 
@@ -81,9 +79,7 @@ mod open_to_liquidation_tutorial {
         // ================================================================
         println!("✅ THEN - 持仓验证\n");
 
-        let position = service
-            .query_position(QueryPositionCommand::long(symbol))
-            .expect("应该能查询到持仓");
+        let position = service.query_position(QueryPositionCommand::long(symbol)).expect("应该能查询到持仓");
 
         assert!(position.has_position(), "应该有持仓");
         assert_eq!(position.quantity.to_f64(), 1.0, "持仓数量应该是1 BTC");
@@ -101,22 +97,14 @@ mod open_to_liquidation_tutorial {
         println!();
 
         let expected_margin = entry_price * 1.0 / leverage as f64;
-        assert!(
-            (margin - expected_margin).abs() < 10.0,
-            "保证金应该约等于 {} USDT",
-            expected_margin
-        );
+        assert!((margin - expected_margin).abs() < 10.0, "保证金应该约等于 {} USDT", expected_margin);
 
         // ================================================================
         // And: 计算强平价
         // ================================================================
         println!("🔍 AND - 风险计算\n");
 
-        let liq_price = calculate_liquidation_price(
-            position.entry_price,
-            leverage,
-            PositionSide::Long
-        );
+        let liq_price = calculate_liquidation_price(position.entry_price, leverage, PositionSide::Long);
 
         let safety_distance = entry_price - liq_price.to_f64();
         let safety_distance_pct = safety_distance / entry_price * 100.0;
@@ -135,11 +123,7 @@ mod open_to_liquidation_tutorial {
         println!();
 
         let expected_liq_price = entry_price * 0.91;
-        assert!(
-            (liq_price.to_f64() - expected_liq_price).abs() < 10.0,
-            "强平价应该约等于 {} USDT",
-            expected_liq_price
-        );
+        assert!((liq_price.to_f64() - expected_liq_price).abs() < 10.0, "强平价应该约等于 {} USDT", expected_liq_price);
 
         // ================================================================
         // When: 价格下跌
@@ -182,12 +166,12 @@ mod open_to_liquidation_tutorial {
         impl InsuranceFund for MockInsuranceFund {
             async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCommandError> {
                 Ok(InsuranceFundCapacity {
-                    available_balance: Price::from_f64(100000.0),
+                    available_balance: Price::from_f64(100000.0)
                 })
             }
             async fn takeover(&self, position: &PositionInfo) -> Result<InsuranceFundTakeover, PrepCommandError> {
                 Ok(InsuranceFundTakeover {
-                    total_loss: position.margin,
+                    total_loss: position.margin
                 })
             }
         }
@@ -195,23 +179,22 @@ mod open_to_liquidation_tutorial {
         struct MockADLEngine;
         #[async_trait::async_trait]
         impl ADLEngine for MockADLEngine {
-            async fn find_counterparties(&self, _symbol: Symbol, _side: Side)
-                -> Result<Vec<PositionInfo>, PrepCommandError> {
+            async fn find_counterparties(
+                &self, _symbol: Symbol, _side: Side
+            ) -> Result<Vec<PositionInfo>, PrepCommandError> {
                 Ok(Vec::new())
             }
-            async fn execute_adl(&self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>)
-                -> Result<ADLResult, PrepCommandError> {
+            async fn execute_adl(
+                &self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>
+            ) -> Result<ADLResult, PrepCommandError> {
                 Ok(ADLResult {
-                    affected_positions: Vec::new(),
+                    affected_positions: Vec::new()
                 })
             }
         }
 
-        let liquidation_processor = LiquidationProcessor::new(
-            service.clone(),
-            Arc::new(MockInsuranceFund),
-            Arc::new(MockADLEngine),
-        );
+        let liquidation_processor =
+            LiquidationProcessor::new(service.clone(), Arc::new(MockInsuranceFund), Arc::new(MockADLEngine));
 
         println!("🔧 启动强平流程:");
         println!("   ├─ Step 0: 冻结持仓状态");
@@ -246,27 +229,14 @@ mod open_to_liquidation_tutorial {
         println!("   ├─ 用户损失: {} USDT", result.margin_loss.to_f64());
         println!("   ├─ 保证金: {} USDT", margin);
         println!("   ├─ 保险基金损失: {} USDT", result.insurance_fund_loss.to_f64());
-        println!("   └─ 穿仓损失: {}",
-            if result.insurance_fund_loss.to_f64() > 0.0 { "有" } else { "无" }
-        );
+        println!("   └─ 穿仓损失: {}", if result.insurance_fund_loss.to_f64() > 0.0 { "有" } else { "无" });
         println!();
 
-        assert_eq!(
-            result.liquidation_type,
-            LiquidationType::Market,
-            "应该是市场强平"
-        );
+        assert_eq!(result.liquidation_type, LiquidationType::Market, "应该是市场强平");
 
-        assert!(
-            result.margin_loss <= position.margin,
-            "用户损失不应超过保证金（正常市场强平情况）"
-        );
+        assert!(result.margin_loss <= position.margin, "用户损失不应超过保证金（正常市场强平情况）");
 
-        assert_eq!(
-            result.insurance_fund_loss.to_f64(),
-            0.0,
-            "市场强平成功时，保险基金不应承担损失"
-        );
+        assert_eq!(result.insurance_fund_loss.to_f64(), 0.0, "市场强平成功时，保险基金不应承担损失");
 
         // ================================================================
         // Finally: 总结报告
@@ -280,13 +250,11 @@ mod open_to_liquidation_tutorial {
         println!("   2️⃣  开仓: {} BTC @ {} USDT", quantity.to_f64(), entry_price);
         println!("   3️⃣  持仓: 保证金 {} USDT，强平价 {} USDT", margin, liq_price.to_f64());
         println!("   4️⃣  下跌: 价格跌至 {} USDT ({:.2}%)", mark_price.to_f64(), drop_pct_2);
-        println!("   5️⃣  强平: {} 强平成功",
-            match result.liquidation_type {
-                LiquidationType::Market => "市场",
-                LiquidationType::InsuranceFund => "保险基金",
-                LiquidationType::ADL => "ADL",
-            }
-        );
+        println!("   5️⃣  强平: {} 强平成功", match result.liquidation_type {
+            LiquidationType::Market => "市场",
+            LiquidationType::InsuranceFund => "保险基金",
+            LiquidationType::ADL => "ADL"
+        });
         println!("   6️⃣  结算: 用户损失 {} USDT", result.margin_loss.to_f64());
         println!();
 

@@ -26,6 +26,7 @@
 //! 4. **元数据支持**：内置追踪、缓存、性能监控
 
 use cqrs::*;
+
 use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
 
 // ==================== 临时类型定义（原来在 mgn.rs 中）====================
@@ -40,7 +41,7 @@ pub struct OrderQuery {
     pub price_range: Option<(Price, Price)>,
     pub active_only: bool,
     pub offset: usize,
-    pub limit: usize,
+    pub limit: usize
 }
 
 /// 订单查询结果（临时定义）
@@ -49,7 +50,7 @@ pub struct OrderQuery {
 pub struct OrderQueryResult {
     pub orders: Vec<OrderView>,
     pub total_count: usize,
-    pub has_more: bool,
+    pub has_more: bool
 }
 
 /// 订单视图（临时定义）
@@ -66,7 +67,7 @@ pub struct OrderView {
     pub fill_rate: u32,
     pub status: OrderStatusEnum,
     pub created_at: u64,
-    pub updated_at: u64,
+    pub updated_at: u64
 }
 
 /// 订单状态（临时定义）
@@ -76,7 +77,7 @@ pub enum OrderStatusEnum {
     Pending,
     PartiallyFilled,
     Filled,
-    Cancelled,
+    Cancelled
 }
 
 /// 订单统计（临时定义）
@@ -86,7 +87,7 @@ pub struct OrderStatistics {
     pub total_orders: usize,
     pub active_orders: usize,
     pub filled_orders: usize,
-    pub cancelled_orders: usize,
+    pub cancelled_orders: usize
 }
 
 // ==================== 查询负载定义 ====================
@@ -95,7 +96,7 @@ pub struct OrderStatistics {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetOrderById {
-    pub order_id: OrderId,
+    pub order_id: OrderId
 }
 
 /// 查询交易员的订单
@@ -107,7 +108,7 @@ pub struct GetOrdersByTrader {
     /// 可选：分页限制
     pub limit: Option<usize>,
     /// 可选：分页偏移
-    pub offset: Option<usize>,
+    pub offset: Option<usize>
 }
 
 impl GetOrdersByTrader {
@@ -117,7 +118,7 @@ impl GetOrdersByTrader {
             trader_id,
             active_only: false,
             limit: None,
-            offset: None,
+            offset: None
         }
     }
 
@@ -127,7 +128,7 @@ impl GetOrdersByTrader {
             trader_id,
             active_only: true,
             limit: None,
-            offset: None,
+            offset: None
         }
     }
 
@@ -146,29 +147,27 @@ pub struct GetOrderStatistics {
     /// 可选：按交易员过滤
     pub trader_id: Option<TraderId>,
     /// 可选：按方向过滤
-    pub side: Option<Side>,
+    pub side: Option<Side>
 }
 
 impl Default for GetOrderStatistics {
     fn default() -> Self {
         Self {
             trader_id: None,
-            side: None,
+            side: None
         }
     }
 }
 
 impl GetOrderStatistics {
     /// 全局统计
-    pub fn global() -> Self {
-        Self::default()
-    }
+    pub fn global() -> Self { Self::default() }
 
     /// 按交易员统计
     pub fn by_trader(trader_id: TraderId) -> Self {
         Self {
             trader_id: Some(trader_id),
-            side: None,
+            side: None
         }
     }
 
@@ -176,7 +175,7 @@ impl GetOrderStatistics {
     pub fn by_side(side: Side) -> Self {
         Self {
             trader_id: None,
-            side: Some(side),
+            side: Some(side)
         }
     }
 }
@@ -206,22 +205,28 @@ pub struct GetMidPrice {}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetMarketDepth {
     /// 深度级别数量
-    pub levels: usize,
+    pub levels: usize
 }
 
 impl GetMarketDepth {
     pub fn new(levels: usize) -> Self {
-        Self { levels }
+        Self {
+            levels
+        }
     }
 
     /// Level 1 数据（BBO）
     pub fn level1() -> Self {
-        Self { levels: 1 }
+        Self {
+            levels: 1
+        }
     }
 
     /// Level 2 数据（常见深度）
     pub fn level2() -> Self {
-        Self { levels: 10 }
+        Self {
+            levels: 10
+        }
     }
 }
 
@@ -229,7 +234,7 @@ impl GetMarketDepth {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrders {
-    pub filter: OrderQuery,
+    pub filter: OrderQuery
 }
 
 // ==================== 查询结果定义 ====================
@@ -238,7 +243,7 @@ pub struct QueryOrders {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetOrderByIdData {
-    pub order: Option<OrderView>,
+    pub order: Option<OrderView>
 }
 
 /// 订单列表查询结果
@@ -247,7 +252,7 @@ pub struct GetOrderByIdData {
 pub struct GetOrdersByTraderData {
     pub orders: Vec<OrderView>,
     pub total_count: usize,
-    pub has_more: bool,
+    pub has_more: bool
 }
 
 /// 订单统计结果
@@ -259,7 +264,7 @@ pub struct OrderStatisticsData {
     pub filled_orders: usize,
     pub cancelled_orders: usize,
     pub total_volume: Quantity,
-    pub by_side: Option<SideStatistics>,
+    pub by_side: Option<SideStatistics>
 }
 
 /// 方向统计
@@ -269,7 +274,7 @@ pub struct SideStatistics {
     pub buy_count: usize,
     pub sell_count: usize,
     pub buy_volume: Quantity,
-    pub sell_volume: Quantity,
+    pub sell_volume: Quantity
 }
 
 /// 最优买价结果
@@ -277,7 +282,7 @@ pub struct SideStatistics {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BestBidData {
     pub price: Option<Price>,
-    pub quantity: Option<Quantity>,
+    pub quantity: Option<Quantity>
 }
 
 /// 最优卖价结果
@@ -285,7 +290,7 @@ pub struct BestBidData {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BestAskData {
     pub price: Option<Price>,
-    pub quantity: Option<Quantity>,
+    pub quantity: Option<Quantity>
 }
 
 /// 价差结果
@@ -294,7 +299,7 @@ pub struct BestAskData {
 pub struct SpreadData {
     pub spread: Option<Price>,
     pub best_bid: Option<Price>,
-    pub best_ask: Option<Price>,
+    pub best_ask: Option<Price>
 }
 
 /// 中间价结果
@@ -303,7 +308,7 @@ pub struct SpreadData {
 pub struct MidPriceData {
     pub mid_price: Option<Price>,
     pub best_bid: Option<Price>,
-    pub best_ask: Option<Price>,
+    pub best_ask: Option<Price>
 }
 
 /// 市场深度结果
@@ -312,7 +317,7 @@ pub struct MidPriceData {
 pub struct MarketDepthData {
     pub bids: Vec<PriceLevel>,
     pub asks: Vec<PriceLevel>,
-    pub timestamp: u64,
+    pub timestamp: u64
 }
 
 /// 价格级别
@@ -321,14 +326,14 @@ pub struct MarketDepthData {
 pub struct PriceLevel {
     pub price: Price,
     pub quantity: Quantity,
-    pub order_count: usize,
+    pub order_count: usize
 }
 
 /// 复杂查询结果
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrdersData {
-    pub result: OrderQueryResult,
+    pub result: OrderQueryResult
 }
 
 // ==================== CQRS 风格的服务接口 ====================
@@ -339,58 +344,35 @@ pub struct QueryOrdersData {
 #[async_trait::async_trait]
 pub trait OrderQueryServiceV2: Send + Sync {
     /// 根据订单ID查询
-    async fn get_order_by_id(
-        &self,
-        query: Query<GetOrderById>,
-    ) -> Result<QueryResult<GetOrderByIdData>, CqrsError>;
+    async fn get_order_by_id(&self, query: Query<GetOrderById>) -> Result<QueryResult<GetOrderByIdData>, CqrsError>;
 
     /// 查询交易员的订单
     async fn get_orders_by_trader(
-        &self,
-        query: Query<GetOrdersByTrader>,
+        &self, query: Query<GetOrdersByTrader>
     ) -> Result<QueryResult<GetOrdersByTraderData>, CqrsError>;
 
     /// 获取订单统计
     async fn get_order_statistics(
-        &self,
-        query: Query<GetOrderStatistics>,
+        &self, query: Query<GetOrderStatistics>
     ) -> Result<QueryResult<OrderStatisticsData>, CqrsError>;
 
     /// 获取最优买价
-    async fn get_best_bid(
-        &self,
-        query: Query<GetBestBid>,
-    ) -> Result<QueryResult<BestBidData>, CqrsError>;
+    async fn get_best_bid(&self, query: Query<GetBestBid>) -> Result<QueryResult<BestBidData>, CqrsError>;
 
     /// 获取最优卖价
-    async fn get_best_ask(
-        &self,
-        query: Query<GetBestAsk>,
-    ) -> Result<QueryResult<BestAskData>, CqrsError>;
+    async fn get_best_ask(&self, query: Query<GetBestAsk>) -> Result<QueryResult<BestAskData>, CqrsError>;
 
     /// 获取价差
-    async fn get_spread(
-        &self,
-        query: Query<GetSpread>,
-    ) -> Result<QueryResult<SpreadData>, CqrsError>;
+    async fn get_spread(&self, query: Query<GetSpread>) -> Result<QueryResult<SpreadData>, CqrsError>;
 
     /// 获取中间价
-    async fn get_mid_price(
-        &self,
-        query: Query<GetMidPrice>,
-    ) -> Result<QueryResult<MidPriceData>, CqrsError>;
+    async fn get_mid_price(&self, query: Query<GetMidPrice>) -> Result<QueryResult<MidPriceData>, CqrsError>;
 
     /// 获取市场深度
-    async fn get_market_depth(
-        &self,
-        query: Query<GetMarketDepth>,
-    ) -> Result<QueryResult<MarketDepthData>, CqrsError>;
+    async fn get_market_depth(&self, query: Query<GetMarketDepth>) -> Result<QueryResult<MarketDepthData>, CqrsError>;
 
     /// 复杂订单查询
-    async fn query_orders(
-        &self,
-        query: Query<QueryOrders>,
-    ) -> Result<QueryResult<QueryOrdersData>, CqrsError>;
+    async fn query_orders(&self, query: Query<QueryOrders>) -> Result<QueryResult<QueryOrdersData>, CqrsError>;
 }
 
 // ==================== 实现示例 ====================
@@ -401,31 +383,27 @@ pub struct OrderQueryServiceImpl {
 }
 
 impl OrderQueryServiceImpl {
-    pub fn new() -> Self {
-        Self {}
-    }
+    pub fn new() -> Self { Self {} }
 }
 
 #[async_trait::async_trait]
 impl OrderQueryServiceV2 for OrderQueryServiceImpl {
-    async fn get_order_by_id(
-        &self,
-        query: Query<GetOrderById>,
-    ) -> Result<QueryResult<GetOrderByIdData>, CqrsError> {
+    async fn get_order_by_id(&self, query: Query<GetOrderById>) -> Result<QueryResult<GetOrderByIdData>, CqrsError> {
         // 从 repo 查询
         // let order = self.repo.find_by_id(query.payload.order_id).await?;
 
         // 示例数据
         let order = None; // 实际应从 repo 查询
 
-        let data = GetOrderByIdData { order };
+        let data = GetOrderByIdData {
+            order
+        };
 
         Ok(QueryResult::success(data))
     }
 
     async fn get_orders_by_trader(
-        &self,
-        query: Query<GetOrdersByTrader>,
+        &self, query: Query<GetOrdersByTrader>
     ) -> Result<QueryResult<GetOrdersByTraderData>, CqrsError> {
         // 从 repo 查询
         // let orders = self.repo
@@ -440,15 +418,14 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
         let data = GetOrdersByTraderData {
             orders,
             total_count,
-            has_more,
+            has_more
         };
 
         Ok(QueryResult::success(data))
     }
 
     async fn get_order_statistics(
-        &self,
-        _query: Query<GetOrderStatistics>,
+        &self, _query: Query<GetOrderStatistics>
     ) -> Result<QueryResult<OrderStatisticsData>, CqrsError> {
         // 从 repo 统计
         let data = OrderStatisticsData {
@@ -457,90 +434,74 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
             filled_orders: 0,
             cancelled_orders: 0,
             total_volume: 0,
-            by_side: None,
+            by_side: None
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn get_best_bid(
-        &self,
-        _query: Query<GetBestBid>,
-    ) -> Result<QueryResult<BestBidData>, CqrsError> {
+    async fn get_best_bid(&self, _query: Query<GetBestBid>) -> Result<QueryResult<BestBidData>, CqrsError> {
         // 从 repo 查询
         let data = BestBidData {
             price: Some(9900),
-            quantity: Some(1000),
+            quantity: Some(1000)
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn get_best_ask(
-        &self,
-        _query: Query<GetBestAsk>,
-    ) -> Result<QueryResult<BestAskData>, CqrsError> {
+    async fn get_best_ask(&self, _query: Query<GetBestAsk>) -> Result<QueryResult<BestAskData>, CqrsError> {
         let data = BestAskData {
             price: Some(10100),
-            quantity: Some(800),
+            quantity: Some(800)
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn get_spread(
-        &self,
-        _query: Query<GetSpread>,
-    ) -> Result<QueryResult<SpreadData>, CqrsError> {
+    async fn get_spread(&self, _query: Query<GetSpread>) -> Result<QueryResult<SpreadData>, CqrsError> {
         let data = SpreadData {
             spread: Some(200),
             best_bid: Some(9900),
-            best_ask: Some(10100),
+            best_ask: Some(10100)
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn get_mid_price(
-        &self,
-        _query: Query<GetMidPrice>,
-    ) -> Result<QueryResult<MidPriceData>, CqrsError> {
+    async fn get_mid_price(&self, _query: Query<GetMidPrice>) -> Result<QueryResult<MidPriceData>, CqrsError> {
         let data = MidPriceData {
             mid_price: Some(10000),
             best_bid: Some(9900),
-            best_ask: Some(10100),
+            best_ask: Some(10100)
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn get_market_depth(
-        &self,
-        query: Query<GetMarketDepth>,
-    ) -> Result<QueryResult<MarketDepthData>, CqrsError> {
+    async fn get_market_depth(&self, query: Query<GetMarketDepth>) -> Result<QueryResult<MarketDepthData>, CqrsError> {
         let _levels = query.payload.levels;
 
         let data = MarketDepthData {
             bids: vec![],
             asks: vec![],
-            timestamp: 1234567890,
+            timestamp: 1234567890
         };
 
         Ok(QueryResult::success(data))
     }
 
-    async fn query_orders(
-        &self,
-        query: Query<QueryOrders>,
-    ) -> Result<QueryResult<QueryOrdersData>, CqrsError> {
+    async fn query_orders(&self, query: Query<QueryOrders>) -> Result<QueryResult<QueryOrdersData>, CqrsError> {
         // 使用原有的 OrderQuery 逻辑
         let result = OrderQueryResult {
             orders: vec![],
             total_count: 0,
-            has_more: false,
+            has_more: false
         };
 
-        let data = QueryOrdersData { result };
+        let data = QueryOrdersData {
+            result
+        };
 
         Ok(QueryResult::success(data))
     }
@@ -557,7 +518,9 @@ mod tests {
         let service = OrderQueryServiceImpl::new();
 
         // 创建查询
-        let query = Query::new(GetOrderById { order_id: 12345 });
+        let query = Query::new(GetOrderById {
+            order_id: 12345
+        });
 
         // 执行查询
         let result = service.get_order_by_id(query).await.unwrap();
@@ -572,9 +535,7 @@ mod tests {
         let service = OrderQueryServiceImpl::new();
 
         // 创建查询（使用便利方法）
-        let query = Query::new(GetOrdersByTrader::active_only(
-            TraderId::from_str("TRADER1"),
-        ));
+        let query = Query::new(GetOrdersByTrader::active_only(TraderId::from_str("TRADER1")));
 
         let result = service.get_orders_by_trader(query).await.unwrap();
 
@@ -633,8 +594,7 @@ mod tests {
     #[test]
     fn test_query_builder_pattern() {
         // 使用构建器模式创建复杂查询
-        let query_payload = GetOrdersByTrader::active_only(TraderId::from_str("TRADER1"))
-            .with_pagination(20, 0);
+        let query_payload = GetOrdersByTrader::active_only(TraderId::from_str("TRADER1")).with_pagination(20, 0);
 
         assert_eq!(query_payload.limit, Some(20));
         assert_eq!(query_payload.offset, Some(0));

@@ -5,14 +5,13 @@ use crate::lob::domain::entity::lob_types::OrderEntry;
 /// 提供快速、缓存友好的分配，无堆开销。
 /// 订单从预分配池中使用bump-pointer分配。
 
-
 /// 固定大小的订单条目内存池
 ///
 /// 使用Free List机制实现内存回收和重用
 pub struct OrderArena {
-    entries: Vec<OrderEntry>,  // 订单条目数组
-    next_free: usize,          // 下一个空闲位置（bump pointer）
-    free_list: Vec<usize>,     // 已释放槽位的索引列表
+    entries: Vec<OrderEntry>, // 订单条目数组
+    next_free: usize,         // 下一个空闲位置（bump pointer）
+    free_list: Vec<usize>     // 已释放槽位的索引列表
 }
 
 impl OrderArena {
@@ -22,7 +21,7 @@ impl OrderArena {
         Self {
             entries: Vec::with_capacity(capacity),
             next_free: 0,
-            free_list: Vec::new(),
+            free_list: Vec::new()
         }
     }
 
@@ -64,39 +63,27 @@ impl OrderArena {
 
     /// 通过索引获取条目的引用 good
     #[inline]
-    pub fn get(&self, idx: usize) -> Option<&OrderEntry> {
-        self.entries.get(idx)
-    }
+    pub fn get(&self, idx: usize) -> Option<&OrderEntry> { self.entries.get(idx) }
 
     /// 通过索引获取条目的可变引用 good
     #[inline]
-    pub fn get_mut(&mut self, idx: usize) -> Option<&mut OrderEntry> {
-        self.entries.get_mut(idx)
-    }
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut OrderEntry> { self.entries.get_mut(idx) }
 
     /// 获取已分配条目的数量
     #[inline]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
+    pub fn len(&self) -> usize { self.entries.len() }
 
     /// 检查内存池是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
     /// 获取内存池容量
     #[inline]
-    pub fn capacity(&self) -> usize {
-        self.entries.capacity()
-    }
+    pub fn capacity(&self) -> usize { self.entries.capacity() }
 
     /// 获取剩余容量
     #[inline]
-    pub fn remaining_capacity(&self) -> usize {
-        self.entries.capacity() - self.entries.len()
-    }
+    pub fn remaining_capacity(&self) -> usize { self.entries.capacity() - self.entries.len() }
 
     /// 清空内存池（用于重置）
     #[inline]
@@ -108,9 +95,7 @@ impl OrderArena {
 
     /// 预留额外容量
     #[inline]
-    pub fn reserve(&mut self, additional: usize) {
-        self.entries.reserve(additional);
-    }
+    pub fn reserve(&mut self, additional: usize) { self.entries.reserve(additional); }
 }
 
 impl Default for OrderArena {
@@ -121,8 +106,10 @@ impl Default for OrderArena {
 
 #[cfg(test)]
 mod tests {
-    use crate::lob::adaptor::outbound::arena::OrderArena;
-    use crate::lob::domain::entity::lob_types::{OrderEntry, TraderId};
+    use crate::lob::{
+        adaptor::outbound::arena::OrderArena,
+        domain::entity::lob_types::{OrderEntry, TraderId}
+    };
 
     #[test]
     fn test_arena_allocation() {

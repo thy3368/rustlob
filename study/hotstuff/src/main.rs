@@ -2,8 +2,7 @@
 //!
 //! 运行方式：cargo run
 
-use hotstuff::crypto::PrivateKey;
-use hotstuff::Node;
+use hotstuff::{crypto::PrivateKey, Node};
 
 fn main() {
     println!("\n╔═══════════════════════════════════════╗");
@@ -11,9 +10,7 @@ fn main() {
     println!("╚═══════════════════════════════════════╝\n");
 
     // 创建 4 个节点
-    let validators: Vec<_> = (0..4)
-        .map(|i| PrivateKey::from_u64(i).public_key())
-        .collect();
+    let validators: Vec<_> = (0..4).map(|i| PrivateKey::from_u64(i).public_key()).collect();
 
     println!("Initializing 4 nodes...\n");
 

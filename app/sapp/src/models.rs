@@ -16,7 +16,7 @@ pub struct CommandRequest {
     pub quantity: Option<u32>,
     pub price_limit: Option<u32>,
     pub order_id: Option<u64>,
-    pub client_order_id: Option<String>,
+    pub client_order_id: Option<String>
 }
 
 /// 统一命令响应
@@ -37,7 +37,7 @@ pub struct CommandResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trades: Option<Vec<TradeInfo>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub error: Option<String>
 }
 
 /// 交易信息
@@ -46,7 +46,7 @@ pub struct TradeInfo {
     pub buyer: String,
     pub seller: String,
     pub price: u32,
-    pub quantity: u32,
+    pub quantity: u32
 }
 
 /// 健康检查响应
@@ -54,7 +54,7 @@ pub struct TradeInfo {
 pub struct HealthResponse {
     pub status: String,
     pub service: String,
-    pub version: String,
+    pub version: String
 }
 
 /// RPC 服务配置
@@ -63,7 +63,7 @@ pub struct RpcServiceConfig {
     pub listen_addr: String,
     pub threads: usize,
     pub order_capacity: usize,
-    pub price_range: usize,
+    pub price_range: usize
 }
 
 impl Default for RpcServiceConfig {
@@ -72,7 +72,7 @@ impl Default for RpcServiceConfig {
             listen_addr: "127.0.0.1:3030".to_string(),
             threads: 4,
             order_capacity: 100000,
-            price_range: 1000000,
+            price_range: 1000000
         }
     }
 }

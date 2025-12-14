@@ -7,8 +7,7 @@
 //!
 //! 这是最常见的正常交易场景，区别于强平流程。
 
-use prep_proc::proc::trading_prep_order_proc::*;
-use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
+use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::MatchingService};
 
 // ============================================================================
 // 完整正常交易流程 - 设置杠杆 → 开仓 → 平仓
@@ -61,8 +60,7 @@ mod normal_trading_flow {
         // ====================================================================
         let open_quantity = Quantity::from_f64(1.0);
 
-        let open_cmd = OpenPositionCommand::market_long(symbol, open_quantity)
-            .with_leverage(leverage);
+        let open_cmd = OpenPositionCommand::market_long(symbol, open_quantity).with_leverage(leverage);
 
         let open_result = matching_service.open_position(open_cmd);
         assert!(open_result.is_ok(), "开仓应该成功");
@@ -111,7 +109,8 @@ mod normal_trading_flow {
         println!("\n📈 Step 5: 市场价格变化");
         println!("   开仓价: {} USDT", position.entry_price.to_f64());
         println!("   当前价: {} USDT", new_market_price.to_f64());
-        println!("   涨幅: +{} USDT ({:.2}%)",
+        println!(
+            "   涨幅: +{} USDT ({:.2}%)",
             new_market_price.to_f64() - position.entry_price.to_f64(),
             (new_market_price.to_f64() - position.entry_price.to_f64()) / position.entry_price.to_f64() * 100.0
         );
@@ -126,8 +125,7 @@ mod normal_trading_flow {
         println!("\n🎯 Step 6: 主动平仓");
 
         let close_cmd = ClosePositionCommand::market_close_long(
-            symbol,
-            None  // None表示平仓全部持仓
+            symbol, None // None表示平仓全部持仓
         );
 
         let close_result = matching_service.close_position(close_cmd);
@@ -155,9 +153,7 @@ mod normal_trading_flow {
         println!("\n✅ Step 7: 验证平仓结果");
 
         // 查询持仓（应该已关闭或数量为0）
-        let position_after_close = matching_service.query_position(
-            QueryPositionCommand::long(symbol)
-        ).unwrap();
+        let position_after_close = matching_service.query_position(QueryPositionCommand::long(symbol)).unwrap();
 
         println!("   平仓后持仓状态:");
         println!("     数量: {} BTC", position_after_close.quantity.to_f64());
@@ -178,22 +174,14 @@ mod normal_trading_flow {
         println!("  2️⃣  设置杠杆: {}x", leverage);
 
         println!("\n交易阶段:");
-        println!("  3️⃣  开仓: {} BTC @ {} USDT",
-            open_quantity.to_f64(),
-            position.entry_price.to_f64()
-        );
+        println!("  3️⃣  开仓: {} BTC @ {} USDT", open_quantity.to_f64(), position.entry_price.to_f64());
         println!("  4️⃣  保证金: {} USDT", position.margin.to_f64());
-        println!("  5️⃣  价格变动: {} → {} USDT",
-            position.entry_price.to_f64(),
-            new_market_price.to_f64()
-        );
+        println!("  5️⃣  价格变动: {} → {} USDT", position.entry_price.to_f64(), new_market_price.to_f64());
         println!("  6️⃣  平仓: 全部持仓");
 
         println!("\n结果:");
         println!("  💰 预期盈利: {} USDT", expected_profit);
-        println!("  📈 收益率: {:.2}%",
-            expected_profit / position.margin.to_f64() * 100.0
-        );
+        println!("  📈 收益率: {:.2}%", expected_profit / position.margin.to_f64() * 100.0);
         println!("  ✅ 流程完成");
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     }
@@ -213,19 +201,14 @@ mod normal_trading_flow {
         let matching_service = MatchingService::new(Price::from_f64(10000.0));
         let symbol = Symbol::new("BTCUSDT");
 
-        matching_service.set_leverage(
-            SetLeverageCommand::new(symbol, 10)
-        ).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 
         println!("✅ Step 1-2: 初始化完成，杠杆已设置为10x");
 
         // ====================================================================
         // Step 3: 开空仓
         // ====================================================================
-        let open_cmd = OpenPositionCommand::market_short(
-            symbol,
-            Quantity::from_f64(1.0)
-        ).with_leverage(10);
+        let open_cmd = OpenPositionCommand::market_short(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd).unwrap();
         assert_eq!(open_result.status, OrderStatus::Filled);
@@ -236,9 +219,7 @@ mod normal_trading_flow {
         // ====================================================================
         // Step 4: 验证空仓持仓
         // ====================================================================
-        let position = matching_service.query_position(
-            QueryPositionCommand::short(symbol)
-        ).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::short(symbol)).unwrap();
 
         assert!(position.is_short(), "应该是空仓");
 
@@ -257,10 +238,7 @@ mod normal_trading_flow {
         println!("\n📉 Step 5: 价格下跌");
         println!("   开仓价: {} USDT", position.entry_price.to_f64());
         println!("   当前价: {} USDT", new_price.to_f64());
-        println!("   跌幅: -{} USDT ({:.2}%)",
-            price_drop,
-            price_drop / position.entry_price.to_f64() * 100.0
-        );
+        println!("   跌幅: -{} USDT ({:.2}%)", price_drop, price_drop / position.entry_price.to_f64() * 100.0);
 
         // 空仓盈利 = 开仓价 - 平仓价
         let expected_profit = price_drop * position.quantity.to_f64();
@@ -282,15 +260,10 @@ mod normal_trading_flow {
         println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         println!("📊 空仓交易总结");
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        println!("  📉 开空仓: {} BTC @ {} USDT",
-            position.quantity.to_f64(),
-            position.entry_price.to_f64()
-        );
+        println!("  📉 开空仓: {} BTC @ {} USDT", position.quantity.to_f64(), position.entry_price.to_f64());
         println!("  📉 价格下跌: {} USDT", price_drop);
         println!("  💰 预期盈利: {} USDT", expected_profit);
-        println!("  📈 收益率: {:.2}%",
-            expected_profit / position.margin.to_f64() * 100.0
-        );
+        println!("  📈 收益率: {:.2}%", expected_profit / position.margin.to_f64() * 100.0);
         println!("  ✅ 空仓交易完成");
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     }
@@ -310,22 +283,17 @@ mod normal_trading_flow {
         let matching_service = MatchingService::new(Price::from_f64(20000.0));
         let symbol = Symbol::new("BTCUSDT");
 
-        matching_service.set_leverage(
-            SetLeverageCommand::new(symbol, 10)
-        ).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 
         // ====================================================================
         // Step 3: 开仓 2 BTC
         // ====================================================================
         let total_quantity = Quantity::from_f64(2.0);
-        let open_cmd = OpenPositionCommand::market_long(symbol, total_quantity)
-            .with_leverage(10);
+        let open_cmd = OpenPositionCommand::market_long(symbol, total_quantity).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(
-            QueryPositionCommand::long(symbol)
-        ).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(symbol)).unwrap();
 
         println!("✅ Step 3: 开仓成功");
         println!("   总数量: {} BTC", position.quantity.to_f64());
@@ -342,7 +310,7 @@ mod normal_trading_flow {
 
         let close_cmd = ClosePositionCommand::market_close_long(
             symbol,
-            Some(partial_close_qty)  // 指定平仓数量
+            Some(partial_close_qty) // 指定平仓数量
         );
 
         let close_result = matching_service.close_position(close_cmd).unwrap();
@@ -389,20 +357,13 @@ mod normal_trading_flow {
         let matching_service = MatchingService::new(Price::from_f64(10000.0));
         let symbol = Symbol::new("BTCUSDT");
 
-        matching_service.set_leverage(
-            SetLeverageCommand::new(symbol, 10)
-        ).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 
-        let open_cmd = OpenPositionCommand::market_long(
-            symbol,
-            Quantity::from_f64(1.0)
-        ).with_leverage(10);
+        let open_cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(
-            QueryPositionCommand::long(symbol)
-        ).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(symbol)).unwrap();
 
         println!("✅ Step 1-3: 持仓创建");
         println!("   开仓价: {} USDT", position.entry_price.to_f64());
@@ -414,15 +375,12 @@ mod normal_trading_flow {
 
         println!("\n🎯 Step 4: 设置止盈限价平仓");
         println!("   目标价格: {} USDT", take_profit_price.to_f64());
-        println!("   预期盈利: {} USDT",
+        println!(
+            "   预期盈利: {} USDT",
             (take_profit_price.to_f64() - position.entry_price.to_f64()) * position.quantity.to_f64()
         );
 
-        let close_cmd = ClosePositionCommand::limit_close_long(
-            symbol,
-            position.quantity,
-            take_profit_price
-        );
+        let close_cmd = ClosePositionCommand::limit_close_long(symbol, position.quantity, take_profit_price);
 
         let close_result = matching_service.close_position(close_cmd).unwrap();
 

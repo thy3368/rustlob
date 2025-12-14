@@ -1,6 +1,7 @@
 //! Adaptor module
 //!
-//! Contains inbound (service implementations) and outbound (persistence) adaptors
+//! Contains inbound (service implementations) and outbound (persistence)
+//! adaptors
 
 pub mod inbound;
 pub mod outbound;
@@ -8,4 +9,3 @@ pub mod outbound;
 // Re-export for convenience
 pub use inbound::AccountServiceImpl;
 pub use outbound::{MemoryAccountRepo, MemoryBalanceRepo, MemoryPositionRepo};
-

@@ -2,31 +2,23 @@ mod client;
 mod models;
 mod server;
 
-use account::{
-    AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo, TradingPair,
-};
+use std::env;
+
+use account::{AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo, TradingPair};
 use lob::lob::{MemoryOrderRepo, SpotMatchingService};
 use models::RpcServiceConfig;
 use server::spot_order_proc::json_rpc_service::LobRpcService;
-use std::env;
 
 /// 创建 MatchingService 实例
 fn create_matching_service(
-    order_capacity: usize,
-    price_range: usize,
-) -> SpotMatchingService<MemoryOrderRepo, AccountServiceImpl<MemoryAccountRepo, MemoryBalanceRepo>>
-{
+    order_capacity: usize, price_range: usize
+) -> SpotMatchingService<MemoryOrderRepo, AccountServiceImpl<MemoryAccountRepo, MemoryBalanceRepo>> {
     let lob_repo = MemoryOrderRepo::new(order_capacity, price_range);
     let account_repo = MemoryAccountRepo::new();
     let balance_repo = MemoryBalanceRepo::with_default_timestamp();
-    let account_service = AccountServiceImpl::new(
-        account_repo,
-        balance_repo,
-        || std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64,
-    );
+    let account_service = AccountServiceImpl::new(account_repo, balance_repo, || {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
+    });
     let trading_pair = TradingPair::BTC_USDT;
 
     SpotMatchingService::new(lob_repo, account_service, trading_pair)
@@ -35,9 +27,7 @@ fn create_matching_service(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 从环境变量或命令行参数选择服务类型
-    let service_type = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "websocket".to_string());
+    let service_type = env::args().nth(1).unwrap_or_else(|| "websocket".to_string());
 
     match service_type.as_str() {
         "jsonrpc" | "rpc" => {
@@ -47,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 listen_addr: "127.0.0.1:3030".to_string(),
                 threads: 4,
                 order_capacity: 100000,
-                price_range: 1000000,
+                price_range: 1000000
             };
 
             let handler = create_matching_service(config.order_capacity, config.price_range);
@@ -66,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     listen_addr: "127.0.0.1:3030".to_string(),
                     threads: 4,
                     order_capacity: 100000,
-                    price_range: 1000000,
+                    price_range: 1000000
                 };
                 let handler = create_matching_service(config.order_capacity, config.price_range);
                 let service = LobRpcService::new(config);

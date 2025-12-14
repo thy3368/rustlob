@@ -7,7 +7,8 @@
 //! cargo run --example memory_layout_analysis
 //! ```
 
-use std::mem::{align_of, size_of, offset_of};
+use std::mem::{align_of, offset_of, size_of};
+
 use lob::lob::{Side, TraderId};
 use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
 
@@ -54,8 +55,7 @@ fn main() {
     println!();
 
     // 计算理论最小大小
-    let theoretical_min =
-        4 +  // symbol_id
+    let theoretical_min = 4 +  // symbol_id
         8 +  // timestamp
         8 +  // sequence
         1 +  // change_type
@@ -63,7 +63,7 @@ fn main() {
         1 +  // side
         4 +  // price
         4 +  // quantity
-        9;   // trader_id (Option<[u8;8]>)
+        9; // trader_id (Option<[u8;8]>)
 
     let actual_size = size_of::<OrderDelta>();
     let padding = actual_size - theoretical_min;
@@ -71,10 +71,7 @@ fn main() {
     println!("💾 内存使用统计:");
     println!("  理论最小大小: {} 字节", theoretical_min);
     println!("  实际大小: {} 字节", actual_size);
-    println!("  Padding 浪费: {} 字节 ({:.1}%)",
-        padding,
-        (padding as f64 / actual_size as f64) * 100.0
-    );
+    println!("  Padding 浪费: {} 字节 ({:.1}%)", padding, (padding as f64 / actual_size as f64) * 100.0);
     println!();
 
     // 优化建议
@@ -129,9 +126,7 @@ fn main() {
     let structs_per_cache_line = cache_line_size / actual_size;
     println!("  缓存行大小: {} 字节", cache_line_size);
     println!("  每个缓存行可容纳: {} 个 OrderDelta", structs_per_cache_line);
-    println!("  100 个实例占用: {} 个缓存行",
-        (100 * actual_size + cache_line_size - 1) / cache_line_size
-    );
+    println!("  100 个实例占用: {} 个缓存行", (100 * actual_size + cache_line_size - 1) / cache_line_size);
     println!();
 
     // 批量分配分析

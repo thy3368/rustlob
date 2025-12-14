@@ -5,9 +5,10 @@
 //! 运行: cargo run --example ws_benchmark --release
 
 
+use std::time::{Duration, Instant};
+
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -16,37 +17,17 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, Web
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ClientMessage {
-    LimitOrder {
-        trader_id: String,
-        side: String,
-        price: u32,
-        quantity: u32,
-    },
-    Ping,
+    LimitOrder { trader_id: String, side: String, price: u32, quantity: u32 },
+    Ping
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ServerMessage {
     Pong { timestamp: u64 },
-    OrderAck {
-        order_id: u64,
-        status: String,
-        latency_us: u128,
-    },
-    Trade {
-        trade_id: u64,
-        buyer: String,
-        seller: String,
-        price: u32,
-        quantity: u32,
-        timestamp: u64,
-    },
-    BookUpdate {
-        best_bid: Option<u32>,
-        best_ask: Option<u32>,
-        spread: Option<u32>,
-    },
+    OrderAck { order_id: u64, status: String, latency_us: u128 },
+    Trade { trade_id: u64, buyer: String, seller: String, price: u32, quantity: u32, timestamp: u64 },
+    BookUpdate { best_bid: Option<u32>, best_ask: Option<u32>, spread: Option<u32> }
 }
 
 // ============ 性能统计 ============
@@ -56,7 +37,7 @@ struct LatencyStats {
     samples: Vec<u128>,
     total_latency: u128,
     min: u128,
-    max: u128,
+    max: u128
 }
 
 impl LatencyStats {
@@ -65,7 +46,7 @@ impl LatencyStats {
             samples: Vec::new(),
             total_latency: 0,
             min: u128::MAX,
-            max: 0,
+            max: 0
         }
     }
 
@@ -109,9 +90,7 @@ impl LatencyStats {
 // ============ 测试工具 ============
 
 async fn connect_ws(url: &str) -> WebSocketStream<MaybeTlsStream<TcpStream>> {
-    let (ws_stream, _) = connect_async(url)
-        .await
-        .expect("Failed to connect to WebSocket");
+    let (ws_stream, _) = connect_async(url).await.expect("Failed to connect to WebSocket");
     ws_stream
 }
 
@@ -149,11 +128,13 @@ async fn test_ping_latency(url: &str, count: usize) {
         send_message(&mut ws, &ClientMessage::Ping).await;
 
         match recv_message(&mut ws).await {
-            ServerMessage::Pong { .. } => {
+            ServerMessage::Pong {
+                ..
+            } => {
                 let latency = start.elapsed().as_micros();
                 stats.record(latency);
             }
-            _ => panic!("Expected Pong"),
+            _ => panic!("Expected Pong")
         }
     }
 
@@ -178,21 +159,20 @@ async fn test_order_latency(url: &str, count: usize) {
         }
 
         let start = Instant::now();
-        send_message(
-            &mut ws,
-            &ClientMessage::LimitOrder {
-                trader_id: format!("trader{}", i),
-                side: side.to_string(),
-                price,
-                quantity: 1,
-            },
-        )
+        send_message(&mut ws, &ClientMessage::LimitOrder {
+            trader_id: format!("trader{}", i),
+            side: side.to_string(),
+            price,
+            quantity: 1
+        })
         .await;
 
         // 等待订单确认
         loop {
             match recv_message(&mut ws).await {
-                ServerMessage::OrderAck { .. } => {
+                ServerMessage::OrderAck {
+                    ..
+                } => {
                     let latency = start.elapsed().as_micros();
                     stats.record(latency);
                     break;
@@ -216,41 +196,40 @@ async fn test_matching_latency(url: &str, count: usize) {
         let price = 50000;
 
         // 先下卖单
-        send_message(
-            &mut ws,
-            &ClientMessage::LimitOrder {
-                trader_id: format!("seller{}", i),
-                side: "sell".to_string(),
-                price,
-                quantity: 1,
-            },
-        )
+        send_message(&mut ws, &ClientMessage::LimitOrder {
+            trader_id: format!("seller{}", i),
+            side: "sell".to_string(),
+            price,
+            quantity: 1
+        })
         .await;
 
         // 等待卖单确认
         loop {
-            if let ServerMessage::OrderAck { .. } = recv_message(&mut ws).await {
+            if let ServerMessage::OrderAck {
+                ..
+            } = recv_message(&mut ws).await
+            {
                 break;
             }
         }
 
         // 下买单触发撮合
         let start = Instant::now();
-        send_message(
-            &mut ws,
-            &ClientMessage::LimitOrder {
-                trader_id: format!("buyer{}", i),
-                side: "buy".to_string(),
-                price,
-                quantity: 1,
-            },
-        )
+        send_message(&mut ws, &ClientMessage::LimitOrder {
+            trader_id: format!("buyer{}", i),
+            side: "buy".to_string(),
+            price,
+            quantity: 1
+        })
         .await;
 
         // 等待成交通知
         loop {
             match recv_message(&mut ws).await {
-                ServerMessage::Trade { .. } => {
+                ServerMessage::Trade {
+                    ..
+                } => {
                     let latency = start.elapsed().as_micros();
                     stats.record(latency);
                     break;
@@ -265,10 +244,7 @@ async fn test_matching_latency(url: &str, count: usize) {
 
 /// 测试4: 吞吐量测试
 async fn test_throughput(url: &str, duration_secs: u64) {
-    println!(
-        "\n[测试4] 吞吐量测试 (持续时间: {}秒)",
-        duration_secs
-    );
+    println!("\n[测试4] 吞吐量测试 (持续时间: {}秒)", duration_secs);
 
     let mut ws = connect_ws(url).await;
     let start_time = Instant::now();
@@ -282,15 +258,12 @@ async fn test_throughput(url: &str, duration_secs: u64) {
             let side = if price % 2 == 0 { "buy" } else { "sell" };
             price += 10;
 
-            send_message(
-                &mut ws,
-                &ClientMessage::LimitOrder {
-                    trader_id: format!("trader{}", order_count),
-                    side: side.to_string(),
-                    price,
-                    quantity: 1,
-                },
-            )
+            send_message(&mut ws, &ClientMessage::LimitOrder {
+                trader_id: format!("trader{}", order_count),
+                side: side.to_string(),
+                price,
+                quantity: 1
+            })
             .await;
             order_count += 1;
         }
@@ -316,10 +289,7 @@ async fn test_throughput(url: &str, duration_secs: u64) {
 
 /// 测试5: 并发连接测试
 async fn test_concurrent_connections(url: &str, num_clients: usize, orders_per_client: usize) {
-    println!(
-        "\n[测试5] 并发连接测试 (客户端: {}, 每客户端订单: {})",
-        num_clients, orders_per_client
-    );
+    println!("\n[测试5] 并发连接测试 (客户端: {}, 每客户端订单: {})", num_clients, orders_per_client);
 
     let start_time = Instant::now();
     let mut handles = Vec::new();
@@ -334,20 +304,20 @@ async fn test_concurrent_connections(url: &str, num_clients: usize, orders_per_c
                 let side = if i % 2 == 0 { "buy" } else { "sell" };
                 price += 10;
 
-                send_message(
-                    &mut ws,
-                    &ClientMessage::LimitOrder {
-                        trader_id: format!("client{}trader{}", client_id, i),
-                        side: side.to_string(),
-                        price,
-                        quantity: 1,
-                    },
-                )
+                send_message(&mut ws, &ClientMessage::LimitOrder {
+                    trader_id: format!("client{}trader{}", client_id, i),
+                    side: side.to_string(),
+                    price,
+                    quantity: 1
+                })
                 .await;
 
                 // 等待确认
                 loop {
-                    if let ServerMessage::OrderAck { .. } = recv_message(&mut ws).await {
+                    if let ServerMessage::OrderAck {
+                        ..
+                    } = recv_message(&mut ws).await
+                    {
                         break;
                     }
                 }

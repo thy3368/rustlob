@@ -7,10 +7,12 @@
 //! 4. 标记价格触及强平价
 //! 5. 触发三级强平机制
 
-use prep_proc::proc::trading_prep_order_proc::*;
-use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
-use prep_proc::proc::liquidation_proc::*;
-use prep_proc::proc::liquidation_types::{PositionId, LiquidationType};
+use prep_proc::proc::{
+    liquidation_proc::*,
+    liquidation_types::{LiquidationType, PositionId},
+    trading_prep_order_proc::*,
+    trading_prep_order_proc_impl::MatchingService
+};
 
 // ============================================================================
 // 完整流程测试 - 从开仓到强平
@@ -26,6 +28,7 @@ mod complete_order_to_liquidation_flow {
         // Scenario: 多仓因价格下跌被强平
 
         use std::sync::Arc;
+
         use prep_proc::proc::liquidation_types::*;
 
         // Mock InsuranceFund
@@ -34,12 +37,12 @@ mod complete_order_to_liquidation_flow {
         impl InsuranceFund for MockInsuranceFund {
             async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCommandError> {
                 Ok(InsuranceFundCapacity {
-                    available_balance: Price::from_f64(100000.0),
+                    available_balance: Price::from_f64(100000.0)
                 })
             }
             async fn takeover(&self, position: &PositionInfo) -> Result<InsuranceFundTakeover, PrepCommandError> {
                 Ok(InsuranceFundTakeover {
-                    total_loss: position.margin,
+                    total_loss: position.margin
                 })
             }
         }
@@ -48,14 +51,16 @@ mod complete_order_to_liquidation_flow {
         struct MockADLEngine;
         #[async_trait::async_trait]
         impl ADLEngine for MockADLEngine {
-            async fn find_counterparties(&self, _symbol: Symbol, _side: Side)
-                -> Result<Vec<PositionInfo>, PrepCommandError> {
+            async fn find_counterparties(
+                &self, _symbol: Symbol, _side: Side
+            ) -> Result<Vec<PositionInfo>, PrepCommandError> {
                 Ok(Vec::new())
             }
-            async fn execute_adl(&self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>)
-                -> Result<ADLResult, PrepCommandError> {
+            async fn execute_adl(
+                &self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>
+            ) -> Result<ADLResult, PrepCommandError> {
                 Ok(ADLResult {
-                    affected_positions: Vec::new(),
+                    affected_positions: Vec::new()
                 })
             }
         }
@@ -68,10 +73,7 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 2: 设置杠杆 - 用户设置10倍杠杆
         // ====================================================================
-        let set_leverage_cmd = SetLeverageCommand::new(
-            Symbol::new("BTCUSDT"),
-            10
-        );
+        let set_leverage_cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10);
 
         let leverage_result = matching_service.set_leverage(set_leverage_cmd);
         assert!(leverage_result.is_ok());
@@ -80,10 +82,8 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 3: 开仓 - 用户以市价开多仓 1 BTC
         // ====================================================================
-        let open_cmd = OpenPositionCommand::market_long(
-            Symbol::new("BTCUSDT"),
-            Quantity::from_f64(1.0)
-        ).with_leverage(10);
+        let open_cmd =
+            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd);
         assert!(open_result.is_ok());
@@ -112,16 +112,13 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         let entry_price = position.entry_price;
         let leverage = position.leverage;
-        let liquidation_price = calculate_liquidation_price(
-            entry_price,
-            leverage,
-            PositionSide::Long
-        );
+        let liquidation_price = calculate_liquidation_price(entry_price, leverage, PositionSide::Long);
 
         println!("✅ Step 5: 强平价格计算完成");
         println!("   开仓价: {} USDT", entry_price.to_f64());
         println!("   强平价: {} USDT", liquidation_price.to_f64());
-        println!("   安全距离: {} USDT ({:.2}%)",
+        println!(
+            "   安全距离: {} USDT ({:.2}%)",
             entry_price.to_f64() - liquidation_price.to_f64(),
             (entry_price.to_f64() - liquidation_price.to_f64()) / entry_price.to_f64() * 100.0
         );
@@ -152,17 +149,12 @@ mod complete_order_to_liquidation_flow {
         // 创建强平处理器
         let insurance_fund = Arc::new(MockInsuranceFund);
         let adl_engine = Arc::new(MockADLEngine);
-        let liquidation_processor = LiquidationProcessor::new(
-            matching_service.clone(),
-            insurance_fund,
-            adl_engine,
-        );
+        let liquidation_processor = LiquidationProcessor::new(matching_service.clone(), insurance_fund, adl_engine);
 
         // 真实执行强平
         println!("   启动三级强平机制...");
-        let liquidation_result = liquidation_processor
-            .execute_liquidation_with_position(position.clone(), mark_price)
-            .await;
+        let liquidation_result =
+            liquidation_processor.execute_liquidation_with_position(position.clone(), mark_price).await;
 
         // 验证强平成功
         assert!(liquidation_result.is_ok(), "强平执行应该成功");
@@ -192,10 +184,7 @@ mod complete_order_to_liquidation_flow {
         println!("   保证金: {} USDT", position.margin.to_f64());
 
         // 损失可能等于保证金（完全强平）或略少（成功市场强平）
-        assert!(
-            result.margin_loss.to_f64() <= position.margin.to_f64() * 1.1,
-            "损失不应超过保证金太多"
-        );
+        assert!(result.margin_loss.to_f64() <= position.margin.to_f64() * 1.1, "损失不应超过保证金太多");
 
         // 保险基金不应该承担损失（因为市场强平成功）
         assert_eq!(result.insurance_fund_loss.to_f64(), 0.0, "保险基金损失应该为0");
@@ -263,10 +252,8 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 3: 开空仓
         // ====================================================================
-        let open_cmd = OpenPositionCommand::market_short(
-            Symbol::new("BTCUSDT"),
-            Quantity::from_f64(1.0)
-        ).with_leverage(10);
+        let open_cmd =
+            OpenPositionCommand::market_short(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd).unwrap();
         assert_eq!(open_result.status, OrderStatus::Filled);
@@ -287,11 +274,7 @@ mod complete_order_to_liquidation_flow {
         // Step 5: 计算强平价格
         // ====================================================================
         let entry_price = position.entry_price;
-        let liquidation_price = calculate_liquidation_price(
-            entry_price,
-            10,
-            PositionSide::Short
-        );
+        let liquidation_price = calculate_liquidation_price(entry_price, 10, PositionSide::Short);
 
         println!("✅ Step 5: 强平价格计算完成");
         println!("   开仓价: {} USDT", entry_price.to_f64());
@@ -353,20 +336,14 @@ mod complete_order_to_liquidation_flow {
         // Step 1-4: 开仓流程（同上）
         // ====================================================================
         let matching_service = MatchingService::new(Price::from_f64(10000.0));
-        matching_service.set_leverage(
-            SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)
-        ).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
 
-        let open_cmd = OpenPositionCommand::market_long(
-            Symbol::new("BTCUSDT"),
-            Quantity::from_f64(1.0)
-        ).with_leverage(10);
+        let open_cmd =
+            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(
-            QueryPositionCommand::long(Symbol::new("BTCUSDT"))
-        ).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
 
         println!("✅ 持仓创建成功");
         println!("   开仓价: {} USDT", position.entry_price.to_f64());
@@ -376,11 +353,7 @@ mod complete_order_to_liquidation_flow {
         // Step 5: 计算强平价格
         // ====================================================================
         let entry_price = position.entry_price;
-        let liquidation_price = calculate_liquidation_price(
-            entry_price,
-            10,
-            PositionSide::Long
-        );
+        let liquidation_price = calculate_liquidation_price(entry_price, 10, PositionSide::Long);
 
         println!("✅ 强平价: {} USDT", liquidation_price.to_f64());
 
@@ -494,20 +467,17 @@ mod complete_order_to_liquidation_flow {
         // Step 1-3: 开仓2 BTC
         // ====================================================================
         let matching_service = MatchingService::new(Price::from_f64(20000.0));
-        matching_service.set_leverage(
-            SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)
-        ).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
 
         let open_cmd = OpenPositionCommand::market_long(
             Symbol::new("BTCUSDT"),
-            Quantity::from_f64(2.0)  // 开2 BTC
-        ).with_leverage(10);
+            Quantity::from_f64(2.0) // 开2 BTC
+        )
+        .with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(
-            QueryPositionCommand::long(Symbol::new("BTCUSDT"))
-        ).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
 
         println!("✅ 持仓创建:");
         println!("   数量: {} BTC", position.quantity.to_f64());
@@ -517,11 +487,7 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 4: 计算强平价格
         // ====================================================================
-        let liquidation_price = calculate_liquidation_price(
-            position.entry_price,
-            10,
-            PositionSide::Long
-        );
+        let liquidation_price = calculate_liquidation_price(position.entry_price, 10, PositionSide::Long);
 
         println!("\n✅ 强平价: {} USDT", liquidation_price.to_f64());
 
@@ -536,7 +502,7 @@ mod complete_order_to_liquidation_flow {
             position_id: PositionId::generate(),
             symbol: position.symbol,
             position_side: position.position_side,
-            quantity: partial_quantity,  // 只强平1 BTC
+            quantity: partial_quantity, // 只强平1 BTC
             entry_price: position.entry_price,
             mark_price: fill_price,
             unrealized_pnl: Price::from_raw(0),
@@ -544,13 +510,10 @@ mod complete_order_to_liquidation_flow {
             leverage: position.leverage,
             margin: Price::from_f64(position.margin.to_f64() / 2.0), // 一半保证金
             liquidation_price: position.liquidation_price,
-            updated_at: 0,
+            updated_at: 0
         };
 
-        let partial_loss = LiquidationProcessor::calculate_liquidation_loss(
-            &partial_position,
-            fill_price
-        );
+        let partial_loss = LiquidationProcessor::calculate_liquidation_loss(&partial_position, fill_price);
 
         println!("\n💰 部分强平:");
         println!("   强平数量: {} BTC", partial_quantity.to_f64());

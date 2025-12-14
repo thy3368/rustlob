@@ -1,5 +1,4 @@
 // ! 强平流程相关类型定义
-//!
 //! 定义强平流程涉及的核心类型
 
 use crate::proc::trading_prep_order_proc::*;
@@ -16,7 +15,7 @@ pub enum LiquidationType {
     /// 风险保障基金接管
     InsuranceFund,
     /// 自动减仓
-    ADL,
+    ADL
 }
 
 /// 强平结果
@@ -28,25 +27,25 @@ pub struct LiquidationResult {
     pub liquidated_quantity: Quantity,
     pub margin_loss: Price,
     pub insurance_fund_loss: Price,
-    pub order_status: OrderStatus,
+    pub order_status: OrderStatus
 }
 
 /// 保险基金接管结果
 #[derive(Debug, Clone)]
 pub struct InsuranceFundTakeover {
-    pub total_loss: Price,
+    pub total_loss: Price
 }
 
 /// ADL执行结果
 #[derive(Debug, Clone)]
 pub struct ADLResult {
-    pub affected_positions: Vec<PositionId>,
+    pub affected_positions: Vec<PositionId>
 }
 
 /// 保险基金容量
 #[derive(Debug, Clone)]
 pub struct InsuranceFundCapacity {
-    pub available_balance: Price,
+    pub available_balance: Price
 }
 
 impl InsuranceFundCapacity {
@@ -65,7 +64,7 @@ pub struct LiquidationOrder {
     pub quantity: Quantity,
     pub order_type: OrderType,
     pub is_liquidation: bool,
-    pub priority: OrderPriority,
+    pub priority: OrderPriority
 }
 
 /// 订单优先级
@@ -75,7 +74,7 @@ pub enum OrderPriority {
     /// 普通订单
     Normal = 1,
     /// 紧急订单（强平订单）
-    Urgent = 2,
+    Urgent = 2
 }
 
 // ============================================================================
@@ -92,16 +91,10 @@ pub trait InsuranceFund: Send + Sync {
 /// ADL引擎接口
 #[async_trait::async_trait]
 pub trait ADLEngine: Send + Sync {
-    async fn find_counterparties(
-        &self,
-        symbol: Symbol,
-        side: Side,
-    ) -> Result<Vec<PositionInfo>, PrepCommandError>;
+    async fn find_counterparties(&self, symbol: Symbol, side: Side) -> Result<Vec<PositionInfo>, PrepCommandError>;
 
     async fn execute_adl(
-        &self,
-        liquidated_position: &PositionInfo,
-        counterparties: Vec<PositionInfo>,
+        &self, liquidated_position: &PositionInfo, counterparties: Vec<PositionInfo>
     ) -> Result<ADLResult, PrepCommandError>;
 }
 
@@ -116,12 +109,8 @@ impl PrepCommandError {
     }
 
     /// 保险基金余额不足错误
-    pub fn insurance_fund_insufficient() -> Self {
-        Self::RiskControlRejected("保险基金余额不足".to_string())
-    }
+    pub fn insurance_fund_insufficient() -> Self { Self::RiskControlRejected("保险基金余额不足".to_string()) }
 
     /// 无ADL对手方错误
-    pub fn no_counterparties_for_adl() -> Self {
-        Self::RiskControlRejected("无可用的ADL对手方".to_string())
-    }
+    pub fn no_counterparties_for_adl() -> Self { Self::RiskControlRejected("无可用的ADL对手方".to_string()) }
 }

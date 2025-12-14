@@ -26,10 +26,16 @@ pub trait AccountRepo: Send + Sync {
         match self.get(account_id) {
             Some(account) => match account.status {
                 AccountStatus::Active => Ok(()),
-                AccountStatus::Frozen => Err(BalanceError::AccountFrozen { account_id }),
-                AccountStatus::Closed => Err(BalanceError::AccountClosed { account_id }),
+                AccountStatus::Frozen => Err(BalanceError::AccountFrozen {
+                    account_id
+                }),
+                AccountStatus::Closed => Err(BalanceError::AccountClosed {
+                    account_id
+                })
             },
-            None => Err(BalanceError::AccountNotFound { account_id }),
+            None => Err(BalanceError::AccountNotFound {
+                account_id
+            })
         }
     }
 }

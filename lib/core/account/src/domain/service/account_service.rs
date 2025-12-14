@@ -12,8 +12,5 @@ pub trait AccountService: Send + Sync {
     fn execute(&mut self, cmd: AccountCommand) -> AccountCommandResult;
 
     /// 批量执行（原子操作，全部成功或全部回滚）
-    fn execute_batch(
-        &mut self,
-        cmds: Vec<AccountCommand>,
-    ) -> Result<Vec<AccountCommandResult>, BalanceError>;
+    fn execute_batch(&mut self, cmds: Vec<AccountCommand>) -> Result<Vec<AccountCommandResult>, BalanceError>;
 }

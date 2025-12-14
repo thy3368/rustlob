@@ -3,7 +3,5 @@ use lob::lob::{IdempotentSpotCommand, IdempotentSpotResult, SpotOrderExchangePro
 pub struct JsonRpcClient {}
 
 impl SpotOrderExchangeProc for JsonRpcClient {
-    fn handle(&mut self, _command: IdempotentSpotCommand) -> IdempotentSpotResult {
-        todo!()
-    }
+    fn handle(&mut self, _command: IdempotentSpotCommand) -> IdempotentSpotResult { todo!() }
 }

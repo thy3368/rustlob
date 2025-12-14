@@ -1,6 +1,7 @@
 //! 量化交易员消费行情数据示例
 //!
-//! 本示例展示了量化交易员如何使用 MarketDataQueryProcessorImpl 消费 L1/L2/L3 行情数据
+//! 本示例展示了量化交易员如何使用 MarketDataQueryProcessorImpl 消费 L1/L2/L3
+//! 行情数据
 //!
 //! 场景：
 //! 1. 高频交易策略：监控 L1 最优买卖价，捕捉价差机会
@@ -8,14 +9,18 @@
 //! 3. 大单追踪策略：监控 L3 订单簿，识别大额订单
 
 use lob::lob::{Price, Quantity, Side, TraderId};
-use spot_market_data::domain::entity::level_types::{BboChangeEvent, Level1, Level2, Level3, Level3Order, MarketDataDelta, OrderChangeType, OrderDelta, PriceLevel, SymbolId, TradeEvent};
-use spot_market_data_proc::proc::trading_market_data_proc::{ IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo,
-    Level2SnapshotRepo, Level3SnapshotRepo, MarketDataQueryError,
-    MarketDataQueryProc,
-    QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2, QueryLevel3,
-    
+use spot_market_data::domain::entity::level_types::{
+    BboChangeEvent, Level1, Level2, Level3, Level3Order, MarketDataDelta, OrderChangeType, OrderDelta, PriceLevel,
+    SymbolId, TradeEvent
 };
-use spot_market_data_proc::proc::trading_market_data_proc_impl::MarketDataQueryProcessorImpl;
+use spot_market_data_proc::proc::{
+    trading_market_data_proc::{
+        IncrementalDataRepo, IncrementalDataResult, Level1SnapshotRepo, Level2SnapshotRepo, Level3SnapshotRepo,
+        MarketDataQueryError, MarketDataQueryProc, QueryIncrementalData, QueryLevel1, QueryLevel1Batch, QueryLevel2,
+        QueryLevel3
+    },
+    trading_market_data_proc_impl::MarketDataQueryProcessorImpl
+};
 
 // ============================================================================
 // Mock 数据仓储实现（用于演示）
@@ -24,14 +29,14 @@ use spot_market_data_proc::proc::trading_market_data_proc_impl::MarketDataQueryP
 /// Mock 快照数据仓储
 struct MockSnapshotRepo {
     symbol_id: SymbolId,
-    sequence: u64,
+    sequence: u64
 }
 
 impl MockSnapshotRepo {
     fn new(symbol_id: SymbolId) -> Self {
         Self {
             symbol_id,
-            sequence: 1000,
+            sequence: 1000
         }
     }
 }
@@ -53,7 +58,7 @@ impl Level1SnapshotRepo for MockSnapshotRepo {
             last_trade_price: Some(50000),
             last_trade_quantity: 10,
             spread: Some(2),
-            mid_price: Some(50000),
+            mid_price: Some(50000)
         })
     }
 }
@@ -70,7 +75,7 @@ impl Level2SnapshotRepo for MockSnapshotRepo {
             level2.bids[i] = Some(PriceLevel {
                 price: 50000 - (i as Price * 10),
                 quantity: 100 + (i as Quantity * 50),
-                order_count: (i + 1) as u32,
+                order_count: (i + 1) as u32
             });
         }
 
@@ -79,7 +84,7 @@ impl Level2SnapshotRepo for MockSnapshotRepo {
             level2.asks[i] = Some(PriceLevel {
                 price: 50001 + (i as Price * 10),
                 quantity: 150 + (i as Quantity * 30),
-                order_count: (i + 1) as u32,
+                order_count: (i + 1) as u32
             });
         }
 
@@ -105,7 +110,7 @@ impl Level3SnapshotRepo for MockSnapshotRepo {
                 trader_id: TraderId::new([1, 0, 0, 0, 0, 0, 0, i as u8]),
                 price: 50000 - (i as Price * 10),
                 quantity: qty,
-                unfilled_quantity: qty,
+                unfilled_quantity: qty
             });
         }
 
@@ -117,7 +122,7 @@ impl Level3SnapshotRepo for MockSnapshotRepo {
                 trader_id: TraderId::new([2, 0, 0, 0, 0, 0, 0, i as u8]),
                 price: 50001 + (i as Price * 10),
                 quantity: qty,
-                unfilled_quantity: qty,
+                unfilled_quantity: qty
             });
         }
 
@@ -129,7 +134,7 @@ impl Level3SnapshotRepo for MockSnapshotRepo {
 struct MockIncrementalRepo {
     symbol_id: SymbolId,
     latest_sequence: u64,
-    deltas: Vec<MarketDataDelta>,
+    deltas: Vec<MarketDataDelta>
 }
 
 impl MockIncrementalRepo {
@@ -147,7 +152,7 @@ impl MockIncrementalRepo {
             side: Side::Buy,
             price: 49998,
             quantity: 200,
-            trader_id: Some(TraderId::new([3, 0, 0, 0, 0, 0, 0, 1])),
+            trader_id: Some(TraderId::new([3, 0, 0, 0, 0, 0, 0, 1]))
         }));
 
         // 2. 成交事件
@@ -160,7 +165,7 @@ impl MockIncrementalRepo {
             seller_order_id: 20001,
             price: 50000,
             quantity: 50,
-            aggressor_side: Side::Buy,
+            aggressor_side: Side::Buy
         }));
 
         // 3. 修改订单
@@ -173,7 +178,7 @@ impl MockIncrementalRepo {
             side: Side::Buy,
             price: 49999,
             quantity: 50, // 部分成交后剩余数量
-            trader_id: Some(TraderId::new([1, 0, 0, 0, 0, 0, 0, 1])),
+            trader_id: Some(TraderId::new([1, 0, 0, 0, 0, 0, 0, 1]))
         }));
 
         // 4. BBO 变更
@@ -184,7 +189,7 @@ impl MockIncrementalRepo {
             best_bid: Some(49998),
             best_bid_quantity: 200,
             best_ask: Some(50001),
-            best_ask_quantity: 150,
+            best_ask_quantity: 150
         }));
 
         // 5. 删除订单
@@ -197,26 +202,25 @@ impl MockIncrementalRepo {
             side: Side::Sell,
             price: 50011,
             quantity: 0,
-            trader_id: Some(TraderId::new([2, 0, 0, 0, 0, 0, 0, 2])),
+            trader_id: Some(TraderId::new([2, 0, 0, 0, 0, 0, 0, 2]))
         }));
 
         Self {
             symbol_id,
             latest_sequence: 1005,
-            deltas,
+            deltas
         }
     }
 }
 
 impl IncrementalDataRepo for MockIncrementalRepo {
     fn query_incremental_data(
-        &self,
-        symbol_id: SymbolId,
-        from_sequence: u64,
-        to_sequence: u64,
+        &self, symbol_id: SymbolId, from_sequence: u64, to_sequence: u64
     ) -> Result<Vec<MarketDataDelta>, MarketDataQueryError> {
         if symbol_id != self.symbol_id {
-            return Err(MarketDataQueryError::SymbolNotFound { symbol_id });
+            return Err(MarketDataQueryError::SymbolNotFound {
+                symbol_id
+            });
         }
 
         let filtered: Vec<MarketDataDelta> = self
@@ -226,7 +230,7 @@ impl IncrementalDataRepo for MockIncrementalRepo {
                 let seq = match delta {
                     MarketDataDelta::OrderChange(d) => d.sequence,
                     MarketDataDelta::Trade(t) => t.sequence,
-                    MarketDataDelta::BboChange(b) => b.sequence,
+                    MarketDataDelta::BboChange(b) => b.sequence
                 };
                 seq > from_sequence && seq <= to_sequence
             })
@@ -253,7 +257,7 @@ impl IncrementalDataRepo for MockIncrementalRepo {
 struct SpreadCaptureStrategy {
     symbol_id: SymbolId,
     min_spread: Price,
-    target_quantity: Quantity,
+    target_quantity: Quantity
 }
 
 impl SpreadCaptureStrategy {
@@ -261,7 +265,7 @@ impl SpreadCaptureStrategy {
         Self {
             symbol_id,
             min_spread,
-            target_quantity,
+            target_quantity
         }
     }
 
@@ -306,7 +310,7 @@ impl SpreadCaptureStrategy {
 struct MarketMakingStrategy {
     symbol_id: SymbolId,
     depth_levels: usize,
-    imbalance_threshold: f64,
+    imbalance_threshold: f64
 }
 
 impl MarketMakingStrategy {
@@ -314,7 +318,7 @@ impl MarketMakingStrategy {
         Self {
             symbol_id,
             depth_levels,
-            imbalance_threshold,
+            imbalance_threshold
         }
     }
 
@@ -392,14 +396,14 @@ impl MarketMakingStrategy {
 /// 策略 3: 大单追踪策略
 struct LargeOrderTrackingStrategy {
     symbol_id: SymbolId,
-    large_order_threshold: Quantity,
+    large_order_threshold: Quantity
 }
 
 impl LargeOrderTrackingStrategy {
     fn new(symbol_id: SymbolId, large_order_threshold: Quantity) -> Self {
         Self {
             symbol_id,
-            large_order_threshold,
+            large_order_threshold
         }
     }
 
@@ -460,7 +464,7 @@ struct IncrementalDataMonitor {
     symbol_id: SymbolId,
     last_sequence: u64,
     trade_count: u64,
-    orderbook_changes: u64,
+    orderbook_changes: u64
 }
 
 impl IncrementalDataMonitor {
@@ -469,7 +473,7 @@ impl IncrementalDataMonitor {
             symbol_id,
             last_sequence: initial_sequence,
             trade_count: 0,
-            orderbook_changes: 0,
+            orderbook_changes: 0
         }
     }
 
@@ -477,10 +481,7 @@ impl IncrementalDataMonitor {
     fn process_incremental_data(&mut self, result: &IncrementalDataResult) {
         println!("\n=== 增量数据实时监控 ===");
         println!("交易对: {}", result.symbol_id);
-        println!(
-            "序列号范围: {} -> {}",
-            result.from_sequence, result.to_sequence
-        );
+        println!("序列号范围: {} -> {}", result.from_sequence, result.to_sequence);
         println!("事件数量: {}", result.deltas.len());
         println!("是否有更多数据: {}", result.has_more);
 
@@ -520,10 +521,7 @@ impl IncrementalDataMonitor {
                     println!("  成交价: {}", trade.price);
                     println!("  成交量: {}", trade.quantity);
                     println!("  主动方: {:?}", trade.aggressor_side);
-                    println!(
-                        "  成交额: {}",
-                        trade.price as u64 * trade.quantity as u64
-                    );
+                    println!("  成交额: {}", trade.price as u64 * trade.quantity as u64);
                 }
                 MarketDataDelta::BboChange(bbo) => {
                     println!("\n📊 最优买卖价变更:");
@@ -544,7 +542,7 @@ impl IncrementalDataMonitor {
             self.last_sequence = match delta {
                 MarketDataDelta::OrderChange(d) => d.sequence,
                 MarketDataDelta::Trade(t) => t.sequence,
-                MarketDataDelta::BboChange(b) => b.sequence,
+                MarketDataDelta::BboChange(b) => b.sequence
             };
         }
 

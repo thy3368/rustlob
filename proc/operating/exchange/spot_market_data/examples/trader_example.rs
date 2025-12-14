@@ -7,21 +7,19 @@
 //! - 订单取消
 //! - 错误处理
 
-use lob::lob::{
-    Command, CommandResponse, MemoryOrderRepo, SpotMatchingService, OrderId, OrderRepo,
-    OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandError, SpotCommandResult,
-    SpotOrderExchangeProc, Symbol, TimeInForce, TraderId,
-};
-
 // 模拟的账户服务（实际使用时需要真实实现）
 use account::AccountService;
+use lob::lob::{
+    Command, CommandResponse, MemoryOrderRepo, OrderId, OrderRepo, OrderStatus, Price, Quantity, Side, SpotCommand,
+    SpotCommandError, SpotCommandResult, SpotMatchingService, SpotOrderExchangeProc, Symbol, TimeInForce, TraderId
+};
 
 /// 交易员结构体
 ///
 /// 封装交易员的身份和交易操作
 pub struct Trader {
     trader_id: TraderId,
-    nonce_counter: u64, // 用于生成唯一的 nonce
+    nonce_counter: u64 // 用于生成唯一的 nonce
 }
 
 impl Trader {
@@ -29,7 +27,7 @@ impl Trader {
     pub fn new(trader_id: TraderId) -> Self {
         Self {
             trader_id,
-            nonce_counter: 0,
+            nonce_counter: 0
         }
     }
 
@@ -44,15 +42,11 @@ impl Trader {
     /// 交易员想以 50000 USDT 的价格买入 1.5 BTC
     /// 如果无法立即成交，订单会挂在订单簿上等待
     pub fn place_limit_buy_gtc<R, A>(
-        &mut self,
-        matching_service: &mut SpotMatchingService<R, A>,
-        symbol: Symbol,
-        price: Price,
-        quantity: Quantity,
+        &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景1: 限价买单 (GTC) ===");
         println!("交易员: {:?}", self.trader_id);
@@ -69,7 +63,7 @@ impl Trader {
             price,
             quantity,
             time_in_force: TimeInForce::GoodTillCancel,
-            client_order_id: Some(format!("CLIENT-BUY-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-BUY-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -84,15 +78,11 @@ impl Trader {
     /// 交易员想以 50100 USDT 的价格卖出 2.0 BTC
     /// PostOnly 确保订单不会立即成交（只做流动性提供者）
     pub fn place_limit_sell_post_only<R, A>(
-        &mut self,
-        matching_service: &mut SpotMatchingService<R, A>,
-        symbol: Symbol,
-        price: Price,
-        quantity: Quantity,
+        &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景2: 限价卖单 (PostOnly) ===");
         println!("交易员: {:?}", self.trader_id);
@@ -109,7 +99,7 @@ impl Trader {
             price,
             quantity,
             time_in_force: TimeInForce::PostOnly,
-            client_order_id: Some(format!("CLIENT-SELL-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-SELL-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -124,15 +114,11 @@ impl Trader {
     /// 交易员想立即买入，未成交部分自动取消
     /// 适合需要快速执行但不想挂单的场景
     pub fn place_limit_buy_ioc<R, A>(
-        &mut self,
-        matching_service: &mut SpotMatchingService<R, A>,
-        symbol: Symbol,
-        price: Price,
-        quantity: Quantity,
+        &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景3: 限价买单 (IOC) ===");
         println!("交易员: {:?}", self.trader_id);
@@ -149,7 +135,7 @@ impl Trader {
             price,
             quantity,
             time_in_force: TimeInForce::ImmediateOrCancel,
-            client_order_id: Some(format!("CLIENT-IOC-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-IOC-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -164,15 +150,11 @@ impl Trader {
     /// 交易员要求全部成交，否则全部拒绝
     /// 适合大单执行，避免部分成交的风险
     pub fn place_limit_buy_fok<R, A>(
-        &mut self,
-        matching_service: &mut SpotMatchingService<R, A>,
-        symbol: Symbol,
-        price: Price,
-        quantity: Quantity,
+        &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景4: 限价买单 (FOK) ===");
         println!("交易员: {:?}", self.trader_id);
@@ -189,7 +171,7 @@ impl Trader {
             price,
             quantity,
             time_in_force: TimeInForce::FillOrKill,
-            client_order_id: Some(format!("CLIENT-FOK-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-FOK-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -208,11 +190,11 @@ impl Trader {
         matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         quantity: Quantity,
-        price_limit: Option<Price>, // 价格保护：最高愿意支付的价格
+        price_limit: Option<Price> // 价格保护：最高愿意支付的价格
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景5: 市价买单 ===");
         println!("交易员: {:?}", self.trader_id);
@@ -232,7 +214,7 @@ impl Trader {
             quantity,
             price_limit,
             time_in_force: None, // 默认 IOC
-            client_order_id: Some(format!("CLIENT-MARKET-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-MARKET-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -250,11 +232,11 @@ impl Trader {
         matching_service: &mut SpotMatchingService<R, A>,
         symbol: Symbol,
         quantity: Quantity,
-        price_limit: Option<Price>, // 价格保护：最低愿意接受的价格
+        price_limit: Option<Price> // 价格保护：最低愿意接受的价格
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景6: 市价卖单 (FOK) ===");
         println!("交易员: {:?}", self.trader_id);
@@ -273,7 +255,7 @@ impl Trader {
             quantity,
             price_limit,
             time_in_force: Some(TimeInForce::FillOrKill),
-            client_order_id: Some(format!("CLIENT-MARKET-FOK-{}", self.nonce_counter)),
+            client_order_id: Some(format!("CLIENT-MARKET-FOK-{}", self.nonce_counter))
         };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
@@ -287,19 +269,19 @@ impl Trader {
     ///
     /// 交易员想取消之前挂的订单
     pub fn cancel_order<R, A>(
-        &mut self,
-        matching_service: &mut SpotMatchingService<R, A>,
-        order_id: OrderId,
+        &mut self, matching_service: &mut SpotMatchingService<R, A>, order_id: OrderId
     ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
     where
         R: OrderRepo + Send + Sync,
-        A: AccountService,
+        A: AccountService
     {
         println!("\n=== 场景7: 取消订单 ===");
         println!("交易员: {:?}", self.trader_id);
         println!("订单ID: {}", order_id);
 
-        let command = SpotCommand::CancelOrder { order_id };
+        let command = SpotCommand::CancelOrder {
+            order_id
+        };
 
         let idempotent_cmd = Command::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
@@ -319,7 +301,7 @@ impl Trader {
                 status,
                 filled_quantity,
                 remaining_quantity,
-                trades,
+                trades
             } => {
                 println!("订单类型: 限价单");
                 println!("订单ID: {}", order_id);
@@ -350,7 +332,7 @@ impl Trader {
             SpotCommandResult::MarketOrder {
                 status,
                 filled_quantity,
-                trades,
+                trades
             } => {
                 println!("订单类型: 市价单");
                 println!("状态: {:?}", status);
@@ -370,13 +352,19 @@ impl Trader {
                     _ => {}
                 }
             }
-            SpotCommandResult::CancelOrder { order_id, status } => {
+            SpotCommandResult::CancelOrder {
+                order_id,
+                status
+            } => {
                 println!("操作类型: 取消订单");
                 println!("订单ID: {}", order_id);
                 println!("状态: {:?}", status);
                 println!("✅ 订单已成功取消");
             }
-            SpotCommandResult::CancelAllOrders { cancelled_count, order_ids } => {
+            SpotCommandResult::CancelAllOrders {
+                cancelled_count,
+                order_ids
+            } => {
                 println!("操作类型: 批量取消订单");
                 println!("取消数量: {}", cancelled_count);
                 println!("订单IDs: {:?}", order_ids);
@@ -391,8 +379,9 @@ impl Trader {
 /// 展示一个交易员的完整交易流程
 #[cfg(test)]
 mod tests {
-    use super::*;
     use account::TradingPair;
+
+    use super::*;
 
     #[test]
     fn test_trader_workflow() {
@@ -400,8 +389,8 @@ mod tests {
         let order_repo = MemoryOrderRepo::new(100000, 10000);
         let account_service = mocks::MockAccountService::new();
         let trading_pair = TradingPair {
-            base_asset: account::AssetId(1), // BTC
-            quote_asset: account::AssetId(2), // USDT
+            base_asset: account::AssetId(1),  // BTC
+            quote_asset: account::AssetId(2)  // USDT
         };
 
         let mut matching_service = SpotMatchingService::new(order_repo, account_service, trading_pair);
@@ -421,12 +410,15 @@ mod tests {
             &mut matching_service,
             symbol,
             50000, // 价格: 50000 USDT
-            1500,  // 数量: 1.5 BTC (使用整数表示，实际需要除以精度)
+            1500   // 数量: 1.5 BTC (使用整数表示，实际需要除以精度)
         );
 
         match result {
             Ok(response) => {
-                if let SpotCommandResult::LimitOrder { order_id, .. } = response.result {
+                if let SpotCommandResult::LimitOrder {
+                    order_id, ..
+                } = response.result
+                {
                     println!("\n✅ 限价买单已挂单，订单ID: {}", order_id);
 
                     // 4. 场景2: 挂限价卖单（PostOnly）
@@ -434,7 +426,7 @@ mod tests {
                         &mut matching_service,
                         symbol,
                         50100, // 价格: 50100 USDT
-                        2000,  // 数量: 2.0 BTC
+                        2000   // 数量: 2.0 BTC
                     );
 
                     // 5. 场景3: 立即买入（IOC）
@@ -442,7 +434,7 @@ mod tests {
                         &mut matching_service,
                         symbol,
                         50050, // 价格: 50050 USDT
-                        500,   // 数量: 0.5 BTC
+                        500    // 数量: 0.5 BTC
                     );
 
                     // 6. 场景4: 全部成交或拒绝（FOK）
@@ -450,23 +442,23 @@ mod tests {
                         &mut matching_service,
                         symbol,
                         50200, // 价格: 50200 USDT
-                        3000,  // 数量: 3.0 BTC
+                        3000   // 数量: 3.0 BTC
                     );
 
                     // 7. 场景5: 市价买入
                     let _ = trader.place_market_buy(
                         &mut matching_service,
                         symbol,
-                        1000,           // 数量: 1.0 BTC
-                        Some(51000),    // 价格保护: 最高 51000 USDT
+                        1000,        // 数量: 1.0 BTC
+                        Some(51000)  // 价格保护: 最高 51000 USDT
                     );
 
                     // 8. 场景6: 市价卖出（FOK）
                     let _ = trader.place_market_sell_fok(
                         &mut matching_service,
                         symbol,
-                        500,            // 数量: 0.5 BTC
-                        Some(49000),    // 价格保护: 最低 49000 USDT
+                        500,         // 数量: 0.5 BTC
+                        Some(49000)  // 价格保护: 最低 49000 USDT
                     );
 
                     // 9. 场景7: 取消之前的订单
@@ -493,8 +485,8 @@ mod tests {
         let order_repo = MemoryOrderRepo::new(100000, 10000);
         let account_service = mocks::MockAccountService::new();
         let trading_pair = TradingPair {
-            base_asset: account::AssetId(1), // BTC
-            quote_asset: account::AssetId(2), // USDT
+            base_asset: account::AssetId(1),  // BTC
+            quote_asset: account::AssetId(2)  // USDT
         };
 
         let mut matching_service = SpotMatchingService::new(order_repo, account_service, trading_pair);
@@ -508,7 +500,7 @@ mod tests {
             &mut matching_service,
             symbol,
             50000,
-            1000000, // 尝试买入 10000 BTC（余额不足）
+            1000000 // 尝试买入 10000 BTC（余额不足）
         );
 
         if let Err(e) = result {
@@ -522,11 +514,14 @@ mod tests {
             &mut matching_service,
             symbol,
             49900, // 价格低于最优买价，会立即成交
-            1000,
+            1000
         );
 
         if let Ok(response) = result {
-            if let SpotCommandResult::LimitOrder { status, .. } = response.result {
+            if let SpotCommandResult::LimitOrder {
+                status, ..
+            } = response.result
+            {
                 if status == OrderStatus::Rejected {
                     println!("✅ PostOnly 订单正确被拒绝");
                 }
@@ -539,11 +534,14 @@ mod tests {
             &mut matching_service,
             symbol,
             50000,
-            100000, // 尝试买入 1000 BTC（市场深度不足）
+            100000 // 尝试买入 1000 BTC（市场深度不足）
         );
 
         if let Ok(response) = result {
-            if let SpotCommandResult::LimitOrder { status, .. } = response.result {
+            if let SpotCommandResult::LimitOrder {
+                status, ..
+            } = response.result
+            {
                 if status == OrderStatus::Rejected {
                     println!("✅ FOK 订单因无法全部成交被正确拒绝");
                 }
@@ -563,15 +561,14 @@ mod tests {
 // Mock 实现（实际使用时需要真实实现）
 #[cfg(test)]
 mod mocks {
-    use super::*;
     use account::{AccountCommand, AccountCommandResult, AccountId, AccountService};
+
+    use super::*;
 
     pub struct MockAccountService;
 
     impl MockAccountService {
-        pub fn new() -> Self {
-            Self
-        }
+        pub fn new() -> Self { Self }
     }
 
     impl AccountService for MockAccountService {
@@ -582,13 +579,12 @@ mod mocks {
                 asset_id: account::AssetId(2), // USDT
                 amount: 50000,
                 new_available: 100000,
-                new_frozen: 50000,
+                new_frozen: 50000
             }
         }
 
         fn execute_batch(
-            &mut self,
-            cmds: Vec<AccountCommand>,
+            &mut self, cmds: Vec<AccountCommand>
         ) -> Result<Vec<AccountCommandResult>, account::BalanceError> {
             // 简单模拟：批量执行
             Ok(cmds.into_iter().map(|cmd| self.execute(cmd)).collect())

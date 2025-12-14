@@ -55,7 +55,5 @@ pub trait PositionRepo<P: Position>: Send + Sync {
     fn get_all(&self) -> Vec<P>;
 
     /// 检查持仓是否存在
-    fn exists(&self, key: P::Key) -> bool {
-        self.get(key).is_some()
-    }
+    fn exists(&self, key: P::Key) -> bool { self.get(key).is_some() }
 }

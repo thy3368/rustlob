@@ -2,8 +2,9 @@
 //!
 //! 包含持仓信息、持仓方向等核心类型
 
-use super::types::{Timestamp, UserId};
 use std::fmt;
+
+use super::types::{Timestamp, UserId};
 
 // ============================================================================
 // 持仓相关类型定义
@@ -17,22 +18,15 @@ impl PositionId {
     /// 生成新的持仓ID（简化实现，实际应使用雪花算法等）
     pub fn generate() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64;
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
         Self(nanos)
     }
 
-    pub fn as_u64(&self) -> u64 {
-        self.0
-    }
+    pub fn as_u64(&self) -> u64 { self.0 }
 }
 
 impl fmt::Display for PositionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
 }
 
 /// 交易对符号（如 BTCUSDT）
@@ -57,9 +51,7 @@ impl Symbol {
 }
 
 impl fmt::Display for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.as_str()) }
 }
 
 /// 持仓方向
@@ -70,7 +62,7 @@ pub enum PositionSide {
     /// 空头（做空）
     Short,
     /// 双向持仓模式
-    Both,
+    Both
 }
 
 impl fmt::Display for PositionSide {
@@ -78,7 +70,7 @@ impl fmt::Display for PositionSide {
         match self {
             PositionSide::Long => write!(f, "LONG"),
             PositionSide::Short => write!(f, "SHORT"),
-            PositionSide::Both => write!(f, "BOTH"),
+            PositionSide::Both => write!(f, "BOTH")
         }
     }
 }
@@ -90,43 +82,27 @@ pub struct Price(i64);
 impl Price {
     const DECIMALS: i64 = 100_000_000; // 8 位小数
 
-    pub fn from_raw(raw: i64) -> Self {
-        Self(raw)
-    }
+    pub fn from_raw(raw: i64) -> Self { Self(raw) }
 
-    pub fn raw(&self) -> i64 {
-        self.0
-    }
+    pub fn raw(&self) -> i64 { self.0 }
 
-    pub fn from_f64(value: f64) -> Self {
-        Self((value * Self::DECIMALS as f64) as i64)
-    }
+    pub fn from_f64(value: f64) -> Self { Self((value * Self::DECIMALS as f64) as i64) }
 
-    pub fn to_f64(&self) -> f64 {
-        self.0 as f64 / Self::DECIMALS as f64
-    }
+    pub fn to_f64(&self) -> f64 { self.0 as f64 / Self::DECIMALS as f64 }
 
-    pub fn is_positive(&self) -> bool {
-        self.0 > 0
-    }
+    pub fn is_positive(&self) -> bool { self.0 > 0 }
 
-    pub fn is_negative(&self) -> bool {
-        self.0 < 0
-    }
+    pub fn is_negative(&self) -> bool { self.0 < 0 }
 }
 
 impl std::ops::Add for Price {
     type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
+    fn add(self, rhs: Self) -> Self::Output { Self(self.0 + rhs.0) }
 }
 
 impl std::ops::Sub for Price {
     type Output = Self;
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self(self.0 - rhs.0)
-    }
+    fn sub(self, rhs: Self) -> Self::Output { Self(self.0 - rhs.0) }
 }
 
 /// 数量（内部使用 i64 存储，假设 8 位小数精度）
@@ -136,29 +112,17 @@ pub struct Quantity(i64);
 impl Quantity {
     const DECIMALS: i64 = 100_000_000; // 8 位小数
 
-    pub fn from_raw(raw: i64) -> Self {
-        Self(raw)
-    }
+    pub fn from_raw(raw: i64) -> Self { Self(raw) }
 
-    pub fn raw(&self) -> i64 {
-        self.0
-    }
+    pub fn raw(&self) -> i64 { self.0 }
 
-    pub fn from_f64(value: f64) -> Self {
-        Self((value * Self::DECIMALS as f64) as i64)
-    }
+    pub fn from_f64(value: f64) -> Self { Self((value * Self::DECIMALS as f64) as i64) }
 
-    pub fn to_f64(&self) -> f64 {
-        self.0 as f64 / Self::DECIMALS as f64
-    }
+    pub fn to_f64(&self) -> f64 { self.0 as f64 / Self::DECIMALS as f64 }
 
-    pub fn is_positive(&self) -> bool {
-        self.0 > 0
-    }
+    pub fn is_positive(&self) -> bool { self.0 > 0 }
 
-    pub fn is_zero(&self) -> bool {
-        self.0 == 0
-    }
+    pub fn is_zero(&self) -> bool { self.0 == 0 }
 }
 
 // ============================================================================
@@ -193,7 +157,7 @@ pub struct PositionInfo {
     /// 强平价格
     pub liquidation_price: Option<Price>,
     /// 更新时间戳（纳秒）
-    pub updated_at: Timestamp,
+    pub updated_at: Timestamp
 }
 
 impl PositionInfo {
@@ -212,24 +176,18 @@ impl PositionInfo {
             leverage: 1,
             margin: Price::from_raw(0),
             liquidation_price: None,
-            updated_at: current_timestamp(),
+            updated_at: current_timestamp()
         }
     }
 
     /// 是否有持仓
-    pub fn has_position(&self) -> bool {
-        self.quantity.is_positive()
-    }
+    pub fn has_position(&self) -> bool { self.quantity.is_positive() }
 
     /// 是否为多头
-    pub fn is_long(&self) -> bool {
-        self.position_side == PositionSide::Long && self.quantity.is_positive()
-    }
+    pub fn is_long(&self) -> bool { self.position_side == PositionSide::Long && self.quantity.is_positive() }
 
     /// 是否为空头
-    pub fn is_short(&self) -> bool {
-        self.position_side == PositionSide::Short && self.quantity.is_positive()
-    }
+    pub fn is_short(&self) -> bool { self.position_side == PositionSide::Short && self.quantity.is_positive() }
 
     /// 计算下次资金费用
     pub fn calculate_next_funding_fee(&self, funding_rate: Price) -> Price {
@@ -240,11 +198,7 @@ impl PositionInfo {
         let notional = self.mark_price.to_f64() * self.quantity.to_f64();
         let base_fee = notional * funding_rate.to_f64();
 
-        let fee = if self.position_side == PositionSide::Long {
-            -base_fee
-        } else {
-            base_fee
-        };
+        let fee = if self.position_side == PositionSide::Long { -base_fee } else { base_fee };
 
         Price::from_f64(fee)
     }
@@ -253,10 +207,7 @@ impl PositionInfo {
 /// 获取当前时间戳（纳秒）
 fn current_timestamp() -> Timestamp {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos() as u64
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
 }
 
 // ============================================================================
@@ -266,7 +217,5 @@ fn current_timestamp() -> Timestamp {
 impl crate::domain::repo::Position for PositionInfo {
     type Key = Symbol;
 
-    fn key(&self) -> Self::Key {
-        self.symbol
-    }
+    fn key(&self) -> Self::Key { self.symbol }
 }

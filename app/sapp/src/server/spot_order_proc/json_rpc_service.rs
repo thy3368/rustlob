@@ -2,19 +2,21 @@
 //!
 //! 通过单一 handle 接口转发所有命令
 
-use crate::models::*;
+use std::sync::{Arc, Mutex};
+
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{SpotCommand, SpotCommandResult, SpotOrderExchangeProc, Side, TraderId, Command};
-use std::sync::{Arc, Mutex};
+use lob::lob::{Command, Side, SpotCommand, SpotCommandResult, SpotOrderExchangeProc, TraderId};
+
+use crate::models::*;
 
 /// 解析 Side 字符串
 fn parse_side(s: &str) -> std::result::Result<Side, jsonrpc_core::Error> {
     match s.to_uppercase().as_str() {
         "BUY" | "B" => Ok(Side::Buy),
         "SELL" | "S" => Ok(Side::Sell),
-        _ => Err(jsonrpc_core::Error::invalid_params("Invalid side")),
+        _ => Err(jsonrpc_core::Error::invalid_params("Invalid side"))
     }
 }
 
@@ -32,18 +34,19 @@ pub trait LobRpc {
 
 /// LOB RPC 服务实现
 pub struct LobRpcImpl<H: SpotOrderExchangeProc + Send + 'static> {
-    handler: Arc<Mutex<H>>,
+    handler: Arc<Mutex<H>>
 }
 
 impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
     pub fn new(handler: H) -> Self {
         Self {
-            handler: Arc::new(Mutex::new(handler)),
+            handler: Arc::new(Mutex::new(handler))
         }
     }
 
     /// 将请求转换为 SpotCommand
-    /// 注意: IcebergOrder 已移至 ConditionalCommand，需通过 ConditionalOrderHandler 处理
+    /// 注意: IcebergOrder 已移至 ConditionalCommand，需通过
+    /// ConditionalOrderHandler 处理
     fn parse_command(cmd: &CommandRequest) -> std::result::Result<SpotCommand, jsonrpc_core::Error> {
         use lob::lob::{Symbol, TimeInForce};
 
@@ -55,7 +58,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
                 time_in_force: TimeInForce::GoodTillCancel,
-                client_order_id: cmd.client_order_id.clone(),
+                client_order_id: cmd.client_order_id.clone()
             }),
             "MarketOrder" => Ok(SpotCommand::MarketOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
@@ -64,12 +67,12 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,
                 price_limit: cmd.price_limit,
                 time_in_force: None,
-                client_order_id: cmd.client_order_id.clone(),
+                client_order_id: cmd.client_order_id.clone()
             }),
             "CancelOrder" => Ok(SpotCommand::CancelOrder {
-                order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?,
+                order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?
             }),
-            _ => Err(jsonrpc_core::Error::invalid_params(format!("unknown command: {}", cmd.command))),
+            _ => Err(jsonrpc_core::Error::invalid_params(format!("unknown command: {}", cmd.command)))
         }
     }
 
@@ -89,12 +92,17 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 order_id: Some(order_id),
                 filled_quantity: Some(filled_quantity),
                 remaining_quantity: Some(remaining_quantity),
-                trades: Some(trades.iter().map(|t| TradeInfo {
-                    buyer: t.buyer().to_string(),
-                    seller: t.seller().to_string(),
-                    price: t.price,
-                    quantity: t.quantity,
-                }).collect()),
+                trades: Some(
+                    trades
+                        .iter()
+                        .map(|t| TradeInfo {
+                            buyer: t.buyer().to_string(),
+                            seller: t.seller().to_string(),
+                            price: t.price,
+                            quantity: t.quantity
+                        })
+                        .collect()
+                ),
                 ..Default::default()
             },
             SpotCommandResult::MarketOrder {
@@ -104,15 +112,23 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
             } => CommandResponse {
                 success: matches!(status, OrderStatus::Filled | OrderStatus::PartiallyFilled),
                 filled_quantity: Some(filled_quantity),
-                trades: Some(trades.iter().map(|t| TradeInfo {
-                    buyer: t.buyer().to_string(),
-                    seller: t.seller().to_string(),
-                    price: t.price,
-                    quantity: t.quantity,
-                }).collect()),
+                trades: Some(
+                    trades
+                        .iter()
+                        .map(|t| TradeInfo {
+                            buyer: t.buyer().to_string(),
+                            seller: t.seller().to_string(),
+                            price: t.price,
+                            quantity: t.quantity
+                        })
+                        .collect()
+                ),
                 ..Default::default()
             },
-            SpotCommandResult::CancelOrder { order_id, status } => CommandResponse {
+            SpotCommandResult::CancelOrder {
+                order_id,
+                status
+            } => CommandResponse {
                 success: matches!(status, OrderStatus::Cancelled),
                 order_id: Some(order_id),
                 ..Default::default()
@@ -121,7 +137,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 success: false,
                 error: Some("unsupported command result".to_string()),
                 ..Default::default()
-            },
+            }
         }
     }
 }
@@ -131,10 +147,7 @@ impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> 
         let spot_command = Self::parse_command(&cmd)?;
         // 使用请求中的 nonce，如果没有则生成一个
         let nonce = cmd.nonce.unwrap_or_else(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
         });
         let idempotent_cmd = Command::new(nonce, spot_command);
 
@@ -148,9 +161,7 @@ impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> 
                 response.is_duplicate = Some(cmd_response.metadata.is_duplicate);
                 Ok(response)
             }
-            Err(e) => {
-                Err(jsonrpc_core::Error::invalid_params(format!("Command failed: {}", e)))
-            }
+            Err(e) => Err(jsonrpc_core::Error::invalid_params(format!("Command failed: {}", e)))
         }
     }
 
@@ -158,19 +169,21 @@ impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> 
         Ok(HealthResponse {
             status: "ok".to_string(),
             service: "lob-matching-service".to_string(),
-            version: "0.1.0".to_string(),
+            version: "0.1.0".to_string()
         })
     }
 }
 
 /// LOB JSON-RPC 服务
 pub struct LobRpcService {
-    config: RpcServiceConfig,
+    config: RpcServiceConfig
 }
 
 impl LobRpcService {
     pub fn new(config: RpcServiceConfig) -> Self {
-        Self { config }
+        Self {
+            config
+        }
     }
 
     pub fn start<H: SpotOrderExchangeProc + Send + Sync + 'static>(self, handler: H) -> Server {

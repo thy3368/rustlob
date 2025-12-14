@@ -2,8 +2,7 @@
 //!
 //! 测试永续合约开仓功能的各种场景
 
-use prep_proc::proc::trading_prep_order_proc::*;
-use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
+use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::MatchingService};
 
 #[test]
 fn test_open_position_market_long_success() {
@@ -12,8 +11,7 @@ fn test_open_position_market_long_success() {
 
     // When: 发送市价做多订单
     let symbol = Symbol::new("BTCUSDT");
-    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1))
-        .with_leverage(10);
+    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1)).with_leverage(10);
 
     let result = matching_service.open_position(cmd);
 
@@ -41,8 +39,7 @@ fn test_open_position_market_short_success() {
 
     // When: 发送市价做空订单
     let symbol = Symbol::new("ETHUSDT");
-    let cmd = OpenPositionCommand::market_short(symbol, Quantity::from_f64(1.0))
-        .with_leverage(5);
+    let cmd = OpenPositionCommand::market_short(symbol, Quantity::from_f64(1.0)).with_leverage(5);
 
     let result = matching_service.open_position(cmd);
 
@@ -64,12 +61,8 @@ fn test_open_position_limit_long_success() {
 
     // When: 发送限价做多订单
     let symbol = Symbol::new("BTCUSDT");
-    let cmd = OpenPositionCommand::limit_long(
-        symbol,
-        Quantity::from_f64(0.2),
-        Price::from_f64(48000.0),
-    )
-    .with_leverage(20);
+    let cmd =
+        OpenPositionCommand::limit_long(symbol, Quantity::from_f64(0.2), Price::from_f64(48000.0)).with_leverage(20);
 
     let result = matching_service.open_position(cmd);
 
@@ -78,9 +71,7 @@ fn test_open_position_limit_long_success() {
     let response = result.unwrap();
 
     // 限价单可能立即成交或进入订单簿
-    assert!(
-        response.status == OrderStatus::Filled || response.status == OrderStatus::Submitted
-    );
+    assert!(response.status == OrderStatus::Filled || response.status == OrderStatus::Submitted);
 
     if response.status == OrderStatus::Filled {
         println!("✓ 限价做多订单立即成交: order_id={}", response.order_id);
@@ -112,7 +103,7 @@ fn test_open_position_insufficient_balance() {
         PrepCommandError::InsufficientBalance => {
             println!("✓ 正确检测到余额不足错误");
         }
-        _ => panic!("期望余额不足错误，但得到: {:?}", error),
+        _ => panic!("期望余额不足错误，但得到: {:?}", error)
     }
 }
 
@@ -135,7 +126,7 @@ fn test_open_position_invalid_quantity() {
         PrepCommandError::ValidationError(_) => {
             println!("✓ 正确检测到数量验证错误");
         }
-        _ => panic!("期望验证错误，但得到: {:?}", error),
+        _ => panic!("期望验证错误，但得到: {:?}", error)
     }
 }
 
@@ -146,8 +137,7 @@ fn test_open_position_invalid_leverage() {
 
     // When: 发送杠杆超过125倍的订单
     let symbol = Symbol::new("BTCUSDT");
-    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1))
-        .with_leverage(200); // 无效杠杆
+    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1)).with_leverage(200); // 无效杠杆
 
     let result = matching_service.open_position(cmd);
 
@@ -159,7 +149,7 @@ fn test_open_position_invalid_leverage() {
         PrepCommandError::ValidationError(_) => {
             println!("✓ 正确检测到杠杆验证错误");
         }
-        _ => panic!("期望验证错误，但得到: {:?}", error),
+        _ => panic!("期望验证错误，但得到: {:?}", error)
     }
 }
 
@@ -184,7 +174,7 @@ fn test_open_position_limit_missing_price() {
         PrepCommandError::ValidationError(_) => {
             println!("✓ 正确检测到限价单缺少价格错误");
         }
-        _ => panic!("期望验证错误，但得到: {:?}", error),
+        _ => panic!("期望验证错误，但得到: {:?}", error)
     }
 }
 
@@ -195,24 +185,21 @@ fn test_open_position_with_different_leverage() {
 
     // Test with leverage 1x
     let symbol = Symbol::new("BTCUSDT");
-    let cmd1 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1))
-        .with_leverage(1);
+    let cmd1 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1)).with_leverage(1);
 
     let result1 = matching_service.open_position(cmd1);
     assert!(result1.is_ok());
     println!("✓ 1倍杠杆开仓成功");
 
     // Test with leverage 10x
-    let cmd2 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1))
-        .with_leverage(10);
+    let cmd2 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1)).with_leverage(10);
 
     let result2 = matching_service.open_position(cmd2);
     assert!(result2.is_ok());
     println!("✓ 10倍杠杆开仓成功");
 
     // Test with leverage 125x (maximum)
-    let cmd3 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1))
-        .with_leverage(125);
+    let cmd3 = OpenPositionCommand::market_long(symbol, Quantity::from_f64(0.1)).with_leverage(125);
 
     let result3 = matching_service.open_position(cmd3);
     assert!(result3.is_ok());
@@ -226,8 +213,7 @@ fn test_open_position_check_trades_details() {
 
     // When: 发送市价订单
     let symbol = Symbol::new("BTCUSDT");
-    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0))
-        .with_leverage(10);
+    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
     let result = matching_service.open_position(cmd).unwrap();
 
@@ -264,8 +250,7 @@ fn test_query_position_after_open() {
 
     // When: 开仓
     let symbol = Symbol::new("BTCUSDT");
-    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0))
-        .with_leverage(10);
+    let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
     let open_result = matching_service.open_position(cmd).unwrap();
     assert_eq!(open_result.status, OrderStatus::Filled);

@@ -22,7 +22,7 @@ pub struct Balance {
     /// 乐观锁版本号（每次修改 +1）
     pub version: u64,
     /// 最后更新时间
-    pub updated_at: Timestamp,
+    pub updated_at: Timestamp
 }
 
 impl Balance {
@@ -34,44 +34,33 @@ impl Balance {
             available: 0,
             frozen: 0,
             version: 0,
-            updated_at: now,
+            updated_at: now
         }
     }
 
     /// 创建带初始余额的记录
-    pub fn with_available(
-        account_id: AccountId,
-        asset_id: AssetId,
-        available: u64,
-        now: Timestamp,
-    ) -> Self {
+    pub fn with_available(account_id: AccountId, asset_id: AssetId, available: u64, now: Timestamp) -> Self {
         Self {
             account_id,
             asset_id,
             available,
             frozen: 0,
             version: 0,
-            updated_at: now,
+            updated_at: now
         }
     }
 
     /// 总余额 = 可用 + 冻结
     #[inline]
-    pub fn total(&self) -> u64 {
-        self.available.saturating_add(self.frozen)
-    }
+    pub fn total(&self) -> u64 { self.available.saturating_add(self.frozen) }
 
     /// 检查是否有足够的可用余额
     #[inline]
-    pub fn has_available(&self, amount: u64) -> bool {
-        self.available >= amount
-    }
+    pub fn has_available(&self, amount: u64) -> bool { self.available >= amount }
 
     /// 检查是否有足够的冻结余额
     #[inline]
-    pub fn has_frozen(&self, amount: u64) -> bool {
-        self.frozen >= amount
-    }
+    pub fn has_frozen(&self, amount: u64) -> bool { self.frozen >= amount }
 
     #[inline]
     pub fn add_balance(&mut self, amount: u64, now: Timestamp) {
@@ -82,7 +71,6 @@ impl Balance {
 
     #[inline]
     pub fn deduct_balance(&mut self, amount: u64, now: Timestamp) {
-
         // if self.available < amount {
         //     return Err(PrepCommandError::InsufficientBalance);
         // }
@@ -94,9 +82,7 @@ impl Balance {
 
     /// 检查余额是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.available == 0 && self.frozen == 0
-    }
+    pub fn is_empty(&self) -> bool { self.available == 0 && self.frozen == 0 }
 }
 
 /// 余额操作（用于 BalanceStore）
@@ -113,5 +99,5 @@ pub enum BalanceOp {
     /// 扣减冻结余额
     DebitFrozen(u64),
     /// 结算盈亏（可正可负）
-    SettlePnl(i64),
+    SettlePnl(i64)
 }

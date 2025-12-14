@@ -2,12 +2,16 @@
 //!
 //! 验证依赖注入的 BalanceRepo 正确工作
 
-use account::adaptor::MemoryBalanceRepo;
-use account::domain::entity::{AccountId, AssetId};
-use prep_proc::proc::trading_prep_order_proc::{
-    OpenPositionCommand, OrderType, PositionSide, Price, Quantity, Side, Symbol, TimeInForce,
+use account::{
+    adaptor::MemoryBalanceRepo,
+    domain::entity::{AccountId, AssetId}
 };
-use prep_proc::proc::trading_prep_order_proc_impl::MatchingService;
+use prep_proc::proc::{
+    trading_prep_order_proc::{
+        OpenPositionCommand, OrderType, PositionSide, Price, Quantity, Side, Symbol, TimeInForce
+    },
+    trading_prep_order_proc_impl::MatchingService
+};
 
 #[test]
 fn test_matching_service_with_balance_repo() {
@@ -31,7 +35,7 @@ fn test_matching_service_with_balance_repo() {
         price: None,
         position_side: PositionSide::Long,
         time_in_force: TimeInForce::GTC,
-        leverage: 10,
+        leverage: 10
     };
 
     // 执行开仓

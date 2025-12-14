@@ -1,30 +1,23 @@
 //! HotStuff 核心实体定义
 
-use crate::crypto::{Hash, PublicKey, Signature};
 use std::collections::HashMap;
+
+use crate::crypto::{Hash, PublicKey, Signature};
 
 /// 视图编号
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ViewNumber(pub u64);
 
 impl ViewNumber {
-    pub const fn new(n: u64) -> Self {
-        Self(n)
-    }
+    pub const fn new(n: u64) -> Self { Self(n) }
 
-    pub const fn as_u64(&self) -> u64 {
-        self.0
-    }
+    pub const fn as_u64(&self) -> u64 { self.0 }
 
-    pub fn next(&self) -> Self {
-        Self(self.0 + 1)
-    }
+    pub fn next(&self) -> Self { Self(self.0 + 1) }
 }
 
 impl std::fmt::Display for ViewNumber {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "View({})", self.0)
-    }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "View({})", self.0) }
 }
 
 /// 区块高度
@@ -32,23 +25,15 @@ impl std::fmt::Display for ViewNumber {
 pub struct Height(pub u64);
 
 impl Height {
-    pub const fn new(n: u64) -> Self {
-        Self(n)
-    }
+    pub const fn new(n: u64) -> Self { Self(n) }
 
-    pub const fn as_u64(&self) -> u64 {
-        self.0
-    }
+    pub const fn as_u64(&self) -> u64 { self.0 }
 
-    pub fn next(&self) -> Self {
-        Self(self.0 + 1)
-    }
+    pub fn next(&self) -> Self { Self(self.0 + 1) }
 }
 
 impl std::fmt::Display for Height {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Height({})", self.0)
-    }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "Height({})", self.0) }
 }
 
 /// 区块阶段
@@ -57,7 +42,7 @@ pub enum Phase {
     Prepare,
     PreCommit,
     Commit,
-    Decide,
+    Decide
 }
 
 impl std::fmt::Display for Phase {
@@ -66,7 +51,7 @@ impl std::fmt::Display for Phase {
             Phase::Prepare => write!(f, "PREPARE"),
             Phase::PreCommit => write!(f, "PRECOMMIT"),
             Phase::Commit => write!(f, "COMMIT"),
-            Phase::Decide => write!(f, "DECIDE"),
+            Phase::Decide => write!(f, "DECIDE")
         }
     }
 }
@@ -87,7 +72,7 @@ pub struct Block {
     /// QC（父区块的仲裁证书）
     justify: QuorumCertificate,
     /// 命令数据（简化为字节数组）
-    commands: Vec<Vec<u8>>,
+    commands: Vec<Vec<u8>>
 }
 
 impl Block {
@@ -101,7 +86,7 @@ impl Block {
             height: Height::new(0),
             proposer: PublicKey::from_u64(0),
             justify: genesis_qc,
-            commands: Vec::new(),
+            commands: Vec::new()
         };
         block.hash = block.compute_hash();
         block
@@ -109,11 +94,7 @@ impl Block {
 
     /// 创建新区块
     pub fn new(
-        parent: &Block,
-        view: ViewNumber,
-        proposer: PublicKey,
-        justify: QuorumCertificate,
-        commands: Vec<Vec<u8>>,
+        parent: &Block, view: ViewNumber, proposer: PublicKey, justify: QuorumCertificate, commands: Vec<Vec<u8>>
     ) -> Self {
         let mut block = Self {
             hash: Hash::zero(),
@@ -122,7 +103,7 @@ impl Block {
             height: parent.height.next(),
             proposer,
             justify,
-            commands,
+            commands
         };
         block.hash = block.compute_hash();
         block
@@ -141,38 +122,22 @@ impl Block {
         Hash::compute(&data)
     }
 
-    pub fn hash(&self) -> Hash {
-        self.hash
-    }
+    pub fn hash(&self) -> Hash { self.hash }
 
-    pub fn parent_hash(&self) -> Hash {
-        self.parent_hash
-    }
+    pub fn parent_hash(&self) -> Hash { self.parent_hash }
 
-    pub fn view(&self) -> ViewNumber {
-        self.view
-    }
+    pub fn view(&self) -> ViewNumber { self.view }
 
-    pub fn height(&self) -> Height {
-        self.height
-    }
+    pub fn height(&self) -> Height { self.height }
 
-    pub fn proposer(&self) -> PublicKey {
-        self.proposer
-    }
+    pub fn proposer(&self) -> PublicKey { self.proposer }
 
-    pub fn justify(&self) -> &QuorumCertificate {
-        &self.justify
-    }
+    pub fn justify(&self) -> &QuorumCertificate { &self.justify }
 
-    pub fn commands(&self) -> &[Vec<u8>] {
-        &self.commands
-    }
+    pub fn commands(&self) -> &[Vec<u8>] { &self.commands }
 
     /// 扩展当前区块（创建子区块）
-    pub fn extends(&self, block: &Block) -> bool {
-        self.parent_hash == block.hash
-    }
+    pub fn extends(&self, block: &Block) -> bool { self.parent_hash == block.hash }
 }
 
 /// 投票
@@ -187,46 +152,30 @@ pub struct Vote {
     /// 投票者公钥
     voter: PublicKey,
     /// 签名
-    signature: Signature,
+    signature: Signature
 }
 
 impl Vote {
     /// 创建投票
-    pub fn new(
-        block_hash: Hash,
-        view: ViewNumber,
-        phase: Phase,
-        voter: PublicKey,
-        signature: Signature,
-    ) -> Self {
+    pub fn new(block_hash: Hash, view: ViewNumber, phase: Phase, voter: PublicKey, signature: Signature) -> Self {
         Self {
             block_hash,
             view,
             phase,
             voter,
-            signature,
+            signature
         }
     }
 
-    pub fn block_hash(&self) -> Hash {
-        self.block_hash
-    }
+    pub fn block_hash(&self) -> Hash { self.block_hash }
 
-    pub fn view(&self) -> ViewNumber {
-        self.view
-    }
+    pub fn view(&self) -> ViewNumber { self.view }
 
-    pub fn phase(&self) -> Phase {
-        self.phase
-    }
+    pub fn phase(&self) -> Phase { self.phase }
 
-    pub fn voter(&self) -> PublicKey {
-        self.voter
-    }
+    pub fn voter(&self) -> PublicKey { self.voter }
 
-    pub fn signature(&self) -> Signature {
-        self.signature
-    }
+    pub fn signature(&self) -> Signature { self.signature }
 
     /// 验证投票签名
     pub fn verify(&self) -> bool {
@@ -245,7 +194,7 @@ pub struct QuorumCertificate {
     /// 阶段
     phase: Phase,
     /// 投票集合
-    votes: HashMap<PublicKey, Vote>,
+    votes: HashMap<PublicKey, Vote>
 }
 
 impl QuorumCertificate {
@@ -255,7 +204,7 @@ impl QuorumCertificate {
             block_hash: Hash::zero(),
             view: ViewNumber::new(0),
             phase: Phase::Decide,
-            votes: HashMap::new(),
+            votes: HashMap::new()
         }
     }
 
@@ -265,7 +214,7 @@ impl QuorumCertificate {
             block_hash,
             view: ViewNumber::new(0),
             phase: Phase::Decide,
-            votes: HashMap::new(),
+            votes: HashMap::new()
         }
     }
 
@@ -275,14 +224,13 @@ impl QuorumCertificate {
             block_hash,
             view,
             phase,
-            votes: HashMap::new(),
+            votes: HashMap::new()
         }
     }
 
     /// 添加投票
     pub fn add_vote(&mut self, vote: Vote) -> bool {
-        if vote.block_hash != self.block_hash || vote.view != self.view || vote.phase != self.phase
-        {
+        if vote.block_hash != self.block_hash || vote.view != self.view || vote.phase != self.phase {
             return false;
         }
 
@@ -301,37 +249,30 @@ impl QuorumCertificate {
         self.votes.len() >= quorum_size
     }
 
-    pub fn block_hash(&self) -> Hash {
-        self.block_hash
-    }
+    pub fn block_hash(&self) -> Hash { self.block_hash }
 
-    pub fn view(&self) -> ViewNumber {
-        self.view
-    }
+    pub fn view(&self) -> ViewNumber { self.view }
 
-    pub fn phase(&self) -> Phase {
-        self.phase
-    }
+    pub fn phase(&self) -> Phase { self.phase }
 
-    pub fn vote_count(&self) -> usize {
-        self.votes.len()
-    }
+    pub fn vote_count(&self) -> usize { self.votes.len() }
 
-    pub fn votes(&self) -> &HashMap<PublicKey, Vote> {
-        &self.votes
-    }
+    pub fn votes(&self) -> &HashMap<PublicKey, Vote> { &self.votes }
 }
 
 /// 提案消息
 #[derive(Debug, Clone)]
 pub struct Proposal {
     pub block: Block,
-    pub phase: Phase,
+    pub phase: Phase
 }
 
 impl Proposal {
     pub fn new(block: Block, phase: Phase) -> Self {
-        Self { block, phase }
+        Self {
+            block,
+            phase
+        }
     }
 }
 
@@ -353,13 +294,7 @@ mod tests {
         let proposer = PublicKey::from_u64(1);
         let qc = QuorumCertificate::genesis();
 
-        let block = Block::new(
-            &genesis,
-            ViewNumber::new(1),
-            proposer,
-            qc,
-            vec![b"command1".to_vec()],
-        );
+        let block = Block::new(&genesis, ViewNumber::new(1), proposer, qc, vec![b"command1".to_vec()]);
 
         assert_eq!(block.height().as_u64(), 1);
         assert_eq!(block.view().as_u64(), 1);

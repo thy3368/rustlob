@@ -12,11 +12,11 @@
 //!
 //! - **单次分配**: 测量分配单个 OrderBookDelta 的时间
 //! - **批量分配 (Vec)**: 测量分配 100 个 OrderBookDelta 到 Vec 的时间
-//! - **批量分配 (预分配)**: 测量使用预分配容量的 Vec 分配 100 个 OrderBookDelta 的时间
+//! - **批量分配 (预分配)**: 测量使用预分配容量的 Vec 分配 100 个 OrderBookDelta
+//!   的时间
 //! - **批量分配 (数组)**: 测量分配 100 个 OrderBookDelta 到栈数组的时间
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-
 use lob::lob::{Side, TraderId};
 use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
 
@@ -32,11 +32,7 @@ fn create_orderbook_delta(index: u64) -> OrderDelta {
         side: if index % 2 == 0 { Side::Buy } else { Side::Sell },
         price: 50000 + (index as u32),
         quantity: 100 + (index as u32),
-        trader_id: Some(TraderId::new([
-            (index % 256) as u8,
-            ((index / 256) % 256) as u8,
-            1, 2, 3, 4, 5, 6,
-        ])),
+        trader_id: Some(TraderId::new([(index % 256) as u8, ((index / 256) % 256) as u8, 1, 2, 3, 4, 5, 6]))
     }
 }
 
@@ -80,9 +76,7 @@ fn bench_vec_allocation_with_reserve(c: &mut Criterion) {
 fn bench_vec_allocation_collect(c: &mut Criterion) {
     c.bench_function("vec_100_orderbook_deltas_collect", |b| {
         b.iter(|| {
-            let deltas: Vec<OrderDelta> = (0..100)
-                .map(|i| create_orderbook_delta(black_box(i)))
-                .collect();
+            let deltas: Vec<OrderDelta> = (0..100).map(|i| create_orderbook_delta(black_box(i))).collect();
             black_box(deltas);
         });
     });
@@ -92,9 +86,7 @@ fn bench_vec_allocation_collect(c: &mut Criterion) {
 fn bench_array_allocation(c: &mut Criterion) {
     c.bench_function("array_100_orderbook_deltas", |b| {
         b.iter(|| {
-            let deltas: [OrderDelta; 100] = std::array::from_fn(|i| {
-                create_orderbook_delta(black_box(i as u64))
-            });
+            let deltas: [OrderDelta; 100] = std::array::from_fn(|i| create_orderbook_delta(black_box(i as u64)));
             black_box(deltas);
         });
     });
@@ -105,19 +97,15 @@ fn bench_varying_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("orderbook_delta_allocation_varying_sizes");
 
     for size in [10, 50, 100, 200, 500, 1000].iter() {
-        group.bench_with_input(
-            BenchmarkId::new("vec_with_reserve", size),
-            size,
-            |b, &size| {
-                b.iter(|| {
-                    let mut deltas = Vec::with_capacity(size);
-                    for i in 0..size {
-                        deltas.push(create_orderbook_delta(black_box(i as u64)));
-                    }
-                    black_box(deltas);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("vec_with_reserve", size), size, |b, &size| {
+            b.iter(|| {
+                let mut deltas = Vec::with_capacity(size);
+                for i in 0..size {
+                    deltas.push(create_orderbook_delta(black_box(i as u64)));
+                }
+                black_box(deltas);
+            });
+        });
     }
 
     group.finish();
@@ -149,9 +137,7 @@ fn bench_clone_performance(c: &mut Criterion) {
 
 /// 基准测试：批量 Copy 100 个 OrderBookDelta
 fn bench_batch_copy(c: &mut Criterion) {
-    let source: Vec<OrderDelta> = (0..100)
-        .map(create_orderbook_delta)
-        .collect();
+    let source: Vec<OrderDelta> = (0..100).map(create_orderbook_delta).collect();
 
     c.bench_function("batch_copy_100_orderbook_deltas", |b| {
         b.iter(|| {

@@ -7,10 +7,11 @@
 //! cargo bench --bench orderdelta_optimized
 //! ```
 
+use std::num::NonZeroU64;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lob::lob::{Side, TraderId};
 use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
-use std::num::NonZeroU64;
 
 // ============================================================================
 // 优化方案 2: 使用 NonZeroU64
@@ -21,28 +22,21 @@ pub struct OrderDeltaV2 {
     pub timestamp: u64,
     pub sequence: u64,
     pub order_id: u64,
-    pub trader_id: Option<NonZeroU64>,     // 8 字节而不是 16 字节！
+    pub trader_id: Option<NonZeroU64>, // 8 字节而不是 16 字节！
 
     pub symbol_id: u32,
     pub price: u32,
     pub quantity: u32,
 
     pub change_type: OrderChangeType,
-    pub side: Side,
+    pub side: Side
 }
 
 impl OrderDeltaV2 {
     #[inline]
     fn new(
-        symbol_id: u32,
-        timestamp: u64,
-        sequence: u64,
-        change_type: OrderChangeType,
-        order_id: u64,
-        side: Side,
-        price: u32,
-        quantity: u32,
-        trader_id: Option<u64>,
+        symbol_id: u32, timestamp: u64, sequence: u64, change_type: OrderChangeType, order_id: u64, side: Side,
+        price: u32, quantity: u32, trader_id: Option<u64>
     ) -> Self {
         Self {
             timestamp,
@@ -53,14 +47,12 @@ impl OrderDeltaV2 {
             price,
             quantity,
             change_type,
-            side,
+            side
         }
     }
 
     #[inline]
-    pub fn trader_id_u64(&self) -> Option<u64> {
-        self.trader_id.map(|id| id.get())
-    }
+    pub fn trader_id_u64(&self) -> Option<u64> { self.trader_id.map(|id| id.get()) }
 }
 
 // ============================================================================
@@ -78,7 +70,7 @@ pub struct OrderDeltaV3 {
     pub price: u32,
     pub quantity: u32,
 
-    pub flags: u8,  // change_type (2 bits) + side (1 bit)
+    pub flags: u8 // change_type (2 bits) + side (1 bit)
 }
 
 impl OrderDeltaV3 {
@@ -87,15 +79,8 @@ impl OrderDeltaV3 {
 
     #[inline]
     fn new(
-        symbol_id: u32,
-        timestamp: u64,
-        sequence: u64,
-        change_type: OrderChangeType,
-        order_id: u64,
-        side: Side,
-        price: u32,
-        quantity: u32,
-        trader_id: Option<u64>,
+        symbol_id: u32, timestamp: u64, sequence: u64, change_type: OrderChangeType, order_id: u64, side: Side,
+        price: u32, quantity: u32, trader_id: Option<u64>
     ) -> Self {
         let mut flags = 0u8;
 
@@ -108,7 +93,7 @@ impl OrderDeltaV3 {
         let change_bits = match change_type {
             OrderChangeType::Add => 0,
             OrderChangeType::Modify => 1,
-            OrderChangeType::Delete => 2,
+            OrderChangeType::Delete => 2
         };
         flags |= change_bits << 1;
 
@@ -120,7 +105,7 @@ impl OrderDeltaV3 {
             symbol_id,
             price,
             quantity,
-            flags,
+            flags
         }
     }
 
@@ -139,7 +124,7 @@ impl OrderDeltaV3 {
             0 => OrderChangeType::Add,
             1 => OrderChangeType::Modify,
             2 => OrderChangeType::Delete,
-            _ => unreachable!(),
+            _ => unreachable!()
         }
     }
 }
@@ -159,11 +144,7 @@ fn create_orderdelta_v1(index: u64) -> OrderDelta {
         side: if index % 2 == 0 { Side::Buy } else { Side::Sell },
         price: 50000 + (index as u32),
         quantity: 100 + (index as u32),
-        trader_id: Some(TraderId::new([
-            (index % 256) as u8,
-            ((index / 256) % 256) as u8,
-            1, 2, 3, 4, 5, 6,
-        ])),
+        trader_id: Some(TraderId::new([(index % 256) as u8, ((index / 256) % 256) as u8, 1, 2, 3, 4, 5, 6]))
     }
 }
 
@@ -179,7 +160,7 @@ fn create_orderdelta_v2(index: u64) -> OrderDeltaV2 {
         if index % 2 == 0 { Side::Buy } else { Side::Sell },
         50000 + (index as u32),
         100 + (index as u32),
-        Some(trader_id_u64),
+        Some(trader_id_u64)
     )
 }
 
@@ -195,7 +176,7 @@ fn create_orderdelta_v3(index: u64) -> OrderDeltaV3 {
         if index % 2 == 0 { Side::Buy } else { Side::Sell },
         50000 + (index as u32),
         100 + (index as u32),
-        Some(trader_id_u64),
+        Some(trader_id_u64)
     )
 }
 
@@ -230,10 +211,12 @@ fn bench_memory_size(c: &mut Criterion) {
     println!("V1 (原始):     {} 字节", std::mem::size_of::<OrderDelta>());
     println!("V2 (NonZero):  {} 字节", std::mem::size_of::<OrderDeltaV2>());
     println!("V3 (位域):     {} 字节", std::mem::size_of::<OrderDeltaV3>());
-    println!("节省 (V2):     {} 字节 ({:.1}%)",
+    println!(
+        "节省 (V2):     {} 字节 ({:.1}%)",
         std::mem::size_of::<OrderDelta>() - std::mem::size_of::<OrderDeltaV2>(),
-        ((std::mem::size_of::<OrderDelta>() - std::mem::size_of::<OrderDeltaV2>()) as f64 /
-         std::mem::size_of::<OrderDelta>() as f64) * 100.0
+        ((std::mem::size_of::<OrderDelta>() - std::mem::size_of::<OrderDeltaV2>()) as f64
+            / std::mem::size_of::<OrderDelta>() as f64)
+            * 100.0
     );
 }
 
@@ -244,27 +227,21 @@ fn bench_memory_size(c: &mut Criterion) {
 fn bench_allocation_100(c: &mut Criterion) {
     c.bench_function("allocation_100_v1_original", |b| {
         b.iter(|| {
-            let deltas: Vec<OrderDelta> = (0..100)
-                .map(|i| create_orderdelta_v1(black_box(i)))
-                .collect();
+            let deltas: Vec<OrderDelta> = (0..100).map(|i| create_orderdelta_v1(black_box(i))).collect();
             black_box(deltas);
         });
     });
 
     c.bench_function("allocation_100_v2_nonzero", |b| {
         b.iter(|| {
-            let deltas: Vec<OrderDeltaV2> = (0..100)
-                .map(|i| create_orderdelta_v2(black_box(i)))
-                .collect();
+            let deltas: Vec<OrderDeltaV2> = (0..100).map(|i| create_orderdelta_v2(black_box(i))).collect();
             black_box(deltas);
         });
     });
 
     c.bench_function("allocation_100_v3_bitfield", |b| {
         b.iter(|| {
-            let deltas: Vec<OrderDeltaV3> = (0..100)
-                .map(|i| create_orderdelta_v3(black_box(i)))
-                .collect();
+            let deltas: Vec<OrderDeltaV3> = (0..100).map(|i| create_orderdelta_v3(black_box(i))).collect();
             black_box(deltas);
         });
     });
@@ -330,13 +307,9 @@ fn bench_trader_id_access(c: &mut Criterion) {
 // ============================================================================
 
 fn bench_sequential_access(c: &mut Criterion) {
-    let deltas_v1: Vec<OrderDelta> = (0..1000)
-        .map(create_orderdelta_v1)
-        .collect();
+    let deltas_v1: Vec<OrderDelta> = (0..1000).map(create_orderdelta_v1).collect();
 
-    let deltas_v2: Vec<OrderDeltaV2> = (0..1000)
-        .map(create_orderdelta_v2)
-        .collect();
+    let deltas_v2: Vec<OrderDeltaV2> = (0..1000).map(create_orderdelta_v2).collect();
 
     c.bench_function("sequential_access_v1", |b| {
         b.iter(|| {

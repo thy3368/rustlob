@@ -48,8 +48,10 @@
 //! println!("Order placed: {:?}", result.data.order_id);
 //! ```
 
-use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fmt,
+    time::{SystemTime, UNIX_EPOCH}
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -69,7 +71,7 @@ pub struct Command<T> {
     /// 业务命令负载
     pub payload: T,
     /// 命令元数据
-    pub metadata: CommandMetadata,
+    pub metadata: CommandMetadata
 }
 
 impl<T> Command<T> {
@@ -77,23 +79,26 @@ impl<T> Command<T> {
     pub fn new(payload: T) -> Self {
         Self {
             payload,
-            metadata: CommandMetadata::new(),
+            metadata: CommandMetadata::new()
         }
     }
 
     /// 创建带自定义元数据的命令
     pub fn with_metadata(payload: T, metadata: CommandMetadata) -> Self {
-        Self { payload, metadata }
+        Self {
+            payload,
+            metadata
+        }
     }
 
     /// 映射命令负载
     pub fn map<U, F>(self, f: F) -> Command<U>
     where
-        F: FnOnce(T) -> U,
+        F: FnOnce(T) -> U
     {
         Command {
             payload: f(self.payload),
-            metadata: self.metadata,
+            metadata: self.metadata
         }
     }
 }
@@ -113,7 +118,7 @@ pub struct CommandMetadata {
     /// 用户/系统标识
     pub actor: Option<String>,
     /// 自定义属性
-    pub attributes: Vec<(String, String)>,
+    pub attributes: Vec<(String, String)>
 }
 
 impl CommandMetadata {
@@ -125,26 +130,15 @@ impl CommandMetadata {
             correlation_id: None,
             causation_id: None,
             actor: None,
-            attributes: Vec::new(),
+            attributes: Vec::new()
         }
     }
 
     /// 生成唯一ID（简单实现，生产环境应使用 UUID）
-    fn generate_id() -> String {
-        format!(
-            "cmd_{}_{:x}",
-            Self::current_timestamp(),
-            rand::random::<u32>()
-        )
-    }
+    fn generate_id() -> String { format!("cmd_{}_{:x}", Self::current_timestamp(), rand::random::<u32>()) }
 
     /// 获取当前时间戳（Unix 毫秒）
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
-    }
+    fn current_timestamp() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 }
 
     /// 设置关联ID
     pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
@@ -166,9 +160,7 @@ impl CommandMetadata {
 }
 
 impl Default for CommandMetadata {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 /// 命令结果包装器
@@ -178,7 +170,7 @@ pub struct CommandResult<T> {
     /// 结果数据
     pub data: T,
     /// 结果元数据
-    pub metadata: ResultMetadata,
+    pub metadata: ResultMetadata
 }
 
 impl<T> CommandResult<T> {
@@ -186,30 +178,31 @@ impl<T> CommandResult<T> {
     pub fn success(data: T) -> Self {
         Self {
             data,
-            metadata: ResultMetadata::success(),
+            metadata: ResultMetadata::success()
         }
     }
 
     /// 创建带自定义元数据的结果
     pub fn with_metadata(data: T, metadata: ResultMetadata) -> Self {
-        Self { data, metadata }
+        Self {
+            data,
+            metadata
+        }
     }
 
     /// 映射结果数据
     pub fn map<U, F>(self, f: F) -> CommandResult<U>
     where
-        F: FnOnce(T) -> U,
+        F: FnOnce(T) -> U
     {
         CommandResult {
             data: f(self.data),
-            metadata: self.metadata,
+            metadata: self.metadata
         }
     }
 
     /// 判断是否成功
-    pub fn is_success(&self) -> bool {
-        self.metadata.success
-    }
+    pub fn is_success(&self) -> bool { self.metadata.success }
 }
 
 // ==================== 查询（Query）====================
@@ -226,7 +219,7 @@ pub struct Query<T> {
     /// 查询负载
     pub payload: T,
     /// 查询元数据
-    pub metadata: QueryMetadata,
+    pub metadata: QueryMetadata
 }
 
 impl<T> Query<T> {
@@ -234,23 +227,26 @@ impl<T> Query<T> {
     pub fn new(payload: T) -> Self {
         Self {
             payload,
-            metadata: QueryMetadata::new(),
+            metadata: QueryMetadata::new()
         }
     }
 
     /// 创建带自定义元数据的查询
     pub fn with_metadata(payload: T, metadata: QueryMetadata) -> Self {
-        Self { payload, metadata }
+        Self {
+            payload,
+            metadata
+        }
     }
 
     /// 映射查询负载
     pub fn map<U, F>(self, f: F) -> Query<U>
     where
-        F: FnOnce(T) -> U,
+        F: FnOnce(T) -> U
     {
         Query {
             payload: f(self.payload),
-            metadata: self.metadata,
+            metadata: self.metadata
         }
     }
 }
@@ -272,7 +268,7 @@ pub struct QueryMetadata {
     /// 缓存TTL（秒）
     pub cache_ttl: Option<u64>,
     /// 自定义属性
-    pub attributes: Vec<(String, String)>,
+    pub attributes: Vec<(String, String)>
 }
 
 impl QueryMetadata {
@@ -285,26 +281,15 @@ impl QueryMetadata {
             actor: None,
             cache_enabled: false,
             cache_ttl: None,
-            attributes: Vec::new(),
+            attributes: Vec::new()
         }
     }
 
     /// 生成唯一ID
-    fn generate_id() -> String {
-        format!(
-            "qry_{}_{:x}",
-            Self::current_timestamp(),
-            rand::random::<u32>()
-        )
-    }
+    fn generate_id() -> String { format!("qry_{}_{:x}", Self::current_timestamp(), rand::random::<u32>()) }
 
     /// 获取当前时间戳
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
-    }
+    fn current_timestamp() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 }
 
     /// 启用缓存
     pub fn with_cache(mut self, ttl_seconds: u64) -> Self {
@@ -321,9 +306,7 @@ impl QueryMetadata {
 }
 
 impl Default for QueryMetadata {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 /// 查询结果包装器
@@ -333,7 +316,7 @@ pub struct QueryResult<T> {
     /// 查询数据
     pub data: T,
     /// 结果元数据
-    pub metadata: ResultMetadata,
+    pub metadata: ResultMetadata
 }
 
 impl<T> QueryResult<T> {
@@ -341,35 +324,34 @@ impl<T> QueryResult<T> {
     pub fn success(data: T) -> Self {
         Self {
             data,
-            metadata: ResultMetadata::success(),
+            metadata: ResultMetadata::success()
         }
     }
 
     /// 创建带自定义元数据的结果
     pub fn with_metadata(data: T, metadata: ResultMetadata) -> Self {
-        Self { data, metadata }
+        Self {
+            data,
+            metadata
+        }
     }
 
     /// 映射结果数据
     pub fn map<U, F>(self, f: F) -> QueryResult<U>
     where
-        F: FnOnce(T) -> U,
+        F: FnOnce(T) -> U
     {
         QueryResult {
             data: f(self.data),
-            metadata: self.metadata,
+            metadata: self.metadata
         }
     }
 
     /// 判断是否成功
-    pub fn is_success(&self) -> bool {
-        self.metadata.success
-    }
+    pub fn is_success(&self) -> bool { self.metadata.success }
 
     /// 判断是否来自缓存
-    pub fn is_from_cache(&self) -> bool {
-        self.metadata.from_cache
-    }
+    pub fn is_from_cache(&self) -> bool { self.metadata.from_cache }
 }
 
 // ==================== 结果元数据（共享）====================
@@ -389,7 +371,7 @@ pub struct ResultMetadata {
     /// 警告信息
     pub warnings: Vec<String>,
     /// 自定义属性
-    pub attributes: Vec<(String, String)>,
+    pub attributes: Vec<(String, String)>
 }
 
 impl ResultMetadata {
@@ -401,7 +383,7 @@ impl ResultMetadata {
             duration_micros: None,
             from_cache: false,
             warnings: Vec::new(),
-            attributes: Vec::new(),
+            attributes: Vec::new()
         }
     }
 
@@ -413,17 +395,12 @@ impl ResultMetadata {
             duration_micros: None,
             from_cache: false,
             warnings: Vec::new(),
-            attributes: Vec::new(),
+            attributes: Vec::new()
         }
     }
 
     /// 获取当前时间戳
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
-    }
+    fn current_timestamp() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 }
 
     /// 设置执行耗时
     pub fn with_duration(mut self, duration_micros: u64) -> Self {
@@ -451,63 +428,63 @@ impl ResultMetadata {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CqrsError {
     /// 命令执行错误
-    CommandError {
-        code: String,
-        message: String,
-        details: Option<String>,
-    },
+    CommandError { code: String, message: String, details: Option<String> },
     /// 查询执行错误
-    QueryError {
-        code: String,
-        message: String,
-        details: Option<String>,
-    },
+    QueryError { code: String, message: String, details: Option<String> },
     /// 验证错误
-    ValidationError {
-        field: String,
-        message: String,
-    },
+    ValidationError { field: String, message: String },
     /// 未找到
-    NotFound {
-        entity: String,
-        id: String,
-    },
+    NotFound { entity: String, id: String },
     /// 冲突（如幂等性检查失败）
-    Conflict {
-        message: String,
-    },
+    Conflict { message: String },
     /// 未授权
-    Unauthorized {
-        message: String,
-    },
+    Unauthorized { message: String },
     /// 内部错误
-    InternalError {
-        message: String,
-    },
+    InternalError { message: String }
 }
 
 impl fmt::Display for CqrsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CqrsError::CommandError { code, message, .. } => {
+            CqrsError::CommandError {
+                code,
+                message,
+                ..
+            } => {
                 write!(f, "Command error [{}]: {}", code, message)
             }
-            CqrsError::QueryError { code, message, .. } => {
+            CqrsError::QueryError {
+                code,
+                message,
+                ..
+            } => {
                 write!(f, "Query error [{}]: {}", code, message)
             }
-            CqrsError::ValidationError { field, message } => {
+            CqrsError::ValidationError {
+                field,
+                message
+            } => {
                 write!(f, "Validation error on {}: {}", field, message)
             }
-            CqrsError::NotFound { entity, id } => {
+            CqrsError::NotFound {
+                entity,
+                id
+            } => {
                 write!(f, "{} not found: {}", entity, id)
             }
-            CqrsError::Conflict { message } => {
+            CqrsError::Conflict {
+                message
+            } => {
                 write!(f, "Conflict: {}", message)
             }
-            CqrsError::Unauthorized { message } => {
+            CqrsError::Unauthorized {
+                message
+            } => {
                 write!(f, "Unauthorized: {}", message)
             }
-            CqrsError::InternalError { message } => {
+            CqrsError::InternalError {
+                message
+            } => {
                 write!(f, "Internal error: {}", message)
             }
         }

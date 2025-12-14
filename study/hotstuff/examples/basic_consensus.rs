@@ -2,13 +2,16 @@
 //!
 //! 运行方式：cargo run --example basic_consensus
 
-use hotstuff::crypto::PrivateKey;
-use hotstuff::domain::node::{Message, Node, NodeRole};
 use std::collections::HashMap;
+
+use hotstuff::{
+    crypto::PrivateKey,
+    domain::node::{Message, Node, NodeRole}
+};
 
 /// 模拟网络环境
 struct SimulatedNetwork {
-    nodes: HashMap<u64, Node>,
+    nodes: HashMap<u64, Node>
 }
 
 impl SimulatedNetwork {
@@ -17,25 +20,21 @@ impl SimulatedNetwork {
         println!("Initializing network with {} nodes...\n", num_nodes);
 
         // 生成所有验证者的公钥
-        let validators: Vec<_> = (0..num_nodes)
-            .map(|i| PrivateKey::from_u64(i as u64).public_key())
-            .collect();
+        let validators: Vec<_> = (0..num_nodes).map(|i| PrivateKey::from_u64(i as u64).public_key()).collect();
 
         // 创建节点
         let mut nodes = HashMap::new();
         for i in 0..num_nodes {
             let private_key = PrivateKey::from_u64(i as u64);
             let node = Node::new(i as u64, private_key, validators.clone(), true);
-            println!(
-                "Node {} initialized - Role: {:?}",
-                i,
-                node.role()
-            );
+            println!("Node {} initialized - Role: {:?}", i, node.role());
             nodes.insert(i as u64, node);
         }
 
         println!();
-        Self { nodes }
+        Self {
+            nodes
+        }
     }
 
     /// 广播消息给所有节点（除了发送者）

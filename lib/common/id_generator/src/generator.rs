@@ -1,5 +1,7 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::{SystemTime, UNIX_EPOCH}
+};
 
 /// Snowflake ID生成器
 ///
@@ -14,7 +16,7 @@ pub struct IdGenerator {
     /// 节点ID (0-31)
     node_id: u8,
     /// 组合的时间戳和序列号 (高48位时间戳 + 低16位序列号)
-    ts_and_seq: AtomicU64,
+    ts_and_seq: AtomicU64
 }
 
 impl IdGenerator {
@@ -37,7 +39,7 @@ impl IdGenerator {
         Self {
             epoch: 1704067200000, // 2024-01-01 00:00:00 UTC
             node_id: node_id & Self::MAX_NODE_ID,
-            ts_and_seq: AtomicU64::new(0),
+            ts_and_seq: AtomicU64::new(0)
         }
     }
 
@@ -78,12 +80,7 @@ impl IdGenerator {
             let new_value = (new_ts << 16) | new_seq;
 
             // 使用CAS确保原子性
-            match self.ts_and_seq.compare_exchange(
-                current,
-                new_value,
-                Ordering::SeqCst,
-                Ordering::Acquire,
-            ) {
+            match self.ts_and_seq.compare_exchange(current, new_value, Ordering::SeqCst, Ordering::Acquire) {
                 Ok(_) => {
                     // 组装ID: [41位时间戳][5位节点ID][12位序列号]
                     let timestamp = now - self.epoch;
@@ -106,9 +103,7 @@ impl IdGenerator {
     ///
     /// # 返回
     /// Unix时间戳(毫秒)
-    pub fn extract_timestamp(&self, id: i64) -> i64 {
-        (id >> (Self::NODE_ID_BITS + Self::SEQUENCE_BITS)) + self.epoch
-    }
+    pub fn extract_timestamp(&self, id: i64) -> i64 { (id >> (Self::NODE_ID_BITS + Self::SEQUENCE_BITS)) + self.epoch }
 
     /// 从ID中提取节点ID
     pub fn extract_node_id(&self, id: i64) -> u8 {
@@ -116,18 +111,11 @@ impl IdGenerator {
     }
 
     /// 从ID中提取序列号
-    pub fn extract_sequence(&self, id: i64) -> u16 {
-        (id & ((1 << Self::SEQUENCE_BITS) - 1)) as u16
-    }
+    pub fn extract_sequence(&self, id: i64) -> u16 { (id & ((1 << Self::SEQUENCE_BITS) - 1)) as u16 }
 
     /// 获取当前时间戳(毫秒)
     #[inline]
-    fn current_millis(&self) -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64
-    }
+    fn current_millis(&self) -> i64 { SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64 }
 }
 
 #[cfg(test)]
@@ -171,17 +159,13 @@ mod tests {
         let generator = IdGenerator::new(0);
         let id = generator.next_id();
         let timestamp = generator.extract_timestamp(id);
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
         assert!((timestamp - now).abs() < 1000);
     }
 
     #[test]
     fn test_concurrent() {
-        use std::sync::Arc;
-        use std::thread;
+        use std::{sync::Arc, thread};
 
         let generator = Arc::new(IdGenerator::new(0));
         let handles: Vec<_> = (0..4)

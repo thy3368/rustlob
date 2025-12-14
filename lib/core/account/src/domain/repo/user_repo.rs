@@ -3,8 +3,7 @@
 //! 遵循 Clean Architecture：Repository 只负责纯粹的 CRUD 操作
 //! 业务逻辑（freeze/unfreeze/credit/debit）在 Service 层实现
 
-use crate::domain::user::User;
-use crate::UserId;
+use crate::{domain::user::User, UserId};
 
 /// 余额仓储接口
 ///

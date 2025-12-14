@@ -1,9 +1,12 @@
 //! HotStuff 节点实现
 
-use super::consensus::HotStuffConsensus;
-use super::entities::{Phase, Proposal, QuorumCertificate, ViewNumber, Vote};
-use crate::crypto::{PrivateKey, PublicKey};
 use std::collections::HashMap;
+
+use super::{
+    consensus::HotStuffConsensus,
+    entities::{Phase, Proposal, QuorumCertificate, ViewNumber, Vote}
+};
+use crate::crypto::{PrivateKey, PublicKey};
 
 /// 消息类型
 #[derive(Debug, Clone)]
@@ -15,14 +18,14 @@ pub enum Message {
     /// QC 消息
     NewQC(QuorumCertificate, Phase),
     /// 视图切换消息
-    ViewChange(ViewNumber),
+    ViewChange(ViewNumber)
 }
 
 /// 节点角色
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeRole {
     Leader,
-    Replica,
+    Replica
 }
 
 /// HotStuff 节点
@@ -38,17 +41,12 @@ pub struct Node {
     /// 消息队列
     message_queue: Vec<Message>,
     /// 是否启用详细日志
-    verbose: bool,
+    verbose: bool
 }
 
 impl Node {
     /// 创建新节点
-    pub fn new(
-        id: u64,
-        private_key: PrivateKey,
-        validators: Vec<PublicKey>,
-        verbose: bool,
-    ) -> Self {
+    pub fn new(id: u64, private_key: PrivateKey, validators: Vec<PublicKey>, verbose: bool) -> Self {
         let total_nodes = validators.len();
 
         let mut validator_map = HashMap::new();
@@ -64,29 +62,19 @@ impl Node {
             role,
             validators: validator_map,
             message_queue: Vec::new(),
-            verbose,
+            verbose
         }
     }
 
-    pub fn id(&self) -> u64 {
-        self.id
-    }
+    pub fn id(&self) -> u64 { self.id }
 
-    pub fn public_key(&self) -> PublicKey {
-        self.consensus.public_key()
-    }
+    pub fn public_key(&self) -> PublicKey { self.consensus.public_key() }
 
-    pub fn consensus(&self) -> &HotStuffConsensus {
-        &self.consensus
-    }
+    pub fn consensus(&self) -> &HotStuffConsensus { &self.consensus }
 
-    pub fn consensus_mut(&mut self) -> &mut HotStuffConsensus {
-        &mut self.consensus
-    }
+    pub fn consensus_mut(&mut self) -> &mut HotStuffConsensus { &mut self.consensus }
 
-    pub fn role(&self) -> NodeRole {
-        self.role
-    }
+    pub fn role(&self) -> NodeRole { self.role }
 
     /// 确定当前视图的 Leader
     fn determine_role(node_id: u64, view: ViewNumber) -> NodeRole {
@@ -106,10 +94,7 @@ impl Node {
         self.role = Self::determine_role(self.id, current_view);
 
         if self.verbose {
-            println!(
-                "[Node {}] Role updated to {:?} for {}",
-                self.id, self.role, current_view
-            );
+            println!("[Node {}] Role updated to {:?} for {}", self.id, self.role, current_view);
         }
     }
 
@@ -142,7 +127,7 @@ impl Node {
             Message::Proposal(proposal) => self.handle_proposal(proposal),
             Message::Vote(vote) => self.handle_vote(vote),
             Message::NewQC(qc, phase) => self.handle_new_qc(qc, phase),
-            Message::ViewChange(new_view) => self.handle_view_change(new_view),
+            Message::ViewChange(new_view) => self.handle_view_change(new_view)
         }
     }
 
@@ -160,12 +145,7 @@ impl Node {
         match self.consensus.on_receive_proposal(proposal) {
             Ok(vote) => {
                 if self.verbose {
-                    println!(
-                        "[Node {}] Voting for block {} in phase {}",
-                        self.id,
-                        vote.block_hash(),
-                        vote.phase()
-                    );
+                    println!("[Node {}] Voting for block {} in phase {}", self.id, vote.block_hash(), vote.phase());
                 }
                 vec![Message::Vote(vote)]
             }
@@ -197,12 +177,7 @@ impl Node {
 
         if let Some(qc) = self.consensus.on_receive_vote(vote.clone()) {
             if self.verbose {
-                println!(
-                    "[Node {}] Formed QC for block {} in phase {}",
-                    self.id,
-                    qc.block_hash(),
-                    vote.phase()
-                );
+                println!("[Node {}] Formed QC for block {} in phase {}", self.id, qc.block_hash(), vote.phase());
             }
 
             // 广播新形成的 QC
@@ -215,12 +190,7 @@ impl Node {
     /// 处理新 QC
     fn handle_new_qc(&mut self, qc: QuorumCertificate, phase: Phase) -> Vec<Message> {
         if self.verbose {
-            println!(
-                "[Node {}] Received QC for block {} in phase {}",
-                self.id,
-                qc.block_hash(),
-                phase
-            );
+            println!("[Node {}] Received QC for block {} in phase {}", self.id, qc.block_hash(), phase);
         }
 
         self.consensus.state_mut().update_high_qc(qc.clone());
@@ -234,7 +204,7 @@ impl Node {
                 Phase::Commit
             }
             Phase::Commit => Phase::Decide,
-            Phase::Decide => return Vec::new(),
+            Phase::Decide => return Vec::new()
         };
 
         // 所有节点对下一阶段投票
@@ -257,10 +227,7 @@ impl Node {
     /// 处理视图切换
     fn handle_view_change(&mut self, new_view: ViewNumber) -> Vec<Message> {
         if self.verbose {
-            println!(
-                "[Node {}] Advancing to {}",
-                self.id, new_view
-            );
+            println!("[Node {}] Advancing to {}", self.id, new_view);
         }
 
         self.consensus.state_mut().advance_view(new_view);
@@ -276,9 +243,7 @@ impl Node {
     }
 
     /// 获取已提交的区块高度
-    pub fn committed_height(&self) -> u64 {
-        self.consensus.state().committed_height().as_u64()
-    }
+    pub fn committed_height(&self) -> u64 { self.consensus.state().committed_height().as_u64() }
 
     /// 打印状态
     pub fn print_status(&self) {
@@ -318,7 +283,8 @@ mod tests {
     fn test_node_creation() {
         let nodes = create_test_nodes(4);
         assert_eq!(nodes.len(), 4);
-        assert_eq!(nodes[1].role(), NodeRole::Leader); // View 1, Leader = 1 % 4 = 1
+        assert_eq!(nodes[1].role(), NodeRole::Leader); // View 1, Leader = 1 % 4
+                                                       // = 1
     }
 
     #[test]
@@ -333,7 +299,7 @@ mod tests {
             Message::Proposal(proposal) => {
                 assert_eq!(proposal.block.height().as_u64(), 1);
             }
-            _ => panic!("Expected proposal message"),
+            _ => panic!("Expected proposal message")
         }
     }
 
@@ -345,7 +311,7 @@ mod tests {
         let messages = nodes[1].propose(vec![b"test".to_vec()]);
         let proposal = match &messages[0] {
             Message::Proposal(p) => p.clone(),
-            _ => panic!("Expected proposal"),
+            _ => panic!("Expected proposal")
         };
 
         // Replica 处理提案
@@ -357,7 +323,7 @@ mod tests {
             Message::Vote(vote) => {
                 assert_eq!(vote.phase(), Phase::Prepare);
             }
-            _ => panic!("Expected vote message"),
+            _ => panic!("Expected vote message")
         }
     }
 }
