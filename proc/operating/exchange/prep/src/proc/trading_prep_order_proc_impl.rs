@@ -7,15 +7,19 @@ use std::{
 use account::domain::entity::{AccountId, AssetId, Timestamp};
 use account::domain::repo::{BalanceRepo, PositionRepo};
 
-use crate::proc::trading_prep_order_proc::{
-    AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand, CancelOrderResult,
-    ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord, MarkPriceInfo, ModifyOrderCommand,
-    ModifyOrderResult, OpenPositionCommand, OpenPositionResult, OrderBookSnapshot, OrderId, OrderQueryResult,
-    OrderStatus, OrderType, PerpOrderExchProc, PerpOrderExchQueryProc, PositionInfo, PrepCommandError, Price, Quantity,
-    QueryAccountBalanceCommand, QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand,
-    QueryMarkPriceCommand, QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand,
-    SetLeverageCommand, SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand,
-    SetPositionModeResult, Side, Symbol, Trade, TradeId, TradesQueryResult
+use crate::proc::{
+    prep_types::InternalOrder,
+    trading_prep_order_proc::{
+        AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand,
+        CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
+        MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult,
+        OrderBookSnapshot, OrderId, OrderQueryResult, OrderStatus, OrderType, PerpOrderExchProc,
+        PerpOrderExchQueryProc, PositionInfo, PrepCommandError, Price, Quantity, QueryAccountBalanceCommand,
+        QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand,
+        QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand,
+        SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult,
+        Side, Symbol, Trade, TradeId, TradesQueryResult
+    }
 };
 
 /// 本地撮合引擎服务
@@ -46,21 +50,6 @@ pub struct MatchingService<R: BalanceRepo, P: PositionRepo<PositionInfo>> {
     match_seq: Arc<RwLock<u64>>
 }
 
-/// 内部订单状态（扩展字段用于撮合引擎）
-#[derive(Debug, Clone)]
-struct InternalOrder {
-    order_id: OrderId,
-    symbol: Symbol,
-    side: Side,
-    order_type: OrderType,
-    quantity: Quantity,
-    price: Option<Price>,
-    filled_quantity: Quantity,
-    status: OrderStatus,
-    created_at: u64,
-    /// 冻结的保证金金额（用于订单取消时归还）
-    frozen_margin: Price
-}
 
 impl<R: BalanceRepo, P: PositionRepo<PositionInfo>> MatchingService<R, P> {
     /// 创建新的撮合服务实例
@@ -768,7 +757,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>> PerpOrderExchProc for Matchi
 
     fn cancel_all_orders(&self, cmd: CancelAllOrdersCommand) -> Result<CancelAllOrdersResult, PrepCommandError> {
         let mut orders = self.orders.write().unwrap();
-        let mut cancelled_ids = Vec::new();
+        let mut cancelled_ids: Vec<OrderId> = Vec::new();
         let mut failed_count = 0;
         let mut total_refund_u64 = 0u64;
 
@@ -877,12 +866,12 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>> PerpOrderExchQueryProc for M
         Ok(self.get_position(cmd.symbol))
     }
 
-    fn query_order_book(&self, cmd: QueryOrderBookCommand) -> Result<OrderBookSnapshot, PrepCommandError> {
+    fn query_order_book(&self, _cmd: QueryOrderBookCommand) -> Result<OrderBookSnapshot, PrepCommandError> {
         // 简化实现：返回空订单簿
-        Ok(OrderBookSnapshot::empty(cmd.symbol))
+        Ok(OrderBookSnapshot::empty(_cmd.symbol))
     }
 
-    fn query_trades(&self, cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError> {
+    fn query_trades(&self, _cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError> {
         // 简化实现：返回空结果
         Ok(TradesQueryResult::empty())
     }
@@ -931,13 +920,13 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>> PerpOrderExchQueryProc for M
     }
 
     fn query_funding_rate_history(
-        &self, cmd: QueryFundingRateHistoryCommand
+        &self, _cmd: QueryFundingRateHistoryCommand
     ) -> Result<Vec<FundingRateRecord>, PrepCommandError> {
         // 简化实现：返回空历史
         Ok(Vec::new())
     }
 
-    fn query_funding_fee(&self, cmd: QueryFundingFeeCommand) -> Result<Vec<FundingFeeRecord>, PrepCommandError> {
+    fn query_funding_fee(&self, _cmd: QueryFundingFeeCommand) -> Result<Vec<FundingFeeRecord>, PrepCommandError> {
         // 简化实现：返回空记录
         Ok(Vec::new())
     }

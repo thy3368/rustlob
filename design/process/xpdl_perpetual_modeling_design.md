@@ -1,4 +1,4 @@
-# XPDL 永续合约行为建模设计文档
+# Rust之从0-1低时延CEX：永续合约行为建模基于XPDL
 
 ## 1. 概述
 
@@ -6,9 +6,8 @@
 
 **核心目标**：
 - 将复杂的永续合约业务规则转化为可执行的流程定义
-- 支持 CQRS + 事件溯源架构
+- 支持 CQRS 架构模式
 - 实现超低延迟（命令执行 < 100μs）
-- 符合币安 API 规范和限频要求
 
 ---
 
@@ -198,9 +197,6 @@ XPDL 通过 `TypeDeclaration` 定义领域特定类型：
               // 8. 注册到风控引擎
               register_risk_monitoring(position_id).await?;
 
-              // 发布事件
-              publish_event(PositionOpenedEvent { ... }).await?;
-
               Ok(position_id)
           }
           ]]>
@@ -228,7 +224,7 @@ XPDL 通过 `TypeDeclaration` 定义领域特定类型：
 1. **Implementation（实现）**：
    - 使用 Rust 伪代码描述执行逻辑
    - 展示完整的执行步骤和错误处理
-   - 体现事件溯源模式（发布领域事件）
+   - 返回执行结果
 
 2. **Performer（执行者）**：
    - 指定负责执行的参与者
@@ -602,179 +598,433 @@ XPDL 通过 `TypeDeclaration` 定义领域特定类型：
 </Activity>
 ```
 
-**事件溯源支持**：
-- 所有状态变更发布领域事件
-- 支持重放和审计
-- 故障恢复能力
-
-**事件定义示例**：
-
-```xml
-<!-- 持仓开仓事件 -->
-<TypeDeclaration Id="PositionOpenedEvent" Name="持仓开仓事件">
-  <RecordType>
-    <Member Name="event_id" Type="STRING"/>
-    <Description>事件唯一标识（UUID）</Description>
-
-    <Member Name="aggregate_id" Type="PositionId"/>
-    <Description>聚合根ID（持仓ID）</Description>
-
-    <Member Name="timestamp" Type="DATETIME"/>
-    <Description>事件发生时间（毫秒级时间戳）</Description>
-
-    <Member Name="trader" Type="TraderId"/>
-    <Member Name="symbol" Type="Symbol"/>
-    <Member Name="position_side" Type="STRING"/>
-    <Description>BOTH | LONG | SHORT</Description>
-
-    <Member Name="entry_price" Type="Price"/>
-    <Member Name="quantity" Type="Quantity"/>
-    <Member Name="leverage" Type="INTEGER"/>
-    <Member Name="margin_type" Type="STRING"/>
-    <Description>ISOLATED | CROSSED</Description>
-
-    <Member Name="initial_margin" Type="STRING"/>
-    <Member Name="liquidation_price" Type="STRING"/>
-  </RecordType>
-  <Description>
-    领域事件：记录持仓创建的完整快照
-    用途：事件溯源、审计追踪、实时通知
-  </Description>
-</TypeDeclaration>
-
-<!-- 强平触发事件 -->
-<TypeDeclaration Id="LiquidationTriggeredEvent" Name="强平触发事件">
-  <RecordType>
-    <Member Name="event_id" Type="STRING"/>
-    <Member Name="aggregate_id" Type="PositionId"/>
-    <Member Name="timestamp" Type="DATETIME"/>
-
-    <Member Name="trigger_price" Type="Price"/>
-    <Description>触发强平时的标记价格</Description>
-
-    <Member Name="liquidation_price" Type="Price"/>
-    <Description>预设的强平价格</Description>
-
-    <Member Name="margin_ratio" Type="FLOAT"/>
-    <Description>当前保证金率（已低于维持保证金率）</Description>
-
-    <Member Name="trigger_reason" Type="STRING"/>
-    <Description>PRICE_BREACH | MARGIN_INSUFFICIENT</Description>
-  </RecordType>
-</TypeDeclaration>
-```
-
-**事件流示例**：
-
-```
-用户开仓流程的事件序列：
-
-1. OpenPositionCommand (命令)
-   ↓
-2. MarginFrozenEvent (保证金冻结事件)
-   ↓
-3. OrderSubmittedEvent (订单提交事件)
-   ↓
-4. OrderMatchedEvent (订单撮合事件)
-   ↓
-5. PositionOpenedEvent (持仓开仓事件)
-   ↓
-6. RiskMonitoringRegisteredEvent (风控监控注册事件)
-
-这些事件会：
-- 存储到事件存储（Event Store）
-- 更新读模型投影（Read Model Projection）
-- 触发下游订阅者（如通知服务、数据分析）
-```
+**错误处理策略**：
+- 活动级错误：每个活动捕获自身的执行错误
+- 流程级错误：统一的失败出口节点
+- 错误传播：通过 Transition 条件判断错误类型
+- 故障恢复：支持重试和补偿机制
 
 ---
 
-## 10. 实现映射
+## 10. Rust Trait 接口定义
 
-### 10.1 从 XPDL 到 Rust 代码
+### 10.1 命令处理器 Trait (`PerpOrderExchProc`)
 
-**XPDL 活动**：
+永续合约订单处理器遵循 CQRS 模式的命令处理接口，用于本地订单簿（LOB）撮合：
+
+```rust
+pub trait PerpOrderExchProc: Send + Sync {
+    /// 处理开仓命令（本地撮合）
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "OpenPosition"
+    /// - Performer: MATCHING_ENGINE
+    ///
+    /// # 参数
+    /// - `cmd`: OpenPositionCommand - 开仓命令
+    ///
+    /// # 返回
+    /// - `Ok(OpenPositionResult)`: 撮合成功，返回订单结果
+    /// - `Err(PrepCommandError)`: 撮合失败，返回错误信息
+    ///
+    /// # 执行流程（映射XPDL TaskScript）
+    /// 1. 验证命令 → ValidationError
+    /// 2. 风控检查（保证金充足性）→ InsufficientBalance
+    /// 3. 在订单簿中撮合
+    /// 4. 更新持仓状态
+    /// 5. 返回撮合结果
+    fn open_position(&self, cmd: OpenPositionCommand)
+        -> Result<OpenPositionResult, PrepCommandError>;
+
+    /// 处理平仓命令（本地撮合）
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "ClosePosition"
+    /// - Performer: MATCHING_ENGINE
+    ///
+    /// # 返回
+    /// - 包含已实现盈亏（realized_pnl）
+    fn close_position(&self, cmd: ClosePositionCommand)
+        -> Result<ClosePositionResult, PrepCommandError>;
+
+    /// 处理取消订单命令
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "CancelOrder"
+    ///
+    /// # 注意
+    /// - 已成交的订单无法取消，返回 `CancelOrderResult::failed`
+    /// - 已取消的订单重复取消，返回成功（幂等性）
+    fn cancel_order(&self, cmd: CancelOrderCommand)
+        -> Result<CancelOrderResult, PrepCommandError>;
+
+    /// 修改订单（价格和/或数量）
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "ModifyOrder"
+    ///
+    /// # 注意
+    /// - 只能修改未成交或部分成交的订单
+    /// - 修改订单会重新进入订单簿撮合队列
+    fn modify_order(&self, cmd: ModifyOrderCommand)
+        -> Result<ModifyOrderResult, PrepCommandError>;
+
+    /// 批量取消订单
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "CancelAllOrders"
+    ///
+    /// # 取消范围（通过命令参数控制）
+    /// - `symbol = None, position_side = None`: 取消所有订单
+    /// - `symbol = Some(s), position_side = None`: 取消指定交易对的所有订单
+    /// - `symbol = None, position_side = Some(p)`: 取消指定持仓方向的所有订单
+    /// - `symbol = Some(s), position_side = Some(p)`: 取消指定交易对和方向的订单
+    fn cancel_all_orders(&self, cmd: CancelAllOrdersCommand)
+        -> Result<CancelAllOrdersResult, PrepCommandError>;
+
+    // ========================================================================
+    // 账户配置命令（对应XPDL AccountConfiguration活动组）
+    // ========================================================================
+
+    /// 设置杠杆倍数
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "AdjustLeverage"
+    /// - DataField: "leverage" (INTEGER, 1-125)
+    ///
+    /// # 使用场景
+    /// - 首次交易前必需设置
+    /// - 调整风险水平（盈利后降低杠杆）
+    /// - 优化资金利用率（提高杠杆释放保证金）
+    ///
+    /// # 保证金影响
+    /// - 降低杠杆：锁定更多保证金，强平价格变远（更安全）
+    /// - 提高杠杆：释放保证金，强平价格变近（风险增加）
+    fn set_leverage(&self, cmd: SetLeverageCommand)
+        -> Result<SetLeverageResult, PrepCommandError>;
+
+    /// 设置保证金类型
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "SetMarginType"
+    /// - TypeDeclaration: "MarginType" (CROSSED | ISOLATED)
+    ///
+    /// # 全仓 vs 逐仓
+    /// - 全仓 (Cross): 所有持仓共享账户余额
+    /// - 逐仓 (Isolated): 每个持仓独立保证金
+    ///
+    /// # 注意
+    /// - 必须在无持仓时设置
+    /// - 每个交易对独立设置
+    fn set_margin_type(&self, cmd: SetMarginTypeCommand)
+        -> Result<SetMarginTypeResult, PrepCommandError>;
+
+    /// 设置持仓模式
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "SetPositionMode"
+    /// - TypeDeclaration: "PositionMode" (ONE_WAY | HEDGE)
+    ///
+    /// # 单向 vs 对冲模式
+    /// - 单向模式 (One-Way): 只能持有一个方向
+    /// - 对冲模式 (Hedge): 可同时持有多空
+    ///
+    /// # ⚠️ 重要约束
+    /// - 全局设置，影响所有交易对
+    /// - 必须在无持仓时设置
+    /// - 切换后无法撤销
+    fn set_position_mode(&self, cmd: SetPositionModeCommand)
+        -> Result<SetPositionModeResult, PrepCommandError>;
+}
+```
+
+### 10.2 查询处理器 Trait (`PerpOrderExchQueryProc`)
+
+永续合约查询处理器，遵循 CQRS 读模型（Read Model）设计：
+
+```rust
+pub trait PerpOrderExchQueryProc: Send + Sync {
+    /// 查询订单状态（从本地订单簿）
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryOrder"
+    ///
+    /// # 返回
+    /// - `Ok(OrderQueryResult)`: 订单详细信息
+    /// - `Err(PrepCommandError::OrderNotFound)`: 订单不存在
+    fn query_order(&self, cmd: QueryOrderCommand)
+        -> Result<OrderQueryResult, PrepCommandError>;
+
+    /// 查询持仓信息（从本地持仓管理器）
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryPosition"
+    /// - TypeDeclaration: "Position" (复合类型)
+    ///
+    /// # 返回持仓信息
+    /// - symbol, position_side, quantity
+    /// - entry_price, liquidation_price
+    /// - leverage, margin_type
+    /// - unrealized_pnl
+    ///
+    /// # 注意
+    /// - 无持仓时返回 `PositionInfo::empty()`，而不是返回错误
+    /// - 可通过 `has_position()` 判断是否有持仓
+    fn query_position(&self, cmd: QueryPositionCommand)
+        -> Result<PositionInfo, PrepCommandError>;
+
+    /// 查询订单簿深度
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryOrderBook"
+    ///
+    /// # 快照内容
+    /// - 买盘档位（按价格从高到低排序）
+    /// - 卖盘档位（按价格从低到高排序）
+    /// - 最佳买价和最佳卖价
+    /// - 买卖价差、中间价
+    fn query_order_book(&self, cmd: QueryOrderBookCommand)
+        -> Result<OrderBookSnapshot, PrepCommandError>;
+
+    /// 查询成交记录
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryTrades"
+    ///
+    /// # 查询条件
+    /// - 支持按订单ID、交易对、时间范围过滤
+    /// - 支持限制返回数量（分页）
+    /// - 成交记录按时间降序排列（最新的在前）
+    fn query_trades(&self, cmd: QueryTradesCommand)
+        -> Result<TradesQueryResult, PrepCommandError>;
+
+    /// 查询账户余额
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryAccountBalance"
+    ///
+    /// # 返回信息
+    /// - 总余额 (balance)
+    /// - 可用余额 (available_balance)
+    /// - 仓位保证金 (position_margin)
+    /// - 挂单保证金 (order_margin)
+    /// - 未实现盈亏 (unrealized_pnl)
+    fn query_account_balance(&self, cmd: QueryAccountBalanceCommand)
+        -> Result<Vec<AccountBalance>, PrepCommandError>;
+
+    /// 查询账户完整信息
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryAccountInfo"
+    ///
+    /// # 包含信息
+    /// - 总资产、可用余额、总盈亏
+    /// - 所有持仓列表
+    /// - 所有资产余额
+    /// - 风险率、杠杆率计算
+    fn query_account_info(&self, cmd: QueryAccountInfoCommand)
+        -> Result<AccountInfo, PrepCommandError>;
+
+    /// 查询标记价格
+    ///
+    /// # 对应XPDL活动
+    /// - Activity Id: "QueryMarkPrice"
+    /// - TypeDeclaration: "MarkPrice" (标记价格实体)
+    ///
+    /// # 价格类型说明
+    /// - 标记价格 (Mark Price): 用于强平判断和盈亏计算
+    /// - 指数价格 (Index Price): 多交易所加权平均
+    /// - 最新价 (Last Price): 订单成交价
+    ///
+    /// # 包含资金费率信息
+    /// - 当前资金费率
+    /// - 下次结算时间
+    /// - 预估结算价格
+    fn query_mark_price(&self, cmd: QueryMarkPriceCommand)
+        -> Result<Vec<MarkPriceInfo>, PrepCommandError>;
+
+    /// 查询历史资金费率
+    ///
+    /// # 对应XPDL子流程
+    /// - SubProcess: "FundingRateSettlementProcess"
+    /// - Activity Id: "QueryFundingRateHistory"
+    ///
+    /// # 使用场景
+    /// - 趋势分析：分析历史费率趋势，判断市场情绪
+    /// - 成本预估：预估持仓期间的资金费用成本
+    /// - 策略回测：回测资金费率套利策略
+    fn query_funding_rate_history(&self, cmd: QueryFundingRateHistoryCommand)
+        -> Result<Vec<FundingRateRecord>, PrepCommandError>;
+
+    /// 查询资金费用收支记录
+    ///
+    /// # 对应XPDL子流程
+    /// - SubProcess: "FundingRateSettlementProcess"
+    /// - Activity Id: "QueryFundingFee"
+    ///
+    /// # 资金费用计算
+    /// ```
+    /// 资金费用 = 持仓名义价值 × 资金费率
+    /// 持仓名义价值 = 标记价格 × 持仓数量
+    ///
+    /// 正费率时：
+    /// - 多头持仓：支付费用（income为负）
+    /// - 空头持仓：收取费用（income为正）
+    /// ```
+    fn query_funding_fee(&self, cmd: QueryFundingFeeCommand)
+        -> Result<Vec<FundingFeeRecord>, PrepCommandError>;
+}
+```
+
+### 10.3 从 XPDL 到 Rust 代码映射
+
+**XPDL 活动定义**：
 ```xml
 <Activity Id="OpenPosition" Name="开仓">
-  <TaskScript>
-    <Script Type="rust/composite">
-      async fn execute_open_position(request: OpenPositionRequest)
-        -> Result<PositionId, Error>
-    </Script>
-  </TaskScript>
+  <Implementation>
+    <Task>
+      <TaskScript>
+        <Script Type="rust/composite">
+          <![CDATA[
+          async fn execute_open_position(request: OpenPositionRequest)
+            -> Result<PositionId, Error>
+          {
+              // 1. 验证参数
+              validate_open_params(&request)?;
+
+              // 2. 检查保证金
+              let margin_check = check_margin_sufficiency(&request).await?;
+
+              // 3. 冻结保证金
+              freeze_margin(request.trader, margin_check.required_margin).await?;
+
+              // 4. 提交订单到撮合引擎
+              let order_id = submit_position_order(&request).await?;
+
+              // 5. 等待撮合成交
+              let trades = match_order(order_id).await?;
+
+              // 6. 创建持仓记录
+              let position_id = create_position_from_trades(&request, &trades).await?;
+
+              // 7. 计算强平价格
+              let liquidation_price = calculate_liquidation_price(
+                  request.entry_price, request.leverage, request.side
+              );
+
+              // 8. 注册到风控引擎
+              register_risk_monitoring(position_id).await?;
+
+              Ok(position_id)
+          }
+          ]]>
+        </Script>
+      </TaskScript>
+    </Task>
+  </Implementation>
+  <Performer>MATCHING_ENGINE</Performer>
 </Activity>
 ```
 
-**Rust 实现**：
+**Rust Trait 实现**：
 ```rust
-// domain/usecases/open_position.rs
-pub struct OpenPositionUseCase {
-    order_repo: Arc<dyn OrderRepository>,
-    exchange_gateway: Arc<dyn ExchangeGateway>,
+// proc/operating/exchange/prep/src/proc/trading_prep_order_proc_impl.rs
+pub struct LocalMatchingEngine {
+    order_book: Arc<OrderBook>,
+    positions: Arc<RwLock<HashMap<(Symbol, PositionSide), PositionInfo>>>,
+    balance_manager: Arc<BalanceManager>,
 }
 
-impl OpenPositionUseCase {
-    pub async fn execute(&self, request: OpenPositionRequest)
-        -> Result<PositionId, Error>
+impl PerpOrderExchProc for LocalMatchingEngine {
+    fn open_position(&self, cmd: OpenPositionCommand)
+        -> Result<OpenPositionResult, PrepCommandError>
     {
-        // 1. 验证参数
-        self.validate_params(&request)?;
+        // 1. 验证命令 - 对应XPDL validate_open_params
+        cmd.validate()
+            .map_err(PrepCommandError::ValidationError)?;
 
-        // 2. 检查保证金
-        let margin = self.check_margin(&request).await?;
-
-        // 3. 提交订单
-        let order_id = self.submit_order(&request).await?;
-
-        // 4. 发布事件
-        self.publish_event(PositionOpenedEvent { ... }).await?;
-
-        Ok(order_id)
-    }
-}
-```
-
-### 10.2 流程引擎执行
-
-```rust
-// infrastructure/workflow/workflow_engine.rs
-pub struct XPDLWorkflowEngine {
-    process_definitions: HashMap<String, WorkflowProcess>,
-}
-
-impl XPDLWorkflowEngine {
-    pub async fn execute_process(
-        &self,
-        process_id: &str,
-        data: ProcessData
-    ) -> Result<ProcessResult, Error>
-    {
-        let process = self.process_definitions.get(process_id)?;
-
-        // 1. 找到开始节点
-        let start = process.find_start_activity()?;
-
-        // 2. 执行流程
-        let mut current = start;
-        loop {
-            // 执行当前活动
-            let result = self.execute_activity(current, &data).await?;
-
-            // 根据条件选择下一个活动
-            current = self.select_next_activity(current, result)?;
-
-            // 到达结束节点
-            if current.is_end() {
-                break;
-            }
+        // 2. 风控检查 - 对应XPDL check_margin_sufficiency
+        let required_margin = self.calculate_required_margin(&cmd)?;
+        if !self.balance_manager.has_sufficient_balance(required_margin) {
+            return Err(PrepCommandError::InsufficientBalance);
         }
 
-        Ok(ProcessResult::Success)
+        // 3. 生成订单ID
+        let order_id = OrderId::generate();
+
+        // 4. 在订单簿中撮合 - 对应XPDL match_order
+        let match_result = self.order_book.match_order(&cmd)?;
+
+        // 5. 更新持仓 - 对应XPDL create_position_from_trades
+        self.update_position(&cmd, &match_result)?;
+
+        // 6. 注册风控监控 - 对应XPDL register_risk_monitoring
+        self.register_liquidation_monitoring(&cmd, &match_result)?;
+
+        // 7. 返回结果
+        match match_result.status {
+            MatchStatus::FullyFilled => {
+                Ok(OpenPositionResult::filled(
+                    order_id,
+                    match_result.trades,
+                    match_result.seq,
+                ))
+            }
+            MatchStatus::PartiallyFilled => {
+                Ok(OpenPositionResult::partially_filled(
+                    order_id,
+                    match_result.trades,
+                    match_result.seq,
+                ))
+            }
+            MatchStatus::NoMatch => {
+                Ok(OpenPositionResult::accepted(order_id))
+            }
+        }
     }
+
+    fn close_position(&self, cmd: ClosePositionCommand)
+        -> Result<ClosePositionResult, PrepCommandError>
+    {
+        // 对应XPDL ClosePosition活动
+        // ...实现细节
+    }
+
+    fn set_leverage(&self, cmd: SetLeverageCommand)
+        -> Result<SetLeverageResult, PrepCommandError>
+    {
+        // 对应XPDL AdjustLeverage活动
+        // ...实现细节
+    }
+
+    // ...其他方法实现
 }
 ```
 
----
+### 10.4 Trait 接口与 XPDL 活动映射表
+
+| Trait 方法 | XPDL Activity Id | XPDL Performer | 主要职责 |
+|-----------|------------------|----------------|---------|
+| `open_position` | OpenPosition | MATCHING_ENGINE | 开仓撮合，持仓创建 |
+| `close_position` | ClosePosition | MATCHING_ENGINE | 平仓撮合，盈亏计算 |
+| `cancel_order` | CancelOrder | MATCHING_ENGINE | 订单取消 |
+| `modify_order` | ModifyOrder | MATCHING_ENGINE | 订单修改 |
+| `cancel_all_orders` | CancelAllOrders | MATCHING_ENGINE | 批量取消 |
+| `set_leverage` | AdjustLeverage | ACCOUNT_MANAGER | 杠杆设置 |
+| `set_margin_type` | SetMarginType | ACCOUNT_MANAGER | 保证金类型设置 |
+| `set_position_mode` | SetPositionMode | ACCOUNT_MANAGER | 持仓模式设置 |
+| `query_order` | QueryOrder | MATCHING_ENGINE | 订单查询 |
+| `query_position` | QueryPosition | ACCOUNT_MANAGER | 持仓查询 |
+| `query_order_book` | QueryOrderBook | MATCHING_ENGINE | 订单簿深度查询 |
+| `query_trades` | QueryTrades | MATCHING_ENGINE | 成交记录查询 |
+| `query_account_balance` | QueryAccountBalance | ACCOUNT_MANAGER | 余额查询 |
+| `query_account_info` | QueryAccountInfo | ACCOUNT_MANAGER | 账户信息查询 |
+| `query_mark_price` | QueryMarkPrice | MARKET_DATA | 标记价格查询 |
+| `query_funding_rate_history` | QueryFundingRateHistory | MARKET_DATA | 历史费率查询 |
+| `query_funding_fee` | QueryFundingFee | ACCOUNT_MANAGER | 费用记录查询 |
+
+
+
 
 ## 11. 总结
 
@@ -842,72 +1092,3 @@ impl XPDLWorkflowEngine {
 - **CQRS 模式**：https://martinfowler.com/bliki/CQRS.html
 - **事件溯源**：https://martinfowler.com/eaaDev/EventSourcing.html
 
-### 12.2 本项目相关文件
-
-**XPDL 流程定义**：
-```
-/design/process/perp_order_exch_proc.xpdl
-```
-- 完整的永续合约交易流程 XPDL 定义
-- 包含主流程、强平子流程、资金费率子流程
-- 包含所有类型定义和活动实现
-
-**业务流程文档**：
-```
-/从开仓到资金费率完整流程.md
-```
-- 业务流程全景图和详细说明
-- 各个活动的前置条件和后置条件
-- 风控机制和资金费率计算逻辑
-
-**代码实现目录**：
-
-| 层次 | 路径 | 说明 |
-|------|------|------|
-| **领域层** | `/lib/core/account/src/domain/` | 实体、值对象、领域服务 |
-| **用例层** | `/lib/core/account/src/application/` | 用例实现（OpenPosition 等） |
-| **基础设施层** | `/lib/core/account/src/infrastructure/` | 仓储实现、事件发布 |
-| **流程引擎** | `/proc/operating/exchange/prep/` | XPDL 流程引擎和编排逻辑 |
-| **测试用例** | `/lib/core/account/tests/` | BDD 行为测试 |
-
-**配置文件**：
-```
-/lib/core/exchange/lob/Cargo.toml          # 撮合引擎配置
-/lib/core/account/Cargo.toml               # 账户模块配置
-/proc/operating/exchange/prep/Cargo.toml   # 流程引擎配置
-```
-
-### 12.3 架构设计文档
-
-**Clean Architecture 指南**：
-```
-~/.claude/CLAUDE.md
-```
-- Clean Architecture 架构要求（第二部分）
-- 依赖注入、分层设计、测试策略
-
-**低延迟优化指南**：
-```
-~/.claude/CLAUDE.md
-ld/CPP_LOW_LATENCY_GUIDE.md
-ld/RUST_LOW_LATENCY_GUIDE.md
-ld/X86_LOW_LATENCY_GUIDE.md
-ld/ARM64_LOW_LATENCY_GUIDE.md
-```
-- 超低延迟性能优化标准
-- 编译器优化、缓存对齐、SIMD 指令
-
----
-
-**文档版本**：v1.1
-**创建日期**：2025-12-14
-**最后更新**：2025-12-14
-**作者**：RustLOB Exchange Team
-
-**更新记录**：
-- v1.1 (2025-12-14):
-  - 添加完整流程图示例（第 5.3 节）
-  - 扩展事件溯源部分，增加事件定义和事件流示例（第 9.3 节）
-  - 将建模检查清单改为表格格式（第 11.3 节）
-  - 新增本项目相关文件索引（第 12.2 节）
-- v1.0 (2025-12-14): 初始版本

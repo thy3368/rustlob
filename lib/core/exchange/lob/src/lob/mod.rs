@@ -116,9 +116,6 @@ mod domain;
 // 导出基础类型
 // 算法交易命令
 // 条件订单命令
-pub use domain::service::trading_spot_order_proc::{
-    AuctionType, ConditionalCommand, ConditionalCommandResult, ConditionalOrderProc, PegType
-};
 // 做市商命令
 pub use domain::service::trading_spot_order_proc::{MarketMakerCommand, MarketMakerCommandResult, MarketMakerProc};
 // 核心现货命令
@@ -138,11 +135,12 @@ pub use domain::{
     service::{
         market_data_service::MarketDataService,
         trading_spot_order_proc::{
-            AlgoCommand, AlgoCommandError, AlgoCommandResult, AlgoOrderProc, Command, CommandMetadata, CommandResponse,
-            CommonError, ConditionalCommandError, IdempotentAlgoCommand, IdempotentAlgoResult,
-            IdempotentConditionalCommand, IdempotentConditionalResult, IdempotentMarketMakerCommand,
-            IdempotentMarketMakerResult, IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommandError, Nonce,
-            QueryError, SpotCommandError, UrgencyLevel
+            AlgoCommand, AlgoCommandError, AlgoCommandResult, AlgoOrderProc, AuctionType, Command, CommandMetadata,
+            CommandResponse, CommonError, ConditionalCommand, ConditionalCommandError, ConditionalCommandResult,
+            ConditionalOrderProc, IdempotentAlgoCommand, IdempotentAlgoResult, IdempotentConditionalCommand,
+            IdempotentConditionalResult, IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
+            IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommandError, Nonce, PegType, QueryError,
+            SpotCommandError, UrgencyLevel
         },
         trading_spot_order_proc_impl::SpotMatchingService
     }
