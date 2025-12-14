@@ -1,4 +1,4 @@
-use account::{OrderId, Price, Quantity, Side};
+use account::{OrderId, Price, Quantity, Side, Symbol};
 
 use crate::proc::prep_types::InternalOrder;
 
@@ -9,7 +9,7 @@ use crate::proc::prep_types::InternalOrder;
 ///
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
-pub trait LimitOrderBookRepo {
+pub trait SymbolLobRepo {
     /// 匹配订单，返回匹配到的订单引用列表
     ///
     /// # 参数
@@ -88,3 +88,60 @@ impl std::fmt::Display for RepoError {
 }
 
 impl std::error::Error for RepoError {}
+
+
+/// 多 LOB 仓储接口
+///
+/// 定义多个交易对的 LOB 管理和订单匹配操作
+/// 遵循 Clean Architecture 的依赖倒置原则，业务层依赖此抽象接口
+pub trait MultiSymbolLobRepo: Send + Sync {
+    /// 匹配订单
+    ///
+    /// 根据交易对 symbol 查找对应的 LOB 并进行订单匹配
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对符号（如 BTCUSDT）
+    /// - `side`: 订单方向（买/卖）
+    /// - `price`: 价格
+    /// - `quantity`: 需要匹配的数量
+    ///
+    /// # 返回
+    /// - `Some(Vec<&InternalOrder>)`: 匹配到的订单列表
+    /// - `None`: 找不到对应的 LOB 或无法匹配足够数量的订单
+    ///
+    /// # 性能要求
+    /// - 查找 LOB: O(1) 时间复杂度
+    /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
+    fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity)
+                    -> Option<Vec<&InternalOrder>>;
+
+    /// 获取指定交易对的最佳买价
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对符号
+    ///
+    /// # 返回
+    /// - `Some(Price)`: 最佳买价
+    /// - `None`: 找不到对应的 LOB 或买盘为空
+    fn best_bid(&self, symbol: Symbol) -> Option<Price>;
+
+    /// 获取指定交易对的最佳卖价
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对符号
+    ///
+    /// # 返回
+    /// - `Some(Price)`: 最佳卖价
+    /// - `None`: 找不到对应的 LOB 或卖盘为空
+    fn best_ask(&self, symbol: Symbol) -> Option<Price>;
+
+    /// 检查指定交易对的 LOB 是否存在
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对符号
+    ///
+    /// # 返回
+    /// - `true`: LOB 存在
+    /// - `false`: LOB 不存在
+    fn contains_symbol(&self, symbol: &Symbol) -> bool;
+}
