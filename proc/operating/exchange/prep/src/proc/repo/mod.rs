@@ -5,3 +5,4 @@ pub mod symbol_lob_repo;
 
 pub mod distributed_lob_repo;
 pub mod standalone_lob_repo;
+mod EntityManager;
