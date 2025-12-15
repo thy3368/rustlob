@@ -17,5 +17,8 @@ rand = "0.8"
 # Clean Architecture 依赖
 account = { path = "../../../../lib/core/account" }
 
+# Derive macro
+diff_derive = { path = "../../../../lib/common/diff_derive" }
+
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full", "test-util"] }

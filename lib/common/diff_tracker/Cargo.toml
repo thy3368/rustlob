@@ -1,0 +1,12 @@
+[package]
+name = "diff_tracker"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+diff = { path = "../diff" }
+diff_derive = { path = "../diff_derive" }
+
+[dev-dependencies]
