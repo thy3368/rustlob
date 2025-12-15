@@ -27,3 +27,9 @@ pub trait Diff {
     /// 比较 self(旧) 和 other(新)，返回字段变更列表
     fn diff(&self, other: &Self) -> Vec<FieldChange>;
 }
+
+/// Replay trait - 用于从变更日志回放数据
+pub trait Replay {
+    /// 从变更日志条目回放数据，更新 self 的字段
+    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), String>;
+}

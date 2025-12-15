@@ -122,3 +122,86 @@ pub fn derive_diff(input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+/// Derive macro for automatically implementing the Replay trait
+///
+/// # Examples
+///
+/// ```ignore
+/// use diff::Replay;
+/// use diff_derive::Replay;
+///
+/// #[derive(Replay)]
+/// struct Order {
+///     id: String,
+///     amount: i64,
+///     status: String,
+/// }
+/// ```
+#[proc_macro_derive(Replay)]
+pub fn derive_replay(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // 只支持结构体
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => {
+                return syn::Error::new_spanned(
+                    &input,
+                    "Replay can only be derived for structs with named fields"
+                )
+                .to_compile_error()
+                .into();
+            }
+        },
+        _ => {
+            return syn::Error::new_spanned(
+                &input,
+                "Replay can only be derived for structs"
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    // 为每个字段生成回放代码
+    let field_replays = fields.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_name_str = field_name.to_string();
+        let field_type = &field.ty;
+
+        // 生成解析代码
+        quote! {
+            #field_name_str => {
+                self.#field_name = change.new_value.parse::<#field_type>()
+                    .map_err(|e| format!("Failed to parse field '{}': {}", #field_name_str, e))?;
+            }
+        }
+    });
+
+    // 生成完整的 Replay trait 实现
+    let expanded = quote! {
+        impl #impl_generics diff::Replay for #name #ty_generics #where_clause {
+            fn replay(&mut self, entry: &diff::ChangeLogEntry) -> Result<(), String> {
+                if let diff::ChangeType::Updated { changed_fields } = &entry.change_type {
+                    for change in changed_fields {
+                        match change.field_name.as_str() {
+                            #(#field_replays)*
+                            _ => {}  // 忽略未知字段
+                        }
+                    }
+                    Ok(())
+                } else {
+                    Err("Cannot replay: not an Update change".to_string())
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
