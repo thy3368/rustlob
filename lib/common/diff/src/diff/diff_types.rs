@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ChangeType {
     Created,
     Updated { changed_fields: Vec<FieldChange> },
@@ -6,7 +6,7 @@ pub enum ChangeType {
 }
 
 /// 字段变更记录
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldChange {
     pub field_name: String,
     pub old_value: String,
@@ -14,7 +14,7 @@ pub struct FieldChange {
 }
 
 // 变更日志条目
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChangeLogEntry {
     pub entity_id: String,
     pub entity_type: String,

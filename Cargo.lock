@@ -507,6 +507,7 @@ dependencies = [
 name = "diff_tracker"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "diff",
  "diff_derive",
 ]

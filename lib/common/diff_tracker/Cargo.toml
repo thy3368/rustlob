@@ -10,6 +10,11 @@ diff = { path = "../diff" }
 diff_derive = { path = "../diff_derive" }
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "tracker_bench"
+harness = false
 
 # ========== Clippy 配置 - 专注于性能和低延迟 ==========
 [lints.clippy]

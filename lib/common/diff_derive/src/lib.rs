@@ -205,3 +205,102 @@ pub fn derive_replay(input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+/// Derive macro for automatically generating tracked update methods
+///
+/// This macro generates a `tracked_update` method that automatically tracks
+/// all changes made to the struct, eliminating the need to call `track_auto`.
+///
+/// # Requirements
+///
+/// The struct must implement `Clone` and `Diff` traits.
+///
+/// # Examples
+///
+/// ```ignore
+/// use diff_derive::{Diff, Tracked};
+///
+/// #[derive(Clone, Diff, Tracked)]
+/// struct Order {
+///     id: String,
+///     price: i64,
+///     status: String,
+/// }
+///
+/// let mut order = Order { id: "1".into(), price: 100, status: "pending".into() };
+///
+/// // 使用自动生成的方法
+/// let entry = order.tracked_update(|o| {
+///     o.price = 200;
+///     o.status = "confirmed".to_string();
+/// }).unwrap();
+/// ```
+///
+/// # Generated Methods
+///
+/// - `tracked_update<F>(&mut self, f: F) -> Result<ChangeLogEntry, Box<dyn std::error::Error>>`
+///   - Tracks changes made by the closure `f`
+///   - Returns a `ChangeLogEntry` with all detected changes
+#[proc_macro_derive(Tracked)]
+pub fn derive_tracked(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // 生成 tracked_update 方法
+    let expanded = quote! {
+        impl #impl_generics #name #ty_generics #where_clause {
+            /// 自动追踪变更的更新方法
+            ///
+            /// # Arguments
+            ///
+            /// * `updater` - 更新闭包，在其中修改字段
+            ///
+            /// # Returns
+            ///
+            /// 返回包含所有变更的 `ChangeLogEntry`
+            ///
+            /// # Examples
+            ///
+            /// ```ignore
+            /// let mut order = Order::new();
+            /// let entry = order.tracked_update(|o| {
+            ///     o.price = 200;
+            ///     o.status = "confirmed".to_string();
+            /// }).unwrap();
+            /// ```
+            pub fn tracked_update<F>(&mut self, updater: F) -> Result<diff::ChangeLogEntry, Box<dyn std::error::Error>>
+            where
+                Self: Clone + diff::Diff + 'static,
+                F: FnOnce(&mut Self)
+            {
+                // 1. 克隆旧状态
+                let old_self = self.clone();
+
+                // 2. 执行更新
+                updater(self);
+
+                // 3. 自动 diff 检测变更
+                let field_changes = old_self.diff(self);
+
+                // 4. 构造 ChangeLogEntry
+                let entry = diff::ChangeLogEntry {
+                    entity_id: "auto_generated".to_string(),
+                    entity_type: std::any::type_name::<Self>().to_string(),
+                    change_type: diff::ChangeType::Updated {
+                        changed_fields: field_changes
+                    },
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)?
+                        .as_secs(),
+                };
+
+                Ok(entry)
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
