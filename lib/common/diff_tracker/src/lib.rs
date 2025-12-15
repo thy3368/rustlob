@@ -7,5 +7,5 @@ pub use diff::{ChangeType, FieldChange, ChangeLogEntry, Diff, Replay};
 pub use diff_derive::{Diff, Replay};
 
 // 重新导出 tracker 模块的公共API
-pub use tracker::tracker::{ChangeTracker, track_with_tracker, track_auto, track_changes};
+pub use tracker::{ChangeTracker, track_with_tracker, track_auto, track_changes};
 

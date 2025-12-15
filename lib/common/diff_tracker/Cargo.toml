@@ -10,3 +10,97 @@ diff = { path = "../diff" }
 diff_derive = { path = "../diff_derive" }
 
 [dev-dependencies]
+
+# ========== Clippy 配置 - 专注于性能和低延迟 ==========
+[lints.clippy]
+
+# ====== 🚀 性能关键（Performance Critical）======
+# 检测内存分配、克隆、拷贝等影响性能的模式
+clone_on_ref_ptr = "warn"                    # 避免对引用指针的不必要克隆
+clone_on_copy = "warn"                       # 对 Copy 类型使用 clone 是多余的
+unnecessary_to_owned = "warn"                # 不必要的 to_owned 调用
+redundant_clone = "warn"                     # 冗余克隆
+large_types_passed_by_value = "warn"        # 大类型应该通过引用传递
+large_stack_arrays = "warn"                  # 栈上的大数组（可能导致栈溢出）
+large_enum_variant = "warn"                  # enum 中的大变体
+box_collection = "warn"                      # 不必要的 Box<Vec<T>>
+rc_buffer = "warn"                           # Rc<Vec<T>> 等可以优化
+rc_mutex = "warn"                            # Rc<Mutex<T>> 应该用 Rc<RefCell<T>>
+mutex_atomic = "warn"                        # 简单类型用原子操作替代 Mutex
+mutex_integer = "warn"                       # 整数用原子类型替代 Mutex
+
+# ====== ⚡ 避免运行时开销（Runtime Overhead）======
+# 避免可能影响性能的运行时检查和分配
+vec_box = "warn"                             # Vec<Box<T>> 可能有额外开销
+linkedlist = "warn"                          # LinkedList 通常比 Vec 慢
+option_option = "warn"                       # Option<Option<T>> 通常是设计问题
+redundant_allocation = "warn"                # 冗余分配（Rc<Box<T>>等）
+unnecessary_box_returns = "warn"             # 不必要的 Box 返回值
+map_unwrap_or = "warn"                       # map().unwrap_or() 不如 map_or()
+or_fun_call = "warn"                         # or(func()) 应该用 or_else(|| func())
+single_char_pattern = "warn"                 # 单字符模式用 char 而非 &str
+string_add = "warn"                          # 字符串拼接用 format! 或 push_str
+string_add_assign = "warn"                   # += 字符串拼接
+inefficient_to_string = "warn"               # 低效的 to_string 调用
+
+# ====== 🔥 内存和分配（Memory & Allocation）======
+# 检测可能导致意外分配的模式
+vec_init_then_push = "warn"                  # 预分配容量而不是多次 push
+collection_is_never_read = "warn"            # 集合从未被读取
+unnecessary_sort_by = "warn"                 # 简单排序用 sort 而非 sort_by
+useless_vec = "warn"                         # 不必要的 vec! 宏
+redundant_slicing = "warn"                   # 冗余的切片操作
+iter_with_drain = "warn"                     # drain 可能比 iter 慢
+
+# ====== 🎯 循环和迭代器优化（Loop & Iterator）======
+# 优化循环和迭代器性能
+needless_range_loop = "warn"                 # 用迭代器替代索引循环
+manual_memcpy = "warn"                       # 手动内存拷贝应该用 copy_from_slice
+explicit_counter_loop = "warn"               # 显式计数器应该用 enumerate
+iter_nth_zero = "warn"                       # iter().nth(0) 应该用 first()
+iter_skip_next = "warn"                      # iter().skip(n).next() 应该用 nth(n)
+filter_next = "warn"                         # filter().next() 应该用 find()
+skip_while_next = "warn"                     # skip_while().next() 应该用 find()
+search_is_some = "warn"                      # find().is_some() 应该用 any()
+
+# ====== 🚫 避免 Panic 和运行时检查（Avoid Panics）======
+# panic 会影响性能（展开栈等）
+unwrap_used = "warn"                         # 避免 unwrap，使用 ? 或 match
+expect_used = "warn"                         # 避免 expect
+panic = "warn"                               # 避免显式 panic
+indexing_slicing = "warn"                    # 数组索引可能 panic，用 get()
+unreachable = "warn"                         # unreachable! 可能在 debug 模式有开销
+todo = "warn"                                # 生产代码不应有 todo
+unimplemented = "warn"                       # 避免 unimplemented
+
+# ====== 📊 数据结构选择（Data Structure）======
+# 选择正确的数据结构很关键
+map_entry = "warn"                           # 使用 entry API 避免重复查找
+option_map_or_none = "warn"                  # 优化 Option 操作
+if_then_some_else_none = "warn"              # 简化 Option 构造
+
+# ====== 🔍 类型转换优化（Type Conversion）======
+# 避免低效的类型转换
+unnecessary_cast = "warn"                    # 不必要的类型转换
+ptr_as_ptr = "warn"                          # 指针转换应该用 cast
+transmute_ptr_to_ptr = "warn"                # 指针转换应该用 cast
+cast_lossless = "warn"                       # 无损转换应该用 From/Into
+cast_possible_truncation = "warn"            # 可能截断的转换
+cast_precision_loss = "warn"                 # 可能损失精度的转换
+cast_sign_loss = "warn"                      # 可能丢失符号的转换
+
+# ====== ⚙️ 函数调用优化（Function Call）======
+# 减少函数调用开销
+trivially_copy_pass_by_ref = "warn"          # 简单 Copy 类型直接传值
+fn_params_excessive_bools = "warn"           # 过多布尔参数影响可读性和性能
+
+# ====== 🎛️ Pedantic 级别（可选但推荐）======
+# pedantic = "warn"  # 取消注释以启用 300+ 额外检查
+
+# ====== ✅ 允许某些规则（避免误报）======
+# 某些规则可能对低延迟代码过于严格
+module_name_repetitions = "allow"            # 允许模块名重复
+similar_names = "allow"                      # 允许相似变量名
+must_use_candidate = "allow"                 # 不强制 must_use
+missing_errors_doc = "allow"                 # 测试代码可以不写错误文档
+missing_panics_doc = "allow"                 # 测试代码可以不写 panic 文档

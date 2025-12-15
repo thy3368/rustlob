@@ -1,5 +1,9 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_lossless)]
 use diff::{ChangeType, Diff};
-use diff_tracker::tracker::tracker::track_auto;
+use diff_tracker::tracker::track_auto;
 
 // ========== Diff Derive 宏测试 ==========
 
@@ -13,7 +17,9 @@ struct User {
 
 #[test]
 fn test_diff_derive_basic() {
-    println!("\n=== Diff Derive 宏测试 - 基础功能 ===\n");
+    println!("
+=== Diff Derive 宏测试 - 基础功能 ===
+");
 
     let user1 = User {
         id: "user_001".to_string(),
@@ -45,7 +51,9 @@ fn test_diff_derive_basic() {
     assert_eq!(age_change.new_value, "31");
     println!("  ✓ age: {} → {}", age_change.old_value, age_change.new_value);
 
-    println!("\n=== Diff Derive 基础测试通过! ===\n");
+    println!("
+=== Diff Derive 基础测试通过! ===
+");
 }
 
 #[test]
@@ -75,7 +83,9 @@ struct Account {
 
 #[test]
 fn test_diff_skip_attribute() {
-    println!("\n=== Diff Derive - skip 属性测试 ===\n");
+    println!("
+=== Diff Derive - skip 属性测试 ===
+");
 
     let acc1 = Account {
         id: "acc_001".to_string(),
@@ -100,7 +110,9 @@ fn test_diff_skip_attribute() {
     println!("✓ skip 属性生效：只检测到 1 个字段变更 (balance)");
     println!("✓ internal_cache 被正确跳过");
 
-    println!("\n=== skip 属性测试通过! ===\n");
+    println!("
+=== skip 属性测试通过! ===
+");
 }
 
 // 测试 mask 属性
@@ -114,7 +126,9 @@ struct SecureUser {
 
 #[test]
 fn test_diff_mask_attribute() {
-    println!("\n=== Diff Derive - mask 属性测试 ===\n");
+    println!("
+=== Diff Derive - mask 属性测试 ===
+");
 
     let user1 = SecureUser {
         id: "user_003".to_string(),
@@ -144,7 +158,9 @@ fn test_diff_mask_attribute() {
     assert_eq!(password_change.new_value, "***");
     println!("✓ password 被脱敏为: ***");
 
-    println!("\n=== mask 属性测试通过! ===\n");
+    println!("
+=== mask 属性测试通过! ===
+");
 }
 
 // 测试 Diff derive 与 track_auto 集成
@@ -157,7 +173,9 @@ struct Order {
 
 #[test]
 fn test_diff_derive_with_track_auto() {
-    println!("\n=== Diff Derive + track_auto 集成测试 ===\n");
+    println!("
+=== Diff Derive + track_auto 集成测试 ===
+");
 
     let mut order = Order {
         id: "ord_001".to_string(),
@@ -180,5 +198,7 @@ fn test_diff_derive_with_track_auto() {
         }
     }
 
-    println!("\n=== 集成测试通过! ===\n");
+    println!("
+=== 集成测试通过! ===
+");
 }

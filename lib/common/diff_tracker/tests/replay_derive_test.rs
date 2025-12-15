@@ -1,5 +1,10 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::approx_constant)]
 use diff::{ChangeLogEntry, ChangeType, FieldChange, Replay};
-use diff_tracker::tracker::tracker::track_auto;
+use diff_tracker::tracker::track_auto;
 
 // ========== Replay Derive 宏测试 ==========
 
@@ -15,7 +20,9 @@ struct Product {
 
 #[test]
 fn test_replay_derive_basic() {
-    println!("\n=== Replay Derive 宏测试 - 基础功能 ===\n");
+    println!("
+=== Replay Derive 宏测试 - 基础功能 ===
+");
 
     // Given: 创建初始产品
     let mut product = Product {
@@ -37,7 +44,8 @@ fn test_replay_derive_basic() {
     let product_snapshot = product.clone();
 
     // When: 使用 track_auto 录制变更
-    println!("\n执行变更并录制...");
+    println!("
+执行变更并录制...");
     let change_log = track_auto(&mut product, |p| {
         p.price = 4500;  // 降价
         p.stock = 15;    // 补货
@@ -55,7 +63,8 @@ fn test_replay_derive_basic() {
     assert_eq!(product.stock, 15);
 
     // Then: 从快照回放变更
-    println!("\n从快照回放变更...");
+    println!("
+从快照回放变更...");
     let mut product_replay = product_snapshot;  // 使用 clone 的快照
 
     println!("回放前: price={}, stock={}", product_replay.price, product_replay.stock);
@@ -70,12 +79,16 @@ fn test_replay_derive_basic() {
     assert_eq!(product_replay.name, product.name);
     assert_eq!(product_replay.is_available, product.is_available);
 
-    println!("\n✅ Replay Derive 基础测试通过!\n");
+    println!("
+✅ Replay Derive 基础测试通过!
+");
 }
 
 #[test]
 fn test_replay_derive_all_types() {
-    println!("\n=== Replay Derive - 支持的类型测试 ===\n");
+    println!("
+=== Replay Derive - 支持的类型测试 ===
+");
 
     #[derive(Debug, Clone, diff_tracker::Diff, diff_tracker::Replay)]
     struct AllTypes {
@@ -125,18 +138,23 @@ fn test_replay_derive_all_types() {
     assert_eq!(entity_replay.field_f64, entity.field_f64);
     assert_eq!(entity_replay.field_bool, entity.field_bool);
 
-    println!("\n✓ String 类型回放成功");
+    println!("
+✓ String 类型回放成功");
     println!("✓ i64 类型回放成功");
     println!("✓ u32 类型回放成功");
     println!("✓ f64 类型回放成功");
     println!("✓ bool 类型回放成功");
 
-    println!("\n✅ 所有类型回放测试通过!\n");
+    println!("
+✅ 所有类型回放测试通过!
+");
 }
 
 #[test]
 fn test_replay_derive_error_handling() {
-    println!("\n=== Replay Derive - 错误处理测试 ===\n");
+    println!("
+=== Replay Derive - 错误处理测试 ===
+");
 
     #[derive(Debug, diff_tracker::Replay)]
     struct TestEntity {
@@ -182,12 +200,16 @@ fn test_replay_derive_error_handling() {
         assert_eq!(e, "Cannot replay: not an Update change");
     }
 
-    println!("\n✅ 错误处理测试通过!\n");
+    println!("
+✅ 错误处理测试通过!
+");
 }
 
 #[test]
 fn test_replay_derive_partial_update() {
-    println!("\n=== Replay Derive - 部分字段更新测试 ===\n");
+    println!("
+=== Replay Derive - 部分字段更新测试 ===
+");
 
     // 创建初始产品
     let mut product = Product {
@@ -208,7 +230,8 @@ fn test_replay_derive_partial_update() {
         p.price = 2500;  // 只修改价格
     }).unwrap();
 
-    println!("\n录制的变更:");
+    println!("
+录制的变更:");
     if let ChangeType::Updated { changed_fields } = &partial_log.change_type {
         for change in changed_fields {
             println!("  - {}: {} → {}", change.field_name, change.old_value, change.new_value);
@@ -218,7 +241,8 @@ fn test_replay_derive_partial_update() {
     // 从快照回放
     let mut product_replay = product_snapshot;
 
-    println!("\n回放前: price={}, name={}, stock={}",
+    println!("
+回放前: price={}, name={}, stock={}",
         product_replay.price, product_replay.name, product_replay.stock);
 
     product_replay.replay(&partial_log).unwrap();
@@ -232,10 +256,13 @@ fn test_replay_derive_partial_update() {
     assert_eq!(product_replay.stock, product.stock);
     assert_eq!(product_replay.is_available, product.is_available);
 
-    println!("\n✓ 部分字段更新成功");
+    println!("
+✓ 部分字段更新成功");
     println!("  - 已更新字段: price = {}", product_replay.price);
     println!("  - 未变更字段: name = {}", product_replay.name);
     println!("  - 未变更字段: stock = {}", product_replay.stock);
 
-    println!("\n✅ 部分字段更新测试通过!\n");
+    println!("
+✅ 部分字段更新测试通过!
+");
 }

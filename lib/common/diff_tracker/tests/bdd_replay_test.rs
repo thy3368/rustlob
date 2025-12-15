@@ -1,5 +1,10 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::assign_op_pattern)]
 use diff::{ChangeLogEntry, ChangeType};
-use diff_tracker::tracker::tracker::track_auto;
+use diff_tracker::tracker::track_auto;
 use diff_tracker::Replay;  // 导入 Replay trait
 
 // ========== BDD: 数据录制与回放 ==========
@@ -43,9 +48,11 @@ impl Order {
 
 #[test]
 fn test_bdd_scenario_1_basic_record_and_replay() {
-    println!("\n========================================");
+    println!("
+========================================");
     println!("场景 1: 基础录制与回放");
-    println!("========================================\n");
+    println!("========================================
+");
 
     // Given: 初始订单
     println!("Given: 创建一个初始订单");
@@ -58,7 +65,8 @@ fn test_bdd_scenario_1_basic_record_and_replay() {
     println!("  已支付: {}", order.is_paid);
 
     // When: 处理订单并录制变更
-    println!("\nWhen: 处理订单（添加税费）");
+    println!("
+When: 处理订单（添加税费）");
     let log_entry = track_auto(&mut order, |o| {
         o.process();
     }).unwrap();
@@ -74,24 +82,28 @@ fn test_bdd_scenario_1_basic_record_and_replay() {
     }
 
     // Then: 验证录制的变更
-    println!("\nThen: 验证变更被正确录制");
+    println!("
+Then: 验证变更被正确录制");
     assert_eq!(order.amount, 1100);
     assert_eq!(order.status, "Processing");
     println!("  ✓ 订单状态已更新");
 
     // Given: 从初始状态开始
-    println!("\n----------------------------------------");
+    println!("
+----------------------------------------");
     println!("Given: 重置到初始状态");
     let mut order_replay = Order::new("ORD-001".to_string(), 1000, 10);
     println!("  金额: {} (初始)", order_replay.amount);
     println!("  状态: {} (初始)", order_replay.status);
 
     // When: 回放变更日志
-    println!("\nWhen: 回放变更日志");
+    println!("
+When: 回放变更日志");
     order_replay.replay(&log_entry).unwrap();  // 使用 Replay derive 生成的方法
 
     // Then: 验证回放结果
-    println!("\nThen: 验证回放后的状态");
+    println!("
+Then: 验证回放后的状态");
     assert_eq!(order_replay.amount, 1100);
     assert_eq!(order_replay.status, "Processing");
     assert_eq!(order_replay.price, 110.0);
@@ -99,14 +111,18 @@ fn test_bdd_scenario_1_basic_record_and_replay() {
     println!("  ✓ 状态: {} (回放后)", order_replay.status);
     println!("  ✓ 价格: {:.2} (回放后)", order_replay.price);
 
-    println!("\n✅ 场景 1 通过：基础录制与回放成功\n");
+    println!("
+✅ 场景 1 通过：基础录制与回放成功
+");
 }
 
 #[test]
 fn test_bdd_scenario_2_multi_step_replay() {
-    println!("\n========================================");
+    println!("
+========================================");
     println!("场景 2: 多步骤变更录制与回放");
-    println!("========================================\n");
+    println!("========================================
+");
 
     // Given: 初始订单
     println!("Given: 创建一个新订单");
@@ -115,7 +131,8 @@ fn test_bdd_scenario_2_multi_step_replay() {
         order.amount, order.status, order.is_paid);
 
     // When: 执行多步业务操作
-    println!("\nWhen: 执行多步业务操作");
+    println!("
+When: 执行多步业务操作");
     let mut change_logs = Vec::new();
 
     println!("  步骤 1: 处理订单");
@@ -134,13 +151,15 @@ fn test_bdd_scenario_2_multi_step_replay() {
         order.amount, order.status, order.is_paid);
 
     // Then: 按顺序回放所有变更
-    println!("\nThen: 从初始状态回放所有变更");
+    println!("
+Then: 从初始状态回放所有变更");
     let mut order_replay = Order::new("ORD-002".to_string(), 2000, 5);
     println!("  回放前: amount={}, status={}, is_paid={}",
         order_replay.amount, order_replay.status, order_replay.is_paid);
 
     for (i, log) in change_logs.iter().enumerate() {
-        println!("\n  回放步骤 {}:", i + 1);
+        println!("
+  回放步骤 {}:", i + 1);
         order_replay.replay(log).unwrap();  // 使用 Replay derive 生成的方法
 
         if let ChangeType::Updated { changed_fields } = &log.change_type {
@@ -153,7 +172,8 @@ fn test_bdd_scenario_2_multi_step_replay() {
         }
     }
 
-    println!("\n  回放后: amount={}, status={}, is_paid={}",
+    println!("
+  回放后: amount={}, status={}, is_paid={}",
         order_replay.amount, order_replay.status, order_replay.is_paid);
 
     // 验证最终状态
@@ -161,27 +181,33 @@ fn test_bdd_scenario_2_multi_step_replay() {
     assert_eq!(order_replay.status, order.status);
     assert_eq!(order_replay.is_paid, order.is_paid);
 
-    println!("\n✅ 场景 2 通过：多步骤回放成功\n");
+    println!("
+✅ 场景 2 通过：多步骤回放成功
+");
 }
 
 #[test]
 fn test_bdd_scenario_3_type_safety_issue() {
-    println!("\n========================================");
+    println!("
+========================================");
     println!("场景 3: 值类型问题分析");
-    println!("========================================\n");
+    println!("========================================
+");
 
     // Given: 创建订单
     println!("Given: 创建一个订单");
     let mut order = Order::new("ORD-003".to_string(), 999, 3);
 
     // When: 录制变更
-    println!("\nWhen: 修改订单金额");
+    println!("
+When: 修改订单金额");
     let log = track_auto(&mut order, |o| {
         o.amount = 1500;
     }).unwrap();
 
     // Then: 分析 FieldChange 的值类型
-    println!("\nThen: 分析 FieldChange 中的值类型");
+    println!("
+Then: 分析 FieldChange 中的值类型");
     if let ChangeType::Updated { changed_fields } = &log.change_type {
         for change in changed_fields {
             println!("  字段: {}", change.field_name);
@@ -189,40 +215,48 @@ fn test_bdd_scenario_3_type_safety_issue() {
             println!("  新值: {} (String 类型)", change.new_value);
 
             // 问题 1: 类型信息丢失
-            println!("\n  ⚠️  问题 1: 类型信息丢失");
+            println!("
+  ⚠️  问题 1: 类型信息丢失");
             println!("    - 存储时: i64(999) → String(\"999\")");
             println!("    - 回放时需要: String(\"999\") → i64(999)");
             println!("    - 需要知道字段的原始类型才能正确解析");
 
             // 问题 2: 解析可能失败
-            println!("\n  ⚠️  问题 2: 解析可能失败");
+            println!("
+  ⚠️  问题 2: 解析可能失败");
             println!("    - 如果 String 不是有效的数字，parse() 会失败");
             println!("    - 需要错误处理");
 
             // 问题 3: 浮点精度
             if change.field_name == "price" {
-                println!("\n  ⚠️  问题 3: 浮点数精度问题");
+                println!("
+  ⚠️  问题 3: 浮点数精度问题");
                 println!("    - f64(333.0) → String(\"333\") → f64(333.0)");
                 println!("    - 字符串转换可能丢失精度");
             }
         }
     }
 
-    println!("\n✅ 场景 3 通过：已识别值类型的潜在问题\n");
+    println!("
+✅ 场景 3 通过：已识别值类型的潜在问题
+");
 }
 
 #[test]
 fn test_bdd_scenario_4_type_parsing_errors() {
-    println!("\n========================================");
+    println!("
+========================================");
     println!("场景 4: 类型解析错误处理");
-    println!("========================================\n");
+    println!("========================================
+");
 
     // Given: 创建一个订单和一个损坏的变更日志
     println!("Given: 创建一个正常订单");
     let mut order = Order::new("ORD-004".to_string(), 1000, 10);
 
     // When: 创建一个包含无效数据的变更日志
-    println!("\nWhen: 尝试回放包含无效类型的变更日志");
+    println!("
+When: 尝试回放包含无效类型的变更日志");
     use diff::FieldChange;
     let corrupted_log = ChangeLogEntry {
         entity_id: "ORD-004".to_string(),
@@ -240,7 +274,8 @@ fn test_bdd_scenario_4_type_parsing_errors() {
     };
 
     // Then: 回放应该失败并返回错误
-    println!("\nThen: 回放失败并返回解析错误");
+    println!("
+Then: 回放失败并返回解析错误");
     let result = order.replay(&corrupted_log);  // 使用 Replay derive 生成的方法
 
     assert!(result.is_err());
@@ -249,16 +284,20 @@ fn test_bdd_scenario_4_type_parsing_errors() {
         assert!(e.contains("Failed to parse field 'amount'"));  // derive 宏生成的错误消息格式
     }
 
-    println!("\n✅ 场景 4 通过：类型解析错误被正确处理\n");
+    println!("
+✅ 场景 4 通过：类型解析错误被正确处理
+");
 }
 
 // ========== 总结：FieldChange 是否需要考虑值类型？ ==========
 
 #[test]
 fn test_analysis_should_we_add_types() {
-    println!("\n========================================");
+    println!("
+========================================");
     println!("分析：FieldChange 是否需要值类型？");
-    println!("========================================\n");
+    println!("========================================
+");
 
     println!("当前设计 (String-based):");
     println!("  pub struct FieldChange {{");
@@ -328,5 +367,6 @@ fn test_analysis_should_we_add_types() {
     println!("  - 如果性能敏感 → 方案 3");
     println!();
 
-    println!("✅ 本测试演示了当前 String 方案的优缺点\n");
+    println!("✅ 本测试演示了当前 String 方案的优缺点
+");
 }

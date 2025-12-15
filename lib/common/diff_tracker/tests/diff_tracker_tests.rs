@@ -1,6 +1,13 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::panic)]
+#![allow(dead_code)]
+#![allow(clippy::assign_op_pattern)]
 use diff::{ChangeType, Diff, FieldChange};
 use diff_tracker::track;
-use diff_tracker::tracker::tracker::{track_auto, track_changes, track_with_tracker};
+use diff_tracker::tracker::{track_auto, track_changes, track_with_tracker};
 
 // 简单的测试用实体 - 不需要实现 Diff trait！
 #[derive(Debug, Clone)]
@@ -30,7 +37,8 @@ fn test_record_log_with_tracker() {
     }).unwrap();
 
     // 验证 entry
-    println!("\n=== ChangeLogEntry 使用 Tracker 记录变更 ===");
+    println!("
+=== ChangeLogEntry 使用 Tracker 记录变更 ===");
 
     assert_eq!(entry.entity_id, "auto_generated");
     println!("✓ entity_id: {}", entry.entity_id);
@@ -74,7 +82,9 @@ fn test_record_log_with_tracker() {
     assert!(entry.timestamp <= now);
     println!("✓ timestamp: {}", entry.timestamp);
 
-    println!("\n=== Tracker 变更追踪验证通过! ===\n");
+    println!("
+=== Tracker 变更追踪验证通过! ===
+");
 }
 
 #[test]
@@ -91,7 +101,8 @@ fn test_convenient_api() {
         tracker.set("name", &mut entity.name, "Updated".to_string());
     }).unwrap();
 
-    println!("\n=== 便捷 API 测试 (tracker.set) ===");
+    println!("
+=== 便捷 API 测试 (tracker.set) ===");
 
     // 验证字段已经更新
     if let ChangeType::Updated { changed_fields } = &entry.change_type {
@@ -119,7 +130,8 @@ fn test_convenient_api() {
             name_change.new_value);
     }
 
-    println!("=== 便捷 API 测试通过! ===\n");
+    println!("=== 便捷 API 测试通过! ===
+");
 }
 
 #[test]
@@ -136,7 +148,8 @@ fn test_macro_api() {
         track!(tracker, entity.name = "Updated".to_string());
     }).unwrap();
 
-    println!("\n=== 宏 API 测试 (track!) ===");
+    println!("
+=== 宏 API 测试 (track!) ===");
 
     if let ChangeType::Updated { changed_fields } = &entry.change_type {
         assert_eq!(changed_fields.len(), 2);
@@ -161,7 +174,9 @@ fn test_macro_api() {
             name_change.new_value);
     }
 
-    println!("\n=== 宏 API 测试通过! ===\n");
+    println!("
+=== 宏 API 测试通过! ===
+");
 }
 
 // 为TestEntity实现Diff trait以支持自动追踪
@@ -207,7 +222,9 @@ impl TestEntity {
 
 #[test]
 fn test_update_auto_with_methods() {
-    println!("\n=== 自动追踪模式测试 (track_auto) ===\n");
+    println!("
+=== 自动追踪模式测试 (track_auto) ===
+");
 
     let mut entity = TestEntity {
         id: "test_10".to_string(),
@@ -249,12 +266,16 @@ fn test_update_auto_with_methods() {
             name_change.new_value);
     }
 
-    println!("\n=== 自动追踪测试通过! ===\n");
+    println!("
+=== 自动追踪测试通过! ===
+");
 }
 
 #[test]
 fn test_update_auto_complex_business_logic() {
-    println!("\n=== 复杂业务逻辑自动追踪测试 ===\n");
+    println!("
+=== 复杂业务逻辑自动追踪测试 ===
+");
 
     let mut entity = TestEntity {
         id: "test_11".to_string(),
@@ -287,12 +308,16 @@ fn test_update_auto_complex_business_logic() {
         assert_eq!(changed_fields[1].new_value, "Order_processed");
     }
 
-    println!("\n=== 复杂业务逻辑测试通过! ===\n");
+    println!("
+=== 复杂业务逻辑测试通过! ===
+");
 }
 
 #[test]
 fn test_track_changes_standalone() {
-    println!("\n=== 独立函数 track_changes 测试 ===\n");
+    println!("
+=== 独立函数 track_changes 测试 ===
+");
 
     let mut entity = TestEntity {
         id: "test_standalone".to_string(),
@@ -326,12 +351,16 @@ fn test_track_changes_standalone() {
     assert_eq!(entity.name, "Modified");
     println!("✓ 实体状态已正确更新");
 
-    println!("\n=== 独立函数测试通过! ===\n");
+    println!("
+=== 独立函数测试通过! ===
+");
 }
 
 #[test]
 fn test_compare_apis() {
-    println!("\n=== API 对比 ===\n");
+    println!("
+=== API 对比 ===
+");
 
     // 方式 1: track_with_tracker（手动追踪）
     println!("方式 1: track_with_tracker（手动追踪）");
@@ -362,12 +391,15 @@ fn test_compare_apis() {
     println!("  - 优势: 更简洁，自动检测变更");
     println!();
 
-    println!("=== API 对比完成! ===\n");
+    println!("=== API 对比完成! ===
+");
 }
 
 #[test]
 fn test_track_with_tracker() {
-    println!("\n=== track_with_tracker 独立函数测试 ===\n");
+    println!("
+=== track_with_tracker 独立函数测试 ===
+");
 
     let mut entity = TestEntity {
         id: "test_tracker".to_string(),
@@ -400,12 +432,16 @@ fn test_track_with_tracker() {
     assert_eq!(entity.name, "TrackerUpdated");
     println!("✓ 实体状态已正确更新");
 
-    println!("\n=== track_with_tracker 测试通过! ===\n");
+    println!("
+=== track_with_tracker 测试通过! ===
+");
 }
 
 #[test]
 fn test_all_standalone_functions() {
-    println!("\n=== 完整 API 演示 ===\n");
+    println!("
+=== 完整 API 演示 ===
+");
 
     // === 场景 1: 使用 track! 宏 ===
     println!("【场景 1】使用 track! 宏手动追踪");
