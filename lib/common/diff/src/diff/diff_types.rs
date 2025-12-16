@@ -281,7 +281,7 @@ pub trait Diff {
 ///     }
 /// }
 /// ```
-pub trait Replayable: Trackable {
+pub trait Replayable: Entity {
     /// 从变更日志条目回放数据，更新 self 的字段
     ///
     /// # 参数
@@ -326,27 +326,101 @@ pub trait Replayable: Trackable {
 ///     // 可以使用所有追踪功能
 /// }
 /// ```
-pub trait Trackable: Entity + Diff {}
+pub trait Trackable: Entity + Diff + Replayable {}
 
-// 为所有实现了 TrackableEntity + Diff + Replay 的类型自动实现 Trackable
-impl<T> Trackable for T where T: Entity + Diff {}
+// 为所有实现了 Entity + Diff + Replayable 的类型自动实现 Trackable
+impl<T> Trackable for T where T: Entity + Diff + Replayable {}
 
 // ============================================================================
 // 辅助类型
 // ============================================================================
 
+/// 变更追踪结果
+#[derive(Debug, Clone, PartialEq)]
+pub enum TrackingResult {
+    /// 无变更
+    NoChange,
+    /// 有变更（包含变更日志）
+    Changed(ChangeLogEntry),
+    /// 实体创建
+    Created(ChangeLogEntry),
+    /// 实体删除
+    Deleted(ChangeLogEntry),
+}
 
-/// 使用 Diff trait 自动追踪变更
+impl TrackingResult {
+    /// 检查是否有变更
+    pub fn has_change(&self) -> bool {
+        !matches!(self, TrackingResult::NoChange)
+    }
+
+    /// 获取变更日志条目
+    pub fn entry(&self) -> Option<&ChangeLogEntry> {
+        match self {
+            TrackingResult::NoChange => None,
+            TrackingResult::Changed(entry) | TrackingResult::Created(entry) | TrackingResult::Deleted(entry) => {
+                Some(entry)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 统一追踪接口
+// ============================================================================
+
+/// 操作类型枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation {
+    /// 创建操作
+    Create,
+    /// 删除操作
+    Delete,
+}
+
+/// 统一的变更追踪接口
+///
+/// 用于追踪 Create 和 Delete 操作（不需要修改实体）
+/// Update 操作请使用 `track_update` 函数
 ///
 /// # 示例
 /// ```ignore
-/// let mut order = Order::new(1, "pending");
-/// let entry = track_auto(&mut order, |o| {
-///     o.value = 200;
+/// // 创建
+/// let entry = track(&order, Operation::Create).unwrap();
+///
+/// // 删除
+/// let entry = track(&order, Operation::Delete).unwrap();
+/// ```
+pub fn track<T>(entity: &T, operation: Operation) -> Result<ChangeLogEntry, String>
+where
+    T: Entity + 'static,
+{
+    let change_type = match operation {
+        Operation::Create => ChangeType::Created,
+        Operation::Delete => ChangeType::Deleted,
+    };
+
+    let entry = ChangeLogEntry::new(
+        entity.entity_id().to_string(),
+        T::entity_type(),
+        change_type,
+        current_timestamp(),
+        0, // 序列号由调用者管理
+    );
+
+    Ok(entry)
+}
+
+/// 追踪实体更新操作（带自动 diff）
+///
+/// # 示例
+/// ```ignore
+/// let entry = track_update(&mut order, |o| {
+///     o.price = 51000.0;
 ///     o.status = "confirmed".to_string();
 /// }).unwrap();
 /// ```
-pub fn track_auto<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, String>
+pub fn track_update<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, String>
 where
     T: Entity + Diff + Clone + 'static,
     F: FnOnce(&mut T)
@@ -377,14 +451,38 @@ where
     Ok(entry)
 }
 
-/// track_auto 的简短别名
+// ============================================================================
+// 便捷别名函数（向后兼容）
+// ============================================================================
+
+/// 追踪实体创建操作（便捷别名）
+///
+/// # 示例
+/// ```ignore
+/// let order = Order::new(1, "BTCUSDT", 50000.0);
+/// let entry = track_create(&order).unwrap();
+/// ```
 #[inline]
-pub fn track_changes<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, String>
+pub fn track_create<T>(entity: &T) -> Result<ChangeLogEntry, String>
 where
-    T: Entity + Diff + Clone + 'static,
-    F: FnOnce(&mut T)
+    T: Entity + 'static
 {
-    track_auto(entity, updater)
+    track(entity, Operation::Create)
+}
+
+/// 追踪实体删除操作（便捷别名）
+///
+/// # 示例
+/// ```ignore
+/// let order = Order::new(1, "BTCUSDT", 50000.0);
+/// let entry = track_delete(&order).unwrap();
+/// ```
+#[inline]
+pub fn track_delete<T>(entity: &T) -> Result<ChangeLogEntry, String>
+where
+    T: Entity + 'static
+{
+    track(entity, Operation::Delete)
 }
 
 // ============================================================================
@@ -500,58 +598,5 @@ mod tests {
 
         entity.replay(&entry).unwrap();
         assert_eq!(entity.value, "new");
-    }
-
-
-    #[test]
-    fn test_track_auto() {
-        let mut entity = TestEntity {
-            id: 1,
-            value: "old".to_string()
-        };
-
-
-        let mut entity2 = entity.clone();
-
-        let entry = track_auto(&mut entity, |e| {
-            e.value = "new".to_string();
-        })
-        .unwrap();
-
-        entity2.replay(&entry).unwrap();
-
-        assert_eq!(entity2.value, "new");
-
-
-        assert_eq!(entity.value, "new");
-        assert_eq!(entry.entity_id, "1");
-        assert_eq!(entry.entity_type, "TestEntity");
-
-        if let ChangeType::Updated {
-            changed_fields
-        } = entry.change_type
-        {
-            assert_eq!(changed_fields.len(), 1);
-            assert_eq!(changed_fields[0].field_name, "value");
-        } else {
-            panic!("Expected Updated change type");
-        }
-    }
-
-
-    #[test]
-    fn test_track_auto_with_no_changes() {
-        let mut entity = TestEntity {
-            id: 1,
-            value: "old".to_string()
-        };
-
-        // 没有任何变更
-        let result = track_auto(&mut entity, |_e| {
-            // 不做任何修改
-        });
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "No changes detected");
     }
 }

@@ -500,11 +500,15 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 [[package]]
 name = "diff"
 version = "0.1.0"
+dependencies = [
+ "diff_derive",
+]
 
 [[package]]
 name = "diff_derive"
 version = "0.1.0"
 dependencies = [
+ "diff",
  "proc-macro2",
  "quote",
  "syn 2.0.110",
@@ -513,11 +517,6 @@ dependencies = [
 [[package]]
 name = "diff_tracker"
 version = "0.1.0"
-dependencies = [
- "criterion",
- "diff",
- "diff_derive",
-]
 
 [[package]]
 name = "digest"
