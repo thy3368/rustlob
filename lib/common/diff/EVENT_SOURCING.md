@@ -873,9 +873,9 @@ fn compact_logs(entity_id: &str) {
 
 ### 下一步
 
-- 查看 [BDD 测试示例](../tests/bdd_replay_test.rs)
-- 查看 [Replay Derive 测试](../tests/replay_derive_test.rs)
-- 查看 [API 文档](../src/lib.rs)
+- 查看 [BDD 测试示例](../diff_tracker/tests/bdd_replay_test.rs)
+- 查看 [Replay Derive 测试](../diff_tracker/tests/replay_derive_test.rs)
+- 查看 [API 文档](../diff_tracker/src/lib.rs)
 
 ---
 
