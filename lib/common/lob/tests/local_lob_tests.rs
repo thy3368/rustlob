@@ -9,6 +9,7 @@ struct MockOrder {
     symbol: Symbol,
     price: Price,
     quantity: Quantity,
+    filled_quantity: Quantity,
     side: Side,
 }
 
@@ -23,6 +24,10 @@ impl Order for MockOrder {
 
     fn quantity(&self) -> Quantity {
         self.quantity
+    }
+
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
     }
 
     fn side(&self) -> Side {
@@ -88,6 +93,7 @@ fn test_add_and_find_order() {
         price: Price::from_f64(50000.0),  // 50000.00 USDT
         quantity: Quantity::from_f64(1.5),  // 1.5 BTC
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     // 添加订单
@@ -116,6 +122,7 @@ fn test_best_bid_ask() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
     lob.add_order(buy_order).unwrap();
     assert_eq!(lob.best_bid(), Some(Price::from_f64(50000.0)));
@@ -127,6 +134,7 @@ fn test_best_bid_ask() {
         price: Price::from_f64(50100.5),
         quantity: Quantity::from_f64(0.5),
         side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
     };
     lob.add_order(sell_order).unwrap();
     assert_eq!(lob.best_ask(), Some(Price::from_f64(50100.5)));
@@ -145,6 +153,7 @@ fn test_match_orders_buy_side() {
             price: Price::from_f64(50000.0 + (i as f64 * 10.0)),
             quantity: Quantity::from_f64(1.0),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -172,6 +181,7 @@ fn test_remove_order() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     lob.add_order(order).unwrap();

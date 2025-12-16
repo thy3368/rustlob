@@ -13,8 +13,19 @@ pub trait Order: Send + Sync {
     /// 获取价格
     fn price(&self) -> Price;
 
-    /// 获取数量
+    /// 获取数量（订单总数量）
     fn quantity(&self) -> Quantity;
+
+    /// 获取已成交数量
+    ///
+    /// # 返回
+    /// 订单的已成交数量
+    ///
+    /// # 说明
+    /// - 对于未成交订单，返回 0
+    /// - 对于部分成交订单，返回已成交的数量
+    /// - 对于完全成交订单，返回值等于 `quantity()`
+    fn filled_quantity(&self) -> Quantity;
 
     /// 获取方向
     fn side(&self) -> Side;

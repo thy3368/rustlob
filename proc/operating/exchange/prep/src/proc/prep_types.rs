@@ -1,6 +1,4 @@
-use account::{Price, Quantity, Symbol};
-
-use crate::proc::trading_prep_order_proc::{OrderId, OrderStatus, OrderType, Side};
+use crate::proc::trading_prep_order_proc::{OrderId, OrderStatus, OrderType, Price, Quantity, Side, Symbol};
 
 /// 内部订单状态（扩展字段用于撮合引擎）
 #[derive(Debug, Clone)]
@@ -16,4 +14,34 @@ pub struct InternalOrder {
     pub created_at: u64,
     /// 冻结的保证金金额（用于订单取消时归还）
     pub frozen_margin: Price
+}
+
+/// 实现 Order trait 以适配 LOB 仓储
+impl lob_repo::core::symbol_lob_repo::Order for InternalOrder {
+    fn order_id(&self) -> base_types::OrderId {
+        self.order_id
+    }
+
+    fn price(&self) -> Price {
+        self.price.unwrap_or_else(|| Price::from_raw(0))
+    }
+
+    fn quantity(&self) -> Quantity {
+        self.quantity
+    }
+
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
+    }
+
+    fn side(&self) -> base_types::Side {
+        match self.side {
+            crate::proc::trading_prep_order_proc::Side::Buy => base_types::Side::Buy,
+            crate::proc::trading_prep_order_proc::Side::Sell => base_types::Side::Sell,
+        }
+    }
+
+    fn symbol(&self) -> Symbol {
+        self.symbol
+    }
 }

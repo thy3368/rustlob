@@ -9,6 +9,7 @@ struct MockOrder {
     symbol: Symbol,
     price: Price,
     quantity: Quantity,
+    filled_quantity: Quantity,
     side: Side,
 }
 
@@ -23,6 +24,10 @@ impl Order for MockOrder {
 
     fn quantity(&self) -> Quantity {
         self.quantity
+    }
+
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
     }
 
     fn side(&self) -> Side {
@@ -47,6 +52,7 @@ fn test_btc_high_price_coin() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(buy_order).is_ok());
 
@@ -57,6 +63,7 @@ fn test_btc_high_price_coin() {
         price: Price::from_f64(50100.5),
         quantity: Quantity::from_f64(0.5),
         side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(sell_order).is_ok());
 
@@ -78,6 +85,7 @@ fn test_shib_low_price_coin() {
         price: Price::from_f64(0.00001234),
         quantity: Quantity::from_f64(1000000.0), // 100万 SHIB
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(buy_order).is_ok());
 
@@ -88,6 +96,7 @@ fn test_shib_low_price_coin() {
         price: Price::from_f64(0.00001250),
         quantity: Quantity::from_f64(500000.0), // 50万 SHIB
         side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(sell_order).is_ok());
 
@@ -110,6 +119,7 @@ fn test_doge_medium_price_coin() {
             price: Price::from_f64(0.08 + (i as f64 * 0.001)),
             quantity: Quantity::from_f64(10000.0),
             side: if i % 2 == 0 { Side::Buy } else { Side::Sell },
+        filled_quantity: Quantity::from_raw(0),
         };
         assert!(lob.add_order(order).is_ok());
     }
@@ -133,6 +143,7 @@ fn test_match_orders_hashmap() {
             price: Price::from_f64(50000.0 + (i as f64 * 10.0)),
             quantity: Quantity::from_f64(1.0),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -160,6 +171,7 @@ fn test_remove_order_hashmap() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     lob.add_order(order).unwrap();
@@ -201,6 +213,7 @@ fn test_pepe_ultra_low_price() {
         price: Price::from_f64(0.000000123),
         quantity: Quantity::from_f64(10000000.0), // 1千万 PEPE
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     assert!(lob.add_order(order).is_ok());
@@ -222,6 +235,7 @@ fn test_hashmap_memory_efficiency() {
             price: Price::from_f64(price),
             quantity: Quantity::from_f64(1.0),
             side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
         };
         assert!(lob.add_order(order).is_ok());
     }

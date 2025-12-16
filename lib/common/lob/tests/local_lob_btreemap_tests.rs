@@ -9,6 +9,7 @@ struct MockOrder {
     symbol: Symbol,
     price: Price,
     quantity: Quantity,
+    filled_quantity: Quantity,
     side: Side,
 }
 
@@ -23,6 +24,10 @@ impl Order for MockOrder {
 
     fn quantity(&self) -> Quantity {
         self.quantity
+    }
+
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
     }
 
     fn side(&self) -> Side {
@@ -46,6 +51,7 @@ fn test_btreemap_basic() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(buy_order).is_ok());
 
@@ -56,6 +62,7 @@ fn test_btreemap_basic() {
         price: Price::from_f64(50100.5),
         quantity: Quantity::from_f64(0.5),
         side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
     };
     assert!(lob.add_order(sell_order).is_ok());
 
@@ -78,6 +85,7 @@ fn test_btreemap_ordered_matching() {
             price: Price::from_f64(price),
             quantity: Quantity::from_f64(1.0),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -112,6 +120,7 @@ fn test_btreemap_market_depth() {
             price: Price::from_f64(50000.0 - (i as f64 * 10.0)),
             quantity: Quantity::from_f64(1.0 + i as f64),
             side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -124,6 +133,7 @@ fn test_btreemap_market_depth() {
             price: Price::from_f64(50100.0 + (i as f64 * 10.0)),
             quantity: Quantity::from_f64(2.0 + i as f64),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -161,6 +171,7 @@ fn test_btreemap_shib_low_price() {
         price: Price::from_f64(0.00001234),
         quantity: Quantity::from_f64(1000000.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     assert!(lob.add_order(order).is_ok());
@@ -178,6 +189,7 @@ fn test_btreemap_remove_order() {
         price: Price::from_f64(50000.0),
         quantity: Quantity::from_f64(1.0),
         side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
     };
 
     lob.add_order(order).unwrap();
@@ -219,6 +231,7 @@ fn test_btreemap_range_query() {
             price: Price::from_f64(50000.0 + (i as f64)),
             quantity: Quantity::from_f64(1.0),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -253,6 +266,7 @@ fn test_btreemap_multiple_orders_same_price() {
             price: Price::from_f64(50000.0),  // 相同价格
             quantity: Quantity::from_f64(1.0),
             side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }
@@ -288,6 +302,7 @@ fn test_btreemap_sell_side_matching() {
             price: Price::from_f64(price),
             quantity: Quantity::from_f64(1.0),
             side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(order).unwrap();
     }

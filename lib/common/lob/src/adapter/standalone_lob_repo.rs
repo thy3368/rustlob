@@ -86,6 +86,7 @@ mod tests {
         symbol: Symbol,
         price: Price,
         quantity: Quantity,
+        filled_quantity: Quantity,
         side: Side
     }
 
@@ -95,6 +96,8 @@ mod tests {
         fn price(&self) -> Price { self.price }
 
         fn quantity(&self) -> Quantity { self.quantity }
+
+        fn filled_quantity(&self) -> Quantity { self.filled_quantity }
 
         fn side(&self) -> Side { self.side }
 
@@ -202,7 +205,8 @@ mod tests {
             symbol: btc_symbol,
             price: Price::from_raw(50100),
             quantity: Quantity::from_raw(100),
-            side: Side::Sell
+            side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(sell_order).unwrap();
 
@@ -258,7 +262,8 @@ mod tests {
             symbol: btc_symbol,
             price: Price::from_raw(50000),
             quantity: Quantity::from_raw(100),
-            side: Side::Buy
+            side: Side::Buy,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(buy_order).unwrap();
 
@@ -283,7 +288,8 @@ mod tests {
             symbol: btc_symbol,
             price: Price::from_raw(50100),
             quantity: Quantity::from_raw(100),
-            side: Side::Sell
+            side: Side::Sell,
+        filled_quantity: Quantity::from_raw(0),
         };
         lob.add_order(sell_order).unwrap();
 

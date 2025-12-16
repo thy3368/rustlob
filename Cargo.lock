@@ -1649,8 +1649,10 @@ version = "0.1.0"
 dependencies = [
  "account",
  "async-trait",
+ "base_types",
  "bincode",
  "diff_derive",
+ "lob_repo",
  "log",
  "rand",
  "serde",
