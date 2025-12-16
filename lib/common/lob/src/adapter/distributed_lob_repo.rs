@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use base_types::{Price, Quantity, Side, Symbol};
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, Order};
-use crate::adapter::remote_lob_repo_impl::RemoteLob;
+use crate::adapter::remote_lob_impl::RemoteLob;
 
 #[allow(dead_code)]
 pub struct DistributedLobRepo<O: Order> {

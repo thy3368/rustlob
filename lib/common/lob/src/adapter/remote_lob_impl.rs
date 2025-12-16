@@ -1,12 +1,13 @@
 use base_types::{OrderId, Price, Quantity, Side, Symbol};
 use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
 
-pub struct LocalLob<O: Order> {
+// todo 通过rpc连接远程的lob
+pub struct RemoteLob<O: Order> {
     symbol: Symbol,
     _phantom: std::marker::PhantomData<O>
 }
 
-impl<O: Order> LocalLob<O> {
+impl<O: Order> RemoteLob<O> {
     pub fn new(symbol: Symbol) -> Self {
         Self {
             symbol,
@@ -19,7 +20,7 @@ impl<O: Order> LocalLob<O> {
     }
 }
 
-impl<O: Order> SymbolLob<O> for LocalLob<O> {
+impl<O: Order> SymbolLob<O> for RemoteLob<O> {
     fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
         todo!()
     }
@@ -45,6 +46,14 @@ impl<O: Order> SymbolLob<O> for LocalLob<O> {
     }
 
     fn best_ask(&self) -> Option<Price> {
+        todo!()
+    }
+
+    fn last_price(&self) -> Option<Price> {
+        todo!()
+    }
+
+    fn update_last_price(&mut self, _price: Price) {
         todo!()
     }
 }

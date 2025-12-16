@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use base_types::{Price, Quantity, Side, Symbol};
-use crate::adapter::local_lob_repo_impl::LocalLob;
+use crate::adapter::local_lob_impl::LocalLob;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, Order, SymbolLob};
 
 /// 单一 LOB 仓储

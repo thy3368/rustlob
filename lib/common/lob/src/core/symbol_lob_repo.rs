@@ -88,6 +88,25 @@ pub trait SymbolLob<O: Order> {
     /// 获取最佳卖价（O(1) 缓存访问）
     fn best_ask(&self) -> Option<Price>;
 
+    /// 获取最后一笔成交价（O(1) 缓存访问）
+    ///
+    /// # 返回
+    /// - `Some(Price)`: 最后一笔成交价
+    /// - `None`: 尚未发生任何成交
+    ///
+    /// # 说明
+    /// 此价格在发生成交时更新，通常在撮合引擎执行成交后调用 `update_last_price` 更新
+    fn last_price(&self) -> Option<Price>;
+
+    /// 更新最后一笔成交价
+    ///
+    /// # 参数
+    /// - `price`: 成交价格
+    ///
+    /// # 说明
+    /// 此方法通常由撮合引擎在成交发生后调用，用于更新市场数据
+    fn update_last_price(&mut self, price: Price);
+
 
     // // === 事件溯源 ===
     //
