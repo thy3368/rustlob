@@ -41,18 +41,28 @@ impl<O: Order> OrderNode<O> {
     }
 }
 
-/// 本地 LOB 实现
+/// 本地 LOB 实现 (HashMap 版本)
 ///
-/// 使用内存存储订单，支持 O(1) 的价格查找和 O(k) 的订单匹配
-/// 使用 Tick Size 将价格映射到数组索引，支持不同精度的交易对
-pub struct LocalLob<O: Order> {
+/// 使用 HashMap 存储订单，支持 O(1) 期望的价格查找和 O(k) 的订单匹配
+/// 使用 Tick Size 将价格规整到固定精度，避免浮点数精度问题
+///
+/// # 优势
+/// - 不受价格范围限制（相比 Vec 方案）
+/// - 内存使用高效（只存储有订单的价格级别）
+/// - 支持任意精度的交易对（通过 tick_size 配置）
+///
+/// # 适用场景
+/// - 低价币（SHIB, PEPE 等需要高精度）
+/// - 价格波动范围大的币种
+/// - 内存受限的环境
+pub struct LocalLobHashMap<O: Order> {
     symbol: Symbol,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
-    /// 买单价格点（索引 = price / tick_size）
-    bids: Vec<PricePoint>,
-    /// 卖单价格点（索引 = price / tick_size）
-    asks: Vec<PricePoint>,
+    /// 买单价格点（key = tick 数量）
+    bids: HashMap<i64, PricePoint>,
+    /// 卖单价格点（key = tick 数量）
+    asks: HashMap<i64, PricePoint>,
     /// 订单存储池
     orders: Vec<Option<OrderNode<O>>>,
     /// 订单ID到存储池索引的映射
@@ -67,7 +77,7 @@ pub struct LocalLob<O: Order> {
     next_slot: usize,
 }
 
-impl<O: Order> LocalLob<O> {
+impl<O: Order> LocalLobHashMap<O> {
     /// 创建新的本地 LOB（使用默认 tick size）
     ///
     /// # 参数
@@ -75,7 +85,6 @@ impl<O: Order> LocalLob<O> {
     ///
     /// # 默认配置
     /// - tick_size: 0.01 USDT (适合 BTC/ETH 等主流币)
-    /// - max_ticks: 30,000,000 (支持价格到 300,000.00 USDT)
     /// - max_orders: 10,000 个订单
     pub fn new(symbol: Symbol) -> Self {
         Self::new_with_tick(symbol, Price::from_f64(0.01))
@@ -90,25 +99,25 @@ impl<O: Order> LocalLob<O> {
     /// # 示例
     /// ```ignore
     /// // BTC/ETH 等高价币：tick_size = 0.01
-    /// let btc_lob = LocalLob::new_with_tick(Symbol::new("BTCUSDT"), Price::from_f64(0.01));
+    /// let btc_lob = LocalLobHashMap::new_with_tick(Symbol::new("BTCUSDT"), Price::from_f64(0.01));
     ///
     /// // DOGE 等中价币：tick_size = 0.0001
-    /// let doge_lob = LocalLob::new_with_tick(Symbol::new("DOGEUSDT"), Price::from_f64(0.0001));
+    /// let doge_lob = LocalLobHashMap::new_with_tick(Symbol::new("DOGEUSDT"), Price::from_f64(0.0001));
     ///
     /// // SHIB/PEPE 等低价币：tick_size = 0.00000001
-    /// let shib_lob = LocalLob::new_with_tick(Symbol::new("SHIBUSDT"), Price::from_f64(0.00000001));
+    /// let shib_lob = LocalLobHashMap::new_with_tick(Symbol::new("SHIBUSDT"), Price::from_f64(0.00000001));
     /// ```
     pub fn new_with_tick(symbol: Symbol, tick_size: Price) -> Self {
-        Self::with_capacity(symbol, tick_size, 30_000_000, 10_000)
+        Self::with_capacity(symbol, tick_size, 10_000)
     }
 
     /// 创建指定容量的本地 LOB
-    pub fn with_capacity(symbol: Symbol, tick_size: Price, max_ticks: usize, max_orders: usize) -> Self {
+    pub fn with_capacity(symbol: Symbol, tick_size: Price, max_orders: usize) -> Self {
         Self {
             symbol,
             tick_size,
-            bids: vec![PricePoint::default(); max_ticks],
-            asks: vec![PricePoint::default(); max_ticks],
+            bids: HashMap::new(),
+            asks: HashMap::new(),
             orders: Vec::with_capacity(max_orders),
             order_index: HashMap::with_capacity(max_orders),
             bid_max: None,
@@ -122,35 +131,36 @@ impl<O: Order> LocalLob<O> {
         &self.symbol
     }
 
-    /// 将价格转换为 tick 索引
+    /// 将价格转换为 tick 数量
     #[inline]
-    fn price_to_tick_idx(&self, price: Price) -> Option<usize> {
+    fn price_to_tick(&self, price: Price) -> Option<i64> {
         if self.tick_size.raw() == 0 {
             return None;
         }
-        let tick_idx = price.raw() / self.tick_size.raw();
-        if tick_idx < 0 {
-            None
-        } else {
-            Some(tick_idx as usize)
-        }
+        Some(price.raw() / self.tick_size.raw())
+    }
+
+    /// 将 tick 数量转换为价格
+    #[inline]
+    fn tick_to_price(&self, tick: i64) -> Price {
+        Price::from_raw(tick * self.tick_size.raw())
     }
 
     /// 获取价格点的可变引用
     fn get_price_point_mut(&mut self, price: Price, side: Side) -> Option<&mut PricePoint> {
-        let tick_idx = self.price_to_tick_idx(price)?;
+        let tick = self.price_to_tick(price)?;
         match side {
-            Side::Buy => self.bids.get_mut(tick_idx),
-            Side::Sell => self.asks.get_mut(tick_idx),
+            Side::Buy => self.bids.get_mut(&tick),
+            Side::Sell => self.asks.get_mut(&tick),
         }
     }
 
     /// 获取价格点的不可变引用
     fn get_price_point(&self, price: Price, side: Side) -> Option<&PricePoint> {
-        let tick_idx = self.price_to_tick_idx(price)?;
+        let tick = self.price_to_tick(price)?;
         match side {
-            Side::Buy => self.bids.get(tick_idx),
-            Side::Sell => self.asks.get(tick_idx),
+            Side::Buy => self.bids.get(&tick),
+            Side::Sell => self.asks.get(&tick),
         }
     }
 
@@ -162,8 +172,21 @@ impl<O: Order> LocalLob<O> {
 
     /// 将订单链接到价格级别的链表尾部
     fn link_order_to_price_level(&mut self, idx: usize, price: Price, side: Side) {
+        let tick = match self.price_to_tick(price) {
+            Some(t) => t,
+            None => return,
+        };
+
+        let price_map = match side {
+            Side::Buy => &mut self.bids,
+            Side::Sell => &mut self.asks,
+        };
+
+        // 获取或创建价格点
+        let price_point = price_map.entry(tick).or_insert_with(PricePoint::default);
+
         // 获取当前链表尾部
-        let last_idx = self.get_price_point(price, side).and_then(|pp| pp.last_order_idx);
+        let last_idx = price_point.last_order_idx;
 
         // 链接到现有尾部订单
         if let Some(last_idx) = last_idx {
@@ -173,9 +196,7 @@ impl<O: Order> LocalLob<O> {
         }
 
         // 更新价格点的首尾指针
-        if let Some(price_point) = self.get_price_point_mut(price, side) {
-            price_point.push_back(idx);
-        }
+        price_point.push_back(idx);
     }
 
     /// 更新最佳买卖价缓存
@@ -196,7 +217,7 @@ impl<O: Order> LocalLob<O> {
     }
 }
 
-impl<O: Order> SymbolLob<O> for LocalLob<O> {
+impl<O: Order> SymbolLob<O> for LocalLobHashMap<O> {
     /// 匹配订单
     ///
     /// 根据 side, price, quantity 匹配所有符合条件的订单
@@ -219,17 +240,23 @@ impl<O: Order> SymbolLob<O> for LocalLob<O> {
                         return None; // 买价太低，无法匹配
                     }
 
-                    // 转换为 tick 索引进行遍历
-                    let price_tick = self.price_to_tick_idx(price)?;
-                    let ask_min_tick = self.price_to_tick_idx(ask_min)?;
+                    // 获取价格范围的 tick
+                    let price_tick = self.price_to_tick(price)?;
+                    let ask_min_tick = self.price_to_tick(ask_min)?;
 
-                    for current_tick in ask_min_tick..=price_tick {
+                    // 遍历所有存在的卖单价格点
+                    let mut ticks: Vec<i64> = self.asks.keys()
+                        .filter(|&&t| t >= ask_min_tick && t <= price_tick)
+                        .copied()
+                        .collect();
+                    ticks.sort_unstable(); // 从低到高排序
+
+                    for tick in ticks {
                         if remaining.is_zero() {
                             break;
                         }
 
-                        // 将 tick 转回价格
-                        let current_price = Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        let current_price = self.tick_to_price(tick);
                         if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
                             let mut current_idx = Some(first_idx);
 
@@ -263,17 +290,24 @@ impl<O: Order> SymbolLob<O> for LocalLob<O> {
                         return None; // 卖价太高，无法匹配
                     }
 
-                    // 转换为 tick 索引进行遍历
-                    let price_tick = self.price_to_tick_idx(price)?;
-                    let bid_max_tick = self.price_to_tick_idx(bid_max)?;
+                    // 获取价格范围的 tick
+                    let price_tick = self.price_to_tick(price)?;
+                    let bid_max_tick = self.price_to_tick(bid_max)?;
 
-                    for current_tick in (price_tick..=bid_max_tick).rev() {
+                    // 遍历所有存在的买单价格点
+                    let mut ticks: Vec<i64> = self.bids.keys()
+                        .filter(|&&t| t >= price_tick && t <= bid_max_tick)
+                        .copied()
+                        .collect();
+                    ticks.sort_unstable();
+                    ticks.reverse(); // 从高到低排序
+
+                    for tick in ticks {
                         if remaining.is_zero() {
                             break;
                         }
 
-                        // 将 tick 转回价格
-                        let current_price = Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        let current_price = self.tick_to_price(tick);
                         if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
                             let mut current_idx = Some(first_idx);
 
@@ -318,7 +352,7 @@ impl<O: Order> SymbolLob<O> for LocalLob<O> {
         if self.order_index.contains_key(&order_id) {
             return Err(RepoError::OrderAlreadyExists);
         }
-        if self.get_price_point(price, side).is_none() {
+        if self.price_to_tick(price).is_none() {
             return Err(RepoError::PriceOutOfRange);
         }
 

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
 use base_types::{Price, Quantity, Side, Symbol};
-use crate::adapter::local_lob_impl::LocalLob;
-use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, Order, SymbolLob};
+
+use crate::{
+    adapter::local_lob_impl::LocalLob,
+    core::symbol_lob_repo::{MultiSymbolLobRepo, Order, SymbolLob}
+};
 
 /// 单一 LOB 仓储
 ///
@@ -28,13 +31,6 @@ impl<O: Order> StandaloneLobRepo<O> {
         }
     }
 
-    /// 从 HashMap 直接创建
-    #[allow(dead_code)]
-    pub fn from_map(lobs: HashMap<Symbol, LocalLob<O>>) -> Self {
-        Self {
-            lobs
-        }
-    }
 
     /// 匹配订单
     ///
@@ -50,9 +46,7 @@ impl<O: Order> StandaloneLobRepo<O> {
     /// - `Some(Vec<&O>)`: 匹配到的订单列表
     /// - `None`: 找不到对应的 LOB 或无法匹配
     #[allow(dead_code)]
-    pub fn match_orders(
-        &self, symbol: Symbol, side: Side, price: Price, quantity: Quantity
-    ) -> Option<Vec<&O>> {
+    pub fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
         // 使用 trait 方法
         MultiSymbolLobRepo::match_orders(self, symbol, side, price, quantity)
     }
@@ -60,9 +54,7 @@ impl<O: Order> StandaloneLobRepo<O> {
 
 /// 实现 MultiLobRepo trait
 impl<O: Order> MultiSymbolLobRepo<O> for StandaloneLobRepo<O> {
-    fn match_orders(
-        &self, symbol: Symbol, side: Side, price: Price, quantity: Quantity
-    ) -> Option<Vec<&O>> {
+    fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
         // O(1) 查找对应的 LOB
         let lob = self.lobs.get(&symbol)?;
 
@@ -80,9 +72,7 @@ impl<O: Order> MultiSymbolLobRepo<O> for StandaloneLobRepo<O> {
         lob.best_ask()
     }
 
-    fn contains_symbol(&self, symbol: &Symbol) -> bool {
-        self.lobs.contains_key(symbol)
-    }
+    fn contains_symbol(&self, symbol: &Symbol) -> bool { self.lobs.contains_key(symbol) }
 }
 
 #[cfg(test)]
@@ -100,25 +90,15 @@ mod tests {
     }
 
     impl Order for MockOrder {
-        fn order_id(&self) -> base_types::OrderId {
-            self.id
-        }
+        fn order_id(&self) -> base_types::OrderId { self.id }
 
-        fn price(&self) -> Price {
-            self.price
-        }
+        fn price(&self) -> Price { self.price }
 
-        fn quantity(&self) -> Quantity {
-            self.quantity
-        }
+        fn quantity(&self) -> Quantity { self.quantity }
 
-        fn side(&self) -> Side {
-            self.side
-        }
+        fn side(&self) -> Side { self.side }
 
-        fn symbol(&self) -> Symbol {
-            self.symbol
-        }
+        fn symbol(&self) -> Symbol { self.symbol }
     }
 
     #[test]
@@ -195,22 +175,6 @@ mod tests {
         assert_ne!(symbol1, symbol3, "不同字符串创建的 Symbol 应该不相等");
     }
 
-    #[test]
-    fn test_from_map_constructor() {
-        // 测试 from_map 构造函数
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let eth_symbol = Symbol::new("ETHUSDT");
-
-        let mut map = HashMap::new();
-        map.insert(btc_symbol, LocalLob::<MockOrder>::new(btc_symbol));
-        map.insert(eth_symbol, LocalLob::<MockOrder>::new(eth_symbol));
-
-        let repo = StandaloneLobRepo::from_map(map);
-
-        assert_eq!(repo.lobs.len(), 2, "应该有两个 LOB");
-        assert!(repo.lobs.contains_key(&btc_symbol), "应该包含 BTCUSDT");
-        assert!(repo.lobs.contains_key(&eth_symbol), "应该包含 ETHUSDT");
-    }
 
     #[test]
     fn test_hashmap_performance() {
@@ -227,17 +191,26 @@ mod tests {
         }
     }
 
-    /// 注意：以下测试需要 Lob::match_orders 实现后才能运行
-    /// 目前会 panic，因为调用了 todo!()
     #[test]
-    #[should_panic(expected = "not yet implemented")]
-    fn test_match_orders_integration_panics_with_todo() {
+    fn test_match_orders_integration() {
         let btc_symbol = Symbol::new("BTCUSDT");
-        let lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+
+        // 添加一些卖单
+        let sell_order = MockOrder {
+            id: 1,
+            symbol: btc_symbol,
+            price: Price::from_raw(50100),
+            quantity: Quantity::from_raw(100),
+            side: Side::Sell
+        };
+        lob.add_order(sell_order).unwrap();
+
         let repo = StandaloneLobRepo::new(vec![lob]);
 
-        // 这会 panic，因为 Lob::match_orders 是 todo!()
-        let _ = repo.match_orders(btc_symbol, Side::Buy, Price::from_f64(50000.0), Quantity::from_f64(1.0));
+        // 测试匹配订单
+        let matched = repo.match_orders(btc_symbol, Side::Buy, Price::from_raw(50100), Quantity::from_raw(50));
+        assert!(matched.is_some());
     }
 
     #[test]
@@ -275,31 +248,53 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
     fn test_multi_lob_repo_trait_best_bid_ask() {
         let btc_symbol = Symbol::new("BTCUSDT");
-        let lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+
+        // 添加订单
+        let buy_order = MockOrder {
+            id: 1,
+            symbol: btc_symbol,
+            price: Price::from_raw(50000),
+            quantity: Quantity::from_raw(100),
+            side: Side::Buy
+        };
+        lob.add_order(buy_order).unwrap();
+
         let repo = StandaloneLobRepo::new(vec![lob]);
 
         // 使用 trait 方法
         let repo_trait: &dyn MultiSymbolLobRepo<MockOrder> = &repo;
 
-        // 这会 panic，因为 Lob::best_bid 是 todo!()
-        let _ = repo_trait.best_bid(btc_symbol);
+        // 测试 best_bid
+        let best_bid = repo_trait.best_bid(btc_symbol);
+        assert_eq!(best_bid, Some(Price::from_raw(50000)));
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
-    fn test_multi_lob_repo_trait_match_orders_panics() {
+    fn test_multi_lob_repo_trait_match_orders() {
         let btc_symbol = Symbol::new("BTCUSDT");
-        let lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
+
+        // 添加卖单
+        let sell_order = MockOrder {
+            id: 1,
+            symbol: btc_symbol,
+            price: Price::from_raw(50100),
+            quantity: Quantity::from_raw(100),
+            side: Side::Sell
+        };
+        lob.add_order(sell_order).unwrap();
+
         let repo = StandaloneLobRepo::new(vec![lob]);
 
         // 使用 trait 方法
         let repo_trait: &dyn MultiSymbolLobRepo<MockOrder> = &repo;
 
-        // 这会 panic，因为 Lob::match_orders 是 todo!()
-        let _ = repo_trait.match_orders(btc_symbol, Side::Buy, Price::from_f64(50000.0), Quantity::from_f64(1.0));
+        // 测试匹配订单
+        let matched = repo_trait.match_orders(btc_symbol, Side::Buy, Price::from_raw(50100), Quantity::from_raw(50));
+        assert!(matched.is_some());
     }
 
     #[test]
@@ -321,4 +316,3 @@ mod tests {
         assert!(!repo_trait.contains_symbol(&Symbol::new("XRPUSDT")));
     }
 }
-

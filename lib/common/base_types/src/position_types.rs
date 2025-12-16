@@ -81,12 +81,17 @@ impl fmt::Display for PositionSide {
     }
 }
 
-/// 价格（内部使用 i64 存储，假设 8 位小数精度）
+/// 价格（内部使用 i64 存储，8 位小数精度）
+///
+/// 加密货币标准：
+/// - 8 位小数精度（与 Bitcoin Satoshi 一致）
+/// - 例如：50000.12345678 USDT
+/// - 最小单位：0.00000001
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Price(i64);
 
 impl Price {
-    const DECIMALS: i64 = 100_000_000; // 8 位小数
+    const DECIMALS: i64 = 100_000_000; // 8 位小数（加密货币标准）
 
     pub fn from_raw(raw: i64) -> Self {
         Self(raw)

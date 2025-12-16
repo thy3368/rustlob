@@ -1259,6 +1259,8 @@ name = "lob_repo"
 version = "0.1.0"
 dependencies = [
  "base_types",
+ "criterion",
+ "rand",
 ]
 
 [[package]]
