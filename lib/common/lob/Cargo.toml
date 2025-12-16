@@ -1,9 +1,9 @@
 [package]
-name = "account"
+name = "lob_repo"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
 [dependencies]
-base_types = { path = "../../../lib/common/base_types" }
+base_types = { path = "../base_types" }

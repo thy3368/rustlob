@@ -1,15 +1,36 @@
-use account::{OrderId, Price, Quantity, Side, Symbol};
-
-use crate::proc::prep_types::InternalOrder;
+use base_types::{OrderId, Price, Quantity, Side, Symbol};
 
 /// 仓储接口定义
-// use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Price, Quantity, Side};
+
+/// 订单抽象 trait
+///
+/// 定义订单的核心行为，遵循依赖倒置原则
+/// 业务层依赖此抽象接口，而非具体的 InternalOrder 实现
+pub trait Order: Send + Sync {
+    /// 获取订单ID
+    fn order_id(&self) -> OrderId;
+
+    /// 获取价格
+    fn price(&self) -> Price;
+
+    /// 获取数量
+    fn quantity(&self) -> Quantity;
+
+    /// 获取方向
+    fn side(&self) -> Side;
+
+    /// 获取交易对
+    fn symbol(&self) -> Symbol;
+}
 
 /// 订单仓储接口
 ///
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
-pub trait SymbolLobRepo {
+///
+/// # 泛型参数
+/// - `O`: 实现了 Order trait 的订单类型
+pub trait SymbolLob<O: Order> {
     /// 匹配订单，返回匹配到的订单引用列表
     ///
     /// # 参数
@@ -18,25 +39,45 @@ pub trait SymbolLobRepo {
     /// - `quantity`: 需要匹配的数量
     ///
     /// # 返回
-    /// - `Some(Vec<&InternalOrder>)`: 匹配到的订单列表（总数量 >= quantity）
+    /// - `Some(Vec<&O>)`: 匹配到的订单列表（总数量 >= quantity）
     /// - `None`: 无法匹配
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&InternalOrder>>;
-
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>>;
 
     /// 添加订单到仓储
-    fn add_order(&mut self, order_id: OrderId, entry: InternalOrder, side: Side, price: Price)
-        -> Result<(), RepoError>;
+    ///
+    /// # 参数
+    /// - `order`: 实现了 Order trait 的订单对象
+    ///
+    /// # 返回
+    /// - `Ok(())`: 成功添加订单
+    /// - `Err(RepoError::OrderAlreadyExists)`: 订单ID已存在
+    /// - `Err(RepoError::PriceOutOfRange)`: 价格超出仓储支持范围
+    /// - `Err(RepoError::CapacityExceeded)`: 订单容量已满
+    ///
+    /// # 实现说明
+    /// 实现层应从订单对象中提取所需信息：
+    /// - `order.order_id()` - 订单ID
+    /// - `order.side()` - 订单方向
+    /// - `order.price()` - 价格
+    fn add_order(&mut self, order: O) -> Result<(), RepoError>;
 
     /// 取消订单
+    ///
+    /// # 参数
+    /// - `order_id`: 要取消的订单ID
+    ///
+    /// # 返回
+    /// - `true`: 成功取消订单
+    /// - `false`: 订单不存在
     fn remove_order(&mut self, order_id: OrderId) -> bool;
 
     // === 核心读操作 ===
 
     /// 根据订单ID查找订单
-    fn find_order(&self, order_id: OrderId) -> Option<&InternalOrder>;
+    fn find_order(&self, order_id: OrderId) -> Option<&O>;
 
     /// 根据订单ID查找订单（可变引用）
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut InternalOrder>;
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut O>;
 
 
     // === 市场数据查询 ===
@@ -94,7 +135,10 @@ impl std::error::Error for RepoError {}
 ///
 /// 定义多个交易对的 LOB 管理和订单匹配操作
 /// 遵循 Clean Architecture 的依赖倒置原则，业务层依赖此抽象接口
-pub trait MultiSymbolLobRepo: Send + Sync {
+///
+/// # 泛型参数
+/// - `O`: 实现了 Order trait 的订单类型
+pub trait MultiSymbolLobRepo<O: Order>: Send + Sync {
     /// 匹配订单
     ///
     /// 根据交易对 symbol 查找对应的 LOB 并进行订单匹配
@@ -106,14 +150,14 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `quantity`: 需要匹配的数量
     ///
     /// # 返回
-    /// - `Some(Vec<&InternalOrder>)`: 匹配到的订单列表
+    /// - `Some(Vec<&O>)`: 匹配到的订单列表
     /// - `None`: 找不到对应的 LOB 或无法匹配足够数量的订单
     ///
     /// # 性能要求
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
     fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity)
-                    -> Option<Vec<&InternalOrder>>;
+                    -> Option<Vec<&O>>;
 
     /// 获取指定交易对的最佳买价
     ///
