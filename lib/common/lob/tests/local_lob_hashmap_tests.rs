@@ -174,7 +174,7 @@ fn test_remove_order_hashmap() {
 #[test]
 fn test_last_price_hashmap() {
     let symbol = Symbol::new("BTCUSDT");
-    let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
+    let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 初始状态
     assert_eq!(lob.last_price(), None);
@@ -192,7 +192,7 @@ fn test_last_price_hashmap() {
 fn test_pepe_ultra_low_price() {
     let symbol = Symbol::new("PEPEUSDT");
     // PEPE 使用最小 tick size
-    let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.00000001));
+    let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.00000001));
 
     // 添加订单 (0.000000123 USDT)
     let order = MockOrder {
@@ -210,7 +210,7 @@ fn test_pepe_ultra_low_price() {
 #[test]
 fn test_hashmap_memory_efficiency() {
     let symbol = Symbol::new("BTCUSDT");
-    let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
+    let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加稀疏分布的订单（不连续的价格）
     let prices = vec![10000.0, 20000.0, 30000.0, 50000.0, 100000.0];
