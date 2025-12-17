@@ -1,26 +1,34 @@
 pub mod diff;
 
-// 重新导出 derive 宏
-pub use diff_derive::{Diff, Replayable};
-
 // 重新导出核心类型，方便使用
 pub use diff::diff_types::{
     // 统一追踪接口
     track,
     track_update,
+    track_update_with,
+    track_batch,
+    track_batch_with,
     Operation,
-    // 便捷追踪函数（向后兼容）
+    // 便捷追踪函数
     track_create,
     track_delete,
+    // 核心数据结构
     ChangeLogEntry,
-    // 核心枚举和数据结构
     ChangeType,
-    Diff as DiffTrait,
-    // 核心 trait
-    Entity,
-    EntitySnapshot,
     FieldChange,
-    Replayable as ReplayableTrait,
-    Trackable,
     TrackingResult,
+    EntitySnapshot,
+    // 核心 trait（Entity 现在包含了 Diff, Replayable, Trackable 的所有功能）
+    Entity,
+    EntityError,
+    // 时间戳和序列号提供者
+    TimestampProvider,
+    SystemTimestampProvider,
+    CachedTimestampProvider,
+    SequenceGenerator,
+    DefaultSequenceGenerator,
+    AtomicSequenceGenerator,
 };
+
+// Entity derive 宏从 entity_derive crate 导入
+// 使用方法: #[derive(entity_derive::Entity)]
