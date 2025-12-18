@@ -8,15 +8,15 @@ use lob_repo::core::repo_snapshot_support::{RepoSnapshot, EventReplay};
 #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
 struct MockOrder {
     id: u64,
-    #[replay(skip)]
+    // #[replay(skip)]
     symbol: Symbol,
-    #[replay(skip)]
+    // #[replay(skip)]
     price: Price,
-    #[replay(skip)]
+    // #[replay(skip)]
     quantity: Quantity,
-    #[replay(skip)]
+    // #[replay(skip)]
     filled_quantity: Quantity,
-    #[replay(skip)]
+    // #[replay(skip)]
     side: Side,
 }
 

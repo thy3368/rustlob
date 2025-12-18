@@ -60,6 +60,12 @@ impl fmt::Display for Symbol {
     }
 }
 
+impl Default for Symbol {
+    fn default() -> Self {
+        Self([0u8; 16])
+    }
+}
+
 /// 持仓方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PositionSide {
@@ -132,6 +138,12 @@ impl std::ops::Sub for Price {
     }
 }
 
+impl Default for Price {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
 /// 数量（内部使用 i64 存储，假设 8 位小数精度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Quantity(i64);
@@ -161,6 +173,12 @@ impl Quantity {
 
     pub fn is_zero(&self) -> bool {
         self.0 == 0
+    }
+}
+
+impl Default for Quantity {
+    fn default() -> Self {
+        Self(0)
     }
 }
 

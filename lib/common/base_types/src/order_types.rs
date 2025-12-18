@@ -25,3 +25,9 @@ impl Side {
         }
     }
 }
+
+impl Default for Side {
+    fn default() -> Self {
+        Side::Buy
+    }
+}

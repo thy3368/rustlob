@@ -3,13 +3,23 @@ use lob_repo::adapter::local_lob_hashmap_impl::LocalLobHashMap;
 use lob_repo::core::symbol_lob_repo::{Order, SymbolLob};
 
 // 创建模拟订单用于测试
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, entity_derive::Entity)]
 struct MockOrder {
     id: u64,
+    #[created(skip)]
+    #[replay(skip)]
     symbol: Symbol,
+    #[created(skip)]
+    #[replay(skip)]
     price: Price,
+    #[created(skip)]
+    #[replay(skip)]
     quantity: Quantity,
+    #[created(skip)]
+    #[replay(skip)]
     filled_quantity: Quantity,
+    #[created(skip)]
+    #[replay(skip)]
     side: Side,
 }
 
