@@ -1,6 +1,7 @@
 //! Entity derive 宏测试
 
 use diff::Entity;
+use diff::{extract_fields_from_created_event, reconstruct_from_created, ChangeLogEntry, ChangeType, FieldChange, EntityError};
 
 /// 测试订单实体 - 使用 Entity derive 宏
 #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
@@ -222,3 +223,425 @@ fn test_entity_derive_skip_fields() {
     let changes = old_order.diff(&new_order);
     assert_eq!(changes.len(), 0);
 }
+
+// ==================== Created 事件重构测试 ====================
+
+#[test]
+fn test_create_event_from_track() {
+    use diff::ChangeType;
+
+    let order = Order {
+        id: 1,
+        symbol: "BTCUSDT".to_string(),
+        price: 50000.0,
+        quantity: 10,
+        status: "pending".to_string(),
+    };
+
+    // 测试从 track_create 生成的 Created 事件
+    let entry = order.track_create().unwrap();
+
+    // 验证事件格式
+    assert_eq!(entry.entity_id, "1");
+    assert_eq!(entry.entity_type, "Order");
+
+    // 验证是 Created 类型
+    match &entry.change_type {
+        ChangeType::Created { fields } => {
+            // Created 事件目前包含空字段列表（实际字段通过其他方式传递）
+            assert_eq!(fields.len(), 0);
+        }
+        _ => panic!("Expected Created change type"),
+    }
+}
+
+#[test]
+fn test_reconstruct_from_created_event_with_fields() {
+    use diff::{ChangeLogEntry, ChangeType, FieldChange};
+
+    // === 场景：从 Created 事件重构实体 ===
+    // Created 事件包含所有初始字段值
+    let created_event = ChangeLogEntry::new(
+        "2",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "2"),
+                FieldChange::new("symbol", "", "\"ETHUSDT\""),
+                FieldChange::new("price", "", "3000.0"),
+                FieldChange::new("quantity", "", "100"),
+                FieldChange::new("status", "", "\"new\""),
+            ],
+        },
+        2000,
+        1,
+    );
+
+    // === 从 Created 事件提取字段并重构实体 ===
+    // 这演示了模式：ChangeLogEntry (with Created) → extract fields → new instance
+    if let ChangeType::Created { fields } = &created_event.change_type {
+        let mut order_data: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        // 提取字段值
+        for field in fields {
+            order_data.insert(field.field_name.to_string(), field.new_value.clone());
+        }
+
+        // 从提取的字段重构实体
+        let reconstructed_order = Order {
+            id: order_data
+                .get("id")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(0),
+            symbol: order_data
+                .get("symbol")
+                .map(|v| {
+                    // String 字段去掉引号
+                    if v.starts_with('\"') && v.ends_with('\"') {
+                        v[1..v.len() - 1].to_string()
+                    } else {
+                        v.clone()
+                    }
+                })
+                .unwrap_or_default(),
+            price: order_data
+                .get("price")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0),
+            quantity: order_data
+                .get("quantity")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(0),
+            status: order_data
+                .get("status")
+                .map(|v| {
+                    // String 字段去掉引号
+                    if v.starts_with('\"') && v.ends_with('\"') {
+                        v[1..v.len() - 1].to_string()
+                    } else {
+                        v.clone()
+                    }
+                })
+                .unwrap_or_default(),
+        };
+
+        // 验证重构的实体
+        assert_eq!(reconstructed_order.id, 2);
+        assert_eq!(reconstructed_order.symbol, "ETHUSDT");
+        assert_eq!(reconstructed_order.price, 3000.0);
+        assert_eq!(reconstructed_order.quantity, 100);
+        assert_eq!(reconstructed_order.status, "new");
+    } else {
+        panic!("Expected Created change type");
+    }
+}
+
+#[test]
+fn test_event_replay_sequence_created_to_updated_to_deleted() {
+    use diff::{ChangeLogEntry, ChangeType, FieldChange};
+
+    // === 演示完整的事件序列：Created → Updated → Deleted ===
+    // 第一步：创建新实体（从 Created 事件的字段值）
+    let mut order = Order {
+        id: 3,
+        symbol: "ADAUSDT".to_string(),
+        price: 0.5,
+        quantity: 1000,
+        status: "pending".to_string(),
+    };
+
+    // 验证初始状态
+    assert_eq!(order.id, 3);
+    assert_eq!(order.status, "pending");
+
+    // 第二步：更新事件（修改实体）
+    let updated_event = ChangeLogEntry::new(
+        "3",
+        "Order",
+        ChangeType::Updated {
+            changed_fields: vec![
+                FieldChange::new("price", "0.5", "0.6"),
+                FieldChange::new("status", "\"pending\"", "\"confirmed\""),
+            ],
+        },
+        2000,
+        2,
+    );
+
+    // 应用更新事件
+    order.replay(&updated_event).unwrap();
+    assert_eq!(order.price, 0.6);
+    assert_eq!(order.status, "confirmed");
+
+    // 第三步：删除事件
+    let deleted_event = ChangeLogEntry::new(
+        "3",
+        "Order",
+        ChangeType::Deleted,
+        3000,
+        3,
+    );
+
+    // 删除事件不能在已删除的实体上回放
+    let delete_result = order.replay(&deleted_event);
+    assert!(delete_result.is_err()); // CannotReplayOnDeleted
+
+    // 但删除事件本身是有效的，表示实体已被删除
+    match &deleted_event.change_type {
+        ChangeType::Deleted => {
+            // 这是有效的删除标记
+            assert!(true);
+        }
+        _ => panic!("Expected Deleted change type"),
+    }
+}
+
+#[test]
+fn test_created_event_field_values_format() {
+    use diff::{ChangeLogEntry, ChangeType, FieldChange};
+
+    // === 验证 Created 事件中字段值的格式 ===
+    // Created 事件中每个 FieldChange 应该有：
+    // - old_value: 空（因为是新创建）
+    // - new_value: 初始值
+
+    let created_event = ChangeLogEntry::new(
+        "4",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                // 数值类型：直接序列化
+                FieldChange::new("id", "", "4"),
+                FieldChange::new("quantity", "", "500"),
+                FieldChange::new("price", "", "100.5"),
+                // 字符串类型：Debug 格式（带引号）
+                FieldChange::new("symbol", "", "\"BNBUSDT\""),
+                FieldChange::new("status", "", "\"active\""),
+            ],
+        },
+        4000,
+        4,
+    );
+
+    if let ChangeType::Created { fields } = &created_event.change_type {
+        // 验证字段格式
+        for field in fields {
+            // Created 事件中，old_value 总是空字符串
+            assert_eq!(field.old_value, "");
+
+            // new_value 包含初始值
+            assert!(!field.new_value.is_empty());
+
+            // 字符串字段应该有引号
+            if field.field_name == "symbol" || field.field_name == "status" {
+                assert!(field.new_value.starts_with('\"'));
+                assert!(field.new_value.ends_with('\"'));
+            }
+
+            // 数值字段不应该有引号
+            if field.field_name == "id" || field.field_name == "quantity"
+                || field.field_name == "price"
+            {
+                assert!(!field.new_value.starts_with('\"'));
+            }
+        }
+    } else {
+        panic!("Expected Created change type");
+    }
+}
+
+// ==================== 使用 Created 事件重构 API 的测试 ====================
+
+#[test]
+fn test_reconstruct_order_from_created_event() {
+    // === 演示完整的重构流程：Created Event + Type → Order Instance ===
+
+    // 第一步：创建包含字段信息的 Created 事件
+    let created_event = ChangeLogEntry::new(
+        "100",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "100"),
+                FieldChange::new("symbol", "", "\"ETHUSDT\""),
+                FieldChange::new("price", "", "3000.5"),
+                FieldChange::new("quantity", "", "50"),
+                FieldChange::new("status", "", "\"pending\""),
+            ],
+        },
+        5000,
+        100,
+    );
+
+    // 第二步：从事件中提取字段映射表
+    let fields = extract_fields_from_created_event(&created_event).unwrap();
+
+    // 验证字段提取
+    assert_eq!(fields.get("id").map(|s| s.as_str()), Some("100"));
+    assert_eq!(
+        fields.get("symbol").map(|s| s.as_str()),
+        Some("\"ETHUSDT\"")
+    );
+    assert_eq!(
+        fields.get("price").map(|s| s.as_str()),
+        Some("3000.5")
+    );
+    assert_eq!(
+        fields.get("quantity").map(|s| s.as_str()),
+        Some("50")
+    );
+    assert_eq!(fields.get("status").map(|s| s.as_str()), Some("\"pending\""));
+
+    // 第三步：使用闭包从字段映射重构 Order 实例
+    let reconstructed = reconstruct_from_created::<Order, _>(&created_event, |fields| {
+        let id = fields
+            .get("id")
+            .and_then(|v| v.parse::<u64>().ok())
+            .ok_or(EntityError::Custom("missing id".to_string()))?;
+
+        let symbol = fields
+            .get("symbol")
+            .map(|v| {
+                if v.starts_with('\"') && v.ends_with('\"') {
+                    v[1..v.len() - 1].to_string()
+                } else {
+                    v.clone()
+                }
+            })
+            .ok_or(EntityError::Custom("missing symbol".to_string()))?;
+
+        let price = fields
+            .get("price")
+            .and_then(|v| v.parse::<f64>().ok())
+            .ok_or(EntityError::Custom("missing price".to_string()))?;
+
+        let quantity = fields
+            .get("quantity")
+            .and_then(|v| v.parse::<u64>().ok())
+            .ok_or(EntityError::Custom("missing quantity".to_string()))?;
+
+        let status = fields
+            .get("status")
+            .map(|v| {
+                if v.starts_with('\"') && v.ends_with('\"') {
+                    v[1..v.len() - 1].to_string()
+                } else {
+                    v.clone()
+                }
+            })
+            .ok_or(EntityError::Custom("missing status".to_string()))?;
+
+        Ok(Order {
+            id,
+            symbol,
+            price,
+            quantity,
+            status,
+        })
+    })
+    .unwrap();
+
+    // 第四步：验证重构的实体
+    assert_eq!(reconstructed.id, 100);
+    assert_eq!(reconstructed.symbol, "ETHUSDT");
+    assert_eq!(reconstructed.price, 3000.5);
+    assert_eq!(reconstructed.quantity, 50);
+    assert_eq!(reconstructed.status, "pending");
+}
+
+#[test]
+fn test_created_event_input_output_pattern() {
+    // === 演示核心模式：Input (Created Event + Type) → Output (Instance) ===
+
+    // Input: ChangeLogEntry with Created type
+    let input_event = ChangeLogEntry::new(
+        "200",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "200"),
+                FieldChange::new("symbol", "", "\"BTCUSDT\""),
+                FieldChange::new("price", "", "60000.75"),
+                FieldChange::new("quantity", "", "0.5"),
+                FieldChange::new("status", "", "\"active\""),
+            ],
+        },
+        6000,
+        200,
+    );
+
+    // Process: Type information + Constructor logic
+    let output_order = reconstruct_from_created::<Order, _>(&input_event, |fields| {
+        // 自定义构造逻辑
+        Ok(Order {
+            id: fields
+                .get("id")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+            symbol: fields
+                .get("symbol")
+                .map(|v| v.trim_matches('\"').to_string())
+                .unwrap_or_default(),
+            price: fields
+                .get("price")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0),
+            quantity: fields
+                .get("quantity")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+            status: fields
+                .get("status")
+                .map(|v| v.trim_matches('\"').to_string())
+                .unwrap_or_default(),
+        })
+    })
+    .unwrap();
+
+    // Output: New instance of Order type
+    assert_eq!(output_order.id, 200);
+    assert_eq!(output_order.symbol, "BTCUSDT");
+    assert_eq!(output_order.price, 60000.75);
+    assert_eq!(output_order.quantity, 0);  // quantity 是 u64，0.5 被截断为 0
+    assert_eq!(output_order.status, "active");
+}
+
+#[test]
+fn test_extract_fields_from_various_types() {
+    // 测试从 Created 事件提取各种类型的字段
+
+    let event = ChangeLogEntry::new(
+        "5",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                // 整数
+                FieldChange::new("id", "", "999"),
+                FieldChange::new("quantity", "", "1000"),
+                // 浮点数
+                FieldChange::new("price", "", "99.99"),
+                // 字符串（带引号）
+                FieldChange::new("symbol", "", "\"XYZABC\""),
+                FieldChange::new("status", "", "\"completed\""),
+            ],
+        },
+        7000,
+        5,
+    );
+
+    let fields = extract_fields_from_created_event(&event).unwrap();
+
+    // 验证各种类型的字段
+    // 整数字段
+    assert_eq!(fields.get("id").unwrap(), "999");
+    assert_eq!(fields.get("quantity").unwrap(), "1000");
+
+    // 浮点数字段
+    assert_eq!(fields.get("price").unwrap(), "99.99");
+
+    // 字符串字段（保留引号，需要手动处理）
+    assert_eq!(fields.get("symbol").unwrap(), "\"XYZABC\"");
+    assert_eq!(fields.get("status").unwrap(), "\"completed\"");
+}
+

@@ -229,7 +229,7 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
                     diff::ChangeType::Deleted => {
                         Err(diff::EntityError::CannotReplayOnDeleted)
                     }
-                    diff::ChangeType::Created => Ok(())
+                    diff::ChangeType::Created { fields: _ } => Ok(())
                 }
             }
         }

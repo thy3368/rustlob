@@ -80,13 +80,18 @@ mod tests {
     use super::*;
 
     // 创建一个模拟的 Order 实现用于测试
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, entity_derive::Entity)]
     struct MockOrder {
         id: u64,
+        #[replay(skip)]
         symbol: Symbol,
+        #[replay(skip)]
         price: Price,
+        #[replay(skip)]
         quantity: Quantity,
+        #[replay(skip)]
         filled_quantity: Quantity,
+        #[replay(skip)]
         side: Side
     }
 

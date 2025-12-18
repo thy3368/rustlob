@@ -1,4 +1,5 @@
 use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use diff::Entity;
 
 /// 仓储接口定义
 
@@ -6,7 +7,9 @@ use base_types::{OrderId, Price, Quantity, Side, Symbol};
 ///
 /// 定义订单的核心行为，遵循依赖倒置原则
 /// 业务层依赖此抽象接口，而非具体的 InternalOrder 实现
-pub trait Order: Send + Sync {
+///
+/// Order trait 继承 Entity trait，支持完整的事件溯源和审计能力
+pub trait Order: Entity + Send + Sync {
     /// 获取订单ID
     fn order_id(&self) -> OrderId;
 
@@ -32,6 +35,50 @@ pub trait Order: Send + Sync {
 
     /// 获取交易对
     fn symbol(&self) -> Symbol;
+}
+
+/// LOB 快照数据
+///
+/// 用于保存 LOB 某个时间点的完整状态，支持事件溯源和状态重建
+#[derive(Debug, Clone)]
+pub struct LobSnapshot {
+    /// 交易对符号
+    pub symbol: Symbol,
+    /// 快照时间戳（纳秒）
+    pub timestamp: u64,
+    /// 快照序列号
+    pub sequence: u64,
+    /// 序列化的 LOB 状态数据
+    pub data: Vec<u8>,
+    /// 最佳买价（快照时）
+    pub best_bid: Option<Price>,
+    /// 最佳卖价（快照时）
+    pub best_ask: Option<Price>,
+    /// 最后成交价（快照时）
+    pub last_price: Option<Price>,
+}
+
+impl LobSnapshot {
+    /// 创建 LOB 快照
+    pub fn new(
+        symbol: Symbol,
+        timestamp: u64,
+        sequence: u64,
+        data: Vec<u8>,
+        best_bid: Option<Price>,
+        best_ask: Option<Price>,
+        last_price: Option<Price>,
+    ) -> Self {
+        Self {
+            symbol,
+            timestamp,
+            sequence,
+            data,
+            best_bid,
+            best_ask,
+            last_price,
+        }
+    }
 }
 
 /// 订单仓储接口
@@ -117,22 +164,7 @@ pub trait SymbolLob<O: Order> {
     /// # 说明
     /// 此方法通常由撮合引擎在成交发生后调用，用于更新市场数据
     fn update_last_price(&mut self, price: Price);
-
-
-    // // === 事件溯源 ===
-    //
-    // /// 重放事件列表，将事件应用到仓储状态
-    // ///
-    // /// # 参数
-    // /// - `events`: 事件列表（按event_id顺序）
-    // ///
-    // /// # 返回
-    // /// - `Ok(())`: 成功应用所有事件
-    // /// - `Err(RepositoryError)`: 应用事件失败
-    // fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepoError>;
 }
-
-/// 仓储错误类型
 
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +176,18 @@ pub enum RepoError {
     /// 订单未找到
     OrderNotFound,
     /// 价格超出范围
-    PriceOutOfRange
+    PriceOutOfRange,
+    /// 不支持快照功能
+    SnapshotNotSupported,
+    /// 反序列化失败
+    DeserializationFailed(String),
+    /// 交易对不匹配
+    SymbolMismatch {
+        expected: String,
+        actual: String,
+    },
+    /// 序列化失败
+    SerializationFailed(String),
 }
 
 impl std::fmt::Display for RepoError {
@@ -153,7 +196,13 @@ impl std::fmt::Display for RepoError {
             RepoError::CapacityExceeded => write!(f, "订单容量已满"),
             RepoError::OrderAlreadyExists => write!(f, "订单已存在"),
             RepoError::OrderNotFound => write!(f, "订单未找到"),
-            RepoError::PriceOutOfRange => write!(f, "价格超出范围")
+            RepoError::PriceOutOfRange => write!(f, "价格超出范围"),
+            RepoError::SnapshotNotSupported => write!(f, "不支持快照功能"),
+            RepoError::DeserializationFailed(msg) => write!(f, "反序列化失败: {}", msg),
+            RepoError::SymbolMismatch { expected, actual } => {
+                write!(f, "交易对不匹配: 期望 {}, 实际 {}", expected, actual)
+            }
+            RepoError::SerializationFailed(msg) => write!(f, "序列化失败: {}", msg),
         }
     }
 }

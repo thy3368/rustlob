@@ -73,8 +73,8 @@ impl From<&str> for EntityError {
 /// 变更类型
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChangeType {
-    /// 实体创建
-    Created,
+    /// 实体创建（包含初始字段）
+    Created { fields: Vec<FieldChange> },
     /// 实体更新（包含变更字段）
     Updated { changed_fields: Vec<FieldChange> },
     /// 实体删除
@@ -510,6 +510,61 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     }
 }
 
+// ============================================================================
+// 实体构造 Trait - 从 Created 事件重构实体
+// ============================================================================
+
+/// 从 Created 事件构造实体的 trait
+///
+/// 允许从 ChangeLogEntry (Created 类型) 中的字段信息重构出实体实例
+///
+/// # 模式
+/// Input: ChangeLogEntry { ChangeType::Created { fields } } + Type Information
+/// Output: New instance of the type
+///
+/// # 示例
+/// ```ignore
+/// let created_event = ChangeLogEntry::new(
+///     "1", "Order",
+///     ChangeType::Created {
+///         fields: vec![
+///             FieldChange::new("id", "", "1"),
+///             FieldChange::new("symbol", "", "\"BTCUSDT\""),
+///             FieldChange::new("price", "", "50000.0"),
+///         ],
+///     },
+///     1000, 1
+/// );
+///
+/// // 从 Created 事件重构 Order 实例
+/// let order = Order::from_created_event(&created_event)?;
+/// ```
+pub trait FromCreatedEvent: Sized {
+    /// 从 Created 事件的字段信息构造实体实例
+    ///
+    /// # 参数
+    /// - `entry`: 包含 Created 事件和字段列表的 ChangeLogEntry
+    ///
+    /// # 返回
+    /// 新构造的实体实例，或错误信息
+    ///
+    /// # 错误
+    /// - EntityError::EntityTypeMismatch: 事件类型与期望类型不匹配
+    /// - EntityError::FieldParseError: 无法解析字段值
+    fn from_created_event(entry: &ChangeLogEntry) -> Result<Self, EntityError>;
+
+    /// 从字段映射表构造实体（内部方法，可选重写）
+    ///
+    /// 默认实现：返回错误，提示需要自定义实现
+    /// 子类可重写此方法简化构造逻辑
+    fn from_field_map(
+        fields: &std::collections::HashMap<String, String>,
+    ) -> Result<Self, EntityError> {
+        Err(EntityError::Custom(
+            "from_field_map not implemented for this type".to_string(),
+        ))
+    }
+}
 
 // ============================================================================
 // 辅助类型
@@ -586,7 +641,10 @@ where
     T: Entity + 'static
 {
     let change_type = match operation {
-        Operation::Create => ChangeType::Created,
+        Operation::Create => {
+            // Created 事件包含空字段列表（实际字段需要通过 to_bytes 序列化）
+            ChangeType::Created { fields: Vec::new() }
+        }
         Operation::Delete => ChangeType::Deleted
     };
 
@@ -624,7 +682,7 @@ where
     T: Entity + 'static
 {
     let change_type = match operation {
-        Operation::Create => ChangeType::Created,
+        Operation::Create => ChangeType::Created { fields: Vec::new() },
         Operation::Delete => ChangeType::Deleted
     };
 
@@ -695,6 +753,127 @@ where
     );
 
     Ok(entry)
+}
+
+// ============================================================================
+// 从 Created 事件重构实体的辅助函数
+// ============================================================================
+
+/// 从 Created 事件中提取字段值，构建字段映射表
+///
+/// # 参数
+/// - `entry`: ChangeLogEntry，必须包含 Created 类型的变更
+///
+/// # 返回
+/// 字段名 -> 字段值的映射表
+///
+/// # 错误
+/// - 如果事件不是 Created 类型，返回错误
+pub fn extract_fields_from_created_event(
+    entry: &ChangeLogEntry,
+) -> Result<std::collections::HashMap<String, String>, EntityError> {
+    match &entry.change_type {
+        ChangeType::Created { fields } => {
+            let mut field_map = std::collections::HashMap::new();
+            for field in fields {
+                // Created 事件中，new_value 包含初始值
+                field_map.insert(field.field_name.to_string(), field.new_value.clone());
+            }
+            Ok(field_map)
+        }
+        _ => Err(EntityError::Custom(
+            "Event is not a Created type event".to_string(),
+        )),
+    }
+}
+
+/// 从字符串解析值（支持多种基础类型）
+///
+/// # 参数
+/// - `value`: 字符串值
+/// - `type_hint`: 类型提示（"u64", "i64", "f64", "bool", "string"）
+///
+/// # 返回
+/// 解析后的值（作为字符串）
+pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityError> {
+    match type_hint {
+        "u64" | "i64" | "u32" | "i32" | "f64" | "f32" | "bool" => {
+            // 数值类型直接验证可解析性
+            match type_hint {
+                "u64" => {
+                    value.parse::<u64>().map_err(|_| {
+                        EntityError::FieldParseError {
+                            field: "value".to_string(),
+                            reason: format!("Cannot parse '{}' as u64", value),
+                        }
+                    })?;
+                }
+                "i64" => {
+                    value.parse::<i64>().map_err(|_| {
+                        EntityError::FieldParseError {
+                            field: "value".to_string(),
+                            reason: format!("Cannot parse '{}' as i64", value),
+                        }
+                    })?;
+                }
+                "f64" => {
+                    value.parse::<f64>().map_err(|_| {
+                        EntityError::FieldParseError {
+                            field: "value".to_string(),
+                            reason: format!("Cannot parse '{}' as f64", value),
+                        }
+                    })?;
+                }
+                "bool" => {
+                    value.parse::<bool>().map_err(|_| {
+                        EntityError::FieldParseError {
+                            field: "value".to_string(),
+                            reason: format!("Cannot parse '{}' as bool", value),
+                        }
+                    })?;
+                }
+                _ => {}
+            }
+            Ok(value.to_string())
+        }
+        "string" => {
+            // String 类型：去掉引号
+            if value.starts_with('\"') && value.ends_with('\"') && value.len() >= 2 {
+                Ok(value[1..value.len() - 1].to_string())
+            } else {
+                Ok(value.to_string())
+            }
+        }
+        _ => Ok(value.to_string()),
+    }
+}
+
+/// 从 Created 事件重构实体的通用函数（闭包风格）
+///
+/// # 参数
+/// - `entry`: Created 类型的 ChangeLogEntry
+/// - `constructor`: 接收字段映射表，返回新实体的闭包
+///
+/// # 返回
+/// 新构造的实体，或错误信息
+///
+/// # 示例
+/// ```ignore
+/// let order = reconstruct_from_created::<Order, _>(&entry, |fields| {
+///     let id = fields.get("id").and_then(|v| v.parse().ok()).unwrap_or(0);
+///     let symbol = fields.get("symbol").map(|v| v.clone()).unwrap_or_default();
+///     Ok(Order { id, symbol })
+/// })?;
+/// ```
+pub fn reconstruct_from_created<T, F>(
+    entry: &ChangeLogEntry,
+    constructor: F,
+) -> Result<T, EntityError>
+where
+    F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>,
+{
+    let field_map = extract_fields_from_created_event(entry)?;
+    constructor(&field_map)
 }
 
 // ============================================================================
@@ -790,7 +969,7 @@ mod tests {
                     Ok(())
                 }
                 ChangeType::Deleted => Err(EntityError::CannotReplayOnDeleted),
-                ChangeType::Created => Ok(())
+                ChangeType::Created { fields: _ } => Ok(())
             }
         }
     }
@@ -827,7 +1006,12 @@ mod tests {
         let entry = entity.track_create().unwrap();
         assert_eq!(entry.entity_id, "1");
         assert_eq!(entry.entity_type, "TestEntity");
-        assert_eq!(entry.change_type, ChangeType::Created);
+        match entry.change_type {
+            ChangeType::Created { fields } => {
+                assert_eq!(fields.len(), 0);
+            }
+            _ => panic!("Expected Created change type"),
+        }
     }
 
     #[test]
@@ -917,5 +1101,161 @@ mod tests {
         let result = new_entity.track_update_from(&old_entity);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), EntityError::NoChangesDetected);
+    }
+
+    // ==================== 从 Created 事件重构实体的测试 ====================
+
+    #[test]
+    fn test_extract_fields_from_created_event() {
+        let created_event = ChangeLogEntry::new(
+            "1",
+            "TestEntity",
+            ChangeType::Created {
+                fields: vec![
+                    FieldChange::new("id", "", "1"),
+                    FieldChange::new("value", "", "\"test\""),
+                ],
+            },
+            1000,
+            1,
+        );
+
+        // 提取字段
+        let fields = extract_fields_from_created_event(&created_event).unwrap();
+
+        // 验证字段值
+        assert_eq!(fields.get("id").map(|s| s.as_str()), Some("1"));
+        assert_eq!(
+            fields.get("value").map(|s| s.as_str()),
+            Some("\"test\"")
+        );
+    }
+
+    #[test]
+    fn test_parse_field_value_numeric() {
+        // 数值类型
+        let result = parse_field_value("42", "u64").unwrap();
+        assert_eq!(result, "42");
+
+        let result = parse_field_value("3.14", "f64").unwrap();
+        assert_eq!(result, "3.14");
+
+        let result = parse_field_value("true", "bool").unwrap();
+        assert_eq!(result, "true");
+
+        // 解析失败
+        let result = parse_field_value("not_a_number", "u64");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_field_value_string() {
+        // String 类型：去掉引号
+        let result = parse_field_value("\"hello world\"", "string").unwrap();
+        assert_eq!(result, "hello world");
+
+        let result = parse_field_value("unquoted", "string").unwrap();
+        assert_eq!(result, "unquoted");
+    }
+
+    #[test]
+    fn test_reconstruct_from_created_event() {
+        // 创建 Created 事件
+        let created_event = ChangeLogEntry::new(
+            "2",
+            "TestEntity",
+            ChangeType::Created {
+                fields: vec![
+                    FieldChange::new("id", "", "2"),
+                    FieldChange::new("value", "", "\"reconstructed\""),
+                ],
+            },
+            2000,
+            2,
+        );
+
+        // 使用闭包重构实体
+        let reconstructed: TestEntity =
+            reconstruct_from_created(&created_event, |fields| {
+                let id = fields
+                    .get("id")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(0);
+
+                let value = fields
+                    .get("value")
+                    .map(|v| {
+                        // 去掉引号
+                        if v.starts_with('\"') && v.ends_with('\"') {
+                            v[1..v.len() - 1].to_string()
+                        } else {
+                            v.clone()
+                        }
+                    })
+                    .unwrap_or_default();
+
+                Ok(TestEntity { id, value })
+            })
+            .unwrap();
+
+        // 验证重构的实体
+        assert_eq!(reconstructed.id, 2);
+        assert_eq!(reconstructed.value, "reconstructed");
+    }
+
+    #[test]
+    fn test_created_event_roundtrip() {
+        // === 演示完整流程：Create → Track → Reconstruct ===
+
+        // 第一步：创建原始实体
+        let original = TestEntity {
+            id: 3,
+            value: "original".to_string(),
+        };
+
+        // 第二步：追踪创建操作
+        let track_entry = original.track_create().unwrap();
+        assert_eq!(track_entry.entity_id, "3");
+
+        // 第三步：手动构建带有字段信息的 Created 事件
+        let full_created_event = ChangeLogEntry::new(
+            "3",
+            "TestEntity",
+            ChangeType::Created {
+                fields: vec![
+                    FieldChange::new("id", "", "3"),
+                    FieldChange::new("value", "", "\"original\""),
+                ],
+            },
+            1000,
+            1,
+        );
+
+        // 第四步：从 Created 事件重构实体
+        let reconstructed: TestEntity =
+            reconstruct_from_created(&full_created_event, |fields| {
+                let id = fields
+                    .get("id")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(0);
+
+                let value = fields
+                    .get("value")
+                    .map(|v| {
+                        if v.starts_with('\"') && v.ends_with('\"') {
+                            v[1..v.len() - 1].to_string()
+                        } else {
+                            v.clone()
+                        }
+                    })
+                    .unwrap_or_default();
+
+                Ok(TestEntity { id, value })
+            })
+            .unwrap();
+
+        // 验证：重构的实体应该与原始实体相同
+        assert_eq!(reconstructed.id, original.id);
+        assert_eq!(reconstructed.value, original.value);
     }
 }

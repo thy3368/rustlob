@@ -21,8 +21,8 @@ account = { path = "../../../../lib/core/account" }
 lob_repo = { path = "../../../../lib/common/lob" }
 base_types = { path = "../../../../lib/common/base_types" }
 
-# Derive macro
-diff_derive = { path = "../../../../lib/common/diff_derive" }
+# Diff tracking
+diff = { path = "../../../../lib/common/diff" }
 
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full", "test-util"] }
