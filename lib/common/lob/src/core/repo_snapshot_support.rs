@@ -10,7 +10,31 @@
 // /// - `Err(RepositoryError)`: 应用事件失败
 // fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepoError>;
 
-use crate::core::symbol_lob_repo::RepoError;
+
+/// 仓储错误类型
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepoError {
+    /// 容量已满
+    CapacityExceeded,
+    /// 订单已存在
+    OrderAlreadyExists,
+    /// 订单未找到
+    OrderNotFound,
+    /// 价格超出范围
+    PriceOutOfRange,
+    /// 不支持快照功能
+    SnapshotNotSupported,
+    /// 反序列化失败
+    DeserializationFailed(String),
+    /// 交易对不匹配
+    SymbolMismatch {
+        expected: String,
+        actual: String,
+    },
+    /// 序列化失败
+    SerializationFailed(String),
+}
+
 
 /// 仓储快照能力 Trait
 ///

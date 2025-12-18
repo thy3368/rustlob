@@ -2,11 +2,8 @@ use std::collections::HashMap;
 
 use base_types::{OrderId, Price, Quantity, Side, Symbol};
 use diff::{ChangeLogEntry, FromCreatedEvent};
-
-use crate::core::{
-    repo_snapshot_support::{EventReplay, RepoSnapshot},
-    symbol_lob_repo::{Order, RepoError, SymbolLob}
-};
+use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
+use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
 
 /// 价格点结构
 ///

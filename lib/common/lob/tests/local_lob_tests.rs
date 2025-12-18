@@ -1,8 +1,8 @@
 use base_types::{OrderId, Price, Quantity, Side, Symbol};
 use diff::{ChangeLogEntry, ChangeType};
 use lob_repo::adapter::local_lob_impl::LocalLob;
+use lob_repo::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
 use lob_repo::core::symbol_lob_repo::{Order, SymbolLob};
-use lob_repo::core::repo_snapshot_support::{RepoSnapshot, EventReplay};
 
 // 创建模拟订单用于测试
 #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
