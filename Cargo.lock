@@ -1652,6 +1652,7 @@ dependencies = [
  "base_types",
  "bincode",
  "diff",
+ "entity_derive",
  "lob_repo",
  "log",
  "rand",

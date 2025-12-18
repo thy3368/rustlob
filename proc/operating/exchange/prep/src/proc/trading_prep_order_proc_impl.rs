@@ -10,6 +10,9 @@ use account::domain::repo::{BalanceRepo, PositionRepo};
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
+// Base types
+use base_types::Side as BaseSide;
+
 use crate::proc::{
     prep_types::InternalOrder,
     trading_prep_order_proc::{
@@ -517,7 +520,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
         let internal_order = InternalOrder {
             order_id: order_id.clone(),
             symbol: cmd.symbol,
-            side: cmd.side,
+            side: cmd.side,  // 现在 cmd.side 已经是 BaseSide
             order_type: cmd.order_type,
             quantity: cmd.quantity,
             price: cmd.price,
@@ -896,7 +899,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
             Ok(OrderQueryResult {
                 order_id: cmd.order_id.clone(),
                 symbol: Symbol::new("UNKNOWN"), // TODO: 从LOB获取
-                side: Side::Buy, // TODO: 从LOB获取
+                side: BaseSide::Buy, // TODO: 从LOB获取
                 order_type: OrderType::Limit, // TODO: 从LOB获取
                 status: metadata.status,
                 quantity: Quantity::from_raw(0), // TODO: 从LOB获取

@@ -8,7 +8,7 @@ use std::fmt;
 // ============================================================================
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
-pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Symbol};
+pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, Symbol};
 
 // ============================================================================
 // 从 account crate 导入领域实体
@@ -18,36 +18,6 @@ pub use account::PositionInfo;
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
-
-/// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum Side {
-    /// 买入
-    Buy = 1,
-    /// 卖出
-    Sell = 2
-}
-
-impl Side {
-    /// 获取相反方向
-    #[inline(always)]
-    pub const fn opposite(self) -> Self {
-        match self {
-            Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy
-        }
-    }
-
-    /// 转换为字符串
-    #[inline(always)]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Side::Buy => "BUY",
-            Side::Sell => "SELL"
-        }
-    }
-}
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -67,6 +37,12 @@ impl OrderType {
             OrderType::Market => "MARKET",
             OrderType::Limit => "LIMIT"
         }
+    }
+}
+
+impl Default for OrderType {
+    fn default() -> Self {
+        OrderType::Limit
     }
 }
 
@@ -542,6 +518,12 @@ impl OrderStatus {
     /// 是否为最终状态
     pub const fn is_final(self) -> bool {
         matches!(self, OrderStatus::Filled | OrderStatus::Cancelled | OrderStatus::Rejected)
+    }
+}
+
+impl Default for OrderStatus {
+    fn default() -> Self {
+        OrderStatus::Pending
     }
 }
 

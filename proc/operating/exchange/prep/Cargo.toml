@@ -23,6 +23,7 @@ base_types = { path = "../../../../lib/common/base_types" }
 
 # Diff tracking
 diff = { path = "../../../../lib/common/diff" }
+entity_derive = { path = "../../../../lib/common/entity_derive" }
 
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full", "test-util"] }
