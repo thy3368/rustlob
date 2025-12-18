@@ -84,14 +84,19 @@ mod tests {
     struct MockOrder {
         id: u64,
         #[replay(skip)]
+        #[created(skip)]
         symbol: Symbol,
         #[replay(skip)]
+        #[created(skip)]
         price: Price,
         #[replay(skip)]
+        #[created(skip)]
         quantity: Quantity,
         #[replay(skip)]
+        #[created(skip)]
         filled_quantity: Quantity,
         #[replay(skip)]
+        #[created(skip)]
         side: Side
     }
 

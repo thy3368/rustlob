@@ -5,17 +5,18 @@ use syn::{
     punctuated::Punctuated,
 };
 
-/// Entity derive macro - 自动实现 Entity trait
+/// Entity derive macro - 自动实现 Entity trait 和 FromCreatedEvent trait
 ///
 /// # 属性
 /// - `#[entity(id = "field_name")]` - 指定ID字段（默认为 `id`）
 /// - `#[entity(type_name = "CustomName")]` - 指定实体类型名称（默认为结构体名）
 /// - `#[diff(skip)]` - 跳过该字段的 diff 检测
 /// - `#[replay(skip)]` - 跳过该字段的 replay 更新
+/// - `#[created(skip)]` - 跳过该字段的 Created 事件重构
 ///
 /// # 示例
 /// ```ignore
-/// use diff::Entity;
+/// use diff::{Entity, FromCreatedEvent};
 ///
 /// #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
 /// struct Order {
@@ -24,10 +25,14 @@ use syn::{
 ///     price: f64,
 ///     #[diff(skip)]
 ///     #[replay(skip)]
+///     #[created(skip)]
 ///     cached_value: String,
 /// }
+///
+/// // 自动生成 FromCreatedEvent 的实现，可直接使用：
+/// // let order = Order::from_created_event(&event)?;
 /// ```
-#[proc_macro_derive(Entity, attributes(entity, diff, replay))]
+#[proc_macro_derive(Entity, attributes(entity, diff, replay, created))]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -46,6 +51,9 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
 
     // 生成 replay 实现
     let replay_impl = generate_replay_impl(&input);
+
+    // 生成 FromCreatedEvent 实现
+    let from_created_impl = generate_from_created_impl(&input);
 
     let expanded = quote! {
         impl #impl_generics diff::Entity for #name #ty_generics #where_clause {
@@ -67,6 +75,9 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
 
             #replay_impl
         }
+
+        // 自动实现 FromCreatedEvent trait
+        #from_created_impl
     };
 
     TokenStream::from(expanded)
@@ -336,3 +347,163 @@ fn generate_parse_logic_for_type(
         });
     }
 }
+
+// ============================================================================
+// FromCreatedEvent 代码生成
+// ============================================================================
+
+/// 生成 FromCreatedEvent trait 实现
+fn generate_from_created_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    // 生成字段构造代码
+    let field_constructions = generate_field_constructions(input);
+
+    quote! {
+        impl #impl_generics diff::FromCreatedEvent for #name #ty_generics #where_clause {
+            fn from_created_event(entry: &diff::ChangeLogEntry) -> Result<Self, diff::EntityError> {
+                let fields = diff::extract_fields_from_created_event(entry)?;
+                Self::from_field_map(&fields)
+            }
+
+            fn from_field_map(
+                fields: &std::collections::HashMap<String, String>,
+            ) -> Result<Self, diff::EntityError> {
+                Ok(Self {
+                    #(#field_constructions),*
+                })
+            }
+        }
+    }
+}
+
+/// 为每个字段生成构造代码
+fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
+    let mut constructions = Vec::new();
+
+    if let Data::Struct(data) = &input.data {
+        if let Fields::Named(fields) = &data.fields {
+            for field in &fields.named {
+                // 检查是否有 #[created(skip)] 属性
+                let skip = field.attrs.iter().any(|attr| {
+                    attr.path().is_ident("created")
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
+                });
+
+                if skip {
+                    // 跳过该字段，使用 Default::default()
+                    if let Some(ident) = &field.ident {
+                        let field_name = ident.to_string();
+                        constructions.push(quote! {
+                            #ident: {
+                                // Field #field_name skipped - using Default
+                                Default::default()
+                            }
+                        });
+                    }
+                    continue;
+                }
+
+                if let Some(ident) = &field.ident {
+                    let field_name = ident.to_string();
+                    let ty = &field.ty;
+                    let type_str = quote!(#ty).to_string();
+
+                    // 根据类型生成解析代码
+                    let parse_code = generate_field_parse_code_for_created(ident, &type_str, &field_name);
+                    constructions.push(parse_code);
+                }
+            }
+        }
+    }
+
+    constructions
+}
+
+/// 为 Created 事件生成字段解析代码
+fn generate_field_parse_code_for_created(
+    field_ident: &Ident,
+    type_str: &str,
+    field_name: &str,
+) -> proc_macro2::TokenStream {
+    match type_str {
+        // 整数类型
+        "u64" | "u32" | "u16" | "u8" | "i64" | "i32" | "i16" | "i8" | "usize" | "isize" => {
+            let type_ident = Ident::new(
+                &type_str.replace(" ", ""),
+                proc_macro2::Span::call_site(),
+            );
+            quote! {
+                #field_ident: fields
+                    .get(#field_name)
+                    .and_then(|v| v.parse::<#type_ident>().ok())
+                    .ok_or(diff::EntityError::FieldParseError {
+                        field: #field_name.to_string(),
+                        reason: format!("Cannot parse '{}' as {}", #field_name, stringify!(#type_ident)),
+                    })?
+            }
+        }
+        // 浮点数类型
+        "f64" | "f32" => {
+            let type_ident = Ident::new(
+                &type_str.replace(" ", ""),
+                proc_macro2::Span::call_site(),
+            );
+            quote! {
+                #field_ident: fields
+                    .get(#field_name)
+                    .and_then(|v| v.parse::<#type_ident>().ok())
+                    .ok_or(diff::EntityError::FieldParseError {
+                        field: #field_name.to_string(),
+                        reason: format!("Cannot parse '{}' as {}", #field_name, stringify!(#type_ident)),
+                    })?
+            }
+        }
+        // 布尔值
+        "bool" => {
+            quote! {
+                #field_ident: fields
+                    .get(#field_name)
+                    .and_then(|v| v.parse::<bool>().ok())
+                    .ok_or(diff::EntityError::FieldParseError {
+                        field: #field_name.to_string(),
+                        reason: format!("Cannot parse '{}' as bool", #field_name),
+                    })?
+            }
+        }
+        // String 类型
+        "String" => {
+            quote! {
+                #field_ident: fields
+                    .get(#field_name)
+                    .map(|v| {
+                        // String 类型：去掉 Debug 格式的引号
+                        if v.starts_with('\"') && v.ends_with('\"') && v.len() >= 2 {
+                            v[1..v.len() - 1].to_string()
+                        } else {
+                            v.clone()
+                        }
+                    })
+                    .ok_or(diff::EntityError::FieldParseError {
+                        field: #field_name.to_string(),
+                        reason: format!("Missing field '{}'", #field_name),
+                    })?
+            }
+        }
+        // 其他类型：尝试调用 from_created_event（如果类型也实现了 FromCreatedEvent）
+        _ => {
+            quote! {
+                #field_ident: {
+                    // 复杂类型：尝试使用 Default
+                    // 如果需要自定义解析，请为该字段添加 #[created(skip)] 并使用 Default::default()
+                    Default::default()
+                }
+            }
+        }
+    }
+}
+

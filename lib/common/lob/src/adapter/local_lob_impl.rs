@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use base_types::{OrderId, Price, Quantity, Side, Symbol};
-use diff::ChangeLogEntry;
+use diff::{ChangeLogEntry, FromCreatedEvent};
 
 use crate::core::{
     repo_snapshot_support::{EventReplay, RepoSnapshot},
@@ -99,7 +99,7 @@ impl<O: Order + Clone> RepoSnapshot for LocalLob<O> {
     }
 }
 
-impl<O: Order> EventReplay for LocalLob<O> {
+impl<O: Order + FromCreatedEvent> EventReplay for LocalLob<O> {
     type Event = ChangeLogEntry;
 
     fn replay_event(&mut self, event: &Self::Event) -> Result<(), RepoError> {
@@ -107,35 +107,26 @@ impl<O: Order> EventReplay for LocalLob<O> {
         use diff::ChangeType;
 
         match &event.change_type {
-            ChangeType::Created { fields } => {
+            ChangeType::Created { .. } => {
                 // 订单创建事件
-                // Created 事件包含初始字段信息
-                // 字段格式: Vec<FieldChange> { field_name, old_value, new_value }
-                // 对于 Created 事件，old_value 为空，new_value 为初始值
+                // 使用 from_created_event 从 Created 事件重构订单对象
 
-                if fields.is_empty() {
-                    // 如果字段为空，无法重构订单，记录警告
-                    // 实际应用中应该从快照中获取订单数据
-                    return Ok(());
-                }
+                // 从 Created 事件重构订单
+                match O::from_created_event(event) {
+                    Ok(order) => {
+                        // 验证订单是否已存在
+                        if self.find_order(order.order_id()).is_some() {
+                            // 订单已存在，不重复创建
+                            return Ok(());
+                        }
 
-                // 提取订单 ID（从 entity_id）
-                let order_id: OrderId = match event.entity_id.parse::<u64>() {
-                    Ok(id) => id,
-                    Err(_) => return Ok(()), // 无法解析 ID，忽略该事件
-                };
-
-                // 验证订单是否已存在
-                if self.find_order(order_id).is_some() {
-                    // 订单已存在，不重复创建
-                    return Ok(());
-                }
-
-                // 记录创建事件日志（实际重构订单需要更多信息）
-                // 字段信息可用于审计和重建
-                for field in fields {
-                    // 解析字段名和初始值
-                    let _ = (&field.field_name, &field.new_value);
+                        // 将重构的订单添加到 LOB
+                        self.add_order(order)?;
+                    }
+                    Err(_) => {
+                        // 无法从事件重构订单，忽略该事件
+                        // 实际应用中应该从快照中恢复数据
+                    }
                 }
 
                 Ok(())

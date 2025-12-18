@@ -645,3 +645,185 @@ fn test_extract_fields_from_various_types() {
     assert_eq!(fields.get("status").unwrap(), "\"completed\"");
 }
 
+// ==================== FromCreatedEvent Derive 测试 ====================
+
+#[test]
+fn test_from_created_event_derived() {
+    use diff::FromCreatedEvent;
+
+    // 创建 Created 事件
+    let created_event = ChangeLogEntry::new(
+        "300",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "300"),
+                FieldChange::new("symbol", "", "\"DOGEUSDT\""),
+                FieldChange::new("price", "", "0.45"),
+                FieldChange::new("quantity", "", "5000"),
+                FieldChange::new("status", "", "\"filled\""),
+            ],
+        },
+        8000,
+        300,
+    );
+
+    // 使用自动生成的 FromCreatedEvent 实现
+    let order = Order::from_created_event(&created_event).unwrap();
+
+    // 验证重构的实体
+    assert_eq!(order.id, 300);
+    assert_eq!(order.symbol, "DOGEUSDT");
+    assert_eq!(order.price, 0.45);
+    assert_eq!(order.quantity, 5000);
+    assert_eq!(order.status, "filled");
+}
+
+#[test]
+fn test_from_created_event_field_map() {
+    use diff::FromCreatedEvent;
+    use std::collections::HashMap;
+
+    // 直接使用 from_field_map 构造
+    let mut fields = HashMap::new();
+    fields.insert("id".to_string(), "400".to_string());
+    fields.insert("symbol".to_string(), "\"SHIBAINU\"".to_string());
+    fields.insert("price".to_string(), "0.000025".to_string());
+    fields.insert("quantity".to_string(), "10000000".to_string());
+    fields.insert("status".to_string(), "\"pending\"".to_string());
+
+    let order = Order::from_field_map(&fields).unwrap();
+
+    assert_eq!(order.id, 400);
+    assert_eq!(order.symbol, "SHIBAINU");
+    assert_eq!(order.price, 0.000025);
+    assert_eq!(order.quantity, 10000000);
+    assert_eq!(order.status, "pending");
+}
+
+#[test]
+fn test_from_created_event_missing_field() {
+    use diff::FromCreatedEvent;
+
+    // 缺少必要字段的 Created 事件
+    let created_event = ChangeLogEntry::new(
+        "500",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "500"),
+                // 缺少 symbol 字段
+                FieldChange::new("price", "", "100.0"),
+            ],
+        },
+        9000,
+        500,
+    );
+
+    // 应该返回错误
+    let result = Order::from_created_event(&created_event);
+    assert!(result.is_err());
+
+    if let Err(diff::EntityError::FieldParseError { field, .. }) = result {
+        assert_eq!(field, "symbol");
+    } else {
+        panic!("Expected FieldParseError");
+    }
+}
+
+#[test]
+fn test_from_created_event_invalid_value() {
+    use diff::FromCreatedEvent;
+
+    // 包含无效字段值的 Created 事件
+    let created_event = ChangeLogEntry::new(
+        "600",
+        "Order",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "not_a_number"),  // 无效的 u64
+                FieldChange::new("symbol", "", "\"TEST\""),
+                FieldChange::new("price", "", "100.0"),
+                FieldChange::new("quantity", "", "10"),
+                FieldChange::new("status", "", "\"active\""),
+            ],
+        },
+        10000,
+        600,
+    );
+
+    // 应该返回错误
+    let result = Order::from_created_event(&created_event);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_created_event_with_skip_attribute() {
+    use diff::FromCreatedEvent;
+
+    // 测试带有 #[created(skip)] 属性的字段
+    #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
+    struct OrderWithCache {
+        id: u64,
+        symbol: String,
+        price: f64,
+        #[created(skip)]
+        cache: String,  // 这个字段会被跳过，使用 Default::default()
+    }
+
+    let created_event = ChangeLogEntry::new(
+        "700",
+        "OrderWithCache",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "700"),
+                FieldChange::new("symbol", "", "\"ETHUSDT\""),
+                FieldChange::new("price", "", "3500.0"),
+                FieldChange::new("cache", "", "\"this_is_ignored\""),  // 被忽略
+            ],
+        },
+        11000,
+        700,
+    );
+
+    let order = OrderWithCache::from_created_event(&created_event).unwrap();
+
+    assert_eq!(order.id, 700);
+    assert_eq!(order.symbol, "ETHUSDT");
+    assert_eq!(order.price, 3500.0);
+    assert_eq!(order.cache, "");  // Default::default() for String
+}
+
+#[test]
+fn test_from_created_event_numeric_types() {
+    use diff::FromCreatedEvent;
+
+    // 测试各种数值类型
+    #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
+    struct NumericOrder {
+        id: u64,
+        quantity: i64,
+        price: f64,
+    }
+
+    let created_event = ChangeLogEntry::new(
+        "800",
+        "NumericOrder",
+        ChangeType::Created {
+            fields: vec![
+                FieldChange::new("id", "", "800"),
+                FieldChange::new("quantity", "", "-100"),  // 负数 i64
+                FieldChange::new("price", "", "99.99"),
+            ],
+        },
+        12000,
+        800,
+    );
+
+    let order = NumericOrder::from_created_event(&created_event).unwrap();
+
+    assert_eq!(order.id, 800);
+    assert_eq!(order.quantity, -100);
+    assert_eq!(order.price, 99.99);
+}
+

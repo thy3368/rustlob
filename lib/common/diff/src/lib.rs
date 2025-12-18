@@ -28,6 +28,11 @@ pub use diff::diff_types::{
     SequenceGenerator,
     DefaultSequenceGenerator,
     AtomicSequenceGenerator,
+    // 从 Created 事件重构实体的 trait 和函数
+    FromCreatedEvent,
+    extract_fields_from_created_event,
+    parse_field_value,
+    reconstruct_from_created,
 };
 
 // Entity derive 宏从 entity_derive crate 导入
