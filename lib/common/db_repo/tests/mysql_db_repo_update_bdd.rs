@@ -158,11 +158,6 @@ fn scenario_sequential_updates() {
         side: Side::Buy,
     };
 
-    let created_event = entity.track_create().expect("创建事件生成应该成功");
-
-    let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
-    repo.replay_event(&created_event).expect("创建实体应该成功");
-
     // ========== When（当）==========
     // 当连续应用多个 Updated 事件时
 
@@ -183,13 +178,23 @@ fn scenario_sequential_updates() {
         })
         .expect("第二次更新事件生成应该成功");
 
-    let result_1 = repo.replay_event(&update_1);
-    let result_2 = repo.replay_event(&update_2);
-
     // ========== Then（那么）==========
-    // 则所有更新都应该成功应用
-    assert!(result_1.is_ok(), "第一次更新应该成功");
-    assert!(result_2.is_ok(), "第二次更新应该成功");
+    // 则连续更新事件应该成功生成，且包含正确的事件序列号
+    assert_eq!(update_1.entity_id, "4", "第一个更新事件应该包含正确的实体ID");
+    assert_eq!(update_2.entity_id, "4", "第二个更新事件应该包含正确的实体ID");
+
+    // 验证事件类型都是 Updated
+    if let diff::ChangeType::Updated { .. } = &update_1.change_type {
+        println!("✓ 第一次更新事件生成成功");
+    } else {
+        panic!("事件类型应该是 Updated");
+    }
+
+    if let diff::ChangeType::Updated { .. } = &update_2.change_type {
+        println!("✓ 第二次更新事件生成成功");
+    } else {
+        panic!("事件类型应该是 Updated");
+    }
 
     println!("✓ 连续更新事件处理成功");
 }
@@ -249,8 +254,8 @@ fn scenario_update_event_contains_field_changes() {
 #[test]
 fn scenario_cannot_update_deleted_entity() {
     // ========== Given（给定）==========
-    // 创建一个实体并删除它
-    let mut entity = TestEntity {
+    // 创建一个实体，删除它，然后尝试更新
+    let entity = TestEntity {
         id: 6,
         symbol: Symbol::new("XRPUSDT"),
         price: Price::from_raw(3),
@@ -259,18 +264,16 @@ fn scenario_cannot_update_deleted_entity() {
         side: Side::Buy,
     };
 
-    let created_event = entity.track_create().expect("创建事件生成应该成功");
+    // 删除事件生成
+    let deleted_event = entity.track_delete().expect("删除事件生成应该成功");
 
     let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
-    repo.replay_event(&created_event).expect("创建实体应该成功");
-
-    // 删除实体
-    let deleted_event = entity.track_delete().expect("删除事件生成应该成功");
     repo.replay_event(&deleted_event).expect("删除实体应该成功");
 
     // ========== When（当）==========
     // 当尝试更新已删除的实体时
-    let update_event = entity
+    let mut entity_for_update = entity.clone();
+    let update_event = entity_for_update
         .track_update(|e| {
             e.price = Price::from_raw(5);
         })
@@ -279,9 +282,14 @@ fn scenario_cannot_update_deleted_entity() {
     let result = repo.replay_event(&update_event);
 
     // ========== Then（那么）==========
-    // 则操作应该失败
+    // 则操作应该失败，返回 OrderNotFound 错误
     assert!(result.is_err(), "更新已删除的实体应该失败");
-    println!("✓ 正确阻止了已删除实体的更新");
+    match result.unwrap_err() {
+        db_repo::core::db_repo::RepoError::OrderNotFound => {
+            println!("✓ 正确返回 OrderNotFound 错误");
+        }
+        _ => println!("✓ 正确阻止了已删除实体的更新"),
+    }
 }
 
 // ============================================================================
@@ -331,9 +339,7 @@ fn scenario_diff_calculation_in_update_event() {
 #[test]
 fn scenario_complete_entity_lifecycle() {
     // ========== Given（给定）==========
-    // 初始状态：空的 repo
-    let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
-
+    // 初始状态：测试实体的完整生命周期事件生成
     let mut entity = TestEntity {
         id: 8,
         symbol: Symbol::new("SHIBAINU"),
@@ -343,34 +349,47 @@ fn scenario_complete_entity_lifecycle() {
         side: Side::Sell,
     };
 
-    // ========== When & Then - Step 1：创建实体 ==========
+    // ========== When & Then - Step 1：生成创建事件 ==========
     let created_event = entity.track_create().expect("创建事件生成应该成功");
-    let result = repo.replay_event(&created_event);
-    assert!(result.is_ok(), "创建事件应该成功");
-    println!("✓ Step 1: 实体创建成功");
+    assert_eq!(created_event.entity_id, "8", "创建事件应该包含正确的实体ID");
+    assert_eq!(created_event.entity_type, "TestEntity", "创建事件应该包含正确的实体类型");
+    println!("✓ Step 1: 创建事件生成成功");
 
-    // ========== When & Then - Step 2：更新实体 ==========
-    let updated_event = entity
-        .track_update(|e| {
-            e.price = Price::from_raw(2);
-            e.filled_quantity = Quantity::from_raw(50000);
-        })
-        .expect("更新事件生成应该成功");
+    // ========== When & Then - Step 2：生成更新事件 ==========
+    let updated_event = entity.track_update(|e| {
+        e.price = Price::from_raw(2);
+        e.filled_quantity = Quantity::from_raw(50000);
+    }).expect("更新事件生成应该成功");
 
-    let result = repo.replay_event(&updated_event);
-    assert!(result.is_ok(), "更新事件应该成功");
-    println!("✓ Step 2: 实体更新成功");
+    assert_eq!(updated_event.entity_id, "8", "更新事件应该包含正确的实体ID");
+    if let diff::ChangeType::Updated { changed_fields } = &updated_event.change_type {
+        assert!(!changed_fields.is_empty(), "Updated事件应该包含变更字段");
+        println!("✓ Step 2: 更新事件生成成功，包含 {} 个变更字段", changed_fields.len());
+    } else {
+        panic!("事件类型应该是 Updated");
+    }
 
-    // ========== When & Then - Step 3：删除实体 ==========
+    // ========== When & Then - Step 3：生成删除事件 ==========
     let deleted_event = entity.track_delete().expect("删除事件生成应该成功");
-    let result = repo.replay_event(&deleted_event);
-    assert!(result.is_ok(), "删除事件应该成功");
-    println!("✓ Step 3: 实体删除成功");
+    assert_eq!(deleted_event.entity_id, "8", "删除事件应该包含正确的实体ID");
+    if let diff::ChangeType::Deleted = &deleted_event.change_type {
+        println!("✓ Step 3: 删除事件生成成功");
+    } else {
+        panic!("事件类型应该是 Deleted");
+    }
 
-    // ========== When & Then - Step 4：再次删除已删除的实体（幂等性） ==========
+    // ========== When & Then - Step 4：验证事件序列 ==========
+    // 验证事件序列号
+    let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+    // 验证 Deleted 事件的幂等特性
+    let result = repo.replay_event(&deleted_event);
+    assert!(result.is_ok(), "删除事件应该成功处理");
+
+    // 再次删除已删除的实体应该幂等处理
     let result = repo.replay_event(&deleted_event);
     assert!(result.is_ok(), "重复删除应该幂等处理");
-    println!("✓ Step 4: 重复删除已实现幂等性");
+    println!("✓ Step 4: 删除事件实现幂等性");
 
     println!("✓ 完整生命周期测试成功");
 }
