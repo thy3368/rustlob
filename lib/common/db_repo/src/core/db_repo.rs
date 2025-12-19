@@ -5,14 +5,16 @@ use diff::{Entity, ChangeLogEntry};
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
 ///
-/// # 泛型参数
-/// - `O`: 实现了 Entity trait 的订单类型
+/// # 关联类型
+/// - `E`: 实现了 Entity trait 的订单类型
 ///
 /// # 核心功能
 /// - 快照支持：通过 RepoSnapshot trait 实现
 /// - 事件回放：通过 EventReplay trait 实现
 /// - 批量操作：支持高效的批量操作
-pub trait DBRepo<O: Entity> {
+pub trait DBRepo {
+    /// 仓储中存储的实体类型
+    type E: Entity;
     /// 从事件日志中回放单个事件
     ///
     /// 此方法根据变更日志条目的类型（Created/Updated/Deleted）

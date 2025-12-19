@@ -697,6 +697,7 @@ version = "0.1.0"
 dependencies = [
  "base_types",
  "diff",
+ "entity_derive",
  "mysql",
  "serde_json",
 ]
@@ -723,10 +724,6 @@ dependencies = [
 
 [[package]]
 name = "diff"
-version = "0.1.0"
-
-[[package]]
-name = "diff_tracker"
 version = "0.1.0"
 
 [[package]]

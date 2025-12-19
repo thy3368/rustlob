@@ -827,3 +827,128 @@ fn test_from_created_event_numeric_types() {
     assert_eq!(order.price, 99.99);
 }
 
+// ============================================================================
+// TableSchema 相关测试
+// ============================================================================
+
+#[test]
+fn test_table_schema_auto_generation() {
+    // 自动生成表结构
+    let schema = Order::table_schema();
+
+    // 验证表名
+    assert_eq!(schema.table_name, "order");
+
+    // 验证字段数量
+    assert_eq!(schema.fields.len(), 5);
+
+    // 验证字段信息
+    assert_eq!(schema.fields[0].field_name, "id");
+    assert_eq!(schema.fields[0].field_type, "u64");
+    assert_eq!(schema.fields[0].default_value, "0");
+
+    assert_eq!(schema.fields[1].field_name, "symbol");
+    assert_eq!(schema.fields[1].field_type, "String");
+
+    assert_eq!(schema.fields[2].field_name, "price");
+    assert_eq!(schema.fields[2].field_type, "f64");
+    assert_eq!(schema.fields[2].default_value, "0.0");
+
+    assert_eq!(schema.fields[3].field_name, "quantity");
+    assert_eq!(schema.fields[3].field_type, "u64");
+
+    assert_eq!(schema.fields[4].field_name, "status");
+    assert_eq!(schema.fields[4].field_type, "String");
+}
+
+#[test]
+fn test_table_name_const_method() {
+    // 测试 table_name() const 方法
+    let name = Order::table_name();
+    assert_eq!(name, "order");
+}
+
+#[test]
+fn test_table_schema_validation() {
+    let schema = Order::table_schema();
+
+    // 验证表结构的完整性
+    assert!(schema.validate().is_ok());
+
+    // 验证字段数量
+    assert_eq!(schema.field_count(), 5);
+
+    // 检查包含指定字段
+    assert!(schema.has_field("id"));
+    assert!(schema.has_field("symbol"));
+    assert!(schema.has_field("price"));
+    assert!(!schema.has_field("nonexistent"));
+}
+
+#[test]
+fn test_table_schema_field_lookup() {
+    let schema = Order::table_schema();
+
+    // 查找字段
+    let id_field = schema.find_field("id");
+    assert!(id_field.is_some());
+    assert_eq!(id_field.unwrap().field_name, "id");
+
+    let symbol_field = schema.find_field("symbol");
+    assert!(symbol_field.is_some());
+    assert_eq!(symbol_field.unwrap().field_type, "String");
+
+    // 查找不存在的字段
+    let nonexistent = schema.find_field("nonexistent");
+    assert!(nonexistent.is_none());
+}
+
+#[test]
+fn test_table_schema_field_names() {
+    let schema = Order::table_schema();
+
+    let names = schema.field_names();
+    assert_eq!(names, vec!["id", "symbol", "price", "quantity", "status"]);
+}
+
+#[test]
+fn test_table_schema_summary() {
+    let schema = Order::table_schema();
+    let summary = schema.summary();
+
+    assert!(summary.contains("Table 'order'"));
+    assert!(summary.contains("5 fields"));
+    assert!(summary.contains("id(u64)"));
+    assert!(summary.contains("symbol(String)"));
+}
+
+#[test]
+fn test_table_schema_display() {
+    let schema = Order::table_schema();
+    let display_str = format!("{}", schema);
+
+    assert!(display_str.contains("Table 'order'"));
+    assert!(display_str.contains("5 fields"));
+}
+
+#[test]
+fn test_custom_entity_table_schema() {
+    // 测试自定义类型的表结构
+    #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
+    #[entity(type_name = "CustomOrder")]
+    struct CustomOrder {
+        id: u64,
+        amount: f64,
+    }
+
+    let schema = CustomOrder::table_schema();
+
+    // 表名应该基于结构体名小写
+    assert_eq!(schema.table_name, "customorder");
+
+    // 验证字段
+    assert_eq!(schema.fields.len(), 2);
+    assert_eq!(schema.fields[0].field_name, "id");
+    assert_eq!(schema.fields[1].field_name, "amount");
+}
+

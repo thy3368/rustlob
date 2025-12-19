@@ -55,6 +55,9 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
     // 生成 FromCreatedEvent 实现
     let from_created_impl = generate_from_created_impl(&input);
 
+    // 生成 table_schema() 方法
+    let table_schema_method = generate_table_schema_method(&input, &type_name);
+
     let expanded = quote! {
         impl #impl_generics diff::Entity for #name #ty_generics #where_clause {
             type Id = #id_type;
@@ -74,6 +77,11 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
             }
 
             #replay_impl
+        }
+
+        // 为实体类型实现 table_schema 相关方法
+        impl #impl_generics #name #ty_generics #where_clause {
+            #table_schema_method
         }
 
         // 自动实现 FromCreatedEvent trait
@@ -397,10 +405,9 @@ fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenSt
                 if skip {
                     // 跳过该字段，使用 Default::default()
                     if let Some(ident) = &field.ident {
-                        let field_name = ident.to_string();
                         constructions.push(quote! {
                             #ident: {
-                                // Field #field_name skipped - using Default
+                                // Field skipped - using Default
                                 Default::default()
                             }
                         });
@@ -504,6 +511,118 @@ fn generate_field_parse_code_for_created(
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// TableSchema 方法代码生成
+// ============================================================================
+
+/// 生成 table_schema() 方法
+///
+/// 自动从结构体字段生成 TableSchema，包含所有字段的元数据
+fn generate_table_schema_method(input: &DeriveInput, type_name: &str) -> proc_macro2::TokenStream {
+    let table_name = type_name.to_lowercase();
+    let field_schemas = generate_field_schemas(input);
+
+    quote! {
+        /// 获取实体对应的数据库表结构定义
+        ///
+        /// 自动从结构体字段生成 TableSchema，包含表名和所有字段的元数据
+        #[inline]
+        pub fn table_schema() -> ::diff::diff_types::TableSchema {
+            let mut schema = ::diff::diff_types::TableSchema {
+                table_name: #table_name.to_string(),
+                fields: vec![
+                    #(#field_schemas),*
+                ],
+            };
+            schema
+        }
+
+        /// 获取实体对应的表名
+        #[inline]
+        pub const fn table_name() -> &'static str {
+            #table_name
+        }
+    }
+}
+
+/// 从结构体字段生成 FieldSchema 列表
+fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
+    let mut schemas = Vec::new();
+
+    if let Data::Struct(data) = &input.data {
+        if let Fields::Named(fields) = &data.fields {
+            for field in &fields.named {
+                // 检查是否有 #[schema(skip)] 属性
+                let skip = field.attrs.iter().any(|attr| {
+                    attr.path().is_ident("schema")
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
+                });
+
+                if skip {
+                    continue;
+                }
+
+                if let Some(ident) = &field.ident {
+                    let field_name = ident.to_string();
+                    let ty = &field.ty;
+                    let type_str = quote!(#ty).to_string();
+
+                    // 获取默认值（如果指定了）
+                    let default_value = extract_default_value(&field)
+                        .unwrap_or_else(|| get_type_default(&type_str).to_string());
+
+                    schemas.push(quote! {
+                        ::diff::diff_types::FieldSchema {
+                            field_name: #field_name.to_string(),
+                            field_type: stringify!(#ty).to_string(),
+                            default_value: #default_value.to_string(),
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    schemas
+}
+
+/// 从字段属性提取默认值
+fn extract_default_value(field: &syn::Field) -> Option<String> {
+    for attr in &field.attrs {
+        if attr.path().is_ident("schema") {
+            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+                for item in meta {
+                    if let Meta::NameValue(nv) = item {
+                        if nv.path.is_ident("default") {
+                            if let syn::Expr::Lit(expr_lit) = &nv.value {
+                                if let syn::Lit::Str(s) = &expr_lit.lit {
+                                    return Some(s.value());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 根据类型获取默认值字符串
+fn get_type_default(type_str: &str) -> &'static str {
+    match type_str {
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => "0",
+        "f32" | "f64" => "0.0",
+        "bool" => "false",
+        "String" => "\"\"",
+        _ => ""
     }
 }
 
