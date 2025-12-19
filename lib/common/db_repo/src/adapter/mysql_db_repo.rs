@@ -195,13 +195,25 @@ impl<E: Entity> MySqlDbRepo<E> {
     }
 
     /// 根据字段信息生成 INSERT SQL
+    ///
+    /// 生成格式: INSERT INTO [entity_type] (entity_id, entity_type, timestamp, sequence, [fields...]) VALUES (...)
     fn generate_insert_sql(&self, event: &ChangeLogEntry) -> Result<String, RepoError> {
         let table_name = event.entity_type.clone();
 
-        // 构建列名和值
-        let mut column_names = vec![];
+        // 构建列名和值 - 包含基础元数据列
+        let mut column_names = vec![
+            "entity_id".to_string(),
+            "entity_type".to_string(),
+            "timestamp".to_string(),
+            "sequence".to_string(),
+        ];
 
-        let mut values = vec![];
+        let mut values = vec![
+            format!("'{}'", event.entity_id),
+            format!("'{}'", event.entity_type),
+            format!("{}", event.timestamp),
+            format!("{}", event.sequence),
+        ];
 
         // 从 Created 事件中提取字段
         if let ChangeType::Created {
@@ -216,20 +228,35 @@ impl<E: Entity> MySqlDbRepo<E> {
         }
 
         // 生成 INSERT 语句
-        let sql = format!("INSERT INTO {} ({}) VALUES ({})", table_name, column_names.join(", "), values.join(", "));
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            table_name,
+            column_names.join(", "),
+            values.join(", ")
+        );
 
         Ok(sql)
     }
 
     /// 执行 SQL 语句
+    ///
+    /// # 参数
+    /// - `sql`: 要执行的 SQL 语句
+    ///
+    /// # 错误处理
+    /// - 如果连接为 None（mock 实例），直接返回 Ok
+    /// - 如果 SQL 执行失败，返回 DeserializationFailed 错误
     fn execute_sql(&mut self, sql: &str) -> Result<(), RepoError> {
         if let Some(ref mut conn) = self.connection {
-            // TODO: 实现真实的 MySQL 执行逻辑
-            // 示例（使用 mysql crate）：
-            // conn.query_drop(sql)
-            //     .map_err(|e| RepoError::DeserializationFailed(format!("SQL
-            // execution failed: {}", e)))?;
+            // 使用 mysql crate 执行 SQL
+            conn.query_drop(sql)
+                .map_err(|e| RepoError::DeserializationFailed(format!(
+                    "SQL execution failed: {}. SQL: {}",
+                    e,
+                    sql
+                )))?;
         }
+        // Mock 实例（connection: None）直接返回成功
         Ok(())
     }
 
@@ -409,19 +436,18 @@ mod tests {
             }
         };
 
-        // repo.replay_event(&event).unwrap();
         let sql = repo.generate_insert_sql(&event).expect("Failed to generate SQL");
 
         // 验证 SQL 包含必要的字段
-        assert!(sql.contains("INSERT INTO entities"));
-        assert!(sql.contains("entity_id"));
-        assert!(sql.contains("entity_type"));
-        assert!(sql.contains("timestamp"));
-        assert!(sql.contains("sequence"));
-        assert!(sql.contains("symbol"));
-        assert!(sql.contains("price"));
-        assert!(sql.contains("order_123"));
-        assert!(sql.contains("TestEntity"));
+        // 使用 entity_type 作为表名的多表设计
+        assert!(sql.contains("INSERT INTO Order"), "SQL 应该插入到 Order 表");
+        assert!(sql.contains("entity_id"), "SQL 应该包含 entity_id");
+        assert!(sql.contains("entity_type"), "SQL 应该包含 entity_type");
+        assert!(sql.contains("timestamp"), "SQL 应该包含 timestamp");
+        assert!(sql.contains("sequence"), "SQL 应该包含 sequence");
+        assert!(sql.contains("symbol"), "SQL 应该包含 symbol");
+        assert!(sql.contains("price"), "SQL 应该包含 price");
+        assert!(sql.contains("order_123"), "SQL 应该包含 entity_id 的值");
     }
 
     #[test]
@@ -444,18 +470,17 @@ mod tests {
             }
         };
 
-        let sql =
-            repo.generate_update_sql(&event).expect("Failed to generate SQL");
+        let sql = repo.generate_update_sql(&event).expect("Failed to generate SQL");
 
         // 验证 UPDATE 语句
-        assert!(sql.contains("UPDATE entities"));
-        assert!(sql.contains("SET"));
-        assert!(sql.contains("timestamp"));
-        assert!(sql.contains("sequence"));
-        assert!(sql.contains("price"));
-        assert!(sql.contains("WHERE"));
-        assert!(sql.contains("entity_id"));
-        assert!(sql.contains("entity_type"));
+        // 使用 entity_type 作为表名的多表设计
+        assert!(sql.contains("UPDATE Order"), "SQL 应该更新 Order 表");
+        assert!(sql.contains("SET"), "SQL 应该包含 SET 子句");
+        assert!(sql.contains("timestamp"), "SQL 应该包含 timestamp");
+        assert!(sql.contains("sequence"), "SQL 应该包含 sequence");
+        assert!(sql.contains("price"), "SQL 应该包含 price");
+        assert!(sql.contains("WHERE"), "SQL 应该包含 WHERE 子句");
+        assert!(sql.contains("entity_id = 'order_123'"), "SQL 应该过滤正确的 entity_id");
     }
 
     #[test]
