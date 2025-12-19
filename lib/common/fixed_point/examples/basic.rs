@@ -1,4 +1,4 @@
-use fixed_point_arithmetic::arithmetic::FixedPoint;
+use fixed_point::arithmetic::FixedPoint;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== FixedPointArithmetic 基础示例 ===\n");

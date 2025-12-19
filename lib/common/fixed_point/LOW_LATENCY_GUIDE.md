@@ -518,7 +518,7 @@ FixedPoint vs f64 - 1,000,000次操作
 # 添加依赖
 # Cargo.toml
 [dependencies]
-fixed_point_arithmetic = { path = "../fixed_point_arithmetic" }
+fixed_point = { path = "../fixed_point_arithmetic" }
 
 # 运行示例
 cargo run --example basic
