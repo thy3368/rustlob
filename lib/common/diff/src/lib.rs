@@ -18,6 +18,9 @@ pub use diff::diff_types::{
     FieldChange,
     TrackingResult,
     EntitySnapshot,
+    // 表结构定义
+    TableSchema,
+    FieldSchema,
     // 核心 trait（Entity 现在包含了 Diff, Replayable, Trackable 的所有功能）
     Entity,
     EntityError,

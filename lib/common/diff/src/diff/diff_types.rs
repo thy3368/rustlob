@@ -116,6 +116,167 @@ impl FieldChange {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FieldSchema {
+    /// 实体唯一标识符
+    pub field_name: String,
+    /// 实体类型名称
+    pub field_type: String,
+    /// 变更类型
+    pub default_value: String,
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TableSchema {
+    /// 实体唯一标识符
+    pub table_name: String,
+    pub fields: Vec<FieldSchema>,
+}
+
+impl TableSchema {
+    /// 创建新的表结构定义
+    #[inline]
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            fields: Vec::new(),
+        }
+    }
+
+    /// 查找指定名称的字段
+    #[inline]
+    pub fn find_field(&self, name: &str) -> Option<&FieldSchema> {
+        self.fields.iter().find(|f| f.field_name == name)
+    }
+
+    /// 查找并修改指定名称的字段（可变引用）
+    #[inline]
+    pub fn find_field_mut(&mut self, name: &str) -> Option<&mut FieldSchema> {
+        self.fields.iter_mut().find(|f| f.field_name == name)
+    }
+
+    /// 添加字段到表结构
+    #[inline]
+    pub fn add_field(&mut self, field: FieldSchema) -> &mut Self {
+        if !self.fields.iter().any(|f| f.field_name == field.field_name) {
+            self.fields.push(field);
+        }
+        self
+    }
+
+    /// 批量添加字段
+    #[inline]
+    pub fn add_fields(&mut self, fields: Vec<FieldSchema>) -> &mut Self {
+        for field in fields {
+            self.add_field(field);
+        }
+        self
+    }
+
+    /// 移除指定名称的字段
+    #[inline]
+    pub fn remove_field(&mut self, name: &str) -> Option<FieldSchema> {
+        self.fields
+            .iter()
+            .position(|f| f.field_name == name)
+            .map(|i| self.fields.remove(i))
+    }
+
+    /// 获取字段数量
+    #[inline]
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// 检查是否包含指定字段
+    #[inline]
+    pub fn has_field(&self, name: &str) -> bool {
+        self.fields.iter().any(|f| f.field_name == name)
+    }
+
+    /// 获取所有字段名称
+    #[inline]
+    pub fn field_names(&self) -> Vec<&str> {
+        self.fields.iter().map(|f| f.field_name.as_str()).collect()
+    }
+
+    /// 验证表结构的完整性
+    ///
+    /// 检查：
+    /// 1. 表名不为空
+    /// 2. 至少有一个字段
+    /// 3. 字段名称唯一
+    /// 4. 字段名称不为空
+    #[inline]
+    pub fn validate(&self) -> Result<(), String> {
+        if self.table_name.is_empty() {
+            return Err("Table name cannot be empty".to_string());
+        }
+
+        if self.fields.is_empty() {
+            return Err(format!(
+                "Table '{}' must have at least one field",
+                self.table_name
+            ));
+        }
+
+        // 检查字段名称唯一性
+        let mut seen = std::collections::HashSet::new();
+        for field in &self.fields {
+            if field.field_name.is_empty() {
+                return Err("Field name cannot be empty".to_string());
+            }
+            if !seen.insert(&field.field_name) {
+                return Err(format!("Duplicate field name: '{}'", field.field_name));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 清空所有字段
+    #[inline]
+    pub fn clear(&mut self) {
+        self.fields.clear();
+    }
+
+    /// 获取表结构的摘要信息
+    #[inline]
+    pub fn summary(&self) -> String {
+        let field_list = self
+            .fields
+            .iter()
+            .map(|f| format!("{}({})", f.field_name, f.field_type))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Table '{}' with {} fields: [{}]",
+            self.table_name,
+            self.fields.len(),
+            field_list
+        )
+    }
+}
+
+impl Default for TableSchema {
+    fn default() -> Self {
+        Self {
+            table_name: String::new(),
+            fields: Vec::new(),
+        }
+    }
+}
+
+impl std::fmt::Display for TableSchema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.summary())
+    }
+}
+
+
+
+
 /// 变更日志条目
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChangeLogEntry {
@@ -508,6 +669,14 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     fn can_replay(&self, entry: &ChangeLogEntry) -> bool {
         self.entity_id().to_string() == entry.entity_id && Self::entity_type() == entry.entity_type
     }
+
+    fn table_schema() -> TableSchema {
+
+        todo!()
+    }
+
+
+
 }
 
 // ============================================================================
