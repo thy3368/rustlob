@@ -1,6 +1,6 @@
 //! 错误类型定义
 
-use super::types::{AccountId, AssetId};
+use base_types::{AccountId, AssetId};
 
 /// 余额错误
 #[derive(Debug, Clone, PartialEq, Eq)]

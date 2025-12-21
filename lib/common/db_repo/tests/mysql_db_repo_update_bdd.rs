@@ -5,7 +5,7 @@
 //! 场景：实体被创建后，通过 Updated 事件更新其字段
 
 use base_types::{Price, Quantity, Side, Symbol};
-use db_repo::core::db_repo::DBCmdRepo;
+use db_repo::core::db_repo::CmdRepo;
 use db_repo::adapter::mysql_db_repo::MySqlDbRepo;
 use diff::Entity;
 

@@ -7,3 +7,5 @@ license.workspace = true
 
 [dependencies]
 base_types = { path = "../../../lib/common/base_types" }
+entity_derive = { path = "../../../lib/common/entity_derive" }
+diff = { path = "../../../lib/common/diff" }

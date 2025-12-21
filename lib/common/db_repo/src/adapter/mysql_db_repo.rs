@@ -1,7 +1,8 @@
 use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
 use mysql::prelude::*;
+use std::sync::Mutex;
 
-use crate::core::db_repo::{DBCmdRepo, DBQueryRepo, RepoError, PageRequest, PageResult};
+use crate::core::db_repo::{CmdRepo, QueryRepo, RepoError, PageRequest, PageResult};
 
 /// MySQL 数据库适配器
 ///
@@ -25,7 +26,7 @@ use crate::core::db_repo::{DBCmdRepo, DBQueryRepo, RepoError, PageRequest, PageR
 /// ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /// ```
 pub struct MySqlDbRepo<E: Entity> {
-    connection: Option<mysql::PooledConn>,
+    connection: Mutex<Option<mysql::PooledConn>>,
     _entity: std::marker::PhantomData<E>
 }
 
@@ -44,7 +45,7 @@ impl<E: Entity> MySqlDbRepo<E> {
             .map_err(|e| RepoError::DeserializationFailed(format!("Failed to get connection: {}", e)))?;
 
         Ok(MySqlDbRepo {
-            connection: Some(conn),
+            connection: Mutex::new(Some(conn)),
             _entity: std::marker::PhantomData
         })
     }
@@ -52,7 +53,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// 创建一个无连接的实例（用于测试）
     pub fn new_mock() -> Self {
         MySqlDbRepo {
-            connection: None,
+            connection: Mutex::new(None),
             _entity: std::marker::PhantomData
         }
     }
@@ -62,7 +63,7 @@ impl<E: Entity> Default for MySqlDbRepo<E> {
     fn default() -> Self { Self::new_mock() }
 }
 
-impl<E: Entity + FromCreatedEvent> DBCmdRepo for MySqlDbRepo<E> {
+impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
     type E = E;
 
     fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
@@ -156,7 +157,8 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// ```
     fn entity_exists(&self, entity_id: &str, entity_type: &str) -> Result<bool, RepoError> {
         // For mock instance (connection: None), always return false
-        if self.connection.is_none() {
+        let conn = self.connection.lock().unwrap();
+        if conn.is_none() {
             return Ok(false);
         }
 
@@ -181,7 +183,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// ```
     fn insert_entity(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
         // For mock instance, return immediately
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(());
         }
 
@@ -247,9 +249,10 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// - 如果连接为 None（mock 实例），直接返回 Ok
     /// - 如果 SQL 执行失败，返回 DeserializationFailed 错误
     fn execute_sql(&self, sql: &str) -> Result<(), RepoError> {
-        if let Some(ref mut conn) = self.connection {
+        let mut conn = self.connection.lock().unwrap();
+        if let Some(ref mut c) = conn.as_mut() {
             // 使用 mysql crate 执行 SQL
-            conn.query_drop(sql)
+            c.query_drop(sql)
                 .map_err(|e| RepoError::DeserializationFailed(format!(
                     "SQL execution failed: {}. SQL: {}",
                     e,
@@ -270,7 +273,8 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// ```
     fn load_entity(&self, entity_id: &str) -> Result<E, RepoError> {
         // For mock instance, return error
-        if self.connection.is_none() {
+        let conn = self.connection.lock().unwrap();
+        if conn.is_none() {
             return Err(RepoError::OrderNotFound);
         }
 
@@ -312,11 +316,11 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// WHERE entity_id = ? AND entity_type = ?
     /// ```
     fn update_entity(
-        &mut self, entity_id: &str, entity_type: &str, _entity: &E, event: &ChangeLogEntry,
+        &self, entity_id: &str, entity_type: &str, _entity: &E, event: &ChangeLogEntry,
         changed_fields: &[diff::FieldChange]
     ) -> Result<(), RepoError> {
         // For mock instance, return immediately
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(());
         }
 
@@ -369,9 +373,9 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// DELETE FROM entities
     /// WHERE entity_id = ? AND entity_type = ?
     /// ```
-    fn delete_entity(&mut self, entity_id: &str, entity_type: &str) -> Result<(), RepoError> {
+    fn delete_entity(&self, entity_id: &str, entity_type: &str) -> Result<(), RepoError> {
         // For mock instance, return immediately
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(());
         }
 
@@ -385,13 +389,13 @@ impl<E: Entity> MySqlDbRepo<E> {
     }
 }
 
-impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
+impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
     type E = E;
 
     /// 按序列号查询单个实体
     fn find_by_sequence(&self, sequence: u64) -> Result<Option<Self::E>, RepoError> {
         // For mock instance, return None
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(None);
         }
 
@@ -404,7 +408,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
     /// 按条件查询单个实体
     fn find_one_by_condition(&self, _condition: Self::E) -> Result<Option<Self::E>, RepoError> {
         // For mock instance, return None
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(None);
         }
 
@@ -417,7 +421,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
     /// 按条件查询所有匹配实体
     fn find_all_by_condition(&self, _condition: Self::E) -> Result<Vec<Self::E>, RepoError> {
         // For mock instance, return empty vector
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(Vec::new());
         }
 
@@ -433,7 +437,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
         page_req: PageRequest,
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(PageResult::new(
                 Vec::new(),
                 0,
@@ -466,7 +470,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
         page_req: PageRequest,
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(PageResult::new(
                 Vec::new(),
                 0,
@@ -491,7 +495,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
     /// 按实体ID查询
     fn find_by_id(&self, _entity_id: &str) -> Result<Option<Self::E>, RepoError> {
         // For mock instance, return None
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok(None);
         }
 
@@ -509,7 +513,7 @@ impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
         _forward: bool,
     ) -> Result<(Vec<Self::E>, Option<String>), RepoError> {
         // For mock instance, return empty result
-        if self.connection.is_none() {
+        if self.connection.lock().unwrap().is_none() {
             return Ok((Vec::new(), None));
         }
 
@@ -782,7 +786,7 @@ mod tests {
 
     #[test]
     fn test_dbqueryrepo_mock_instance() {
-        use crate::core::db_repo::DBQueryRepo;
+        use crate::core::db_repo::QueryRepo;
 
         let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
 

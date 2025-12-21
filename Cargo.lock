@@ -7,6 +7,8 @@ name = "account"
 version = "0.1.0"
 dependencies = [
  "base_types",
+ "diff",
+ "entity_derive",
 ]
 
 [[package]]

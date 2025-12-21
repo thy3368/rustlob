@@ -33,19 +33,19 @@ use crate::proc::{
 ///
 /// 遵循Clean Architecture原则的撮合引擎实现
 /// - 依赖注入：通过 MySqlDbRepo<Balance> 管理余额
-/// - 依赖注入：通过 PositionRepo 接口管理持仓
-/// - 依赖注入：通过 MultiSymbolLobRepo 接口管理订单簿
+/// - 依赖注入：通过关联类型 PositionRepo 管理持仓
+/// - 依赖注入：通过关联类型 LobRepo 管理订单簿
 /// - 支持价格-时间优先的订单匹配
 /// - 维护持仓、余额、订单状态
-pub struct MatchingService<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> {
+pub struct MatchingService {
     /// 余额仓储（依赖注入）
     balance_repo: MySqlDbRepo<Balance>,
 
     /// 持仓仓储（依赖注入）
-    position_repo: Arc<Mutex<P>>,
+    position_repo: Arc<Mutex<Box<dyn PositionRepo<PositionInfo>>>>,
 
     /// LOB 仓储（依赖注入）- 替代原 orders HashMap
-    lob_repo: Arc<RwLock<L>>,
+    lob_repo: Arc<RwLock<Box<dyn MultiSymbolLobRepo<InternalOrder>>>>,
 
     /// 账户ID（固定账户）
     account_id: AccountId,
@@ -72,7 +72,7 @@ struct OrderMetadata {
 }
 
 
-impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> MatchingService<P, L> {
+impl MatchingService {
     /// 创建新的撮合服务实例
     ///
     /// # 参数
@@ -81,7 +81,13 @@ impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> Matchi
     /// - `lob_repo`: LOB 仓储实现（依赖注入）
     /// - `account_id`: 账户ID
     /// - `asset_id`: 资产ID（如 USDT）
-    pub fn new(balance_repo: MySqlDbRepo<Balance>, position_repo: P, lob_repo: L, account_id: AccountId, asset_id: AssetId) -> Self {
+    pub fn new(
+        balance_repo: MySqlDbRepo<Balance>,
+        position_repo: Box<dyn PositionRepo<PositionInfo>>,
+        lob_repo: Box<dyn MultiSymbolLobRepo<InternalOrder>>,
+        account_id: AccountId,
+        asset_id: AssetId
+    ) -> Self {
         Self {
             balance_repo,
             position_repo: Arc::new(Mutex::new(position_repo)),
@@ -132,8 +138,15 @@ impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> Matchi
             return Err(PrepCommandError::InsufficientBalance);
         }
 
-        balance.deduct_balance(amount, now);
-        // TODO: 使用 track_update 和 replay_event 持久化更新
+        // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
+        let event = balance.track_update(|b| {
+            b.deduct_balance(amount, now);
+        }).map_err(|_| PrepCommandError::InternalError)?;
+
+        // 回放事件到数据库
+        self.balance_repo.replay_event(&event)
+            .map_err(|_| PrepCommandError::InternalError)?;
+
         Ok(())
     }
 
@@ -150,8 +163,20 @@ impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> Matchi
             None => Balance::new(self.account_id, self.asset_id, now),
         };
 
-        balance.add_balance(amount, now);
-        // TODO: 使用 track_update 和 replay_event 持久化更新
+        // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
+        match balance.track_update(|b| {
+            b.add_balance(amount, now);
+        }) {
+            Ok(event) => {
+                // 回放事件到数据库
+                if let Err(e) = self.balance_repo.replay_event(&event) {
+                    log::error!("Failed to replay balance update event: {:?}", e);
+                }
+            },
+            Err(e) => {
+                log::error!("Failed to track balance update for {}: {:?}", balance_id, e);
+            }
+        }
     }
 
     // ========================================================================
@@ -462,7 +487,7 @@ impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> Matchi
     }
 }
 
-impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchProc for MatchingService<P, L> {
+impl PerpOrderExchProc for MatchingService {
     /// 处理开仓命令
     ///
     /// # 流程
@@ -901,7 +926,7 @@ impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOr
     }
 }
 
-impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchQueryProc for MatchingService<P, L> {
+impl PerpOrderExchQueryProc for MatchingService {
     fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
         // TODO: 需要从LOB获取完整订单信息
         // 当前简化实现：从元数据获取部分信息

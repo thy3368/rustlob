@@ -7,7 +7,6 @@ pub mod balance;
 pub mod command;
 pub mod error;
 pub mod position;
-pub mod types;
 pub mod user;
 
 // Re-export commonly used types
@@ -16,4 +15,5 @@ pub use balance::{Balance, BalanceOp};
 pub use command::{AccountCommand, AccountCommandResult};
 pub use error::BalanceError;
 pub use position::{PositionId, PositionInfo, PositionSide, Price, Quantity, Symbol};
-pub use types::{AccountId, AssetId, OrderId, Side, Timestamp, TradingPair, UserId};
+// 从 base_types 重导出共享类型
+pub use base_types::{AccountId, AssetId, OrderId, Side, Timestamp, TradingPair, UserId};

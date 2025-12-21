@@ -1,6 +1,6 @@
 //! 账户实体定义
 
-use super::types::{AccountId, Timestamp, UserId};
+use base_types::{AccountId, Timestamp, UserId};
 
 /// 交易账户
 #[derive(Debug, Clone)]

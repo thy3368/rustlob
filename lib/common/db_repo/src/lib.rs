@@ -3,8 +3,8 @@ pub mod adapter;
 
 // 导出核心仓储接口和分页类型
 pub use core::db_repo::{
-    DBCmdRepo,
-    DBQueryRepo,
+    CmdRepo,
+    QueryRepo,
     RepoError,
     PageRequest,
     PageResult,

@@ -1,6 +1,6 @@
 //! 余额实体定义
 
-use super::types::{AccountId, AssetId, Timestamp};
+use base_types::{AccountId, AssetId, Timestamp};
 use std::fmt;
 use entity_derive::Entity;
 
@@ -17,15 +17,18 @@ impl BalanceId {
     }
 }
 
-impl ToString for BalanceId {
-    fn to_string(&self) -> String {
-        format!("{}:{}", self.account_id.0, self.asset_id.0)
-    }
-}
-
 impl fmt::Display for BalanceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.account_id.0, self.asset_id.0)
+    }
+}
+
+impl Default for BalanceId {
+    fn default() -> Self {
+        Self {
+            account_id: AccountId(0),
+            asset_id: AssetId(0),
+        }
     }
 }
 
