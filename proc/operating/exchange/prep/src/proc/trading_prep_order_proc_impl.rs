@@ -14,7 +14,7 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 // Order trait - 用于调用 quantity() 和 price() 方法
-use lob_repo::core::symbol_lob_repo::Order as OrderTrait;
+// use lob_repo::core::symbol_lob_repo::Order as OrderTrait;
 
 use crate::proc::{
     prep_types::InternalOrder,
@@ -503,10 +503,11 @@ impl MatchingService {
                     break;
                 }
 
-                let fill_amount = remaining_qty.min((*matched_order).quantity().to_f64());
+                let fill_amount = remaining_qty.min(matched_order.quantity.to_f64());
                 let fill_qty_obj = Quantity::from_f64(fill_amount);
-                let match_price = (*matched_order).price();
-                let notional = match_price.to_f64() * fill_amount;
+                let match_price = matched_order.price;
+                // todo none时会出问题
+                let notional = match_price.unwrap().to_f64() * fill_amount;
                 let fee = Price::from_f64(notional * 0.0004); // Taker费率
 
                 let trade = Trade::new(
@@ -514,7 +515,7 @@ impl MatchingService {
                     order_id.clone(),
                     cmd.symbol,
                     cmd.side,
-                    match_price,
+                    match_price.unwrap(),
                     fill_qty_obj,
                     fee,
                     Symbol::new("USDT"),
@@ -589,10 +590,10 @@ impl MatchingService {
                     break;
                 }
 
-                let fill_amount = remaining_qty.min((*matched_order).quantity().to_f64());
+                let fill_amount = remaining_qty.min(matched_order.quantity.to_f64());
                 let fill_qty_obj = Quantity::from_f64(fill_amount);
-                let match_price = (*matched_order).price();
-                let notional = match_price.to_f64() * fill_amount;
+                let match_price = matched_order.price;
+                let notional = match_price.unwrap().to_f64() * fill_amount;
                 let fee = Price::from_f64(notional * 0.0002); // Maker费率
 
                 let trade = Trade::new(
@@ -630,7 +631,7 @@ impl MatchingService {
             order_type: cmd.order_type,
             quantity: cmd.quantity,
             price: cmd.price,
-            filled_quantity: Quantity.from_f64(cmd.quantity.to_f64() - remaining_qty),
+            filled_quantity: Quantity::from_f64(cmd.quantity.to_f64() - remaining_qty),
             status: final_status,
             created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
             frozen_margin: required_margin
