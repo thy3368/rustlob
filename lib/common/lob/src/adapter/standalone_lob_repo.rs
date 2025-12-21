@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use base_types::{Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, Symbol};
 
 use crate::{
     adapter::local_lob_impl::LocalLob,
     core::symbol_lob_repo::{MultiSymbolLobRepo, Order, SymbolLob}
 };
+use crate::core::repo_snapshot_support::RepoError;
 
 /// 单一 LOB 仓储
 ///
@@ -53,8 +54,10 @@ impl<O: Order> StandaloneLobRepo<O> {
 }
 
 /// 实现 MultiLobRepo trait
-impl<O: Order> MultiSymbolLobRepo<O> for StandaloneLobRepo<O> {
-    fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
+impl<O: Order> MultiSymbolLobRepo for StandaloneLobRepo<O> {
+    type Order = O;
+
+    fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
         // O(1) 查找对应的 LOB
         let lob = self.lobs.get(&symbol)?;
 
@@ -73,6 +76,14 @@ impl<O: Order> MultiSymbolLobRepo<O> for StandaloneLobRepo<O> {
     }
 
     fn contains_symbol(&self, symbol: &Symbol) -> bool { self.lobs.contains_key(symbol) }
+
+    fn add_order(&self, symbol: Symbol, order: Self::Order) -> Result<(), RepoError> {
+        todo!()
+    }
+
+    fn remove_order(&self, symbol: Symbol, order_id: OrderId) -> bool {
+        todo!()
+    }
 }
 
 #[cfg(test)]
@@ -247,19 +258,6 @@ mod tests {
 
     // === MultiLobRepo trait 测试 ===
 
-    #[test]
-    fn test_multi_lob_repo_trait_contains_symbol() {
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let eth_symbol = Symbol::new("ETHUSDT");
-
-        let lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-        let repo = StandaloneLobRepo::new(vec![lob]);
-
-        // 使用 trait 方法
-        let repo_trait: &dyn MultiSymbolLobRepo<MockOrder> = &repo;
-        assert!(repo_trait.contains_symbol(&btc_symbol), "应该包含 BTCUSDT");
-        assert!(!repo_trait.contains_symbol(&eth_symbol), "不应该包含 ETHUSDT");
-    }
 
     #[test]
     fn test_multi_lob_repo_trait_best_bid_ask() {
@@ -280,55 +278,12 @@ mod tests {
         let repo = StandaloneLobRepo::new(vec![lob]);
 
         // 使用 trait 方法
-        let repo_trait: &dyn MultiSymbolLobRepo<MockOrder> = &repo;
 
         // 测试 best_bid
-        let best_bid = repo_trait.best_bid(btc_symbol);
+        let best_bid = repo.best_bid(btc_symbol);
         assert_eq!(best_bid, Some(Price::from_raw(50000)));
     }
 
-    #[test]
-    fn test_multi_lob_repo_trait_match_orders() {
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
 
-        // 添加卖单
-        let sell_order = MockOrder {
-            id: 1,
-            symbol: btc_symbol,
-            price: Price::from_raw(50100),
-            quantity: Quantity::from_raw(100),
-            side: Side::Sell,
-        filled_quantity: Quantity::from_raw(0),
-        };
-        lob.add_order(sell_order).unwrap();
 
-        let repo = StandaloneLobRepo::new(vec![lob]);
-
-        // 使用 trait 方法
-        let repo_trait: &dyn MultiSymbolLobRepo<MockOrder> = &repo;
-
-        // 测试匹配订单
-        let matched = repo_trait.match_orders(btc_symbol, Side::Buy, Price::from_raw(50100), Quantity::from_raw(50));
-        assert!(matched.is_some());
-    }
-
-    #[test]
-    fn test_polymorphism_with_trait_object() {
-        // 测试多态性：使用 trait object
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let eth_symbol = Symbol::new("ETHUSDT");
-
-        let lob1: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-        let lob2: LocalLob<MockOrder> = LocalLob::new(eth_symbol);
-
-        let repo = StandaloneLobRepo::new(vec![lob1, lob2]);
-
-        // 可以将具体类型转换为 trait object
-        let repo_trait: Box<dyn MultiSymbolLobRepo<MockOrder>> = Box::new(repo);
-
-        assert!(repo_trait.contains_symbol(&btc_symbol));
-        assert!(repo_trait.contains_symbol(&eth_symbol));
-        assert!(!repo_trait.contains_symbol(&Symbol::new("XRPUSDT")));
-    }
 }

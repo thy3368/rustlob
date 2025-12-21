@@ -203,6 +203,10 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "base_types"
 version = "0.1.0"
+dependencies = [
+ "diff",
+ "entity_derive",
+]
 
 [[package]]
 name = "bigdecimal"
@@ -2253,6 +2257,7 @@ dependencies = [
  "async-trait",
  "base_types",
  "bincode",
+ "db_repo",
  "diff",
  "entity_derive",
  "lob_repo",

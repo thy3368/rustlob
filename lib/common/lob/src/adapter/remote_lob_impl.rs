@@ -20,12 +20,14 @@ impl<O: Order> RemoteLob<O> {
     }
 }
 
-impl<O: Order> SymbolLob<O> for RemoteLob<O> {
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
+impl<O: Order> SymbolLob for RemoteLob<O> {
+    type Order = O;
+
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
         todo!()
     }
 
-    fn add_order(&mut self, order: O) -> Result<(), RepoError> {
+    fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
         todo!()
     }
 
@@ -33,11 +35,11 @@ impl<O: Order> SymbolLob<O> for RemoteLob<O> {
         todo!()
     }
 
-    fn find_order(&self, order_id: OrderId) -> Option<&O> {
+    fn find_order(&self, order_id: OrderId) -> Option<&Self::Order> {
         todo!()
     }
 
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut O> {
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut Self::Order> {
         todo!()
     }
 

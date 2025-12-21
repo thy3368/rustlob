@@ -2,12 +2,15 @@
 //!
 //! 测试永续合约开仓功能的各种场景
 
-use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::MatchingService};
+mod test_helpers;
+
+use prep_proc::proc::trading_prep_order_proc::*;
+use test_helpers::create_test_matching_service;
 
 #[test]
 fn test_open_position_market_long_success() {
     // Given: 一个有足够余额的撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0);
 
     // When: 发送市价做多订单
     let symbol = Symbol::new("BTCUSDT");
@@ -35,7 +38,7 @@ fn test_open_position_market_long_success() {
 #[test]
 fn test_open_position_market_short_success() {
     // Given: 一个有足够余额的撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送市价做空订单
     let symbol = Symbol::new("ETHUSDT");
@@ -57,7 +60,7 @@ fn test_open_position_market_short_success() {
 #[test]
 fn test_open_position_limit_long_success() {
     // Given: 一个有足够余额的撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送限价做多订单
     let symbol = Symbol::new("BTCUSDT");
@@ -86,7 +89,7 @@ fn test_open_position_limit_long_success() {
 #[test]
 fn test_open_position_insufficient_balance() {
     // Given: 一个余额不足的撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10.0)); // 只有10 USDT
+    let matching_service = create_test_matching_service(10.0)); // 只有10 USDT
 
     // When: 尝试开大仓位
     let symbol = Symbol::new("BTCUSDT");
@@ -110,7 +113,7 @@ fn test_open_position_insufficient_balance() {
 #[test]
 fn test_open_position_invalid_quantity() {
     // Given: 一个撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送数量为0的订单
     let symbol = Symbol::new("BTCUSDT");
@@ -133,7 +136,7 @@ fn test_open_position_invalid_quantity() {
 #[test]
 fn test_open_position_invalid_leverage() {
     // Given: 一个撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送杠杆超过125倍的订单
     let symbol = Symbol::new("BTCUSDT");
@@ -156,7 +159,7 @@ fn test_open_position_invalid_leverage() {
 #[test]
 fn test_open_position_limit_missing_price() {
     // Given: 一个撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送限价单但没有指定价格
     let symbol = Symbol::new("BTCUSDT");
@@ -181,7 +184,7 @@ fn test_open_position_limit_missing_price() {
 #[test]
 fn test_open_position_with_different_leverage() {
     // Given: 一个有足够余额的撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(100000.0));
+    let matching_service = create_test_matching_service(100000.0));
 
     // Test with leverage 1x
     let symbol = Symbol::new("BTCUSDT");
@@ -209,7 +212,7 @@ fn test_open_position_with_different_leverage() {
 #[test]
 fn test_open_position_check_trades_details() {
     // Given: 一个撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(10000.0));
+    let matching_service = create_test_matching_service(10000.0));
 
     // When: 发送市价订单
     let symbol = Symbol::new("BTCUSDT");
@@ -246,7 +249,7 @@ fn test_open_position_check_trades_details() {
 #[test]
 fn test_query_position_after_open() {
     // Given: 一个撮合服务
-    let matching_service = MatchingService::new(Price::from_f64(100000.0));
+    let matching_service = create_test_matching_service(100000.0));
 
     // When: 开仓
     let symbol = Symbol::new("BTCUSDT");

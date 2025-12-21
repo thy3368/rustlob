@@ -15,7 +15,9 @@ pub struct InternalOrder {
     pub status: OrderStatus,
     pub created_at: u64,
     /// 冻结的保证金金额（用于订单取消时归还）
-    pub frozen_margin: Price
+    pub frozen_margin: Price,
+
+    
 }
 
 /// 实现 Order trait 以适配 LOB 仓储

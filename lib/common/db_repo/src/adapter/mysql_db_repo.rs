@@ -57,6 +57,24 @@ impl<E: Entity> MySqlDbRepo<E> {
             _entity: std::marker::PhantomData
         }
     }
+
+    /// 按实体ID查询单个实体
+    ///
+    /// 这是一个便利方法，用于按ID快速查询实体
+    /// 当仓储为 mock 实例时，返回 Ok(None)
+    pub fn find_by_id(&self, _id: &str) -> Result<Option<E>, RepoError>
+    where
+        E: FromCreatedEvent,
+    {
+        // For mock instance, return None
+        if self.connection.lock().unwrap().is_none() {
+            return Ok(None);
+        }
+
+        // TODO: 实现按 entity_id 查询数据库
+        // SQL: SELECT * FROM [entity_type] WHERE entity_id = ? LIMIT 1
+        Ok(None)
+    }
 }
 
 impl<E: Entity> Default for MySqlDbRepo<E> {

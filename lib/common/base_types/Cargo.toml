@@ -6,3 +6,5 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+entity_derive = { path = "../entity_derive" }
+diff = { path = "../diff" }

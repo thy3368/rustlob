@@ -275,7 +275,8 @@ impl<O: Order> LocalLobBTreeMap<O> {
     }
 }
 
-impl<O: Order> SymbolLob<O> for LocalLobBTreeMap<O> {
+impl<O: Order> SymbolLob for LocalLobBTreeMap<O> {
+    type Order = O;
     /// 匹配订单
     ///
     /// 根据 side, price, quantity 匹配所有符合条件的订单
@@ -288,7 +289,7 @@ impl<O: Order> SymbolLob<O> for LocalLobBTreeMap<O> {
     /// # BTreeMap 优势
     /// - 自动排序，无需额外排序步骤
     /// - 使用 range() 进行高效范围查询
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
@@ -392,7 +393,7 @@ impl<O: Order> SymbolLob<O> for LocalLobBTreeMap<O> {
         }
     }
 
-    fn add_order(&mut self, order: O) -> Result<(), RepoError> {
+    fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
         let order_id = order.order_id();
         let price = order.price();
         let side = order.side();
@@ -442,7 +443,7 @@ impl<O: Order> SymbolLob<O> for LocalLobBTreeMap<O> {
         false
     }
 
-    fn find_order(&self, order_id: OrderId) -> Option<&O> {
+    fn find_order(&self, order_id: OrderId) -> Option<&Self::Order> {
         self.order_index
             .get(&order_id)
             .and_then(|&idx| self.orders.get(idx))
@@ -450,7 +451,7 @@ impl<O: Order> SymbolLob<O> for LocalLobBTreeMap<O> {
             .map(|node| &node.order)
     }
 
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut O> {
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut Self::Order> {
         self.order_index
             .get(&order_id)
             .and_then(|&idx| self.orders.get_mut(idx))

@@ -5,8 +5,8 @@
 use super::{
     balance::Balance,
     error::BalanceError,
-    types::{AccountId, AssetId, OrderId, Side, TradingPair}
 };
+use base_types::{AccountId, AssetId, OrderId, Side, TradingPair};
 
 /// 账户命令（统一）
 ///

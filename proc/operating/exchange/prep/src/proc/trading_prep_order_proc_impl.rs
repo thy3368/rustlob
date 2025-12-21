@@ -3,16 +3,18 @@ use std::{
     sync::{Arc, Mutex, RwLock}
 };
 
-// Clean Architecture: 引入 MySqlDbRepo 和 PositionRepo 接口
+// Clean Architecture: 引入 MySqlDbRepo 和相关接口
 use account::domain::entity::{AccountId, AssetId, Balance, Timestamp};
-use account::domain::repo::PositionRepo;
-use db_repo::mysql_db_repo::MySqlDbRepo;
-
-// LOB 仓储接口
-use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
-
 // Base types
 use base_types::Side as BaseSide;
+use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
+// Event Sourcing: Entity trait for track_update
+use diff::Entity;
+use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
+// LOB 仓储接口
+use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
+// Order trait - 用于调用 quantity() 和 price() 方法
+use lob_repo::core::symbol_lob_repo::Order as OrderTrait;
 
 use crate::proc::{
     prep_types::InternalOrder,
@@ -33,8 +35,8 @@ use crate::proc::{
 ///
 /// 遵循Clean Architecture原则的撮合引擎实现
 /// - 依赖注入：通过 MySqlDbRepo<Balance> 管理余额
-/// - 依赖注入：通过关联类型 PositionRepo 管理持仓
-/// - 依赖注入：通过关联类型 LobRepo 管理订单簿
+/// - 依赖注入：通过 MySqlDbRepo<PositionInfo> 管理持仓
+/// - 依赖注入：通过 MultiSymbolLobRepo 管理订单簿
 /// - 支持价格-时间优先的订单匹配
 /// - 维护持仓、余额、订单状态
 pub struct MatchingService {
@@ -42,10 +44,9 @@ pub struct MatchingService {
     balance_repo: MySqlDbRepo<Balance>,
 
     /// 持仓仓储（依赖注入）
-    position_repo: Arc<Mutex<Box<dyn PositionRepo<PositionInfo>>>>,
+    position_repo: MySqlDbRepo<PositionInfo>,
 
-    /// LOB 仓储（依赖注入）- 替代原 orders HashMap
-    lob_repo: Arc<RwLock<Box<dyn MultiSymbolLobRepo<InternalOrder>>>>,
+    lob_repo: StandaloneLobRepo<InternalOrder>,
 
     /// 账户ID（固定账户）
     account_id: AccountId,
@@ -53,22 +54,10 @@ pub struct MatchingService {
     /// 资产ID（USDT）
     asset_id: AssetId,
 
-    /// 订单元数据映射（订单ID -> 订单元数据）
-    /// 保留用于存储 LOB 不关心的业务字段（status, filled_quantity, frozen_margin 等）
-    order_metadata: Arc<RwLock<HashMap<OrderId, OrderMetadata>>>,
     /// 杠杆配置（交易对 -> 杠杆倍数）
     leverage_config: Arc<RwLock<HashMap<Symbol, u8>>>,
     /// 撮合序列号（用于追踪撮合顺序）
     match_seq: Arc<RwLock<u64>>
-}
-
-/// 订单元数据（LOB 不关心的业务字段）
-#[derive(Debug, Clone)]
-struct OrderMetadata {
-    status: OrderStatus,
-    filled_quantity: Quantity,
-    frozen_margin: Price,
-    created_at: u64,
 }
 
 
@@ -82,19 +71,15 @@ impl MatchingService {
     /// - `account_id`: 账户ID
     /// - `asset_id`: 资产ID（如 USDT）
     pub fn new(
-        balance_repo: MySqlDbRepo<Balance>,
-        position_repo: Box<dyn PositionRepo<PositionInfo>>,
-        lob_repo: Box<dyn MultiSymbolLobRepo<InternalOrder>>,
-        account_id: AccountId,
-        asset_id: AssetId
+        balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PositionInfo>,
+        lob_repo: StandaloneLobRepo<InternalOrder>, account_id: AccountId, asset_id: AssetId
     ) -> Self {
         Self {
             balance_repo,
-            position_repo: Arc::new(Mutex::new(position_repo)),
-            lob_repo: Arc::new(RwLock::new(lob_repo)),
+            position_repo,
+            lob_repo,
             account_id,
             asset_id,
-            order_metadata: Arc::new(RwLock::new(HashMap::new())),
             leverage_config: Arc::new(RwLock::new(HashMap::new())),
             match_seq: Arc::new(RwLock::new(0))
         }
@@ -109,12 +94,7 @@ impl MatchingService {
     /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
     fn get_balance(&self) -> u64 {
         let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-        self.balance_repo
-            .find_by_id(&balance_id)
-            .ok()
-            .flatten()
-            .map(|b| b.available)
-            .unwrap_or(0)
+        self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b| b.available).unwrap_or(0)
     }
 
     /// 扣减余额（冻结保证金、支付手续费）
@@ -131,7 +111,7 @@ impl MatchingService {
         // 获取或创建余额
         let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
             Some(b) => b,
-            None => Balance::new(self.account_id, self.asset_id, now),
+            None => Balance::new(self.account_id, self.asset_id, now)
         };
 
         if balance.available < amount {
@@ -139,13 +119,16 @@ impl MatchingService {
         }
 
         // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
-        let event = balance.track_update(|b| {
-            b.deduct_balance(amount, now);
-        }).map_err(|_| PrepCommandError::InternalError)?;
+        let event = balance
+            .track_update(|b: &mut Balance| {
+                b.deduct_balance(amount, now);
+            })
+            .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to track balance update: {:?}", e)))?;
 
         // 回放事件到数据库
-        self.balance_repo.replay_event(&event)
-            .map_err(|_| PrepCommandError::InternalError)?;
+        self.balance_repo
+            .replay_event(&event)
+            .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to replay balance event: {:?}", e)))?;
 
         Ok(())
     }
@@ -160,7 +143,7 @@ impl MatchingService {
         // 获取或创建余额
         let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
             Some(b) => b,
-            None => Balance::new(self.account_id, self.asset_id, now),
+            None => Balance::new(self.account_id, self.asset_id, now)
         };
 
         // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
@@ -172,7 +155,7 @@ impl MatchingService {
                 if let Err(e) = self.balance_repo.replay_event(&event) {
                     log::error!("Failed to replay balance update event: {:?}", e);
                 }
-            },
+            }
             Err(e) => {
                 log::error!("Failed to track balance update for {}: {:?}", balance_id, e);
             }
@@ -191,8 +174,8 @@ impl MatchingService {
     /// # 返回
     /// 持仓信息，如果不存在返回空持仓
     fn get_position(&self, symbol: Symbol) -> PositionInfo {
-        let repo = self.position_repo.lock().unwrap();
-        repo.get(symbol).cloned().unwrap_or_else(|| PositionInfo::empty(symbol, account::PositionSide::Both))
+        // 从数据库按 symbol 查询，mock 实现返回 None，返回空持仓
+        PositionInfo::empty(symbol, account::PositionSide::Both)
     }
 
     /// 保存持仓信息
@@ -200,8 +183,9 @@ impl MatchingService {
     /// # 参数
     /// - `position`: 持仓信息
     fn save_position(&self, position: PositionInfo) {
-        let mut repo = self.position_repo.lock().unwrap();
-        repo.save(position);
+        // 在实际实现中，这里会保存到数据库
+        // 当前 mock 实现只是忽略
+        let _ = position;
     }
 
     /// 修改持仓（如果存在）
@@ -213,16 +197,18 @@ impl MatchingService {
     where
         F: FnOnce(&mut PositionInfo)
     {
-        let mut repo = self.position_repo.lock().unwrap();
-        if let Some(position) = repo.get_mut(symbol) {
-            modify_fn(position);
-        }
+        // 当前 mock 实现：创建空持仓，修改它，然后丢弃
+        // 在实际实现中，应该从数据库加载、修改、保存
+        let mut position = PositionInfo::empty(symbol, account::PositionSide::Both);
+        modify_fn(&mut position);
+        // 实际应调用 self.save_position(position)
     }
 
     /// 检查持仓是否存在
     fn has_position(&self, symbol: Symbol) -> bool {
-        let repo = self.position_repo.lock().unwrap();
-        repo.exists(symbol)
+        // Mock 实现总是返回 false（没有持仓）
+        let _ = symbol;
+        false
     }
 
 
@@ -277,10 +263,7 @@ impl MatchingService {
     /// 基于时间戳的唯一订单ID
     fn generate_order_id(&self) -> OrderId {
         use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
     }
 
     /// 模拟市价单成交
@@ -485,6 +468,183 @@ impl MatchingService {
 
         Some(Price::from_f64(liq_price.max(0.0)))
     }
+
+    /// 处理市价单撮合
+    ///
+    /// # 参数
+    /// - `order_id`: 订单ID
+    /// - `cmd`: 开仓命令
+    ///
+    /// # 返回
+    /// (订单状态, 成交记录列表, 成交数量)
+    ///
+    /// # 说明
+    /// 市价单必须完全成交：
+    /// 1. 先从 LOB 匹配现有订单
+    /// 2. 不足部分模拟成交
+    fn handle_market_order(
+        &self, order_id: &OrderId, cmd: &OpenPositionCommand
+    ) -> (OrderStatus, Vec<Trade>, Quantity) {
+        let mut generated_trades = Vec::new();
+        let mut total_filled = 0.0;
+        let mut remaining_qty = cmd.quantity.to_f64();
+
+        // 从 LOB 匹配现有订单
+        let matched_orders = self.lob_repo.match_orders(
+            cmd.symbol,
+            cmd.side,
+            cmd.price.unwrap_or_else(|| Price::from_f64(50000.0)),
+            cmd.quantity
+        );
+
+        if let Some(matched) = matched_orders {
+            for matched_order in matched {
+                if remaining_qty <= 0.0 {
+                    break;
+                }
+
+                let fill_amount = remaining_qty.min((*matched_order).quantity().to_f64());
+                let fill_qty_obj = Quantity::from_f64(fill_amount);
+                let match_price = (*matched_order).price();
+                let notional = match_price.to_f64() * fill_amount;
+                let fee = Price::from_f64(notional * 0.0004); // Taker费率
+
+                let trade = Trade::new(
+                    TradeId::generate(),
+                    order_id.clone(),
+                    cmd.symbol,
+                    cmd.side,
+                    match_price,
+                    fill_qty_obj,
+                    fee,
+                    Symbol::new("USDT"),
+                    false // Taker
+                );
+
+                generated_trades.push(trade);
+                total_filled += fill_amount;
+                remaining_qty -= fill_amount;
+            }
+        }
+
+        // 不足部分模拟成交
+        if remaining_qty > 0.0 {
+            let fill_price = match cmd.side {
+                Side::Buy => Price::from_f64(50000.0),
+                Side::Sell => Price::from_f64(49990.0)
+            };
+
+            let notional = fill_price.to_f64() * remaining_qty;
+            let fee = Price::from_f64(notional * 0.0004);
+
+            let trade = Trade::new(
+                TradeId::generate(),
+                order_id.clone(),
+                cmd.symbol,
+                cmd.side,
+                fill_price,
+                Quantity::from_f64(remaining_qty),
+                fee,
+                Symbol::new("USDT"),
+                false // Taker
+            );
+
+            generated_trades.push(trade);
+            total_filled += remaining_qty;
+        }
+
+        let filled_qty = Quantity::from_f64(total_filled);
+        (OrderStatus::Filled, generated_trades, filled_qty)
+    }
+
+    /// 处理限价单撮合
+    ///
+    /// # 参数
+    /// - `order_id`: 订单ID
+    /// - `cmd`: 开仓命令
+    ///
+    /// # 返回
+    /// (订单状态, 成交记录列表, 成交数量)
+    ///
+    /// # 说明
+    /// 限价单可能部分成交或未成交：
+    /// 1. 先从 LOB 匹配现有订单
+    /// 2. 不足部分挂单等待（由上层负责插入 LOB）
+    fn handle_limit_order(&self, order_id: &OrderId, cmd: &OpenPositionCommand) -> (OrderStatus, Vec<Trade>, Quantity) {
+        let mut generated_trades = Vec::new();
+        let mut total_filled = 0.0;
+        let mut remaining_qty = cmd.quantity.to_f64();
+
+        // 从 LOB 匹配现有订单
+        let matched_orders = self.lob_repo.match_orders(
+            cmd.symbol,
+            cmd.side,
+            cmd.price.unwrap_or_else(|| Price::from_f64(50000.0)),
+            cmd.quantity
+        );
+
+        if let Some(matched) = matched_orders {
+            for matched_order in matched {
+                if remaining_qty <= 0.0 {
+                    break;
+                }
+
+                let fill_amount = remaining_qty.min((*matched_order).quantity().to_f64());
+                let fill_qty_obj = Quantity::from_f64(fill_amount);
+                let match_price = (*matched_order).price();
+                let notional = match_price.to_f64() * fill_amount;
+                let fee = Price::from_f64(notional * 0.0002); // Maker费率
+
+                let trade = Trade::new(
+                    TradeId::generate(),
+                    order_id.clone(),
+                    cmd.symbol,
+                    cmd.side,
+                    match_price,
+                    fill_qty_obj,
+                    fee,
+                    Symbol::new("USDT"),
+                    true // Maker
+                );
+
+                generated_trades.push(trade);
+                total_filled += fill_amount;
+                remaining_qty -= fill_amount;
+            }
+        }
+
+        // 不足部分不模拟，由上层负责插入 LOB
+        let filled_qty = Quantity::from_f64(total_filled);
+        let final_status = if filled_qty == cmd.quantity {
+            OrderStatus::Filled
+        } else if filled_qty > Quantity::from_raw(0) {
+            OrderStatus::PartiallyFilled
+        } else {
+            OrderStatus::Submitted
+        };
+
+        let internal_order = InternalOrder {
+            order_id: order_id.clone(),
+            symbol: cmd.symbol,
+            side: cmd.side,
+            order_type: cmd.order_type,
+            quantity: cmd.quantity,
+            price: cmd.price,
+            filled_quantity: Quantity.from_f64(cmd.quantity.to_f64() - remaining_qty),
+            status: final_status,
+            created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
+            frozen_margin: required_margin
+        };
+
+
+        // 如果没匹配完，则lob里面插入
+        if (remaining_qty > 0f64) {
+            self.lob_repo.add_order(cmd.symbol, internal_order);
+        }
+
+
+        (final_status, generated_trades, total_filled)
+    }
 }
 
 impl PerpOrderExchProc for MatchingService {
@@ -535,65 +695,24 @@ impl PerpOrderExchProc for MatchingService {
         // ========================================================================
         let order_id = self.generate_order_id();
 
-        // ========================================================================
-        // 5. 根据订单类型进行撮合
-        // ========================================================================
-        let (status, trades): (OrderStatus, Vec<Trade>) = match cmd.order_type {
-            OrderType::Market => {
-                // 市价单立即成交
-                let trades = self.simulate_market_fill(&order_id, &cmd);
-                (OrderStatus::Filled, trades)
-            }
-            OrderType::Limit => {
-                // 限价单尝试撮合
-                let (filled, trades) = self.simulate_limit_fill(&order_id, &cmd);
-                if filled {
-                    (OrderStatus::Filled, trades)
-                } else {
-                    // 未成交，进入订单簿
-                    (OrderStatus::Submitted, Vec::new())
-                }
-            }
-        };
 
         // ========================================================================
-        // 6. 保存订单记录
+        // 5. 根据订单类型分开进行撮合
         // ========================================================================
-        let filled_quantity = if status == OrderStatus::Filled { cmd.quantity } else { Quantity::from_raw(0) };
 
-        let internal_order = InternalOrder {
-            order_id: order_id.clone(),
-            symbol: cmd.symbol,
-            side: cmd.side,  // 现在 cmd.side 已经是 BaseSide
-            order_type: cmd.order_type,
-            quantity: cmd.quantity,
-            price: cmd.price,
-            filled_quantity,
-            status,
-            created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
-            frozen_margin: required_margin // 保存冻结的保证金金额
-        };
+        // match cmd.order_type {
+        //     OrderType::Market => {
+        //         // 市价单：先从 LOB 匹配，不足部分模拟成交（必须完全成交）
+        //         self.handle_market_order(&order_id, &cmd)
+        //     }
+        //     OrderType::Limit => {
+        //         // 限价单：先从 LOB 匹配，不足部分挂单等待（可能部分成交）
+        //         self.handle_limit_order(&order_id, &cmd);
+        //     }
+        // };
 
-        // 保存订单元数据（LOB 不关心的字段）
-        {
-            let mut metadata = self.order_metadata.write().unwrap();
-            metadata.insert(
-                order_id.clone(),
-                OrderMetadata {
-                    status,
-                    filled_quantity,
-                    frozen_margin: required_margin,
-                    created_at: internal_order.created_at,
-                },
-            );
-        }
+        self.handle_limit_order(&order_id, &cmd);
 
-        // 保存订单到 LOB 仓储（仅未成交订单需要加入订单簿）
-        if status == OrderStatus::Submitted {
-            let mut lob = self.lob_repo.write().unwrap();
-            // TODO: 处理添加订单失败的情况
-            // lob.add_order(cmd.symbol, internal_order).ok();
-        }
 
         // ========================================================================
         // 7. 如果成交，更新持仓和余额
@@ -737,9 +856,8 @@ impl PerpOrderExchProc for MatchingService {
         let is_full_close = close_qty == position.quantity;
 
         if is_full_close {
-            // 完全平仓 - 移除持仓
-            let mut repo = self.position_repo.lock().unwrap();
-            repo.remove(cmd.symbol);
+            // 完全平仓 - 移除持仓（mock 实现）
+            // 在实际实现中，应从数据库删除持仓
         } else {
             // 部分平仓 - 减少数量，保证金按比例减少
             self.modify_position(cmd.symbol, |position| {
@@ -801,35 +919,8 @@ impl PerpOrderExchProc for MatchingService {
 
     fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
         // 先从元数据中获取订单信息
-        let mut metadata_map = self.order_metadata.write().unwrap();
 
-        if let Some(metadata) = metadata_map.get_mut(&cmd.order_id) {
-            if metadata.status.is_final() {
-                return Ok(CancelOrderResult::failed(cmd.order_id, metadata.status));
-            }
-
-            // 归还冻结的保证金（仅限未成交或部分成交的订单）
-            let unfilled_quantity = metadata.filled_quantity.to_f64(); // TODO: 需要从订单获取原始数量
-            if unfilled_quantity > 0.0 {
-                // TODO: 计算退款需要从LOB获取订单完整信息
-                // let refund_ratio = unfilled_quantity / order.quantity.to_f64();
-                // let refund_margin = Price::from_f64(metadata.frozen_margin.to_f64() * refund_ratio);
-                // let refund_u64 = Self::price_to_u64(refund_margin);
-
-                // let now = self.now();
-                // self.add_balance(refund_u64, now);
-            }
-
-            metadata.status = OrderStatus::Cancelled;
-
-            // TODO: 从 LOB 移除订单
-            // let mut lob = self.lob_repo.write().unwrap();
-            // lob.remove_order(cmd.symbol, cmd.order_id);
-
-            Ok(CancelOrderResult::success(cmd.order_id))
-        } else {
-            Err(PrepCommandError::OrderNotFound(cmd.order_id.to_string()))
-        }
+        todo!()
     }
 
     fn modify_order(&self, cmd: ModifyOrderCommand) -> Result<ModifyOrderResult, PrepCommandError> {
@@ -841,30 +932,13 @@ impl PerpOrderExchProc for MatchingService {
         // 2. 以新价格/数量重新添加订单
         // 3. 更新元数据
 
-        let mut metadata_map = self.order_metadata.write().unwrap();
 
-        if let Some(_metadata) = metadata_map.get_mut(&cmd.order_id) {
-            // if metadata.status.is_final() {
-            //     return Ok(ModifyOrderResult::failed(cmd.order_id));
-            // }
-
-            // TODO: 修改LOB中的订单
-            // let mut lob = self.lob_repo.write().unwrap();
-            // lob.remove_order(symbol, cmd.order_id);
-            // if let Some(new_price) = cmd.new_price {
-            //     ...
-            // }
-
-            Ok(ModifyOrderResult::success(cmd.order_id, cmd.new_price, cmd.new_quantity))
-        } else {
-            Err(PrepCommandError::OrderNotFound(cmd.order_id.to_string()))
-        }
+        todo!()
     }
 
     fn cancel_all_orders(&self, cmd: CancelAllOrdersCommand) -> Result<CancelAllOrdersResult, PrepCommandError> {
         // TODO: 需要遍历LOB获取所有订单
         // 当前简化实现：只处理元数据
-        let mut metadata_map = self.order_metadata.write().unwrap();
         let mut cancelled_ids: Vec<OrderId> = Vec::new();
         let mut failed_count = 0;
         let mut total_refund_u64 = 0u64;
@@ -930,33 +1004,9 @@ impl PerpOrderExchQueryProc for MatchingService {
     fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
         // TODO: 需要从LOB获取完整订单信息
         // 当前简化实现：从元数据获取部分信息
-        let metadata_map = self.order_metadata.read().unwrap();
 
-        if let Some(metadata) = metadata_map.get(&cmd.order_id) {
-            let (avg_price, filled_quantity) = if metadata.status == OrderStatus::Filled {
-                (None, metadata.filled_quantity) // TODO: 需要从LOB获取价格
-            } else {
-                (None, Quantity::from_raw(0))
-            };
 
-            // TODO: 需要从LOB获取订单的完整信息（symbol, side, order_type, quantity, price等）
-            Ok(OrderQueryResult {
-                order_id: cmd.order_id.clone(),
-                symbol: Symbol::new("UNKNOWN"), // TODO: 从LOB获取
-                side: BaseSide::Buy, // TODO: 从LOB获取
-                order_type: OrderType::Limit, // TODO: 从LOB获取
-                status: metadata.status,
-                quantity: Quantity::from_raw(0), // TODO: 从LOB获取
-                price: None, // TODO: 从LOB获取
-                filled_quantity,
-                avg_price,
-                position_side: crate::proc::trading_prep_order_proc::PositionSide::Long,
-                created_at: metadata.created_at,
-                updated_at: metadata.created_at
-            })
-        } else {
-            Err(PrepCommandError::OrderNotFound(cmd.order_id.to_string()))
-        }
+        todo!()
     }
 
     fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError> {
@@ -993,8 +1043,8 @@ impl PerpOrderExchQueryProc for MatchingService {
         let balance_u64 = self.get_balance();
         let balance = Self::u64_to_price(balance_u64);
 
-        let repo = self.position_repo.lock().unwrap();
-        let positions_vec: Vec<PositionInfo> = repo.get_all();
+        // Mock 实现：返回空的持仓列表
+        let positions_vec: Vec<PositionInfo> = vec![];
 
         Ok(AccountInfo::new(balance, Price::from_raw(0), Price::from_raw(0), balance, positions_vec, Vec::new()))
     }

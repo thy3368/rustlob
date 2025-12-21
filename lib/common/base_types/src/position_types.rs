@@ -33,6 +33,12 @@ impl fmt::Display for PositionId {
     }
 }
 
+impl Default for PositionId {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
 /// 交易对符号（如 BTCUSDT）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Symbol([u8; 16]);
@@ -84,6 +90,12 @@ impl fmt::Display for PositionSide {
             PositionSide::Short => write!(f, "SHORT"),
             PositionSide::Both => write!(f, "BOTH")
         }
+    }
+}
+
+impl Default for PositionSide {
+    fn default() -> Self {
+        PositionSide::Long
     }
 }
 
@@ -187,7 +199,8 @@ impl Default for Quantity {
 // ============================================================================
 
 /// 持仓信息
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, entity_derive::Entity)]
+#[entity(id = "position_id")]
 pub struct PositionInfo {
     /// 所属用户ID
     pub user_id: UserId,
