@@ -1,6 +1,33 @@
 //! 余额实体定义
 
 use super::types::{AccountId, AssetId, Timestamp};
+use std::fmt;
+use entity_derive::Entity;
+
+/// 余额ID（复合键：account_id:asset_id）
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BalanceId {
+    pub account_id: AccountId,
+    pub asset_id: AssetId,
+}
+
+impl BalanceId {
+    pub fn new(account_id: AccountId, asset_id: AssetId) -> Self {
+        Self { account_id, asset_id }
+    }
+}
+
+impl ToString for BalanceId {
+    fn to_string(&self) -> String {
+        format!("{}:{}", self.account_id.0, self.asset_id.0)
+    }
+}
+
+impl fmt::Display for BalanceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.account_id.0, self.asset_id.0)
+    }
+}
 
 /// 资产余额（统一资产模型）
 ///
@@ -8,9 +35,11 @@ use super::types::{AccountId, AssetId, Timestamp};
 /// - Balance(account, USDT, 100_000_000) = 100 USDT
 /// - Balance(account, BTC, 100_000_000)  = 1 BTC
 /// - Balance(account, AAPL, 1000)        = 1000 股苹果
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Entity)]
 #[repr(align(64))]
 pub struct Balance {
+    /// 余额ID（复合键）
+    pub id: BalanceId,
     /// 账户ID
     pub account_id: AccountId,
     /// 资产ID
@@ -29,6 +58,7 @@ impl Balance {
     /// 创建新余额记录
     pub fn new(account_id: AccountId, asset_id: AssetId, now: Timestamp) -> Self {
         Self {
+            id: BalanceId::new(account_id, asset_id),
             account_id,
             asset_id,
             available: 0,
@@ -41,6 +71,7 @@ impl Balance {
     /// 创建带初始余额的记录
     pub fn with_available(account_id: AccountId, asset_id: AssetId, available: u64, now: Timestamp) -> Self {
         Self {
+            id: BalanceId::new(account_id, asset_id),
             account_id,
             asset_id,
             available,

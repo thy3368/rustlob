@@ -1,7 +1,7 @@
 use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
 use mysql::prelude::*;
 
-use crate::core::db_repo::{DBCmdRepo, RepoError};
+use crate::core::db_repo::{DBCmdRepo, DBQueryRepo, RepoError, PageRequest, PageResult};
 
 /// MySQL 数据库适配器
 ///
@@ -65,7 +65,7 @@ impl<E: Entity> Default for MySqlDbRepo<E> {
 impl<E: Entity + FromCreatedEvent> DBCmdRepo for MySqlDbRepo<E> {
     type E = E;
 
-    fn replay_event(&mut self, event: &ChangeLogEntry) -> Result<(), RepoError> {
+    fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
         // 验证事件的实体类型是否匹配
         if event.entity_type != E::entity_type() {
             return Err(RepoError::DeserializationFailed(format!(
@@ -179,7 +179,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// INSERT INTO entities (entity_id, entity_type, data, timestamp, sequence)
     /// VALUES (?, ?, ?, ?, ?)
     /// ```
-    fn insert_entity(&mut self, event: &ChangeLogEntry) -> Result<(), RepoError> {
+    fn insert_entity(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
         // For mock instance, return immediately
         if self.connection.is_none() {
             return Ok(());
@@ -246,7 +246,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// # 错误处理
     /// - 如果连接为 None（mock 实例），直接返回 Ok
     /// - 如果 SQL 执行失败，返回 DeserializationFailed 错误
-    fn execute_sql(&mut self, sql: &str) -> Result<(), RepoError> {
+    fn execute_sql(&self, sql: &str) -> Result<(), RepoError> {
         if let Some(ref mut conn) = self.connection {
             // 使用 mysql crate 执行 SQL
             conn.query_drop(sql)
@@ -385,6 +385,227 @@ impl<E: Entity> MySqlDbRepo<E> {
     }
 }
 
+impl<E: Entity + FromCreatedEvent> DBQueryRepo for MySqlDbRepo<E> {
+    type E = E;
+
+    /// 按序列号查询单个实体
+    fn find_by_sequence(&self, sequence: u64) -> Result<Option<Self::E>, RepoError> {
+        // For mock instance, return None
+        if self.connection.is_none() {
+            return Ok(None);
+        }
+
+        // SQL: SELECT * FROM [entity_type] WHERE sequence = ? LIMIT 1
+        // Note: 实现需要能够反序列化实体
+        // TODO: 实现数据库查询和反序列化
+        Ok(None)
+    }
+
+    /// 按条件查询单个实体
+    fn find_one_by_condition(&self, _condition: Self::E) -> Result<Option<Self::E>, RepoError> {
+        // For mock instance, return None
+        if self.connection.is_none() {
+            return Ok(None);
+        }
+
+        // SQL: SELECT * FROM [entity_type] WHERE [condition_fields] LIMIT 1
+        // Note: condition 参数应该包含查询条件的值
+        // TODO: 实现动态条件查询
+        Ok(None)
+    }
+
+    /// 按条件查询所有匹配实体
+    fn find_all_by_condition(&self, _condition: Self::E) -> Result<Vec<Self::E>, RepoError> {
+        // For mock instance, return empty vector
+        if self.connection.is_none() {
+            return Ok(Vec::new());
+        }
+
+        // SQL: SELECT * FROM [entity_type] WHERE [condition_fields]
+        // TODO: 实现动态条件查询
+        Ok(Vec::new())
+    }
+
+    /// 按条件分页查询
+    fn find_all_by_condition_paginated(
+        &self,
+        _condition: Self::E,
+        page_req: PageRequest,
+    ) -> Result<PageResult<Self::E>, RepoError> {
+        // For mock instance, return empty result
+        if self.connection.is_none() {
+            return Ok(PageResult::new(
+                Vec::new(),
+                0,
+                page_req.page,
+                page_req.page_size,
+            ));
+        }
+
+        // SQL: SELECT * FROM [entity_type]
+        //      WHERE [condition_fields]
+        //      LIMIT ? OFFSET ?
+        //
+        // 以及单独的 COUNT 查询：
+        // SELECT COUNT(*) FROM [entity_type] WHERE [condition_fields]
+        //
+        // TODO: 实现分页查询和 COUNT 查询
+        Ok(PageResult::new(
+            Vec::new(),
+            0,
+            page_req.page,
+            page_req.page_size,
+        ))
+    }
+
+    /// 按序列号范围分页查询
+    fn find_range_by_sequence_paginated(
+        &self,
+        _from_sequence: u64,
+        _to_sequence: u64,
+        page_req: PageRequest,
+    ) -> Result<PageResult<Self::E>, RepoError> {
+        // For mock instance, return empty result
+        if self.connection.is_none() {
+            return Ok(PageResult::new(
+                Vec::new(),
+                0,
+                page_req.page,
+                page_req.page_size,
+            ));
+        }
+
+        // SQL: SELECT * FROM [entity_type]
+        //      WHERE sequence >= ? AND sequence <= ?
+        //      LIMIT ? OFFSET ?
+        //
+        // TODO: 实现范围分页查询
+        Ok(PageResult::new(
+            Vec::new(),
+            0,
+            page_req.page,
+            page_req.page_size,
+        ))
+    }
+
+    /// 按实体ID查询
+    fn find_by_id(&self, _entity_id: &str) -> Result<Option<Self::E>, RepoError> {
+        // For mock instance, return None
+        if self.connection.is_none() {
+            return Ok(None);
+        }
+
+        // SQL: SELECT * FROM [entity_type] WHERE entity_id = ? LIMIT 1
+        // TODO: 实现主键查询
+        Ok(None)
+    }
+
+    /// 基于游标的分页查询
+    fn find_by_cursor(
+        &self,
+        _condition: Self::E,
+        _cursor: Option<String>,
+        _limit: u64,
+        _forward: bool,
+    ) -> Result<(Vec<Self::E>, Option<String>), RepoError> {
+        // For mock instance, return empty result
+        if self.connection.is_none() {
+            return Ok((Vec::new(), None));
+        }
+
+        // SQL:
+        // Forward (forward=true):
+        //   SELECT * FROM [entity_type]
+        //   WHERE [condition_fields] AND id > ?cursor
+        //   ORDER BY id ASC
+        //   LIMIT ? + 1
+        //
+        // Backward (forward=false):
+        //   SELECT * FROM [entity_type]
+        //   WHERE [condition_fields] AND id < ?cursor
+        //   ORDER BY id DESC
+        //   LIMIT ? + 1
+        //
+        // TODO: 实现游标分页查询
+        Ok((Vec::new(), None))
+    }
+}
+
+impl<E: Entity> MySqlDbRepo<E> {
+    /// 生成 SELECT COUNT(*) SQL 语句
+    ///
+    /// 用于获取满足条件的总记录数
+    ///
+    /// # SQL 等价操作
+    /// ```sql
+    /// SELECT COUNT(*) FROM [entity_type]
+    /// WHERE [condition_fields]
+    /// ```
+    fn generate_count_sql(&self, entity_type: &str, where_clause: &str) -> String {
+        if where_clause.is_empty() {
+            format!("SELECT COUNT(*) as cnt FROM {}", entity_type)
+        } else {
+            format!(
+                "SELECT COUNT(*) as cnt FROM {} WHERE {}",
+                entity_type, where_clause
+            )
+        }
+    }
+
+    /// 生成 SELECT 分页 SQL 语句
+    ///
+    /// # SQL 等价操作
+    /// ```sql
+    /// SELECT * FROM [entity_type]
+    /// WHERE [condition_fields]
+    /// ORDER BY [order_fields]
+    /// LIMIT ? OFFSET ?
+    /// ```
+    fn generate_paginated_select_sql(
+        &self,
+        entity_type: &str,
+        where_clause: &str,
+        order_clause: &str,
+        limit: u64,
+        offset: u64,
+    ) -> String {
+        let mut sql = format!("SELECT * FROM {}", entity_type);
+
+        if !where_clause.is_empty() {
+            sql.push_str(&format!(" WHERE {}", where_clause));
+        }
+
+        if !order_clause.is_empty() {
+            sql.push_str(&format!(" ORDER BY {}", order_clause));
+        }
+
+        sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+        sql
+    }
+
+    /// 生成范围查询 SQL
+    fn generate_range_where_clause(&self, from_seq: u64, to_seq: u64) -> String {
+        format!("sequence >= {} AND sequence <= {}", from_seq, to_seq)
+    }
+
+    /// 生成游标查询 SQL WHERE 子句
+    fn generate_cursor_where_clause(
+        &self,
+        cursor: &str,
+        forward: bool,
+        additional_condition: &str,
+    ) -> String {
+        let comparison = if forward { ">" } else { "<" };
+        let mut where_clause = format!("entity_id {} '{}'", comparison, cursor);
+
+        if !additional_condition.is_empty() {
+            where_clause.push_str(&format!(" AND {}", additional_condition));
+        }
+
+        where_clause
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use base_types::{Price, Quantity, Side, Symbol};
@@ -489,5 +710,120 @@ mod tests {
         // 验证 mock repo 创建成功
         let exists = repo.entity_exists("test", "test").unwrap();
         assert!(!exists, "Mock repo 中实体不应该存在");
+    }
+
+    #[test]
+    fn test_generate_count_sql() {
+        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+        // 不含 WHERE 子句的 COUNT
+        let sql = repo.generate_count_sql("Order", "");
+        assert_eq!(sql, "SELECT COUNT(*) as cnt FROM Order");
+
+        // 含 WHERE 子句的 COUNT
+        let sql = repo.generate_count_sql("Order", "symbol = 'BTCUSDT' AND status = 'PENDING'");
+        assert!(sql.contains("WHERE symbol = 'BTCUSDT' AND status = 'PENDING'"));
+        assert!(sql.contains("COUNT(*)"));
+    }
+
+    #[test]
+    fn test_generate_paginated_select_sql() {
+        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+        // 基本分页 - 第一页，每页 20 条
+        let sql = repo.generate_paginated_select_sql("Order", "", "", 20, 0);
+        assert_eq!(sql, "SELECT * FROM Order LIMIT 20 OFFSET 0");
+
+        // 第二页
+        let sql = repo.generate_paginated_select_sql("Order", "", "", 20, 20);
+        assert_eq!(sql, "SELECT * FROM Order LIMIT 20 OFFSET 20");
+
+        // 含 WHERE 和 ORDER 子句
+        let sql = repo.generate_paginated_select_sql(
+            "Order",
+            "symbol = 'BTCUSDT'",
+            "created_at DESC",
+            50,
+            100,
+        );
+        assert!(sql.contains("WHERE symbol = 'BTCUSDT'"));
+        assert!(sql.contains("ORDER BY created_at DESC"));
+        assert!(sql.contains("LIMIT 50 OFFSET 100"));
+    }
+
+    #[test]
+    fn test_generate_range_where_clause() {
+        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+        let where_clause = repo.generate_range_where_clause(100, 200);
+        assert_eq!(where_clause, "sequence >= 100 AND sequence <= 200");
+
+        let where_clause = repo.generate_range_where_clause(0, 1000);
+        assert_eq!(where_clause, "sequence >= 0 AND sequence <= 1000");
+    }
+
+    #[test]
+    fn test_generate_cursor_where_clause() {
+        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+        // 向前翻页（forward=true）
+        let where_clause = repo.generate_cursor_where_clause("order_100", true, "");
+        assert_eq!(where_clause, "entity_id > 'order_100'");
+
+        // 向后翻页（forward=false）
+        let where_clause = repo.generate_cursor_where_clause("order_100", false, "");
+        assert_eq!(where_clause, "entity_id < 'order_100'");
+
+        // 附加条件
+        let where_clause = repo.generate_cursor_where_clause("order_100", true, "symbol = 'BTCUSDT'");
+        assert!(where_clause.contains("entity_id > 'order_100'"));
+        assert!(where_clause.contains("symbol = 'BTCUSDT'"));
+    }
+
+    #[test]
+    fn test_dbqueryrepo_mock_instance() {
+        use crate::core::db_repo::DBQueryRepo;
+
+        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+
+        // 所有查询方法在 mock 实例中应返回空结果
+        assert_eq!(repo.find_by_sequence(100).unwrap(), None);
+        assert_eq!(repo.find_by_id("order_123").unwrap(), None);
+        assert_eq!(repo.find_all_by_condition(TestEntity {
+            id: 0,
+            symbol: Symbol::new("BTC"),
+            price: Price::from_raw(0),
+            quantity: Quantity::from_raw(0),
+            filled_quantity: Quantity::from_raw(0),
+            side: Side::Buy,
+        }).unwrap(), Vec::<TestEntity>::new());
+
+        // 分页查询返回空结果但正确的元数据
+        let page_req = PageRequest::new(0, 20);
+        let result = repo.find_all_by_condition_paginated(TestEntity {
+            id: 0,
+            symbol: Symbol::new("BTC"),
+            price: Price::from_raw(0),
+            quantity: Quantity::from_raw(0),
+            filled_quantity: Quantity::from_raw(0),
+            side: Side::Buy,
+        }, page_req).unwrap();
+
+        assert_eq!(result.page, 0);
+        assert_eq!(result.page_size, 20);
+        assert_eq!(result.total_elements, 0);
+        assert!(result.content.is_empty());
+
+        // 游标查询返回空结果
+        let (items, cursor) = repo.find_by_cursor(TestEntity {
+            id: 0,
+            symbol: Symbol::new("BTC"),
+            price: Price::from_raw(0),
+            quantity: Quantity::from_raw(0),
+            filled_quantity: Quantity::from_raw(0),
+            side: Side::Buy,
+        }, None, 20, true).unwrap();
+        assert!(items.is_empty());
+        assert!(cursor.is_none());
     }
 }

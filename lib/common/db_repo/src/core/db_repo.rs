@@ -271,7 +271,7 @@ pub trait DBCmdRepo {
     ///
     /// lob.replay_event(&event)?;
     /// ```
-    fn replay_event(&mut self, event: &ChangeLogEntry) -> Result<(), RepoError>;
+    fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError>;
 
     /// 批量回放多个事件
     ///
@@ -305,7 +305,7 @@ pub trait DBCmdRepo {
     ///
     /// lob.replay_events(&events)?;
     /// ```
-    fn replay_events(&mut self, events: &[ChangeLogEntry]) -> Result<(), RepoError> {
+    fn replay_events(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }
@@ -350,7 +350,7 @@ pub trait DBCmdRepo {
     /// // 只会应用 sequence >= 5001 的事件
     /// ```
     fn replay_from_sequence(
-        &mut self,
+        &self,
         events: &[ChangeLogEntry],
         from_sequence: u64,
     ) -> Result<(), RepoError> {

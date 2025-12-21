@@ -3,9 +3,10 @@ use std::{
     sync::{Arc, Mutex, RwLock}
 };
 
-// Clean Architecture: 引入 BalanceRepo 和 PositionRepo 接口
-use account::domain::entity::{AccountId, AssetId, Timestamp};
-use account::domain::repo::{BalanceRepo, PositionRepo};
+// Clean Architecture: 引入 MySqlDbRepo 和 PositionRepo 接口
+use account::domain::entity::{AccountId, AssetId, Balance, Timestamp};
+use account::domain::repo::PositionRepo;
+use db_repo::mysql_db_repo::MySqlDbRepo;
 
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
@@ -31,14 +32,14 @@ use crate::proc::{
 /// 本地撮合引擎服务
 ///
 /// 遵循Clean Architecture原则的撮合引擎实现
-/// - 依赖注入：通过 BalanceRepo 接口管理余额
+/// - 依赖注入：通过 MySqlDbRepo<Balance> 管理余额
 /// - 依赖注入：通过 PositionRepo 接口管理持仓
 /// - 依赖注入：通过 MultiSymbolLobRepo 接口管理订单簿
 /// - 支持价格-时间优先的订单匹配
 /// - 维护持仓、余额、订单状态
-pub struct MatchingService<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> {
+pub struct MatchingService<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> {
     /// 余额仓储（依赖注入）
-    balance_repo: Arc<Mutex<R>>,
+    balance_repo: MySqlDbRepo<Balance>,
 
     /// 持仓仓储（依赖注入）
     position_repo: Arc<Mutex<P>>,
@@ -71,7 +72,7 @@ struct OrderMetadata {
 }
 
 
-impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> MatchingService<R, P, L> {
+impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> MatchingService<P, L> {
     /// 创建新的撮合服务实例
     ///
     /// # 参数
@@ -80,9 +81,9 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     /// - `lob_repo`: LOB 仓储实现（依赖注入）
     /// - `account_id`: 账户ID
     /// - `asset_id`: 资产ID（如 USDT）
-    pub fn new(balance_repo: R, position_repo: P, lob_repo: L, account_id: AccountId, asset_id: AssetId) -> Self {
+    pub fn new(balance_repo: MySqlDbRepo<Balance>, position_repo: P, lob_repo: L, account_id: AccountId, asset_id: AssetId) -> Self {
         Self {
-            balance_repo: Arc::new(Mutex::new(balance_repo)),
+            balance_repo,
             position_repo: Arc::new(Mutex::new(position_repo)),
             lob_repo: Arc::new(RwLock::new(lob_repo)),
             account_id,
@@ -99,10 +100,15 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     /// 可用余额（u64 原始值）
     ///
     /// # 说明
-    /// 从 BalanceRepo 获取余额，如果不存在返回 0
+    /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
     fn get_balance(&self) -> u64 {
-        let repo = self.balance_repo.lock().unwrap();
-        repo.get(self.account_id, self.asset_id).map(|b| b.available).unwrap_or(0)
+        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+        self.balance_repo
+            .find_by_id(&balance_id)
+            .ok()
+            .flatten()
+            .map(|b| b.available)
+            .unwrap_or(0)
     }
 
     /// 扣减余额（冻结保证金、支付手续费）
@@ -114,14 +120,20 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     /// - `Ok(())`: 扣减成功
     /// - `Err(InsufficientBalance)`: 余额不足
     fn deduct_balance(&self, amount: u64, now: Timestamp) -> Result<(), PrepCommandError> {
-        let mut repo = self.balance_repo.lock().unwrap();
+        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
 
-        let balance = repo.get_or_create(self.account_id, self.asset_id, now);
+        // 获取或创建余额
+        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+            Some(b) => b,
+            None => Balance::new(self.account_id, self.asset_id, now),
+        };
+
         if balance.available < amount {
             return Err(PrepCommandError::InsufficientBalance);
         }
-        balance.deduct_balance(amount, now);
 
+        balance.deduct_balance(amount, now);
+        // TODO: 使用 track_update 和 replay_event 持久化更新
         Ok(())
     }
 
@@ -130,9 +142,16 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     /// # 参数
     /// - `amount`: 增加金额（u64）
     fn add_balance(&self, amount: u64, now: Timestamp) {
-        let mut repo = self.balance_repo.lock().unwrap();
-        let balance = repo.get_or_create(self.account_id, self.asset_id, now);
+        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+
+        // 获取或创建余额
+        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+            Some(b) => b,
+            None => Balance::new(self.account_id, self.asset_id, now),
+        };
+
         balance.add_balance(amount, now);
+        // TODO: 使用 track_update 和 replay_event 持久化更新
     }
 
     // ========================================================================
@@ -443,7 +462,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     }
 }
 
-impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchProc for MatchingService<R, P, L> {
+impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchProc for MatchingService<P, L> {
     /// 处理开仓命令
     ///
     /// # 流程
@@ -882,7 +901,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
     }
 }
 
-impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchQueryProc for MatchingService<R, P, L> {
+impl<P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<InternalOrder>> PerpOrderExchQueryProc for MatchingService<P, L> {
     fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
         // TODO: 需要从LOB获取完整订单信息
         // 当前简化实现：从元数据获取部分信息
