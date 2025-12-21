@@ -1,7 +1,7 @@
 use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
 use mysql::prelude::*;
 
-use crate::core::db_repo::{DBRepo, RepoError};
+use crate::core::db_repo::{DBCmdRepo, RepoError};
 
 /// MySQL 数据库适配器
 ///
@@ -62,7 +62,7 @@ impl<E: Entity> Default for MySqlDbRepo<E> {
     fn default() -> Self { Self::new_mock() }
 }
 
-impl<E: Entity + FromCreatedEvent> DBRepo for MySqlDbRepo<E> {
+impl<E: Entity + FromCreatedEvent> DBCmdRepo for MySqlDbRepo<E> {
     type E = E;
 
     fn replay_event(&mut self, event: &ChangeLogEntry) -> Result<(), RepoError> {
