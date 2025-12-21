@@ -1,6 +1,5 @@
 //! 业务流程处理器模块
 
-pub mod events;
 pub mod trading_prep_order_proc;
 pub mod trading_prep_order_proc_impl;
 

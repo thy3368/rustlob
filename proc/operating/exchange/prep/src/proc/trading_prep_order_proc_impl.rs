@@ -111,7 +111,7 @@ impl MatchingService {
         // 获取或创建余额
         let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
             Some(b) => b,
-            None => Balance::new(self.account_id, self.asset_id, now)
+            None => Balance::new(self.account_id, self.asset_id, now)//todo 应该报错
         };
 
         if balance.available < amount {
