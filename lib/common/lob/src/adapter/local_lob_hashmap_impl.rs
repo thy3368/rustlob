@@ -23,6 +23,7 @@ impl PricePoint {
     }
 }
 
+//todo 用type 代码范型
 /// 订单包装器
 ///
 /// 包装 Order trait 对象，并添加链表指针
@@ -426,86 +427,6 @@ impl<O: Order> SymbolLob for LocalLobHashMap<O> {
         self.last_trade_price = Some(price);
     }
 
-    // === 快照实现（需要订单类型支持序列化）===
-    //
-    // 注意：如果订单类型 O 实现了 serde::Serialize 和 serde::Deserialize，
-    // 可以覆盖这些方法来提供真正的快照功能。
-    //
-    // 示例实现参见：lib/common/lob/examples/snapshot_example.rs
-    //
-    // fn create_snapshot(&self, timestamp: u64, sequence: u64) -> Result<LobSnapshot, RepoError> {
-    //     use serde::Serialize;
-    //
-    //     #[derive(Serialize)]
-    //     struct SnapshotData {
-    //         orders: Vec<(OrderId, O)>,
-    //         tick_size: i64,
-    //     }
-    //
-    //     let orders: Vec<(OrderId, O)> = self.order_index
-    //         .iter()
-    //         .filter_map(|(order_id, &idx)| {
-    //             self.orders.get(idx)
-    //                 .and_then(|opt| opt.as_ref())
-    //                 .map(|node| (*order_id, node.order.clone()))
-    //         })
-    //         .collect();
-    //
-    //     let snapshot_data = SnapshotData {
-    //         orders,
-    //         tick_size: self.tick_size.raw(),
-    //     };
-    //
-    //     let data = bincode::serialize(&snapshot_data)
-    //         .map_err(|e| RepoError::SerializationFailed(e.to_string()))?;
-    //
-    //     Ok(LobSnapshot::new(
-    //         self.symbol,
-    //         timestamp,
-    //         sequence,
-    //         data,
-    //         self.best_bid(),
-    //         self.best_ask(),
-    //         self.last_price(),
-    //     ))
-    // }
-    //
-    // fn restore_from_snapshot(&mut self, snapshot: &LobSnapshot) -> Result<(), RepoError> {
-    //     use serde::Deserialize;
-    //
-    //     if snapshot.symbol != self.symbol {
-    //         return Err(RepoError::SymbolMismatch {
-    //             expected: self.symbol.to_string(),
-    //             actual: snapshot.symbol.to_string(),
-    //         });
-    //     }
-    //
-    //     #[derive(Deserialize)]
-    //     struct SnapshotData<O> {
-    //         orders: Vec<(OrderId, O)>,
-    //         tick_size: i64,
-    //     }
-    //
-    //     let snapshot_data: SnapshotData<O> = bincode::deserialize(&snapshot.data)
-    //         .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
-    //
-    //     // 清空当前状态
-    //     self.bids.clear();
-    //     self.asks.clear();
-    //     self.orders.clear();
-    //     self.order_index.clear();
-    //     self.next_slot = 0;
-    //
-    //     // 恢复订单
-    //     for (_order_id, order) in snapshot_data.orders {
-    //         self.add_order(order)?;
-    //     }
-    //
-    //     // 恢复市场数据
-    //     self.bid_max = snapshot.best_bid;
-    //     self.ask_min = snapshot.best_ask;
-    //     self.last_trade_price = snapshot.last_price;
-    //
-    //     Ok(())
-    // }
+
+
 }

@@ -5,6 +5,8 @@ use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, Order};
 use crate::adapter::remote_lob_impl::RemoteLob;
 use crate::core::repo_snapshot_support::RepoError;
 
+//todo 用type 代码范型
+
 #[allow(dead_code)]
 pub struct DistributedLobRepo<O: Order> {
     lobs: HashMap<Symbol, RemoteLob<O>>

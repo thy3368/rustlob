@@ -2,6 +2,7 @@ use base_types::{OrderId, Price, Quantity, Side, Symbol};
 use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
 
 // todo 通过rpc连接远程的lob
+//todo 用type 代码范型
 pub struct RemoteLob<O: Order> {
     symbol: Symbol,
     _phantom: std::marker::PhantomData<O>

@@ -23,6 +23,8 @@ impl PricePoint {
     }
 }
 
+//todo 用type 代码范型
+
 /// 订单包装器
 ///
 /// 包装 Order trait 对象，并添加链表指针

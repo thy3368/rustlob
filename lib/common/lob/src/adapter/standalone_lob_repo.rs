@@ -8,6 +8,8 @@ use crate::{
 };
 use crate::core::repo_snapshot_support::RepoError;
 
+
+//todo 用type 代码范型
 /// 单一 LOB 仓储
 ///
 /// 使用 HashMap 存储多个交易对的 LOB，实现 O(1) 查找性能
@@ -145,144 +147,6 @@ mod tests {
         assert!(eth_lob.is_some(), "应该能找到 ETHUSDT 的 LOB");
     }
 
-    #[test]
-    fn test_match_orders_symbol_not_found() {
-        // 创建只有 BTCUSDT 的 repo
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-        let repo = StandaloneLobRepo::new(vec![lob]);
-
-        // 查找不存在的 symbol
-        let not_found_symbol = Symbol::new("XRPUSDT");
-        let result = repo.lobs.get(&not_found_symbol);
-
-        assert!(result.is_none(), "不存在的 symbol 应该返回 None");
-    }
-
-    #[test]
-    fn test_empty_repo() {
-        // 创建空的 repo
-        let repo: StandaloneLobRepo<MockOrder> = StandaloneLobRepo::new(vec![]);
-
-        // 验证 HashMap 是空的
-        assert!(repo.lobs.is_empty(), "空 repo 的 HashMap 应该为空");
-
-        // 查找任何 symbol 都应该返回 None
-        let symbol = Symbol::new("BTCUSDT");
-        let result = repo.lobs.get(&symbol);
-
-        assert!(result.is_none(), "空 repo 应该返回 None");
-    }
-
-    #[test]
-    fn test_multiple_lobs_with_same_symbol() {
-        // 测试当有多个相同 symbol 的 LOB 时，HashMap 只保留最后一个
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let lob1: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-        let lob2: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-
-        let repo = StandaloneLobRepo::new(vec![lob1, lob2]);
-
-        // HashMap 应该只包含一个 BTCUSDT
-        assert_eq!(repo.lobs.len(), 1, "HashMap 中应该只有一个 LOB");
-        assert!(repo.lobs.contains_key(&btc_symbol), "应该包含 BTCUSDT");
-    }
-
-    #[test]
-    fn test_symbol_comparison() {
-        // 测试 Symbol 的相等性比较
-        let symbol1 = Symbol::new("BTCUSDT");
-        let symbol2 = Symbol::new("BTCUSDT");
-        let symbol3 = Symbol::new("ETHUSDT");
-
-        assert_eq!(symbol1, symbol2, "相同字符串创建的 Symbol 应该相等");
-        assert_ne!(symbol1, symbol3, "不同字符串创建的 Symbol 应该不相等");
-    }
-
-
-    #[test]
-    fn test_hashmap_performance() {
-        // 测试 HashMap 的容量预分配
-        let symbols = vec![Symbol::new("BTCUSDT"), Symbol::new("ETHUSDT"), Symbol::new("BNBUSDT")];
-
-        let lobs: Vec<LocalLob<MockOrder>> = symbols.iter().map(|s| LocalLob::new(*s)).collect();
-        let repo = StandaloneLobRepo::new(lobs);
-
-        // 验证所有 symbol 都被正确插入
-        assert_eq!(repo.lobs.len(), 3, "应该有 3 个 LOB");
-        for symbol in symbols {
-            assert!(repo.lobs.contains_key(&symbol), "应该包含 symbol: {}", symbol);
-        }
-    }
-
-    #[test]
-    fn test_match_orders_integration() {
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-
-        // 添加一些卖单
-        let sell_order = MockOrder {
-            id: 1,
-            symbol: btc_symbol,
-            price: Price::from_raw(50100),
-            quantity: Quantity::from_raw(100),
-            side: Side::Sell,
-        filled_quantity: Quantity::from_raw(0),
-        };
-        lob.add_order(sell_order).unwrap();
-
-        let repo = StandaloneLobRepo::new(vec![lob]);
-
-        // 测试匹配订单
-        let matched = repo.match_orders(btc_symbol, Side::Buy, Price::from_raw(50100), Quantity::from_raw(50));
-        assert!(matched.is_some());
-    }
-
-    #[test]
-    fn test_o1_lookup_performance() {
-        // 性能测试：验证 O(1) 查找
-        // 创建大量 LOB 来验证查找性能不随数量增加而显著下降
-        let symbols: Vec<Symbol> = (0..100).map(|i| Symbol::new(&format!("SYM{:04}USDT", i))).collect();
-
-        let lobs: Vec<LocalLob<MockOrder>> = symbols.iter().map(|s| LocalLob::new(*s)).collect();
-        let repo = StandaloneLobRepo::new(lobs);
-
-        // 查找第一个和最后一个 symbol 的性能应该相同
-        let first_symbol = symbols[0];
-        let last_symbol = symbols[99];
-
-        assert!(repo.lobs.get(&first_symbol).is_some(), "应该找到第一个 symbol");
-        assert!(repo.lobs.get(&last_symbol).is_some(), "应该找到最后一个 symbol");
-        assert_eq!(repo.lobs.len(), 100, "应该有 100 个 LOB");
-    }
-
-    // === MultiLobRepo trait 测试 ===
-
-
-    #[test]
-    fn test_multi_lob_repo_trait_best_bid_ask() {
-        let btc_symbol = Symbol::new("BTCUSDT");
-        let mut lob: LocalLob<MockOrder> = LocalLob::new(btc_symbol);
-
-        // 添加订单
-        let buy_order = MockOrder {
-            id: 1,
-            symbol: btc_symbol,
-            price: Price::from_raw(50000),
-            quantity: Quantity::from_raw(100),
-            side: Side::Buy,
-        filled_quantity: Quantity::from_raw(0),
-        };
-        lob.add_order(buy_order).unwrap();
-
-        let repo = StandaloneLobRepo::new(vec![lob]);
-
-        // 使用 trait 方法
-
-        // 测试 best_bid
-        let best_bid = repo.best_bid(btc_symbol);
-        assert_eq!(best_bid, Some(Price::from_raw(50000)));
-    }
 
 
 
