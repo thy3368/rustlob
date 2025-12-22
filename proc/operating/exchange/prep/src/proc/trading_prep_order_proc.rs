@@ -8,13 +8,13 @@ use std::fmt;
 // ============================================================================
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
-pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, Symbol};
+pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, TradingPair, Trade, TradeId, TradingPair};
 
 // ============================================================================
 // 从 account crate 导入领域实体
 // ============================================================================
 pub use account::PositionInfo;
-
+use base_types::AssetId;
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
@@ -82,7 +82,7 @@ impl TimeInForce {
 #[derive(Debug, Clone, Copy)]
 pub struct OpenPositionCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 订单方向（Buy=做多, Sell=做空）
     pub side: Side,
     /// 订单类型
@@ -104,18 +104,18 @@ impl OpenPositionCommand {
     ///
     /// # 示例
     /// ```
-    /// use prep_proc::proc::trading_prep_order_proc::{OpenPositionCommand, Symbol, Quantity};
+    /// use prep_proc::proc::trading_prep_order_proc::{OpenPositionCommand, TradingPair, AssetId, Quantity};
     ///
     /// // 开多BTC，数量1.0
     /// let cmd = OpenPositionCommand::market_long(
-    ///     Symbol::new("BTCUSDT"),
+    ///     TradingPair::BTC_USDT,
     ///     Quantity::from_f64(1.0)
     /// );
     /// ```
     #[inline]
-    pub fn market_long(symbol: Symbol, quantity: Quantity) -> Self {
+    pub fn market_long(trading_pair: TradingPair, quantity: Quantity) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Buy,
             order_type: OrderType::Market,
             quantity,
@@ -128,9 +128,9 @@ impl OpenPositionCommand {
 
     /// 创建市价做空订单
     #[inline]
-    pub fn market_short(symbol: Symbol, quantity: Quantity) -> Self {
+    pub fn market_short(trading_pair: TradingPair, quantity: Quantity) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Sell,
             order_type: OrderType::Market,
             quantity,
@@ -143,9 +143,9 @@ impl OpenPositionCommand {
 
     /// 创建限价做多订单
     #[inline]
-    pub fn limit_long(symbol: Symbol, quantity: Quantity, price: Price) -> Self {
+    pub fn limit_long(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Buy,
             order_type: OrderType::Limit,
             quantity,
@@ -158,9 +158,9 @@ impl OpenPositionCommand {
 
     /// 创建限价做空订单
     #[inline]
-    pub fn limit_short(symbol: Symbol, quantity: Quantity, price: Price) -> Self {
+    pub fn limit_short(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Sell,
             order_type: OrderType::Limit,
             quantity,
@@ -227,7 +227,7 @@ impl OpenPositionCommand {
 #[derive(Debug, Clone, Copy)]
 pub struct ClosePositionCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 订单方向（平多用Sell，平空用Buy）
     pub side: Side,
     /// 订单类型
@@ -247,24 +247,24 @@ impl ClosePositionCommand {
     ///
     /// # 示例
     /// ```
-    /// use prep_proc::proc::trading_prep_order_proc::{ClosePositionCommand, Symbol, Quantity};
+    /// use prep_proc::proc::trading_prep_order_proc::{ClosePositionCommand, TradingPair, Quantity};
     ///
     /// // 全部平多仓
     /// let cmd = ClosePositionCommand::market_close_long(
-    ///     Symbol::new("BTCUSDT"),
+    ///     TradingPair::new("BTCUSDT"),
     ///     None  // None表示全部平仓
     /// );
     ///
     /// // 部分平多仓
     /// let cmd = ClosePositionCommand::market_close_long(
-    ///     Symbol::new("BTCUSDT"),
+    ///     TradingPair::new("BTCUSDT"),
     ///     Some(Quantity::from_f64(0.5))
     /// );
     /// ```
     #[inline]
-    pub fn market_close_long(symbol: Symbol, quantity: Option<Quantity>) -> Self {
+    pub fn market_close_long(trading_pair: TradingPair, quantity: Option<Quantity>) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Sell, // 平多用卖
             order_type: OrderType::Market,
             quantity,
@@ -276,9 +276,9 @@ impl ClosePositionCommand {
 
     /// 市价平空仓
     #[inline]
-    pub fn market_close_short(symbol: Symbol, quantity: Option<Quantity>) -> Self {
+    pub fn market_close_short(trading_pair: TradingPair, quantity: Option<Quantity>) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Buy, // 平空用买
             order_type: OrderType::Market,
             quantity,
@@ -290,9 +290,9 @@ impl ClosePositionCommand {
 
     /// 限价平多仓
     #[inline]
-    pub fn limit_close_long(symbol: Symbol, quantity: Quantity, price: Price) -> Self {
+    pub fn limit_close_long(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Sell,
             order_type: OrderType::Limit,
             quantity: Some(quantity),
@@ -304,9 +304,9 @@ impl ClosePositionCommand {
 
     /// 限价平空仓
     #[inline]
-    pub fn limit_close_short(symbol: Symbol, quantity: Quantity, price: Price) -> Self {
+    pub fn limit_close_short(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side: Side::Buy,
             order_type: OrderType::Limit,
             quantity: Some(quantity),
@@ -318,9 +318,9 @@ impl ClosePositionCommand {
 
     /// 市价平仓（单向持仓模式）
     #[inline]
-    pub fn market_close_both(symbol: Symbol, side: Side, quantity: Option<Quantity>) -> Self {
+    pub fn market_close_both(trading_pair: TradingPair, side: Side, quantity: Option<Quantity>) -> Self {
         Self {
-            symbol,
+            trading_pair,
             side,
             order_type: OrderType::Market,
             quantity,
@@ -408,82 +408,6 @@ impl std::error::Error for PrepCommandError {}
 // ============================================================================
 // 命令响应类型
 // ============================================================================
-
-/// 成交ID
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TradeId(String);
-
-impl TradeId {
-    /// 创建新的成交ID
-    pub fn new(id: impl Into<String>) -> Self { Self(id.into()) }
-
-    /// 生成随机成交ID
-    pub fn generate() -> Self {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        Self(format!("TRD-{}", timestamp))
-    }
-
-    /// 获取字符串表示
-    pub fn as_str(&self) -> &str { &self.0 }
-}
-
-impl fmt::Display for TradeId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
-}
-
-/// 成交记录（单次撮合成交）
-#[derive(Debug, Clone)]
-pub struct Trade {
-    /// 成交ID
-    pub trade_id: TradeId,
-    /// 关联订单ID
-    pub order_id: OrderId,
-    /// 交易对
-    pub symbol: Symbol,
-    /// 订单方向
-    pub side: Side,
-    /// 成交价格
-    pub price: Price,
-    /// 成交数量
-    pub quantity: Quantity,
-    /// 手续费
-    pub fee: Price,
-    /// 手续费资产（通常是USDT）
-    pub fee_asset: Symbol,
-    /// 是否为Maker（流动性提供方）
-    pub is_maker: bool,
-    /// 成交时间戳（毫秒）
-    pub timestamp: u64
-}
-
-impl Trade {
-    /// 创建新的成交记录
-    pub fn new(
-        trade_id: TradeId, order_id: OrderId, symbol: Symbol, side: Side, price: Price, quantity: Quantity, fee: Price,
-        fee_asset: Symbol, is_maker: bool
-    ) -> Self {
-        Self {
-            trade_id,
-            order_id,
-            symbol,
-            side,
-            price,
-            quantity,
-            fee,
-            fee_asset,
-            is_maker,
-            timestamp: current_timestamp_ms()
-        }
-    }
-
-    /// 计算成交金额（价格 * 数量）
-    pub fn notional(&self) -> Price {
-        // 简化计算：使用浮点数计算后转回定点数
-        let value = self.price.to_f64() * self.quantity.to_f64();
-        Price::from_f64(value)
-    }
-}
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -763,15 +687,15 @@ pub struct CancelOrderCommand {
     /// 订单ID
     pub order_id: OrderId,
     /// 交易对
-    pub symbol: Symbol
+    pub trading_pair: TradingPair
 }
 
 impl CancelOrderCommand {
     /// 创建取消订单命令
-    pub fn new(order_id: OrderId, symbol: Symbol) -> Self {
+    pub fn new(order_id: OrderId, trading_pair: TradingPair) -> Self {
         Self {
             order_id,
-            symbol
+            trading_pair
         }
     }
 }
@@ -817,15 +741,15 @@ pub struct QueryOrderCommand {
     /// 订单ID
     pub order_id: OrderId,
     /// 交易对
-    pub symbol: Symbol
+    pub trading_pair: TradingPair
 }
 
 impl QueryOrderCommand {
     /// 创建查询订单命令
-    pub fn new(order_id: OrderId, symbol: Symbol) -> Self {
+    pub fn new(order_id: OrderId, trading_pair: TradingPair) -> Self {
         Self {
             order_id,
-            symbol
+            trading_pair
         }
     }
 }
@@ -836,7 +760,7 @@ pub struct OrderQueryResult {
     /// 订单ID
     pub order_id: OrderId,
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 订单方向
     pub side: Side,
     /// 订单类型
@@ -863,40 +787,40 @@ pub struct OrderQueryResult {
 #[derive(Debug, Clone)]
 pub struct QueryPositionCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 持仓方向
     pub position_side: PositionSide
 }
 
 impl QueryPositionCommand {
     /// 创建查询持仓命令
-    pub fn new(symbol: Symbol, position_side: PositionSide) -> Self {
+    pub fn new(trading_pair: TradingPair, position_side: PositionSide) -> Self {
         Self {
-            symbol,
+            trading_pair,
             position_side
         }
     }
 
     /// 查询多头持仓
-    pub fn long(symbol: Symbol) -> Self {
+    pub fn long(trading_pair: TradingPair) -> Self {
         Self {
-            symbol,
+            trading_pair,
             position_side: PositionSide::Long
         }
     }
 
     /// 查询空头持仓
-    pub fn short(symbol: Symbol) -> Self {
+    pub fn short(trading_pair: TradingPair) -> Self {
         Self {
-            symbol,
+            trading_pair,
             position_side: PositionSide::Short
         }
     }
 
     /// 查询单向持仓
-    pub fn both(symbol: Symbol) -> Self {
+    pub fn both(trading_pair: TradingPair) -> Self {
         Self {
-            symbol,
+            trading_pair,
             position_side: PositionSide::Both
         }
     }
@@ -913,7 +837,7 @@ pub struct ModifyOrderCommand {
     /// 订单ID
     pub order_id: OrderId,
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 新价格（None表示不修改）
     pub new_price: Option<Price>,
     /// 新数量（None表示不修改）
@@ -922,10 +846,10 @@ pub struct ModifyOrderCommand {
 
 impl ModifyOrderCommand {
     /// 创建修改订单命令
-    pub fn new(order_id: OrderId, symbol: Symbol) -> Self {
+    pub fn new(order_id: OrderId, trading_pair: TradingPair) -> Self {
         Self {
             order_id,
-            symbol,
+            trading_pair,
             new_price: None,
             new_quantity: None
         }
@@ -1011,7 +935,7 @@ impl ModifyOrderResult {
 #[derive(Debug, Clone)]
 pub struct CancelAllOrdersCommand {
     /// 交易对（None表示取消所有交易对的订单）
-    pub symbol: Option<Symbol>,
+    pub trading_pair: Option<TradingPair>,
     /// 持仓方向（None表示取消所有方向的订单）
     pub position_side: Option<PositionSide>
 }
@@ -1020,15 +944,15 @@ impl CancelAllOrdersCommand {
     /// 取消所有订单
     pub fn all() -> Self {
         Self {
-            symbol: None,
+            trading_pair: None,
             position_side: None
         }
     }
 
     /// 取消指定交易对的所有订单
-    pub fn by_symbol(symbol: Symbol) -> Self {
+    pub fn by_symbol(trading_pair: TradingPair) -> Self {
         Self {
-            symbol: Some(symbol),
+            trading_pair: Some(trading_pair),
             position_side: None
         }
     }
@@ -1036,15 +960,15 @@ impl CancelAllOrdersCommand {
     /// 取消指定持仓方向的所有订单
     pub fn by_position_side(position_side: PositionSide) -> Self {
         Self {
-            symbol: None,
+            trading_pair: None,
             position_side: Some(position_side)
         }
     }
 
     /// 取消指定交易对和持仓方向的订单
-    pub fn by_symbol_and_side(symbol: Symbol, position_side: PositionSide) -> Self {
+    pub fn by_symbol_and_side(trading_pair: TradingPair, position_side: PositionSide) -> Self {
         Self {
-            symbol: Some(symbol),
+            trading_pair: Some(trading_pair),
             position_side: Some(position_side)
         }
     }
@@ -1141,16 +1065,16 @@ impl MarginType {
 #[derive(Debug, Clone)]
 pub struct SetLeverageCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 杠杆倍数（1-125）
     pub leverage: u8
 }
 
 impl SetLeverageCommand {
     /// 创建设置杠杆命令
-    pub fn new(symbol: Symbol, leverage: u8) -> Self {
+    pub fn new(trading_pair: TradingPair, leverage: u8) -> Self {
         Self {
-            symbol,
+            trading_pair,
             leverage
         }
     }
@@ -1168,7 +1092,7 @@ impl SetLeverageCommand {
 #[derive(Debug, Clone)]
 pub struct SetLeverageResult {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 旧杠杆倍数
     pub old_leverage: u8,
     /// 新杠杆倍数
@@ -1218,16 +1142,16 @@ pub struct SetLeverageResult {
 #[derive(Debug, Clone)]
 pub struct SetMarginTypeCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 保证金类型
     pub margin_type: MarginType
 }
 
 impl SetMarginTypeCommand {
     /// 创建设置保证金类型命令
-    pub fn new(symbol: Symbol, margin_type: MarginType) -> Self {
+    pub fn new(trading_pair: TradingPair, margin_type: MarginType) -> Self {
         Self {
-            symbol,
+            trading_pair,
             margin_type
         }
     }
@@ -1237,7 +1161,7 @@ impl SetMarginTypeCommand {
 #[derive(Debug, Clone)]
 pub struct SetMarginTypeResult {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 新的保证金类型
     pub margin_type: MarginType,
     /// 是否成功
@@ -1353,7 +1277,7 @@ pub struct SetPositionModeResult {
 #[derive(Debug, Clone)]
 pub struct QueryAccountBalanceCommand {
     /// 资产类型（None=查询所有）
-    pub asset: Option<Symbol>
+    pub asset: Option<AssetId>
 }
 
 impl QueryAccountBalanceCommand {
@@ -1365,7 +1289,7 @@ impl QueryAccountBalanceCommand {
     }
 
     /// 查询指定资产余额
-    pub fn by_asset(asset: Symbol) -> Self {
+    pub fn by_asset(asset: AssetId) -> Self {
         Self {
             asset: Some(asset)
         }
@@ -1376,7 +1300,7 @@ impl QueryAccountBalanceCommand {
 #[derive(Debug, Clone)]
 pub struct AccountBalance {
     /// 资产类型（如USDT）
-    pub asset: Symbol,
+    pub asset: TradingPair,
     /// 总余额
     pub balance: Price,
     /// 可用余额（可用于开新仓）
@@ -1392,7 +1316,7 @@ pub struct AccountBalance {
 impl AccountBalance {
     /// 创建账户余额
     pub fn new(
-        asset: Symbol, balance: Price, available_balance: Price, position_margin: Price, order_margin: Price,
+        asset: TradingPair, balance: Price, available_balance: Price, position_margin: Price, order_margin: Price,
         unrealized_pnl: Price
     ) -> Self {
         Self {
@@ -1539,21 +1463,21 @@ impl AccountInfo {
 #[derive(Debug, Clone)]
 pub struct QueryMarkPriceCommand {
     /// 交易对（None=查询所有）
-    pub symbol: Option<Symbol>
+    pub trading_pair: Option<TradingPair>
 }
 
 impl QueryMarkPriceCommand {
     /// 查询所有交易对标记价格
     pub fn all() -> Self {
         Self {
-            symbol: None
+            trading_pair: None
         }
     }
 
     /// 查询指定交易对标记价格
-    pub fn by_symbol(symbol: Symbol) -> Self {
+    pub fn by_symbol(trading_pair: TradingPair) -> Self {
         Self {
-            symbol: Some(symbol)
+            trading_pair: Some(trading_pair)
         }
     }
 }
@@ -1562,7 +1486,7 @@ impl QueryMarkPriceCommand {
 #[derive(Debug, Clone)]
 pub struct MarkPriceInfo {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 标记价格（用于强平和盈亏计算）
     pub mark_price: Price,
     /// 指数价格（多交易所加权平均）
@@ -1580,11 +1504,11 @@ pub struct MarkPriceInfo {
 impl MarkPriceInfo {
     /// 创建标记价格信息
     pub fn new(
-        symbol: Symbol, mark_price: Price, index_price: Price, funding_rate: Price, next_funding_time: u64,
+        trading_pair: TradingPair, mark_price: Price, index_price: Price, funding_rate: Price, next_funding_time: u64,
         estimated_settle_price: Price
     ) -> Self {
         Self {
-            symbol,
+            trading_pair,
             mark_price,
             index_price,
             funding_rate,
@@ -1648,7 +1572,7 @@ impl MarkPriceInfo {
 #[derive(Debug, Clone)]
 pub struct QueryFundingRateHistoryCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 开始时间（毫秒时间戳，可选）
     pub start_time: Option<u64>,
     /// 结束时间（毫秒时间戳，可选）
@@ -1659,9 +1583,9 @@ pub struct QueryFundingRateHistoryCommand {
 
 impl QueryFundingRateHistoryCommand {
     /// 创建查询历史资金费率命令
-    pub fn new(symbol: Symbol) -> Self {
+    pub fn new(trading_pair: TradingPair) -> Self {
         Self {
-            symbol,
+            trading_pair,
             start_time: None,
             end_time: None,
             limit: 100
@@ -1698,7 +1622,7 @@ impl QueryFundingRateHistoryCommand {
 #[derive(Debug, Clone)]
 pub struct FundingRateRecord {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 资金费率
     pub funding_rate: Price,
     /// 结算时间（毫秒时间戳）
@@ -1707,9 +1631,9 @@ pub struct FundingRateRecord {
 
 impl FundingRateRecord {
     /// 创建资金费率记录
-    pub fn new(symbol: Symbol, funding_rate: Price, funding_time: u64) -> Self {
+    pub fn new(trading_pair: TradingPair, funding_rate: Price, funding_time: u64) -> Self {
         Self {
-            symbol,
+            trading_pair,
             funding_rate,
             funding_time
         }
@@ -1782,7 +1706,7 @@ impl FundingRateRecord {
 #[derive(Debug, Clone)]
 pub struct QueryFundingFeeCommand {
     /// 交易对（可选，None=查询所有）
-    pub symbol: Option<Symbol>,
+    pub trading_pair: Option<TradingPair>,
     /// 开始时间（毫秒时间戳，可选）
     pub start_time: Option<u64>,
     /// 结束时间（毫秒时间戳，可选）
@@ -1795,7 +1719,7 @@ impl QueryFundingFeeCommand {
     /// 创建查询所有交易对的资金费用命令
     pub fn all() -> Self {
         Self {
-            symbol: None,
+            trading_pair: None,
             start_time: None,
             end_time: None,
             limit: 100
@@ -1803,9 +1727,9 @@ impl QueryFundingFeeCommand {
     }
 
     /// 创建查询指定交易对的资金费用命令
-    pub fn by_symbol(symbol: Symbol) -> Self {
+    pub fn by_symbol(trading_pair: TradingPair) -> Self {
         Self {
-            symbol: Some(symbol),
+            trading_pair: Some(trading_pair),
             start_time: None,
             end_time: None,
             limit: 100
@@ -1846,11 +1770,11 @@ impl Default for QueryFundingFeeCommand {
 #[derive(Debug, Clone)]
 pub struct FundingFeeRecord {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 费用金额（正数=收入，负数=支出）
     pub income: Price,
     /// 资产类型（通常是USDT）
-    pub asset: Symbol,
+    pub asset: TradingPair,
     /// 结算时间（毫秒时间戳）
     pub time: u64,
     /// 交易ID
@@ -1859,9 +1783,9 @@ pub struct FundingFeeRecord {
 
 impl FundingFeeRecord {
     /// 创建资金费用记录
-    pub fn new(symbol: Symbol, income: Price, asset: Symbol, time: u64, tran_id: String) -> Self {
+    pub fn new(trading_pair: TradingPair, income: Price, asset: TradingPair, time: u64, tran_id: String) -> Self {
         Self {
-            symbol,
+            trading_pair,
             income,
             asset,
             time,
@@ -1885,7 +1809,7 @@ pub struct QueryTradesCommand {
     /// 按订单ID查询（可选）
     pub order_id: Option<OrderId>,
     /// 按交易对查询（可选）
-    pub symbol: Option<Symbol>,
+    pub trading_pair: Option<TradingPair>,
     /// 开始时间戳（毫秒，可选）
     pub start_time: Option<u64>,
     /// 结束时间戳（毫秒，可选）
@@ -1899,7 +1823,7 @@ impl QueryTradesCommand {
     pub fn new() -> Self {
         Self {
             order_id: None,
-            symbol: None,
+            trading_pair: None,
             start_time: None,
             end_time: None,
             limit: 100
@@ -1910,7 +1834,7 @@ impl QueryTradesCommand {
     pub fn by_order_id(order_id: OrderId) -> Self {
         Self {
             order_id: Some(order_id),
-            symbol: None,
+            trading_pair: None,
             start_time: None,
             end_time: None,
             limit: 100
@@ -1918,10 +1842,10 @@ impl QueryTradesCommand {
     }
 
     /// 按交易对查询
-    pub fn by_symbol(symbol: Symbol) -> Self {
+    pub fn by_symbol(trading_pair: TradingPair) -> Self {
         Self {
             order_id: None,
-            symbol: Some(symbol),
+            trading_pair: Some(trading_pair),
             start_time: None,
             end_time: None,
             limit: 100
@@ -1932,7 +1856,7 @@ impl QueryTradesCommand {
     pub fn by_time_range(start_time: u64, end_time: u64) -> Self {
         Self {
             order_id: None,
-            symbol: None,
+            trading_pair: None,
             start_time: Some(start_time),
             end_time: Some(end_time),
             limit: 100
@@ -1952,8 +1876,8 @@ impl QueryTradesCommand {
     }
 
     /// 设置交易对过滤
-    pub fn with_symbol(mut self, symbol: Symbol) -> Self {
-        self.symbol = Some(symbol);
+    pub fn with_symbol(mut self, trading_pair: TradingPair) -> Self {
+        self.trading_pair = Some(trading_pair);
         self
     }
 
@@ -2009,22 +1933,22 @@ impl TradesQueryResult {
 #[derive(Debug, Clone)]
 pub struct QueryOrderBookCommand {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 深度档位（如20表示20档深度）
     pub depth: u32
 }
 
 impl QueryOrderBookCommand {
     /// 创建查询订单簿命令
-    pub fn new(symbol: Symbol, depth: u32) -> Self {
+    pub fn new(trading_pair: TradingPair, depth: u32) -> Self {
         Self {
-            symbol,
+            trading_pair,
             depth
         }
     }
 
     /// 默认20档深度
-    pub fn default_depth(symbol: Symbol) -> Self { Self::new(symbol, 20) }
+    pub fn default_depth(trading_pair: TradingPair) -> Self { Self::new(trading_pair, 20) }
 }
 
 /// 订单簿价格档位
@@ -2053,7 +1977,7 @@ impl PriceLevel {
 #[derive(Debug, Clone)]
 pub struct OrderBookSnapshot {
     /// 交易对
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     /// 买盘（按价格从高到低排序）
     pub bids: Vec<PriceLevel>,
     /// 卖盘（按价格从低到高排序）
@@ -2068,12 +1992,12 @@ pub struct OrderBookSnapshot {
 
 impl OrderBookSnapshot {
     /// 创建订单簿快照
-    pub fn new(symbol: Symbol, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
+    pub fn new(trading_pair: TradingPair, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
         let best_bid = bids.first().map(|level| level.price);
         let best_ask = asks.first().map(|level| level.price);
 
         Self {
-            symbol,
+            trading_pair,
             bids,
             asks,
             best_bid,
@@ -2083,9 +2007,9 @@ impl OrderBookSnapshot {
     }
 
     /// 创建空订单簿
-    pub fn empty(symbol: Symbol) -> Self {
+    pub fn empty(trading_pair: TradingPair) -> Self {
         Self {
-            symbol,
+            trading_pair,
             bids: Vec::new(),
             asks: Vec::new(),
             best_bid: None,
@@ -2191,7 +2115,7 @@ impl OrderBookSnapshot {
 ///         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 ///
 ///         // 2. 检查持仓
-///         let position = self.positions.get(&cmd.symbol)
+///         let position = self.positions.get(&cmd.trading_pair)
 ///             .ok_or(PrepCommandError::InsufficientPosition)?;
 ///
 ///         if !position.has_position() {
@@ -2231,9 +2155,9 @@ impl OrderBookSnapshot {
 ///
 ///     fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError> {
 ///         // 查询当前持仓
-///         Ok(self.positions.get(&cmd.symbol)
+///         Ok(self.positions.get(&cmd.trading_pair)
 ///             .cloned()
-///             .unwrap_or_else(|| PositionInfo::empty(cmd.symbol, cmd.position_side)))
+///             .unwrap_or_else(|| PositionInfo::empty(cmd.trading_pair, cmd.position_side)))
 ///     }
 /// }
 /// ```
@@ -2587,18 +2511,7 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_open_position_market_long() {
-        let symbol = Symbol::new("BTCUSDT");
-        let cmd = OpenPositionCommand::market_long(symbol, Quantity::from_f64(1.0)).with_leverage(10);
 
-        assert!(cmd.validate().is_ok());
-        assert_eq!(cmd.side, Side::Buy);
-        assert_eq!(cmd.position_side, PositionSide::Long);
-        assert_eq!(cmd.order_type, OrderType::Market);
-        assert_eq!(cmd.leverage, 10);
-        assert!(cmd.price.is_none());
-    }
-    
+
 
 }

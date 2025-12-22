@@ -9,5 +9,5 @@ pub mod trading_types;
 
 // Re-export all types
 pub use order_types::{OrderId, Side};
-pub use position_types::{PositionId, PositionInfo, PositionSide, Price, Quantity, Symbol};
+pub use position_types::{PositionId, PositionInfo, PositionSide, Price, Quantity, Trade, TradeId};
 pub use trading_types::{AccountId, AssetId, Timestamp, TradingPair, UserId};

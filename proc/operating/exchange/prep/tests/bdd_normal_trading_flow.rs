@@ -7,7 +7,7 @@
 //!
 //! 这是最常见的正常交易场景，区别于强平流程。
 
-use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::MatchingService};
+use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::PrepMatchingService};
 
 // ============================================================================
 // 完整正常交易流程 - 设置杠杆 → 开仓 → 平仓
@@ -30,7 +30,7 @@ mod normal_trading_flow {
         // Step 1: 初始化 - 用户有10000 USDT余额
         // ====================================================================
         let initial_balance = Price::from_f64(10000.0);
-        let matching_service = MatchingService::new(initial_balance);
+        let matching_service = PrepMatchingService::new(initial_balance);
 
         println!("✅ Step 1: 初始化账户");
         println!("   初始余额: {} USDT", initial_balance.to_f64());
@@ -38,7 +38,7 @@ mod normal_trading_flow {
         // ====================================================================
         // Step 2: 设置杠杆 - 用户设置10倍杠杆
         // ====================================================================
-        let symbol = Symbol::new("BTCUSDT");
+        let symbol = TradingPair::new("BTCUSDT");
         let leverage = 10;
 
         let set_leverage_cmd = SetLeverageCommand::new(symbol, leverage);
@@ -198,8 +198,8 @@ mod normal_trading_flow {
         // ====================================================================
         // Step 1-2: 初始化和设置杠杆
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
-        let symbol = Symbol::new("BTCUSDT");
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
+        let symbol = TradingPair::new("BTCUSDT");
 
         matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 
@@ -280,8 +280,8 @@ mod normal_trading_flow {
         // ====================================================================
         // Step 1-2: 初始化
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(20000.0));
-        let symbol = Symbol::new("BTCUSDT");
+        let matching_service = PrepMatchingService::new(Price::from_f64(20000.0));
+        let symbol = TradingPair::new("BTCUSDT");
 
         matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 
@@ -354,8 +354,8 @@ mod normal_trading_flow {
         // ====================================================================
         // Step 1-3: 初始化并开仓
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
-        let symbol = Symbol::new("BTCUSDT");
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
+        let symbol = TradingPair::new("BTCUSDT");
 
         matching_service.set_leverage(SetLeverageCommand::new(symbol, 10)).unwrap();
 

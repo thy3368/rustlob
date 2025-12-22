@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 
 /// 内部订单状态（扩展字段用于撮合引擎）
@@ -6,7 +6,7 @@ use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 #[entity(id = "order_id")]
 pub struct InternalOrder {
     pub order_id: OrderId,
-    pub symbol: Symbol,
+    pub trading_pair: TradingPair,
     pub side: Side,
     pub order_type: OrderType,
     pub quantity: Quantity,
@@ -42,7 +42,7 @@ impl lob_repo::core::symbol_lob_repo::Order for InternalOrder {
         self.side
     }
 
-    fn symbol(&self) -> Symbol {
-        self.symbol
+    fn symbol(&self) -> TradingPair {
+        self.trading_pair
     }
 }

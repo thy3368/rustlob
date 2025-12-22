@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use lob_repo::adapter::local_lob_btreemap_impl::LocalLobBTreeMap;
 use lob_repo::core::symbol_lob_repo::{Order, SymbolLob};
 
@@ -8,7 +8,7 @@ struct MockOrder {
     id: u64,
     // #[created(skip)]
     // #[replay(skip)]
-    symbol: Symbol,
+    symbol: TradingPair,
     // #[created(skip)]
     // #[replay(skip)]
     price: Price,
@@ -44,14 +44,14 @@ impl Order for MockOrder {
         self.side
     }
 
-    fn symbol(&self) -> Symbol {
+    fn symbol(&self) -> TradingPair {
         self.symbol
     }
 }
 
 #[test]
 fn test_btreemap_basic() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加买单
@@ -83,7 +83,7 @@ fn test_btreemap_basic() {
 
 #[test]
 fn test_btreemap_ordered_matching() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加多个卖单（无序添加）
@@ -119,7 +119,7 @@ fn test_btreemap_ordered_matching() {
 
 #[test]
 fn test_btreemap_market_depth() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加买单
@@ -171,7 +171,7 @@ fn test_btreemap_market_depth() {
 
 #[test]
 fn test_btreemap_shib_low_price() {
-    let symbol = Symbol::new("SHIBUSDT");
+    let symbol = TradingPair::new("SHIBUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.00000001));
 
     // 添加低价币订单
@@ -190,7 +190,7 @@ fn test_btreemap_shib_low_price() {
 
 #[test]
 fn test_btreemap_remove_order() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     let order = MockOrder {
@@ -213,7 +213,7 @@ fn test_btreemap_remove_order() {
 
 #[test]
 fn test_btreemap_last_price() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 初始状态
@@ -230,7 +230,7 @@ fn test_btreemap_last_price() {
 
 #[test]
 fn test_btreemap_range_query() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加大量卖单（模拟真实场景）
@@ -265,7 +265,7 @@ fn test_btreemap_range_query() {
 
 #[test]
 fn test_btreemap_multiple_orders_same_price() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 在同一价格添加多个订单（测试时间优先）
@@ -300,7 +300,7 @@ fn test_btreemap_multiple_orders_same_price() {
 
 #[test]
 fn test_btreemap_sell_side_matching() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobBTreeMap<MockOrder> = LocalLobBTreeMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加多个买单

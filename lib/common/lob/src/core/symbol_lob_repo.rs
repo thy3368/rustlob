@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use diff::Entity;
 
 pub(crate) use crate::core::repo_snapshot_support::RepoError;
@@ -36,7 +36,7 @@ pub trait Order: Entity + Send + Sync {
     fn side(&self) -> Side;
 
     /// 获取交易对
-    fn symbol(&self) -> Symbol;
+    fn symbol(&self) -> TradingPair;
 }
 
 /// LOB 快照数据
@@ -45,7 +45,7 @@ pub trait Order: Entity + Send + Sync {
 #[derive(Debug, Clone)]
 pub struct LobSnapshot {
     /// 交易对符号
-    pub symbol: Symbol,
+    pub symbol: TradingPair,
     /// 快照时间戳（纳秒）
     pub timestamp: u64,
     /// 快照序列号
@@ -63,7 +63,7 @@ pub struct LobSnapshot {
 impl LobSnapshot {
     /// 创建 LOB 快照
     pub fn new(
-        symbol: Symbol, timestamp: u64, sequence: u64, data: Vec<u8>, best_bid: Option<Price>, best_ask: Option<Price>,
+        symbol: TradingPair, timestamp: u64, sequence: u64, data: Vec<u8>, best_bid: Option<Price>, best_ask: Option<Price>,
         last_price: Option<Price>
     ) -> Self {
         Self {
@@ -216,7 +216,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 性能要求
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
-    fn match_orders(&self, symbol: Symbol, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
+    fn match_orders(&self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
 
     /// 获取指定交易对的最佳买价
     ///
@@ -226,7 +226,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 返回
     /// - `Some(Price)`: 最佳买价
     /// - `None`: 找不到对应的 LOB 或买盘为空
-    fn best_bid(&self, symbol: Symbol) -> Option<Price>;
+    fn best_bid(&self, symbol: TradingPair) -> Option<Price>;
 
     /// 获取指定交易对的最佳卖价
     ///
@@ -236,7 +236,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 返回
     /// - `Some(Price)`: 最佳卖价
     /// - `None`: 找不到对应的 LOB 或卖盘为空
-    fn best_ask(&self, symbol: Symbol) -> Option<Price>;
+    fn best_ask(&self, symbol: TradingPair) -> Option<Price>;
 
     /// 检查指定交易对的 LOB 是否存在
     ///
@@ -246,9 +246,9 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 返回
     /// - `true`: LOB 存在
     /// - `false`: LOB 不存在
-    fn contains_symbol(&self, symbol: &Symbol) -> bool;
+    fn contains_symbol(&self, symbol: &TradingPair) -> bool;
 
-    fn add_order(&self, symbol: Symbol, order: Self::Order) -> Result<(), RepoError>;
+    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), RepoError>;
 
     /// 取消订单
     ///
@@ -258,5 +258,5 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 返回
     /// - `true`: 成功取消订单
     /// - `false`: 订单不存在
-    fn remove_order(&self, symbol: Symbol, order_id: OrderId) -> bool;
+    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool;
 }

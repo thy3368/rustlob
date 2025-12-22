@@ -4,7 +4,7 @@
 //! 事件通过 Entity 的 track 方法生成
 //! 场景：实体被创建后，通过 Updated 事件更新其字段
 
-use base_types::{Price, Quantity, Side, Symbol};
+use base_types::{Price, Quantity, Side, TradingPair};
 use db_repo::core::db_repo::CmdRepo;
 use db_repo::adapter::mysql_db_repo::MySqlDbRepo;
 use diff::Entity;
@@ -17,7 +17,7 @@ use diff::Entity;
 #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]
 struct TestEntity {
     id: u64,
-    symbol: Symbol,
+    symbol: TradingPair,
     price: Price,
     quantity: Quantity,
     filled_quantity: Quantity,
@@ -34,7 +34,7 @@ fn scenario_update_single_field_after_creation() {
     // 初始状态：有一个新创建的 TestEntity，直接用 mock repo
     let mut entity = TestEntity {
         id: 1,
-        symbol: Symbol::new("BTCUSDT"),
+        symbol: TradingPair::new("BTCUSDT"),
         price: Price::from_raw(50000),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
@@ -70,7 +70,7 @@ fn scenario_update_multiple_fields_after_creation() {
     // 初始状态：有一个新创建的 TestEntity
     let mut entity = TestEntity {
         id: 2,
-        symbol: Symbol::new("ETHUSDT"),
+        symbol: TradingPair::new("ETHUSDT"),
         price: Price::from_raw(3000),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
@@ -113,7 +113,7 @@ fn scenario_update_non_existent_entity_should_fail() {
     // 创建一个从未被创建过的实体的更新事件
     let mut entity = TestEntity {
         id: 999,
-        symbol: Symbol::new("DOGEUSDT"),
+        symbol: TradingPair::new("DOGEUSDT"),
         price: Price::from_raw(0),
         quantity: Quantity::from_raw(1000),
         filled_quantity: Quantity::from_raw(0),
@@ -151,7 +151,7 @@ fn scenario_sequential_updates() {
     // 初始状态：创建一个实体
     let mut entity = TestEntity {
         id: 4,
-        symbol: Symbol::new("ADAUSDT"),
+        symbol: TradingPair::new("ADAUSDT"),
         price: Price::from_raw(1),
         quantity: Quantity::from_raw(10000),
         filled_quantity: Quantity::from_raw(0),
@@ -209,7 +209,7 @@ fn scenario_update_event_contains_field_changes() {
     // 一个实体和其更新
     let mut entity = TestEntity {
         id: 5,
-        symbol: Symbol::new("LTCUSDT"),
+        symbol: TradingPair::new("LTCUSDT"),
         price: Price::from_raw(200),
         quantity: Quantity::from_raw(50),
         filled_quantity: Quantity::from_raw(0),
@@ -257,7 +257,7 @@ fn scenario_cannot_update_deleted_entity() {
     // 创建一个实体，删除它，然后尝试更新
     let entity = TestEntity {
         id: 6,
-        symbol: Symbol::new("XRPUSDT"),
+        symbol: TradingPair::new("XRPUSDT"),
         price: Price::from_raw(3),
         quantity: Quantity::from_raw(1000),
         filled_quantity: Quantity::from_raw(0),
@@ -302,7 +302,7 @@ fn scenario_diff_calculation_in_update_event() {
     // 两个不同状态的实体
     let entity_v1 = TestEntity {
         id: 7,
-        symbol: Symbol::new("UNIUSDT"),
+        symbol: TradingPair::new("UNIUSDT"),
         price: Price::from_raw(30),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
@@ -342,7 +342,7 @@ fn scenario_complete_entity_lifecycle() {
     // 初始状态：测试实体的完整生命周期事件生成
     let mut entity = TestEntity {
         id: 8,
-        symbol: Symbol::new("SHIBAINU"),
+        symbol: TradingPair::new("SHIBAINU"),
         price: Price::from_raw(1),
         quantity: Quantity::from_raw(100000),
         filled_quantity: Quantity::from_raw(0),

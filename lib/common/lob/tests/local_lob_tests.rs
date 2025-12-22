@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use diff::{ChangeLogEntry, ChangeType};
 use lob_repo::adapter::local_lob_impl::LocalLob;
 use lob_repo::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
@@ -9,7 +9,7 @@ use lob_repo::core::symbol_lob_repo::{Order, SymbolLob};
 struct MockOrder {
     id: u64,
     // #[replay(skip)]
-    symbol: Symbol,
+    symbol: TradingPair,
     // #[replay(skip)]
     price: Price,
     // #[replay(skip)]
@@ -43,14 +43,14 @@ impl Order for MockOrder {
         self.side
     }
 
-    fn symbol(&self) -> Symbol {
+    fn symbol(&self) -> TradingPair {
         self.symbol
     }
 }
 
 #[test]
 fn test_last_price_initially_none() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 初始状态，最后成交价应为 None
@@ -59,7 +59,7 @@ fn test_last_price_initially_none() {
 
 #[test]
 fn test_update_last_price() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 更新最后成交价 (50000.00 USDT)
@@ -72,7 +72,7 @@ fn test_update_last_price() {
 
 #[test]
 fn test_multiple_price_updates() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 第一次成交 (50000.00 USDT)
@@ -93,7 +93,7 @@ fn test_multiple_price_updates() {
 
 #[test]
 fn test_add_and_find_order() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     let order = MockOrder {
@@ -118,7 +118,7 @@ fn test_add_and_find_order() {
 
 #[test]
 fn test_best_bid_ask() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 初始状态
@@ -152,7 +152,7 @@ fn test_best_bid_ask() {
 
 #[test]
 fn test_match_orders_buy_side() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加多个卖单
@@ -182,7 +182,7 @@ fn test_match_orders_buy_side() {
 
 #[test]
 fn test_remove_order() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     let order = MockOrder {
@@ -211,7 +211,7 @@ fn test_remove_order() {
 
 #[test]
 fn test_snapshot_creation() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加一些订单和状态
@@ -233,7 +233,7 @@ fn test_snapshot_creation() {
 
 #[test]
 fn test_snapshot_restore() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 创建快照
@@ -247,7 +247,7 @@ fn test_snapshot_restore() {
 
 #[test]
 fn test_snapshot_with_multiple_orders() {
-    let symbol = Symbol::new("ETHUSDT");
+    let symbol = TradingPair::new("ETHUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加多个买单
@@ -289,7 +289,7 @@ fn test_snapshot_with_multiple_orders() {
 
 #[test]
 fn test_event_replay_basic() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 创建一个事件（包含字段信息）
@@ -300,7 +300,7 @@ fn test_event_replay_basic() {
 
 #[test]
 fn test_event_replay_multiple_events() {
-    let symbol = Symbol::new("ETHUSDT");
+    let symbol = TradingPair::new("ETHUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 创建多个事件（包含字段信息）
@@ -321,7 +321,7 @@ fn test_event_replay_multiple_events() {
 fn test_event_replay_update_event() {
     use diff::FieldChange;
 
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // === 第一阶段：添加初始订单 ===
@@ -423,7 +423,7 @@ fn test_event_replay_update_event() {
 
 #[test]
 fn test_snapshot_creation_replay() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut original_lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // === 第一阶段：构建初始订单簿 ===
@@ -512,7 +512,7 @@ fn test_snapshot_creation_replay() {
 
 #[test]
 fn test_match_orders_sell_side() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加多个买单
@@ -543,7 +543,7 @@ fn test_match_orders_sell_side() {
 
 #[test]
 fn test_match_orders_no_match() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加卖单在 50100.00
@@ -569,7 +569,7 @@ fn test_match_orders_no_match() {
 
 #[test]
 fn test_match_orders_exact_quantity() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 添加一个卖单
@@ -597,7 +597,7 @@ fn test_match_orders_exact_quantity() {
 
 #[test]
 fn test_find_order_mut() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     let order = MockOrder {
@@ -622,7 +622,7 @@ fn test_find_order_mut() {
 
 #[test]
 fn test_symbol_getter() {
-    let symbol = Symbol::new("DOGEUSDT");
+    let symbol = TradingPair::new("DOGEUSDT");
     let lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     assert_eq!(lob.symbol(), &symbol);
@@ -630,7 +630,7 @@ fn test_symbol_getter() {
 
 #[test]
 fn test_add_order_duplicate_id() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     let order1 = MockOrder {
@@ -660,7 +660,7 @@ fn test_add_order_duplicate_id() {
 
 #[test]
 fn test_complex_order_matching_scenario() {
-    let symbol = Symbol::new("BNBUSDT");
+    let symbol = TradingPair::new("BNBUSDT");
     let mut lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 构建订单簿：多个价格级别

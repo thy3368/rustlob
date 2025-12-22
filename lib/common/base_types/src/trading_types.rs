@@ -53,7 +53,7 @@ impl From<u32> for AssetId {
 /// 例如：BTC/USDT 交易对
 /// - base_asset = BTC (基础资产，卖出时检查)
 /// - quote_asset = USDT (计价资产，买入时检查)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct TradingPair {
     /// 基础资产（如 BTC）
     pub base_asset: AssetId,
@@ -68,6 +68,73 @@ impl TradingPair {
             base_asset,
             quote_asset
         }
+    }
+
+    /// 从交易对符号字符串创建 TradingPair
+    ///
+    /// # 说明
+    /// - 假设格式为 `{BASE_ASSET}{QUOTE_ASSET}`，例如 "BTCUSDT"
+    /// - 假设 quote_asset 总是 USDT（4字符）
+    /// - base_asset 是其余部分（通常 3-4 个字符）
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let pair = TradingPair::from_symbol_str("BTCUSDT");
+    /// assert_eq!(pair.base_asset, AssetId::BTC);
+    /// assert_eq!(pair.quote_asset, AssetId::USDT);
+    /// ```
+    pub fn from_symbol_str(symbol: &str) -> Option<Self> {
+        if symbol.len() < 7 {
+            // 最少需要 3 (base) + 4 (USDT) = 7 个字符
+            return None;
+        }
+
+        let quote_str = &symbol[symbol.len() - 4..];
+        let base_str = &symbol[..symbol.len() - 4];
+
+        let base_asset = match base_str.to_uppercase().as_str() {
+            "BTC" => AssetId::BTC,
+            "ETH" => AssetId::ETH,
+            // 可以继续添加其他资产
+            _ => return None,
+        };
+
+        let quote_asset = match quote_str.to_uppercase().as_str() {
+            "USDT" => AssetId::USDT,
+            // 可以继续添加其他计价资产
+            _ => return None,
+        };
+
+        Some(Self {
+            base_asset,
+            quote_asset,
+        })
+    }
+
+    /// 生成交易对符号字符串
+    ///
+    /// # 说明
+    /// - 生成格式为 `{BASE_ASSET}{QUOTE_ASSET}` 的符号
+    /// - 例如：BTC/USDT -> "BTCUSDT"
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let pair = TradingPair::BTC_USDT;
+    /// assert_eq!(pair.to_symbol_string(), "BTCUSDT");
+    /// ```
+    pub fn to_symbol_string(&self) -> String {
+        let base_str = match self.base_asset.0 {
+            2 => "BTC",
+            3 => "ETH",
+            _ => "UNKNOWN",
+        };
+
+        let quote_str = match self.quote_asset.0 {
+            1 => "USDT",
+            _ => "UNKNOWN",
+        };
+
+        format!("{}{}", base_str, quote_str)
     }
 
     /// BTC/USDT 交易对

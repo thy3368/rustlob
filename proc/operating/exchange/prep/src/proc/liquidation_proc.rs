@@ -121,7 +121,7 @@ impl LiquidationProcessor {
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 提交紧急市价单
         let order_cmd = OpenPositionCommand {
-            symbol: position.symbol,
+            trading_pair: position.trading_pair,
             side,
             order_type: OrderType::Market,
             quantity: position.quantity,
@@ -175,7 +175,7 @@ impl LiquidationProcessor {
         &self, position: &PositionInfo, side: Side
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 查找对手方盈利仓位（按ADL队列优先级）
-        let counterparties = self.adl_engine.find_counterparties(position.symbol, side).await?;
+        let counterparties = self.adl_engine.find_counterparties(position.trading_pair, side).await?;
 
         if counterparties.is_empty() {
             return Err(PrepCommandError::no_counterparties_for_adl());

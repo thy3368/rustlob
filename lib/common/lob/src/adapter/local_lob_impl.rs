@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use diff::{ChangeLogEntry, FromCreatedEvent};
 use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
 use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
@@ -53,7 +53,7 @@ impl<O: Order> OrderNode<O> {
 /// 使用 Tick Size 将价格映射到数组索引，支持不同精度的交易对
 #[derive(Clone)]
 pub struct LocalLob<O: Order> {
-    symbol: Symbol,
+    symbol: TradingPair,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
     /// 买单价格点（索引 = price / tick_size）
@@ -175,7 +175,7 @@ impl<O: Order> LocalLob<O> {
     /// - tick_size: 0.01 USDT (适合 BTC/ETH 等主流币)
     /// - max_ticks: 30,000,000 (支持价格到 300,000.00 USDT)
     /// - max_orders: 10,000 个订单
-    pub fn new(symbol: Symbol) -> Self { Self::new_with_tick(symbol, Price::from_f64(0.01)) }
+    pub fn new(symbol: TradingPair) -> Self { Self::new_with_tick(symbol, Price::from_f64(0.01)) }
 
     /// 创建指定 tick size 的本地 LOB
     ///
@@ -194,12 +194,12 @@ impl<O: Order> LocalLob<O> {
     /// // SHIB/PEPE 等低价币：tick_size = 0.00000001
     /// let shib_lob = LocalLob::new_with_tick(Symbol::new("SHIBUSDT"), Price::from_f64(0.00000001));
     /// ```
-    pub fn new_with_tick(symbol: Symbol, tick_size: Price) -> Self {
+    pub fn new_with_tick(symbol: TradingPair, tick_size: Price) -> Self {
         Self::with_capacity(symbol, tick_size, 30_000_000, 10_000)
     }
 
     /// 创建指定容量的本地 LOB
-    pub fn with_capacity(symbol: Symbol, tick_size: Price, max_ticks: usize, max_orders: usize) -> Self {
+    pub fn with_capacity(symbol: TradingPair, tick_size: Price, max_ticks: usize, max_orders: usize) -> Self {
         Self {
             symbol,
             tick_size,
@@ -214,7 +214,7 @@ impl<O: Order> LocalLob<O> {
         }
     }
 
-    pub fn symbol(&self) -> &Symbol { &self.symbol }
+    pub fn symbol(&self) -> &TradingPair { &self.symbol }
 
     /// 将价格转换为 tick 索引
     #[inline]

@@ -59,7 +59,7 @@ impl InsuranceFundCapacity {
 #[derive(Debug, Clone)]
 pub struct LiquidationOrder {
     pub position_id: PositionId,
-    pub symbol: Symbol,
+    pub symbol: TradingPair,
     pub side: Side,
     pub quantity: Quantity,
     pub order_type: OrderType,
@@ -91,7 +91,7 @@ pub trait InsuranceFund: Send + Sync {
 /// ADL引擎接口
 #[async_trait::async_trait]
 pub trait ADLEngine: Send + Sync {
-    async fn find_counterparties(&self, symbol: Symbol, side: Side) -> Result<Vec<PositionInfo>, PrepCommandError>;
+    async fn find_counterparties(&self, symbol: TradingPair, side: Side) -> Result<Vec<PositionInfo>, PrepCommandError>;
 
     async fn execute_adl(
         &self, liquidated_position: &PositionInfo, counterparties: Vec<PositionInfo>

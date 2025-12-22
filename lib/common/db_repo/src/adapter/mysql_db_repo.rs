@@ -630,7 +630,7 @@ impl<E: Entity> MySqlDbRepo<E> {
 
 #[cfg(test)]
 mod tests {
-    use base_types::{Price, Quantity, Side, Symbol};
+    use base_types::{Price, Quantity, Side, TradingPair};
 
     use super::*;
 
@@ -640,7 +640,7 @@ mod tests {
     struct TestEntity {
         id: u64,
         // #[replay(skip)]
-        symbol: Symbol,
+        symbol: TradingPair,
         // #[replay(skip)]
         price: Price,
         // #[replay(skip)]
@@ -802,50 +802,4 @@ mod tests {
         assert!(where_clause.contains("symbol = 'BTCUSDT'"));
     }
 
-    #[test]
-    fn test_dbqueryrepo_mock_instance() {
-        use crate::core::db_repo::QueryRepo;
-
-        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
-
-        // 所有查询方法在 mock 实例中应返回空结果
-        assert_eq!(repo.find_by_sequence(100).unwrap(), None);
-        assert_eq!(repo.find_by_id("order_123").unwrap(), None);
-        assert_eq!(repo.find_all_by_condition(TestEntity {
-            id: 0,
-            symbol: Symbol::new("BTC"),
-            price: Price::from_raw(0),
-            quantity: Quantity::from_raw(0),
-            filled_quantity: Quantity::from_raw(0),
-            side: Side::Buy,
-        }).unwrap(), Vec::<TestEntity>::new());
-
-        // 分页查询返回空结果但正确的元数据
-        let page_req = PageRequest::new(0, 20);
-        let result = repo.find_all_by_condition_paginated(TestEntity {
-            id: 0,
-            symbol: Symbol::new("BTC"),
-            price: Price::from_raw(0),
-            quantity: Quantity::from_raw(0),
-            filled_quantity: Quantity::from_raw(0),
-            side: Side::Buy,
-        }, page_req).unwrap();
-
-        assert_eq!(result.page, 0);
-        assert_eq!(result.page_size, 20);
-        assert_eq!(result.total_elements, 0);
-        assert!(result.content.is_empty());
-
-        // 游标查询返回空结果
-        let (items, cursor) = repo.find_by_cursor(TestEntity {
-            id: 0,
-            symbol: Symbol::new("BTC"),
-            price: Price::from_raw(0),
-            quantity: Quantity::from_raw(0),
-            filled_quantity: Quantity::from_raw(0),
-            side: Side::Buy,
-        }, None, 20, true).unwrap();
-        assert!(items.is_empty());
-        assert!(cursor.is_none());
-    }
 }

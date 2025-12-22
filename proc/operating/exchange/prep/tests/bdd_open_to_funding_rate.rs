@@ -12,7 +12,7 @@
 use std::sync::{Arc, Mutex};
 
 use prep_proc::proc::{
-    liquidation_types::*, trading_prep_order_proc::*, trading_prep_order_proc_impl::MatchingService
+    liquidation_types::*, trading_prep_order_proc::*, trading_prep_order_proc_impl::PrepMatchingService
 };
 
 // ============================================================================
@@ -22,7 +22,7 @@ use prep_proc::proc::{
 /// 资金费率记录
 #[derive(Debug, Clone)]
 pub struct FundingRateRecord {
-    pub symbol: Symbol,
+    pub symbol: TradingPair,
     pub funding_rate: i64, // 精度1e6，例如100表示0.0001
     pub settlement_time: i64
 }
@@ -31,7 +31,7 @@ pub struct FundingRateRecord {
 #[derive(Debug, Clone)]
 pub struct FundingFeeRecord {
     pub position_id: PositionId,
-    pub symbol: Symbol,
+    pub symbol: TradingPair,
     pub funding_fee: Price,
     pub settlement_time: i64
 }
@@ -48,7 +48,7 @@ pub struct FundingSettlementResult {
 /// Mock资金费率服务
 struct MockFundingRateService {
     /// 当前资金费率 (按symbol)
-    current_rates: Arc<Mutex<std::collections::HashMap<Symbol, i64>>>,
+    current_rates: Arc<Mutex<std::collections::HashMap<TradingPair, i64>>>,
     /// 资金费率历史
     rate_history: Arc<Mutex<Vec<FundingRateRecord>>>,
     /// 资金费用历史
@@ -65,10 +65,10 @@ impl MockFundingRateService {
     }
 
     /// 设置资金费率
-    fn set_funding_rate(&self, symbol: Symbol, rate: i64) { self.current_rates.lock().unwrap().insert(symbol, rate); }
+    fn set_funding_rate(&self, symbol: TradingPair, rate: i64) { self.current_rates.lock().unwrap().insert(symbol, rate); }
 
     /// 获取当前资金费率
-    fn get_funding_rate(&self, symbol: Symbol) -> i64 { *self.current_rates.lock().unwrap().get(&symbol).unwrap_or(&0) }
+    fn get_funding_rate(&self, symbol: TradingPair) -> i64 { *self.current_rates.lock().unwrap().get(&symbol).unwrap_or(&0) }
 
     /// 计算资金费用
     fn calculate_funding_fee(&self, position: &PositionInfo, funding_rate: i64) -> Price {
@@ -84,7 +84,7 @@ impl MockFundingRateService {
 
     /// 执行资金费率结算
     fn settle_funding_rate(
-        &self, symbol: Symbol, positions: &[PositionInfo], settlement_time: i64
+        &self, symbol: TradingPair, positions: &[PositionInfo], settlement_time: i64
     ) -> FundingSettlementResult {
         let funding_rate = self.get_funding_rate(symbol);
 
@@ -182,10 +182,10 @@ mod opening_preparation_scenarios {
         // Scenario: 设置杠杆为后续开仓做准备
 
         // Given: 用户有10000 USDT余额
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
 
         // When: 用户设置BTCUSDT的杠杆为10倍
-        let cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10);
+        let cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10);
         let result = matching_service.set_leverage(cmd);
 
         // Then: 杠杆设置成功
@@ -216,12 +216,12 @@ mod order_execution_scenarios {
         // Scenario: 成功开多仓并创建持仓
 
         // Given: 用户有10000 USDT余额，设置了10倍杠杆
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
-        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
+        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
 
         // When: 用户以市价开多仓1 BTC
         let open_cmd =
-            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd);
 
@@ -238,7 +238,7 @@ mod order_execution_scenarios {
         assert_eq!(result.filled_quantity.to_f64(), 1.0);
 
         // And: 持仓应该被创建
-        let position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         assert!(position.has_position());
         println!("\n✅ 持仓创建成功:");
@@ -275,12 +275,12 @@ mod funding_rate_calculation_scenarios {
 
         // Given: 资金费率为+0.01% (100 / 1e6)
         let funding_rate = 100; // 0.0001
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓 @ 50000 USDT
         let position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -318,12 +318,12 @@ mod funding_rate_calculation_scenarios {
 
         // Given: 资金费率为+0.01%
         let funding_rate = 100;
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC空仓 @ 50000 USDT
         let position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Short,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -360,12 +360,12 @@ mod funding_rate_calculation_scenarios {
 
         // Given: 资金费率为-0.01% (负值)
         let funding_rate = -100;
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓 @ 50000 USDT
         let position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -410,14 +410,14 @@ mod funding_rate_settlement_scenarios {
 
         // Given: 资金费率为+0.01%
         let funding_rate = 100;
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 有3个持仓
         let positions = vec![
             // 多仓1: 1 BTC @ 50000
             PositionInfo {
                 position_id: PositionId::generate(),
-                symbol: Symbol::new("BTCUSDT"),
+                symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Long,
                 quantity: Quantity::from_f64(1.0),
                 entry_price: Price::from_f64(50000.0),
@@ -432,7 +432,7 @@ mod funding_rate_settlement_scenarios {
             // 多仓2: 0.5 BTC @ 50000
             PositionInfo {
                 position_id: PositionId::generate(),
-                symbol: Symbol::new("BTCUSDT"),
+                symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Long,
                 quantity: Quantity::from_f64(0.5),
                 entry_price: Price::from_f64(50000.0),
@@ -447,7 +447,7 @@ mod funding_rate_settlement_scenarios {
             // 空仓: 1 BTC @ 50000
             PositionInfo {
                 position_id: PositionId::generate(),
-                symbol: Symbol::new("BTCUSDT"),
+                symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Short,
                 quantity: Quantity::from_f64(1.0),
                 entry_price: Price::from_f64(50000.0),
@@ -463,7 +463,7 @@ mod funding_rate_settlement_scenarios {
 
         // When: 执行资金费率结算
         let settlement_time = 1640000000; // 2021-12-20 08:00:00 UTC
-        let result = funding_service.settle_funding_rate(Symbol::new("BTCUSDT"), &positions, settlement_time);
+        let result = funding_service.settle_funding_rate(TradingPair::new("BTCUSDT"), &positions, settlement_time);
 
         // Then: 结算成功
         println!("✅ 资金费率结算完成:");
@@ -509,12 +509,12 @@ mod funding_rate_margin_impact_scenarios {
 
         // Given: 资金费率为+0.01%
         let funding_rate = 100;
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓，保证金5000 USDT
         let mut position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -561,7 +561,7 @@ mod funding_rate_margin_impact_scenarios {
         // And: 用户有1 BTC空仓，保证金5000 USDT
         let mut position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Short,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -613,7 +613,7 @@ mod funding_rate_liquidation_scenarios {
         // Given: 用户有1 BTC多仓，保证金仅为5010 USDT（接近强平）
         let mut position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -635,7 +635,7 @@ mod funding_rate_liquidation_scenarios {
 
         // And: 资金费率为+0.02% (较高费率)
         let funding_rate = 200; // 0.0002
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // When: 支付资金费用
         let funding_fee = funding_service.calculate_funding_fee(&position, funding_rate);
@@ -694,7 +694,7 @@ mod funding_rate_liquidation_scenarios {
         // Given: 用户有1 BTC多仓 @ 50000，保证金5100 USDT
         let mut position = PositionInfo {
             position_id: PositionId::generate(),
-            symbol: Symbol::new("BTCUSDT"),
+            symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
             quantity: Quantity::from_f64(1.0),
             entry_price: Price::from_f64(50000.0),
@@ -712,7 +712,7 @@ mod funding_rate_liquidation_scenarios {
 
         // When: 经过多次资金费率结算
         let funding_rate = 100; // 0.01%
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // 第1次结算 (T+0小时，开仓后不久)
         let fee1 = funding_service.apply_funding_fee_to_position(&mut position, funding_rate);
@@ -770,7 +770,7 @@ mod complete_open_to_funding_workflow {
         println!("     完整24小时交易流程模拟");
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
         let funding_service = MockFundingRateService::new();
 
         // ================================================================
@@ -780,16 +780,16 @@ mod complete_open_to_funding_workflow {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         // Step 1: 设置杠杆
-        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
+        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
         println!("✅ 杠杆设置: 10x");
 
         // Step 2: 开多仓
         let open_cmd =
-            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let mut position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
+        let mut position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         println!("✅ 开仓成功:");
         println!("   数量: {} BTC", position.quantity.to_f64());
@@ -810,7 +810,7 @@ mod complete_open_to_funding_workflow {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         let funding_rate_1 = 100; // +0.01%
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate_1);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate_1);
 
         let fee_1 = funding_service.apply_funding_fee_to_position(&mut position, funding_rate_1);
 
@@ -825,7 +825,7 @@ mod complete_open_to_funding_workflow {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         let funding_rate_2 = 150; // +0.015%
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate_2);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate_2);
 
         let fee_2 = funding_service.apply_funding_fee_to_position(&mut position, funding_rate_2);
 
@@ -840,7 +840,7 @@ mod complete_open_to_funding_workflow {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         let funding_rate_3 = 120; // +0.012%
-        funding_service.set_funding_rate(Symbol::new("BTCUSDT"), funding_rate_3);
+        funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate_3);
 
         let fee_3 = funding_service.apply_funding_fee_to_position(&mut position, funding_rate_3);
 

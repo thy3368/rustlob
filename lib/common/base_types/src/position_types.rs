@@ -4,7 +4,8 @@
 
 use std::fmt;
 
-use super::trading_types::{Timestamp, UserId};
+use super::trading_types::{Timestamp, TradingPair, UserId, AssetId};
+use crate::{AccountId, OrderId, Side};
 
 // ============================================================================
 // 持仓相关类型定义
@@ -36,39 +37,6 @@ impl fmt::Display for PositionId {
 impl Default for PositionId {
     fn default() -> Self {
         Self(0)
-    }
-}
-
-/// 交易对符号（如 BTCUSDT）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol([u8; 16]);
-
-impl Symbol {
-    /// 创建新的交易对符号
-    pub fn new(s: &str) -> Self {
-        let mut bytes = [0u8; 16];
-        let src_bytes = s.as_bytes();
-        let len = src_bytes.len().min(16);
-        bytes[..len].copy_from_slice(&src_bytes[..len]);
-        Self(bytes)
-    }
-
-    /// 转为字符串
-    pub fn as_str(&self) -> &str {
-        let len = self.0.iter().position(|&b| b == 0).unwrap_or(16);
-        std::str::from_utf8(&self.0[..len]).unwrap_or("")
-    }
-}
-
-impl fmt::Display for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-impl Default for Symbol {
-    fn default() -> Self {
-        Self([0u8; 16])
     }
 }
 
@@ -206,8 +174,11 @@ pub struct PositionInfo {
     pub user_id: UserId,
     /// 持仓ID
     pub position_id: PositionId,
-    /// 交易对
-    pub symbol: Symbol,
+    /// 账户ID
+    pub account_id: AccountId,
+
+    /// 交易对（包含 base_asset 和 quote_asset）
+    pub trading_pair: TradingPair,
     /// 持仓方向
     pub position_side: PositionSide,
     /// 持仓数量（正数表示多头，负数表示空头）
@@ -232,11 +203,12 @@ pub struct PositionInfo {
 
 impl PositionInfo {
     /// 创建空持仓
-    pub fn empty(symbol: Symbol, position_side: PositionSide) -> Self {
+    pub fn empty(trading_pair: TradingPair, position_side: PositionSide) -> Self {
         Self {
             user_id: UserId(0),
             position_id: PositionId::generate(),
-            symbol,
+            account_id: AccountId(0),
+            trading_pair,
             position_side,
             quantity: Quantity::from_raw(0),
             entry_price: Price::from_raw(0),
@@ -288,4 +260,91 @@ impl PositionInfo {
 fn current_timestamp() -> Timestamp {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
+}
+
+// ============================================================================
+// 成交相关类型定义
+// ============================================================================
+
+/// 成交ID
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct TradeId(String);
+
+impl TradeId {
+    /// 创建新的成交ID
+    pub fn new(id: impl Into<String>) -> Self { Self(id.into()) }
+
+    /// 生成随机成交ID
+    pub fn generate() -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        Self(format!("TRD-{}", timestamp))
+    }
+
+    /// 获取字符串表示
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+
+impl fmt::Display for TradeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+}
+
+/// 成交记录（单次撮合成交）
+#[derive(Debug, Clone, entity_derive::Entity)]
+#[entity(id = "trade_id")]
+pub struct Trade {
+    /// 成交ID
+    pub trade_id: TradeId,
+    /// 关联订单ID
+    pub order_id: OrderId,
+    /// 交易对
+    pub symbol: TradingPair,
+    /// 订单方向
+    pub side: Side,
+    /// 成交价格
+    pub price: Price,
+    /// 成交数量
+    pub quantity: Quantity,
+    /// 手续费
+    pub fee: Price,
+    /// 手续费资产（通常是USDT）
+    pub fee_asset: AssetId,
+    /// 是否为Maker（流动性提供方）
+    pub is_maker: bool,
+    /// 成交时间戳（毫秒）
+    pub timestamp: u64
+}
+
+impl Trade {
+    /// 创建新的成交记录
+    pub fn new(
+        trade_id: TradeId, order_id: OrderId, symbol: TradingPair, side: Side, price: Price, quantity: Quantity, fee: Price,
+        fee_asset: AssetId, is_maker: bool
+    ) -> Self {
+        Self {
+            trade_id,
+            order_id,
+            symbol,
+            side,
+            price,
+            quantity,
+            fee,
+            fee_asset,
+            is_maker,
+            timestamp: current_timestamp_ms()
+        }
+    }
+
+    /// 计算成交金额（价格 * 数量）
+    pub fn notional(&self) -> Price {
+        // 简化计算：使用浮点数计算后转回定点数
+        let value = self.price.to_f64() * self.quantity.to_f64();
+        Price::from_f64(value)
+    }
+}
+
+/// 获取当前时间戳（毫秒）
+fn current_timestamp_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }

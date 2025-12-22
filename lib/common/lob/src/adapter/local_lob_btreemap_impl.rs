@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
 
 /// 价格点结构
@@ -60,7 +60,7 @@ impl<O: Order> OrderNode<O> {
 /// - 市场深度查询
 /// - 对确定性性能有要求的系统
 pub struct LocalLobBTreeMap<O: Order> {
-    symbol: Symbol,
+    symbol: TradingPair,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
     /// 买单价格点（key = tick 数量，自动升序排列）
@@ -90,7 +90,7 @@ impl<O: Order> LocalLobBTreeMap<O> {
     /// # 默认配置
     /// - tick_size: 0.01 USDT (适合 BTC/ETH 等主流币)
     /// - max_orders: 10,000 个订单
-    pub fn new(symbol: Symbol) -> Self {
+    pub fn new(symbol: TradingPair) -> Self {
         Self::new_with_tick(symbol, Price::from_f64(0.01))
     }
 
@@ -111,12 +111,12 @@ impl<O: Order> LocalLobBTreeMap<O> {
     /// // SHIB/PEPE 等低价币：tick_size = 0.00000001
     /// let shib_lob = LocalLobBTreeMap::new_with_tick(Symbol::new("SHIBUSDT"), Price::from_f64(0.00000001));
     /// ```
-    pub fn new_with_tick(symbol: Symbol, tick_size: Price) -> Self {
+    pub fn new_with_tick(symbol: TradingPair, tick_size: Price) -> Self {
         Self::with_capacity(symbol, tick_size, 10_000)
     }
 
     /// 创建指定容量的本地 LOB
-    pub fn with_capacity(symbol: Symbol, tick_size: Price, max_orders: usize) -> Self {
+    pub fn with_capacity(symbol: TradingPair, tick_size: Price, max_orders: usize) -> Self {
         Self {
             symbol,
             tick_size,
@@ -131,7 +131,7 @@ impl<O: Order> LocalLobBTreeMap<O> {
         }
     }
 
-    pub fn symbol(&self) -> &Symbol {
+    pub fn symbol(&self) -> &TradingPair {
         &self.symbol
     }
 

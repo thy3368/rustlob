@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, Symbol};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use lob_repo::adapter::local_lob_hashmap_impl::LocalLobHashMap;
 use lob_repo::core::symbol_lob_repo::{Order, SymbolLob};
 
@@ -8,7 +8,7 @@ struct MockOrder {
     id: u64,
     #[created(skip)]
     #[replay(skip)]
-    symbol: Symbol,
+    symbol: TradingPair,
     #[created(skip)]
     #[replay(skip)]
     price: Price,
@@ -44,14 +44,14 @@ impl Order for MockOrder {
         self.side
     }
 
-    fn symbol(&self) -> Symbol {
+    fn symbol(&self) -> TradingPair {
         self.symbol
     }
 }
 
 #[test]
 fn test_btc_high_price_coin() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     // BTC 使用 0.01 tick size
     let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
@@ -84,7 +84,7 @@ fn test_btc_high_price_coin() {
 
 #[test]
 fn test_shib_low_price_coin() {
-    let symbol = Symbol::new("SHIBUSDT");
+    let symbol = TradingPair::new("SHIBUSDT");
     // SHIB 使用 0.00000001 tick size (8 位小数)
     let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.00000001));
 
@@ -117,7 +117,7 @@ fn test_shib_low_price_coin() {
 
 #[test]
 fn test_doge_medium_price_coin() {
-    let symbol = Symbol::new("DOGEUSDT");
+    let symbol = TradingPair::new("DOGEUSDT");
     // DOGE 使用 0.0001 tick size (4 位小数)
     let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.0001));
 
@@ -142,7 +142,7 @@ fn test_doge_medium_price_coin() {
 
 #[test]
 fn test_match_orders_hashmap() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加多个卖单
@@ -172,7 +172,7 @@ fn test_match_orders_hashmap() {
 
 #[test]
 fn test_remove_order_hashmap() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     let order = MockOrder {
@@ -195,7 +195,7 @@ fn test_remove_order_hashmap() {
 
 #[test]
 fn test_last_price_hashmap() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 初始状态
@@ -212,7 +212,7 @@ fn test_last_price_hashmap() {
 
 #[test]
 fn test_pepe_ultra_low_price() {
-    let symbol = Symbol::new("PEPEUSDT");
+    let symbol = TradingPair::new("PEPEUSDT");
     // PEPE 使用最小 tick size
     let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.00000001));
 
@@ -232,7 +232,7 @@ fn test_pepe_ultra_low_price() {
 
 #[test]
 fn test_hashmap_memory_efficiency() {
-    let symbol = Symbol::new("BTCUSDT");
+    let symbol = TradingPair::new("BTCUSDT");
     let mut lob: LocalLobHashMap<MockOrder> = LocalLobHashMap::new_with_tick(symbol, Price::from_f64(0.01));
 
     // 添加稀疏分布的订单（不连续的价格）

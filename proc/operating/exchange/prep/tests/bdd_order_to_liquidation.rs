@@ -11,7 +11,7 @@ use prep_proc::proc::{
     liquidation_proc::*,
     liquidation_types::{LiquidationType, PositionId},
     trading_prep_order_proc::*,
-    trading_prep_order_proc_impl::MatchingService
+    trading_prep_order_proc_impl::PrepMatchingService
 };
 
 // ============================================================================
@@ -52,7 +52,7 @@ mod complete_order_to_liquidation_flow {
         #[async_trait::async_trait]
         impl ADLEngine for MockADLEngine {
             async fn find_counterparties(
-                &self, _symbol: Symbol, _side: Side
+                &self, _symbol: TradingPair, _side: Side
             ) -> Result<Vec<PositionInfo>, PrepCommandError> {
                 Ok(Vec::new())
             }
@@ -68,12 +68,12 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 1: 初始化 - 用户有10000 USDT余额
         // ====================================================================
-        let matching_service = Arc::new(MatchingService::new(Price::from_f64(10000.0)));
+        let matching_service = Arc::new(PrepMatchingService::new(Price::from_f64(10000.0)));
 
         // ====================================================================
         // Step 2: 设置杠杆 - 用户设置10倍杠杆
         // ====================================================================
-        let set_leverage_cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10);
+        let set_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10);
 
         let leverage_result = matching_service.set_leverage(set_leverage_cmd);
         assert!(leverage_result.is_ok());
@@ -83,7 +83,7 @@ mod complete_order_to_liquidation_flow {
         // Step 3: 开仓 - 用户以市价开多仓 1 BTC
         // ====================================================================
         let open_cmd =
-            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd);
         assert!(open_result.is_ok());
@@ -96,7 +96,7 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 4: 验证持仓创建
         // ====================================================================
-        let position_query = QueryPositionCommand::long(Symbol::new("BTCUSDT"));
+        let position_query = QueryPositionCommand::long(TradingPair::new("BTCUSDT"));
         let position = matching_service.query_position(position_query).unwrap();
 
         assert!(position.has_position());
@@ -240,12 +240,12 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 1: 初始化
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
 
         // ====================================================================
         // Step 2: 设置杠杆
         // ====================================================================
-        let set_leverage_cmd = SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10);
+        let set_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10);
         matching_service.set_leverage(set_leverage_cmd).unwrap();
         println!("✅ Step 2: 杠杆设置成功 - 10倍");
 
@@ -253,7 +253,7 @@ mod complete_order_to_liquidation_flow {
         // Step 3: 开空仓
         // ====================================================================
         let open_cmd =
-            OpenPositionCommand::market_short(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCommand::market_short(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd).unwrap();
         assert_eq!(open_result.status, OrderStatus::Filled);
@@ -262,7 +262,7 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 4: 获取持仓
         // ====================================================================
-        let position_query = QueryPositionCommand::short(Symbol::new("BTCUSDT"));
+        let position_query = QueryPositionCommand::short(TradingPair::new("BTCUSDT"));
         let position = matching_service.query_position(position_query).unwrap();
 
         assert!(position.has_position());
@@ -335,15 +335,15 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 1-4: 开仓流程（同上）
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(10000.0));
-        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
+        let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
+        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
 
         let open_cmd =
-            OpenPositionCommand::market_long(Symbol::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         println!("✅ 持仓创建成功");
         println!("   开仓价: {} USDT", position.entry_price.to_f64());
@@ -466,18 +466,18 @@ mod complete_order_to_liquidation_flow {
         // ====================================================================
         // Step 1-3: 开仓2 BTC
         // ====================================================================
-        let matching_service = MatchingService::new(Price::from_f64(20000.0));
-        matching_service.set_leverage(SetLeverageCommand::new(Symbol::new("BTCUSDT"), 10)).unwrap();
+        let matching_service = PrepMatchingService::new(Price::from_f64(20000.0));
+        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
 
         let open_cmd = OpenPositionCommand::market_long(
-            Symbol::new("BTCUSDT"),
+            TradingPair::new("BTCUSDT"),
             Quantity::from_f64(2.0) // 开2 BTC
         )
         .with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(QueryPositionCommand::long(Symbol::new("BTCUSDT"))).unwrap();
+        let position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         println!("✅ 持仓创建:");
         println!("   数量: {} BTC", position.quantity.to_f64());

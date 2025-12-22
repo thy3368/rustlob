@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use prep_proc::proc::{
     liquidation_proc::*, liquidation_types::*, trading_prep_order_proc::*,
-    trading_prep_order_proc_impl::MatchingService
+    trading_prep_order_proc_impl::PrepMatchingService
 };
 
 #[cfg(test)]
@@ -43,11 +43,11 @@ mod open_to_liquidation_tutorial {
         println!("📋 GIVEN - 准备阶段\n");
 
         let initial_balance = Price::from_f64(10000.0);
-        let service = Arc::new(MatchingService::new(initial_balance));
+        let service = Arc::new(PrepMatchingService::new(initial_balance));
 
         println!("✅ 用户张三有 {} USDT 余额", initial_balance.to_f64());
 
-        let symbol = Symbol::new("BTCUSDT");
+        let symbol = TradingPair::new("BTCUSDT");
         let leverage = 10;
 
         service.set_leverage(SetLeverageCommand::new(symbol, leverage)).expect("设置杠杆应该成功");
@@ -180,7 +180,7 @@ mod open_to_liquidation_tutorial {
         #[async_trait::async_trait]
         impl ADLEngine for MockADLEngine {
             async fn find_counterparties(
-                &self, _symbol: Symbol, _side: Side
+                &self, _symbol: TradingPair, _side: Side
             ) -> Result<Vec<PositionInfo>, PrepCommandError> {
                 Ok(Vec::new())
             }

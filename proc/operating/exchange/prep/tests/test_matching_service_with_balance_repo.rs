@@ -8,9 +8,9 @@ use account::{
 };
 use prep_proc::proc::{
     trading_prep_order_proc::{
-        OpenPositionCommand, OrderType, PositionSide, Price, Quantity, Side, Symbol, TimeInForce
+        OpenPositionCommand, OrderType, PositionSide, Price, Quantity, Side, TradingPair, TimeInForce
     },
-    trading_prep_order_proc_impl::MatchingService
+    trading_prep_order_proc_impl::PrepMatchingService
 };
 
 #[test]
@@ -24,11 +24,11 @@ fn test_matching_service_with_balance_repo() {
     balance_repo.set_balance(account_id, asset_id, 10_000_000_000_000); // 10000 USDT (假设 8 位小数)
 
     // 创建撮合服务（依赖注入 BalanceRepo）
-    let service = MatchingService::new(balance_repo, account_id, asset_id);
+    let service = PrepMatchingService::new(balance_repo, account_id, asset_id);
 
     // 测试开仓命令
     let cmd = OpenPositionCommand {
-        symbol: Symbol::new("BTCUSDT"),
+        symbol: TradingPair::new("BTCUSDT"),
         side: Side::Buy,
         order_type: OrderType::Market,
         quantity: Quantity::from_f64(0.1),
