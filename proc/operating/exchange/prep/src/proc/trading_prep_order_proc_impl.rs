@@ -57,8 +57,6 @@ pub struct PrepMatchingService {
     /// 资产ID（USDT）
     asset_id: AssetId,
 
-    /// 杠杆配置（交易对 -> 杠杆倍数）
-    leverage_config: Arc<RwLock<HashMap<TradingPair, u8>>>,
     /// 撮合序列号（用于追踪撮合顺序）
     match_seq: Arc<RwLock<u64>>
 }
@@ -88,7 +86,6 @@ impl PrepMatchingService {
             lob_repo,
             account_id,
             asset_id,
-            leverage_config: Arc::new(RwLock::new(HashMap::new())),
             match_seq: Arc::new(RwLock::new(0))
         }
     }
@@ -453,16 +450,8 @@ impl PrepMatchingService {
         // ========================================================================
         // 2. 风控检查 - 杠杆配置
         // ========================================================================
-        let leverage = {
-            let config = self.leverage_config.read().unwrap();
-            *config.get(&cmd.trading_pair).unwrap_or(&cmd.leverage)
-        };
-
-        // 如果杠杆配置不存在，使用命令中的杠杆并保存配置
-        if leverage == cmd.leverage {
-            let mut config = self.leverage_config.write().unwrap();
-            config.insert(cmd.trading_pair, cmd.leverage);
-        }
+        // 直接使用命令中的杠杆倍数，不使用缓存
+        let leverage = cmd.leverage;
 
         // ========================================================================
         // 3. 风控检查 - 余额检查并冻结保证金
@@ -588,6 +577,7 @@ impl PrepMatchingService {
             // 获取撮合序列号
             let match_seq = self.next_match_seq();
 
+            //todo 重构一下 首先生成 internal_order，1，如果 remaining_qty > 0.0 则插入lob_repo.add_order 2，track_create, order_repo.replay
             // ========================================================================
             // 8. 创建内部订单对象（用于未成交部分挂单）
             // ========================================================================
@@ -862,12 +852,13 @@ impl PerpOrderExchProc for PrepMatchingService {
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
     }
 
+    //todo 设计某持仓的杠杆会影响保证金
     fn set_leverage(&self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
-        let mut config = self.leverage_config.write().unwrap();
-        let old_leverage = *config.get(&cmd.trading_pair).unwrap_or(&1);
-        config.insert(cmd.trading_pair, cmd.leverage);
+        // 获取当前持仓信息，以便获取旧的杠杆倍数
+        let position = self.get_position(cmd.trading_pair);
+        let old_leverage = position.leverage;
 
         // 获取当前余额
         let balance_u64 = self.get_balance();
