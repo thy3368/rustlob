@@ -421,6 +421,7 @@ impl PrepMatchingService {
 
 
 
+    //todo 1,3 4个order 4个trade,4个balance,4个持仓
 
     /// 处理限价单开仓 v2 版本 - 直接返回 OpenPositionResult
     ///
@@ -488,7 +489,11 @@ impl PrepMatchingService {
             cmd.quantity
         );
 
+        // 用于收集所有需要回放的事件
+        let mut all_events = Vec::new();
+
         if let Some(matched) = matched_orders {
+            // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
             for matched_order in matched {
                 if remaining_qty <= 0.0 {
                     break;
@@ -516,32 +521,39 @@ impl PrepMatchingService {
                     true // Maker
                 );
 
-                generated_trades.push(trade);
+                generated_trades.push(trade.clone());
+
+                // 创建 matched_order 的副本以便修改并生成事件
+                let mut updated_order = matched_order.clone();
+                let old_filled = updated_order.filled_quantity.to_f64();
+                let new_filled_qty = Quantity::from_f64(old_filled + fill_amount);
+                updated_order.filled_quantity = new_filled_qty;
+
+                // 如果完全成交，更新状态为 Filled
+                let new_order_status = if (updated_order.quantity.to_f64() - new_filled_qty.to_f64()).abs() <= 0.0001 {
+                    OrderStatus::Filled
+                } else {
+                    OrderStatus::PartiallyFilled
+                };
+                updated_order.status = new_order_status.clone();
+
+                // 生成 matched_order 的更新事件
+                let filled_copy = new_filled_qty;
+                let status_copy = new_order_status.clone();
+                if let Ok(event) = updated_order.track_update(|order| {
+                    order.filled_quantity = filled_copy;
+                    order.status = status_copy.clone();
+                }) {
+                    all_events.push(event);
+                }
+
+                // 生成 trade 的创建事件
+                if let Ok(event) = trade.track_create() {
+                    all_events.push(event);
+                }
+
                 total_filled += fill_amount;
                 remaining_qty -= fill_amount;
-            }
-        }
-
-
-        // 根据生成的成交记录生成事件，收集后一次性回放到数据库
-        if !generated_trades.is_empty() {
-            let mut trade_events = Vec::new();
-
-            for trade in &generated_trades {
-                // 使用 track_create 生成交易事件
-                match trade.track_create() {
-                    Ok(event) => {
-                        trade_events.push(event);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to track trade creation for {:?}: {:?}", trade.trade_id, e);
-                    }
-                }
-            }
-
-            // 一次性回放所有交易事件到数据库
-            if let Err(e) = self.trade_repo.replay(&trade_events) {
-                log::error!("Failed to replay trade events: {:?}", e);
             }
         }
 
@@ -577,12 +589,12 @@ impl PrepMatchingService {
             // 获取撮合序列号
             let match_seq = self.next_match_seq();
 
-            //todo 重构一下 首先生成 internal_order，1，如果 remaining_qty > 0.0 则插入lob_repo.add_order 2，track_create, order_repo.replay
             // ========================================================================
-            // 8. 创建内部订单对象（用于未成交部分挂单）
+            // 8. 创建内部订单对象
             // ========================================================================
-            if remaining_qty > 0.0 {
-                let internal_order = PrepOrder {
+            let internal_order = if remaining_qty > 0.0 {
+                // 部分成交情况
+                PrepOrder {
                     order_id: order_id.clone(),
                     trading_pair: cmd.trading_pair,
                     side: cmd.side,
@@ -594,18 +606,59 @@ impl PrepMatchingService {
                     created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
                         as u64,
                     frozen_margin: required_margin
-                };
+                }
+            } else {
+                // 完全成交情况
+                PrepOrder {
+                    order_id: order_id.clone(),
+                    trading_pair: cmd.trading_pair,
+                    side: cmd.side,
+                    order_type: cmd.order_type,
+                    quantity: cmd.quantity,
+                    price: cmd.price,
+                    filled_quantity: cmd.quantity,
+                    status: OrderStatus::Filled,
+                    created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
+                        as u64,
+                    frozen_margin: Price::from_raw(0)
+                }
+            };
 
-                // 挂单到 LOB
-                let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order);
+            // 1. 如果有未成交部分，挂单到 LOB
+            if remaining_qty > 0.0 {
+                let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order.clone());
+            }
 
-                // todo order落库
+            // 2. 生成 internal_order 的创建事件，加入 all_events
+            if let Ok(event) = internal_order.track_create() {
+                all_events.push(event);
+            }
 
-                // 部分成交
+            // 3. 一次性回放所有事件到数据库
+            if !all_events.is_empty() {
+                // 回放 matched_order 更新和 trade 创建事件到各自的 repo
+                for event in &all_events {
+                    // 根据 entity_type 判断回放到哪个 repo
+                    match event.entity_type.as_str() {
+                        "PrepOrder" => {
+                            if let Err(e) = self.order_repo.replay_event(event) {
+                                log::error!("Failed to replay order event: {:?}", e);
+                            }
+                        }
+                        "PrepTrade" => {
+                            if let Err(e) = self.trade_repo.replay_event(event) {
+                                log::error!("Failed to replay trade event: {:?}", e);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // 4. 返回相应的结果
+            if remaining_qty > 0.0 {
                 Ok(OpenPositionResult::partially_filled(order_id, generated_trades, match_seq))
             } else {
-                // todo order落库
-                // 完全成交
                 Ok(OpenPositionResult::filled(order_id, generated_trades, match_seq))
             }
         } else {
@@ -628,9 +681,27 @@ impl PrepMatchingService {
             };
 
             // 挂单到 LOB
-            let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order);
+            let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order.clone());
 
-            // todo order落库
+            // 生成 internal_order 的创建事件，加入 all_events
+            if let Ok(event) = internal_order.track_create() {
+                all_events.push(event);
+            }
+
+            // 一次性回放所有事件到数据库
+            if !all_events.is_empty() {
+                for event in &all_events {
+                    match event.entity_type.as_str() {
+                        "PrepOrder" => {
+                            if let Err(e) = self.order_repo.replay_event(event) {
+                                log::error!("Failed to replay order event: {:?}", e);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
             // 返回已接受状态（待撮合）
             Ok(OpenPositionResult::accepted(order_id))
         }
