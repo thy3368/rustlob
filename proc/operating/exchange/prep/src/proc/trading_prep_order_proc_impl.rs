@@ -26,7 +26,7 @@ use crate::proc::{
         QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand,
         QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand,
         SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult,
-        Side, TradingPair, Trade, TradeId, TradesQueryResult
+        Side, Trade, TradeId, TradesQueryResult
     }
 };
 
@@ -523,7 +523,7 @@ impl PrepMatchingService {
                     match_price,
                     fill_qty_obj,
                     fee,
-                    TradingPair::new("USDT"),
+                    AssetId::USDT,
                     true // Maker
                 );
 
@@ -698,7 +698,7 @@ impl PerpOrderExchProc for PrepMatchingService {
             fill_price,
             close_qty,
             fee,
-            TradingPair::new("USDT"),
+            AssetId::USDT,
             false // 市价单为Taker
         );
 
@@ -908,7 +908,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         let balance = Self::u64_to_price(balance_u64);
 
         let account_balance = AccountBalance::new(
-            cmd.asset.unwrap_or_else(|| TradingPair::new("USDT")),
+            cmd.asset.unwrap_or_else(|| AssetId::USDT),
             balance,
             balance,
             Price::from_raw(0),
@@ -931,7 +931,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
 
     fn query_mark_price(&self, cmd: QueryMarkPriceCommand) -> Result<Vec<MarkPriceInfo>, PrepCommandError> {
         // 简化实现：返回模拟标记价格
-        let symbol = cmd.trading_pair.unwrap_or_else(|| TradingPair::new("BTCUSDT"));
+        let symbol = cmd.trading_pair.unwrap_or_else(|| TradingPair::USDT_USDT);
 
         let mark_price = MarkPriceInfo::new(
             symbol,

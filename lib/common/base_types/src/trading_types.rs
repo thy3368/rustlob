@@ -148,4 +148,10 @@ impl TradingPair {
         base_asset: AssetId::ETH,
         quote_asset: AssetId::USDT
     };
+
+    /// USDT/USDT（用于费用资产表示）
+    pub const USDT_USDT: TradingPair = TradingPair {
+        base_asset: AssetId::USDT,
+        quote_asset: AssetId::USDT
+    };
 }

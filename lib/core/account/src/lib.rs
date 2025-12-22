@@ -59,7 +59,7 @@ pub use domain::{
     entity::{
         Account, AccountCommand, AccountCommandResult, AccountId, AccountStatus, AccountType, AssetId, Balance,
         BalanceError, BalanceOp, OrderId, PositionId, PositionInfo, PositionSide, Price, Quantity, Side, TradingPair,
-        Timestamp, TradingPair, UserId
+        Timestamp, UserId
     },
     repo::{AccountRepo, BalanceRepo, Position, PositionRepo},
     service::AccountService

@@ -6,15 +6,14 @@
 use std::fmt;
 
 // ============================================================================
-// 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
-// ============================================================================
-pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, TradingPair, Trade, TradeId, TradingPair};
-
-// ============================================================================
 // 从 account crate 导入领域实体
 // ============================================================================
 pub use account::PositionInfo;
 use base_types::AssetId;
+// ============================================================================
+// 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
+// ============================================================================
+pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, Trade, TradeId, TradingPair};
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
@@ -41,9 +40,7 @@ impl OrderType {
 }
 
 impl Default for OrderType {
-    fn default() -> Self {
-        OrderType::Limit
-    }
+    fn default() -> Self { OrderType::Limit }
 }
 
 /// 订单有效期类型
@@ -446,9 +443,7 @@ impl OrderStatus {
 }
 
 impl Default for OrderStatus {
-    fn default() -> Self {
-        OrderStatus::Pending
-    }
+    fn default() -> Self { OrderStatus::Pending }
 }
 
 /// 开仓命令响应（本地撮合结果）
@@ -1300,7 +1295,7 @@ impl QueryAccountBalanceCommand {
 #[derive(Debug, Clone)]
 pub struct AccountBalance {
     /// 资产类型（如USDT）
-    pub asset: TradingPair,
+    pub asset: AssetId,
     /// 总余额
     pub balance: Price,
     /// 可用余额（可用于开新仓）
@@ -1316,7 +1311,7 @@ pub struct AccountBalance {
 impl AccountBalance {
     /// 创建账户余额
     pub fn new(
-        asset: TradingPair, balance: Price, available_balance: Price, position_margin: Price, order_margin: Price,
+        asset: AssetId, balance: Price, available_balance: Price, position_margin: Price, order_margin: Price,
         unrealized_pnl: Price
     ) -> Self {
         Self {
@@ -2508,10 +2503,4 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
 // ============================================================================
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-
-
-
-}
+mod tests {}
