@@ -4,7 +4,7 @@ use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 /// 内部订单状态（扩展字段用于撮合引擎）
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "order_id")]
-pub struct InternalOrder {
+pub struct PrepOrder {
     pub order_id: OrderId,
     pub trading_pair: TradingPair,
     pub side: Side,
@@ -21,7 +21,7 @@ pub struct InternalOrder {
 }
 
 /// 实现 Order trait 以适配 LOB 仓储
-impl lob_repo::core::symbol_lob_repo::Order for InternalOrder {
+impl lob_repo::core::symbol_lob_repo::Order for PrepOrder {
     fn order_id(&self) -> base_types::OrderId {
         self.order_id
     }

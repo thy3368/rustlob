@@ -16,17 +16,17 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 
 use crate::proc::{
-    prep_types::InternalOrder,
+    prep_types::PrepOrder,
     trading_prep_order_proc::{
         AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand,
         CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
         MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult,
         OrderBookSnapshot, OrderId, OrderQueryResult, OrderStatus, OrderType, PerpOrderExchProc,
-        PerpOrderExchQueryProc, PositionInfo, PrepCommandError, Price, Quantity, QueryAccountBalanceCommand,
+        PerpOrderExchQueryProc, PrepPosition, PrepCommandError, Price, Quantity, QueryAccountBalanceCommand,
         QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand,
         QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand,
         SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult,
-        Side, Trade, TradeId, TradesQueryResult
+        Side, PrepTrade, TradeId, TradesQueryResult
     }
 };
 
@@ -43,13 +43,13 @@ pub struct PrepMatchingService {
     balance_repo: MySqlDbRepo<Balance>,
 
     /// 持仓仓储（依赖注入）
-    position_repo: MySqlDbRepo<PositionInfo>,
+    position_repo: MySqlDbRepo<PrepPosition>,
 
-    trade_repo: MySqlDbRepo<Trade>,
+    trade_repo: MySqlDbRepo<PrepTrade>,
 
-    order_repo: MySqlDbRepo<InternalOrder>,
+    order_repo: MySqlDbRepo<PrepOrder>,
 
-    lob_repo: StandaloneLobRepo<InternalOrder>,
+    lob_repo: StandaloneLobRepo<PrepOrder>,
 
     /// 账户ID（固定账户）
     account_id: AccountId,
@@ -76,8 +76,8 @@ impl PrepMatchingService {
     /// - `account_id`: 账户ID
     /// - `asset_id`: 资产ID（如 USDT）
     pub fn new(
-        balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PositionInfo>, trade_repo: MySqlDbRepo<Trade>,
-        order_repo: MySqlDbRepo<InternalOrder>, lob_repo: StandaloneLobRepo<InternalOrder>, account_id: AccountId,
+        balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PrepPosition>, trade_repo: MySqlDbRepo<PrepTrade>,
+        order_repo: MySqlDbRepo<PrepOrder>, lob_repo: StandaloneLobRepo<PrepOrder>, account_id: AccountId,
         asset_id: AssetId
     ) -> Self {
         Self {
@@ -189,13 +189,13 @@ impl PrepMatchingService {
     ///
     /// # 返回
     /// 持仓信息，如果不存在返回空持仓
-    fn get_position(&self, trading_pair: TradingPair) -> PositionInfo {
+    fn get_position(&self, trading_pair: TradingPair) -> PrepPosition {
         // 从数据库按 trading_pair 查询
-        match self.position_repo.find_one_by_condition(PositionInfo::empty(trading_pair, account::PositionSide::Both)) {
+        match self.position_repo.find_one_by_condition(PrepPosition::empty(trading_pair, account::PositionSide::Both)) {
             Ok(Some(position)) => position,
             Ok(None) | Err(_) => {
                 // 如果数据库中不存在，返回空持仓
-                PositionInfo::empty(trading_pair, account::PositionSide::Both)
+                PrepPosition::empty(trading_pair, account::PositionSide::Both)
             }
         }
     }
@@ -209,11 +209,11 @@ impl PrepMatchingService {
     /// - `modify_fn`: 修改函数
     fn modify_position<F>(&self, trading_pair: TradingPair, modify_fn: F)
     where
-        F: FnOnce(&mut PositionInfo)
+        F: FnOnce(&mut PrepPosition)
     {
         // 当前 mock 实现：创建空持仓，修改它，然后丢弃
         // 在实际实现中，应该从数据库加载、修改、保存
-        let mut position = PositionInfo::empty(trading_pair, account::PositionSide::Both);
+        let mut position = PrepPosition::empty(trading_pair, account::PositionSide::Both);
         modify_fn(&mut position);
         // 实际应调用 self.save_position(position)
     }
@@ -221,7 +221,7 @@ impl PrepMatchingService {
     /// 检查持仓是否存在
     fn has_position(&self, trading_pair: TradingPair) -> bool {
         // 从数据库查询是否存在该持仓
-        match self.position_repo.find_one_by_condition(PositionInfo::empty(trading_pair, account::PositionSide::Both)) {
+        match self.position_repo.find_one_by_condition(PrepPosition::empty(trading_pair, account::PositionSide::Both)) {
             Ok(Some(position)) => position.has_position(),
             Ok(None) | Err(_) => false
         }
@@ -300,7 +300,7 @@ impl PrepMatchingService {
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(trading_pair);
         if !self.has_position(trading_pair) {
-            position = PositionInfo::empty(trading_pair, position_side);
+            position = PrepPosition::empty(trading_pair, position_side);
         }
 
         // 更新持仓数量和均价
@@ -316,7 +316,7 @@ impl PrepMatchingService {
         // ========================================================================
         // Track position 生成log event, then replay_event
         // ========================================================================
-        match position.track_update(|p: &mut PositionInfo| {
+        match position.track_update(|p: &mut PrepPosition| {
             p.quantity = Quantity::from_f64(total_qty);
             p.entry_price = if total_qty > 0.0 { Price::from_f64(total_cost / total_qty) } else { Price::from_raw(0) };
             p.leverage = leverage;
@@ -359,7 +359,7 @@ impl PrepMatchingService {
     /// 多仓未实现盈亏 = (标记价格 - 开仓均价) × 持仓数量
     /// 空仓未实现盈亏 = (开仓均价 - 标记价格) × 持仓数量
     /// ```
-    fn calculate_unrealized_pnl(&self, position: &PositionInfo) -> Price {
+    fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
         if !position.has_position() {
             return Price::from_raw(0);
         }
@@ -395,7 +395,7 @@ impl PrepMatchingService {
     ///
     /// 其中维持保证金率假设为 0.4% (Binance标准)
     /// ```
-    fn calculate_liquidation_price(&self, position: &PositionInfo) -> Option<Price> {
+    fn calculate_liquidation_price(&self, position: &PrepPosition) -> Option<Price> {
         if !position.has_position() {
             return None;
         }
@@ -515,7 +515,7 @@ impl PrepMatchingService {
                 let fee = Price::from_f64(notional * 0.0002);
 
                 // 创建成交记录
-                let trade = Trade::new(
+                let trade = PrepTrade::new(
                     TradeId::generate(),
                     order_id.clone(),
                     cmd.trading_pair,
@@ -534,7 +534,27 @@ impl PrepMatchingService {
         }
 
 
-        // todo 根据 generated_trades 生成log event
+        // 根据生成的成交记录生成事件，收集后一次性回放到数据库
+        if !generated_trades.is_empty() {
+            let mut trade_events = Vec::new();
+
+            for trade in &generated_trades {
+                // 使用 track_create 生成交易事件
+                match trade.track_create() {
+                    Ok(event) => {
+                        trade_events.push(event);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to track trade creation for {:?}: {:?}", trade.trade_id, e);
+                    }
+                }
+            }
+
+            // 一次性回放所有交易事件到数据库
+            if let Err(e) = self.trade_repo.replay(&trade_events) {
+                log::error!("Failed to replay trade events: {:?}", e);
+            }
+        }
 
         // ========================================================================
         // 6. 确定最终订单状态
@@ -572,7 +592,7 @@ impl PrepMatchingService {
             // 8. 创建内部订单对象（用于未成交部分挂单）
             // ========================================================================
             if remaining_qty > 0.0 {
-                let internal_order = InternalOrder {
+                let internal_order = PrepOrder {
                     order_id: order_id.clone(),
                     trading_pair: cmd.trading_pair,
                     side: cmd.side,
@@ -603,7 +623,7 @@ impl PrepMatchingService {
             // ========================================================================
             // 8. 创建内部订单对象（未成交，需要挂单等待）
             // ========================================================================
-            let internal_order = InternalOrder {
+            let internal_order = PrepOrder {
                 order_id: order_id.clone(),
                 trading_pair: cmd.trading_pair,
                 side: cmd.side,
@@ -690,7 +710,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         let notional = fill_price.to_f64() * close_qty.to_f64();
         let fee = Price::from_f64(notional * 0.0004);
 
-        let trade = Trade::new(
+        let trade = PrepTrade::new(
             TradeId::generate(),
             order_id.clone(),
             cmd.trading_pair,
@@ -889,7 +909,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         todo!()
     }
 
-    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError> {
+    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PrepPosition, PrepCommandError> {
         Ok(self.get_position(cmd.trading_pair))
     }
 
@@ -924,7 +944,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         let balance = Self::u64_to_price(balance_u64);
 
         // Mock 实现：返回空的持仓列表
-        let positions_vec: Vec<PositionInfo> = vec![];
+        let positions_vec: Vec<PrepPosition> = vec![];
 
         Ok(AccountInfo::new(balance, Price::from_raw(0), Price::from_raw(0), balance, positions_vec, Vec::new()))
     }

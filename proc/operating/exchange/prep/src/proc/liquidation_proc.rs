@@ -58,7 +58,7 @@ impl LiquidationProcessor {
     /// # 返回
     /// 强平结果，包含强平类型和损失分配
     pub async fn execute_liquidation_with_position(
-        &self, position: PositionInfo, trigger_price: Price
+        &self, position: PrepPosition, trigger_price: Price
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 确定平仓方向（与持仓方向相反）
         let liquidation_side = match position.position_side {
@@ -117,7 +117,7 @@ impl LiquidationProcessor {
 
     /// 尝试市场强平
     async fn try_market_liquidation(
-        &self, position: &PositionInfo, side: Side
+        &self, position: &PrepPosition, side: Side
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 提交紧急市价单
         let order_cmd = OpenPositionCommand {
@@ -154,7 +154,7 @@ impl LiquidationProcessor {
 
     /// 尝试保险基金接管
     async fn try_insurance_fund_takeover(
-        &self, position: &PositionInfo
+        &self, position: &PrepPosition
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 检查保险基金容量
         let capacity = self.insurance_fund.check_capacity().await?;
@@ -172,7 +172,7 @@ impl LiquidationProcessor {
 
     /// 触发自动减仓
     async fn trigger_auto_deleveraging(
-        &self, position: &PositionInfo, side: Side
+        &self, position: &PrepPosition, side: Side
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 查找对手方盈利仓位（按ADL队列优先级）
         let counterparties = self.adl_engine.find_counterparties(position.trading_pair, side).await?;
@@ -203,7 +203,7 @@ impl LiquidationProcessor {
     }
 
     /// 获取持仓信息
-    async fn get_position(&self, position_id: &PositionId) -> Result<PositionInfo, PrepCommandError> {
+    async fn get_position(&self, position_id: &PositionId) -> Result<PrepPosition, PrepCommandError> {
         // 尝试从 matching_service 查询持仓
         // 但是 query_position 需要 Symbol，而我们只有 position_id
         // 这是一个设计问题：需要一个 position_id -> Symbol 的映射
@@ -220,7 +220,7 @@ impl LiquidationProcessor {
     }
 
     /// 计算强平损失
-    pub fn calculate_liquidation_loss(position: &PositionInfo, close_price: Price) -> Price {
+    pub fn calculate_liquidation_loss(position: &PrepPosition, close_price: Price) -> Price {
         let entry = position.entry_price.to_f64();
         let close = close_price.to_f64();
         let qty = position.quantity.to_f64();
@@ -248,7 +248,7 @@ impl LiquidationProcessor {
     }
 
     async fn settle_market_liquidation(
-        &self, position: &PositionInfo, avg_price: Price, loss: Price
+        &self, position: &PrepPosition, avg_price: Price, loss: Price
     ) -> Result<LiquidationResult, PrepCommandError> {
         // 扣除保证金
         let margin_loss = position.margin;
@@ -269,7 +269,7 @@ impl LiquidationProcessor {
     }
 
     async fn settle_insurance_fund_liquidation(
-        &self, position: &PositionInfo, takeover: InsuranceFundTakeover
+        &self, position: &PrepPosition, takeover: InsuranceFundTakeover
     ) -> Result<LiquidationResult, PrepCommandError> {
         Ok(LiquidationResult {
             position_id: position.position_id.clone(),
@@ -283,7 +283,7 @@ impl LiquidationProcessor {
     }
 
     async fn settle_adl_liquidation(
-        &self, position: &PositionInfo, _adl_result: ADLResult
+        &self, position: &PrepPosition, _adl_result: ADLResult
     ) -> Result<LiquidationResult, PrepCommandError> {
         Ok(LiquidationResult {
             position_id: position.position_id.clone(),

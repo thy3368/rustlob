@@ -169,7 +169,7 @@ impl Default for Quantity {
 /// 持仓信息
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "position_id")]
-pub struct PositionInfo {
+pub struct PrepPosition {
     /// 所属用户ID
     pub user_id: UserId,
     /// 持仓ID
@@ -201,7 +201,7 @@ pub struct PositionInfo {
     pub updated_at: Timestamp
 }
 
-impl PositionInfo {
+impl PrepPosition {
     /// 创建空持仓
     pub fn empty(trading_pair: TradingPair, position_side: PositionSide) -> Self {
         Self {
@@ -292,7 +292,7 @@ impl fmt::Display for TradeId {
 /// 成交记录（单次撮合成交）
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "trade_id")]
-pub struct Trade {
+pub struct PrepTrade {
     /// 成交ID
     pub trade_id: TradeId,
     /// 关联订单ID
@@ -315,7 +315,7 @@ pub struct Trade {
     pub timestamp: u64
 }
 
-impl Trade {
+impl PrepTrade {
     /// 创建新的成交记录
     pub fn new(
         trade_id: TradeId, order_id: OrderId, symbol: TradingPair, side: Side, price: Price, quantity: Quantity, fee: Price,

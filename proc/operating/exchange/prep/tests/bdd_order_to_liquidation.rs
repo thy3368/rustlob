@@ -40,7 +40,7 @@ mod complete_order_to_liquidation_flow {
                     available_balance: Price::from_f64(100000.0)
                 })
             }
-            async fn takeover(&self, position: &PositionInfo) -> Result<InsuranceFundTakeover, PrepCommandError> {
+            async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCommandError> {
                 Ok(InsuranceFundTakeover {
                     total_loss: position.margin
                 })
@@ -53,11 +53,11 @@ mod complete_order_to_liquidation_flow {
         impl ADLEngine for MockADLEngine {
             async fn find_counterparties(
                 &self, _symbol: TradingPair, _side: Side
-            ) -> Result<Vec<PositionInfo>, PrepCommandError> {
+            ) -> Result<Vec<PrepPosition>, PrepCommandError> {
                 Ok(Vec::new())
             }
             async fn execute_adl(
-                &self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>
+                &self, _liquidated_position: &PrepPosition, _counterparties: Vec<PrepPosition>
             ) -> Result<ADLResult, PrepCommandError> {
                 Ok(ADLResult {
                     affected_positions: Vec::new()
@@ -498,7 +498,7 @@ mod complete_order_to_liquidation_flow {
         let fill_price = Price::from_f64(liquidation_price.to_f64() + 100.0);
 
         // 创建部分持仓用于计算
-        let partial_position = PositionInfo {
+        let partial_position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: position.symbol,
             position_side: position.position_side,

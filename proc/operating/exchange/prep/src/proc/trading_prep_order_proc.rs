@@ -8,12 +8,12 @@ use std::fmt;
 // ============================================================================
 // 从 account crate 导入领域实体
 // ============================================================================
-pub use account::PositionInfo;
+pub use account::PrepPosition;
 use base_types::AssetId;
 // ============================================================================
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
-pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, Trade, TradeId, TradingPair};
+pub use base_types::{OrderId, PositionId, PositionSide, Price, Quantity, Side, PrepTrade, TradeId, TradingPair};
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
@@ -458,7 +458,7 @@ pub struct OpenPositionResult {
     /// 已成交数量
     pub filled_quantity: Quantity,
     /// 成交明细列表（按时间顺序）
-    pub trades: Vec<Trade>,
+    pub trades: Vec<PrepTrade>,
     /// 撮合序列号（用于追踪撮合顺序）
     pub match_seq: Option<u64>,
     /// 创建时间戳（毫秒）
@@ -499,7 +499,7 @@ impl OpenPositionResult {
     }
 
     /// 创建已成交状态的响应
-    pub fn filled(order_id: OrderId, trades: Vec<Trade>, match_seq: u64) -> Self {
+    pub fn filled(order_id: OrderId, trades: Vec<PrepTrade>, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -518,7 +518,7 @@ impl OpenPositionResult {
     }
 
     /// 创建部分成交状态的响应
-    pub fn partially_filled(order_id: OrderId, trades: Vec<Trade>, match_seq: u64) -> Self {
+    pub fn partially_filled(order_id: OrderId, trades: Vec<PrepTrade>, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -537,7 +537,7 @@ impl OpenPositionResult {
     }
 
     /// 计算成交均价和总数量
-    fn calculate_avg_price_and_quantity(trades: &[Trade]) -> (Price, Quantity) {
+    fn calculate_avg_price_and_quantity(trades: &[PrepTrade]) -> (Price, Quantity) {
         if trades.is_empty() {
             return (Price::from_raw(0), Quantity::from_raw(0));
         }
@@ -570,7 +570,7 @@ pub struct ClosePositionResult {
     /// 已平仓数量
     pub closed_quantity: Quantity,
     /// 成交明细列表（按时间顺序）
-    pub trades: Vec<Trade>,
+    pub trades: Vec<PrepTrade>,
     /// 平仓盈亏
     pub realized_pnl: Option<Price>,
     /// 撮合序列号（用于追踪撮合顺序）
@@ -615,7 +615,7 @@ impl ClosePositionResult {
     }
 
     /// 创建已成交状态的响应
-    pub fn filled(order_id: OrderId, trades: Vec<Trade>, realized_pnl: Price, match_seq: u64) -> Self {
+    pub fn filled(order_id: OrderId, trades: Vec<PrepTrade>, realized_pnl: Price, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -635,7 +635,7 @@ impl ClosePositionResult {
     }
 
     /// 创建部分成交状态的响应
-    pub fn partially_filled(order_id: OrderId, trades: Vec<Trade>, realized_pnl: Price, match_seq: u64) -> Self {
+    pub fn partially_filled(order_id: OrderId, trades: Vec<PrepTrade>, realized_pnl: Price, match_seq: u64) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -655,7 +655,7 @@ impl ClosePositionResult {
     }
 
     /// 计算成交均价和总数量
-    fn calculate_avg_price_and_quantity(trades: &[Trade]) -> (Price, Quantity) {
+    fn calculate_avg_price_and_quantity(trades: &[PrepTrade]) -> (Price, Quantity) {
         if trades.is_empty() {
             return (Price::from_raw(0), Quantity::from_raw(0));
         }
@@ -1378,7 +1378,7 @@ pub struct AccountInfo {
     /// 可用余额
     pub available_balance: Price,
     /// 所有持仓列表
-    pub positions: Vec<PositionInfo>,
+    pub positions: Vec<PrepPosition>,
     /// 所有资产余额
     pub assets: Vec<AccountBalance>,
     /// 更新时间戳
@@ -1389,7 +1389,7 @@ impl AccountInfo {
     /// 创建账户信息
     pub fn new(
         total_wallet_balance: Price, total_margin_balance: Price, total_unrealized_pnl: Price,
-        available_balance: Price, positions: Vec<PositionInfo>, assets: Vec<AccountBalance>
+        available_balance: Price, positions: Vec<PrepPosition>, assets: Vec<AccountBalance>
     ) -> Self {
         Self {
             total_wallet_balance,
@@ -1897,7 +1897,7 @@ impl Default for QueryTradesCommand {
 #[derive(Debug, Clone)]
 pub struct TradesQueryResult {
     /// 成交记录列表（按时间降序）
-    pub trades: Vec<Trade>,
+    pub trades: Vec<PrepTrade>,
     /// 总成交数量
     pub total_count: usize,
     /// 是否有更多数据
@@ -1906,7 +1906,7 @@ pub struct TradesQueryResult {
 
 impl TradesQueryResult {
     /// 创建成交查询结果
-    pub fn new(trades: Vec<Trade>, total_count: usize, has_more: bool) -> Self {
+    pub fn new(trades: Vec<PrepTrade>, total_count: usize, has_more: bool) -> Self {
         Self {
             trades,
             total_count,
@@ -2346,7 +2346,7 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
     /// # 注意
     /// - 无持仓时返回 `PositionInfo::empty()`，而不是返回错误
     /// - 可通过 `has_position()` 判断是否有持仓
-    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PositionInfo, PrepCommandError>;
+    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PrepPosition, PrepCommandError>;
 
     /// 查询订单簿深度
     ///

@@ -71,7 +71,7 @@ impl MockFundingRateService {
     fn get_funding_rate(&self, symbol: TradingPair) -> i64 { *self.current_rates.lock().unwrap().get(&symbol).unwrap_or(&0) }
 
     /// 计算资金费用
-    fn calculate_funding_fee(&self, position: &PositionInfo, funding_rate: i64) -> Price {
+    fn calculate_funding_fee(&self, position: &PrepPosition, funding_rate: i64) -> Price {
         // 持仓价值 = 数量 × 标记价格
         let position_value = position.quantity.to_f64() * position.mark_price.to_f64();
 
@@ -84,7 +84,7 @@ impl MockFundingRateService {
 
     /// 执行资金费率结算
     fn settle_funding_rate(
-        &self, symbol: TradingPair, positions: &[PositionInfo], settlement_time: i64
+        &self, symbol: TradingPair, positions: &[PrepPosition], settlement_time: i64
     ) -> FundingSettlementResult {
         let funding_rate = self.get_funding_rate(symbol);
 
@@ -141,7 +141,7 @@ impl MockFundingRateService {
     }
 
     /// 应用资金费用到持仓
-    fn apply_funding_fee_to_position(&self, position: &mut PositionInfo, funding_rate: i64) -> Price {
+    fn apply_funding_fee_to_position(&self, position: &mut PrepPosition, funding_rate: i64) -> Price {
         let funding_fee = self.calculate_funding_fee(position, funding_rate);
 
         // 多仓支付，空仓收取（当funding_rate > 0时）
@@ -278,7 +278,7 @@ mod funding_rate_calculation_scenarios {
         funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓 @ 50000 USDT
-        let position = PositionInfo {
+        let position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
@@ -321,7 +321,7 @@ mod funding_rate_calculation_scenarios {
         funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC空仓 @ 50000 USDT
-        let position = PositionInfo {
+        let position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Short,
@@ -363,7 +363,7 @@ mod funding_rate_calculation_scenarios {
         funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓 @ 50000 USDT
-        let position = PositionInfo {
+        let position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
@@ -415,7 +415,7 @@ mod funding_rate_settlement_scenarios {
         // And: 有3个持仓
         let positions = vec![
             // 多仓1: 1 BTC @ 50000
-            PositionInfo {
+            PrepPosition {
                 position_id: PositionId::generate(),
                 symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Long,
@@ -430,7 +430,7 @@ mod funding_rate_settlement_scenarios {
                 updated_at: 0
             },
             // 多仓2: 0.5 BTC @ 50000
-            PositionInfo {
+            PrepPosition {
                 position_id: PositionId::generate(),
                 symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Long,
@@ -445,7 +445,7 @@ mod funding_rate_settlement_scenarios {
                 updated_at: 0
             },
             // 空仓: 1 BTC @ 50000
-            PositionInfo {
+            PrepPosition {
                 position_id: PositionId::generate(),
                 symbol: TradingPair::new("BTCUSDT"),
                 position_side: PositionSide::Short,
@@ -512,7 +512,7 @@ mod funding_rate_margin_impact_scenarios {
         funding_service.set_funding_rate(TradingPair::new("BTCUSDT"), funding_rate);
 
         // And: 用户有1 BTC多仓，保证金5000 USDT
-        let mut position = PositionInfo {
+        let mut position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
@@ -559,7 +559,7 @@ mod funding_rate_margin_impact_scenarios {
         let funding_rate = 100;
 
         // And: 用户有1 BTC空仓，保证金5000 USDT
-        let mut position = PositionInfo {
+        let mut position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Short,
@@ -611,7 +611,7 @@ mod funding_rate_liquidation_scenarios {
         let funding_service = MockFundingRateService::new();
 
         // Given: 用户有1 BTC多仓，保证金仅为5010 USDT（接近强平）
-        let mut position = PositionInfo {
+        let mut position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,
@@ -692,7 +692,7 @@ mod funding_rate_liquidation_scenarios {
         let funding_service = MockFundingRateService::new();
 
         // Given: 用户有1 BTC多仓 @ 50000，保证金5100 USDT
-        let mut position = PositionInfo {
+        let mut position = PrepPosition {
             position_id: PositionId::generate(),
             symbol: TradingPair::new("BTCUSDT"),
             position_side: PositionSide::Long,

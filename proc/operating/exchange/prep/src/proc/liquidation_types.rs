@@ -49,7 +49,7 @@ pub struct InsuranceFundCapacity {
 }
 
 impl InsuranceFundCapacity {
-    pub fn can_takeover(&self, position: &PositionInfo) -> bool {
+    pub fn can_takeover(&self, position: &PrepPosition) -> bool {
         // 简化判断：保险基金余额 > 持仓保证金
         self.available_balance > position.margin
     }
@@ -85,16 +85,16 @@ pub enum OrderPriority {
 #[async_trait::async_trait]
 pub trait InsuranceFund: Send + Sync {
     async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCommandError>;
-    async fn takeover(&self, position: &PositionInfo) -> Result<InsuranceFundTakeover, PrepCommandError>;
+    async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCommandError>;
 }
 
 /// ADL引擎接口
 #[async_trait::async_trait]
 pub trait ADLEngine: Send + Sync {
-    async fn find_counterparties(&self, symbol: TradingPair, side: Side) -> Result<Vec<PositionInfo>, PrepCommandError>;
+    async fn find_counterparties(&self, symbol: TradingPair, side: Side) -> Result<Vec<PrepPosition>, PrepCommandError>;
 
     async fn execute_adl(
-        &self, liquidated_position: &PositionInfo, counterparties: Vec<PositionInfo>
+        &self, liquidated_position: &PrepPosition, counterparties: Vec<PrepPosition>
     ) -> Result<ADLResult, PrepCommandError>;
 }
 

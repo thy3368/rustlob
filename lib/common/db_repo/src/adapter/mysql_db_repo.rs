@@ -75,6 +75,26 @@ impl<E: Entity> MySqlDbRepo<E> {
         // SQL: SELECT * FROM [entity_type] WHERE entity_id = ? LIMIT 1
         Ok(None)
     }
+
+    /// 一次性回放多个事件到数据库
+    ///
+    /// 遍历所有 ChangeLogEntry 事件，依次调用 replay_event 进行处理
+    ///
+    /// # 参数
+    /// - `events`: ChangeLogEntry 事件列表
+    ///
+    /// # 返回
+    /// - `Ok(())`: 所有事件回放成功
+    /// - `Err(RepoError)`: 任何一个事件回放失败时返回错误
+    pub fn replay(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError>
+    where
+        E: FromCreatedEvent,
+    {
+        for event in events {
+            self.replay_event(event)?;
+        }
+        Ok(())
+    }
 }
 
 impl<E: Entity> Default for MySqlDbRepo<E> {

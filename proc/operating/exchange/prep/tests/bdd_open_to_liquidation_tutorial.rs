@@ -169,7 +169,7 @@ mod open_to_liquidation_tutorial {
                     available_balance: Price::from_f64(100000.0)
                 })
             }
-            async fn takeover(&self, position: &PositionInfo) -> Result<InsuranceFundTakeover, PrepCommandError> {
+            async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCommandError> {
                 Ok(InsuranceFundTakeover {
                     total_loss: position.margin
                 })
@@ -181,11 +181,11 @@ mod open_to_liquidation_tutorial {
         impl ADLEngine for MockADLEngine {
             async fn find_counterparties(
                 &self, _symbol: TradingPair, _side: Side
-            ) -> Result<Vec<PositionInfo>, PrepCommandError> {
+            ) -> Result<Vec<PrepPosition>, PrepCommandError> {
                 Ok(Vec::new())
             }
             async fn execute_adl(
-                &self, _liquidated_position: &PositionInfo, _counterparties: Vec<PositionInfo>
+                &self, _liquidated_position: &PrepPosition, _counterparties: Vec<PrepPosition>
             ) -> Result<ADLResult, PrepCommandError> {
                 Ok(ADLResult {
                     affected_positions: Vec::new()
