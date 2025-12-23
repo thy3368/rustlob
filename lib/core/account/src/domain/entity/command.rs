@@ -6,7 +6,7 @@ use super::{
     balance::Balance,
     error::BalanceError,
 };
-use base_types::{AccountId, AssetId, OrderId, Side, TradingPair};
+use base_types::{AccountId, AssetId, OrderId, Side, TradingPair, Price};
 
 /// 账户命令（统一）
 ///
@@ -23,34 +23,34 @@ pub enum AccountCommand {
         order_id: OrderId,
         pair: TradingPair,
         side: Side,
-        price: u64,
-        quantity: u64
+        price: Price,
+        quantity: Price
     },
 
     /// 解冻资金（撤单时释放）
-    Unfreeze { account_id: AccountId, order_id: OrderId, pair: TradingPair, side: Side, price: u64, quantity: u64 },
+    Unfreeze { account_id: AccountId, order_id: OrderId, pair: TradingPair, side: Side, price: Price, quantity: Price },
 
     // ==================== Settlement 调用（直接操作资产） ====================
     /// 冻结指定资产（可用 → 冻结）
-    Freeze { account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    Freeze { account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 解冻指定资产（冻结 → 可用）
-    UnfreezeAsset { account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    UnfreezeAsset { account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 增加可用余额（入金、收款、成交收入）
-    Credit { account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    Credit { account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 扣减可用余额（出金、付款）
-    Debit { account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    Debit { account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 扣减冻结余额（成交扣款、强平）
-    DebitFrozen { account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    DebitFrozen { account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 转账（同用户不同账户间）
-    Transfer { from_account_id: AccountId, to_account_id: AccountId, asset_id: AssetId, amount: u64, reference_id: u64 },
+    Transfer { from_account_id: AccountId, to_account_id: AccountId, asset_id: AssetId, amount: Price, reference_id: u64 },
 
     /// 结算盈亏（可正可负）
-    SettlePnl { account_id: AccountId, asset_id: AssetId, pnl: i64, reference_id: u64 },
+    SettlePnl { account_id: AccountId, asset_id: AssetId, pnl: Price, reference_id: u64 },
 
     // ==================== 查询 ====================
     /// 查询余额
@@ -169,7 +169,7 @@ impl AccountCommand {
     /// 计算交易对命令的冻结资产和金额
     /// 仅适用于 CheckAndFreeze 和 Unfreeze
     #[inline]
-    pub fn trading_pair_amount(&self) -> Option<(AssetId, u64)> {
+    pub fn trading_pair_amount(&self) -> Option<(AssetId, Price)> {
         match self {
             AccountCommand::CheckAndFreeze {
                 pair,
@@ -200,22 +200,22 @@ impl AccountCommand {
 #[derive(Debug, Clone)]
 pub enum AccountCommandResult {
     /// 冻结成功（CheckAndFreeze, Freeze）
-    Frozen { reference_id: u64, asset_id: AssetId, amount: u64, new_available: u64, new_frozen: u64 },
+    Frozen { reference_id: u64, asset_id: AssetId, amount: Price, new_available: Price, new_frozen: Price },
 
     /// 解冻成功（Unfreeze, UnfreezeAsset）
-    Unfrozen { reference_id: u64, asset_id: AssetId, amount: u64, new_available: u64, new_frozen: u64 },
+    Unfrozen { reference_id: u64, asset_id: AssetId, amount: Price, new_available: Price, new_frozen: Price },
 
     /// 入账成功（Credit）
-    Credited { reference_id: u64, asset_id: AssetId, amount: u64, new_available: u64 },
+    Credited { reference_id: u64, asset_id: AssetId, amount: Price, new_available: Price },
 
     /// 扣款成功（Debit, DebitFrozen）
     Debited {
         reference_id: u64,
         asset_id: AssetId,
-        amount: u64,
+        amount: Price,
         from_frozen: bool,
-        new_available: u64,
-        new_frozen: u64
+        new_available: Price,
+        new_frozen: Price
     },
 
     /// 转账成功（Transfer）
@@ -224,11 +224,11 @@ pub enum AccountCommandResult {
         from_account_id: AccountId,
         to_account_id: AccountId,
         asset_id: AssetId,
-        amount: u64
+        amount: Price
     },
 
     /// 盈亏结算成功（SettlePnl）
-    PnlSettled { reference_id: u64, asset_id: AssetId, pnl: i64, new_available: u64 },
+    PnlSettled { reference_id: u64, asset_id: AssetId, pnl: Price, new_available: Price },
 
     /// 余额查询结果
     Balance(Option<Balance>),

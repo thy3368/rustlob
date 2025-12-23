@@ -38,7 +38,7 @@ impl MemoryBalanceRepo {
     /// 设置余额（测试用）
     pub fn set_balance(&mut self, account_id: AccountId, asset_id: AssetId, available: u64) {
         let now = self.now();
-        self.balances.insert((account_id, asset_id), Balance::with_available(account_id, asset_id, available, now));
+        self.balances.insert((account_id, asset_id), Balance::with_available(account_id, asset_id, base_types::Price::from_raw(available as i64), now));
     }
 }
 

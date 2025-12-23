@@ -102,6 +102,28 @@ impl Price {
     pub fn is_negative(&self) -> bool {
         self.0 < 0
     }
+
+    /// 与数量相乘：Price * Quantity -> Price
+    /// 或与价格相乘（表示名义价值）：Price * Price -> Price
+    /// 用于计算名义价值（notional）
+    pub fn checked_mul(&self, qty: impl Into<i128>) -> Option<Price> {
+        let price_raw = self.0 as i128;
+        let qty_raw = qty.into();
+        let result = price_raw.checked_mul(qty_raw)?;
+        // 需要除以 DECIMALS 因为两个都有 8 位小数
+        let normalized = result.checked_div(Self::DECIMALS as i128)?;
+        i64::try_from(normalized).ok().map(Price)
+    }
+
+    /// 与 Quantity 相乘
+    pub fn mul_quantity(&self, qty: Quantity) -> Option<Price> {
+        self.checked_mul(qty.raw())
+    }
+
+    /// 与另一个 Price 相乘（定点数乘法）
+    pub fn mul_price(&self, other: Price) -> Option<Price> {
+        self.checked_mul(other.raw())
+    }
 }
 
 impl std::ops::Add for Price {
@@ -121,6 +143,12 @@ impl std::ops::Sub for Price {
 impl Default for Price {
     fn default() -> Self {
         Self(0)
+    }
+}
+
+impl From<Price> for i128 {
+    fn from(p: Price) -> Self {
+        p.0 as i128
     }
 }
 
@@ -254,12 +282,171 @@ impl PrepPosition {
 
         Price::from_f64(fee)
     }
+
+    fn calculate_liquidation_price(&self, position: &PrepPosition) -> Option<Price> {
+        if !position.has_position() {
+            return None;
+        }
+
+        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
+        let entry = position.entry_price.to_f64();
+        let leverage = position.leverage as f64;
+
+        let liq_price = match position.position_side {
+            PositionSide::Long => {
+                // 多仓：价格下跌到此价格时强平
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+            PositionSide::Short => {
+                // 空仓：价格上涨到此价格时强平
+                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
+            }
+            PositionSide::Both => {
+                // 单向模式，暂时按多仓处理
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+        };
+
+        Some(Price::from_f64(liq_price.max(0.0)))
+    }
+
+
+    fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
+        if !position.has_position() {
+            return Price::from_raw(0);
+        }
+
+        let entry = position.entry_price.to_f64();
+        let mark = position.mark_price.to_f64();
+        let qty = position.quantity.to_f64();
+
+        let pnl = match position.position_side {
+            PositionSide::Long => (mark - entry) * qty,
+            PositionSide::Short => (entry - mark) * qty,
+            PositionSide::Both => {
+                // 单向持仓模式，根据数量符号判断
+                (mark - entry) * qty
+            }
+        };
+
+        Price::from_f64(pnl)
+    }
+
+    /// 更新持仓数量、均价、杠杆和相关计算字段
+    ///
+    /// # 参数
+    /// - `new_quantity`: 新成交数量
+    /// - `new_price`: 新成交价格
+    /// - `leverage`: 杠杆倍数
+    /// - `side`: 订单方向
+    /// - `position_side`: 持仓方向
+    pub fn update(&mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::Side, _position_side: crate::PositionSide) {
+        // 计算新的持仓数量和均价（加权平均）
+        let old_qty = self.quantity.to_f64();
+        let old_price = self.entry_price.to_f64();
+        let new_qty_val = new_quantity.to_f64();
+        let new_price_val = new_price.to_f64();
+
+        let total_cost = old_qty * old_price + new_qty_val * new_price_val;
+        let total_qty = old_qty + new_qty_val;
+
+        // 更新持仓数量和均价
+        self.quantity = Quantity::from_f64(total_qty);
+        self.entry_price = if total_qty > 0.0 {
+            Price::from_f64(total_cost / total_qty)
+        } else {
+            Price::from_raw(0)
+        };
+
+        // 更新标记价格
+        self.mark_price = new_price;
+
+        // 更新杠杆
+        self.leverage = leverage;
+
+        // 计算保证金 = (持仓价值) / 杠杆倍数
+        let notional = self.entry_price.to_f64() * self.quantity.to_f64();
+        self.margin = Price::from_f64(notional / leverage as f64);
+
+        // 计算未实现盈亏
+        self.unrealized_pnl = self.calculate_unrealized_pnl_value();
+
+        // 计算强平价格
+        self.liquidation_price = self.calculate_liquidation_price_value();
+
+        // 更新时间戳
+        self.updated_at = current_timestamp_ms();
+    }
+
+    /// 计算未实现盈亏值
+    fn calculate_unrealized_pnl_value(&self) -> Price {
+        if !self.has_position() {
+            return Price::from_raw(0);
+        }
+
+        let entry = self.entry_price.to_f64();
+        let mark = self.mark_price.to_f64();
+        let qty = self.quantity.to_f64();
+
+        let pnl = match self.position_side {
+            PositionSide::Long => (mark - entry) * qty,
+            PositionSide::Short => (entry - mark) * qty,
+            PositionSide::Both => {
+                // 单向持仓模式，根据数量符号判断
+                (mark - entry) * qty
+            }
+        };
+
+        Price::from_f64(pnl)
+    }
+
+    /// 计算强平价格值
+    fn calculate_liquidation_price_value(&self) -> Option<Price> {
+        if !self.has_position() {
+            return None;
+        }
+
+        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
+        let entry = self.entry_price.to_f64();
+        let leverage = self.leverage as f64;
+
+        let liq_price = match self.position_side {
+            PositionSide::Long => {
+                // 多仓：价格下跌到此价格时强平
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+            PositionSide::Short => {
+                // 空仓：价格上涨到此价格时强平
+                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
+            }
+            PositionSide::Both => {
+                // 单向模式，暂时按多仓处理
+                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+            }
+        };
+
+        Some(Price::from_f64(liq_price.max(0.0)))
+    }
+
+    /// 更新已实现盈亏
+    ///
+    /// # 参数
+    /// - `pnl`: 盈亏金额
+    pub fn update_realized_pnl(&mut self, pnl: Price) {
+        self.realized_pnl = self.realized_pnl + pnl;
+    }
 }
 
 /// 获取当前时间戳（纳秒）
 fn current_timestamp() -> Timestamp {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
+}
+
+/// 获取当前时间戳（毫秒）
+fn current_timestamp_ms() -> Timestamp {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 // ============================================================================
@@ -344,10 +531,4 @@ impl PrepTrade {
         let value = self.price.to_f64() * self.quantity.to_f64();
         Price::from_f64(value)
     }
-}
-
-/// 获取当前时间戳（毫秒）
-fn current_timestamp_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }

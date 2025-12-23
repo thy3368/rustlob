@@ -1,43 +1,47 @@
 //! 余额实体定义
 
-use base_types::{AccountId, AssetId, Timestamp};
 use std::fmt;
+
+use base_types::{AccountId, AssetId, Timestamp, Price};
 use entity_derive::Entity;
 
 /// 余额ID（复合键：account_id:asset_id）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BalanceId {
     pub account_id: AccountId,
-    pub asset_id: AssetId,
+    pub asset_id: AssetId
 }
 
 impl BalanceId {
     pub fn new(account_id: AccountId, asset_id: AssetId) -> Self {
-        Self { account_id, asset_id }
+        Self {
+            account_id,
+            asset_id
+        }
     }
 }
 
 impl fmt::Display for BalanceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.account_id.0, self.asset_id.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}:{}", self.account_id.0, self.asset_id.0) }
 }
 
 impl Default for BalanceId {
     fn default() -> Self {
         Self {
             account_id: AccountId(0),
-            asset_id: AssetId(0),
+            asset_id: AssetId(0)
         }
     }
 }
 
-/// 资产余额（统一资产模型）
+/// 资产余额（统一资产模型，支持8位小数精度）
+///
+/// 使用 Price (i64) 存储，确保与持仓、PnL 等计算精度一致
 ///
 /// 示例：
-/// - Balance(account, USDT, 100_000_000) = 100 USDT
-/// - Balance(account, BTC, 100_000_000)  = 1 BTC
-/// - Balance(account, AAPL, 1000)        = 1000 股苹果
+/// - Balance(account, USDT, 100.00000000) = 100 USDT
+/// - Balance(account, BTC, 1.00000000)    = 1 BTC
+/// - Balance(account, AAPL, 1000.00000000) = 1000 股苹果
 #[derive(Debug, Clone, Entity)]
 #[repr(align(64))]
 pub struct Balance {
@@ -48,9 +52,11 @@ pub struct Balance {
     /// 资产ID
     pub asset_id: AssetId,
     /// 可用余额（可用于下单、提现）
-    pub available: u64,
+    /// 使用 Price 类型保证 8 位小数精度
+    pub available: Price,
     /// 冻结余额（已锁定用于挂单、保证金）
-    pub frozen: u64,
+    /// 使用 Price 类型保证 8 位小数精度
+    pub frozen: Price,
     /// 乐观锁版本号（每次修改 +1）
     pub version: u64,
     /// 最后更新时间
@@ -64,21 +70,21 @@ impl Balance {
             id: BalanceId::new(account_id, asset_id),
             account_id,
             asset_id,
-            available: 0,
-            frozen: 0,
+            available: Price::from_raw(0),
+            frozen: Price::from_raw(0),
             version: 0,
             updated_at: now
         }
     }
 
     /// 创建带初始余额的记录
-    pub fn with_available(account_id: AccountId, asset_id: AssetId, available: u64, now: Timestamp) -> Self {
+    pub fn with_available(account_id: AccountId, asset_id: AssetId, available: Price, now: Timestamp) -> Self {
         Self {
             id: BalanceId::new(account_id, asset_id),
             account_id,
             asset_id,
             available,
-            frozen: 0,
+            frozen: Price::from_raw(0),
             version: 0,
             updated_at: now
         }
@@ -86,52 +92,74 @@ impl Balance {
 
     /// 总余额 = 可用 + 冻结
     #[inline]
-    pub fn total(&self) -> u64 { self.available.saturating_add(self.frozen) }
+    pub fn total(&self) -> Price {
+        self.available + self.frozen
+    }
 
     /// 检查是否有足够的可用余额
     #[inline]
-    pub fn has_available(&self, amount: u64) -> bool { self.available >= amount }
+    pub fn has_available(&self, amount: Price) -> bool {
+        self.available >= amount
+    }
 
     /// 检查是否有足够的冻结余额
     #[inline]
-    pub fn has_frozen(&self, amount: u64) -> bool { self.frozen >= amount }
+    pub fn has_frozen(&self, amount: Price) -> bool {
+        self.frozen >= amount
+    }
 
     #[inline]
-    pub fn add_balance(&mut self, amount: u64, now: Timestamp) {
-        self.available += amount;
+    pub fn add_balance(&mut self, amount: Price, now: Timestamp) {
+        self.available = self.available + amount;
         self.version += 1;
         self.updated_at = now;
     }
 
     #[inline]
-    pub fn deduct_balance(&mut self, amount: u64, now: Timestamp) {
-        // if self.available < amount {
-        //     return Err(PrepCommandError::InsufficientBalance);
-        // }
-        self.available -= amount;
+    pub fn frozen(&mut self, amount: Price, now: Timestamp) {
+        self.available = self.available - amount;
+        self.frozen = self.frozen + amount;
+        self.version += 1;
+        self.updated_at = now;
+    }
 
+    #[inline]
+    pub fn frozen2pay(&mut self, amount: Price, now: Timestamp) {
+        self.frozen = self.frozen - amount;
+        self.version += 1;
+        self.updated_at = now;
+    }
+
+
+
+    #[inline]
+    pub fn un_frozen(&mut self, amount: Price, now: Timestamp) {
+        self.available = self.available + amount;
+        self.frozen = self.frozen - amount;
         self.version += 1;
         self.updated_at = now;
     }
 
     /// 检查余额是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool { self.available == 0 && self.frozen == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.available.is_negative() == false && self.frozen.is_negative() == false && self.available.raw() == 0 && self.frozen.raw() == 0
+    }
 }
 
 /// 余额操作（用于 BalanceStore）
 #[derive(Debug, Clone, Copy)]
 pub enum BalanceOp {
     /// 冻结（可用 → 冻结）
-    Freeze(u64),
+    Freeze(Price),
     /// 解冻（冻结 → 可用）
-    Unfreeze(u64),
+    Unfreeze(Price),
     /// 入账（增加可用）
-    Credit(u64),
+    Credit(Price),
     /// 扣款（减少可用）
-    Debit(u64),
+    Debit(Price),
     /// 扣减冻结余额
-    DebitFrozen(u64),
+    DebitFrozen(Price),
     /// 结算盈亏（可正可负）
-    SettlePnl(i64)
+    SettlePnl(Price)
 }

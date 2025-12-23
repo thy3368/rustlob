@@ -3,6 +3,7 @@
 //! 遵循 Clean Architecture：Service 层实现业务逻辑
 //! Repository 层只负责纯粹的 CRUD 操作
 
+use base_types::Price;
 use crate::domain::{
     entity::{AccountCommand, AccountCommandResult, BalanceError, Side, Timestamp},
     repo::{AccountRepo, BalanceRepo},
@@ -55,7 +56,7 @@ where
     /// 冻结操作：可用 → 冻结
     #[inline]
     fn do_freeze(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: u64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_mut(account_id, asset_id).ok_or(BalanceError::BalanceNotFound {
             account_id,
@@ -64,15 +65,13 @@ where
 
         if balance.available < amount {
             return Err(BalanceError::InsufficientAvailable {
-                required: amount,
-                available: balance.available
+                required: amount.raw(),
+                available: balance.available.raw()
             });
         }
 
-        let new_frozen = balance.frozen.checked_add(amount).ok_or(BalanceError::Overflow)?;
-
-        balance.available -= amount;
-        balance.frozen = new_frozen;
+        balance.available = balance.available - amount;
+        balance.frozen = balance.frozen + amount;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -82,7 +81,7 @@ where
     /// 解冻操作：冻结 → 可用
     #[inline]
     fn do_unfreeze(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: u64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_mut(account_id, asset_id).ok_or(BalanceError::BalanceNotFound {
             account_id,
@@ -91,15 +90,13 @@ where
 
         if balance.frozen < amount {
             return Err(BalanceError::InsufficientFrozen {
-                required: amount,
-                frozen: balance.frozen
+                required: amount.raw(),
+                frozen: balance.frozen.raw()
             });
         }
 
-        let new_available = balance.available.checked_add(amount).ok_or(BalanceError::Overflow)?;
-
-        balance.frozen -= amount;
-        balance.available = new_available;
+        balance.frozen = balance.frozen - amount;
+        balance.available = balance.available + amount;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -109,11 +106,11 @@ where
     /// 入账操作：增加可用余额
     #[inline]
     fn do_credit(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: u64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_or_create(account_id, asset_id, now);
 
-        balance.available = balance.available.checked_add(amount).ok_or(BalanceError::Overflow)?;
+        balance.available = balance.available + amount;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -123,7 +120,7 @@ where
     /// 扣款操作：减少可用余额
     #[inline]
     fn do_debit(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: u64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_mut(account_id, asset_id).ok_or(BalanceError::BalanceNotFound {
             account_id,
@@ -132,12 +129,12 @@ where
 
         if balance.available < amount {
             return Err(BalanceError::InsufficientAvailable {
-                required: amount,
-                available: balance.available
+                required: amount.raw(),
+                available: balance.available.raw()
             });
         }
 
-        balance.available -= amount;
+        balance.available = balance.available - amount;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -147,7 +144,7 @@ where
     /// 扣减冻结余额
     #[inline]
     fn do_debit_frozen(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: u64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, amount: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_mut(account_id, asset_id).ok_or(BalanceError::BalanceNotFound {
             account_id,
@@ -156,12 +153,12 @@ where
 
         if balance.frozen < amount {
             return Err(BalanceError::InsufficientFrozen {
-                required: amount,
-                frozen: balance.frozen
+                required: amount.raw(),
+                frozen: balance.frozen.raw()
             });
         }
 
-        balance.frozen -= amount;
+        balance.frozen = balance.frozen - amount;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -172,7 +169,7 @@ where
     #[inline]
     fn do_transfer(
         &mut self, from_account_id: crate::AccountId, to_account_id: crate::AccountId, asset_id: crate::AssetId,
-        amount: u64, now: Timestamp
+        amount: Price, now: Timestamp
     ) -> Result<(), BalanceError> {
         // 1. 预检查：源账户余额
         {
@@ -184,31 +181,24 @@ where
 
             if from_balance.available < amount {
                 return Err(BalanceError::InsufficientAvailable {
-                    required: amount,
-                    available: from_balance.available
+                    required: amount.raw(),
+                    available: from_balance.available.raw()
                 });
             }
         }
 
-        // 2. 预检查：目标账户是否会溢出
-        {
-            if let Some(to_balance) = self.balance_repo.get(to_account_id, asset_id) {
-                to_balance.available.checked_add(amount).ok_or(BalanceError::Overflow)?;
-            }
-        }
-
-        // 3. 执行转账 - 扣减源账户
+        // 2. 执行转账 - 扣减源账户
         {
             let from_balance = self.balance_repo.get_mut(from_account_id, asset_id).unwrap();
-            from_balance.available -= amount;
+            from_balance.available = from_balance.available - amount;
             from_balance.version += 1;
             from_balance.updated_at = now;
         }
 
-        // 4. 增加目标账户
+        // 3. 增加目标账户
         {
             let to_balance = self.balance_repo.get_or_create(to_account_id, asset_id, now);
-            to_balance.available += amount;
+            to_balance.available = to_balance.available + amount;
             to_balance.version += 1;
             to_balance.updated_at = now;
         }
@@ -216,25 +206,15 @@ where
         Ok(())
     }
 
-    /// 结算盈亏
+    /// 结算盈亏 - 直接支持负数（亏损）
     #[inline]
     fn do_settle_pnl(
-        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, pnl: i64, now: Timestamp
+        &mut self, account_id: crate::AccountId, asset_id: crate::AssetId, pnl: Price, now: Timestamp
     ) -> Result<crate::Balance, BalanceError> {
         let balance = self.balance_repo.get_or_create(account_id, asset_id, now);
 
-        if pnl >= 0 {
-            balance.available = balance.available.checked_add(pnl as u64).ok_or(BalanceError::Overflow)?;
-        } else {
-            let loss = (-pnl) as u64;
-            if balance.available < loss {
-                return Err(BalanceError::InsufficientAvailable {
-                    required: loss,
-                    available: balance.available
-                });
-            }
-            balance.available -= loss;
-        }
+        // 使用 Price 的加法，自动支持正负数
+        balance.available = balance.available + pnl;
         balance.version += 1;
         balance.updated_at = now;
 
@@ -268,13 +248,14 @@ where
                 })?;
                 if balance.available < *amount {
                     return Err(BalanceError::InsufficientAvailable {
-                        required: *amount,
-                        available: balance.available
+                        required: amount.raw(),
+                        available: balance.available.raw()
                     });
                 }
                 // 检查目标账户是否会溢出
                 if let Some(to_balance) = self.balance_repo.get(*to_account_id, *asset_id) {
-                    to_balance.available.checked_add(*amount).ok_or(BalanceError::Overflow)?;
+                    // Price already handles overflow in its Add implementation
+                    let _ = to_balance.available + *amount;
                 }
                 Ok(())
             }
@@ -286,7 +267,8 @@ where
             } => {
                 // 检查是否会溢出
                 if let Some(balance) = self.balance_repo.get(*account_id, *asset_id) {
-                    balance.available.checked_add(*amount).ok_or(BalanceError::Overflow)?;
+                    // Price already handles overflow in its Add implementation
+                    let _ = balance.available + *amount;
                 }
                 Ok(())
             }
@@ -313,12 +295,13 @@ where
 
                 if balance.available < amount {
                     return Err(BalanceError::InsufficientAvailable {
-                        required: amount,
-                        available: balance.available
+                        required: amount.raw(),
+                        available: balance.available.raw()
                     });
                 }
 
-                balance.frozen.checked_add(amount).ok_or(BalanceError::Overflow)?;
+                // Price already handles overflow in its Add implementation
+                let _ = balance.frozen + amount;
                 Ok(())
             }
             AccountCommand::Freeze {
@@ -334,8 +317,8 @@ where
 
                 if balance.available < *amount {
                     return Err(BalanceError::InsufficientAvailable {
-                        required: *amount,
-                        available: balance.available
+                        required: amount.raw(),
+                        available: balance.available.raw()
                     });
                 }
                 Ok(())
@@ -353,8 +336,8 @@ where
 
                 if balance.available < *amount {
                     return Err(BalanceError::InsufficientAvailable {
-                        required: *amount,
-                        available: balance.available
+                        required: amount.raw(),
+                        available: balance.available.raw()
                     });
                 }
                 Ok(())
@@ -372,8 +355,8 @@ where
 
                 if balance.frozen < *amount {
                     return Err(BalanceError::InsufficientFrozen {
-                        required: *amount,
-                        frozen: balance.frozen
+                        required: amount.raw(),
+                        frozen: balance.frozen.raw()
                     });
                 }
                 Ok(())

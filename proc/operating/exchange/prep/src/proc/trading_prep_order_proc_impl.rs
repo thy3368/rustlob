@@ -96,9 +96,9 @@ impl PrepMatchingService {
     ///
     /// # 说明
     /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
-    fn get_balance(&self) -> u64 {
+    fn get_balance(&self) -> Price {
         let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-        self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b| b.available).unwrap_or(0)
+        self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b| b.available).unwrap_or(Price::from_raw(0))
     }
 
     /// 扣减余额（冻结保证金、支付手续费）
@@ -109,7 +109,7 @@ impl PrepMatchingService {
     /// # 返回
     /// - `Ok(())`: 扣减成功
     /// - `Err(InsufficientBalance)`: 余额不足
-    fn deduct_balance(&self, amount: u64, now: Timestamp) -> Result<(), PrepCommandError> {
+    fn deduct_balance(&self, amount: Price, now: Timestamp) -> Result<(), PrepCommandError> {
         // 获取变更事件
         let event = self.deduct_balance2(amount, now)?;
 
@@ -121,7 +121,7 @@ impl PrepMatchingService {
         Ok(())
     }
 
-    fn deduct_balance2(&self, amount: u64, now: Timestamp) -> Result<ChangeLogEntry, PrepCommandError> {
+    fn deduct_balance2(&self, amount: Price, now: Timestamp) -> Result<ChangeLogEntry, PrepCommandError> {
         let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
 
         // 获取或创建余额
@@ -137,7 +137,7 @@ impl PrepMatchingService {
         // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
         let event = balance
             .track_update(|b: &mut Balance| {
-                b.deduct_balance(amount, now);
+                b.frozen(amount, now);
             })
             .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to track balance update: {:?}", e)))?;
 
@@ -148,8 +148,8 @@ impl PrepMatchingService {
     /// 增加余额（归还保证金、盈利入账）
     ///
     /// # 参数
-    /// - `amount`: 增加金额（u64）
-    fn add_balance(&self, amount: u64, now: Timestamp) {
+    /// - `amount`: 增加金额（Price）
+    fn add_balance(&self, amount: Price, now: Timestamp) {
         let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
 
         // 获取或创建余额
@@ -294,40 +294,13 @@ impl PrepMatchingService {
     ) {
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(trading_pair);
-        if !self.has_position(trading_pair) {
-            position = PrepPosition::empty(trading_pair, position_side);
-        }
-
-        // 更新持仓数量和均价
-        let old_qty = position.quantity.to_f64();
-        let old_price = position.entry_price.to_f64();
-        let new_qty_val = quantity.to_f64();
-        let new_price = avg_price.to_f64();
-
-        // 计算新的持仓均价（加权平均）
-        let total_cost = old_qty * old_price + new_qty_val * new_price;
-        let total_qty = old_qty + new_qty_val;
 
         // ========================================================================
         // Track position 生成log event, then replay_event
         // ========================================================================
         match position.track_update(|p: &mut PrepPosition| {
-            p.quantity = Quantity::from_f64(total_qty);
-            p.entry_price = if total_qty > 0.0 { Price::from_f64(total_cost / total_qty) } else { Price::from_raw(0) };
-            p.leverage = leverage;
-            p.mark_price = avg_price;
-            p.updated_at =
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-
-            // 计算保证金 = (持仓价值) / 杠杆倍数
-            let notional = p.entry_price.to_f64() * p.quantity.to_f64();
-            p.margin = Price::from_f64(notional / leverage as f64);
-
-            // 计算未实现盈亏
-            p.unrealized_pnl = self.calculate_unrealized_pnl(p);
-
-            // 计算强平价格
-            p.liquidation_price = self.calculate_liquidation_price(p);
+            // 调用position的update方法更新所有信息（数量、均价、杠杆、保证金、PnL等）
+            p.update(quantity, avg_price, leverage, _side, position_side);
         }) {
             Ok(event) => {
                 // 回放事件到数据库
@@ -341,84 +314,7 @@ impl PrepMatchingService {
         }
     }
 
-    /// 计算未实现盈亏
-    ///
-    /// # 参数
-    /// - `position`: 持仓信息
-    ///
-    /// # 返回
-    /// 未实现盈亏金额
-    ///
-    /// # 计算公式
-    /// ```text
-    /// 多仓未实现盈亏 = (标记价格 - 开仓均价) × 持仓数量
-    /// 空仓未实现盈亏 = (开仓均价 - 标记价格) × 持仓数量
-    /// ```
-    fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
-        if !position.has_position() {
-            return Price::from_raw(0);
-        }
 
-        let entry = position.entry_price.to_f64();
-        let mark = position.mark_price.to_f64();
-        let qty = position.quantity.to_f64();
-
-        let pnl = match position.position_side {
-            crate::proc::trading_prep_order_proc::PositionSide::Long => (mark - entry) * qty,
-            crate::proc::trading_prep_order_proc::PositionSide::Short => (entry - mark) * qty,
-            crate::proc::trading_prep_order_proc::PositionSide::Both => {
-                // 单向持仓模式，根据数量符号判断
-                (mark - entry) * qty
-            }
-        };
-
-        Price::from_f64(pnl)
-    }
-
-    /// 计算强平价格
-    ///
-    /// # 参数
-    /// - `position`: 持仓信息
-    ///
-    /// # 返回
-    /// 强平价格（如果有持仓）
-    ///
-    /// # 计算公式
-    /// ```text
-    /// 多仓强平价 = 开仓均价 × (1 - 1/杠杆倍数 + 维持保证金率)
-    /// 空仓强平价 = 开仓均价 × (1 + 1/杠杆倍数 - 维持保证金率)
-    ///
-    /// 其中维持保证金率假设为 0.4% (Binance标准)
-    /// ```
-    fn calculate_liquidation_price(&self, position: &PrepPosition) -> Option<Price> {
-        if !position.has_position() {
-            return None;
-        }
-
-        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
-        let entry = position.entry_price.to_f64();
-        let leverage = position.leverage as f64;
-
-        let liq_price = match position.position_side {
-            crate::proc::trading_prep_order_proc::PositionSide::Long => {
-                // 多仓：价格下跌到此价格时强平
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
-            }
-            crate::proc::trading_prep_order_proc::PositionSide::Short => {
-                // 空仓：价格上涨到此价格时强平
-                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
-            }
-            crate::proc::trading_prep_order_proc::PositionSide::Both => {
-                // 单向模式，暂时按多仓处理
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
-            }
-        };
-
-        Some(Price::from_f64(liq_price.max(0.0)))
-    }
-
-
-    // todo 1,3 4个order 4个trade,4个balance,4个持仓
 
     /// 处理限价单开仓 v2 版本 - 直接返回 OpenPositionResult
     ///
@@ -459,9 +355,8 @@ impl PrepMatchingService {
 
         // 检查余额并立即扣除保证金（冻结效果）
         let now = self.now();
-        let required_margin_u64 = Self::price_to_u64(required_margin);
 
-        let event = self.deduct_balance2(required_margin_u64, now)?;
+        let event = self.deduct_balance2(required_margin, now)?;
         // 回放事件到数据库
         self.balance_repo
             .replay_event(&event)
@@ -566,11 +461,11 @@ impl PrepMatchingService {
         if total_filled > 0.0 && !generated_trades.is_empty() {
             // 扣除手续费
             let total_fee: f64 = generated_trades.iter().map(|t| t.fee.to_f64()).sum();
-            let total_fee_u64 = Self::price_to_u64(Price::from_f64(total_fee));
+            let total_fee_price = Price::from_f64(total_fee);
             let now = self.now();
 
             // todo
-            self.deduct_balance(total_fee_u64, now).unwrap_or_else(|_| {
+            self.deduct_balance(total_fee_price, now).unwrap_or_else(|_| {
                 log::error!("Failed to deduct fee {} for order {:?}", total_fee, order_id);
             });
 
@@ -594,6 +489,7 @@ impl PrepMatchingService {
                 // 部分成交情况
                 PrepOrder {
                     order_id: order_id.clone(),
+                    account_id: self.account_id,
                     trading_pair: cmd.trading_pair,
                     side: cmd.side,
                     order_type: cmd.order_type,
@@ -609,6 +505,7 @@ impl PrepMatchingService {
                 // 完全成交情况
                 PrepOrder {
                     order_id: order_id.clone(),
+                    account_id: self.account_id,
                     trading_pair: cmd.trading_pair,
                     side: cmd.side,
                     order_type: cmd.order_type,
@@ -666,6 +563,7 @@ impl PrepMatchingService {
             // ========================================================================
             let internal_order = PrepOrder {
                 order_id: order_id.clone(),
+                account_id: self.account_id,
                 trading_pair: cmd.trading_pair,
                 side: cmd.side,
                 order_type: cmd.order_type,
@@ -728,8 +626,9 @@ impl PrepMatchingService {
         let order_id = self.generate_order_id();
 
         // 1 创建订单
-        let mut internal_order = PrepOrder::Pending(
+        let mut internal_order = PrepOrder::pending(
             order_id.clone(),
+            self.account_id,
             cmd.trading_pair,
             cmd.side,
             cmd.order_type,
@@ -739,7 +638,6 @@ impl PrepMatchingService {
         );
 
 
-        // 3. 风控检查 - 余额检查并冻结保证金
         let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
         let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
             Some(b) => b,
@@ -747,10 +645,10 @@ impl PrepMatchingService {
         };
 
         let now = self.now();
-        internal_order.frozen_margin(balance, now);
+        // 2 风控检查 - 余额检查并冻结保证金
+        internal_order.frozen_margin(balance.clone(), now);
 
-
-        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected
+        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected, 基本结束
 
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
@@ -760,13 +658,26 @@ impl PrepMatchingService {
             cmd.quantity
         );
 
-        if (!matched_orders.is_none()) {
+        // 获取或创建持仓（通过 self.position_repo）
+        let mut position = self.get_position(cmd.trading_pair);
+        
+        if (matched_orders.is_some()) {
             // 如果匹配
             let mut trades = Vec::new();
             if let Some(matched) = matched_orders {
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
-                    let trade = internal_order.make_trade(matched_order);
+
+                    let mut match_position = self.get_position(matched_order.trading_pair);
+
+                    let balance_id = format!("{}:{}", matched_order.account_id.0, self.asset_id.0);
+                    let mut match_balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+                        Some(b) => b,
+                        None => todo!() // todo 应该报错
+                    };
+
+                    let mut matched_order_mut = matched_order.clone();
+                    let trade = internal_order.make_trade(&mut matched_order_mut, match_balance, &mut match_position, balance.clone(), &mut position, now);
 
                     // todo 更新持仓和资金
                     trades.push(trade);
@@ -958,25 +869,24 @@ impl PerpOrderExchProc for PrepMatchingService {
         };
 
         // 归还保证金
-        let margin_return_u64 = Self::price_to_u64(Price::from_f64(margin_return));
-        self.add_balance(margin_return_u64, now);
+        let margin_return_price = Price::from_f64(margin_return);
+        self.add_balance(margin_return_price, now);
 
         // 结算盈亏（可能为负）
         if realized_pnl >= 0.0 {
             // 盈利入账
-            let pnl_u64 = Self::price_to_u64(Price::from_f64(realized_pnl));
-            self.add_balance(pnl_u64, now);
+            let pnl_price = Price::from_f64(realized_pnl);
+            self.add_balance(pnl_price, now);
         } else {
             // 亏损扣除
-            let loss_u64 = Self::price_to_u64(Price::from_f64(-realized_pnl));
-            self.deduct_balance(loss_u64, now).unwrap_or_else(|_| {
+            let loss_price = Price::from_f64(-realized_pnl);
+            self.deduct_balance(loss_price, now).unwrap_or_else(|_| {
                 log::error!("Failed to deduct loss {} for position {:?}", -realized_pnl, cmd.trading_pair);
             });
         }
 
         // 扣除手续费
-        let fee_u64 = Self::price_to_u64(fee);
-        self.deduct_balance(fee_u64, now).unwrap_or_else(|_| {
+        self.deduct_balance(fee, now).unwrap_or_else(|_| {
             log::error!("Failed to deduct fee {} for close position {:?}", fee.to_f64(), cmd.trading_pair);
         });
 
@@ -1030,7 +940,8 @@ impl PerpOrderExchProc for PrepMatchingService {
         // 归还总保证金
         if total_refund_u64 > 0 {
             let now = self.now();
-            self.add_balance(total_refund_u64, now);
+            let total_refund_price = Price::from_raw(total_refund_u64 as i64);
+            self.add_balance(total_refund_price, now);
         }
 
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
@@ -1045,8 +956,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         let old_leverage = position.leverage;
 
         // 获取当前余额
-        let balance_u64 = self.get_balance();
-        let balance = Self::u64_to_price(balance_u64);
+        let balance = self.get_balance();
 
         Ok(SetLeverageResult {
             trading_pair: cmd.trading_pair,
@@ -1099,8 +1009,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
     }
 
     fn query_account_balance(&self, cmd: QueryAccountBalanceCommand) -> Result<Vec<AccountBalance>, PrepCommandError> {
-        let balance_u64 = self.get_balance();
-        let balance = Self::u64_to_price(balance_u64);
+        let balance = self.get_balance();
 
         let account_balance = AccountBalance::new(
             cmd.asset.unwrap_or_else(|| AssetId::USDT),
@@ -1115,8 +1024,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
     }
 
     fn query_account_info(&self, _cmd: QueryAccountInfoCommand) -> Result<AccountInfo, PrepCommandError> {
-        let balance_u64 = self.get_balance();
-        let balance = Self::u64_to_price(balance_u64);
+        let balance = self.get_balance();
 
         // Mock 实现：返回空的持仓列表
         let positions_vec: Vec<PrepPosition> = vec![];

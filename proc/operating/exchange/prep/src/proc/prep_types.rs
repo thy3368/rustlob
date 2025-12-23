@@ -1,5 +1,5 @@
 use account::Balance;
-use base_types::{AssetId, OrderId, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
+use base_types::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
 
 use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 
@@ -8,6 +8,8 @@ use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 #[entity(id = "order_id")]
 pub struct PrepOrder {
     pub order_id: OrderId,
+    /// 账户ID（固定账户）
+    pub account_id: AccountId,
     pub trading_pair: TradingPair,
     pub side: Side,
     pub order_type: OrderType,
@@ -20,19 +22,22 @@ pub struct PrepOrder {
     pub frozen_margin: Price
 }
 
+
 impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
-        balance.deduct_balance(self.frozen_margin, now);
+        // 直接使用 Price，无需转换
+        if self.frozen_margin.is_positive() {
+            balance.frozen(self.frozen_margin, now);
+        }
 
+        // 冻结不成功 则reject
         self.change2reject();
     }
-}
 
 
-impl PrepOrder {
-    pub fn Pending(
-        order_id: u64, trading_pair: TradingPair, side: Side, order_type: OrderType, quantity: Quantity,
-        price: Option<Price>, leverage: u8
+    pub fn pending(
+        order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: Side, order_type: OrderType,
+        quantity: Quantity, price: Option<Price>, leverage: u8
     ) -> PrepOrder {
         let estimate_price = price.unwrap_or_else(|| Price::from_f64(50000.0));
 
@@ -41,6 +46,7 @@ impl PrepOrder {
 
         let mut internal_order = PrepOrder {
             order_id,
+            account_id,
             trading_pair,
             side,
             order_type,
@@ -78,9 +84,26 @@ impl PrepOrder {
         self.status = OrderStatus::Rejected;
     }
 
+    pub fn frozen2pay(&mut self, mut balance: Balance, now: Timestamp) {
+        // 直接使用 Price，无需转换
 
-    pub fn filled_qty(&mut self, qty: f64) -> f64 {
+        balance.frozen2pay(self.frozen_margin, now);
+    }
+
+
+    pub fn filled_qty(&mut self, mut balance: Balance, match_p: &mut PrepPosition, qty: f64, now: Timestamp) -> f64 {
         self.filled_quantity = Quantity::from_f64(self.filled_quantity.to_f64() + qty);
+
+        // 真实资金操作
+        self.frozen2pay(balance, now);
+
+        // 处理 position - 更新被匹配方的持仓
+        let fill_qty = Quantity::from_f64(qty);
+        let fill_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
+        let leverage = 10; // 默认杠杆
+
+        // 直接调用 position.update() 更新持仓
+        match_p.update(fill_qty, fill_price, leverage, self.side, crate::proc::trading_prep_order_proc::PositionSide::Long);
 
         if self.remaining_qty() <= 0.0001 {
             self.status = OrderStatus::Filled
@@ -90,10 +113,11 @@ impl PrepOrder {
         self.filled_quantity.to_f64()
     }
 
-    pub fn make_trade(&mut self, matched_order: &PrepOrder) -> PrepTrade {
+    pub fn make_trade(&mut self, matched_order: &mut PrepOrder, match_b: Balance, match_p: &mut PrepPosition, my_b: Balance, my_p: &mut PrepPosition, now: Timestamp) -> PrepTrade {
         let filled = self.remaining_qty().min(matched_order.quantity.to_f64());
 
-        self.filled_qty(filled);
+        self.filled_qty(my_b, my_p, filled, now);
+        matched_order.filled_qty(match_b, match_p, filled, now);
 
         // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
         let price = matched_order.price.unwrap_or_else(|| Price::from_raw(0));
@@ -114,8 +138,7 @@ impl PrepOrder {
             true // Maker
         );
 
-        // todo position 变化
-        // todo 保证金变化
+        // position 变化已在 filled_qty 方法中处理
 
         trade
     }

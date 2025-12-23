@@ -6,10 +6,10 @@ use base_types::{AccountId, AssetId};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceError {
     /// 可用余额不足
-    InsufficientAvailable { required: u64, available: u64 },
+    InsufficientAvailable { required: i64, available: i64 },
     /// 冻结余额不足
-    InsufficientFrozen { required: u64, frozen: u64 },
-    /// 余额溢出（price * quantity 超出 u64）
+    InsufficientFrozen { required: i64, frozen: i64 },
+    /// 余额溢出（price * quantity 超出 i64）
     Overflow,
     /// 账户不存在
     AccountNotFound { account_id: AccountId },
