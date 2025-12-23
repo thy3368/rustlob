@@ -315,7 +315,6 @@ impl PrepMatchingService {
     }
 
 
-
     /// 处理限价单开仓 v2 版本 - 直接返回 OpenPositionResult
     ///
     /// # 参数
@@ -603,26 +602,27 @@ impl PrepMatchingService {
         }
     }
 
-    fn handle_limit_order3(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
-        // /// 等待提交
-        // Pending = 1,
-        // /// 已提交
-        // Submitted = 2,
-        // /// 部分成交
-        // PartiallyFilled = 3,
-        // /// 完全成交
-        // Filled = 4,
-        // /// 已取消
-        // Cancelled = 5,
-        // /// 已拒绝
-        // Rejected = 6
+    // /// 等待提交
+    // Pending = 1,
+    // /// 已提交
+    // Submitted = 2,
+    // /// 部分成交
+    // PartiallyFilled = 3,
+    // /// 完全成交
+    // Filled = 4,
+    // /// 已取消
+    // Cancelled = 5,
+    // /// 已拒绝
+    // Rejected = 6
 
+
+    fn handle_limit_order3(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
         // ========================================================================
         // 1. 命令验证
         // ========================================================================
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
-
+        // todo time_in_force 没有用
         let order_id = self.generate_order_id();
 
         // 1 创建订单
@@ -648,7 +648,8 @@ impl PrepMatchingService {
         // 2 风控检查 - 余额检查并冻结保证金
         internal_order.frozen_margin(balance.clone(), now);
 
-        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected, 基本结束
+        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected,
+        // 基本结束
 
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
@@ -660,14 +661,13 @@ impl PrepMatchingService {
 
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(cmd.trading_pair);
-        
+
         if (matched_orders.is_some()) {
             // 如果匹配
             let mut trades = Vec::new();
             if let Some(matched) = matched_orders {
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
-
                     let mut match_position = self.get_position(matched_order.trading_pair);
 
                     let balance_id = format!("{}:{}", matched_order.account_id.0, self.asset_id.0);
@@ -677,7 +677,14 @@ impl PrepMatchingService {
                     };
 
                     let mut matched_order_mut = matched_order.clone();
-                    let trade = internal_order.make_trade(&mut matched_order_mut, match_balance, &mut match_position, balance.clone(), &mut position, now);
+                    let trade = internal_order.make_trade(
+                        &mut matched_order_mut,
+                        match_balance,
+                        &mut match_position,
+                        balance.clone(),
+                        &mut position,
+                        now
+                    );
 
                     // todo 更新持仓和资金
                     trades.push(trade);
