@@ -296,7 +296,9 @@ pub struct PrepTrade {
     /// 成交ID
     pub trade_id: TradeId,
     /// 关联订单ID
-    pub order_id: OrderId,
+    pub ask_order_id: OrderId,
+    /// 关联订单ID
+    pub bid_order_id: OrderId,
     /// 交易对
     pub symbol: TradingPair,
     /// 订单方向
@@ -318,12 +320,13 @@ pub struct PrepTrade {
 impl PrepTrade {
     /// 创建新的成交记录
     pub fn new(
-        trade_id: TradeId, order_id: OrderId, symbol: TradingPair, side: Side, price: Price, quantity: Quantity, fee: Price,
+        trade_id: TradeId, ask_order_id: OrderId,bid_order_id: OrderId, symbol: TradingPair, side: Side, price: Price, quantity: Quantity, fee: Price,
         fee_asset: AssetId, is_maker: bool
     ) -> Self {
         Self {
             trade_id,
-            order_id,
+            ask_order_id,
+            bid_order_id,
             symbol,
             side,
             price,

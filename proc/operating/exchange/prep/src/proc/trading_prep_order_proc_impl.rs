@@ -14,7 +14,6 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-
 use crate::proc::{
     prep_types::PrepOrder,
     trading_prep_order_proc::{
@@ -22,11 +21,11 @@ use crate::proc::{
         CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
         MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult,
         OrderBookSnapshot, OrderId, OrderQueryResult, OrderStatus, OrderType, PerpOrderExchProc,
-        PerpOrderExchQueryProc, PrepPosition, PrepCommandError, Price, Quantity, QueryAccountBalanceCommand,
+        PerpOrderExchQueryProc, PrepCommandError, PrepPosition, PrepTrade, Price, Quantity, QueryAccountBalanceCommand,
         QueryAccountInfoCommand, QueryFundingFeeCommand, QueryFundingRateHistoryCommand, QueryMarkPriceCommand,
         QueryOrderBookCommand, QueryOrderCommand, QueryPositionCommand, QueryTradesCommand, SetLeverageCommand,
         SetLeverageResult, SetMarginTypeCommand, SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult,
-        Side, PrepTrade, TradeId, TradesQueryResult
+        Side, TradeId, TradesQueryResult
     }
 };
 
@@ -74,9 +73,9 @@ impl PrepMatchingService {
     /// - `account_id`: 账户ID
     /// - `asset_id`: 资产ID（如 USDT）
     pub fn new(
-        balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PrepPosition>, trade_repo: MySqlDbRepo<PrepTrade>,
-        order_repo: MySqlDbRepo<PrepOrder>, lob_repo: StandaloneLobRepo<PrepOrder>, account_id: AccountId,
-        asset_id: AssetId
+        balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PrepPosition>,
+        trade_repo: MySqlDbRepo<PrepTrade>, order_repo: MySqlDbRepo<PrepOrder>, lob_repo: StandaloneLobRepo<PrepOrder>,
+        account_id: AccountId, asset_id: AssetId
     ) -> Self {
         Self {
             balance_repo,
@@ -198,7 +197,6 @@ impl PrepMatchingService {
     }
 
 
-
     /// 修改持仓（如果存在）
     ///
     /// # 参数
@@ -280,7 +278,6 @@ impl PrepMatchingService {
     }
 
 
-
     /// 更新或创建持仓
     ///
     /// # 参数
@@ -291,8 +288,9 @@ impl PrepMatchingService {
     /// - `avg_price`: 成交均价
     /// - `leverage`: 杠杆倍数
     fn update_position(
-        &self, trading_pair: TradingPair, _side: Side, position_side: crate::proc::trading_prep_order_proc::PositionSide,
-        quantity: Quantity, avg_price: Price, leverage: u8
+        &self, trading_pair: TradingPair, _side: Side,
+        position_side: crate::proc::trading_prep_order_proc::PositionSide, quantity: Quantity, avg_price: Price,
+        leverage: u8
     ) {
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(trading_pair);
@@ -420,8 +418,7 @@ impl PrepMatchingService {
     }
 
 
-
-    //todo 1,3 4个order 4个trade,4个balance,4个持仓
+    // todo 1,3 4个order 4个trade,4个balance,4个持仓
 
     /// 处理限价单开仓 v2 版本 - 直接返回 OpenPositionResult
     ///
@@ -511,6 +508,7 @@ impl PrepMatchingService {
                 // 创建成交记录
                 let trade = PrepTrade::new(
                     TradeId::generate(),
+                    order_id.clone(),
                     order_id.clone(),
                     cmd.trading_pair,
                     cmd.side,
@@ -706,6 +704,120 @@ impl PrepMatchingService {
             Ok(OpenPositionResult::accepted(order_id))
         }
     }
+
+    fn handle_limit_order3(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+        // /// 等待提交
+        // Pending = 1,
+        // /// 已提交
+        // Submitted = 2,
+        // /// 部分成交
+        // PartiallyFilled = 3,
+        // /// 完全成交
+        // Filled = 4,
+        // /// 已取消
+        // Cancelled = 5,
+        // /// 已拒绝
+        // Rejected = 6
+
+        // ========================================================================
+        // 1. 命令验证
+        // ========================================================================
+        cmd.validate().map_err(PrepCommandError::ValidationError)?;
+
+
+        let order_id = self.generate_order_id();
+
+        // 1 创建订单
+        let mut internal_order = PrepOrder::Pending(
+            order_id.clone(),
+            cmd.trading_pair,
+            cmd.side,
+            cmd.order_type,
+            cmd.quantity,
+            cmd.price,
+            cmd.leverage
+        );
+
+
+        // 3. 风控检查 - 余额检查并冻结保证金
+        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+            Some(b) => b,
+            None => todo!() // todo 应该报错
+        };
+
+        let now = self.now();
+        internal_order.frozen_margin(balance, now);
+
+
+        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected
+
+        // 匹配
+        let matched_orders = self.lob_repo.match_orders(
+            cmd.trading_pair,
+            cmd.side,
+            cmd.price.unwrap_or_else(|| Price::from_f64(50000.0)),
+            cmd.quantity
+        );
+
+        if (!matched_orders.is_none()) {
+            // 如果匹配
+            let mut trades = Vec::new();
+            if let Some(matched) = matched_orders {
+                // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
+                for matched_order in matched {
+                    let trade = internal_order.make_trade(matched_order);
+
+                    // todo 更新持仓和资金
+                    trades.push(trade);
+                    if internal_order.is_all_filled() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            // 如果完全没有匹配
+            internal_order.change2submit();
+        }
+
+
+        // 没成交挂单
+        if (!internal_order.is_all_filled()) {
+            let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order.clone());
+        }
+
+
+        // 所有数据持久化操作
+        let mut all_events: Vec<ChangeLogEntry> = Vec::new();
+
+        // 3. 一次性回放所有事件到数据库
+        if !all_events.is_empty() {
+            // 回放 matched_order 更新和 trade 创建事件到各自的 repo
+            for event in &all_events {
+                // 根据 entity_type 判断回放到哪个 repo
+                // todo 增加balance position
+                match event.entity_type.as_str() {
+                    "PrepOrder" => {
+                        if let Err(e) = self.order_repo.replay_event(event) {
+                            log::error!("Failed to replay order event: {:?}", e);
+                        }
+                    }
+                    "PrepTrade" => {
+                        if let Err(e) = self.trade_repo.replay_event(event) {
+                            log::error!("Failed to replay trade event: {:?}", e);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+
+        // todo 每个prep order的处理是一个状态机
+        // 1, 新建订单 为Pending
+
+        todo!()
+    }
 }
 
 impl PerpOrderExchProc for PrepMatchingService {
@@ -773,6 +885,7 @@ impl PerpOrderExchProc for PrepMatchingService {
 
         let trade = PrepTrade::new(
             TradeId::generate(),
+            order_id.clone(),
             order_id.clone(),
             cmd.trading_pair,
             cmd.side,
@@ -923,7 +1036,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         Ok(CancelAllOrdersResult::new(cancelled_ids, failed_count))
     }
 
-    //todo 设计某持仓的杠杆会影响保证金
+    // todo 设计某持仓的杠杆会影响保证金
     fn set_leverage(&self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
         cmd.validate().map_err(PrepCommandError::ValidationError)?;
 
