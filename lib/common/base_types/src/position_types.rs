@@ -340,7 +340,7 @@ impl PrepPosition {
     /// - `leverage`: 杠杆倍数
     /// - `side`: 订单方向
     /// - `position_side`: 持仓方向
-    pub fn update(&mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::Side, _position_side: crate::PositionSide) {
+    pub fn add(&mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::Side, _position_side: crate::PositionSide) {
         // 计算新的持仓数量和均价（加权平均）
         let old_qty = self.quantity.to_f64();
         let old_price = self.entry_price.to_f64();

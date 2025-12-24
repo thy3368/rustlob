@@ -1,5 +1,7 @@
 use account::Balance;
-use base_types::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
+use base_types::{
+    AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair
+};
 
 use crate::proc::trading_prep_order_proc::{OrderStatus, OrderType};
 
@@ -19,18 +21,20 @@ pub struct PrepOrder {
     pub status: OrderStatus,
     pub created_at: u64,
     /// 冻结的保证金金额（用于订单取消时归还）
-    pub frozen_margin: Price
+    pub frozen_margin: Price,
+    pub leverage: u8
 }
 
 
 impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
-        // 直接使用 Price，无需转换
-        if self.frozen_margin.is_positive() {
-            balance.frozen(self.frozen_margin, now);
-        }
+        assert!(self.status == OrderStatus::Pending, "Pending状态才能冻结");
 
-        // 冻结不成功 则reject
+        let estimate_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
+        // 直接使用 Price，无需转换
+        self.frozen_margin = Self::calculate_required_margin(estimate_price, self.quantity, self.leverage);
+        balance.frozen(self.frozen_margin, now);
+        // todo 冻结不成功 则reject
         self.change2reject();
     }
 
@@ -39,11 +43,6 @@ impl PrepOrder {
         order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: Side, order_type: OrderType,
         quantity: Quantity, price: Option<Price>, leverage: u8
     ) -> PrepOrder {
-        let estimate_price = price.unwrap_or_else(|| Price::from_f64(50000.0));
-
-        let required_margin = Self::calculate_required_margin(estimate_price, quantity, leverage);
-
-
         let mut internal_order = PrepOrder {
             order_id,
             account_id,
@@ -55,7 +54,8 @@ impl PrepOrder {
             filled_quantity: Quantity::from_raw(0),
             status: OrderStatus::Pending,
             created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
-            frozen_margin: required_margin
+            frozen_margin: Price::from_raw(0),
+            leverage
         };
 
         internal_order
@@ -66,11 +66,9 @@ impl PrepOrder {
         let margin = notional / leverage as f64;
         Price::from_f64(margin)
     }
-}
 
-impl PrepOrder {
-    pub fn remaining_qty(&self) -> f64 {
-        let remaining_qty = self.quantity.to_f64() - self.filled_quantity.to_f64();
+    pub fn remaining_qty(&self) -> i64 {
+        let remaining_qty = self.quantity.raw() - self.filled_quantity.raw();
         remaining_qty
     }
 
@@ -84,28 +82,49 @@ impl PrepOrder {
         self.status = OrderStatus::Rejected;
     }
 
-    pub fn frozen2pay(&mut self, mut balance: Balance, now: Timestamp) {
+
+    // 取消订单
+    pub fn cancel(&mut self, balance: &mut Balance, now: Timestamp) {
+        // 如果filled_quantity==0
+        self.status = OrderStatus::Rejected;
+
+        balance.un_frozen(self.frozen_margin, now);
+        self.frozen_margin = Price::from_raw(0);
+    }
+
+
+    pub fn frozen2pay(&mut self, balance: &mut Balance, now: Timestamp) {
         // 直接使用 Price，无需转换
 
         balance.frozen2pay(self.frozen_margin, now);
     }
 
 
-    pub fn filled_qty(&mut self, mut balance: Balance, match_p: &mut PrepPosition, qty: f64, now: Timestamp) -> f64 {
-        self.filled_quantity = Quantity::from_f64(self.filled_quantity.to_f64() + qty);
+    pub fn filled_qty(&mut self, balance: &mut Balance, match_p: &mut PrepPosition, qty: i64, now: Timestamp) -> f64 {
+        match self.side {
+            Side::Buy => {}
+            Side::Sell => {}
+        }
+
+        self.filled_quantity = Quantity::from_raw(self.filled_quantity.raw() + qty);
 
         // 真实资金操作
         self.frozen2pay(balance, now);
 
         // 处理 position - 更新被匹配方的持仓
-        let fill_qty = Quantity::from_f64(qty);
+        let fill_qty = Quantity::from_raw(qty);
         let fill_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
-        let leverage = 10; // 默认杠杆
 
         // 直接调用 position.update() 更新持仓
-        match_p.update(fill_qty, fill_price, leverage, self.side, crate::proc::trading_prep_order_proc::PositionSide::Long);
+        match_p.add(
+            fill_qty,
+            fill_price,
+            self.leverage,
+            self.side,
+            crate::proc::trading_prep_order_proc::PositionSide::Long
+        );
 
-        if self.remaining_qty() <= 0.0001 {
+        if self.remaining_qty() == 0 {
             self.status = OrderStatus::Filled
         } else {
             self.status = OrderStatus::PartiallyFilled
@@ -113,15 +132,24 @@ impl PrepOrder {
         self.filled_quantity.to_f64()
     }
 
-    pub fn make_trade(&mut self, matched_order: &mut PrepOrder, match_b: Balance, match_p: &mut PrepPosition, my_b: Balance, my_p: &mut PrepPosition, now: Timestamp) -> PrepTrade {
-        let filled = self.remaining_qty().min(matched_order.quantity.to_f64());
+
+    // todo 每个order会有两个balance, 根据买卖来决定资产流转
+    pub fn make_trade(
+        &mut self, matched_order: &mut PrepOrder, matched_b: &mut Balance, matched_p: &mut PrepPosition,
+        my_b: &mut Balance, my_p: &mut PrepPosition, now: Timestamp
+    ) -> PrepTrade {
+        let filled = self.remaining_qty().min(matched_order.quantity.raw());
 
         self.filled_qty(my_b, my_p, filled, now);
-        matched_order.filled_qty(match_b, match_p, filled, now);
+        matched_order.filled_qty(matched_b, matched_p, filled, now);
+
+
+        matched_b.frozen2pay(Price::from_raw(0), now);
+
 
         // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
         let price = matched_order.price.unwrap_or_else(|| Price::from_raw(0));
-        let notional = price.to_f64() * filled;
+        let notional = price.raw() * filled;
         let fee = Price::from_f64(notional * 0.0002);
 
         // 创建成交记录
@@ -132,7 +160,7 @@ impl PrepOrder {
             self.trading_pair,
             self.side,
             price,
-            Quantity::from_f64(filled),
+            Quantity::from_raw(filled),
             fee,
             AssetId::USDT,
             true // Maker

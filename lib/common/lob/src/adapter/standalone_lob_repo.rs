@@ -18,6 +18,10 @@ pub struct StandaloneLobRepo<O: Order> {
 }
 
 impl<O: Order> StandaloneLobRepo<O> {
+
+}
+
+impl<O: Order> StandaloneLobRepo<O> {
     /// 创建新的 SingleLobRepo
     ///
     /// # 参数
@@ -83,6 +87,10 @@ impl<O: Order> MultiSymbolLobRepo for StandaloneLobRepo<O> {
     }
 
     fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
+        todo!()
+    }
+
+    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
         todo!()
     }
 }

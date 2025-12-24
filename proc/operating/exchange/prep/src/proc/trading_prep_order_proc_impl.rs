@@ -53,9 +53,6 @@ pub struct PrepMatchingService {
     /// 账户ID（固定账户）
     account_id: AccountId,
 
-    /// 资产ID（USDT）
-    asset_id: AssetId,
-
     /// 撮合序列号（用于追踪撮合顺序）
     match_seq: Arc<RwLock<u64>>
 }
@@ -75,7 +72,7 @@ impl PrepMatchingService {
     pub fn new(
         balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PrepPosition>,
         trade_repo: MySqlDbRepo<PrepTrade>, order_repo: MySqlDbRepo<PrepOrder>, lob_repo: StandaloneLobRepo<PrepOrder>,
-        account_id: AccountId, asset_id: AssetId
+        account_id: AccountId
     ) -> Self {
         Self {
             balance_repo,
@@ -84,22 +81,21 @@ impl PrepMatchingService {
             order_repo,
             lob_repo,
             account_id,
-            asset_id,
             match_seq: Arc::new(RwLock::new(0))
         }
     }
 
-    /// 获取当前余额
-    ///
-    /// # 返回
-    /// 可用余额（u64 原始值）
-    ///
-    /// # 说明
-    /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
-    fn get_balance(&self) -> Price {
-        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-        self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b| b.available).unwrap_or(Price::from_raw(0))
-    }
+    // /// 获取当前余额
+    // ///
+    // /// # 返回
+    // /// 可用余额（u64 原始值）
+    // ///
+    // /// # 说明
+    // /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
+    // fn get_balance(&self) -> Price {
+    //     let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+    //     self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b|
+    // b.available).unwrap_or(Price::from_raw(0)) }
 
     /// 扣减余额（冻结保证金、支付手续费）
     ///
@@ -121,58 +117,62 @@ impl PrepMatchingService {
         Ok(())
     }
 
-    fn deduct_balance2(&self, amount: Price, now: Timestamp) -> Result<ChangeLogEntry, PrepCommandError> {
-        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+    // fn deduct_balance2(&self, amount: Price, now: Timestamp) ->
+    // Result<ChangeLogEntry, PrepCommandError> {     let balance_id =
+    // format!("{}:{}", self.account_id.0, self.asset_id.0);
+    //
+    //     // 获取或创建余额
+    //     let mut balance = match
+    // self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+    //         Some(b) => b,
+    //         None => Balance::new(self.account_id, self.asset_id, now) // todo
+    // 应该报错     };
+    //
+    //     if balance.available < amount {
+    //         return Err(PrepCommandError::InsufficientBalance);
+    //     }
+    //
+    //     // 在 track_update 闭包内修改
+    // balance，生成正确的变更事件，然后回放到数据库     let event = balance
+    //         .track_update(|b: &mut Balance| {
+    //             b.frozen(amount, now);
+    //         })
+    //         .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to
+    // track balance update: {:?}", e)))?;
+    //
+    //
+    //     Ok(event)
+    // }
 
-        // 获取或创建余额
-        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
-            Some(b) => b,
-            None => Balance::new(self.account_id, self.asset_id, now) // todo 应该报错
-        };
-
-        if balance.available < amount {
-            return Err(PrepCommandError::InsufficientBalance);
-        }
-
-        // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
-        let event = balance
-            .track_update(|b: &mut Balance| {
-                b.frozen(amount, now);
-            })
-            .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to track balance update: {:?}", e)))?;
-
-
-        Ok(event)
-    }
-
-    /// 增加余额（归还保证金、盈利入账）
-    ///
-    /// # 参数
-    /// - `amount`: 增加金额（Price）
-    fn add_balance(&self, amount: Price, now: Timestamp) {
-        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-
-        // 获取或创建余额
-        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
-            Some(b) => b,
-            None => Balance::new(self.account_id, self.asset_id, now)
-        };
-
-        // 在 track_update 闭包内修改 balance，生成正确的变更事件，然后回放到数据库
-        match balance.track_update(|b| {
-            b.add_balance(amount, now);
-        }) {
-            Ok(event) => {
-                // 回放事件到数据库
-                if let Err(e) = self.balance_repo.replay_event(&event) {
-                    log::error!("Failed to replay balance update event: {:?}", e);
-                }
-            }
-            Err(e) => {
-                log::error!("Failed to track balance update for {}: {:?}", balance_id, e);
-            }
-        }
-    }
+    // /// 增加余额（归还保证金、盈利入账）
+    // ///
+    // /// # 参数
+    // /// - `amount`: 增加金额（Price）
+    // fn add_balance(&self, amount: Price, now: Timestamp) {
+    //     let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+    //
+    //     // 获取或创建余额
+    //     let mut balance = match
+    // self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+    //         Some(b) => b,
+    //         None => Balance::new(self.account_id, self.asset_id, now)
+    //     };
+    //
+    //     // 在 track_update 闭包内修改
+    // balance，生成正确的变更事件，然后回放到数据库     match balance.
+    // track_update(|b| {         b.add_balance(amount, now);
+    //     }) {
+    //         Ok(event) => {
+    //             // 回放事件到数据库
+    //             if let Err(e) = self.balance_repo.replay_event(&event) {
+    //                 log::error!("Failed to replay balance update event: {:?}",
+    // e);             }
+    //         }
+    //         Err(e) => {
+    //             log::error!("Failed to track balance update for {}: {:?}",
+    // balance_id, e);         }
+    //     }
+    // }
 
     // ========================================================================
     // PositionRepo 辅助方法
@@ -229,17 +229,6 @@ impl PrepMatchingService {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
     }
 
-    /// Price 转 u64（假设 Price 内部是 8 位小数）
-    ///
-    /// # 说明
-    /// Price 内部存储为 raw 值，通常是整数表示（如 100_000_000 = 1.0）
-    /// 这里假设 Price 的精度与 u64 精度一致
-    #[inline]
-    fn price_to_u64(price: Price) -> u64 { price.raw() as u64 }
-
-    /// u64 转 Price
-    #[inline]
-    fn u64_to_price(value: u64) -> Price { Price::from_raw(value as i64) }
 
     /// 计算所需保证金
     ///
@@ -300,7 +289,7 @@ impl PrepMatchingService {
         // ========================================================================
         match position.track_update(|p: &mut PrepPosition| {
             // 调用position的update方法更新所有信息（数量、均价、杠杆、保证金、PnL等）
-            p.update(quantity, avg_price, leverage, _side, position_side);
+            p.add(quantity, avg_price, leverage, _side, position_side);
         }) {
             Ok(event) => {
                 // 回放事件到数据库
@@ -314,293 +303,6 @@ impl PrepMatchingService {
         }
     }
 
-
-    /// 处理限价单开仓 v2 版本 - 直接返回 OpenPositionResult
-    ///
-    /// # 参数
-    /// - `cmd`: 开仓命令
-    ///
-    /// # 返回
-    /// - `Ok(OpenPositionResult)`: 包含订单信息和成交详情的完整结果
-    /// - `Err(PrepCommandError)`: 处理过程中的错误
-    ///
-    /// # 流程
-    /// 1. 验证命令有效性
-    /// 2. 检查和保存杠杆配置
-    /// 3. 检查余额并冻结保证金
-    /// 4. 生成订单ID
-    /// 5. 从 LOB 匹配现有订单
-    /// 6. 处理成交或未成交的情况
-    /// 7. 更新持仓和余额
-    /// 8. 返回完整结果
-    // todo 完成handle_limit_order2
-    fn handle_limit_order2(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
-        // ========================================================================
-        // 1. 命令验证
-        // ========================================================================
-        cmd.validate().map_err(PrepCommandError::ValidationError)?;
-
-        // ========================================================================
-        // 2. 风控检查 - 杠杆配置
-        // ========================================================================
-        // 直接使用命令中的杠杆倍数，不使用缓存
-        let leverage = cmd.leverage;
-
-        // ========================================================================
-        // 3. 风控检查 - 余额检查并冻结保证金
-        // ========================================================================
-        let estimate_price = cmd.price.unwrap_or_else(|| Price::from_f64(50000.0));
-        let required_margin = self.calculate_required_margin(estimate_price, cmd.quantity, leverage);
-
-        // 检查余额并立即扣除保证金（冻结效果）
-        let now = self.now();
-
-        let event = self.deduct_balance2(required_margin, now)?;
-        // 回放事件到数据库
-        self.balance_repo
-            .replay_event(&event)
-            .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to replay balance event: {:?}", e)))?;
-
-        // ========================================================================
-        // 4. 生成订单ID
-        // ========================================================================
-        let order_id = self.generate_order_id();
-
-        // ========================================================================
-        // 5. 从 LOB 匹配现有订单
-        // ========================================================================
-        let mut generated_trades = Vec::new();
-        let mut total_filled = 0.0;
-        let mut remaining_qty = cmd.quantity.to_f64();
-
-        let matched_orders = self.lob_repo.match_orders(
-            cmd.trading_pair,
-            cmd.side,
-            cmd.price.unwrap_or_else(|| Price::from_f64(50000.0)),
-            cmd.quantity
-        );
-
-        // 用于收集所有需要回放的事件
-        let mut all_events = Vec::new();
-
-        if let Some(matched) = matched_orders {
-            // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
-            for matched_order in matched {
-                if remaining_qty <= 0.0 {
-                    break;
-                }
-
-                // 计算当前成交数量
-                let fill_amount = remaining_qty.min(matched_order.quantity.to_f64());
-                let fill_qty_obj = Quantity::from_f64(fill_amount);
-                let match_price = matched_order.price.unwrap_or_else(|| Price::from_f64(50000.0));
-
-                // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
-                let notional = match_price.to_f64() * fill_amount;
-                let fee = Price::from_f64(notional * 0.0002);
-
-                // 创建成交记录
-                let trade = PrepTrade::new(
-                    TradeId::generate(),
-                    order_id.clone(),
-                    order_id.clone(),
-                    cmd.trading_pair,
-                    cmd.side,
-                    match_price,
-                    fill_qty_obj,
-                    fee,
-                    AssetId::USDT,
-                    true // Maker
-                );
-
-                generated_trades.push(trade.clone());
-
-                // 创建 matched_order 的副本以便修改并生成事件
-                let mut updated_order = matched_order.clone();
-                let old_filled = updated_order.filled_quantity.to_f64();
-                let new_filled_qty = Quantity::from_f64(old_filled + fill_amount);
-                updated_order.filled_quantity = new_filled_qty;
-
-                // 如果完全成交，更新状态为 Filled
-                let new_order_status = if (updated_order.quantity.to_f64() - new_filled_qty.to_f64()).abs() <= 0.0001 {
-                    OrderStatus::Filled
-                } else {
-                    OrderStatus::PartiallyFilled
-                };
-                updated_order.status = new_order_status.clone();
-
-                // 生成 matched_order 的更新事件
-                let filled_copy = new_filled_qty;
-                let status_copy = new_order_status.clone();
-                if let Ok(event) = updated_order.track_update(|order| {
-                    order.filled_quantity = filled_copy;
-                    order.status = status_copy.clone();
-                }) {
-                    all_events.push(event);
-                }
-
-                // 生成 trade 的创建事件
-                if let Ok(event) = trade.track_create() {
-                    all_events.push(event);
-                }
-
-                total_filled += fill_amount;
-                remaining_qty -= fill_amount;
-            }
-        }
-
-        // ========================================================================
-        // 6. 确定最终订单状态
-        // ========================================================================
-        let filled_qty = Quantity::from_f64(total_filled);
-
-        // ========================================================================
-        // 7. 如果有成交，更新持仓和扣除手续费
-        // ========================================================================
-        if total_filled > 0.0 && !generated_trades.is_empty() {
-            // 扣除手续费
-            let total_fee: f64 = generated_trades.iter().map(|t| t.fee.to_f64()).sum();
-            let total_fee_price = Price::from_f64(total_fee);
-            let now = self.now();
-
-            // todo
-            self.deduct_balance(total_fee_price, now).unwrap_or_else(|_| {
-                log::error!("Failed to deduct fee {} for order {:?}", total_fee, order_id);
-            });
-
-            // 计算成交均价
-            let mut total_notional = 0.0;
-            for trade in &generated_trades {
-                total_notional += trade.price.to_f64() * trade.quantity.to_f64();
-            }
-            let avg_price = Price::from_f64(total_notional / total_filled);
-
-            // 更新持仓
-            self.update_position(cmd.trading_pair, cmd.side, cmd.position_side, filled_qty, avg_price, leverage);
-
-            // 获取撮合序列号
-            let match_seq = self.next_match_seq();
-
-            // ========================================================================
-            // 8. 创建内部订单对象
-            // ========================================================================
-            let internal_order = if remaining_qty > 0.0 {
-                // 部分成交情况
-                PrepOrder {
-                    order_id: order_id.clone(),
-                    account_id: self.account_id,
-                    trading_pair: cmd.trading_pair,
-                    side: cmd.side,
-                    order_type: cmd.order_type,
-                    quantity: cmd.quantity,
-                    price: cmd.price,
-                    filled_quantity: filled_qty,
-                    status: OrderStatus::PartiallyFilled,
-                    created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
-                        as u64,
-                    frozen_margin: required_margin
-                }
-            } else {
-                // 完全成交情况
-                PrepOrder {
-                    order_id: order_id.clone(),
-                    account_id: self.account_id,
-                    trading_pair: cmd.trading_pair,
-                    side: cmd.side,
-                    order_type: cmd.order_type,
-                    quantity: cmd.quantity,
-                    price: cmd.price,
-                    filled_quantity: cmd.quantity,
-                    status: OrderStatus::Filled,
-                    created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
-                        as u64,
-                    frozen_margin: Price::from_raw(0)
-                }
-            };
-
-            // 1. 如果有未成交部分，挂单到 LOB
-            if remaining_qty > 0.0 {
-                let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order.clone());
-            }
-
-            // 2. 生成 internal_order 的创建事件，加入 all_events
-            if let Ok(event) = internal_order.track_create() {
-                all_events.push(event);
-            }
-
-            // 3. 一次性回放所有事件到数据库
-            if !all_events.is_empty() {
-                // 回放 matched_order 更新和 trade 创建事件到各自的 repo
-                for event in &all_events {
-                    // 根据 entity_type 判断回放到哪个 repo
-                    match event.entity_type.as_str() {
-                        "PrepOrder" => {
-                            if let Err(e) = self.order_repo.replay_event(event) {
-                                log::error!("Failed to replay order event: {:?}", e);
-                            }
-                        }
-                        "PrepTrade" => {
-                            if let Err(e) = self.trade_repo.replay_event(event) {
-                                log::error!("Failed to replay trade event: {:?}", e);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            // 4. 返回相应的结果
-            if remaining_qty > 0.0 {
-                Ok(OpenPositionResult::partially_filled(order_id, generated_trades, match_seq))
-            } else {
-                Ok(OpenPositionResult::filled(order_id, generated_trades, match_seq))
-            }
-        } else {
-            // 无成交情况
-            // ========================================================================
-            // 8. 创建内部订单对象（未成交，需要挂单等待）
-            // ========================================================================
-            let internal_order = PrepOrder {
-                order_id: order_id.clone(),
-                account_id: self.account_id,
-                trading_pair: cmd.trading_pair,
-                side: cmd.side,
-                order_type: cmd.order_type,
-                quantity: cmd.quantity,
-                price: cmd.price,
-                filled_quantity: Quantity::from_raw(0),
-                status: OrderStatus::Submitted,
-                created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
-                    as u64,
-                frozen_margin: required_margin
-            };
-
-            // 挂单到 LOB
-            let _ = self.lob_repo.add_order(cmd.trading_pair, internal_order.clone());
-
-            // 生成 internal_order 的创建事件，加入 all_events
-            if let Ok(event) = internal_order.track_create() {
-                all_events.push(event);
-            }
-
-            // 一次性回放所有事件到数据库
-            if !all_events.is_empty() {
-                for event in &all_events {
-                    match event.entity_type.as_str() {
-                        "PrepOrder" => {
-                            if let Err(e) = self.order_repo.replay_event(event) {
-                                log::error!("Failed to replay order event: {:?}", e);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            // 返回已接受状态（待撮合）
-            Ok(OpenPositionResult::accepted(order_id))
-        }
-    }
 
     // /// 等待提交
     // Pending = 1,
@@ -638,7 +340,7 @@ impl PrepMatchingService {
         );
 
 
-        let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
+        let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.base_asset.0);
         let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
@@ -648,8 +350,6 @@ impl PrepMatchingService {
         // 2 风控检查 - 余额检查并冻结保证金
         internal_order.frozen_margin(balance.clone(), now);
 
-        // todo 如果冻结失败 balance 则变成 Rejected internal_order.change2rejected,
-        // 基本结束
 
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
@@ -662,16 +362,17 @@ impl PrepMatchingService {
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(cmd.trading_pair);
 
+
         if (matched_orders.is_some()) {
             // 如果匹配
             let mut trades = Vec::new();
             if let Some(matched) = matched_orders {
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
-                    let mut match_position = self.get_position(matched_order.trading_pair);
+                    let mut matched_position = self.get_position(matched_order.trading_pair);
 
-                    let balance_id = format!("{}:{}", matched_order.account_id.0, self.asset_id.0);
-                    let mut match_balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+                    let balance_id = format!("{}:{}", matched_order.account_id.0, cmd.trading_pair.base_asset.0);
+                    let mut matched_balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
                         Some(b) => b,
                         None => todo!() // todo 应该报错
                     };
@@ -679,14 +380,13 @@ impl PrepMatchingService {
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
                         &mut matched_order_mut,
-                        match_balance,
-                        &mut match_position,
-                        balance.clone(),
+                        &mut matched_balance,
+                        &mut matched_position,
+                        &mut balance,
                         &mut position,
                         now
                     );
 
-                    // todo 更新持仓和资金
                     trades.push(trade);
                     if internal_order.is_all_filled() {
                         break;
@@ -749,7 +449,7 @@ impl PerpOrderExchProc for PrepMatchingService {
     /// 5. 更新持仓和余额
     /// 6. 返回撮合结果
     fn open_position(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
-        self.handle_limit_order2(cmd)
+        self.handle_limit_order3(cmd)
     }
 
     fn close_position(&self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
@@ -909,7 +609,20 @@ impl PerpOrderExchProc for PrepMatchingService {
     }
 
     fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
-        // 先从元数据中获取订单信息
+        // 1. 先从元数据中获取订单信息 2. order.cancel
+
+        cmd.trading_pair.base_asset;
+        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+            Some(b) => b,
+            None => todo!() // todo 应该报错
+        };
+
+
+        self.lob_repo.remove_order(TradingPair::USDT_USDT, cmd.order_id);
+
+        let order = self.lob_repo.find_order_mut(TradingPair::USDT_USDT, cmd.order_id).unwrap();
+
+        order.cancel(&mut balance, self.now());
 
         todo!()
     }

@@ -63,8 +63,8 @@ pub struct LobSnapshot {
 impl LobSnapshot {
     /// 创建 LOB 快照
     pub fn new(
-        symbol: TradingPair, timestamp: u64, sequence: u64, data: Vec<u8>, best_bid: Option<Price>, best_ask: Option<Price>,
-        last_price: Option<Price>
+        symbol: TradingPair, timestamp: u64, sequence: u64, data: Vec<u8>, best_bid: Option<Price>,
+        best_ask: Option<Price>, last_price: Option<Price>
     ) -> Self {
         Self {
             symbol,
@@ -216,7 +216,9 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 性能要求
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
-    fn match_orders(&self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
+    fn match_orders(
+        &self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity
+    ) -> Option<Vec<&Self::Order>>;
 
     /// 获取指定交易对的最佳买价
     ///
@@ -259,4 +261,8 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `true`: 成功取消订单
     /// - `false`: 订单不存在
     fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool;
+
+    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order>;
+
+    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order>;
 }
