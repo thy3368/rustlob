@@ -14,9 +14,9 @@ use crate::{
         adaptor::outbound::{entity_repo::EntityRepo, event_repo::EventRepo, id_repo::IdRepo},
         domain::{
             entity::lob_types::{
-                EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, Quantity,
+                EntityEvent, EventOperation, FieldValue, SpotOrder, OrderId, Price, Quantity,
                 Side::{Buy, Sell},
-                Trade
+                SpotTrade
             },
             repo::OrderRepo
         }
@@ -72,7 +72,7 @@ where
     /// # 返回
     /// (订单更新事件列表, 交易事件列表, 未成交金额, 新订单ID)
     fn create_events(
-        &self, matched_orders: Option<Vec<&OrderEntry>>, price: Price, quantity: Quantity
+        &self, matched_orders: Option<Vec<&SpotOrder>>, price: Price, quantity: Quantity
     ) -> (Option<Vec<EntityEvent>>, Option<Vec<EntityEvent>>, Quantity) {
         let mut order_events = Vec::new();
         let mut trade_events = Vec::new();
@@ -196,7 +196,7 @@ where
     A: AccountService
 {
     fn handle_limit_order(&mut self, command: SpotCommand) -> Result<SpotCommandResult, SpotCommandError> {
-        let _trades: Vec<Trade> = Vec::new(); // TODO: 从 trade_events 转换
+        let _trades: Vec<SpotTrade> = Vec::new(); // TODO: 从 trade_events 转换
 
         if let SpotCommand::LimitOrder {
             trader,

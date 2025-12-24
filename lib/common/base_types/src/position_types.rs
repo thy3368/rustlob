@@ -482,14 +482,14 @@ impl fmt::Display for TradeId {
 pub struct PrepTrade {
     /// 成交ID
     pub trade_id: TradeId,
-    /// 关联订单ID
-    pub ask_order_id: OrderId,
-    /// 关联订单ID
-    pub bid_order_id: OrderId,
+    /// 主动订单ID
+    pub taker_order_id: OrderId,
+    /// 被动订单ID
+    pub maker_order_id: OrderId,
     /// 交易对
-    pub symbol: TradingPair,
-    /// 订单方向
-    pub side: Side,
+    pub trading_pair: TradingPair,
+    /// 主动方向
+    pub taker_side: Side,
     /// 成交价格
     pub price: Price,
     /// 成交数量
@@ -498,11 +498,30 @@ pub struct PrepTrade {
     pub fee: Price,
     /// 手续费资产（通常是USDT）
     pub fee_asset: AssetId,
-    /// 是否为Maker（流动性提供方）
+    /// 是否为Maker（流动性提供方）//todo 怎么判断？
     pub is_maker: bool,
     /// 成交时间戳（毫秒）
     pub timestamp: u64
 }
+
+// pub struct SpotTrade {
+//     /// 交易唯一标识
+//     pub trade_id: u64,
+//     /// 成交价格
+//     pub price: Price,
+//     /// 成交数量
+//     pub quantity: Quantity,
+//     /// Taker交易员（主动方，新订单提交者）
+//     pub taker_trader: TraderId,
+//     /// Maker交易员（被动方，订单簿中的挂单方）
+//     pub maker_trader: TraderId,
+//     /// Taker订单ID
+//     pub taker_order_id: OrderId,
+//     /// Maker订单ID
+//     pub maker_order_id: OrderId,
+//     /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
+//     pub taker_side: Side
+// }
 
 impl PrepTrade {
     /// 创建新的成交记录
@@ -512,10 +531,10 @@ impl PrepTrade {
     ) -> Self {
         Self {
             trade_id,
-            ask_order_id,
-            bid_order_id,
-            symbol,
-            side,
+            taker_order_id: ask_order_id,
+            maker_order_id: bid_order_id,
+            trading_pair: symbol,
+            taker_side: side,
             price,
             quantity,
             fee,

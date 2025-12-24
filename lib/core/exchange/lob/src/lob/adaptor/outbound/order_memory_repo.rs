@@ -7,7 +7,7 @@ use crate::lob::domain::repo::traits::{OrderRepo, RepoError};
 use crate::lob::{
     adaptor::outbound::arena::OrderArena,
     domain::entity::lob_types::{
-        EntityEvent, EventOperation, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity, Side, TraderId
+        EntityEvent, EventOperation, FieldValue, SpotOrder, OrderId, Price, PricePoint, Quantity, Side, TraderId
     }
 };
 
@@ -109,7 +109,7 @@ impl MemoryOrderRepo {
 }
 
 impl OrderRepo for MemoryOrderRepo {
-    fn add_order(&mut self, order_id: OrderId, entry: OrderEntry, side: Side, price: Price) -> Result<(), RepoError> {
+    fn add_order(&mut self, order_id: OrderId, entry: SpotOrder, side: Side, price: Price) -> Result<(), RepoError> {
         // === 1. 前置验证（不分配资源）===
         if self.order_index.contains_key(&order_id) {
             return Err(RepoError::OrderAlreadyExists);
@@ -131,7 +131,7 @@ impl OrderRepo for MemoryOrderRepo {
         Ok(())
     }
 
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>> {
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&SpotOrder>> {
         // 根据 side,price,quantity 匹配所有的Order
         // quantity总和要大于等于quantity, 返回匹配上的订单数组
 
@@ -215,11 +215,11 @@ impl OrderRepo for MemoryOrderRepo {
     }
 
     // good
-    fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry> {
+    fn find_order(&self, order_id: OrderId) -> Option<&SpotOrder> {
         self.order_index.get(&order_id).and_then(|&idx| self.arena.get(idx))
     }
 
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry> {
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut SpotOrder> {
         self.order_index.get(&order_id).and_then(|&idx| self.arena.get_mut(idx))
     }
 
@@ -363,7 +363,7 @@ impl MemoryOrderRepo {
                 }
             }
 
-            let entry = OrderEntry::new(order_id, trader, quantity);
+            let entry = SpotOrder::new(order_id, trader, quantity);
             self.add_order(order_id, entry, side, price)?;
         }
         Ok(())
@@ -419,7 +419,7 @@ mod tests {
         let mut repo = MemoryOrderRepo::new(100_000, 1000);
         let trader = TraderId::from_str("TRADER1");
         let order_id = 1;
-        let entry = OrderEntry::new(order_id, trader, 100);
+        let entry = SpotOrder::new(order_id, trader, 100);
 
         // 添加订单
         let result = repo.add_order(order_id, entry, Side::Buy, 10000);
@@ -472,7 +472,7 @@ mod tests {
         let trader = TraderId::from_str("TRADER1");
 
         // 先添加订单
-        let entry = OrderEntry::new(100, trader, 100);
+        let entry = SpotOrder::new(100, trader, 100);
         repo.add_order(100, entry, Side::Buy, 10000).unwrap();
 
         // 构造 Update 事件
@@ -495,7 +495,7 @@ mod tests {
         let trader = TraderId::from_str("TRADER1");
 
         // 先添加订单
-        let entry = OrderEntry::new(100, trader, 100);
+        let entry = SpotOrder::new(100, trader, 100);
         repo.add_order(100, entry, Side::Buy, 10000).unwrap();
         assert!(repo.find_order(100).is_some());
 

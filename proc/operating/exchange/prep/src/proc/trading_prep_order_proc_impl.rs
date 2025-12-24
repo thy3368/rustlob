@@ -85,17 +85,7 @@ impl PrepMatchingService {
         }
     }
 
-    // /// 获取当前余额
-    // ///
-    // /// # 返回
-    // /// 可用余额（u64 原始值）
-    // ///
-    // /// # 说明
-    // /// 从 MySqlDbRepo 获取余额，如果不存在返回 0
-    // fn get_balance(&self) -> Price {
-    //     let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-    //     self.balance_repo.find_by_id(&balance_id).ok().flatten().map(|b|
-    // b.available).unwrap_or(Price::from_raw(0)) }
+
 
     /// 扣减余额（冻结保证金、支付手续费）
     ///
@@ -117,62 +107,6 @@ impl PrepMatchingService {
         Ok(())
     }
 
-    // fn deduct_balance2(&self, amount: Price, now: Timestamp) ->
-    // Result<ChangeLogEntry, PrepCommandError> {     let balance_id =
-    // format!("{}:{}", self.account_id.0, self.asset_id.0);
-    //
-    //     // 获取或创建余额
-    //     let mut balance = match
-    // self.balance_repo.find_by_id(&balance_id).ok().flatten() {
-    //         Some(b) => b,
-    //         None => Balance::new(self.account_id, self.asset_id, now) // todo
-    // 应该报错     };
-    //
-    //     if balance.available < amount {
-    //         return Err(PrepCommandError::InsufficientBalance);
-    //     }
-    //
-    //     // 在 track_update 闭包内修改
-    // balance，生成正确的变更事件，然后回放到数据库     let event = balance
-    //         .track_update(|b: &mut Balance| {
-    //             b.frozen(amount, now);
-    //         })
-    //         .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to
-    // track balance update: {:?}", e)))?;
-    //
-    //
-    //     Ok(event)
-    // }
-
-    // /// 增加余额（归还保证金、盈利入账）
-    // ///
-    // /// # 参数
-    // /// - `amount`: 增加金额（Price）
-    // fn add_balance(&self, amount: Price, now: Timestamp) {
-    //     let balance_id = format!("{}:{}", self.account_id.0, self.asset_id.0);
-    //
-    //     // 获取或创建余额
-    //     let mut balance = match
-    // self.balance_repo.find_by_id(&balance_id).ok().flatten() {
-    //         Some(b) => b,
-    //         None => Balance::new(self.account_id, self.asset_id, now)
-    //     };
-    //
-    //     // 在 track_update 闭包内修改
-    // balance，生成正确的变更事件，然后回放到数据库     match balance.
-    // track_update(|b| {         b.add_balance(amount, now);
-    //     }) {
-    //         Ok(event) => {
-    //             // 回放事件到数据库
-    //             if let Err(e) = self.balance_repo.replay_event(&event) {
-    //                 log::error!("Failed to replay balance update event: {:?}",
-    // e);             }
-    //         }
-    //         Err(e) => {
-    //             log::error!("Failed to track balance update for {}: {:?}",
-    // balance_id, e);         }
-    //     }
-    // }
 
     // ========================================================================
     // PositionRepo 辅助方法

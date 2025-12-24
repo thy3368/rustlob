@@ -128,8 +128,8 @@ pub use domain::service::trading_spot_order_proc::{
 };
 pub use domain::{
     entity::lob_types::{
-        EntityEvent, EventOperation, FieldChange, FieldValue, OrderEntry, OrderId, Price, PricePoint, Quantity,
-        RecordChange, Side, Symbol, Trade, TraderId
+        EntityEvent, EventOperation, FieldChange, FieldValue, SpotOrder, OrderId, Price, PricePoint, Quantity,
+        RecordChange, Side, Symbol, SpotTrade, TraderId
     },
     repo::{MemoryOrderRepo, OrderRepo, RepoError},
     service::{

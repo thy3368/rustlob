@@ -6,3 +6,19 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+
+# Clean Architecture 依赖
+account = { path = "../../../../lib/core/account" }
+
+# LOB 仓储依赖
+lob_repo = { path = "../../../../lib/common/lob" }
+base_types = { path = "../../../../lib/common/base_types" }
+
+# Diff tracking
+diff = { path = "../../../../lib/common/diff" }
+entity_derive = { path = "../../../../lib/common/entity_derive" }
+
+# Database repository
+db_repo = { path = "../../../../lib/common/db_repo" }
+
+lob = { path = "../../../../lib/core/exchange/lob" }

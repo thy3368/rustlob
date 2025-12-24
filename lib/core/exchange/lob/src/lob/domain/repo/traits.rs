@@ -1,5 +1,5 @@
 /// 仓储接口定义
-use crate::lob::domain::entity::lob_types::{EntityEvent, OrderEntry, OrderId, Price, Quantity, Side};
+use crate::lob::domain::entity::lob_types::{EntityEvent, SpotOrder, OrderId, Price, Quantity, Side};
 
 
 /// 订单仓储接口
@@ -10,7 +10,7 @@ pub trait OrderRepo {
     // === 核心写操作 ===
 
     /// 添加订单到仓储
-    fn add_order(&mut self, order_id: OrderId, entry: OrderEntry, side: Side, price: Price) -> Result<(), RepoError>;
+    fn add_order(&mut self, order_id: OrderId, entry: SpotOrder, side: Side, price: Price) -> Result<(), RepoError>;
 
     /// 取消订单
     fn cancel_order(&mut self, order_id: OrderId) -> bool;
@@ -18,10 +18,10 @@ pub trait OrderRepo {
     // === 核心读操作 ===
 
     /// 根据订单ID查找订单
-    fn find_order(&self, order_id: OrderId) -> Option<&OrderEntry>;
+    fn find_order(&self, order_id: OrderId) -> Option<&SpotOrder>;
 
     /// 根据订单ID查找订单（可变引用）
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut OrderEntry>;
+    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut SpotOrder>;
 
     /// 匹配订单，返回匹配到的订单引用列表
     ///
@@ -33,7 +33,7 @@ pub trait OrderRepo {
     /// # 返回
     /// - `Some(Vec<&OrderEntry>)`: 匹配到的订单列表（总数量 >= quantity）
     /// - `None`: 无法匹配
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&OrderEntry>>;
+    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&SpotOrder>>;
 
     // === 市场数据查询 ===
 

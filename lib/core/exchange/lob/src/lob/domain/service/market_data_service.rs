@@ -56,7 +56,7 @@ where
 mod tests {
     use super::*;
     use crate::lob::domain::{
-        entity::lob_types::{OrderEntry, Side, TraderId},
+        entity::lob_types::{SpotOrder, Side, TraderId},
         repo::MemoryOrderRepo
     };
 
@@ -68,11 +68,11 @@ mod tests {
 
         // 添加订单
         let buy_id = repo.allocate_order_id();
-        let buy_entry = OrderEntry::new(buy_id, trader, 100);
+        let buy_entry = SpotOrder::new(buy_id, trader, 100);
         repo.add_order(buy_id, buy_entry, Side::Buy, 9900).unwrap();
 
         let sell_id = repo.allocate_order_id();
-        let sell_entry = OrderEntry::new(sell_id, trader, 100);
+        let sell_entry = SpotOrder::new(sell_id, trader, 100);
         repo.add_order(sell_id, sell_entry, Side::Sell, 10100).unwrap();
 
         // 创建市场数据服务
@@ -102,7 +102,7 @@ mod tests {
         let trader = TraderId::from_str("TRADER");
 
         let buy_id = repo.allocate_order_id();
-        let buy_entry = OrderEntry::new(buy_id, trader, 100);
+        let buy_entry = SpotOrder::new(buy_id, trader, 100);
         repo.add_order(buy_id, buy_entry, Side::Buy, 9900).unwrap();
 
         let md_service = MarketDataService::new(repo);
@@ -119,7 +119,7 @@ mod tests {
         let trader = TraderId::from_str("TRADER");
 
         let sell_id = repo.allocate_order_id();
-        let sell_entry = OrderEntry::new(sell_id, trader, 100);
+        let sell_entry = SpotOrder::new(sell_id, trader, 100);
         repo.add_order(sell_id, sell_entry, Side::Sell, 10100).unwrap();
 
         let md_service = MarketDataService::new(repo);

@@ -41,5 +41,13 @@ impl<O: Order> MultiSymbolLobRepo for DistributedLobRepo<O> {
     fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
         todo!()
     }
+
+    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
+        todo!()
+    }
+
+    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
+        todo!()
+    }
 }
 

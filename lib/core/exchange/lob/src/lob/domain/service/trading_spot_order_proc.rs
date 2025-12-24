@@ -8,7 +8,7 @@
 //! 幂等性设计：
 //! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Symbol, Trade, TraderId};
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Symbol, SpotTrade, TraderId};
 
 // ============================================================================
 // 基础类型定义
@@ -516,11 +516,11 @@ pub enum SpotCommandResult {
         status: OrderStatus,
         filled_quantity: Quantity,
         remaining_quantity: Quantity,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     /// 市价单结果
-    MarketOrder { status: OrderStatus, filled_quantity: Quantity, trades: Vec<Trade> },
+    MarketOrder { status: OrderStatus, filled_quantity: Quantity, trades: Vec<SpotTrade> },
 
     /// 取消订单结果
     CancelOrder { order_id: OrderId, status: OrderStatus },
@@ -529,13 +529,6 @@ pub enum SpotCommandResult {
     CancelAllOrders { cancelled_count: usize, order_ids: Vec<OrderId> }
 }
 
-/// 现货订单处理器
-///
-/// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
-/// 支持 ? 操作符进行错误传播
-pub trait SpotOrderExchangeProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult;
-}
 
 // ============================================================================
 // 算法交易命令 (AlgoCommand)
@@ -695,27 +688,27 @@ pub enum ConditionalCommandResult {
     StopMarket {
         order_id: OrderId,
         triggered: bool,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     StopLimit {
         order_id: OrderId,
         triggered: bool,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     TrailingStop {
         order_id: OrderId,
         current_stop_price: Price,
         triggered: bool,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     TrailingStopPercent {
         order_id: OrderId,
         current_stop_price: Price,
         triggered: bool,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     // ========== 组合订单结果 ==========
@@ -729,33 +722,33 @@ pub enum ConditionalCommandResult {
         entry_order_id: OrderId,
         take_profit_order_id: OrderId,
         stop_loss_order_id: OrderId,
-        entry_trades: Vec<Trade>,
-        exit_trades: Vec<Trade>
+        entry_trades: Vec<SpotTrade>,
+        exit_trades: Vec<SpotTrade>
     },
 
     // ========== 高级订单结果 ==========
     /// 冰山单结果
     Iceberg {
         order_id: OrderId,
-        trades: Vec<Trade>,
+        trades: Vec<SpotTrade>,
         remaining_total: Quantity,
         current_display: Quantity
     },
 
     Hidden {
         order_id: OrderId,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     Pegged {
         order_id: OrderId,
         current_price: Price,
-        trades: Vec<Trade>
+        trades: Vec<SpotTrade>
     },
 
     MinimumQuantity {
         order_id: OrderId,
-        trades: Vec<Trade>,
+        trades: Vec<SpotTrade>,
         all_fills_meet_minimum: bool
     },
 
@@ -785,9 +778,9 @@ pub enum MarketMakerCommand {
 /// 做市商命令结果
 #[derive(Debug, Clone)]
 pub enum MarketMakerCommandResult {
-    TwoWayQuote { bid_order_id: OrderId, ask_order_id: OrderId, bid_trades: Vec<Trade>, ask_trades: Vec<Trade> },
+    TwoWayQuote { bid_order_id: OrderId, ask_order_id: OrderId, bid_trades: Vec<SpotTrade>, ask_trades: Vec<SpotTrade> },
 
-    AuctionOrder { order_id: OrderId, auction_price: Option<Price>, trades: Vec<Trade> },
+    AuctionOrder { order_id: OrderId, auction_price: Option<Price>, trades: Vec<SpotTrade> },
 
     NotImplemented
 }
@@ -943,4 +936,12 @@ pub enum OrderQueryResult {
 /// 负责处理所有只读查询操作（CQRS 读侧）
 pub trait OrderQueryProc: Send + Sync {
     fn handle(&self, query: OrderQueryCommand) -> Result<OrderQueryResult, QueryError>;
+}
+
+/// 现货订单处理器
+///
+/// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
+/// 支持 ? 操作符进行错误传播
+pub trait SpotOrderExchangeProc: Send + Sync {
+    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult;
 }

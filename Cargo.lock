@@ -2859,6 +2859,15 @@ dependencies = [
 [[package]]
 name = "spot_proc"
 version = "0.1.0"
+dependencies = [
+ "account",
+ "base_types",
+ "db_repo",
+ "diff",
+ "entity_derive",
+ "lob",
+ "lob_repo",
+]
 
 [[package]]
 name = "stable_deref_trait"

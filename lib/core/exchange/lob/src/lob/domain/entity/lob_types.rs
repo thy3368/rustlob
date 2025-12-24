@@ -5,6 +5,7 @@
 use std::fmt;
 
 
+
 /// 简化字段变更创建的宏
 #[macro_export]
 macro_rules! fields {
@@ -301,7 +302,7 @@ impl EntityEvent {
 /// - 账户结算（确定资金划转方向）
 /// - 交易历史查询
 #[derive(Debug, Clone, Copy)]
-pub struct Trade {
+pub struct SpotTrade {
     /// 交易唯一标识
     pub trade_id: u64,
     /// 成交价格
@@ -320,7 +321,7 @@ pub struct Trade {
     pub taker_side: Side
 }
 
-impl Trade {
+impl SpotTrade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
@@ -376,7 +377,7 @@ impl Trade {
     }
 }
 
-impl fmt::Display for Trade {
+impl fmt::Display for SpotTrade {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -395,15 +396,16 @@ impl fmt::Display for Trade {
 /// 订单簿条目（64字节缓存行对齐以提升性能）
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(align(64))]
-pub struct OrderEntry {
-    pub order_id: OrderId,           // 订单ID
-    pub trader: TraderId,            // 交易员ID
+pub struct SpotOrder {
+    pub order_id: OrderId, // 订单ID
+    pub trader: TraderId,  // 交易员ID
+    // todo 增加交易对，订单类型
     pub total_quantity: Quantity,    // 总数量
     pub unfilled_quantity: Quantity, // 未成交数量
     pub next_idx: Option<usize>      // 链表中下一个订单的索引
 }
 
-impl OrderEntry {
+impl SpotOrder {
     /// 创建新的订单条目
     #[inline]
     pub fn new(order_id: OrderId, trader: TraderId, quantity: Quantity) -> Self {

@@ -1,4 +1,4 @@
-use crate::lob::domain::entity::lob_types::OrderEntry;
+use crate::lob::domain::entity::lob_types::SpotOrder;
 
 /// 订单簿条目的内存池分配器
 ///
@@ -9,7 +9,7 @@ use crate::lob::domain::entity::lob_types::OrderEntry;
 ///
 /// 使用Free List机制实现内存回收和重用
 pub struct OrderArena {
-    entries: Vec<OrderEntry>, // 订单条目数组
+    entries: Vec<SpotOrder>, // 订单条目数组
     next_free: usize,         // 下一个空闲位置（bump pointer）
     free_list: Vec<usize>     // 已释放槽位的索引列表
 }
@@ -29,7 +29,7 @@ impl OrderArena {
     ///
     /// 优先从free list中重用已释放的槽位，提升内存利用率
     #[inline]
-    pub fn allocate(&mut self, entry: OrderEntry) -> Option<usize> {
+    pub fn allocate(&mut self, entry: SpotOrder) -> Option<usize> {
         // 优先从free list中分配（重用已释放的槽位）
         if let Some(idx) = self.free_list.pop() {
             self.entries[idx] = entry;
@@ -63,11 +63,11 @@ impl OrderArena {
 
     /// 通过索引获取条目的引用 good
     #[inline]
-    pub fn get(&self, idx: usize) -> Option<&OrderEntry> { self.entries.get(idx) }
+    pub fn get(&self, idx: usize) -> Option<&SpotOrder> { self.entries.get(idx) }
 
     /// 通过索引获取条目的可变引用 good
     #[inline]
-    pub fn get_mut(&mut self, idx: usize) -> Option<&mut OrderEntry> { self.entries.get_mut(idx) }
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut SpotOrder> { self.entries.get_mut(idx) }
 
     /// 获取已分配条目的数量
     #[inline]
@@ -108,14 +108,14 @@ impl Default for OrderArena {
 mod tests {
     use crate::lob::{
         adaptor::outbound::arena::OrderArena,
-        domain::entity::lob_types::{OrderEntry, TraderId}
+        domain::entity::lob_types::{SpotOrder, TraderId}
     };
 
     #[test]
     fn test_arena_allocation() {
         let mut arena = OrderArena::new(10);
 
-        let entry = OrderEntry::new(1, TraderId::from_str("TRADER1"), 100);
+        let entry = SpotOrder::new(1, TraderId::from_str("TRADER1"), 100);
         let idx = arena.allocate(entry).unwrap();
 
         assert_eq!(idx, 0);
@@ -127,9 +127,9 @@ mod tests {
     fn test_arena_full() {
         let mut arena = OrderArena::new(2);
 
-        let entry1 = OrderEntry::new(1, TraderId::from_str("T1"), 100);
-        let entry2 = OrderEntry::new(2, TraderId::from_str("T2"), 200);
-        let entry3 = OrderEntry::new(3, TraderId::from_str("T3"), 300);
+        let entry1 = SpotOrder::new(1, TraderId::from_str("T1"), 100);
+        let entry2 = SpotOrder::new(2, TraderId::from_str("T2"), 200);
+        let entry3 = SpotOrder::new(3, TraderId::from_str("T3"), 300);
 
         assert!(arena.allocate(entry1).is_some());
         assert!(arena.allocate(entry2).is_some());
@@ -140,7 +140,7 @@ mod tests {
     fn test_arena_clear() {
         let mut arena = OrderArena::new(10);
 
-        arena.allocate(OrderEntry::new(1, TraderId::from_str("T1"), 100));
+        arena.allocate(SpotOrder::new(1, TraderId::from_str("T1"), 100));
         assert_eq!(arena.len(), 1);
 
         arena.clear();
