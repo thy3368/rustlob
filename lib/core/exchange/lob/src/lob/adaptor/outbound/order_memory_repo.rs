@@ -333,15 +333,23 @@ impl MemoryOrderRepo {
 
             // 从字段变更中提取订单信息
             let mut trader = TraderId::new([0u8; 8]);
+            let mut symbol = Symbol::from_str("");
             let mut side = Side::Buy;
             let mut price: Price = 0;
             let mut quantity: Quantity = 0;
+            let mut order_type = OrderType::Limit;
+            let mut timestamp: u64 = 0;
 
             for field in change.field_changes {
                 match field.field_name {
                     "trader" => {
                         if let Some(FieldValue::TraderId(t)) = field.new_value {
                             trader = t;
+                        }
+                    }
+                    "symbol" => {
+                        if let Some(FieldValue::Symbol(s)) = field.new_value {
+                            symbol = s;
                         }
                     }
                     "side" => {
@@ -359,11 +367,25 @@ impl MemoryOrderRepo {
                             quantity = q;
                         }
                     }
+                    "order_type" => {
+                        if let Some(FieldValue::U32(ot)) = field.new_value {
+                            order_type = match ot {
+                                1 => OrderType::Limit,
+                                2 => OrderType::Market,
+                                _ => OrderType::Limit,
+                            };
+                        }
+                    }
+                    "timestamp" => {
+                        if let Some(FieldValue::U64(ts)) = field.new_value {
+                            timestamp = ts;
+                        }
+                    }
                     _ => {}
                 }
             }
 
-            let entry = SpotOrder::new(order_id, trader, quantity);
+            let entry = SpotOrder::new(order_id, trader, symbol, price, quantity, side, order_type, timestamp);
             self.add_order(order_id, entry, side, price)?;
         }
         Ok(())

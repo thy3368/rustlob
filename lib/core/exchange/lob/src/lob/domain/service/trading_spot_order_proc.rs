@@ -8,7 +8,9 @@
 //! 幂等性设计：
 //! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, Symbol, SpotTrade, TraderId};
+use account::{TradingPair, UserId};
+
+use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, SpotTrade, Symbol, TraderId};
 
 // ============================================================================
 // 基础类型定义
@@ -62,6 +64,8 @@ pub type Nonce = u64;
 /// 所有命令通过此结构包装，实现幂等性检查
 #[derive(Debug, Clone)]
 pub struct Command<C> {
+    /// 角色
+    pub user_id: UserId,
     /// 客户端生成的唯一标识（同一 nonce 只处理一次）
     pub nonce: Nonce,
     /// 命令时间戳（Unix毫秒，用于过期检查）
@@ -72,8 +76,9 @@ pub struct Command<C> {
 
 impl<C> Command<C> {
     /// 创建新命令
-    pub fn new(nonce: Nonce, payload: C) -> Self {
+    pub fn new(user_id: UserId, nonce: Nonce, payload: C) -> Self {
         Self {
+            user_id,
             nonce,
             timestamp_ms: 0, // 由调用方设置
             payload
@@ -81,8 +86,9 @@ impl<C> Command<C> {
     }
 
     /// 创建带时间戳的命令
-    pub fn with_timestamp(nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
+    pub fn with_timestamp(user_id: UserId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
         Self {
+            user_id,
             nonce,
             timestamp_ms,
             payload
@@ -474,7 +480,7 @@ pub enum SpotCommand {
     /// 限价单
     LimitOrder {
         trader: TraderId,
-        symbol: Symbol,
+        symbol: TradingPair,
         side: Side,
         price: Price,
         quantity: Quantity,

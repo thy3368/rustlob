@@ -129,6 +129,44 @@ pub enum Side {
     Sell = b'S'  // 卖出
 }
 
+/// 订单类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OrderType {
+    Limit = 1,   // 限价单
+    Market = 2,  // 市价单
+}
+
+impl fmt::Display for OrderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderType::Limit => write!(f, "LIMIT"),
+            OrderType::Market => write!(f, "MARKET")
+        }
+    }
+}
+
+/// 订单状态
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OrderStatus {
+    Pending = 1,         // 待成交
+    PartiallyFilled = 2, // 部分成交
+    Filled = 3,          // 完全成交
+    Cancelled = 4,       // 已取消
+}
+
+impl fmt::Display for OrderStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderStatus::Pending => write!(f, "PENDING"),
+            OrderStatus::PartiallyFilled => write!(f, "PARTIALLY_FILLED"),
+            OrderStatus::Filled => write!(f, "FILLED"),
+            OrderStatus::Cancelled => write!(f, "CANCELLED")
+        }
+    }
+}
+
 impl Side {
     /// 获取相反方向
     #[inline]
@@ -397,34 +435,75 @@ impl fmt::Display for SpotTrade {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(align(64))]
 pub struct SpotOrder {
-    pub order_id: OrderId, // 订单ID
-    pub trader: TraderId,  // 交易员ID
-    // todo 增加交易对，订单类型
-    pub total_quantity: Quantity,    // 总数量
-    pub unfilled_quantity: Quantity, // 未成交数量
-    pub next_idx: Option<usize>      // 链表中下一个订单的索引
+    pub order_id: OrderId,           // 订单ID（8字节）
+    pub trader: TraderId,            // 交易员ID（8字节）
+    pub symbol: Symbol,              // 交易对符号（8字节）
+    pub price: Price,                // 订单价格（4字节）
+    pub total_quantity: Quantity,    // 总数量（4字节）
+    pub filled_quantity: Quantity,   // 已成交数量（4字节）
+    pub unfilled_quantity: Quantity, // 未成交数量（4字节）
+    pub side: Side,                  // 订单方向（1字节）
+    pub order_type: OrderType,       // 订单类型（1字节）
+    pub status: OrderStatus,         // 订单状态（1字节）
+    pub timestamp: u64,              // 订单创建时间戳（8字节）
+    pub next_idx: Option<usize>      // 链表中下一个订单的索引（8字节）
 }
 
 impl SpotOrder {
     /// 创建新的订单条目
     #[inline]
-    pub fn new(order_id: OrderId, trader: TraderId, quantity: Quantity) -> Self {
+    pub fn new(
+        order_id: OrderId,
+        trader: TraderId,
+        symbol: Symbol,
+        price: Price,
+        quantity: Quantity,
+        side: Side,
+        order_type: OrderType,
+        timestamp: u64,
+    ) -> Self {
         Self {
             order_id,
             trader,
+            symbol,
+            price,
             total_quantity: quantity,
+            filled_quantity: 0,
             unfilled_quantity: quantity,
-            next_idx: None
+            side,
+            order_type,
+            status: OrderStatus::Pending,
+            timestamp,
+            next_idx: None,
         }
     }
 
     /// 检查订单是否仍然有效（数量>0）
     #[inline]
-    pub fn is_active(&self) -> bool { self.unfilled_quantity > 0 }
+    pub fn is_active(&self) -> bool {
+        self.unfilled_quantity > 0
+    }
 
     /// 取消订单（通过将数量置零，单次内存写入，速度快）
     #[inline]
-    pub fn cancel(&mut self) { self.unfilled_quantity = 0; }
+    pub fn cancel(&mut self) {
+        self.unfilled_quantity = 0;
+        self.status = OrderStatus::Cancelled;
+    }
+
+    /// 更新已成交数量
+    #[inline]
+    pub fn fill(&mut self, quantity: Quantity) {
+        if quantity < self.unfilled_quantity {
+            self.unfilled_quantity -= quantity;
+            self.filled_quantity += quantity;
+            self.status = OrderStatus::PartiallyFilled;
+        } else if quantity == self.unfilled_quantity {
+            self.filled_quantity += quantity;
+            self.unfilled_quantity = 0;
+            self.status = OrderStatus::Filled;
+        }
+    }
 }
 
 /// 订单簿中的价格点（链表头）
