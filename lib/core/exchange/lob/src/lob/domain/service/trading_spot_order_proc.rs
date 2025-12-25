@@ -10,47 +10,9 @@
 
 use account::{TradingPair, UserId};
 
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, SpotTrade, Symbol, TraderId};
+use crate::lob::domain::entity::spot_types::{OrderId, OrderStatus, Price, Quantity, Side, SpotTrade, TimeInForce, TraderId};
 
-// ============================================================================
-// 基础类型定义
-// ============================================================================
 
-/// 订单有效期类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TimeInForce {
-    /// GTC - Good Till Cancel (撤单前一直有效)
-    GoodTillCancel,
-    /// IOC - Immediate Or Cancel (立即成交，未成交部分自动取消)
-    ImmediateOrCancel,
-    /// FOK - Fill Or Kill (全部成交或全部取消)
-    FillOrKill,
-    /// GTD - Good Till Date (有效至指定时间戳)
-    GoodTillDate(u64),
-    /// Post-Only - 只做 Maker，不吃单（如果会立即成交则拒绝）
-    PostOnly
-}
-
-/// 订单状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OrderStatus {
-    /// 初始状态
-    Initial,
-    /// 等待成交
-    Pending,
-    /// 部分成交
-    PartiallyFilled,
-    /// 完全成交
-    Filled,
-    /// 取消中
-    Cancelling,
-    /// 已取消
-    Cancelled,
-    /// 被拒绝
-    Rejected,
-    /// 已过期
-    Expired
-}
 
 // ============================================================================
 // 幂等性包装 (Idempotent Command)
@@ -491,7 +453,7 @@ pub enum SpotCommand {
     /// 市价单
     MarketOrder {
         trader: TraderId,
-        symbol: Symbol,
+        trading_pair: TradingPair,
         side: Side,
         quantity: Quantity,
         price_limit: Option<Price>, // 价格保护：买单最高价/卖单最低价
@@ -506,7 +468,7 @@ pub enum SpotCommand {
     /// 批量取消订单
     CancelAllOrders {
         trader: TraderId,
-        symbol: Option<Symbol>, // 可选：只取消指定交易对
+        trading_pair: Option<TradingPair>, // 可选：只取消指定交易对
         side: Option<Side>
     }
 }
@@ -854,7 +816,7 @@ impl std::error::Error for QueryError {}
 #[derive(Debug, Clone)]
 pub enum OrderQueryCommand {
     /// 查询当前活跃订单
-    QueryOpenOrders { trader: TraderId, symbol: Option<String>, side: Option<Side>, page: Option<u32> },
+    QueryOpenOrders { trader: TraderId, trading_pair: Option<TradingPair>, side: Option<Side>, page: Option<u32> },
 
     /// 查询订单详情
     QueryOrderDetail { order_id: OrderId },
@@ -862,7 +824,7 @@ pub enum OrderQueryCommand {
     /// 查询历史订单
     QueryOrderHistory {
         trader: TraderId,
-        symbol: Option<String>,
+        trading_pair: Option<TradingPair>,
         start_time: Option<u64>,
         end_time: Option<u64>,
         page: Option<u32>
@@ -871,7 +833,7 @@ pub enum OrderQueryCommand {
     /// 查询成交历史
     QueryTradeHistory {
         trader: TraderId,
-        symbol: Option<String>,
+        trading_pair: Option<TradingPair>,
         order_id: Option<OrderId>,
         start_time: Option<u64>,
         end_time: Option<u64>

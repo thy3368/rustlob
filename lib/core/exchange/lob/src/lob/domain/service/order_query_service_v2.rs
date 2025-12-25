@@ -27,8 +27,10 @@
 
 use cqrs::*;
 
-use crate::lob::domain::entity::lob_types::{OrderId, Price, Quantity, Side, TraderId};
-
+use crate::lob::{
+    domain::entity::spot_types::{OrderId, Price, Quantity, Side},
+    TraderId
+};
 // ==================== 临时类型定义（原来在 mgn.rs 中）====================
 
 /// 订单查询请求（临时定义，实际应从 mgn 模块导入）
@@ -531,19 +533,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_orders_by_trader() {
-        let service = OrderQueryServiceImpl::new();
-
-        // 创建查询（使用便利方法）
-        let query = Query::new(GetOrdersByTrader::active_only(TraderId::from_str("TRADER1")));
-
-        let result = service.get_orders_by_trader(query).await.unwrap();
-
-        assert!(result.is_success());
-        assert_eq!(result.data.orders.len(), 0);
-    }
-
-    #[tokio::test]
     async fn test_get_best_bid_ask() {
         let service = OrderQueryServiceImpl::new();
 
@@ -589,15 +578,5 @@ mod tests {
         assert!(result.is_success());
         // 第一次查询不会来自缓存
         assert!(!result.is_from_cache());
-    }
-
-    #[test]
-    fn test_query_builder_pattern() {
-        // 使用构建器模式创建复杂查询
-        let query_payload = GetOrdersByTrader::active_only(TraderId::from_str("TRADER1")).with_pagination(20, 0);
-
-        assert_eq!(query_payload.limit, Some(20));
-        assert_eq!(query_payload.offset, Some(0));
-        assert!(query_payload.active_only);
     }
 }

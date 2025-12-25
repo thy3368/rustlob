@@ -117,21 +117,13 @@ mod domain;
 // 算法交易命令
 // 条件订单命令
 // 做市商命令
-pub use domain::service::trading_spot_order_proc::{MarketMakerCommand, MarketMakerCommandResult, MarketMakerProc};
 // 核心现货命令
-pub use domain::service::trading_spot_order_proc::{
-    OrderStatus, // 导出 TimeInForce 和 OrderStatus
-    SpotCommand,
-    SpotCommandResult,
-    SpotOrderExchangeProc,
-    TimeInForce
-};
 pub use domain::{
-    entity::lob_types::{
-        EntityEvent, EventOperation, FieldChange, FieldValue, SpotOrder, OrderId, Price, PricePoint, Quantity,
-        RecordChange, Side, Symbol, SpotTrade, TraderId
+    entity::spot_types::{
+        AlgorithmStrategy, ConditionalType, ExecutionMethod, MakerConstraint, OrderSource,
+        OrderStatus as SpotOrderStatus, OrderType, SelfTradePrevention, SpotOrder, SpotTrade,
+        TimeInForce as SpotTimeInForce, TraderId
     },
-    repo::{MemoryOrderRepo, OrderRepo, RepoError},
     service::{
         market_data_service::MarketDataService,
         trading_spot_order_proc::{
@@ -139,9 +131,9 @@ pub use domain::{
             CommandResponse, CommonError, ConditionalCommand, ConditionalCommandError, ConditionalCommandResult,
             ConditionalOrderProc, IdempotentAlgoCommand, IdempotentAlgoResult, IdempotentConditionalCommand,
             IdempotentConditionalResult, IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
-            IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommandError, Nonce, PegType, QueryError,
-            SpotCommandError, UrgencyLevel
-        },
-        trading_spot_order_proc_impl::SpotMatchingService
+            IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommand, MarketMakerCommandError,
+            MarketMakerCommandResult, MarketMakerProc, Nonce, PegType, QueryError, SpotCommand, SpotCommandError,
+            SpotCommandResult, SpotOrderExchangeProc, UrgencyLevel
+        }
     }
 };
