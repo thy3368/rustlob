@@ -80,6 +80,7 @@ pub struct SpotOrder {
     pub unfilled_qty: Quantity, // 未成交数量
     pub executed_qty: Quantity, // 已成交数量（计数器去重）
     pub average_price: Price,   // 平均成交价
+    pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
     pub commission_qty: Quantity,  // 手续费
     pub commission_asset: AssetId, // 手续费资产
 
@@ -110,7 +111,9 @@ pub struct SpotOrder {
 
     // ===== 时间戳（8字节）=====
     pub timestamp: u64, // 创建时间戳 (ms)
-    pub last_updated: u64
+    pub last_updated: u64,
+
+
 }
 
 impl SpotOrder {
