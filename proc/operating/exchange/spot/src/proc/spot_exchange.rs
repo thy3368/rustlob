@@ -110,7 +110,7 @@ impl SpotOrderExchangeProcImpl {
 
 
                     let mut matched_order_mut = matched_order.clone();
-                    let trade = internal_order.make_trade_4_buy(
+                    let trade = internal_order.make_trade(
                         &mut matched_order_mut,
                         &mut frozen_asset_balance,
                         &mut base_asset_balance,

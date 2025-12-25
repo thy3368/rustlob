@@ -74,15 +74,15 @@ pub struct SpotOrder {
     pub frozen_asset: AssetId, // 冻结资产
 
     // ===== 数量字段（8字节）=====
-    pub total_qty: Quantity,    // 总数量
-    pub filled_asset: AssetId,  // 购买资产
-    pub price: Option<Price>,   // 订单价格 (0表示市价单)
-    pub unfilled_qty: Quantity, // 未成交数量
-    pub executed_qty: Quantity, // 已成交数量（计数器去重）
-    pub average_price: Price,   // 平均成交价
+    pub total_qty: Quantity,            // 总数量
+    pub filled_asset: AssetId,          // 购买资产
+    pub price: Option<Price>,           // 订单价格 (0表示市价单)
+    pub unfilled_qty: Quantity,         // 未成交数量
+    pub executed_qty: Quantity,         // 已成交数量（计数器去重）
+    pub average_price: Price,           // 平均成交价
     pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
-    pub commission_qty: Quantity,  // 手续费
-    pub commission_asset: AssetId, // 手续费资产
+    pub commission_qty: Quantity,       // 手续费
+    pub commission_asset: AssetId,      // 手续费资产
 
     // ===== 方向和状态（2字节）=====
     pub side: Side,          // 买卖方向 (BUY/SELL) (1字节)
@@ -111,58 +111,65 @@ pub struct SpotOrder {
 
     // ===== 时间戳（8字节）=====
     pub timestamp: u64, // 创建时间戳 (ms)
-    pub last_updated: u64,
-
-
+    pub last_updated: u64
 }
 
 impl SpotOrder {
-    pub fn frozen_asset_balance_id(&self) -> String {
-
-        format!("{}:{}", self.account_id.0, self.frozen_asset.0)
-
-
-    }
+    pub fn frozen_asset_balance_id(&self) -> String { format!("{}:{}", self.account_id.0, self.frozen_asset.0) }
 }
 
 impl SpotOrder {
     pub fn is_all_filled(&self) -> bool { self.total_qty == self.executed_qty }
 
-    pub fn make_trade_4_buy(
-        &mut self, matched_order: &mut &SpotOrder, frozen_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
+    pub fn make_trade(
+        &mut self, matched_order: &mut &SpotOrder, quote_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
         o_quote_asset_balance: &mut Balance, o_base_asset_balance: &mut Balance
     ) -> SpotTrade {
         let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
-
         self.unfilled_qty -= filled;
         self.executed_qty += filled;
 
-        //todo 计算buy费
-        //todo 计算sell费
-        frozen_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
-        base_asset_balance.add_balance(filled, now);
-        o_quote_asset_balance.add_balance(filled * self.price.unwrap(), now);
-        o_base_asset_balance.frozen2pay(filled, now);
+        match self.side {
+            Side::Buy => {
+                // todo 计算buy费
+                // todo 计算sell费
+                quote_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
+                base_asset_balance.add_balance(filled, now);
+                o_quote_asset_balance.add_balance(filled * self.price.unwrap(), now);
+                o_base_asset_balance.frozen2pay(filled, now);
+            }
+            Side::Sell => {
+                base_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
+                quote_asset_balance.add_balance(filled, now);
+                o_base_asset_balance.add_balance(filled * self.price.unwrap(), now);
+                o_quote_asset_balance.frozen2pay(filled, now);
+            }
+        };
+
 
         // todo 生成 let trade= SpotTrade::new()
-
-
         // todo
         todo!()
     }
 
     pub fn frozen_margin(&mut self, balance: &mut Balance, now: u64) {
         // 根据买卖方向确定冻结资产
-        let frozen_asset = match self.side {
-            Side::Buy => self.trading_pair.quote_asset,
-            Side::Sell => self.trading_pair.base_asset
+        match self.side {
+            Side::Buy => {
+                // 冻结，失败则reject
+                self.frozen_qty = self.total_qty * self.price.unwrap();
+                balance.frozen(self.frozen_qty, now);
+            }
+            Side::Sell => {
+                self.frozen_qty = self.total_qty;
+                balance.frozen(self.frozen_qty, now);
+            }
         };
 
-        self.frozen_asset = self.frozen_asset;
+        // self.frozen_asset = self.frozen_asset;
         // self.frozen_qty=self.frozen_qty;
 
         // 冻结，失败则reject
-        balance.frozen(self.frozen_qty, now);
     }
 }
 
