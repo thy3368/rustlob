@@ -74,13 +74,12 @@ pub struct SpotOrder {
     pub frozen_asset: AssetId, // 冻结资产
 
     // ===== 数量字段（8字节）=====
-    pub total_qty: Quantity,    // 总数量 (u32)
+    pub total_qty: Quantity,    // 总数量
     pub filled_asset: AssetId,  // 购买资产
-    pub price: Option<Price>,   // 订单价格 (u32，0表示市价单)
-    pub unfilled_qty: Quantity, // 已成交数量 (u32)
+    pub price: Option<Price>,   // 订单价格 (0表示市价单)
+    pub unfilled_qty: Quantity, // 未成交数量
     pub executed_qty: Quantity, // 已成交数量（计数器去重）
     pub average_price: Price,   // 平均成交价
-    // pub cumulative_quote_qty: u64,   // 累计成交金额 能计算出来
     pub commission_qty: Quantity,  // 手续费
     pub commission_asset: AssetId, // 手续费资产
 
@@ -114,12 +113,20 @@ pub struct SpotOrder {
     pub last_updated: u64
 }
 
+impl SpotOrder {
+    pub fn frozen_asset_balance_id(&self) -> String {
+
+        format!("{}:{}", self.account_id.0, self.frozen_asset.0)
+
+
+    }
+}
 
 impl SpotOrder {
     pub fn is_all_filled(&self) -> bool { self.total_qty == self.executed_qty }
 
     pub fn make_trade_4_buy(
-        &mut self, matched_order: &mut &SpotOrder, quote_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
+        &mut self, matched_order: &mut &SpotOrder, frozen_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
         o_quote_asset_balance: &mut Balance, o_base_asset_balance: &mut Balance
     ) -> SpotTrade {
         let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
@@ -127,12 +134,14 @@ impl SpotOrder {
         self.unfilled_qty -= filled;
         self.executed_qty += filled;
 
-        quote_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
+        //todo 计算buy费
+        //todo 计算sell费
+        frozen_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
         base_asset_balance.add_balance(filled, now);
         o_quote_asset_balance.add_balance(filled * self.price.unwrap(), now);
         o_base_asset_balance.frozen2pay(filled, now);
 
-        // let trade= SpotTrade::new()
+        // todo 生成 let trade= SpotTrade::new()
 
 
         // todo

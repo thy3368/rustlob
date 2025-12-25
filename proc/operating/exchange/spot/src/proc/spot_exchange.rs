@@ -56,22 +56,23 @@ impl SpotOrderExchangeProcImpl {
             now
         );
 
-        let quote_asset_balance_id = format!("{}:{}", "self.account_id.0", cmd.payload.trading_pair.quote_asset.0);
-        let base_asset_balance_id = format!("{}:{}", "self.account_id.0", cmd.payload.trading_pair.base_asset.0);
+        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
+        
+        let base_asset_balance_id = format!("{}:{}", "self.account_id.0", internal_order.trading_pair.base_asset.0);
 
-        let mut quote_asset_balance = match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {
+        let mut frozen_asset_balance = match self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
         };
 
-        let mut base_asset_balance = match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {
+        let mut base_asset_balance = match self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
         };
 
 
         // 2 风控检查 - 余额检查并冻结保证金
-        internal_order.frozen_margin(&mut quote_asset_balance, now);
+        internal_order.frozen_margin(&mut frozen_asset_balance, now);
 
 
         // todo time_in_force 没有用
@@ -93,8 +94,7 @@ impl SpotOrderExchangeProcImpl {
                 for matched_order in matched {
                     let quote_asset_balance_id =
                         format!("{}:{}", matched_order.account_id.0, cmd.payload.trading_pair.quote_asset.0);
-                    let base_asset_balance_id =
-                        format!("{}:{}", matched_order.account_id.0, cmd.payload.trading_pair.base_asset.0);
+                    let base_asset_balance_id =matched_order.frozen_asset_balance_id();
 
                     let mut o_quote_asset_balance =
                         match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {
@@ -112,7 +112,7 @@ impl SpotOrderExchangeProcImpl {
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade_4_buy(
                         &mut matched_order_mut,
-                        &mut quote_asset_balance,
+                        &mut frozen_asset_balance,
                         &mut base_asset_balance,
                         &mut o_quote_asset_balance,
                         &mut o_base_asset_balance
