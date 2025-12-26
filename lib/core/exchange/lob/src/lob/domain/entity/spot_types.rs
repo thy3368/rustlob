@@ -50,6 +50,18 @@ pub enum Side {
     Sell = b'S'  // 卖出
 }
 
+impl Side {
+    /// 反转订单方向
+    /// Buy ↔ Sell
+    #[inline]
+    pub fn reverse(self) -> Self {
+        match self {
+            Side::Buy => Side::Sell,
+            Side::Sell => Side::Buy,
+        }
+    }
+}
+
 
 /// 订单标识符
 pub type OrderId = u64;
@@ -59,119 +71,6 @@ pub type Price = i64;
 
 /// 数量/规模
 pub type Quantity = i64;
-
-/// 订单簿条目（64字节缓存行对齐以提升性能）
-#[repr(align(64))]
-pub struct SpotOrder {
-    // ===== 核心标识字段（24字节）=====
-    pub order_id: OrderId,     // 订单ID (u64)
-    pub trader_id: TraderId,   // 交易员ID ([u8; 8])
-    pub account_id: AccountId, // 账户ID
-
-    pub trading_pair: TradingPair, // 交易对 (u64)
-
-    pub frozen_qty: Quantity,  // 冻结数据
-    pub frozen_asset: AssetId, // 冻结资产
-
-    // ===== 数量字段（8字节）=====
-    pub total_qty: Quantity,            // 总数量
-    pub filled_asset: AssetId,          // 购买资产
-    pub price: Option<Price>,           // 订单价格 (0表示市价单)
-    pub unfilled_qty: Quantity,         // 未成交数量
-    pub executed_qty: Quantity,         // 已成交数量（计数器去重）
-    pub average_price: Price,           // 平均成交价
-    pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
-    pub commission_qty: Quantity,       // 手续费
-    pub commission_asset: AssetId,      // 手续费资产
-
-    // ===== 方向和状态（2字节）=====
-    pub side: Side,          // 买卖方向 (BUY/SELL) (1字节)
-    pub status: OrderStatus, // 订单状态 (1字节)
-
-    // ===== 订单类型维度（4字节）⭐ 新增算法策略维度 =====
-    pub execution_method: ExecutionMethod,     // 执行方式 (Limit/Market) (1字节)
-    pub conditional_type: ConditionalType,     // 条件类型 (None/StopLoss/TakeProfit) (1字节)
-    pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
-    pub maker_constraint: MakerConstraint,     // Maker约束 (None/PostOnly) (1字节)
-
-    // ===== 有效期和防护（2字节）=====
-    pub time_in_force: TimeInForce,                 // 有效期 (GTC/IOC/FOK/GTX) (1字节)
-    pub self_trade_prevention: SelfTradePrevention, // 自交易防护 (1字节，固定ExpireTaker)
-
-    // ===== P3 优先级：可选属性 =====
-    pub stop_price: Option<Price>, // 止损/止盈触发价（仅conditional_type != None时有效）
-    pub iceberg_qty: Option<Quantity>, // 冰山单显示数量
-
-    // ===== 可选字段 =====
-    // pub client_order_id: Option<String>,        // 客户订单ID
-    // pub tag: Option<String>,                    // 订单标签
-
-    // ===== 订单来源（Phase 3：1字节）=====
-    pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
-
-    // ===== 时间戳（8字节）=====
-    pub timestamp: u64, // 创建时间戳 (ms)
-    pub last_updated: u64
-}
-
-impl SpotOrder {
-    pub fn frozen_asset_balance_id(&self) -> String { format!("{}:{}", self.account_id.0, self.frozen_asset.0) }
-}
-
-impl SpotOrder {
-    pub fn is_all_filled(&self) -> bool { self.total_qty == self.executed_qty }
-
-    pub fn make_trade(
-        &mut self, matched_order: &mut &SpotOrder, quote_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
-        o_quote_asset_balance: &mut Balance, o_base_asset_balance: &mut Balance
-    ) -> SpotTrade {
-        let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
-        self.unfilled_qty -= filled;
-        self.executed_qty += filled;
-
-        match self.side {
-            Side::Buy => {
-                // todo 计算buy费
-                // todo 计算sell费
-                quote_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
-                base_asset_balance.add_balance(filled, now);
-                o_quote_asset_balance.add_balance(filled * self.price.unwrap(), now);
-                o_base_asset_balance.frozen2pay(filled, now);
-            }
-            Side::Sell => {
-                base_asset_balance.frozen2pay(filled * self.price.unwrap(), now);
-                quote_asset_balance.add_balance(filled, now);
-                o_base_asset_balance.add_balance(filled * self.price.unwrap(), now);
-                o_quote_asset_balance.frozen2pay(filled, now);
-            }
-        };
-
-
-        // todo 生成 let trade= SpotTrade::new()
-        // todo
-        todo!()
-    }
-
-    pub fn frozen_margin(&mut self, balance: &mut Balance, now: u64) {
-        // 根据买卖方向确定冻结资产
-        match self.side {
-            Side::Buy => {
-                // 冻结，失败则reject
-                self.frozen_qty = self.total_qty * self.price.unwrap();
-                balance.frozen(self.frozen_qty, now);
-            }
-            Side::Sell => {
-                self.frozen_qty = self.total_qty;
-                balance.frozen(self.frozen_qty, now);
-            }
-        };
-
-        // self.frozen_asset = self.frozen_asset;
-        // self.frozen_qty=self.frozen_qty;
-
-        // 冻结，失败则reject
-    }
-}
 
 
 /// 订单执行方式 - 定义订单如何与市场交互
@@ -321,68 +220,207 @@ pub enum TimeInForce {
 }
 
 
+/// 订单簿条目（64字节缓存行对齐以提升性能）
+#[repr(align(64))]
+pub struct SpotOrder {
+    // ===== 核心标识字段（24字节）=====
+    pub order_id: OrderId,     // 订单ID (u64)
+    pub trader_id: TraderId,   // 交易员ID ([u8; 8])
+    pub account_id: AccountId, // 账户ID
+
+    pub trading_pair: TradingPair, // 交易对 (u64)
+
+    pub total_qty: Quantity,        // 总数量
+    pub price: Option<Price>,       // 订单价格 (0表示市价单)
+    pub side: Side,                 // 买卖方向 (BUY/SELL) (1字节)
+    pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX) (1字节)
+
+    pub status: OrderStatus, // 订单状态 (1字节)
+
+    // ===== 可选字段 =====
+    pub client_order_id: Option<String>, // 客户订单ID
+    // pub tag: Option<String>,                    // 订单标签
+
+    // ===== 订单来源（Phase 3：1字节）=====
+    pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
+
+    // ===== 订单类型维度（4字节）⭐ 新增算法策略维度 =====
+    pub execution_method: ExecutionMethod,     // 执行方式 (Limit/Market) (1字节)
+    pub conditional_type: ConditionalType,     // 条件类型 (None/StopLoss/TakeProfit) (1字节)
+    pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
+    pub maker_constraint: MakerConstraint,     // Maker约束 (None/PostOnly) (1字节)
+
+    // ===== 有效期和防护（2字节）=====
+    pub self_trade_prevention: SelfTradePrevention, // 自交易防护 (1字节，固定ExpireTaker)
+
+    // ===== P3 优先级：可选属性 =====
+    pub stop_price: Option<Price>, // 止损/止盈触发价（仅conditional_type != None时有效）
+    pub iceberg_qty: Option<Quantity>, // 冰山单显示数量
+
+    // ===== 计算出来=====
+    pub frozen_qty: Quantity,  // 冻结数据
+    pub frozen_asset: AssetId, // 冻结资产
+
+    pub filled_asset: AssetId,          // 购买资产
+    pub unfilled_qty: Quantity,         // 未成交数量
+    pub executed_qty: Quantity,         // 已成交数量（计数器去重）
+    pub average_price: Price,           // 平均成交价
+    pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
+    pub commission_qty: Quantity,       // 手续费
+    pub commission_asset: AssetId,      // 手续费资产
+
+    // ===== 时间戳（8字节）=====
+    pub timestamp: u64, // 创建时间戳 (ms)
+    pub last_updated: u64
+}
+
+
 impl SpotOrder {
+    pub fn is_all_filled(&self) -> bool { self.total_qty == self.executed_qty }
+
+    /// 更新订单的成交统计信息
+    ///
+    /// 计算并更新：
+    /// - 累计成交金额 (cumulative_quote_qty)
+    /// - 平均成交价 (average_price)
+    /// - 生成成交记录 SpotTrade
     #[inline]
-    pub fn pending(
-        order_id: OrderId, trader: TraderId, frozen_qty: Quantity, frozen_asset: AssetId, account_id: AccountId,
-        trading_pair: TradingPair, price: Option<Price>, quantity: Quantity, side: Side, timestamp: u64
+    pub fn trade(
+        &mut self, filled: Quantity, price: Price, is_taker: bool, quote_asset_balance: &mut Balance,
+        base_asset_balance: &mut Balance
+    ) -> SpotTrade {
+        // 更新订单成交状态
+        self.frozen_qty -= filled * price;
+        self.executed_qty += filled;
+        self.unfilled_qty -= filled;
+        self.cumulative_quote_qty += filled * price;
+
+        // 重新计算平均成交价 = 累计成交金额 / 已成交数量
+        self.average_price = self.cumulative_quote_qty / self.executed_qty;
+
+        // 获取当前时间戳
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(self.timestamp);
+
+        // 更新账户余额
+        match self.side {
+            Side::Buy => {
+                // 买方：冻结 quote 资产，增加 base 资产
+                quote_asset_balance.frozen2pay(filled * price, now);
+                base_asset_balance.add_balance(filled, now);
+            }
+            Side::Sell => {
+                // 卖方：冻结 base 资产，增加 quote 资产
+                base_asset_balance.frozen2pay(filled, now);
+                quote_asset_balance.add_balance(filled * price, now);
+            }
+        };
+
+        // 生成交易ID（基于时间戳和订单ID）
+        let trade_id = (self.timestamp << 32) | (self.order_id & 0xFFFFFFFF) as u64;
+
+        // 计算手续费（根据 is_taker 区分费率）
+        // todo: 根据 FeeConfig 计算实际费率
+        let (commission_qty, commission_rate) = if is_taker {
+            (0, 10)  // Taker 费率 10 bp = 0.1%
+        } else {
+            (0, 5)   // Maker 费率 5 bp = 0.05%
+        };
+
+        let commission_asset = self.frozen_asset;
+
+        // Taker 的方向记录在 SpotTrade 中
+        // 当 is_taker=true 时，使用 self.side（Taker 的方向）
+        // 当 is_taker=false 时，反转到 Taker 的方向
+        let taker_side = if is_taker {
+            self.side
+        } else {
+            self.side.reverse()
+        };
+
+        // 创建成交记录
+        let trade = SpotTrade::new(
+            trade_id,
+            self.order_id,
+            self.timestamp,
+            price,
+            filled,
+            taker_side,
+            commission_qty,
+            commission_asset,
+            commission_rate
+        );
+
+        trade
+    }
+
+    pub fn make_trade(
+        &mut self, matched_order: &mut SpotOrder, quote_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
+        o_quote_asset_balance: &mut Balance, o_base_asset_balance: &mut Balance
+    ) -> Vec<SpotTrade> {
+        let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
+        self.unfilled_qty -= filled;
+        self.executed_qty += filled;
+
+        let transaction_price = match self.price {
+            None => matched_order.price.unwrap(),
+            Some(price) => price
+        };
+
+
+        let mut vec = Vec::<SpotTrade>::new();
+        vec.push(self.trade(filled, transaction_price, true, quote_asset_balance, base_asset_balance));
+        vec.push(matched_order.trade(filled, transaction_price, false, o_quote_asset_balance, o_base_asset_balance));
+        vec
+    }
+
+    pub fn frozen_margin(&mut self, balance: &mut Balance, now: u64) {
+        // 根据买卖方向确定冻结资产
+        match self.side {
+            Side::Buy => {
+                // 冻结，失败则reject
+                self.frozen_qty = self.total_qty * self.price.unwrap();
+                self.frozen_asset = self.trading_pair.quote_asset;
+                balance.frozen(self.frozen_qty, now);
+            }
+            Side::Sell => {
+                self.frozen_qty = self.total_qty;
+                self.frozen_asset = self.trading_pair.base_asset;
+                balance.frozen(self.frozen_qty, now);
+            }
+        };
+
+        // 冻结，失败则reject
+    }
+    pub fn frozen_asset_balance_id(&self) -> String { format!("{}:{}", self.account_id.0, self.frozen_asset.0) }
+
+    #[inline]
+    pub fn create_limit(
+        order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: Side,
+        price: Price, quantity: Quantity, time_in_force: TimeInForce, client_order_id: Option<String>
     ) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
         Self {
             order_id,
-            frozen_qty,
-            frozen_asset,
-            trader_id: trader,
+            trader_id,
             account_id,
             trading_pair,
             total_qty: quantity,
-            unfilled_qty: 0,
-            price,
-            side,
-            status: OrderStatus::Pending,                            // 初始状态：待冻结余额
-            execution_method: ExecutionMethod::Limit,                // 默认限价单
-            conditional_type: ConditionalType::None,                 // 默认无条件
-            algorithm_strategy: AlgorithmStrategy::None,             // 默认无算法
-            maker_constraint: MakerConstraint::None,                 // 默认无约束
-            time_in_force: TimeInForce::GTC,                         // 默认 GTC
-            self_trade_prevention: SelfTradePrevention::ExpireTaker, // 固定 ExpireTaker
-            timestamp,                                               // 创建时间戳
-            last_updated: timestamp,                                 // 初始更新时间与创建时间相同
-            executed_qty: 0,                                         // 初始未成交
-            average_price: 0,                                        // 初始平均价为 0
-            cumulative_quote_qty: 0,                                 // 初始累计金额为 0
-            commission_qty: 0,                                       // 初始手续费为 0
-            stop_price: None,                                        // 初始无止损/止盈价
-            iceberg_qty: None,                                       // 初始无冰山数量
-            source: OrderSource::API,                                // Phase 3: 默认来源为 API
-            next_idx: None                                           // 初始链表索引为空
-        }
-    }
-
-    /// 创建新的订单条目（遗留接口，使用 pending 替代）
-    #[inline]
-    pub fn new(
-        order_id: OrderId, trader: TraderId, frozen_qty: Quantity, frozen_asset: AssetId, symbol: TradingPair,
-        price: Option<Price>, quantity: Quantity, side: Side, _order_type: OrderType, timestamp: u64
-    ) -> Self {
-        // 遗留接口：转发到 pending 方法
-        // 注意：这个方法不会设置 account_id，需要调用者补充
-        Self {
-            order_id,
-            trader_id: trader,
-            frozen_qty,
-            frozen_asset,
-            account_id: Default::default(), // 使用默认值
-            trading_pair: symbol,
-            total_qty: quantity,
-            unfilled_qty: 0,
-            price,
+            unfilled_qty: quantity,
+            price: Some(price),
             side,
             status: OrderStatus::Pending,
             execution_method: ExecutionMethod::Limit,
             conditional_type: ConditionalType::None,
             algorithm_strategy: AlgorithmStrategy::None,
             maker_constraint: MakerConstraint::None,
-            time_in_force: TimeInForce::GTC,
+            time_in_force,
             self_trade_prevention: SelfTradePrevention::ExpireTaker,
             timestamp,
             last_updated: timestamp,
@@ -393,9 +431,14 @@ impl SpotOrder {
             stop_price: None,
             iceberg_qty: None,
             source: OrderSource::API,
-            next_idx: None
+            client_order_id,
+            frozen_qty: 0,
+            frozen_asset: AssetId::default(),
+            filled_asset: AssetId::default(),
+            commission_asset: AssetId::default()
         }
     }
+
 
     /// 检查订单是否仍然有效（有未成交数量）
     #[inline]
@@ -472,52 +515,170 @@ impl SpotOrder {
 /// - 事件溯源（TradeCreated事件）
 /// - 账户结算（确定资金划转方向）
 /// - 交易历史查询
+///
+/// 竞品分析对标：
+/// - 币安: id, orderId, price, qty, quoteQty, commission, commissionAsset,
+///   time, isBuyer, isMaker
+/// - OKX: ordId, tradeId, side, px, sz, fee, feeRate, feeCcy, execType,
+///   tradeTime
+/// - Coinbase: trade_id, order_id, price, size, fee, liquidity, created_at
 #[derive(Debug, Clone, Copy)]
 pub struct SpotTrade {
-    /// 交易唯一标识
+    // ===== 交易标识字段（24字节）=====
+    /// 交易唯一标识（对标币安/OKX/Coinbase）
     pub trade_id: u64,
-    /// 成交价格
+    /// 订单ID（对标币安 orderId、OKX ordId、Coinbase order_id）
+    pub order_id: OrderId,
+    /// 成交时间戳 (ms)（对标币安/OKX/Coinbase）
+    pub timestamp: u64,
+
+    // ===== 价格和数量（24字节）=====
+    /// 成交价格（对标所有交易所）
     pub price: Price,
-    /// 成交数量
+    /// 成交数量（对标所有交易所）
     pub quantity: Quantity,
-    /// Taker交易员（主动方，新订单提交者）
-    pub taker_trader: TraderId,
-    /// Maker交易员（被动方，订单簿中的挂单方）
-    pub maker_trader: TraderId,
-    /// Taker订单ID
-    pub taker_order_id: OrderId,
-    /// Maker订单ID
-    pub maker_order_id: OrderId,
+    /// 成交金额 = quantity × price（对标币安 quoteQty）
+    pub quote_qty: Quantity,
+
+    // ===== 交易方向（1字节）=====
     /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
-    pub taker_side: Side
+    pub taker_side: Side,
+
+    // ===== 手续费字段（16字节）=====
+    /// 手续费数量（对标币安 commission、Coinbase fee）
+    pub commission_qty: Quantity,
+    /// 手续费资产（对标币安 commissionAsset）
+    pub commission_asset: AssetId,
+    /// 手续费率 (bp, 基点)（对标OKX feeRate，1 bp = 0.01%）
+    pub commission_rate: i32,
+
+    // ===== 补位（4字节）=====
+    pub _padding: u32
 }
+
 
 impl SpotTrade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
-        trade_id: u64, price: Price, quantity: Quantity, taker_trader: TraderId, maker_trader: TraderId,
-        taker_order_id: OrderId, maker_order_id: OrderId, taker_side: Side
+        trade_id: u64, order_id: OrderId, timestamp: u64, price: Price, quantity: Quantity, taker_side: Side,
+        commission_qty: Quantity, commission_asset: AssetId, commission_rate: i32
     ) -> Self {
-        todo!()
+        let quote_qty = quantity * price; // 计算成交金额
+
+        Self {
+            trade_id,
+            order_id,
+            timestamp,
+            price,
+            quantity,
+            quote_qty,
+            taker_side,
+            commission_qty,
+            commission_asset,
+            commission_rate,
+            _padding: 0
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_balance() -> Balance {
+        Balance::with_available(
+            AccountId(1),
+            AssetId(0),
+            1_000_000_000, // 10亿
+            0
+        )
     }
 
-
-    /// 获取买方订单ID
-    #[inline]
-    pub fn buyer_order_id(&self) -> OrderId {
-        match self.taker_side {
-            Side::Buy => self.taker_order_id,
-            Side::Sell => self.maker_order_id
+    fn create_test_trading_pair() -> TradingPair {
+        TradingPair {
+            base_asset: AssetId(1),
+            quote_asset: AssetId(0)
         }
     }
 
-    /// 获取卖方订单ID
-    #[inline]
-    pub fn seller_order_id(&self) -> OrderId {
-        match self.taker_side {
-            Side::Buy => self.maker_order_id,
-            Side::Sell => self.taker_order_id
-        }
+    #[test]
+    fn test_make_trade_buy_sell_match() {
+        // 创建买单（Taker）
+        let mut buy_order = SpotOrder::create_limit(
+            1001,
+            TraderId([1, 2, 3, 4, 5, 6, 7, 8]),
+            AccountId(1),
+            create_test_trading_pair(),
+            Side::Buy,
+            10000, // 价格：100.00
+            1000,  // 数量：10
+            TimeInForce::GTC,
+            None
+        );
+
+        // 创建卖单（Maker）
+        let mut sell_order = SpotOrder::create_limit(
+            1002,
+            TraderId([8, 7, 6, 5, 4, 3, 2, 1]),
+            AccountId(2),
+            create_test_trading_pair(),
+            Side::Sell,
+            10000, // 价格：100.00
+            1000,  // 数量：10
+            TimeInForce::GTC,
+            None
+        );
+
+        let mut buy_balance = create_test_balance();
+        let mut sell_balance = create_test_balance();
+        let mut buy_balance_other = create_test_balance();
+        let mut sell_balance_other = create_test_balance();
+
+        // 执行交易
+        let trades = buy_order.make_trade(
+            &mut sell_order,
+            &mut buy_balance,
+            &mut sell_balance,
+            &mut buy_balance_other,
+            &mut sell_balance_other
+        );
+
+        // 应该返回两条成交记录：Taker（买单）和 Maker（卖单）
+        assert_eq!(trades.len(), 2);
+
+        // 验证 Taker（买单）的成交记录
+        let taker_trade = &trades[0];
+        assert_eq!(taker_trade.order_id, 1001);            // 订单ID（Taker）
+        assert_eq!(taker_trade.price, 10000);              // 成交价格
+        assert_eq!(taker_trade.quantity, 1000);            // 成交数量
+        assert_eq!(taker_trade.quote_qty, 10_000_000);     // 成交金额
+        assert_eq!(taker_trade.taker_side, Side::Buy);
+        assert_eq!(taker_trade.commission_rate, 10);       // Taker 费率 10bp
+        assert!(taker_trade.timestamp > 0);
+        assert!(taker_trade.trade_id > 0);
+
+        // 验证 Maker（卖单）的成交记录
+        let maker_trade = &trades[1];
+        assert_eq!(maker_trade.order_id, 1002);            // 订单ID（Maker）
+        assert_eq!(maker_trade.price, 10000);              // 成交价格
+        assert_eq!(maker_trade.quantity, 1000);            // 成交数量
+        assert_eq!(maker_trade.quote_qty, 10_000_000);     // 成交金额
+        assert_eq!(maker_trade.taker_side, Side::Sell);    // Maker 的反向视角
+        assert_eq!(maker_trade.commission_rate, 5);        // Maker 费率 5bp（更低）
+        assert!(maker_trade.timestamp > 0);
+        assert!(maker_trade.trade_id > 0);
+
+        // 验证订单状态更新
+        assert_eq!(buy_order.executed_qty, 1000); // 已成交数量
+        assert_eq!(buy_order.unfilled_qty, 0); // 未成交数量
+        assert_eq!(sell_order.executed_qty, 1000);
+        assert_eq!(sell_order.unfilled_qty, 0);
+
+        // 验证累计成交金额和平均成交价
+        assert_eq!(buy_order.cumulative_quote_qty, 10_000_000); // 1000 * 10000
+        assert_eq!(buy_order.average_price, 10000); // 10_000_000 / 1000
+        assert_eq!(sell_order.cumulative_quote_qty, 10_000_000);
+        assert_eq!(sell_order.average_price, 10000);
     }
 }

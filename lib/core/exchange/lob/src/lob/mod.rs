@@ -40,7 +40,7 @@
 //!     nonce,
 //!     SpotCommand::LimitOrder {
 //!         trader,
-//!         symbol,
+//!         trading_pair:symbol,
 //!         side: Side::Buy,
 //!         price: 10000,
 //!         quantity: 100,
@@ -71,7 +71,7 @@
 //!     1001,
 //!     SpotCommand::LimitOrder {
 //!         trader: seller,
-//!         symbol,
+//!         trading_pair:symbol,
 //!         side: Side::Sell,
 //!         price: 10000,
 //!         quantity: 100,
@@ -85,7 +85,7 @@
 //!     1002,
 //!     SpotCommand::LimitOrder {
 //!         trader: buyer,
-//!         symbol,
+//!         trading_pair:symbol,
 //!         side: Side::Buy,
 //!         price: 10000,
 //!         quantity: 50,
@@ -125,7 +125,6 @@ pub use domain::{
         TimeInForce as SpotTimeInForce, TraderId
     },
     service::{
-        market_data_service::MarketDataService,
         trading_spot_order_proc::{
             AlgoCommand, AlgoCommandError, AlgoCommandResult, AlgoOrderProc, AuctionType, Command, CommandMetadata,
             CommandResponse, CommonError, ConditionalCommand, ConditionalCommandError, ConditionalCommandResult,

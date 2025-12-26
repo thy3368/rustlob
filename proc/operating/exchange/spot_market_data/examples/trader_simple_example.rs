@@ -22,7 +22,7 @@ fn main() {
     println!("--- 场景1: 限价买单 (GTC) ---");
     let limit_buy_order = SpotCommand::LimitOrder {
         trader: trader_id,
-        symbol,
+        trading_pair: symbol,
         side: Side::Buy,
         price: 50000,   // 50000 USDT
         quantity: 1500, // 1.5 BTC (假设精度为1000)
@@ -39,7 +39,7 @@ fn main() {
     println!("--- 场景2: 限价卖单 (PostOnly) ---");
     let limit_sell_order = SpotCommand::LimitOrder {
         trader: trader_id,
-        symbol,
+        trading_pair: symbol,
         side: Side::Sell,
         price: 50100,   // 50100 USDT
         quantity: 2000, // 2.0 BTC

@@ -53,7 +53,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
         match cmd.command.as_str() {
             "LimitOrder" => Ok(SpotCommand::LimitOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
-                symbol: Symbol::from_str(cmd.symbol.as_deref().unwrap_or("BTCUSDT")),
+                trading_pair: Symbol::from_str(cmd.symbol.as_deref().unwrap_or("BTCUSDT")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
                 price: cmd.price.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing price"))?,
                 quantity: cmd.quantity.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing quantity"))?,

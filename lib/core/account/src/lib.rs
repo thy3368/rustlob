@@ -54,7 +54,6 @@ pub mod domain;
 
 // Re-export commonly used types
 // Re-export adaptor implementations
-pub use adaptor::{AccountServiceImpl, MemoryAccountRepo, MemoryBalanceRepo, MemoryPositionRepo};
 pub use domain::{
     entity::{
         Account, AccountCommand, AccountCommandResult, AccountId, AccountStatus, AccountType, AssetId, Balance,

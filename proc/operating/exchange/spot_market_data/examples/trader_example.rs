@@ -58,7 +58,7 @@ impl Trader {
 
         let command = SpotCommand::LimitOrder {
             trader: self.trader_id,
-            symbol,
+            trading_pair: symbol,
             side: Side::Buy,
             price,
             quantity,
@@ -94,7 +94,7 @@ impl Trader {
 
         let command = SpotCommand::LimitOrder {
             trader: self.trader_id,
-            symbol,
+            trading_pair: symbol,
             side: Side::Sell,
             price,
             quantity,
@@ -130,7 +130,7 @@ impl Trader {
 
         let command = SpotCommand::LimitOrder {
             trader: self.trader_id,
-            symbol,
+            trading_pair: symbol,
             side: Side::Buy,
             price,
             quantity,
@@ -166,7 +166,7 @@ impl Trader {
 
         let command = SpotCommand::LimitOrder {
             trader: self.trader_id,
-            symbol,
+            trading_pair: symbol,
             side: Side::Buy,
             price,
             quantity,

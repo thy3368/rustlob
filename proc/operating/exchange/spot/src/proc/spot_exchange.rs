@@ -1,5 +1,5 @@
 use account::Balance;
-use base_types::{Price, Quantity, Side};
+use base_types::{Price, Quantity, Side, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use lob::lob::{
@@ -41,23 +41,28 @@ impl SpotOrderExchangeProcImpl {
         let order_id = self.generate_order_id();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
+        // trader: TraderId,
+        // symbol: TradingPair,
+        // side: Side,
+        // price: Price,
+        // quantity: Quantity,
+        // time_in_force: TimeInForce,
 
 
-        let mut internal_order = SpotOrder::pending(
+        let mut internal_order = SpotOrder::create_limit(
             order_id,
-            TraderId([0; 8]), // TODO: 从请求或上下文获取真实trader_id
-            cmd.quantity,     // frozen_qty
-            frozen_asset,     // frozen_asset
-            self.account_id,
-            cmd.trading_pair,
-            cmd.price,
-            cmd.quantity,
-            cmd.side,
+            cmd.payload.trader,
+            cmd.payload.account_id,
+            cmd.payload.trading_pair,
+            cmd.payload.price,
+            cmd.payload.quantity,
+            cmd.payload.side,
+            cmd.payload.time_in_force,
             now
         );
 
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
-        
+
         let base_asset_balance_id = format!("{}:{}", "self.account_id.0", internal_order.trading_pair.base_asset.0);
 
         let mut frozen_asset_balance = match self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().flatten() {
@@ -94,7 +99,7 @@ impl SpotOrderExchangeProcImpl {
                 for matched_order in matched {
                     let quote_asset_balance_id =
                         format!("{}:{}", matched_order.account_id.0, cmd.payload.trading_pair.quote_asset.0);
-                    let base_asset_balance_id =matched_order.frozen_asset_balance_id();
+                    let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
                     let mut o_quote_asset_balance =
                         match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {

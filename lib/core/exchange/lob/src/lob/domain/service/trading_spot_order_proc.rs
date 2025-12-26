@@ -8,7 +8,7 @@
 //! 幂等性设计：
 //! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
-use account::{TradingPair, UserId};
+use account::{AccountId, TradingPair, UserId};
 
 use crate::lob::domain::entity::spot_types::{OrderId, OrderStatus, Price, Quantity, Side, SpotTrade, TimeInForce, TraderId};
 
@@ -442,7 +442,8 @@ pub enum SpotCommand {
     /// 限价单
     LimitOrder {
         trader: TraderId,
-        symbol: TradingPair,
+        account_id: AccountId,
+        trading_pair: TradingPair,
         side: Side,
         price: Price,
         quantity: Quantity,
@@ -453,6 +454,7 @@ pub enum SpotCommand {
     /// 市价单
     MarketOrder {
         trader: TraderId,
+        account_id: AccountId,
         trading_pair: TradingPair,
         side: Side,
         quantity: Quantity,
