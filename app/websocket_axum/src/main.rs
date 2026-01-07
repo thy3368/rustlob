@@ -1,11 +1,11 @@
 use axum::{
-    extract::{WebSocketUpgrade, State},
+    extract::WebSocketUpgrade,
     response::IntoResponse,
     routing::get,
     Router,
 };
 use serde::Deserialize;
-use std::sync::Arc;
+use simd_json::json;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
@@ -19,11 +19,11 @@ async fn websocket_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
         println!("New WebSocket connection established");
 
         // 发送欢迎消息
-        let welcome_msg = serde_json::json!({
+        let welcome_msg = json!({
             "type": "welcome",
             "message": "Hello from Axum WebSocket!"
         });
-        if socket.send(axum::extract::ws::Message::Text(serde_json::to_string(&welcome_msg).unwrap())).await.is_err() {
+        if socket.send(axum::extract::ws::Message::Text(simd_json::to_string(&welcome_msg).unwrap())).await.is_err() {
             return;
         }
 
@@ -33,35 +33,37 @@ async fn websocket_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
                 axum::extract::ws::Message::Text(text) => {
                     println!("Received message: {}", text);
 
-                    match serde_json::from_str::<Message>(&text) {
+                    // simd-json::from_str 需要 &mut str，所以我们需要先转换为 mutable reference
+                    let mut text_mut = text.clone();
+                    match unsafe { simd_json::from_str::<Message>(&mut text_mut) } {
                         Ok(msg) => {
                             // 回复消息
-                            let response = serde_json::json!({
+                            let response = json!({
                                 "type": "response",
                                 "message": format!("You said: {}", msg.text)
                             });
-                            if socket.send(axum::extract::ws::Message::Text(serde_json::to_string(&response).unwrap())).await.is_err() {
+                            if socket.send(axum::extract::ws::Message::Text(simd_json::to_string(&response).unwrap())).await.is_err() {
                                 break;
                             }
 
                             // 如果收到 "hello" 消息，发送特殊响应
                             if msg.text.to_lowercase().contains("hello") {
-                                let special_response = serde_json::json!({
+                                let special_response = json!({
                                     "type": "special",
                                     "message": "Hello World! 👋"
                                 });
-                                if socket.send(axum::extract::ws::Message::Text(serde_json::to_string(&special_response).unwrap())).await.is_err() {
+                                if socket.send(axum::extract::ws::Message::Text(simd_json::to_string(&special_response).unwrap())).await.is_err() {
                                     break;
                                 }
                             }
                         }
                         Err(e) => {
                             println!("Error parsing message: {}", e);
-                            let error_response = serde_json::json!({
+                            let error_response = json!({
                                 "type": "error",
                                 "message": "Invalid message format"
                             });
-                            if socket.send(axum::extract::ws::Message::Text(serde_json::to_string(&error_response).unwrap())).await.is_err() {
+                            if socket.send(axum::extract::ws::Message::Text(simd_json::to_string(&error_response).unwrap())).await.is_err() {
                                 break;
                             }
                         }

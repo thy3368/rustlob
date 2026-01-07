@@ -6,13 +6,24 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-sockudo-ws = { version = "1.7.4", features = ["permessage-deflate"] }
+sockudo-ws = { version = "1.7.4", features = ["simd", "mimalloc", "tokio-runtime"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+simd-json = "0.13"
 bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 tokio = { version = "1", features = ["full"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+target-cpu = "native"
+
+[[bench]]
+name = "websocket_benchmark"
+harness = false
