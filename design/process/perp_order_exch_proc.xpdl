@@ -1,0 +1,2405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="PerpOrderExchProc" Name="永续合约交易流程" Version="2.0">
+
+  <!-- 包元数据 -->
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB Exchange</Vendor>
+    <Created>2025-12-12</Created>
+    <Description>永续合约交易所核心业务流程定义 - 包含持仓生命周期管理、保证金管理、资金费率、风控等</Description>
+    <Documentation>
+      基于CQRS和事件溯源架构的永续合约交易流程
+
+      核心特性:
+      - 杠杆交易: 支持1-125倍杠杆
+      - 保证金管理: 逐仓/全仓模式
+      - 资金费率: 8小时收付一次
+      - 强平机制: 标记价格触发强平
+      - 低延迟: 命令执行 &lt; 100μs
+
+      架构改进:
+      - 主流程: 永续合约交易流程（覆盖完整的交易生命周期）
+      - 活动: 开仓、平仓、调整杠杆、强平等都是主流程中的活动
+      - 子流程: 仅用于真正需要独立运行的业务场景（如定时任务）
+    </Documentation>
+  </PackageHeader>
+
+  <!-- 数据类型定义 -->
+  <TypeDeclarations>
+    <!-- 基础数据类型 -->
+    <TypeDeclaration Id="TraderId" Name="交易员ID">
+      <BasicType Type="STRING">
+        <Length>8</Length>
+      </BasicType>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="Symbol" Name="合约符号">
+      <BasicType Type="STRING">
+        <Length>8</Length>
+      </BasicType>
+      <Description>例如: BTCUSDT, ETHUSDT</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="PositionId" Name="持仓ID">
+      <BasicType Type="INTEGER"/>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="OrderId" Name="订单ID">
+      <BasicType Type="INTEGER"/>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="Price" Name="价格">
+      <BasicType Type="STRING"/>
+      <Description>字符串类型，内部使用定点数表示，保持精度。币安API使用字符串避免浮点误差</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="Quantity" Name="数量">
+      <BasicType Type="STRING"/>
+      <Description>字符串类型，内部使用定点数表示，保持精度</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="Leverage" Name="杠杆倍数">
+      <BasicType Type="INTEGER"/>
+      <Description>范围: 1-125</Description>
+    </TypeDeclaration>
+
+    <!-- 枚举类型 -->
+    <!-- 持仓模式：单向 vs 对冲 -->
+    <TypeDeclaration Id="PositionMode" Name="持仓模式">
+      <EnumerationType>
+        <EnumerationValue Name="ONE_WAY">单向持仓模式（默认）</EnumerationValue>
+        <EnumerationValue Name="HEDGE">对冲持仓模式（可同时持有多空）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API: GET/POST /fapi/v1/positionSide/dual
+        - ONE_WAY: 一个合约只能持有一个方向
+        - HEDGE: 同一合约可同时持有多空双向仓位
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 仓位方向（用于对冲模式） -->
+    <TypeDeclaration Id="PositionSideEnum" Name="仓位方向">
+      <EnumerationType>
+        <EnumerationValue Name="BOTH">单向持仓（One-Way模式）</EnumerationValue>
+        <EnumerationValue Name="LONG">多仓（Hedge模式）</EnumerationValue>
+        <EnumerationValue Name="SHORT">空仓（Hedge模式）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API字段：positionSide
+        - BOTH: 单向持仓模式下使用
+        - LONG/SHORT: 对冲模式下区分多空仓位
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单方向 -->
+    <TypeDeclaration Id="OrderSide" Name="订单方向">
+      <EnumerationType>
+        <EnumerationValue Name="BUY">买入</EnumerationValue>
+        <EnumerationValue Name="SELL">卖出</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="OrderType" Name="订单类型">
+      <EnumerationType>
+        <EnumerationValue Name="LIMIT">限价单</EnumerationValue>
+        <EnumerationValue Name="MARKET">市价单</EnumerationValue>
+        <EnumerationValue Name="STOP">止损限价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="STOP_MARKET">止损市价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TAKE_PROFIT">止盈限价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TAKE_PROFIT_MARKET">止盈市价单（条件单）</EnumerationValue>
+        <EnumerationValue Name="TRAILING_STOP_MARKET">追踪止损市价单（条件单）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API 2025-12-09重大变更：
+        - 普通订单（LIMIT, MARKET）：POST /fapi/v1/order
+        - 条件订单（STOP_*, TAKE_PROFIT_*, TRAILING_*）：迁移至Algo Service
+        条件订单下单前不检查保证金，触发时才检查
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单分类：普通订单 vs Algo订单 -->
+    <TypeDeclaration Id="OrderCategory" Name="订单分类">
+      <EnumerationType>
+        <EnumerationValue Name="REGULAR">普通订单（LIMIT, MARKET）</EnumerationValue>
+        <EnumerationValue Name="CONDITIONAL">条件订单（Algo Service处理）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        2025-12-09起生效：
+        - REGULAR: 使用 POST /fapi/v1/order
+        - CONDITIONAL: 使用 Algo Service 独立端点
+      </Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="MarginMode" Name="保证金模式">
+      <EnumerationType>
+        <EnumerationValue Name="ISOLATED">逐仓</EnumerationValue>
+        <EnumerationValue Name="CROSSED">全仓</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API: POST /fapi/v1/marginType
+        参数: marginType = "ISOLATED" | "CROSSED"
+        注意：币安使用CROSSED而非CROSS
+      </Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="PositionStatus" Name="持仓状态">
+      <EnumerationType>
+        <EnumerationValue Name="OPEN">持仓中</EnumerationValue>
+        <EnumerationValue Name="CLOSING">平仓中</EnumerationValue>
+        <EnumerationValue Name="CLOSED">已平仓</EnumerationValue>
+        <EnumerationValue Name="LIQUIDATING">强平中</EnumerationValue>
+        <EnumerationValue Name="LIQUIDATED">已强平</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="TradeAction" Name="交易动作">
+      <EnumerationType>
+        <EnumerationValue Name="OPEN_POSITION">开仓</EnumerationValue>
+        <EnumerationValue Name="CLOSE_POSITION">平仓</EnumerationValue>
+        <EnumerationValue Name="ADJUST_LEVERAGE">调整杠杆</EnumerationValue>
+        <EnumerationValue Name="ADD_MARGIN">追加保证金</EnumerationValue>
+        <EnumerationValue Name="REDUCE_MARGIN">减少保证金</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 复合数据类型 -->
+    <TypeDeclaration Id="Position" Name="持仓实体">
+      <RecordType>
+        <!-- 基础信息 -->
+        <Member Name="symbol" Type="Symbol"/>
+        <Member Name="position_side" Type="STRING"/>
+        <Description>positionSide: BOTH(单向) | LONG(多仓) | SHORT(空仓)</Description>
+
+        <!-- 持仓数量和价格 -->
+        <Member Name="position_amount" Type="STRING"/>
+        <Description>持仓数量，正数=多仓，负数=空仓</Description>
+        <Member Name="entry_price" Type="STRING"/>
+        <Description>开仓均价</Description>
+        <Member Name="break_even_price" Type="STRING"/>
+        <Description>盈亏平衡价</Description>
+        <Member Name="mark_price" Type="STRING"/>
+        <Description>当前标记价格</Description>
+        <Member Name="liquidation_price" Type="STRING"/>
+        <Description>强平价格</Description>
+
+        <!-- 盈亏 -->
+        <Member Name="unrealized_profit" Type="STRING"/>
+        <Description>未实现盈亏（基于标记价格）</Description>
+
+        <!-- 杠杆和保证金 -->
+        <Member Name="leverage" Type="INTEGER"/>
+        <Description>当前杠杆倍数</Description>
+        <Member Name="margin_type" Type="STRING"/>
+        <Description>保证金类型: isolated | cross</Description>
+        <Member Name="isolated_margin" Type="STRING"/>
+        <Description>逐仓保证金额</Description>
+        <Member Name="is_auto_add_margin" Type="BOOLEAN"/>
+        <Description>是否自动追加保证金（逐仓模式）</Description>
+        <Member Name="position_initial_margin" Type="STRING"/>
+        <Description>持仓起始保证金</Description>
+        <Member Name="open_order_initial_margin" Type="STRING"/>
+        <Description>挂单起始保证金</Description>
+        <Member Name="max_notional_value" Type="STRING"/>
+        <Description>当前杠杆下允许的最大名义价值</Description>
+
+        <!-- 风控 -->
+        <Member Name="adl" Type="INTEGER"/>
+        <Description>自动减仓队列等级(1-5)，数字越大优先级越高</Description>
+
+        <!-- 时间戳 -->
+        <Member Name="update_time" Type="DATETIME"/>
+        <Description>更新时间（Unix毫秒时间戳）</Description>
+
+        <!-- 内部状态字段（非币安API） -->
+        <Member Name="position_id" Type="PositionId"/>
+        <Description>内部持仓ID（用于事件溯源）</Description>
+        <Member Name="trader" Type="TraderId"/>
+        <Description>交易员ID</Description>
+        <Member Name="status" Type="PositionStatus"/>
+        <Description>内部状态：OPEN | CLOSING | CLOSED | LIQUIDATING | LIQUIDATED</Description>
+        <Member Name="created_at" Type="DATETIME"/>
+        <Description>创建时间</Description>
+      </RecordType>
+      <Description>
+        对应币安API: GET /fapi/v2/positionRisk 或 GET /fapi/v3/positionRisk
+        V3版本优化：仅返回有持仓或挂单的合约
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单实体 -->
+    <TypeDeclaration Id="Order" Name="订单实体">
+      <RecordType>
+        <!-- 订单基础信息 -->
+        <Member Name="order_id" Type="INTEGER"/>
+        <Description>系统订单ID</Description>
+        <Member Name="client_order_id" Type="STRING"/>
+        <Description>客户自定义订单ID</Description>
+        <Member Name="symbol" Type="Symbol"/>
+
+        <!-- 订单方向和类型 -->
+        <Member Name="side" Type="STRING"/>
+        <Description>BUY | SELL</Description>
+        <Member Name="position_side" Type="STRING"/>
+        <Description>BOTH | LONG | SHORT（对冲模式）</Description>
+        <Member Name="type" Type="STRING"/>
+        <Description>LIMIT | MARKET | STOP | STOP_MARKET | TAKE_PROFIT | TAKE_PROFIT_MARKET | TRAILING_STOP_MARKET</Description>
+
+        <!-- 价格和数量 -->
+        <Member Name="price" Type="STRING"/>
+        <Description>委托价格</Description>
+        <Member Name="quantity" Type="STRING"/>
+        <Description>委托数量</Description>
+        <Member Name="executed_qty" Type="STRING"/>
+        <Description>已成交数量</Description>
+        <Member Name="cumulative_quote_qty" Type="STRING"/>
+        <Description>累计成交金额</Description>
+        <Member Name="avg_price" Type="STRING"/>
+        <Description>平均成交价格</Description>
+
+        <!-- 订单状态 -->
+        <Member Name="status" Type="STRING"/>
+        <Description>NEW | PARTIALLY_FILLED | FILLED | CANCELED | EXPIRED | NEW_INSURANCE | NEW_ADL</Description>
+        <Member Name="time_in_force" Type="STRING"/>
+        <Description>GTC | IOC | FOK | GTX | GTD</Description>
+
+        <!-- 条件订单参数 -->
+        <Member Name="stop_price" Type="STRING"/>
+        <Description>触发价（条件单）</Description>
+        <Member Name="activation_price" Type="STRING"/>
+        <Description>追踪止损激活价</Description>
+        <Member Name="callback_rate" Type="STRING"/>
+        <Description>追踪止损回调比例</Description>
+        <Member Name="working_type" Type="STRING"/>
+        <Description>MARK_PRICE | CONTRACT_PRICE（触发价格类型）</Description>
+
+        <!-- 其他属性 -->
+        <Member Name="reduce_only" Type="BOOLEAN"/>
+        <Description>只减仓标记</Description>
+        <Member Name="close_position" Type="BOOLEAN"/>
+        <Description>触发后全部平仓</Description>
+        <Member Name="update_time" Type="DATETIME"/>
+        <Description>更新时间</Description>
+        <Member Name="create_time" Type="DATETIME"/>
+        <Description>创建时间</Description>
+      </RecordType>
+      <Description>
+        对应币安API:
+        - 下单: POST /fapi/v1/order（普通订单）或 Algo Service（条件订单）
+        - 查询: GET /fapi/v1/order 或 GET /fapi/v1/allOrders
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 订单状态枚举 -->
+    <TypeDeclaration Id="OrderStatus" Name="订单状态">
+      <EnumerationType>
+        <EnumerationValue Name="NEW">新建订单</EnumerationValue>
+        <EnumerationValue Name="PARTIALLY_FILLED">部分成交</EnumerationValue>
+        <EnumerationValue Name="FILLED">完全成交</EnumerationValue>
+        <EnumerationValue Name="CANCELED">已撤销</EnumerationValue>
+        <EnumerationValue Name="EXPIRED">已过期</EnumerationValue>
+        <EnumerationValue Name="NEW_INSURANCE">风险保障基金接管（强平）</EnumerationValue>
+        <EnumerationValue Name="NEW_ADL">自动减仓序列（强平）</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 有效方式 -->
+    <TypeDeclaration Id="TimeInForce" Name="订单有效方式">
+      <EnumerationType>
+        <EnumerationValue Name="GTC">成交为止（Good Till Cancel）</EnumerationValue>
+        <EnumerationValue Name="IOC">无法立即成交的部分就撤销（Immediate or Cancel）</EnumerationValue>
+        <EnumerationValue Name="FOK">无法全部立即成交就撤销（Fill or Kill）</EnumerationValue>
+        <EnumerationValue Name="GTX">无法成为挂单方就撤销（Good Till Crossing）</EnumerationValue>
+        <EnumerationValue Name="GTD">到指定时间撤销（Good Till Date）</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 条件价格触发类型 -->
+    <TypeDeclaration Id="WorkingType" Name="条件价格触发类型">
+      <EnumerationType>
+        <EnumerationValue Name="MARK_PRICE">标记价格</EnumerationValue>
+        <EnumerationValue Name="CONTRACT_PRICE">最新成交价</EnumerationValue>
+      </EnumerationType>
+    </TypeDeclaration>
+
+    <!-- 合约规格 -->
+    <TypeDeclaration Id="ContractSpecs" Name="合约规格">
+      <RecordType>
+        <Member Name="symbol" Type="Symbol"/>
+        <Member Name="price_precision" Type="INTEGER"/>
+        <Description>价格精度（小数位数）</Description>
+        <Member Name="quantity_precision" Type="INTEGER"/>
+        <Description>数量精度（小数位数）</Description>
+        <Member Name="base_asset_precision" Type="INTEGER"/>
+        <Description>标的资产精度</Description>
+        <Member Name="quote_precision" Type="INTEGER"/>
+        <Description>报价资产精度</Description>
+
+        <!-- PRICE_FILTER -->
+        <Member Name="tick_size" Type="STRING"/>
+        <Description>价格最小变动单位</Description>
+        <Member Name="min_price" Type="STRING"/>
+        <Description>最小价格</Description>
+        <Member Name="max_price" Type="STRING"/>
+        <Description>最大价格</Description>
+
+        <!-- LOT_SIZE -->
+        <Member Name="step_size" Type="STRING"/>
+        <Description>数量最小变动单位</Description>
+        <Member Name="min_qty" Type="STRING"/>
+        <Description>最小下单数量</Description>
+        <Member Name="max_qty" Type="STRING"/>
+        <Description>最大下单数量</Description>
+
+        <!-- MIN_NOTIONAL -->
+        <Member Name="min_notional" Type="STRING"/>
+        <Description>最小名义价值</Description>
+
+        <!-- MAX_NUM_ORDERS -->
+        <Member Name="max_num_orders" Type="INTEGER"/>
+        <Description>最大订单数</Description>
+
+        <!-- MAX_NUM_ALGO_ORDERS -->
+        <Member Name="max_num_algo_orders" Type="INTEGER"/>
+        <Description>最大条件订单数</Description>
+
+        <!-- 资金费率配置 -->
+        <Member Name="funding_interval_hours" Type="INTEGER"/>
+        <Description>资金费率结算间隔（小时）：4 | 8（默认8小时）</Description>
+      </RecordType>
+      <Description>
+        对应币安API: GET /fapi/v1/exchangeInfo
+        返回所有交易对的交易规则和交易对信息
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 强平类型枚举 -->
+    <TypeDeclaration Id="LiquidationType" Name="强平类型">
+      <EnumerationType>
+        <EnumerationValue Name="MARKET">市场强平（市价单成交）</EnumerationValue>
+        <EnumerationValue Name="INSURANCE_FUND">风险保障基金接管</EnumerationValue>
+        <EnumerationValue Name="ADL">自动减仓（ADL）</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安三级强平机制：
+        1. MARKET: 优先尝试市场强平
+        2. INSURANCE_FUND: 市场流动性不足时，由保险基金接管
+        3. ADL: 保险基金不足时，触发自动减仓
+      </Description>
+    </TypeDeclaration>
+
+    <!-- 强平结果实体 -->
+    <TypeDeclaration Id="LiquidationResult" Name="强平结果">
+      <RecordType>
+        <Member Name="position_id" Type="PositionId"/>
+        <Member Name="liquidation_type" Type="STRING"/>
+        <Description>MARKET | INSURANCE_FUND | ADL</Description>
+        <Member Name="liquidation_price" Type="STRING"/>
+        <Description>实际强平价格</Description>
+        <Member Name="liquidated_quantity" Type="STRING"/>
+        <Description>强平数量</Description>
+        <Member Name="margin_loss" Type="STRING"/>
+        <Description>保证金损失</Description>
+        <Member Name="insurance_fund_loss" Type="STRING"/>
+        <Description>保险基金承担的损失</Description>
+        <Member Name="order_status" Type="STRING"/>
+        <Description>订单最终状态：FILLED | NEW_INSURANCE | NEW_ADL</Description>
+      </RecordType>
+    </TypeDeclaration>
+
+    <!-- API错误码 -->
+    <TypeDeclaration Id="ApiErrorCode" Name="API错误码">
+      <EnumerationType>
+        <!-- 通用错误 -1xxx -->
+        <EnumerationValue Name="UNKNOWN">-1000: 未知错误</EnumerationValue>
+        <EnumerationValue Name="DISCONNECTED">-1001: 内部错误（断开连接）</EnumerationValue>
+        <EnumerationValue Name="UNAUTHORIZED">-1002: 未授权</EnumerationValue>
+        <EnumerationValue Name="TOO_MANY_REQUESTS">-1003: 请求过多（触发限频）</EnumerationValue>
+        <EnumerationValue Name="UNEXPECTED_RESP">-1006: 服务器响应异常</EnumerationValue>
+        <EnumerationValue Name="TIMEOUT">-1007: 超时</EnumerationValue>
+
+        <!-- 请求格式错误 -10xx -->
+        <EnumerationValue Name="INVALID_MESSAGE">-1013: 非法参数</EnumerationValue>
+        <EnumerationValue Name="UNKNOWN_ORDER_COMPOSITION">-1014: 不支持的订单组合</EnumerationValue>
+        <EnumerationValue Name="TOO_MANY_ORDERS">-1015: 订单过多</EnumerationValue>
+
+        <!-- 订单相关错误 -20xx -->
+        <EnumerationValue Name="UNKNOWN_ORDER">-2013: 订单不存在</EnumerationValue>
+        <EnumerationValue Name="BAD_API_KEY">-2015: 无效的API密钥</EnumerationValue>
+        <EnumerationValue Name="NO_TRADING_WINDOW">-2016: 当前时间不在交易窗口</EnumerationValue>
+        <EnumerationValue Name="BALANCE_NOT_SUFFICIENT">-2019: 余额不足</EnumerationValue>
+
+        <!-- 合约特定错误 -40xx -->
+        <EnumerationValue Name="INVALID_LEVERAGE">-4028: 杠杆倍数无效</EnumerationValue>
+        <EnumerationValue Name="INVALID_ORDER_STATUS">-4044: 订单状态不允许此操作</EnumerationValue>
+        <EnumerationValue Name="NO_NEED_TO_CHANGE_MARGIN_TYPE">-4046: 无需更改保证金类型</EnumerationValue>
+        <EnumerationValue Name="POSITION_SIDE_NOT_MATCH">-4059: 持仓方向不匹配</EnumerationValue>
+        <EnumerationValue Name="REDUCE_ONLY_REJECT">-4061: 只减仓订单被拒绝</EnumerationValue>
+      </EnumerationType>
+      <Description>
+        币安API标准错误码
+        参考: https://binance-docs.github.io/apidocs/futures/en/#error-codes
+      </Description>
+    </TypeDeclaration>
+
+    <!-- API错误响应实体 -->
+    <TypeDeclaration Id="ApiError" Name="API错误响应">
+      <RecordType>
+        <Member Name="code" Type="INTEGER"/>
+        <Description>错误代码</Description>
+        <Member Name="msg" Type="STRING"/>
+        <Description>错误消息</Description>
+      </RecordType>
+      <Description>
+        币安API统一错误响应格式：
+        {"code": -1003, "msg": "Too many requests."}
+      </Description>
+    </TypeDeclaration>
+  </TypeDeclarations>
+
+  <!-- 参与者定义 -->
+  <Participants>
+    <Participant Id="TRADER" Name="交易员">
+      <ParticipantType Type="ROLE"/>
+      <Description>普通交易用户，可以开仓、平仓、调整杠杆和保证金</Description>
+    </Participant>
+
+    <Participant Id="VIP_TRADER" Name="VIP交易员">
+      <ParticipantType Type="ROLE"/>
+      <Description>VIP用户，享有更低手续费和更高杠杆</Description>
+    </Participant>
+
+    <Participant Id="RISK_MANAGER" Name="风控管理员">
+      <ParticipantType Type="ROLE"/>
+      <Description>监控风险、触发强平、调整风险参数</Description>
+    </Participant>
+
+    <Participant Id="ADMIN" Name="系统管理员">
+      <ParticipantType Type="ROLE"/>
+      <Description>管理合约参数、资金费率配置</Description>
+    </Participant>
+
+    <Participant Id="MATCHING_ENGINE" Name="撮合引擎">
+      <ParticipantType Type="SYSTEM"/>
+      <Description>高性能撮合引擎，处理订单匹配</Description>
+    </Participant>
+
+    <Participant Id="RISK_ENGINE" Name="风控引擎">
+      <ParticipantType Type="SYSTEM"/>
+      <Description>实时监控持仓风险，触发强平</Description>
+    </Participant>
+
+    <Participant Id="FUNDING_RATE_ENGINE" Name="资金费率引擎">
+      <ParticipantType Type="SYSTEM"/>
+      <Description>计算和结算资金费率</Description>
+    </Participant>
+  </Participants>
+
+  <!-- 工作流程定义 -->
+  <WorkflowProcesses>
+
+    <!-- ==================== 主流程: 永续合约交易流程 ==================== -->
+    <WorkflowProcess Id="PerpetualTradingProcess" Name="永续合约交易流程" AccessLevel="PUBLIC">
+      <ProcessHeader>
+        <Created>2025-12-12</Created>
+        <Description>永续合约交易的主业务流程 - 包含开仓、平仓、调整杠杆等核心活动</Description>
+        <Priority>1</Priority>
+        <DurationUnit>millisecond</DurationUnit>
+      </ProcessHeader>
+
+      <!-- 流程数据字段 -->
+      <DataFields>
+        <!-- 交易请求基础信息 -->
+        <DataField Id="trader_id" Name="交易员ID">
+          <DataType><BasicType Type="STRING"/></DataType>
+        </DataField>
+        <DataField Id="action" Name="交易动作">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>OPEN_POSITION | CLOSE_POSITION | ADJUST_LEVERAGE | ADD_MARGIN | REDUCE_MARGIN | CHANGE_POSITION_MODE | CHANGE_MARGIN_TYPE | CANCEL_ORDER | CANCEL_ALL_ORDERS | MODIFY_ORDER | SET_AUTO_ADD_MARGIN</Description>
+        </DataField>
+
+        <!-- 开仓参数 -->
+        <DataField Id="symbol" Name="合约符号">
+          <DataType><BasicType Type="STRING"/></DataType>
+        </DataField>
+        <DataField Id="position_mode" Name="持仓模式">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <InitialValue>ONE_WAY</InitialValue>
+          <Description>ONE_WAY | HEDGE（对冲模式）</Description>
+        </DataField>
+        <DataField Id="position_side" Name="仓位方向">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>BOTH（单向模式）| LONG（多仓）| SHORT（空仓）- 取决于持仓模式</Description>
+        </DataField>
+        <DataField Id="order_side" Name="订单方向">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>BUY | SELL</Description>
+        </DataField>
+        <DataField Id="quantity" Name="数量">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
+        </DataField>
+        <DataField Id="leverage" Name="杠杆倍数">
+          <DataType><BasicType Type="INTEGER"/></DataType>
+          <InitialValue>10</InitialValue>
+        </DataField>
+        <DataField Id="order_type" Name="订单类型">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>LIMIT | MARKET | STOP | STOP_MARKET | TAKE_PROFIT | TAKE_PROFIT_MARKET | TRAILING_STOP_MARKET</Description>
+        </DataField>
+        <DataField Id="order_category" Name="订单分类">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>REGULAR（普通订单）| CONDITIONAL（条件订单，Algo Service处理）</Description>
+        </DataField>
+        <DataField Id="price" Name="委托价格">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
+        </DataField>
+        <DataField Id="margin_mode" Name="保证金模式">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <InitialValue>ISOLATED</InitialValue>
+          <Description>ISOLATED（逐仓）| CROSSED（全仓）</Description>
+        </DataField>
+
+        <!-- 持仓相关 -->
+        <DataField Id="position_id" Name="持仓ID">
+          <DataType><BasicType Type="INTEGER"/></DataType>
+        </DataField>
+        <DataField Id="current_position" Name="当前持仓">
+          <DataType><DeclaredType Id="Position"/></DataType>
+        </DataField>
+
+        <!-- 保证金和盈亏 -->
+        <DataField Id="required_margin" Name="所需保证金">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
+        </DataField>
+        <DataField Id="available_balance" Name="可用余额">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
+        </DataField>
+        <DataField Id="realized_pnl" Name="已实现盈亏">
+          <DataType><BasicType Type="STRING"/></DataType>
+          <Description>字符串类型，避免浮点精度问题</Description>
+        </DataField>
+
+        <!-- 订单相关 -->
+        <DataField Id="order_id" Name="订单ID">
+          <DataType><BasicType Type="INTEGER"/></DataType>
+        </DataField>
+      </DataFields>
+
+      <!-- 活动节点 -->
+      <Activities>
+
+        <!-- ============ 流程入口 ============ -->
+        <Activity Id="Start" Name="交易请求开始">
+          <Event>
+            <StartEvent Trigger="None"/>
+          </Event>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="None"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToRouteAction"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- 路由网关：根据action分发到不同的活动 -->
+        <Activity Id="RouteAction" Name="路由交易动作">
+          <Route>
+            <Condition Type="CONDITION">
+              根据action字段分发到对应的活动分支
+            </Condition>
+          </Route>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToOpenPosition"/>
+                  <TransitionRef Id="ToClosePosition"/>
+                  <TransitionRef Id="ToAdjustLeverage"/>
+                  <TransitionRef Id="ToAddMargin"/>
+                  <TransitionRef Id="ToReduceMargin"/>
+                  <TransitionRef Id="ToChangePositionMode"/>
+                  <TransitionRef Id="ToChangeMarginType"/>
+                  <TransitionRef Id="ToCancelOrder"/>
+                  <TransitionRef Id="ToCancelAllOrders"/>
+                  <TransitionRef Id="ToModifyOrder"/>
+                  <TransitionRef Id="ToSetAutoAddMargin"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 开仓 ============ -->
+        <Activity Id="OpenPosition" Name="开仓">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 开仓活动由多个子任务组成
+                  // 这是一个组合任务，内部包含：
+                  // 1. 验证参数
+                  // 2. 检查保证金
+                  // 3. 冻结保证金
+                  // 4. 提交订单
+                  // 5. 撮合成交
+                  // 6. 创建持仓
+                  // 7. 计算强平价格
+                  // 8. 注册风控监控
+
+                  async fn execute_open_position(request: OpenPositionRequest) -> Result<PositionId, Error> {
+                      // 1. 验证参数
+                      validate_open_params(&request)?;
+
+                      // 2. 检查保证金
+                      let margin_check = check_margin_sufficiency(&request).await?;
+
+                      // 3. 冻结保证金
+                      freeze_margin(request.trader, margin_check.required_margin).await?;
+
+                      // 4. 提交订单到撮合引擎
+                      let order_id = submit_position_order(&request).await?;
+
+                      // 5. 等待撮合成交
+                      let trades = match_order(order_id).await?;
+
+                      // 6. 创建持仓记录
+                      let position_id = create_position_from_trades(&request, &trades).await?;
+
+                      // 7. 计算强平价格
+                      let liquidation_price = calculate_liquidation_price(
+                          request.entry_price,
+                          request.leverage,
+                          request.side
+                      );
+                      update_position_liquidation_price(position_id, liquidation_price).await?;
+
+                      // 8. 注册到风控引擎
+                      register_risk_monitoring(position_id).await?;
+
+                      // 发布事件
+                      publish_event(PositionOpenedEvent {
+                          position_id,
+                          trader: request.trader,
+                          symbol: request.symbol,
+                          side: request.side,
+                          quantity: request.quantity,
+                          entry_price: request.entry_price,
+                          leverage: request.leverage,
+                      }).await?;
+
+                      Ok(position_id)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 看涨行情开多仓：交易员预期BTC价格上涨，以50000 USDT价格开10倍杠杆多仓
+            2. 看跌行情开空仓：预期ETH下跌，以3000 USDT价格开20倍杠杆空仓
+            3. 对冲套利：在对冲模式下同时开多空双向仓位进行套利
+            4. 市价快速建仓：使用MARKET订单类型快速进场
+            5. 限价精准建仓：使用LIMIT订单在目标价位挂单等待成交
+
+            【前置条件】
+            - 账户可用余额充足
+            - 已设置持仓模式（单向/对冲）
+            - 已设置保证金类型（逐仓/全仓）
+            - 订单参数符合合约规格（最小数量、价格精度等）
+
+            【业务规则】
+            - 单向模式：同一合约只能持有一个方向（LONG或SHORT）
+            - 对冲模式：可同时持有多空双向仓位
+            - 杠杆倍数：1-125倍（依合约而定）
+            - 保证金计算：名义价值 / 杠杆倍数
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 平仓 ============ -->
+        <Activity Id="ClosePosition" Name="平仓">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 平仓活动组合任务
+                  async fn execute_close_position(request: ClosePositionRequest) -> Result<i64, Error> {
+                      // 1. 验证持仓
+                      let position = validate_position(request.position_id)?;
+
+                      // 2. 确定平仓数量
+                      let close_quantity = request.quantity.unwrap_or(position.quantity);
+
+                      // 3. 提交平仓订单（方向与开仓相反）
+                      let close_side = match position.side {
+                          PositionSide::Long => Side::Sell,
+                          PositionSide::Short => Side::Buy,
+                      };
+
+                      let order_id = submit_close_order(CloseOrderRequest {
+                          position_id: position.position_id,
+                          trader: position.trader,
+                          symbol: position.symbol,
+                          side: close_side,
+                          quantity: close_quantity,
+                          price: request.price,
+                      }).await?;
+
+                      // 4. 执行撮合
+                      let trades = match_order(order_id).await?;
+
+                      // 5. 计算已实现盈亏
+                      let avg_close_price = calculate_avg_price(&trades);
+                      let realized_pnl = calculate_realized_pnl(
+                          position.entry_price,
+                          avg_close_price,
+                          close_quantity,
+                          position.side,
+                          position.leverage
+                      );
+
+                      // 6. 结算盈亏和释放保证金
+                      settle_position_pnl(position.trader, position.initial_margin, realized_pnl).await?;
+
+                      // 7. 更新持仓状态
+                      let is_full_close = close_quantity == position.quantity;
+                      if is_full_close {
+                          update_position_status(position.position_id, PositionStatus::Closed).await?;
+
+                          publish_event(PositionClosedEvent {
+                              position_id: position.position_id,
+                              realized_pnl,
+                              close_type: "FULL",
+                          }).await?;
+                      } else {
+                          reduce_position_quantity(position.position_id, close_quantity).await?;
+
+                          publish_event(PositionPartiallyClosedEvent {
+                              position_id: position.position_id,
+                              closed_quantity: close_quantity,
+                              realized_pnl,
+                          }).await?;
+                      }
+
+                      Ok(realized_pnl)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 止盈出场：持仓达到目标盈利，全部或部分平仓锁定利润
+            2. 止损出场：亏损达到止损线，及时平仓控制风险
+            3. 反向操作：看反行情，平掉原有持仓后开反向仓位
+            4. 降低风险敞口：部分平仓减少持仓规模，降低风险暴露
+            5. 市场波动避险：重大事件前临时平仓规避不确定性
+
+            【前置条件】
+            - 存在未平仓的持仓
+            - 平仓数量 ≤ 当前持仓数量
+            - 对冲模式下需指定正确的positionSide
+
+            【业务规则】
+            - 全部平仓：平仓数量 = 持仓数量，持仓状态变为CLOSED
+            - 部分平仓：平仓数量 < 持仓数量，持仓继续保留
+            - 平仓方向：多仓平仓=SELL，空仓平仓=BUY
+            - 盈亏计算：(平仓价 - 开仓价) × 数量 × 杠杆倍数（多仓）
+            - 保证金释放：平仓后自动释放对应的保证金
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 调整杠杆 ============ -->
+        <Activity Id="AdjustLeverage" Name="调整杠杆">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 调整杠杆活动
+                  async fn execute_adjust_leverage(request: AdjustLeverageRequest) -> Result<(), Error> {
+                      // 1. 验证持仓和新杠杆值
+                      let position = validate_position_for_leverage_adjustment(
+                          request.position_id,
+                          request.new_leverage
+                      )?;
+
+                      // 2. 重新计算保证金需求
+                      let mark_price = get_mark_price(position.symbol).await?;
+                      let position_value = mark_price * position.quantity;
+
+                      let old_required_margin = position_value / position.leverage;
+                      let new_required_margin = position_value / request.new_leverage;
+                      let margin_diff = new_required_margin as i64 - old_required_margin as i64;
+
+                      // 3. 调整保证金余额
+                      if margin_diff > 0 {
+                          // 降低杠杆，需要追加保证金
+                          let available = get_available_balance(position.trader).await?;
+                          if available < margin_diff as u64 {
+                              return Err(Error::InsufficientBalance);
+                          }
+                          freeze_additional_margin(position.trader, margin_diff as u64).await?;
+
+                          publish_event(MarginAddedEvent {
+                              position_id: position.position_id,
+                              amount: margin_diff as u64,
+                          }).await?;
+                      } else if margin_diff < 0 {
+                          // 增加杠杆，释放保证金
+                          // 但要检查是否会触发强平
+                          let new_liq_price = calculate_liquidation_price(
+                              position.entry_price,
+                              request.new_leverage,
+                              position.side
+                          );
+
+                          if is_close_to_liquidation(mark_price, new_liq_price) {
+                              return Err(Error::WouldTriggerLiquidation);
+                          }
+
+                          release_margin(position.trader, (-margin_diff) as u64).await?;
+
+                          publish_event(MarginReducedEvent {
+                              position_id: position.position_id,
+                              amount: (-margin_diff) as u64,
+                          }).await?;
+                      }
+
+                      // 4. 更新强平价格
+                      let new_liquidation_price = calculate_liquidation_price(
+                          position.entry_price,
+                          request.new_leverage,
+                          position.side
+                      );
+                      update_position_liquidation_price(position.position_id, new_liquidation_price).await?;
+
+                      // 5. 提交杠杆变更
+                      update_position_leverage(position.position_id, request.new_leverage).await?;
+
+                      publish_event(LeverageAdjustedEvent {
+                          position_id: position.position_id,
+                          old_leverage: position.leverage,
+                          new_leverage: request.new_leverage,
+                          new_liquidation_price,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 降低风险：行情不明朗时降低杠杆倍数，减少强平风险
+            2. 提高收益：对趋势有信心时提高杠杆倍数，放大盈利
+            3. 接近强平调整：当前价格接近强平价时，降低杠杆远离强平线
+            4. 资金利用优化：释放保证金用于其他交易机会
+            5. 风控要求：满足风险管理策略的杠杆限制
+
+            【前置条件】
+            - 存在持仓
+            - 新杠杆倍数在允许范围内（1-125倍）
+            - 可用余额足够支付额外保证金（降低杠杆时）
+
+            【业务规则】
+            - 降低杠杆（如20x→10x）：需追加保证金，强平价格远离当前价
+            - 提高杠杆（如10x→20x）：释放部分保证金，强平价格靠近当前价
+            - 保证金调整：自动计算并冻结/释放保证金差额
+            - 强平价格更新：根据新杠杆重新计算强平价格
+            - 风险检查：不能调整到会立即触发强平的杠杆
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 追加保证金 ============ -->
+        <Activity Id="AddMargin" Name="追加保证金">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 追加保证金活动（逐仓模式）
+                  async fn execute_add_margin(request: AddMarginRequest) -> Result<(), Error> {
+                      let position = validate_position(request.position_id)?;
+
+                      // 只有逐仓模式才能追加保证金
+                      if position.margin_mode != MarginMode::Isolated {
+                          return Err(Error::OnlyIsolatedModeSupportsAddMargin);
+                      }
+
+                      // 检查可用余额
+                      let available = get_available_balance(position.trader).await?;
+                      if available < request.amount {
+                          return Err(Error::InsufficientBalance);
+                      }
+
+                      // 冻结保证金
+                      freeze_additional_margin(position.trader, request.amount).await?;
+
+                      // 更新持仓保证金
+                      increase_position_margin(position.position_id, request.amount).await?;
+
+                      // 重新计算强平价格（保证金增加，强平价格更远）
+                      let new_liquidation_price = recalculate_liquidation_price_with_margin(
+                          &position,
+                          position.initial_margin + request.amount
+                      );
+                      update_position_liquidation_price(position.position_id, new_liquidation_price).await?;
+
+                      publish_event(MarginAddedEvent {
+                          position_id: position.position_id,
+                          amount: request.amount,
+                          new_liquidation_price,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 避免强平：当前价格接近强平价，追加保证金拉远强平线
+            2. 降低风险：市场波动加剧时主动增加保证金缓冲
+            3. 维持杠杆：价格波动导致实际杠杆变化，追加保证金恢复目标杠杆
+            4. 接收预警后补仓：收到强平预警后及时追加保证金
+            5. 策略调整：从高杠杆策略转向稳健策略
+
+            【前置条件】
+            - 存在逐仓模式的持仓（全仓模式不支持）
+            - 账户可用余额充足
+            - 追加金额 > 0
+
+            【业务规则】
+            - 仅逐仓模式：全仓模式共享账户余额，不支持单独追加
+            - 强平价格变化：追加保证金后强平价格远离当前价
+            - 资金转移：从可用余额转移到持仓保证金
+            - 即时生效：追加后立即更新强平价格和风控参数
+
+            【与调整杠杆的关系】
+            追加保证金在数学上等价于降低杠杆倍数：
+            - 追加保证金 → 实际杠杆降低 → 强平价远离当前价
+            - 降低杠杆 → 需追加保证金 → 强平价远离当前价
+
+            示例：持仓价值50,000 USDT，当前20x杠杆，保证金2,500 USDT
+            - 方式1：追加2,500 USDT → 新保证金5,000 → 实际杠杆变为10x
+            - 方式2：降低杠杆到10x → 需保证金5,000 → 自动追加2,500 USDT
+            结果完全相同！
+
+            【两者的选择建议】
+            - AddMargin：用户关注"加多少钱"（如：加500 USDT防强平）
+            - AdjustLeverage：用户关注"杠杆比例"（如：降到10x降低风险）
+            - 逐仓模式：AddMargin更灵活，可追加任意金额（不必是整数杠杆）
+            - 全仓模式：AdjustLeverage更常用，直接控制风险倍数
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 减少保证金 ============ -->
+        <Activity Id="ReduceMargin" Name="减少保证金">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 减少保证金活动（逐仓模式）
+                  async fn execute_reduce_margin(request: ReduceMarginRequest) -> Result<(), Error> {
+                      let position = validate_position(request.position_id)?;
+
+                      // 只有逐仓模式才能减少保证金
+                      if position.margin_mode != MarginMode::Isolated {
+                          return Err(Error::OnlyIsolatedModeSupportsReduceMargin);
+                      }
+
+                      // 计算减少后的保证金
+                      if request.amount >= position.initial_margin {
+                          return Err(Error::CannotReduceBelowMinimum);
+                      }
+
+                      let remaining_margin = position.initial_margin - request.amount;
+
+                      // 检查减少后是否会触发强平
+                      let mark_price = get_mark_price(position.symbol).await?;
+                      let new_liquidation_price = recalculate_liquidation_price_with_margin(
+                          &position,
+                          remaining_margin
+                      );
+
+                      if is_close_to_liquidation(mark_price, new_liquidation_price) {
+                          return Err(Error::WouldTriggerLiquidation);
+                      }
+
+                      // 释放保证金
+                      release_margin(position.trader, request.amount).await?;
+
+                      // 更新持仓
+                      decrease_position_margin(position.position_id, request.amount).await?;
+                      update_position_liquidation_price(position.position_id, new_liquidation_price).await?;
+
+                      publish_event(MarginReducedEvent {
+                          position_id: position.position_id,
+                          amount: request.amount,
+                          new_liquidation_price,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            【使用场景】
+            1. 释放资金：行情有利时减少保证金，释放资金用于其他交易
+            2. 提高杠杆：通过减少保证金变相提高杠杆倍数
+            3. 资金周转：需要资金进行其他操作时适度减少保证金
+            4. 利润保护：持仓盈利后适度减少保证金，锁定部分利润
+            5. 策略调整：从保守策略转向激进策略
+
+            【前置条件】
+            - 存在逐仓模式的持仓（全仓模式不支持）
+            - 减少后保证金仍满足最低要求
+            - 不会导致立即触发强平
+
+            【业务规则】
+            - 仅逐仓模式：全仓模式不支持减少保证金
+            - 最低保证金限制：不能减少到低于维持保证金要求
+            - 强平价格变化：减少保证金后强平价格靠近当前价
+            - 风险检查：如果会导致立即强平则拒绝操作
+            - 资金返还：保证金返回到可用余额
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 切换持仓模式 ============ -->
+        <Activity Id="ChangePositionMode" Name="切换持仓模式">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 切换持仓模式（单向 ↔ 对冲）
+                  async fn execute_change_position_mode(request: ChangePositionModeRequest) -> Result<(), Error> {
+                      let trader = request.trader;
+                      let new_mode = request.position_mode;  // ONE_WAY | HEDGE
+
+                      // 1. 检查是否有持仓
+                      let positions = get_all_positions(trader).await?;
+                      if !positions.is_empty() {
+                          return Err(Error::CannotChangeModeWithOpenPositions);
+                      }
+
+                      // 2. 检查是否有挂单
+                      let open_orders = get_open_orders(trader).await?;
+                      if !open_orders.is_empty() {
+                          return Err(Error::CannotChangeModeWithOpenOrders);
+                      }
+
+                      // 3. 调用币安API切换持仓模式
+                      // POST /fapi/v1/positionSide/dual
+                      let dual_side_position = match new_mode {
+                          PositionMode::OneWay => false,
+                          PositionMode::Hedge => true,
+                      };
+
+                      binance_api_change_position_mode(trader, dual_side_position).await?;
+
+                      // 4. 更新本地配置
+                      update_trader_position_mode(trader, new_mode).await?;
+
+                      publish_event(PositionModeChangedEvent {
+                          trader,
+                          old_mode: get_current_position_mode(trader).await?,
+                          new_mode,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>TRADER</Performer>
+          <Description>
+            币安API: POST /fapi/v1/positionSide/dual
+            参数: dualSidePosition (true=对冲模式, false=单向模式)
+            注意：必须在无持仓、无挂单的情况下才能切换
+
+            【使用场景】
+            1. 套利策略：需要同时持有多空双向仓位进行跨期套利或资金费率套利
+            2. 对冲风险：在主仓位上建立反向对冲仓位，锁定部分利润或控制风险
+            3. 网格交易：需要在不同价位同时持有多空仓位的网格策略
+            4. 策略切换：从单向趋势交易切换到对冲策略
+            5. 账户初始化：新账户首次设置适合自己交易风格的持仓模式
+
+            【前置条件】
+            - 无任何持仓（所有合约）
+            - 无任何挂单（所有合约）
+            - 首次使用必须显式设置模式
+
+            【业务规则】
+            - 单向模式（ONE_WAY）：同一合约只能持有一个方向，positionSide=BOTH
+            - 对冲模式（HEDGE）：可同时持有多空，positionSide=LONG或SHORT
+            - 切换限制：必须清空所有仓位和挂单才能切换
+            - 全局设置：对所有合约生效，不能单独为某个合约设置
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 变更保证金类型 ============ -->
+        <Activity Id="ChangeMarginType" Name="变更保证金类型">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 变更保证金类型（逐仓 ↔ 全仓）
+                  async fn execute_change_margin_type(request: ChangeMarginTypeRequest) -> Result<(), Error> {
+                      let symbol = request.symbol;
+                      let new_margin_type = request.margin_type;  // ISOLATED | CROSSED
+
+                      // 1. 检查该合约是否有持仓
+                      let position = get_position_by_symbol(request.trader, symbol).await?;
+                      if position.is_some() {
+                          return Err(Error::CannotChangeMarginTypeWithPosition);
+                      }
+
+                      // 2. 检查是否有该合约的挂单
+                      let open_orders = get_open_orders_by_symbol(request.trader, symbol).await?;
+                      if !open_orders.is_empty() {
+                          return Err(Error::CannotChangeMarginTypeWithOrders);
+                      }
+
+                      // 3. 调用币安API变更保证金类型
+                      // POST /fapi/v1/marginType
+                      binance_api_change_margin_type(
+                          request.trader,
+                          symbol,
+                          new_margin_type
+                      ).await?;
+
+                      // 4. 更新本地配置
+                      update_symbol_margin_type(request.trader, symbol, new_margin_type).await?;
+
+                      publish_event(MarginTypeChangedEvent {
+                          trader: request.trader,
+                          symbol,
+                          new_margin_type,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>TRADER</Performer>
+          <Description>
+            币安API: POST /fapi/v1/marginType
+            参数: symbol, marginType (ISOLATED | CROSSED)
+            注意：必须在该合约无持仓、无挂单的情况下才能变更
+
+            【使用场景】
+            1. 风险隔离：高风险交易使用逐仓模式，避免影响其他持仓
+            2. 资金集中：稳健交易使用全仓模式，提高资金利用率
+            3. 新合约配置：交易新合约前根据策略选择保证金模式
+            4. 策略调整：从激进策略（高杠杆逐仓）切换到稳健策略（全仓）
+            5. 风控要求：满足不同风险等级的保证金管理要求
+
+            【前置条件】
+            - 该合约无持仓
+            - 该合约无挂单
+            - 保证金类型与当前不同
+
+            【业务规则】
+            - 逐仓（ISOLATED）：每个合约独立保证金，亏损限于该仓位保证金
+            - 全仓（CROSSED）：共享账户余额，可降低强平风险但风险相互影响
+            - 合约独立：每个合约可单独设置，不影响其他合约
+            - 切换限制：必须清空该合约的仓位和挂单才能切换
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 撤销订单 ============ -->
+        <Activity Id="CancelOrder" Name="撤销订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 撤销单个订单
+                  async fn execute_cancel_order(request: CancelOrderRequest) -> Result<Order, Error> {
+                      let symbol = request.symbol;
+                      let order_id = request.order_id.or(request.client_order_id);
+
+                      if order_id.is_none() {
+                          return Err(Error::OrderIdRequired);
+                      }
+
+                      // 1. 查询订单状态
+                      let order = get_order(request.trader, symbol, order_id).await?;
+
+                      // 2. 验证订单状态是否可撤销
+                      match order.status {
+                          OrderStatus::New | OrderStatus::PartiallyFilled => {
+                              // 可撤销
+                          }
+                          OrderStatus::Filled => {
+                              return Err(Error::OrderAlreadyFilled);
+                          }
+                          OrderStatus::Cancelled | OrderStatus::Expired => {
+                              return Err(Error::OrderAlreadyCancelled);
+                          }
+                          _ => {
+                              return Err(Error::InvalidOrderStatus);
+                          }
+                      }
+
+                      // 3. 调用币安API撤销订单
+                      // DELETE /fapi/v1/order
+                      let cancelled_order = binance_api_cancel_order(
+                          request.trader,
+                          symbol,
+                          order_id
+                      ).await?;
+
+                      // 4. 释放冻结的保证金（如果是开仓单）
+                      if cancelled_order.position_side != "BOTH" || cancelled_order.is_opening_order() {
+                          let frozen_margin = calculate_frozen_margin(&cancelled_order);
+                          release_margin(request.trader, frozen_margin).await?;
+                      }
+
+                      // 5. 更新订单状态
+                      update_order_status(order.order_id, OrderStatus::Cancelled).await?;
+
+                      publish_event(OrderCancelledEvent {
+                          trader: request.trader,
+                          order_id: order.order_id,
+                          symbol,
+                          cancelled_qty: order.quantity - order.executed_qty,
+                      }).await?;
+
+                      Ok(cancelled_order)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: DELETE /fapi/v1/order
+            参数: symbol, orderId 或 origClientOrderId
+            权重: 1
+
+            【使用场景】
+            1. 价格调整：市场价格变化，原挂单价位不理想，撤单后重新挂单
+            2. 策略变化：交易策略发生改变，撤销不再符合策略的订单
+            3. 风险控制：市场波动剧烈，临时撤销挂单观望
+            4. 错误订单：发现订单参数有误（价格、数量等），及时撤销
+            5. 流动性管理：市场流动性不足，挂单长时间未成交，撤销后调整
+
+            【前置条件】
+            - 订单存在且状态为NEW或PARTIALLY_FILLED
+            - 订单尚未完全成交
+            - 提供有效的orderId或clientOrderId
+
+            【业务规则】
+            - 可撤销状态：NEW（新建）、PARTIALLY_FILLED（部分成交）
+            - 不可撤销：FILLED（已成交）、CANCELLED（已撤销）、EXPIRED（已过期）
+            - 保证金释放：撤单后自动释放该订单冻结的保证金
+            - 部分成交：已成交部分不受影响，未成交部分被撤销
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 批量撤销订单 ============ -->
+        <Activity Id="CancelAllOrders" Name="批量撤销订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 批量撤销某个合约的所有挂单
+                  async fn execute_cancel_all_orders(request: CancelAllOrdersRequest) -> Result<Vec<Order>, Error> {
+                      let symbol = request.symbol;
+                      let trader = request.trader;
+
+                      // 1. 查询该合约的所有挂单
+                      let open_orders = get_open_orders_by_symbol(trader, symbol).await?;
+
+                      if open_orders.is_empty() {
+                          return Ok(vec![]);
+                      }
+
+                      // 2. 调用币安API批量撤单
+                      // DELETE /fapi/v1/allOpenOrders
+                      let cancelled_orders = binance_api_cancel_all_orders(trader, symbol).await?;
+
+                      // 3. 释放所有冻结的保证金
+                      let mut total_frozen_margin = 0u64;
+                      for order in &cancelled_orders {
+                          total_frozen_margin += calculate_frozen_margin(order);
+                      }
+                      release_margin(trader, total_frozen_margin).await?;
+
+                      // 4. 批量更新订单状态
+                      for order in &cancelled_orders {
+                          update_order_status(order.order_id, OrderStatus::Cancelled).await?;
+                      }
+
+                      publish_event(AllOrdersCancelledEvent {
+                          trader,
+                          symbol,
+                          cancelled_count: cancelled_orders.len(),
+                      }).await?;
+
+                      Ok(cancelled_orders)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: DELETE /fapi/v1/allOpenOrders
+            参数: symbol
+            权重: 1
+            用途: 紧急情况下快速清空某个合约的所有挂单
+
+            【使用场景】
+            1. 紧急止损：重大负面消息，快速撤销所有挂单避免成交
+            2. 系统维护：交易系统升级或维护前清空挂单
+            3. 策略重置：策略失效需要全面调整，先清空所有挂单
+            4. 风险事件：黑天鹅事件发生，紧急清空所有订单
+            5. 市场异常：发现市场数据异常，暂停所有挂单交易
+
+            【前置条件】
+            - 指定合约存在未成交订单
+            - 有批量撤单权限
+
+            【业务规则】
+            - 批量操作：一次性撤销该合约的所有NEW和PARTIALLY_FILLED订单
+            - 保证金释放：批量释放所有订单冻结的保证金
+            - 原子操作：要么全部成功，要么全部失败（事务性）
+            - 高效执行：比逐个撤单更高效，适合紧急情况
+            - 限频友好：权重仅为1，不会触发限频
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 修改订单 ============ -->
+        <Activity Id="ModifyOrder" Name="修改订单">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 修改订单（2024年新增功能）
+                  async fn execute_modify_order(request: ModifyOrderRequest) -> Result<Order, Error> {
+                      let symbol = request.symbol;
+                      let order_id = request.order_id;
+
+                      // 1. 查询原订单
+                      let original_order = get_order(request.trader, symbol, order_id).await?;
+
+                      // 2. 验证订单状态
+                      match original_order.status {
+                          OrderStatus::New | OrderStatus::PartiallyFilled => {
+                              // 可修改
+                          }
+                          _ => {
+                              return Err(Error::OrderCannotBeModified);
+                          }
+                      }
+
+                      // 3. 验证修改参数
+                      let new_quantity = request.quantity.unwrap_or(original_order.quantity);
+                      let new_price = request.price.unwrap_or(original_order.price);
+
+                      if new_quantity == original_order.quantity && new_price == original_order.price {
+                          return Err(Error::NoChangesToOrder);
+                      }
+
+                      // 4. 调用币安API修改订单
+                      // PUT /fapi/v1/order
+                      let modified_order = binance_api_modify_order(
+                          request.trader,
+                          symbol,
+                          order_id,
+                          new_quantity,
+                          new_price
+                      ).await?;
+
+                      // 5. 重新计算保证金需求
+                      let old_margin = calculate_frozen_margin(&original_order);
+                      let new_margin = calculate_frozen_margin(&modified_order);
+
+                      if new_margin > old_margin {
+                          // 需要追加冻结保证金
+                          freeze_additional_margin(request.trader, new_margin - old_margin).await?;
+                      } else if new_margin < old_margin {
+                          // 释放多余的保证金
+                          release_margin(request.trader, old_margin - new_margin).await?;
+                      }
+
+                      // 6. 更新订单
+                      update_order(modified_order.clone()).await?;
+
+                      publish_event(OrderModifiedEvent {
+                          trader: request.trader,
+                          order_id,
+                          symbol,
+                          old_quantity: original_order.quantity,
+                          new_quantity,
+                          old_price: original_order.price,
+                          new_price,
+                      }).await?;
+
+                      Ok(modified_order)
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>MATCHING_ENGINE</Performer>
+          <Description>
+            币安API: PUT /fapi/v1/order（2024年新增）
+            参数: symbol, orderId, quantity, price
+            权重: 1
+            优势: 无需撤单重挂，保留队列优先级
+
+            【使用场景】
+            1. 价格微调：市场价格小幅变化，调整挂单价格追随市场
+            2. 数量调整：根据资金变化或策略调整订单数量
+            3. 保持优先级：修改价格但保留在队列中的时间优先级
+            4. 高频交易：频繁调整订单时避免撤单重挂的时延
+            5. 降低成本：减少撤单+下单的手续费和限频消耗
+
+            【前置条件】
+            - 订单状态为NEW或PARTIALLY_FILLED
+            - 新价格或新数量与原订单不同
+            - 修改后参数符合合约规格
+
+            【业务规则】
+            - 保留优先级：修改不改变订单在队列中的时间位置
+            - 价格数量：可单独修改价格或数量，也可同时修改
+            - 保证金重算：自动计算保证金差额，追加或释放保证金
+            - 部分成交：已成交部分不受影响，仅修改未成交部分
+            - 原子操作：修改失败时订单保持原状态
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ Activity: 设置自动追加保证金 ============ -->
+        <Activity Id="SetAutoAddMargin" Name="设置自动追加保证金">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 设置自动追加保证金（逐仓模式）
+                  async fn execute_set_auto_add_margin(request: SetAutoAddMarginRequest) -> Result<(), Error> {
+                      let symbol = request.symbol;
+                      let position_side = request.position_side;  // BOTH | LONG | SHORT
+                      let auto_add_margin = request.auto_add_margin;  // true | false
+
+                      // 1. 验证保证金模式
+                      let position = get_position(request.trader, symbol, position_side).await?;
+                      if position.margin_type != MarginMode::Isolated {
+                          return Err(Error::OnlyIsolatedModeSupportsAutoAddMargin);
+                      }
+
+                      // 2. 调用币安API设置自动追加保证金
+                      // POST /fapi/v1/positionMargin
+                      binance_api_set_auto_add_margin(
+                          request.trader,
+                          symbol,
+                          position_side,
+                          auto_add_margin
+                      ).await?;
+
+                      // 3. 更新本地持仓配置
+                      update_position_auto_add_margin(
+                          position.position_id,
+                          auto_add_margin
+                      ).await?;
+
+                      publish_event(AutoAddMarginChangedEvent {
+                          trader: request.trader,
+                          symbol,
+                          position_side,
+                          auto_add_margin,
+                      }).await?;
+
+                      Ok(())
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            币安API: POST /fapi/v1/positionMargin
+            参数: symbol, positionSide, autoAddMargin (true | false)
+            仅逐仓模式可用：当保证金不足时自动从可用余额补充
+
+            【使用场景】
+            1. 自动风控：启用后自动追加保证金，避免因暂时波动被强平
+            2. 无人值守：策略自动运行时，避免因保证金不足导致强平
+            3. 降低监控压力：不需要时刻盯盘手动追加保证金
+            4. 波动市场：市场波动剧烈时自动补充保证金维持持仓
+            5. 分层风控：对不同合约设置不同的自动追加策略
+
+            【前置条件】
+            - 存在逐仓模式的持仓
+            - 账户有足够的可用余额
+            - 对冲模式需指定positionSide
+
+            【业务规则】
+            - 仅逐仓：全仓模式本身共享余额，无需此功能
+            - 自动触发：当保证金率接近维持保证金率时自动追加
+            - 余额限制：仅从可用余额追加，不会超出账户余额
+            - 独立设置：每个仓位可单独设置，互不影响
+            - 可随时切换：可随时开启或关闭此功能
+          </Description>
+          <TransitionRestrictions>
+            <TransitionRestriction>
+              <Join Type="XOR"/>
+              <Split Type="XOR">
+                <TransitionRefs>
+                  <TransitionRef Id="ToEndSuccess"/>
+                  <TransitionRef Id="ToEndFailure"/>
+                </TransitionRefs>
+              </Split>
+            </TransitionRestriction>
+          </TransitionRestrictions>
+        </Activity>
+
+        <!-- ============ 流程出口 ============ -->
+        <Activity Id="EndSuccess" Name="交易成功">
+          <Event>
+            <EndEvent Result="SUCCESS"/>
+          </Event>
+        </Activity>
+
+        <Activity Id="EndFailure" Name="交易失败">
+          <Event>
+            <EndEvent Result="ERROR"/>
+          </Event>
+        </Activity>
+
+      </Activities>
+
+      <!-- 转换（流程流向） -->
+      <Transitions>
+        <!-- 主路由 -->
+        <Transition Id="ToRouteAction" From="Start" To="RouteAction"/>
+
+        <!-- 路由到各个活动 -->
+        <Transition Id="ToOpenPosition" From="RouteAction" To="OpenPosition">
+          <Condition Type="CONDITION">action == "OPEN_POSITION"</Condition>
+        </Transition>
+        <Transition Id="ToClosePosition" From="RouteAction" To="ClosePosition">
+          <Condition Type="CONDITION">action == "CLOSE_POSITION"</Condition>
+        </Transition>
+        <Transition Id="ToAdjustLeverage" From="RouteAction" To="AdjustLeverage">
+          <Condition Type="CONDITION">action == "ADJUST_LEVERAGE"</Condition>
+        </Transition>
+        <Transition Id="ToAddMargin" From="RouteAction" To="AddMargin">
+          <Condition Type="CONDITION">action == "ADD_MARGIN"</Condition>
+        </Transition>
+        <Transition Id="ToReduceMargin" From="RouteAction" To="ReduceMargin">
+          <Condition Type="CONDITION">action == "REDUCE_MARGIN"</Condition>
+        </Transition>
+        <Transition Id="ToChangePositionMode" From="RouteAction" To="ChangePositionMode">
+          <Condition Type="CONDITION">action == "CHANGE_POSITION_MODE"</Condition>
+        </Transition>
+        <Transition Id="ToChangeMarginType" From="RouteAction" To="ChangeMarginType">
+          <Condition Type="CONDITION">action == "CHANGE_MARGIN_TYPE"</Condition>
+        </Transition>
+        <Transition Id="ToCancelOrder" From="RouteAction" To="CancelOrder">
+          <Condition Type="CONDITION">action == "CANCEL_ORDER"</Condition>
+        </Transition>
+        <Transition Id="ToCancelAllOrders" From="RouteAction" To="CancelAllOrders">
+          <Condition Type="CONDITION">action == "CANCEL_ALL_ORDERS"</Condition>
+        </Transition>
+        <Transition Id="ToModifyOrder" From="RouteAction" To="ModifyOrder">
+          <Condition Type="CONDITION">action == "MODIFY_ORDER"</Condition>
+        </Transition>
+        <Transition Id="ToSetAutoAddMargin" From="RouteAction" To="SetAutoAddMargin">
+          <Condition Type="CONDITION">action == "SET_AUTO_ADD_MARGIN"</Condition>
+        </Transition>
+
+        <!-- 各活动到结束节点（每个活动都可能成功或失败） -->
+        <Transition Id="FromOpenToSuccess" From="OpenPosition" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromOpenToFailure" From="OpenPosition" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromCloseToSuccess" From="ClosePosition" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromCloseToFailure" From="ClosePosition" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromAdjustLeverageToSuccess" From="AdjustLeverage" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromAdjustLeverageToFailure" From="AdjustLeverage" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromAddMarginToSuccess" From="AddMargin" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromAddMarginToFailure" From="AddMargin" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromReduceMarginToSuccess" From="ReduceMargin" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromReduceMarginToFailure" From="ReduceMargin" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromChangePositionModeToSuccess" From="ChangePositionMode" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromChangePositionModeToFailure" From="ChangePositionMode" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromChangeMarginTypeToSuccess" From="ChangeMarginType" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromChangeMarginTypeToFailure" From="ChangeMarginType" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromCancelOrderToSuccess" From="CancelOrder" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromCancelOrderToFailure" From="CancelOrder" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromCancelAllOrdersToSuccess" From="CancelAllOrders" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromCancelAllOrdersToFailure" From="CancelAllOrders" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromModifyOrderToSuccess" From="ModifyOrder" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromModifyOrderToFailure" From="ModifyOrder" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+
+        <Transition Id="FromSetAutoAddMarginToSuccess" From="SetAutoAddMargin" To="EndSuccess">
+          <Condition Type="CONDITION">execution_success == true</Condition>
+        </Transition>
+        <Transition Id="FromSetAutoAddMarginToFailure" From="SetAutoAddMargin" To="EndFailure">
+          <Condition Type="OTHERWISE"/>
+        </Transition>
+      </Transitions>
+
+    </WorkflowProcess>
+
+    <!-- ==================== 子流程: 强平流程（由风控引擎触发） ==================== -->
+    <WorkflowProcess Id="LiquidationProcess" Name="强制平仓流程" AccessLevel="PUBLIC">
+      <ProcessHeader>
+        <Created>2025-12-12</Created>
+        <Description>独立运行的强平流程 - 由风控引擎实时监控触发，不依赖用户请求</Description>
+        <Priority>0</Priority>
+        <DurationUnit>millisecond</DurationUnit>
+      </ProcessHeader>
+
+      <DataFields>
+        <DataField Id="position_id" Name="持仓ID">
+          <DataType><BasicType Type="INTEGER"/></DataType>
+        </DataField>
+        <DataField Id="trigger_price" Name="触发价格">
+          <DataType><BasicType Type="INTEGER"/></DataType>
+        </DataField>
+      </DataFields>
+
+      <Activities>
+        <Activity Id="Start" Name="触发强平">
+          <Event>
+            <StartEvent Trigger="Message">
+              <TriggerResultMessage>LiquidationTriggered</TriggerResultMessage>
+            </StartEvent>
+          </Event>
+          <Description>由风控引擎实时监控触发</Description>
+        </Activity>
+
+        <Activity Id="ExecuteLiquidation" Name="执行三级强平">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 币安三级强平机制实现
+                  async fn execute_three_tier_liquidation(position_id: PositionId) -> Result<LiquidationResult, Error> {
+                      // 0. 冻结持仓
+                      update_position_status(position_id, PositionStatus::Liquidating).await?;
+                      publish_event(PositionFrozenEvent {
+                          position_id,
+                          reason: "LIQUIDATION",
+                      }).await?;
+
+                      // 获取持仓信息
+                      let position = get_position(position_id).await?;
+
+                      // 确定平仓方向（与持仓方向相反）
+                      let liquidation_side = match position.position_side.as_str() {
+                          "LONG" | "BOTH" => "SELL",
+                          "SHORT" => "BUY",
+                          _ => return Err(Error::InvalidPositionSide),
+                      };
+
+                      // ========================================
+                      // 1️⃣ 第一级：市场强平（Market Liquidation）
+                      // ========================================
+                      let order_id = submit_liquidation_order(LiquidationOrder {
+                          position_id,
+                          trader: position.trader,
+                          symbol: position.symbol,
+                          side: liquidation_side,
+                          position_side: position.position_side.clone(),
+                          quantity: position.position_amount.clone(),
+                          order_type: "MARKET",
+                          is_liquidation: true,
+                          priority: "URGENT",
+                      }).await?;
+
+                      publish_event(LiquidationOrderSubmittedEvent {
+                          order_id,
+                          position_id,
+                          liquidation_type: "MARKET",
+                          trigger_price: position.liquidation_price.clone(),
+                      }).await?;
+
+                      // 尝试市场撮合（设置5秒超时）
+                      let market_result = match_urgent_order(order_id, timeout_secs: 5).await;
+
+                      match market_result {
+                          Ok(trades) if is_fully_filled(&trades, &position.position_amount) => {
+                              // ✅ 市场强平成功
+                              let avg_price = calculate_avg_price(&trades);
+                              let loss = calculate_liquidation_loss(&position, &avg_price);
+
+                              let result = settle_market_liquidation(
+                                  position_id,
+                                  &position,
+                                  avg_price,
+                                  loss,
+                              ).await?;
+
+                              publish_event(LiquidationCompletedEvent {
+                                  position_id,
+                                  liquidation_type: "MARKET",
+                                  liquidation_price: avg_price,
+                                  order_status: "FILLED",
+                              }).await?;
+
+                              return Ok(result);
+                          }
+                          _ => {
+                              // ❌ 市场流动性不足，进入第二级
+                              log::warn!("Market liquidation failed for position {}: insufficient liquidity", position_id);
+                          }
+                      }
+
+                      // ========================================
+                      // 2️⃣ 第二级：风险保障基金接管（Insurance Fund）
+                      // ========================================
+                      let insurance_capacity = check_insurance_fund_capacity().await?;
+
+                      if insurance_capacity.has_sufficient_balance(&position) {
+                          // ✅ 风险保障基金充足，接管持仓
+                          let takeover_result = insurance_fund_takeover(position_id, &position).await?;
+
+                          // 标记订单状态为 NEW_INSURANCE
+                          update_order_status(order_id, "NEW_INSURANCE").await?;
+
+                          let result = settle_insurance_fund_liquidation(
+                              position_id,
+                              &position,
+                              takeover_result,
+                          ).await?;
+
+                          publish_event(LiquidationCompletedEvent {
+                              position_id,
+                              liquidation_type: "INSURANCE_FUND",
+                              liquidation_price: position.liquidation_price.clone(),
+                              order_status: "NEW_INSURANCE",
+                          }).await?;
+
+                          return Ok(result);
+                      } else {
+                          // ❌ 风险保障基金不足，进入第三级
+                          log::error!("Insurance fund insufficient for position {}", position_id);
+                      }
+
+                      // ========================================
+                      // 3️⃣ 第三级：自动减仓（Auto-Deleveraging, ADL）
+                      // ========================================
+                      // 查找对手方的盈利仓位（按ADL队列优先级）
+                      let counterparty_positions = get_adl_counterparties(
+                          &position.symbol,
+                          liquidation_side,
+                      ).await?;
+
+                      if counterparty_positions.is_empty() {
+                          return Err(Error::NoCounterpartiesForADL);
+                      }
+
+                      // 触发自动减仓
+                      let adl_result = trigger_auto_deleveraging(
+                          position_id,
+                          &position,
+                          counterparty_positions,
+                      ).await?;
+
+                      // 标记订单状态为 NEW_ADL
+                      update_order_status(order_id, "NEW_ADL").await?;
+
+                      let result = settle_adl_liquidation(
+                          position_id,
+                          &position,
+                          adl_result,
+                      ).await?;
+
+                      // 通知被ADL的对手方
+                      for counterparty_id in adl_result.affected_positions {
+                          notify_adl_counterparty(counterparty_id).await?;
+                      }
+
+                      publish_event(LiquidationCompletedEvent {
+                          position_id,
+                          liquidation_type: "ADL",
+                          liquidation_price: position.liquidation_price.clone(),
+                          order_status: "NEW_ADL",
+                      }).await?;
+
+                      Ok(result)
+                  }
+
+                  // ========================================
+                  // 辅助函数
+                  // ========================================
+
+                  /// 结算市场强平
+                  async fn settle_market_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      avg_price: String,
+                      loss: i64,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
+                      let insurance_fund_loss = if loss > margin_loss {
+                          loss - margin_loss
+                      } else {
+                          0
+                      };
+
+                      // 扣除保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
+
+                      // 如有超出部分，从保险基金扣除
+                      if insurance_fund_loss > 0 {
+                          insurance_fund_deduct(insurance_fund_loss as u64).await?;
+                      }
+
+                      // 更新持仓状态
+                      update_position_status(position_id, PositionStatus::Liquidated).await?;
+
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
+                          position_id,
+                          liquidation_type: "MARKET".to_string(),
+                          liquidation_price: avg_price,
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: insurance_fund_loss.to_string(),
+                          order_status: "FILLED".to_string(),
+                      })
+                  }
+
+                  /// 结算保险基金接管
+                  async fn settle_insurance_fund_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      takeover_result: InsuranceFundTakeover,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
+
+                      // 扣除保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
+
+                      // 保险基金承担全部损失
+                      insurance_fund_deduct(takeover_result.total_loss).await?;
+
+                      // 更新持仓状态
+                      update_position_status(position_id, PositionStatus::Liquidated).await?;
+
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
+                          position_id,
+                          liquidation_type: "INSURANCE_FUND".to_string(),
+                          liquidation_price: position.liquidation_price.clone(),
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: takeover_result.total_loss.to_string(),
+                          order_status: "NEW_INSURANCE".to_string(),
+                      })
+                  }
+
+                  /// 结算ADL强平
+                  async fn settle_adl_liquidation(
+                      position_id: PositionId,
+                      position: &Position,
+                      adl_result: ADLResult,
+                  ) -> Result<LiquidationResult, Error> {
+                      let margin_loss = position.isolated_margin.parse::<i64>()?;
+
+                      // 扣除被强平方的保证金
+                      deduct_margin(position.trader, margin_loss as u64).await?;
+
+                      // 更新持仓状态
+                      update_position_status(position_id, PositionStatus::Liquidated).await?;
+
+                      // 通知用户
+                      send_liquidation_notification(position.trader, position_id, margin_loss).await?;
+
+                      Ok(LiquidationResult {
+                          position_id,
+                          liquidation_type: "ADL".to_string(),
+                          liquidation_price: position.liquidation_price.clone(),
+                          liquidated_quantity: position.position_amount.clone(),
+                          margin_loss: margin_loss.to_string(),
+                          insurance_fund_loss: "0".to_string(),
+                          order_status: "NEW_ADL".to_string(),
+                      })
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>RISK_ENGINE</Performer>
+          <Description>
+            币安三级强平机制：
+            1. 市场强平：优先尝试在市场中平仓
+            2. 风险保障基金：市场流动性不足时，由保险基金接管
+            3. 自动减仓（ADL）：保险基金不足时，对手方盈利仓位被强制平仓
+
+            对应API：GET /fapi/v1/allForceOrders
+            订单状态：FILLED | NEW_INSURANCE | NEW_ADL
+          </Description>
+        </Activity>
+
+        <Activity Id="End" Name="强平完成">
+          <Event><EndEvent Result="SUCCESS"/></Event>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="ExecuteLiquidation"/>
+        <Transition Id="T2" From="ExecuteLiquidation" To="End"/>
+      </Transitions>
+    </WorkflowProcess>
+
+    <!-- ==================== 子流程: 资金费率结算流程（定时任务） ==================== -->
+    <WorkflowProcess Id="FundingRateSettlementProcess" Name="资金费率结算流程" AccessLevel="PUBLIC">
+      <ProcessHeader>
+        <Created>2025-12-12</Created>
+        <Description>独立运行的定时任务 - 每8小时执行一次资金费率结算</Description>
+        <Priority>2</Priority>
+      </ProcessHeader>
+
+      <DataFields>
+        <DataField Id="settlement_time" Name="结算时间">
+          <DataType><BasicType Type="DATETIME"/></DataType>
+        </DataField>
+        <DataField Id="funding_rate" Name="资金费率">
+          <DataType><BasicType Type="FLOAT"/></DataType>
+        </DataField>
+      </DataFields>
+
+      <Activities>
+        <Activity Id="Start" Name="触发结算">
+          <Event>
+            <StartEvent Trigger="Timer">
+              <TriggerTimer>
+                <TimeCycle>0 */4 * * *</TimeCycle>
+              </TriggerTimer>
+            </StartEvent>
+          </Event>
+          <Description>
+            每4小时触发一次 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+            实际结算根据每个合约的funding_interval_hours配置执行：
+            - 8小时合约：仅在00:00, 08:00, 16:00执行
+            - 4小时合约：每4小时执行
+          </Description>
+        </Activity>
+
+        <Activity Id="SettleFunding" Name="结算资金费率">
+          <Implementation>
+            <Task>
+              <TaskScript>
+                <Script Type="rust/composite">
+                  <![CDATA[
+                  // 资金费率结算流程（支持动态间隔）
+                  async fn settle_funding_rates(settlement_time: DateTime) -> Result<(), Error> {
+                      // 获取所有交易对
+                      let symbols = get_all_active_symbols().await?;
+
+                      // 获取当前UTC小时
+                      let current_hour = settlement_time.hour();
+
+                      for symbol in symbols {
+                          // 获取合约规格
+                          let contract_specs = get_contract_specs(symbol).await?;
+                          let funding_interval_hours = contract_specs.funding_interval_hours;
+
+                          // 检查是否到达该合约的结算时间
+                          if !should_settle_funding(current_hour, funding_interval_hours) {
+                              continue;  // 跳过不需要结算的合约
+                          }
+
+                          // 1. 计算资金费率
+                          let mark_price = get_mark_price(symbol).await?;
+                          let index_price = get_index_price(symbol).await?;
+
+                          // Premium Index = (Mark Price - Index Price) / Index Price
+                          let premium_index = (mark_price as f64 - index_price as f64) / index_price as f64;
+
+                          // 根据结算间隔调整Interest Rate
+                          // 默认年化利率0.03%（日利率0.03%），按间隔分摊
+                          let interest_rate = match funding_interval_hours {
+                              4 => 0.0001 / 2.0,  // 0.005% per 4h（日利率的1/6）
+                              8 => 0.0001,        // 0.01% per 8h（日利率的1/3，默认）
+                              _ => 0.0001,        // 默认8小时
+                          };
+
+                          // Funding Rate = Premium Index + clamp(Interest - Premium, -0.05%, 0.05%)
+                          let clamped_diff = (interest_rate - premium_index).clamp(-0.0005, 0.0005);
+                          let funding_rate = premium_index + clamped_diff;
+
+                          publish_event(FundingRateCalculatedEvent {
+                              symbol,
+                              funding_rate,
+                              premium_index,
+                              settlement_time,
+                          }).await?;
+
+                          // 2. 查询所有持仓
+                          let positions = get_open_positions_by_symbol(symbol).await?;
+
+                          // 3. 批量结算
+                          for position in positions {
+                              let position_value = (mark_price * position.quantity) as f64;
+                              let funding_fee = (position_value * funding_rate) as i64;
+
+                              // 多仓支付，空仓收取（当funding_rate > 0时）
+                              let actual_fee = match position.side {
+                                  PositionSide::Long => -funding_fee,  // 支付
+                                  PositionSide::Short => funding_fee,  // 收取
+                              };
+
+                              // 更新余额
+                              if actual_fee < 0 {
+                                  deduct_balance(position.trader, actual_fee.abs() as u64).await?;
+                              } else {
+                                  credit_balance(position.trader, actual_fee as u64).await?;
+                              }
+
+                              publish_event(FundingFeeSettledEvent {
+                                  position_id: position.position_id,
+                                  trader: position.trader,
+                                  funding_fee: actual_fee,
+                                  funding_rate,
+                              }).await?;
+                          }
+
+                          // 4. 保存历史记录
+                          save_funding_rate_history(FundingRateRecord {
+                              symbol,
+                              funding_rate,
+                              funding_interval_hours,
+                              settlement_time,
+                          }).await?;
+                      }
+
+                      Ok(())
+                  }
+
+                  // 辅助函数：判断当前时间是否为合约的结算时间
+                  fn should_settle_funding(current_hour: u32, interval_hours: u32) -> bool {
+                      match interval_hours {
+                          4 => current_hour % 4 == 0,  // 每4小时（0, 4, 8, 12, 16, 20）
+                          8 => current_hour % 8 == 0,  // 每8小时（0, 8, 16）
+                          _ => current_hour % 8 == 0,  // 默认8小时
+                      }
+                  }
+                  ]]>
+                </Script>
+              </TaskScript>
+            </Task>
+          </Implementation>
+          <Performer>FUNDING_RATE_ENGINE</Performer>
+        </Activity>
+
+        <Activity Id="End" Name="结算完成">
+          <Event><EndEvent Result="SUCCESS"/></Event>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="SettleFunding"/>
+        <Transition Id="T2" From="SettleFunding" To="End"/>
+      </Transitions>
+    </WorkflowProcess>
+
+  </WorkflowProcesses>
+
+  <!-- 扩展属性 -->
+  <ExtendedAttributes>
+    <ExtendedAttribute Name="Performance-SLA">
+      <ExtendedAttribute Name="MainProcess-Latency" Value="100μs"/>
+      <ExtendedAttribute Name="Liquidation-Latency" Value="50μs"/>
+      <ExtendedAttribute Name="Throughput-TPS" Value="100000"/>
+    </ExtendedAttribute>
+
+    <ExtendedAttribute Name="Architecture">
+      <ExtendedAttribute Name="Pattern" Value="CQRS + Event Sourcing"/>
+      <ExtendedAttribute Name="Language" Value="Rust"/>
+      <ExtendedAttribute Name="Storage" Value="Event Store + Projection DB"/>
+      <ExtendedAttribute Name="Design" Value="Activity-Based Composition"/>
+    </ExtendedAttribute>
+
+    <ExtendedAttribute Name="Risk-Parameters">
+      <ExtendedAttribute Name="MaxLeverage" Value="125"/>
+      <ExtendedAttribute Name="MaintenanceMarginRate" Value="0.5%"/>
+      <ExtendedAttribute Name="FundingInterval" Value="8h"/>
+      <ExtendedAttribute Name="LiquidationFee" Value="0.5%"/>
+    </ExtendedAttribute>
+
+    <ExtendedAttribute Name="Design-Principles">
+      <ExtendedAttribute Name="MainProcess" Value="永续合约交易流程 - 包含所有用户发起的交易活动"/>
+      <ExtendedAttribute Name="Activities" Value="开仓、平仓、调整杠杆、追加保证金、减少保证金 - 作为主流程中的活动"/>
+      <ExtendedAttribute Name="SubProcesses" Value="强平流程、资金费率结算 - 系统自动触发的独立流程"/>
+    </ExtendedAttribute>
+
+    <!-- 币安API限频规则 -->
+    <ExtendedAttribute Name="BinanceAPILimits">
+      <!-- 订单频率限制 -->
+      <ExtendedAttribute Name="OrderRateLimit" Value="300 orders/10s per account"/>
+      <ExtendedAttribute Name="OrderRateLimit-Description" Value="每个账户10秒内最多300个订单（包括下单、撤单、修改订单）"/>
+
+      <!-- 请求权重限制 -->
+      <ExtendedAttribute Name="RequestWeight" Value="2400 weight/1min per IP"/>
+      <ExtendedAttribute Name="RequestWeight-Description" Value="每个IP每分钟请求权重上限2400，超出后触发418或429错误"/>
+
+      <!-- 原始请求数限制 -->
+      <ExtendedAttribute Name="RawRequests" Value="6000 requests/5min per IP"/>
+      <ExtendedAttribute Name="RawRequests-Description" Value="每个IP 5分钟内最多6000次请求"/>
+
+      <!-- 具体端点权重 -->
+      <ExtendedAttribute Name="POST_order_weight" Value="0 or 1"/>
+      <ExtendedAttribute Name="POST_order_description" Value="下单权重：GTC订单=0，其他=1"/>
+
+      <ExtendedAttribute Name="GET_positionRisk_weight" Value="5"/>
+      <ExtendedAttribute Name="GET_positionRisk_description" Value="查询持仓风险权重=5"/>
+
+      <ExtendedAttribute Name="POST_leverage_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_leverage_description" Value="调整杠杆权重=1"/>
+
+      <ExtendedAttribute Name="POST_marginType_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_marginType_description" Value="变更保证金类型权重=1"/>
+
+      <ExtendedAttribute Name="POST_positionMargin_weight" Value="1"/>
+      <ExtendedAttribute Name="POST_positionMargin_description" Value="调整逐仓保证金权重=1"/>
+
+      <ExtendedAttribute Name="GET_allOrders_weight" Value="5"/>
+      <ExtendedAttribute Name="GET_allOrders_description" Value="查询所有订单权重=5"/>
+
+      <ExtendedAttribute Name="DELETE_order_weight" Value="1"/>
+      <ExtendedAttribute Name="DELETE_order_description" Value="撤销订单权重=1"/>
+
+      <!-- WebSocket限制 -->
+      <ExtendedAttribute Name="WebSocketConnections" Value="5 connections/s per IP"/>
+      <ExtendedAttribute Name="WebSocketConnections-Description" Value="每个IP每秒最多建立5个WebSocket连接"/>
+
+      <ExtendedAttribute Name="WebSocketSubscriptions" Value="200 streams per connection"/>
+      <ExtendedAttribute Name="WebSocketSubscriptions-Description" Value="每个连接最多订阅200个数据流"/>
+
+      <ExtendedAttribute Name="WebSocketMessageRate" Value="10 messages/s per connection"/>
+      <ExtendedAttribute Name="WebSocketMessageRate-Description" Value="每个连接每秒最多发送10条消息"/>
+    </ExtendedAttribute>
+
+    <!-- 限频响应头 -->
+    <ExtendedAttribute Name="RateLimitHeaders">
+      <ExtendedAttribute Name="X-MBX-USED-WEIGHT-1M" Value="当前1分钟内已使用的请求权重"/>
+      <ExtendedAttribute Name="X-MBX-ORDER-COUNT-10S" Value="当前10秒内的下单次数"/>
+      <ExtendedAttribute Name="X-SAPI-USED-UID-WEIGHT-1M" Value="当前UID 1分钟内已使用权重"/>
+      <ExtendedAttribute Name="Retry-After" Value="触发限频后建议的重试等待时间（秒）"/>
+      <ExtendedAttribute Name="Header-Usage" Value="客户端应监控这些响应头，主动控制请求频率，避免触发418/429限频错误"/>
+    </ExtendedAttribute>
+
+    <!-- 限频错误处理策略 -->
+    <ExtendedAttribute Name="RateLimitErrorHandling">
+      <ExtendedAttribute Name="HTTP-418" Value="IP被封禁，需等待自动解封（通常2分钟 - 3天）"/>
+      <ExtendedAttribute Name="HTTP-429" Value="请求过多，应实施指数退避策略"/>
+      <ExtendedAttribute Name="ExponentialBackoff" Value="建议退避序列：100ms, 200ms, 400ms, 800ms, 1.6s, 3.2s"/>
+      <ExtendedAttribute Name="CircuitBreaker" Value="连续触发限频5次后应启动熔断器，暂停请求60秒"/>
+    </ExtendedAttribute>
+  </ExtendedAttributes>
+
+</Package>

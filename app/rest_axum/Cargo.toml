@@ -1,0 +1,16 @@
+[package]
+name = "rest_axum"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+simd-json = "0.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sbe = { path = "../../lib/common/sbe" }

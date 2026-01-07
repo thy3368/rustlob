@@ -1,0 +1,1 @@
+# 设计资产管理 出入金等业务command及entity 以及与account的协同  写在/Users/hongyaotang/src/rustlob/lib/core/funds/design.md

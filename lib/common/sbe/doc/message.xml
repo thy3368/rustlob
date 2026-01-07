@@ -1,0 +1,16 @@
+<sbe:messageSchema xmlns:sbe="http://real-logic.co.uk/sbe/draft/0.9" package="com.tanggo.fund.metadriven.sbe" id="1">
+    <types>
+        <composite name="messageHeader" description="Message header">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+    </types>
+    <sbe:message name="Trade" id="1">
+        <field name="tradeId" id="1" type="uint64"/>
+        <field name="symbol" id="2" type="char" length="10"/>
+        <field name="price" id="3" type="double"/>
+        <field name="quantity" id="4" type="int32"/>
+    </sbe:message>
+</sbe:messageSchema>

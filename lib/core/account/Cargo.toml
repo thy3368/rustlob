@@ -1,0 +1,11 @@
+[package]
+name = "account"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+base_types = { path = "../../../lib/common/base_types" }
+entity_derive = { path = "../../../lib/common/entity_derive" }
+diff = { path = "../../../lib/common/diff" }

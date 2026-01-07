@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/app/dapp/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/sapp/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/domain/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/study/web3/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/sapp/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/lob/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/lob/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/sapp/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/study/hotstuff/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/study/hotstuff/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/cqrs/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/account/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/option/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/prep/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/spot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/funds/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/settlement/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/support/algo/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/support/algo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/id_generator/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/market_data/spot_market_data/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/account/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/base_types/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/entity_derive/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/entity_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/entity_derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/fixed_point/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/fixed_point/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/repo_def/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/decimal/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/fee/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/fee/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/study/zk-snarks/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/fast/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/fixp/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/ws-gateway/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/ws_gateway/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/ws_gateway/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/rest_axum/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/websocket_axum/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/websocket_sockudo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sequencer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
+      <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
+      <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/study/web3/target" />
+      <excludeFolder url="file://$MODULE_DIR$/lib/lob/target" />
+      <excludeFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

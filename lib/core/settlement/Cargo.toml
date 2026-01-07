@@ -1,0 +1,9 @@
+[package]
+name = "settlement"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+base_types = { path = "../../common/base_types" }

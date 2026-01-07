@@ -1,0 +1,620 @@
+{
+  "mode": "system",
+  "system": [
+    {
+      "maxSize": "2147483647",
+      "services": [],
+      "type": "",
+      "repository": [],
+      "script": [
+        {
+          "name": "install",
+          "path": "./filebeat_simple/scripts/install.py",
+          "describe": "安装"
+        },
+        {
+          "name": "afterInstall",
+          "path": "./filebeat_simple/scripts/afterInstall.py",
+          "describe": "安装后配置"
+        },
+        {
+          "name": "start",
+          "path": "./filebeat_simple/scripts/start.py",
+          "describe": "启动"
+        },
+        {
+          "name": "stop",
+          "path": "./filebeat_simple/scripts/stop.py",
+          "describe": "停止"
+        },
+        {
+          "name": "validateStart",
+          "path": "./filebeat_simple/scripts/validateStart.py",
+          "describe": "验证启动"
+        },
+        {
+          "name": "validateStop",
+          "path": "./filebeat_simple/scripts/validateStop.py",
+          "describe": "验证停止"
+        },
+        {
+          "name": "uninstall",
+          "path": "./filebeat_simple/scripts/uninstall.py",
+          "describe": "卸载"
+        }
+      ],
+      "mode": "cluster",
+      "node": [
+        {
+          "variable": [
+            {
+              "name": "hslog_type",
+              "type": "select",
+              "options": [
+                {
+                  "text": "light",
+                  "value": "light"
+                },
+                {
+                  "text": "normal",
+                  "value": "normal"
+                }
+              ],
+              "label": "日志中心类型",
+              "tooltip": "轻量日志中心为light，全量日志中心为normal",
+              "default": "light",
+              "value": "light"
+            },
+            {
+              "name": "projectId",
+              "label": "全链路topic",
+              "tooltip": "与日志中心的全链路topic值一致",
+              "type": "input",
+              "visible": "false",
+              "required": "true",
+              "default": "apm",
+              "value": "apm"
+            },
+            {
+              "name": "user",
+              "label": "安装用户",
+              "type": "input",
+              "required": "false",
+              "default": "filebeat",
+              "value": "filebeat"
+            },
+            {
+              "name": "workspace",
+              "label": "安装目录",
+              "type": "input",
+              "validate": "Dir",
+              "required": "true",
+              "tooltip": "请填写绝对路径,确保目录该为空,且用户有读写权限。配置示例：Linux系统下目录路径格式为/aa/bb/cc;Windows系统下目录路径为D:\\aa\\bb\\cc",
+              "default": "/home/filebeat",
+              "value": "/home/filebeat"
+            },
+            {
+              "name": "installed_tag",
+              "label": "安装来源",
+              "type": "input",
+              "required": "false",
+              "tooltip": "用于标记节点的安装来源,日志中心自动安装的节点值为auto"
+            },
+            {
+              "type": "input",
+              "name": "max_cores",
+              "label": "CPU核数",
+              "tooltip": "filebeat最多使用CPU核数",
+              "visible": "true",
+              "required": "true",
+              "validate": "size(1/10000)",
+              "default": "1",
+              "value": "1"
+            },
+            {
+              "label": "设置内存上限",
+              "name": "memory_setting",
+              "options": [
+                {
+                  "text": "是",
+                  "value": "true"
+                },
+                {
+                  "text": "否",
+                  "value": "false"
+                }
+              ],
+              "tooltip": "该配置目前仅支持大部分linux操作系统，请确认服务器已安装cgroup命令，若当前安装用户为非root，则需确认该用户已获得cgroup权限",
+              "type": "switchForm",
+              "default": "false",
+              "value": "false",
+              "field": [
+                "max_memory"
+              ]
+            },
+            {
+              "type": "input",
+              "name": "max_memory",
+              "label": "内存上限",
+              "tooltip": "单位mb",
+              "visible": "true",
+              "required": "false",
+              "validate": "Integer",
+              "default": "2048",
+              "value": "2048",
+              "parent": "memory_setting"
+            },
+            {
+              "label": "清空历史数据",
+              "name": "clearHistory",
+              "options": [
+                {
+                  "text": "是",
+                  "value": "true"
+                },
+                {
+                  "text": "否",
+                  "value": "false"
+                }
+              ],
+              "tooltip": "开启表示重装并清空目录，关闭表示只覆盖配置文件。",
+              "type": "switch",
+              "default": "false",
+              "value": "false"
+            },
+            {
+              "type": "division",
+              "name": "filebeat_common",
+              "label": "通用配置",
+              "visible": "true",
+              "fold": "false",
+              "required": "false",
+              "level": 1,
+              "field": [
+                "logging_level",
+                "logging_files_num",
+                "logging_files_rotateeverybytes",
+                "logging_files_interval",
+                "queue_mem_events",
+                "queue_mem_flush_min_events",
+                "queue_mem_flush_timeout",
+                "filebeat_config_inputs_reload_period",
+                "bulk_max_size",
+                "requestHeaderDesensitiseFields",
+                "desensitiseFields"
+              ]
+            },
+            {
+              "type": "select",
+              "name": "logging_level",
+              "label": "日志级别",
+              "visible": "true",
+              "options": [
+                {
+                  "text": "debug",
+                  "value": "debug"
+                },
+                {
+                  "text": "info",
+                  "value": "info"
+                },
+                {
+                  "text": "warning",
+                  "value": "warning"
+                },
+                {
+                  "text": "error",
+                  "value": "error"
+                }
+              ],
+              "required": "true",
+              "default": "info",
+              "value": "info"
+            },
+            {
+              "type": "input",
+              "name": "logging_files_num",
+              "label": "日志文件个数",
+              "visible": "true",
+              "required": "true",
+              "validate": "size(1/1024)",
+              "default": "7",
+              "value": "7"
+            },
+            {
+              "type": "input",
+              "name": "logging_files_rotateeverybytes",
+              "label": "单个日志文件大小上限",
+              "tooltip": "单位:字节,默认大小104857600,即100m",
+              "visible": "true",
+              "required": "true",
+              "validate": "size(1/10485760000)",
+              "default": "104857600",
+              "value": "104857600"
+            },
+            {
+              "type": "input",
+              "name": "logging_files_interval",
+              "label": "日志文件轮转时间间隔",
+              "tooltip": "单位:s(秒),m(分钟),h(小时),当前默认24小时",
+              "visible": "true",
+              "required": "true",
+              "default": "24h",
+              "value": "24h"
+            },
+            {
+              "type": "input",
+              "name": "queue_mem_events",
+              "label": "队列缓存事件数",
+              "visible": "true",
+              "required": "true",
+              "validate": "size(1/1000000)",
+              "default": "4096",
+              "value": "4096"
+            },
+            {
+              "type": "input",
+              "name": "queue_mem_flush_min_events",
+              "label": "一次flush最少缓存事件数",
+              "visible": "true",
+              "required": "true",
+              "validate": "size(1/1000000)",
+              "default": "2048",
+              "value": "2048"
+            },
+            {
+              "type": "input",
+              "name": "queue_mem_flush_timeout",
+              "label": "一次flush超时时间",
+              "visible": "true",
+              "required": "true",
+              "tooltip": "单位s(秒)",
+              "validate": "size(1/600)",
+              "default": "1",
+              "value": "1"
+            },
+            {
+              "type": "input",
+              "name": "filebeat_config_inputs_reload_period",
+              "label": "动态加载配置时间间隔",
+              "visible": "true",
+              "required": "true",
+              "tooltip": "单位s(秒)",
+              "validate": "size(1/600)",
+              "default": "3",
+              "value": "3"
+            },
+            {
+              "type": "input",
+              "name": "bulk_max_size",
+              "label": "最大批量事件数",
+              "visible": "true",
+              "required": "false",
+              "tooltip": "填写正整数数，默认不填时输出到kafka为2048，输出到elasticsearch为50",
+              "validate": "Integer,size(1/100000)"
+            },
+            {
+              "type": "input",
+              "name": "requestHeaderDesensitiseFields",
+              "label": "消息头脱敏字段",
+              "visible": "true",
+              "required": "false",
+              "tooltip": "对链路日志的消息头字段脱敏,多个字段以逗号分割,例如SECURITY.pwd_str_reqheader,SECURITY.password_str_reqheader"
+            },
+            {
+              "type": "input",
+              "name": "desensitiseFields",
+              "label": "脱敏字段",
+              "visible": "true",
+              "required": "false",
+              "tooltip": "对链路日志的数据字段脱敏,多个字段以逗号分割,例如DATASET.password,DATASET.passwd"
+            },
+            {
+              "name": "output_component_type",
+              "label": "输出组件类型",
+              "required": "false",
+              "type": "select",
+              "visible": "true",
+              "tooltip": "输出组件类型",
+              "options": [
+                {
+                  "text": "kafka",
+                  "value": "kafka"
+                },
+                {
+                  "text": "elasticsearch",
+                  "value": "elasticsearch"
+                }
+              ],
+              "default": "elasticsearch",
+              "value": "elasticsearch"
+            },
+            {
+              "type": "division",
+              "name": "output_kafka",
+              "label": "输出到kafka配置（仅全量日志中心需配置此项）",
+              "visible": "true",
+              "fold": "true",
+              "required": "false",
+              "level": 1,
+              "field": [
+                "kafka_max_message_bytes",
+                "kafka_required_ack",
+                "kafka_compression",
+                "kafka_compression_type",
+                "kafka_compression_level",
+                "kafka_relation",
+                "kafka_brokers"
+              ]
+            },
+            {
+              "name": "kafka_max_message_bytes",
+              "label": "单条日志大小上限",
+              "required": "false",
+              "validate": "size(1/1048576000)",
+              "tooltip": "单条日志大小上限，单位字节，超出上限的日志会被丢弃;当前默认值为10MB,推荐配置小于等于kafka的message.max.bytes;",
+              "type": "input",
+              "visible": "true",
+              "default": "10485760",
+              "value": "10485760"
+            },
+            {
+              "name": "kafka_required_ack",
+              "label": "日志发送状态确认",
+              "required": "false",
+              "type": "select",
+              "tooltip": "1表示等待一个kafka分区成功写入即可;0表示只发送不等待kafka写入成功状态返回;-1表示等待kafka所有分区副本写入成功",
+              "options": [
+                {
+                  "text": "1",
+                  "value": "1"
+                },
+                {
+                  "text": "0",
+                  "value": "0"
+                },
+                {
+                  "text": "-1",
+                  "value": "-1"
+                }
+              ],
+              "visible": "true",
+              "default": "1",
+              "value": "1"
+            },
+            {
+              "name": "kafka_compression",
+              "label": "是否开启压缩",
+              "required": "false",
+              "type": "switchForm",
+              "tooltip": "关闭则表示不使用压缩",
+              "default": "false",
+              "visible": "true",
+              "value": "false",
+              "field": [
+                "kafka_compression_type",
+                "kafka_compression_level"
+              ]
+            },
+            {
+              "name": "kafka_compression_type",
+              "label": "压缩类型",
+              "required": "false",
+              "type": "select",
+              "visible": "true",
+              "tooltip": "压缩类型,取值范围snappy,lz4,gzip,默认值是gzip",
+              "options": [
+                {
+                  "text": "snappy",
+                  "value": "snappy"
+                },
+                {
+                  "text": "lz4",
+                  "value": "lz4"
+                },
+                {
+                  "text": "gzip",
+                  "value": "gzip"
+                }
+              ],
+              "default": "gzip",
+              "value": "gzip",
+              "parent": "kafka_compression"
+            },
+            {
+              "name": "kafka_compression_level",
+              "label": "压缩级别",
+              "tooltip": "压缩级别，范围1-9，1表示速度最快，压缩比最小，9表示速度最慢，压缩比最高;压缩级别越高,cpu使用越高",
+              "required": "false",
+              "validate": "size(1/9)",
+              "visible": "true",
+              "type": "input",
+              "default": "4",
+              "value": "4",
+              "parent": "kafka_compression"
+            },
+            {
+              "label": "手工配置kafka",
+              "name": "kafka_relation",
+              "required": "false",
+              "default": "false",
+              "tooltip": "打开之后需要手动输入kafka地址；关闭则默认使用日志中心内置kafka组件;手工配置的优先级更高",
+              "type": "switchForm",
+              "value": "false",
+              "field": [
+                "kafka_brokers"
+              ]
+            },
+            {
+              "name": "kafka_brokers",
+              "label": "Kafka地址",
+              "required": "false",
+              "tooltip": "多个以逗号分割。例：127.0.0.1:9092,127.0.0.2:9092,127.0.0.3:9092",
+              "type": "input",
+              "parent": "kafka_relation"
+            },
+            {
+              "type": "division",
+              "name": "output_es",
+              "label": "输出到es配置",
+              "visible": "true",
+              "fold": "false",
+              "required": "false",
+              "level": 1,
+              "field": [
+                "es_relation",
+                "es_brokers_input",
+                "es_http_username",
+                "es_http_password",
+                "metric_es_brokers",
+                "metric_es_http_username",
+                "metric_es_http_password"
+              ]
+            },
+            {
+              "label": "手工配置es",
+              "name": "es_relation",
+              "required": "false",
+              "default": "false",
+              "tooltip": "打开之后需要手动输入ES地址；关闭则默认使用日志中心es组件;手工配置的优先级更高",
+              "type": "switchForm",
+              "value": "false",
+              "field": [
+                "es_brokers_input",
+                "es_http_username",
+                "es_http_password"
+              ]
+            },
+            {
+              "name": "es_brokers_input",
+              "label": "ES地址",
+              "required": "false",
+              "tooltip": "多个节点以逗号分割。例：127.0.0.1:9200,127.0.0.2:9200,127.0.0.3:9200",
+              "type": "input",
+              "parent": "es_relation"
+            },
+            {
+              "label": "ES账号",
+              "name": "es_http_username",
+              "required": "false",
+              "tooltip": "ES账号和密码都填写表示es开启了鉴权",
+              "type": "input",
+              "parent": "es_relation"
+            },
+            {
+              "label": "es密码",
+              "name": "es_http_password",
+              "required": "false",
+              "tooltip": "ES账号和密码都填写表示es开启了鉴权",
+              "type": "password",
+              "parent": "es_relation"
+            },
+            {
+              "name": "metric_es_brokers",
+              "type": "input",
+              "label": "监控指标存储的es地址",
+              "required": "false",
+              "visible": "true",
+              "tooltip": "多个节点以逗号分割。例：127.0.0.1:9200,127.0.0.2:9200,127.0.0.3:9200"
+            },
+            {
+              "label": "监控指标存储的es账号",
+              "name": "metric_es_http_username",
+              "required": "false",
+              "tooltip": "ES账号和密码都填写表示es开启了鉴权",
+              "type": "input"
+            },
+            {
+              "label": "监控指标存储的es密码",
+              "name": "metric_es_http_password",
+              "required": "false",
+              "tooltip": "ES账号和密码都填写表示es开启了鉴权",
+              "type": "password"
+            }
+          ],
+          "mode": "application",
+          "config": [
+            {
+              "path": "./filebeat_simple/scripts/util.py",
+              "template": "./util.py",
+              "reference": ""
+            },
+            {
+              "path": "./filebeat_simple/scripts/monitor.py",
+              "template": "./monitor.py",
+              "reference": ""
+            },
+            {
+              "path": "./filebeat_simple/scripts/start.py",
+              "template": "./start.py",
+              "reference": ""
+            },
+            {
+              "path": "./filebeat_simple/scripts/afterInstall.py",
+              "template": "./afterInstall.py",
+              "reference": ""
+            },
+            {
+              "path": "./filebeat_simple/template/fb.yml",
+              "template": "./fb.yml"
+            }
+          ],
+          "op_lock": "806475041"
+        }
+      ],
+      "op_lock": "806475041",
+      "name": "filebeat",
+      "variable": [
+        {
+          "type": "smallfile",
+          "name": "rule_ini_file",
+          "label": "rule.ini配置文件",
+          "visible": "true",
+          "tooltip": "使用rule.ini方式需点击上传配置文件，此处优先级高于制品内置rule.ini文件，确保文件格式正确，且文件编码格式为utf-8",
+          "required": "false"
+        },
+        {
+          "name": "hslog_system_id",
+          "type": "input",
+          "label": "日志中心应用id",
+          "required": "false",
+          "visible": "false",
+          "tooltip": "用于绑定日志中心应用"
+        }
+      ],
+      "minSize": "0",
+      "id": "filebeat",
+      "monitors": [
+        {
+          "template": "filebeat.json"
+        },
+        {
+          "template": "process-filebeat-simple.json"
+        }
+      ]
+    }
+  ],
+  "op_lock": "806475041",
+  "appInfo": {
+    "clearWk": "false",
+    "enableBeta": "false",
+    "shareHost": "false",
+    "groupMode": "clusterAsGroup",
+    "groupSize": "2",
+    "enableRegister": "true",
+    "customize": []
+  },
+  "name": "filebeat",
+  "basic": {
+    "packType": "pack",
+    "systemType": "filebeat_simple",
+    "appType": "filebeat_simple",
+    "appName": "filebeat_simple",
+    "appDescribe": "filebeat_simple",
+    "version": "SEE2.0-HSLog-FILEBEAT-V202401-20-002",
+    "packInEffect": "",
+    "productId": "99a6c217-2ffd-4e12-83f5-35af2c50f2bd",
+    "packSvcType": "NORMAL"
+  },
+  "type": ""
+}

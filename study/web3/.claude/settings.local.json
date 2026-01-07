@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo doc:*)",
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(xargs cat:*)",
+      "Bash(cargo test:*)",
+      "Bash(rustup update:*)",
+      "Bash(rustc:*)",
+      "Bash(rustup default:*)",
+      "Bash(cargo clean:*)",
+      "Bash(cargo build:*)",
+      "Bash(cat src/lob/domain/service/matching_service.rs)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

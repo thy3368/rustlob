@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/hongyaotang/src/rustlob/app/design/process/spot*.md)",
+      "WebSearch",
+      "Bash(cargo test --lib id_generator::tests::test_generate_order_id -- --nocapture)",
+      "Bash(cargo test --lib id_generator -- --nocapture)",
+      "Bash(cargo test --lib id_generator::tests::test_concurrent -- --nocapture)",
+      "Bash(cargo test -- --nocapture)",
+      "Bash(cargo check)",
+      "Bash(ls -la /Users/hongyaotang/src/rustlob/lib/core/exchange/lob/src/id_generator*)",
+      "Bash(cargo test --lib)",
+      "Bash(cargo test)",
+      "Bash(cargo check --package sapp)",
+      "Bash(cargo test scenario_trader_opens_long_position_on_btc -- --nocapture)",
+      "Bash(find tests -name \"*.rs\" -exec sed -i '' 's/fn open_position(&mut self,/fn open_position(\\&self,/g; s/fn close_position(&mut self,/fn close_position(\\&self,/g; s/fn cancel_order(&mut self,/fn cancel_order(\\&self,/g; s/fn modify_order(&mut self,/fn modify_order(\\&self,/g; s/fn cancel_all_orders(&mut self,/fn cancel_all_orders(\\&self,/g; s/fn set_leverage(&mut self,/fn set_leverage(\\&self,/g; s/fn set_margin_type(&mut self,/fn set_margin_type(\\&self,/g; s/fn set_position_mode(&mut self,/fn set_position_mode(\\&self,/g' {} ;)",
+      "Bash(cargo test workflow_test --lib)",
+      "Bash(cargo test --test workflow_test scenario_trader_opens_long_position_on_btc -- --nocapture)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

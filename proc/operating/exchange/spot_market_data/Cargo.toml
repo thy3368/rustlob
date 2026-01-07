@@ -1,0 +1,22 @@
+[package]
+name = "spot_market_data_proc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lob = { path = "../../../../lib/core/exchange/lob" }
+spot_market_data = { path = "../../../../lib/core/market_data/spot_market_data" }
+account = { path = "../../../../lib/core/account" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "orderbook_delta_allocation"
+harness = false
+
+[[bench]]
+name = "orderdelta_optimized"
+harness = false

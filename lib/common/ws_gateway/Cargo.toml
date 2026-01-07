@@ -1,0 +1,22 @@
+[package]
+name = "ws_gateway"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+tokio-tungstenite = "0.23"
+futures = "0.3"
+bytes = "1.8"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+sbe = { path = "../sbe" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[example]]
+name = "server"
+path = "examples/server.rs"

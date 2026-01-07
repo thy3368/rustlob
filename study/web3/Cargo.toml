@@ -1,0 +1,87 @@
+[package]
+name = "web3"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "chat"
+path = "src/libp2p/chat.rs"
+
+[[bin]]
+name = "kaemon"
+path = "src/kaemon/main.rs"
+
+[[bin]]
+name = "kameo_simple"
+path = "src/kaemon/kameo_simple.rs"
+
+[[bin]]
+name = "kameo_simple1"
+path = "src/kaemon/kameo_simple1.rs"
+
+[[bin]]
+name = "sup"
+path = "src/kaemon/supervisor.rs"
+
+[[bin]]
+name = "revm_counter"
+path = "src/revm/main.rs"
+
+[[bin]]
+name = "mpt_demo"
+path = "src/mpt/main.rs"
+
+[[bin]]
+name = "zevm_demo"
+path = "src/zvem/main.rs"
+
+[[bin]]
+name = "boojum_demo"
+path = "src/boojum/demo.rs"
+
+
+[[bin]]
+name = "boojum_demo2"
+path = "src/boojum/demo_fixed.rs"
+
+
+[dependencies]
+tokio = { version = "1.48", features = ["full"] }
+libp2p = { version = "0.54", features = [
+    "tokio",
+    "tcp",
+    "noise",
+    "yamux",
+    "gossipsub",
+    "mdns",
+    "identify",
+    "kad",
+    "macros",
+] }
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-std = { version = "1.12", features = ["attributes"] }
+clap = { version = "4.5", features = ["derive"] }
+kameo = "0.19.0"
+revm = { version = "18.0.0", features = ["std"] }
+alloy-primitives = "0.8"
+hex = "0.4"
+derive_more = { version = "1.0", features = ["full"] }
+sha3 = "0.10"
+tempfile = "3.8"
+sha2 = "0.10"
+
+# Halo2 零知识证明库
+halo2_proofs = "0.3"
+ff = "0.13"
+group = "0.13"
+rand = "0.8"
+
+# Boojum 零知识证明库 (zkSync Era)
+# 使用 git 版本获取最新修复
+# 暂时禁用以测试 EVM 指令集
+# boojum = { git = "https://github.com/matter-labs/era-boojum", default-features = false }
+# circuit_definitions = "0.150"

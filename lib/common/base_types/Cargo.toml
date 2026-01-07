@@ -1,0 +1,11 @@
+[package]
+name = "base_types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+entity_derive = { path = "../entity_derive" }
+diff = { path = "../diff" }
+decimal = { path = "../decimal" }
