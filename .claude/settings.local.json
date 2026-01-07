@@ -52,7 +52,21 @@
       "Bash(git init:*)",
       "Bash(git commit:*)",
       "Bash(xargs:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(ssh:*)",
+      "Bash(ping:*)",
+      "Bash(ssh-add:*)",
+      "Bash(env:*)",
+      "Bash(curl:*)",
+      "Bash(scutil:*)",
+      "Bash(sysctl:*)",
+      "Bash(networksetup:*)",
+      "Bash(route -n get:*)",
+      "Bash(timeout:*)",
+      "Bash(traceroute:*)"
     ],
     "deny": [],
     "ask": []
