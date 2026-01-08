@@ -126,7 +126,7 @@ fn main() {
 
     println!("=== 示例结束 ===");
     println!("\n提示：");
-    println!("- 查看完整文档: lib/core/exchange/lob/examples/TRADER_GUIDE.md");
-    println!("- 查看完整代码: lib/core/exchange/lob/examples/trader_example.rs");
+    println!("- 查看完整文档: lib/core/exchange/lob_repo/examples/TRADER_GUIDE.md");
+    println!("- 查看完整代码: lib/core/exchange/lob_repo/examples/trader_example.rs");
     println!("- 运行完整测试: cargo test --example trader_example");
 }

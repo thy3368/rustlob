@@ -11,7 +11,7 @@ license.workspace = true
 account = { path = "../../../../lib/core/account" }
 
 # LOB 仓储依赖
-lob_repo = { path = "../../../../lib/common/lob" }
+lob_repo = { path = "../../../../lib/common/lob_repo" }
 base_types = { path = "../../../../lib/common/base_types" }
 
 # Diff tracking

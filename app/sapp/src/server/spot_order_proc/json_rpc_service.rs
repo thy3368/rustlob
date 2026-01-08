@@ -168,7 +168,7 @@ impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> 
     fn health(&self) -> Result<HealthResponse> {
         Ok(HealthResponse {
             status: "ok".to_string(),
-            service: "lob-matching-service".to_string(),
+            service: "lob_repo-matching-service".to_string(),
             version: "0.1.0".to_string()
         })
     }

@@ -43,9 +43,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/src" isTestSource="false" />
@@ -73,8 +70,13 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sequencer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/rest_actix/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_axum/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_sockudo/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/websocket_tungstenite/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />

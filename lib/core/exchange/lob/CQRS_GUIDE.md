@@ -283,7 +283,7 @@ match handler.handle(cmd).await {
 
 ```rust
 // 启用 serde 特性
-// Cargo.toml: lob = { version = "0.1", features = ["serde"] }
+// Cargo.toml: lob_repo = { version = "0.1", features = ["serde"] }
 
 use serde_json;
 

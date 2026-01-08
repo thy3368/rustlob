@@ -227,7 +227,7 @@ impl<O: Order> LocalLobBTreeMap<O> {
     ///
     /// # 示例
     /// ```ignore
-    /// let (bids, asks) = lob.market_depth(5);
+    /// let (bids, asks) = lob_repo.market_depth(5);
     /// // bids: [(50000.0, 2.5), (49999.0, 1.0), ...]  从高到低
     /// // asks: [(50001.0, 1.5), (50002.0, 3.0), ...]  从低到高
     /// ```

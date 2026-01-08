@@ -173,7 +173,7 @@ rustlob/
 ### 运行核心库测试
 
 ```bash
-cd lib/core/exchange/lob
+cd lib/core/exchange/lob_repo
 cargo test --all
 # ✅ test result: ok. 48 passed; 0 failed
 ```

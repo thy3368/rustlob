@@ -88,7 +88,7 @@ impl<O: Order> SymbolLob<O> for LocalLobHashMap<O> {
     // 注意：如果订单类型 O 实现了 serde::Serialize 和 serde::Deserialize，
     // 可以覆盖这些方法来提供真正的快照功能。
     //
-    // 示例实现参见：lib/common/lob/examples/snapshot_example.rs
+    // 示例实现参见：lib/common/lob_repo/examples/snapshot_example.rs
     //
     // fn create_snapshot(&self, timestamp: u64, sequence: u64) -> Result<LobSnapshot, RepoError> {
     //     // ... 序列化实现 ...

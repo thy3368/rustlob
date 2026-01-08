@@ -14,7 +14,7 @@ once_cell = "1.19"
 id_generator = { path = "../../../common/id_generator" }
 entity_derive = { path = "../../../common/entity_derive" }
 diff = { path = "../../../common/diff" }
-lob_repo = { path = "../../../common/lob" }
+lob_repo = { path = "../../../common/lob_repo" }
 base_types = { path = "../../../common/base_types" }
 fee = { path = "../../fee" }
 

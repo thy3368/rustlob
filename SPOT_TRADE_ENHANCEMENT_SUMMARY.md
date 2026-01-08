@@ -202,12 +202,12 @@ let commission_rate = 0;       // ❌ 待实现
 
 ### 编译检查
 ```bash
-cargo check -p lob
+cargo check -p lob_repo
 ```
 
 ### 单元测试
 ```bash
-cargo test -p lob test_make_trade_buy_sell_match -- --nocapture
+cargo test -p lob_repo test_make_trade_buy_sell_match -- --nocapture
 ```
 
 ### 预期覆盖

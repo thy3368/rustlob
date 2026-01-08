@@ -14,8 +14,8 @@
 
 // 取消注释以启用基准测试
 // use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
-// use sapp::lob::engine::OrderBook;
-// use sapp::lob::types::{Side, TraderId};
+// use sapp::lob_repo::engine::OrderBook;
+// use sapp::lob_repo::types::{Side, TraderId};
 
 // 基准测试：订单放置性能
 // fn bench_order_placement(c: &mut Criterion) {

@@ -269,7 +269,7 @@ pub trait CmdRepo {
     ///     sequence
     /// );
     ///
-    /// lob.replay_event(&event)?;
+    /// lob_repo.replay_event(&event)?;
     /// ```
     fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError>;
 
@@ -303,7 +303,7 @@ pub trait CmdRepo {
     ///     ChangeLogEntry::new(...),  // Create order 2
     /// ];
     ///
-    /// lob.replay_events(&events)?;
+    /// lob_repo.replay_events(&events)?;
     /// ```
     fn replay_events(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError> {
         for event in events {
@@ -339,14 +339,14 @@ pub trait CmdRepo {
     /// // 恢复流程：
     /// // 1. 加载快照
     /// let snapshot = load_snapshot()?;
-    /// let mut lob = LocalLob::new(...);
-    /// lob.restore_from_snapshot(&snapshot)?;  // sequence = 5000
+    /// let mut lob_repo = LocalLob::new(...);
+    /// lob_repo.restore_from_snapshot(&snapshot)?;  // sequence = 5000
     ///
     /// // 2. 加载变更日志
     /// let events = load_changelog()?;  // 包含所有历史事件
     ///
     /// // 3. 仅应用快照之后的事件
-    /// lob.replay_from_sequence(&events, snapshot.sequence + 1)?;
+    /// lob_repo.replay_from_sequence(&events, snapshot.sequence + 1)?;
     /// // 只会应用 sequence >= 5001 的事件
     /// ```
     fn replay_from_sequence(

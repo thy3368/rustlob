@@ -263,7 +263,7 @@ WalConfig {
 ### 快照配置
 ```rust
 SnapshotConfig {
-    prefix: "lob".to_string(),     // 文件前缀
+    prefix: "lob_repo".to_string(),     // 文件前缀
     enable_compression: true,       // 启用LZ4压缩
     retention_count: 10,            // 保留10个快照
 }

@@ -2733,6 +2733,10 @@ name = "repo_def"
 version = "0.1.0"
 
 [[package]]
+name = "rest_actix"
+version = "0.1.0"
+
+[[package]]
 name = "rest_axum"
 version = "0.1.0"
 dependencies = [
@@ -3964,6 +3968,10 @@ dependencies = [
  "sockudo-ws",
  "tokio",
 ]
+
+[[package]]
+name = "websocket_tungstenite"
+version = "0.1.0"
 
 [[package]]
 name = "winapi"

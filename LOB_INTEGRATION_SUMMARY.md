@@ -137,7 +137,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
    if status == OrderStatus::Submitted {
        let mut lob = self.lob_repo.write().unwrap();
        // 需要 MultiSymbolLobRepo 增加 add_order 方法
-       // lob.add_order(internal_order)?;
+       // lob_repo.add_order(internal_order)?;
    }
    ```
 
@@ -146,7 +146,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
    // 在 cancel_order 方法中
    let mut lob = self.lob_repo.write().unwrap();
    // 需要 MultiSymbolLobRepo 增加 remove_order 方法
-   // lob.remove_order(order_id)?;
+   // lob_repo.remove_order(order_id)?;
    ```
 
 3. **从 LOB 查询订单**:
@@ -154,7 +154,7 @@ impl<R: BalanceRepo, P: PositionRepo<PositionInfo>, L: MultiSymbolLobRepo<Intern
    // 在 query_order 方法中
    let lob = self.lob_repo.read().unwrap();
    // 需要 MultiSymbolLobRepo 增加 find_order 方法
-   // if let Some(order) = lob.find_order(cmd.order_id) { ... }
+   // if let Some(order) = lob_repo.find_order(cmd.order_id) { ... }
    ```
 
 ### 中优先级

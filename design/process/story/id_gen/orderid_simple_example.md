@@ -164,7 +164,7 @@ mod tests {
 ## 集成到订单系统
 
 ```rust
-// src/lob/domain/entity/order.rs
+// src/lob_repo/domain/entity/order.rs
 
 use crate::id_generator::generate_order_id;
 
@@ -208,7 +208,7 @@ impl Order {
 ## 集成到成交系统
 
 ```rust
-// src/lob/domain/entity/trade.rs
+// src/lob_repo/domain/entity/trade.rs
 
 use crate::id_generator::generate_trade_id;
 

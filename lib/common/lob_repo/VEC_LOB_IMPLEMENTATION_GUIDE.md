@@ -608,7 +608,7 @@ async fn main() -> Result<()> {
     let snapshot_mgr = SnapshotManager::new(
         &config.snapshot_dir,
         SnapshotConfig {
-            prefix: "lob".to_string(),
+            prefix: "lob_repo".to_string(),
             enable_compression: true,
             retention_count: 10,
         },

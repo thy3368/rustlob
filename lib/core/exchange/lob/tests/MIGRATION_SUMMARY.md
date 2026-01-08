@@ -74,7 +74,7 @@ use lob::lob::types::{Price, Quantity, Side, Trade, TraderId};
 **变更后**:
 ```rust
 //! ```
-//! use lob::lob::{OrderBook, TraderId, Side};
+//! use lob_repo::lob_repo::{OrderBook, TraderId, Side};
 //! ```
 ```
 
@@ -202,7 +202,7 @@ fn main() {
 ### 2. 发布 lob 库
 
 ```bash
-cd lib/lob
+cd lib/lob_repo
 cargo publish --dry-run  # 预发布检查
 cargo publish            # 发布到 crates.io
 ```
@@ -227,7 +227,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Run lib/lob tests
+      - name: Run lib/lob_repo tests
         run: |
           cd lib/lob
           cargo test
@@ -255,11 +255,11 @@ jobs:
 
 ```bash
 # 1. 恢复测试到 sapp
-cp -r /Users/hongyaotang/src/rustlob/lib/lob/tests/* \
+cp -r /Users/hongyaotang/src/rustlob/lib/lob_repo/tests/* \
       /Users/hongyaotang/src/rustlob/app/sapp/tests/
 
 # 2. 恢复导入路径
-sed -i '' 's/use lob::lob::/use sapp::lob::/g' \
+sed -i '' 's/use lob_repo::lob_repo::/use sapp::lob_repo::/g' \
   /Users/hongyaotang/src/rustlob/app/sapp/tests/lob_integration_tests.rs
 
 # 3. 运行测试验证
