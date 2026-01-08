@@ -74,7 +74,9 @@
       "Bash(pkill:*)",
       "Bash(docker build:*)",
       "Bash(docker-compose up:*)",
-      "Bash(tar:*)"
+      "Bash(tar:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:ai.google.dev)"
     ],
     "deny": [],
     "ask": []
