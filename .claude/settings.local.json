@@ -71,7 +71,10 @@
       "Bash(lsof:*)",
       "Bash(cargo rustc:*)",
       "Bash(cargo doc:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(docker build:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(tar:*)"
     ],
     "deny": [],
     "ask": []
