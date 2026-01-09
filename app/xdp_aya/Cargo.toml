@@ -1,8 +1,22 @@
 [package]
 name = "xdp_aya"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
+version = "0.1.0"
+edition = "2021"
+authors = ["Hongyao Tang"]
+license = "MIT"
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
+simd-json = "0.13"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+aya = { version = "0.13", features = ["async_tokio"] }
+aya-log = "0.2"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+thiserror = "1.0"
+websocket_axum = { path = "../websocket_axum" }
+nix = { version = "0.30", features = ["net"] }
+
+[build-dependencies]
+cc = "1.0"

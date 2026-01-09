@@ -76,7 +76,9 @@
       "Bash(docker-compose up:*)",
       "Bash(tar:*)",
       "WebFetch(domain:docs.rs)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(cargo search:*)",
+      "Bash(rustup target:*)"
     ],
     "deny": [],
     "ask": []

@@ -74,6 +74,7 @@
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_axum/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_sockudo/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_tungstenite/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/xdp-aya-ebpf/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/xdp_aya/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/xdp_libbpf/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/benches" isTestSource="true" />
