@@ -78,7 +78,8 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:ai.google.dev)",
       "Bash(cargo search:*)",
-      "Bash(rustup target:*)"
+      "Bash(rustup target:*)",
+      "Bash(docker:*)"
     ],
     "deny": [],
     "ask": []

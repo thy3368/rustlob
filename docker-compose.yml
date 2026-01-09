@@ -3,23 +3,37 @@ version: '3.8'
 services:
   xdp_aya_builder:
     container_name: xdp_aya_builder
-    image: ubuntu:24.04
+    image: rust:latest
     working_dir: /app
     volumes:
       - ./:/app
     command: >
       bash -c "
-        apt-get update && apt-get install -y --no-install-recommends curl build-essential clang llvm libelf-dev libbpf-dev pkg-config linux-libc-dev git ca-certificates && rm -rf /var/lib/apt/lists/* && update-ca-certificates && curl -k --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source /root/.cargo/env && rustup toolchain install stable && rustc --version && cargo --version && rustup target add aarch64-unknown-linux-gnu && cd app/xdp_aya && cargo build --release --target aarch64-unknown-linux-gnu && ls -la /app/app/xdp_aya/target/aarch64-unknown-linux-gnu/release/
+        cargo build --release -p xdp-aya-ebpf &&
+        cargo build --release -p xdp_aya &&
+        ls -la /app/app/xdp_aya/target/release/ &&
+        ls -la /app/app/xdp-aya-ebpf/target/bpfel-unknown-none/release/
       "
     privileged: false
     cap_add:
       - SYS_ADMIN
     security_opt:
       - seccomp:unconfined
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+        reservations:
+          memory: 4G
+          cpus: '2'
+    networks:
+      - xdp_aya_network
+    memswap_limit: 0
 
   xdp_aya_runner:
     container_name: xdp_aya_runner
-    image: ubuntu:24.04
+    image: rust:latest
     working_dir: /app
     volumes:
       - ./:/app
@@ -33,8 +47,21 @@ services:
       - seccomp:unconfined
     command: >
       bash -c "
-        apt-get update && apt-get install -y --no-install-recommends libelf-dev libbpf-dev && rm -rf /var/lib/apt/lists/* && ls -la /app/app/xdp_aya/target/aarch64-unknown-linux-gnu/release/ && /app/app/xdp_aya/target/aarch64-unknown-linux-gnu/release/xdp_aya --iface eth0 --port 8080
+        ls -la /app/app/xdp_aya/target/release/ &&
+        /app/app/xdp_aya/target/release/xdp_aya --iface eth0 --port 8080
       "
     depends_on:
       xdp_aya_builder:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 2G
+          cpus: '1'
+
+networks:
+  xdp_aya_network:
+    driver: bridge
