@@ -1,55 +1,30 @@
 use std::env;
+use std::ffi::OsStr;
 use std::path::PathBuf;
 
+use libbpf_cargo::SkeletonBuilder;
+
+const SRC: &str = "src/bpf/xdp_hello.bpf.c";
+
 fn main() {
-    // 编译eBPF程序
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let src_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let bpf_src = src_dir.join("src/bpf/xdp_hello.bpf.c");
-    let bpf_obj = out_dir.join("xdp_hello.bpf.o");
+    let out = PathBuf::from(
+        env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set in build script"),
+    )
+    .join("src")
+    .join("bpf")
+    .join("xdp_hello.skel.rs");
 
-    // 查找Linux内核头文件
-    let mut include_paths = vec![];
+    let arch = env::var("CARGO_CFG_TARGET_ARCH")
+        .expect("CARGO_CFG_TARGET_ARCH must be set in build script");
 
-    // 尝试常见的内核头文件路径
-    let possible_paths = [
-        "/usr/include",
-        "/usr/include/linux",
-        "/usr/src/linux-headers-$(uname -r)/include",
-        "/usr/src/linux-headers-generic/include",
-    ];
-
-    for path in possible_paths.iter() {
-        let p = PathBuf::from(*path);
-        if p.exists() && p.is_dir() {
-            include_paths.push("-I".to_string());
-            include_paths.push(p.to_str().unwrap().to_string());
-        }
-    }
-
-    println!("Using include paths: {:?}", include_paths);
-
-    // 使用clang编译eBPF程序
-    let status = std::process::Command::new("clang")
-        .arg("-target")
-        .arg("bpf")
-        .arg("-Wall")
-        .arg("-Wextra")
-        .arg("-O2")
-        .arg("-c")
-        .args(include_paths)
-        .arg(bpf_src.to_str().unwrap())
-        .arg("-o")
-        .arg(bpf_obj.to_str().unwrap())
-        .status()
-        .expect("Failed to compile eBPF program");
-
-    println!("Compilation status: {:?}", status);
-
-    if !status.success() {
-        println!("cargo:warning=Failed to compile eBPF program, skipping for now");
-    } else {
-        // 让cargo知道需要重新编译的条件
-        println!("cargo:rerun-if-changed={}", bpf_src.to_str().unwrap());
-    }
+    SkeletonBuilder::new()
+        .source(SRC)
+        .clang_args([
+            OsStr::new("-I"),
+            vmlinux::include_path_root().join(arch).as_os_str(),
+        ])
+        // .no_format() // 禁用 rustfmt，避免需要安装 rustfmt
+        .build_and_generate(&out)
+        .unwrap();
+    println!("cargo:rerun-if-changed={SRC}");
 }

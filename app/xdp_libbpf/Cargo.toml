@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 libbpf-rs = "0.24.8"
-libbpf-sys = "1.2"
+libbpf-sys = { version = "1.1.0", features = ["vendored"] }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
@@ -16,5 +16,8 @@ nix = { version = "0.30", features = ["net"] }
 tokio = { version = "1", features = ["full"] }  # 保留，因为 xdp_libbpf 直接使用 tokio
 websocket_axum = { path = "../websocket_axum" }
 simd-json = "0.13"  # 新增：需要直接使用 simd_json 的 json! 宏
+libc = "0.2"
 
 [build-dependencies]
+libbpf-cargo = "0.24.8"
+vmlinux = { version = "0.0", git = "https://github.com/libbpf/vmlinux.h.git", rev = "83a228cf37fc65f2d14e4896a04922b5ee531a94" }

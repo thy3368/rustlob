@@ -62,6 +62,71 @@ services:
           memory: 2G
           cpus: '1'
 
+  xdp_libbpf_builder:
+    container_name: xdp_libbpf_builder
+    image: rust:latest
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y build-essential libelf-dev libssl-dev flex bison gawk gettext autoconf automake libtool pkg-config zlib1g-dev &&
+        cargo build --release -p xdp_libbpf &&
+        ls -la /app/app/xdp_libbpf/target/release/
+      "
+    privileged: false
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+        reservations:
+          memory: 4G
+          cpus: '2'
+    networks:
+      - xdp_libbpf_network
+    memswap_limit: 0
+
+  xdp_libbpf_runner:
+    container_name: xdp_libbpf_runner
+    image: rust:latest
+    working_dir: /app
+    volumes:
+      - ./:/app
+    network_mode: "host"
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_PTRACE
+      - NET_RAW
+    security_opt:
+      - seccomp:unconfined
+    devices:
+      - /dev/bpf:/dev/bpf
+    command: >
+      bash -c "
+        ls -la /app/app/xdp_libbpf/target/release/ &&
+        /app/app/xdp_libbpf/target/release/xdp_libbpf --iface lo --port 8081
+      "
+    depends_on:
+      xdp_libbpf_builder:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 2G
+          cpus: '1'
+
 networks:
   xdp_aya_network:
+    driver: bridge
+  xdp_libbpf_network:
     driver: bridge

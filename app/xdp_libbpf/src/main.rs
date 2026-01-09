@@ -1,11 +1,22 @@
 use std::os::fd::AsFd;
 use anyhow::{Context, Result};
 use clap::Parser;
-use libbpf_rs::{MapCore, ObjectBuilder};
+use nix::libc;
 use nix::net::if_::if_nametoindex;
-use std::path::PathBuf;
 use tokio::sync::broadcast;
 use websocket_axum::{start_server, WebSocketEvent};
+use std::mem::MaybeUninit;
+use libbpf_rs::skel::SkelBuilder;
+use libbpf_rs::skel::OpenSkel;
+
+// 包含生成的 eBPF 骨架代码
+mod xdp_hello {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/bpf/xdp_hello.skel.rs"
+    ));
+}
+use xdp_hello::*;
 
 
 #[derive(Parser, Debug)]
@@ -60,59 +71,43 @@ impl XdpEvent {
     }
 }
 
+fn bump_memlock_rlimit() -> Result<()> {
+    let rlimit = libc::rlimit {
+        rlim_cur: 128 << 20,
+        rlim_max: 128 << 20,
+    };
+
+    if unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlimit) } != 0 {
+        anyhow::bail!("Failed to increase rlimit");
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    // 增加 memlock 限制
+    bump_memlock_rlimit()?;
+
     // 创建事件广播通道
     let (tx, _) = broadcast::channel(1024);
 
-    // 获取编译后的eBPF目标文件路径
-    let obj_path = match std::env::var("OUT_DIR") {
-        Ok(out_dir) => PathBuf::from(out_dir).join("xdp_hello.bpf.o"),
-        Err(_) => {
-            let possible_paths = [
-                "target/debug/build/xdp_libbpf-*/out/xdp_hello.bpf.o",
-                "target/release/build/xdp_libbpf-*/out/xdp_hello.bpf.o",
-                "target/debug/out/xdp_hello.bpf.o",
-                "target/release/out/xdp_hello.bpf.o",
-            ];
+    println!("Loading eBPF skeleton...");
 
-            println!("Looking for eBPF object file in possible locations...");
-            for pattern in possible_paths.iter() {
-                println!("Checking: {}", pattern);
-                if let Ok(entries) = glob::glob(pattern) {
-                    if entries.filter_map(Result::ok).next().is_some() {
-                        return Err(anyhow::anyhow!(
-                            "eBPF object file not found. Please rebuild the project."
-                        ));
-                    }
-                }
-            }
-
-            return Err(anyhow::anyhow!(
-                "eBPF object file not found. Please run 'cargo build' first."
-            ));
-        }
-    };
-
-    println!("Loading eBPF object from: {:?}", obj_path);
-
-    // 使用 ObjectBuilder 打开 eBPF 对象
-    let mut builder = ObjectBuilder::default();
-    let obj = builder
-        .open_file(obj_path)
-        .context("Failed to open eBPF object file")?;
-
-    // 加载 eBPF 程序
-    let mut loaded_obj = obj.load().context("Failed to load eBPF object")?;
+    // 使用骨架代码加载 eBPF 程序
+    let mut builder = XdpHelloSkelBuilder::default();
+    let mut open_object = MaybeUninit::uninit();
+    let open_skel = builder.open(&mut open_object)?;
+    let mut skel = open_skel.load()?;
 
     println!("XDP program loaded successfully!");
 
     // 尝试附加到网络接口（仅在Linux上支持）
     #[cfg(target_os = "linux")]
     {
-        if let Err(e) = run_xdp_program(args.iface, args.port, tx, loaded_obj).await {
+        if let Err(e) = run_xdp_program(args.iface, args.port, tx, skel).await {
             eprintln!("Error: {}", e);
         }
     }
@@ -129,52 +124,44 @@ async fn run_xdp_program(
     iface: String,
     port: u16,
     tx: broadcast::Sender<WebSocketEvent>,
-    mut loaded_obj: libbpf_rs::Object,
+    mut skel: XdpHelloSkel<'_>,
 ) -> Result<()> {
     use libbpf_rs::{Xdp, XdpFlags};
 
     let if_index = if_nametoindex(iface.as_str())
         .context("Failed to get interface index")?;
 
-    // 在一个单独的作用域中完成所有对 loaded_obj 的操作，以避免借用检查冲突
-    let (xdp_prog, ringbuf) = {
-        // 查找并获取 XDP 程序
-        let prog = loaded_obj
-            .progs_mut()
-            .find(|p| p.name() == "xdp_hello")
-            .context("Failed to find xdp_hello program")?;
+    // 尝试使用默认模式附加 XDP 程序，失败时使用通用模式
+    let xdp_prog = Xdp::new(skel.progs.xdp_hello.as_fd());
+    match xdp_prog.attach(if_index as i32, XdpFlags::empty()) {
+        Ok(_) => println!("XDP program attached to interface: {} (driver mode)", iface),
+        Err(e) => {
+            println!("Failed to attach in driver mode: {}, trying generic mode", e);
+            xdp_prog.attach(if_index as i32, XdpFlags::SKB_MODE)
+                .context("Failed to attach XDP program to interface (generic mode)")?;
+            println!("XDP program attached to interface: {} (generic mode)", iface);
+        }
+    }
 
-        let xdp_prog = Xdp::new(prog.as_fd());
-        xdp_prog.attach(if_index as i32, XdpFlags::empty())
-            .context("Failed to attach XDP program to interface")?;
+    // 设置环形缓冲区回调
+    let tx_ebpf = tx.clone();
+    let mut builder = libbpf_rs::RingBufferBuilder::new();
+    builder
+        .add(&skel.maps.xdp_events as &dyn libbpf_rs::MapCore, move |data| {
+            let event = unsafe { &*(data.as_ptr() as *const XdpEvent) };
+            let json = event.to_json();
 
-        println!("XDP program attached to interface: {}", iface);
+            // 发送 WebSocket 事件
+            let ws_event = WebSocketEvent {
+                r#type: "network_event".to_string(),
+                data: json,
+            };
+            let _ = tx_ebpf.send(ws_event);
 
-        // 获取环形缓冲区
-        let mut builder = libbpf_rs::RingBufferBuilder::new();
-        let xdp_events_map = loaded_obj.maps_mut()
-            .find(|m| m.name() == "xdp_events")
-            .context("Failed to find xdp_events map")?;
-        let tx_ebpf = tx.clone();
-        builder
-            .add(&xdp_events_map as &dyn MapCore, move |data| {
-                let event = unsafe { &*(data.as_ptr() as *const XdpEvent) };
-                let json = event.to_json();
-
-                // 发送 WebSocket 事件
-                let ws_event = WebSocketEvent {
-                    r#type: "network_event".to_string(),
-                    data: json,
-                };
-                let _ = tx_ebpf.send(ws_event);
-
-                0
-            })
-            .context("Failed to add ringbuf callback")?;
-        let ringbuf = builder.build().context("Failed to build ring buffer")?;
-
-        (xdp_prog, ringbuf)
-    };
+            0
+        })
+        .context("Failed to add ringbuf callback")?;
+    let ringbuf = builder.build().context("Failed to build ring buffer")?;
 
     // 启动环形缓冲区监听
     tokio::spawn(async move {
