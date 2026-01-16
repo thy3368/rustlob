@@ -10,9 +10,9 @@
 
 use account::{AccountId, TradingPair, UserId};
 
-use crate::lob::domain::entity::spot_types::{OrderId, OrderStatus, Price, Quantity, Side, SpotTrade, TimeInForce, TraderId};
-
-
+use crate::lob::domain::entity::spot_types::{
+    OrderId, OrderStatus, Price, Quantity, Side, SpotTrade, TimeInForce, TraderId,
+};
 
 // ============================================================================
 // 幂等性包装 (Idempotent Command)
@@ -25,7 +25,7 @@ pub type Nonce = u64;
 ///
 /// 所有命令通过此结构包装，实现幂等性检查
 #[derive(Debug, Clone)]
-pub struct Command<C> {
+pub struct Cmd<C> {
     /// 角色
     pub user_id: UserId,
     /// 客户端生成的唯一标识（同一 nonce 只处理一次）
@@ -33,28 +33,23 @@ pub struct Command<C> {
     /// 命令时间戳（Unix毫秒，用于过期检查）
     pub timestamp_ms: u64,
     /// 实际命令内容
-    pub payload: C
+    pub payload: C,
 }
 
-impl<C> Command<C> {
+impl<C> Cmd<C> {
     /// 创建新命令
     pub fn new(user_id: UserId, nonce: Nonce, payload: C) -> Self {
         Self {
             user_id,
             nonce,
             timestamp_ms: 0, // 由调用方设置
-            payload
+            payload,
         }
     }
 
     /// 创建带时间戳的命令
     pub fn with_timestamp(user_id: UserId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
-        Self {
-            user_id,
-            nonce,
-            timestamp_ms,
-            payload
-        }
+        Self { user_id, nonce, timestamp_ms, payload }
     }
 }
 
@@ -78,48 +73,31 @@ pub enum CommonError {
     /// 交易对不存在
     TradingPairNotFound { symbol: String },
     /// 系统内部错误
-    Internal { message: String }
+    Internal { message: String },
 }
 
 impl std::fmt::Display for CommonError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InsufficientBalance {
-                required,
-                available
-            } => {
+            Self::InsufficientBalance { required, available } => {
                 write!(f, "Insufficient balance: required {}, available {}", required, available)
             }
-            Self::OrderNotFound {
-                order_id
-            } => {
+            Self::OrderNotFound { order_id } => {
                 write!(f, "Order not found: {}", order_id)
             }
-            Self::InvalidStatusTransition {
-                from,
-                to
-            } => {
+            Self::InvalidStatusTransition { from, to } => {
                 write!(f, "Invalid status transition: {:?} -> {:?}", from, to)
             }
-            Self::InvalidParameter {
-                field,
-                reason
-            } => {
+            Self::InvalidParameter { field, reason } => {
                 write!(f, "Invalid parameter '{}': {}", field, reason)
             }
-            Self::AccountFrozen {
-                account_id
-            } => {
+            Self::AccountFrozen { account_id } => {
                 write!(f, "Account frozen: {}", account_id)
             }
-            Self::TradingPairNotFound {
-                symbol
-            } => {
+            Self::TradingPairNotFound { symbol } => {
                 write!(f, "Trading pair not found: {}", symbol)
             }
-            Self::Internal {
-                message
-            } => {
+            Self::Internal { message } => {
                 write!(f, "Internal error: {}", message)
             }
         }
@@ -130,7 +108,7 @@ impl std::error::Error for CommonError {}
 
 /// 现货命令错误
 #[derive(Debug, Clone, PartialEq)]
-pub enum SpotCommandError {
+pub enum SpotCmdError {
     /// 通用错误
     Common(CommonError),
     /// FOK订单无法全部成交被拒绝
@@ -140,52 +118,40 @@ pub enum SpotCommandError {
     /// 价格超出限制
     PriceOutOfRange { price: Price, min: Price, max: Price },
     /// 数量超出限制
-    QuantityOutOfRange { quantity: Quantity, min: Quantity, max: Quantity }
+    QuantityOutOfRange { quantity: Quantity, min: Quantity, max: Quantity },
 }
 
-impl std::fmt::Display for SpotCommandError {
+impl std::fmt::Display for SpotCmdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
-            Self::FillOrKillRejected {
-                order_id,
-                filled,
-                requested
-            } => {
+            Self::FillOrKillRejected { order_id, filled, requested } => {
                 write!(f, "FOK order {} rejected: filled {}/{}", order_id, filled, requested)
             }
-            Self::InvalidTimeInForce {
-                reason
-            } => {
+            Self::InvalidTimeInForce { reason } => {
                 write!(f, "Invalid TimeInForce: {}", reason)
             }
-            Self::PriceOutOfRange {
-                price,
-                min,
-                max
-            } => {
+            Self::PriceOutOfRange { price, min, max } => {
                 write!(f, "Price {} out of range [{}, {}]", price, min, max)
             }
-            Self::QuantityOutOfRange {
-                quantity,
-                min,
-                max
-            } => {
+            Self::QuantityOutOfRange { quantity, min, max } => {
                 write!(f, "Quantity {} out of range [{}, {}]", quantity, min, max)
             }
         }
     }
 }
 
-impl std::error::Error for SpotCommandError {}
+impl std::error::Error for SpotCmdError {}
 
-impl From<CommonError> for SpotCommandError {
-    fn from(e: CommonError) -> Self { Self::Common(e) }
+impl From<CommonError> for SpotCmdError {
+    fn from(e: CommonError) -> Self {
+        Self::Common(e)
+    }
 }
 
 /// 算法交易命令错误
 #[derive(Debug, Clone, PartialEq)]
-pub enum AlgoCommandError {
+pub enum AlgoCmdError {
     /// 通用错误
     Common(CommonError),
     /// 非法的VWAP目标价格
@@ -195,51 +161,40 @@ pub enum AlgoCommandError {
     /// TWAP持续时间非法
     InvalidTwapDuration { duration_secs: u64, min: u64, max: u64 },
     /// 时间间隔非法
-    InvalidInterval { interval_secs: u64, min: u64 }
+    InvalidInterval { interval_secs: u64, min: u64 },
 }
 
-impl std::fmt::Display for AlgoCommandError {
+impl std::fmt::Display for AlgoCmdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
-            Self::InvalidVwapTarget {
-                target,
-                market_price
-            } => {
+            Self::InvalidVwapTarget { target, market_price } => {
                 write!(f, "Invalid VWAP target: {} (market: {})", target, market_price)
             }
-            Self::ParticipationRateTooHigh {
-                rate,
-                max
-            } => {
+            Self::ParticipationRateTooHigh { rate, max } => {
                 write!(f, "Participation rate {} exceeds max {}", rate, max)
             }
-            Self::InvalidTwapDuration {
-                duration_secs,
-                min,
-                max
-            } => {
+            Self::InvalidTwapDuration { duration_secs, min, max } => {
                 write!(f, "TWAP duration {}s out of range [{}, {}]", duration_secs, min, max)
             }
-            Self::InvalidInterval {
-                interval_secs,
-                min
-            } => {
+            Self::InvalidInterval { interval_secs, min } => {
                 write!(f, "Interval {}s below minimum {}", interval_secs, min)
             }
         }
     }
 }
 
-impl std::error::Error for AlgoCommandError {}
+impl std::error::Error for AlgoCmdError {}
 
-impl From<CommonError> for AlgoCommandError {
-    fn from(e: CommonError) -> Self { Self::Common(e) }
+impl From<CommonError> for AlgoCmdError {
+    fn from(e: CommonError) -> Self {
+        Self::Common(e)
+    }
 }
 
 /// 条件订单命令错误
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConditionalCommandError {
+pub enum ConditionalCmdError {
     /// 通用错误
     Common(CommonError),
     /// 止损价格非法
@@ -251,53 +206,43 @@ pub enum ConditionalCommandError {
     /// 钉住偏移量非法
     InvalidPegOffset { offset: i32 },
     /// OCO订单配置冲突
-    ConflictingOcoOrders { reason: &'static str }
+    ConflictingOcoOrders { reason: &'static str },
 }
 
-impl std::fmt::Display for ConditionalCommandError {
+impl std::fmt::Display for ConditionalCmdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
-            Self::InvalidStopPrice {
-                stop_price,
-                current_price
-            } => {
+            Self::InvalidStopPrice { stop_price, current_price } => {
                 write!(f, "Invalid stop price: {} (current: {})", stop_price, current_price)
             }
-            Self::InvalidTrailAmount {
-                trail_amount
-            } => {
+            Self::InvalidTrailAmount { trail_amount } => {
                 write!(f, "Invalid trail amount: {}", trail_amount)
             }
-            Self::InvalidDisplayQuantity {
-                display,
-                total
-            } => {
+            Self::InvalidDisplayQuantity { display, total } => {
                 write!(f, "Display quantity {} exceeds total {}", display, total)
             }
-            Self::InvalidPegOffset {
-                offset
-            } => {
+            Self::InvalidPegOffset { offset } => {
                 write!(f, "Invalid peg offset: {}", offset)
             }
-            Self::ConflictingOcoOrders {
-                reason
-            } => {
+            Self::ConflictingOcoOrders { reason } => {
                 write!(f, "Conflicting OCO orders: {}", reason)
             }
         }
     }
 }
 
-impl std::error::Error for ConditionalCommandError {}
+impl std::error::Error for ConditionalCmdError {}
 
-impl From<CommonError> for ConditionalCommandError {
-    fn from(e: CommonError) -> Self { Self::Common(e) }
+impl From<CommonError> for ConditionalCmdError {
+    fn from(e: CommonError) -> Self {
+        Self::Common(e)
+    }
 }
 
 /// 做市商命令错误
 #[derive(Debug, Clone, PartialEq)]
-pub enum MarketMakerCommandError {
+pub enum MarketMakerCmdError {
     /// 通用错误
     Common(CommonError),
     /// 买卖价差非法
@@ -305,61 +250,55 @@ pub enum MarketMakerCommandError {
     /// 非法的拍卖类型
     InvalidAuctionType { reason: &'static str },
     /// 做市商义务未履行
-    ObligationNotMet { reason: &'static str }
+    ObligationNotMet { reason: &'static str },
 }
 
-impl std::fmt::Display for MarketMakerCommandError {
+impl std::fmt::Display for MarketMakerCmdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
-            Self::InvalidSpread {
-                bid,
-                ask,
-                min_spread
-            } => {
+            Self::InvalidSpread { bid, ask, min_spread } => {
                 write!(f, "Invalid spread: bid {} ask {} (min: {})", bid, ask, min_spread)
             }
-            Self::InvalidAuctionType {
-                reason
-            } => {
+            Self::InvalidAuctionType { reason } => {
                 write!(f, "Invalid auction type: {}", reason)
             }
-            Self::ObligationNotMet {
-                reason
-            } => {
+            Self::ObligationNotMet { reason } => {
                 write!(f, "Market maker obligation not met: {}", reason)
             }
         }
     }
 }
 
-impl std::error::Error for MarketMakerCommandError {}
+impl std::error::Error for MarketMakerCmdError {}
 
-impl From<CommonError> for MarketMakerCommandError {
-    fn from(e: CommonError) -> Self { Self::Common(e) }
+impl From<CommonError> for MarketMakerCmdError {
+    fn from(e: CommonError) -> Self {
+        Self::Common(e)
+    }
 }
 
 /// 命令执行元数据
 ///
 /// 包含幂等性和追踪信息
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CommandMetadata {
+pub struct CmdMetadata {
     /// 命令唯一标识（客户端生成）
     pub nonce: Nonce,
     /// 是否为重复命令（幂等命中）
     pub is_duplicate: bool,
     /// 命令接收时间戳
-    pub received_at: u64
+    pub received_at: u64,
 }
 
-impl CommandMetadata {
+impl CmdMetadata {
     /// 创建新命令元数据
     #[inline]
     pub fn new(nonce: Nonce) -> Self {
         Self {
             nonce,
             is_duplicate: false,
-            received_at: 0 // 由处理器设置
+            received_at: 0, // 由处理器设置
         }
     }
 
@@ -376,117 +315,119 @@ impl CommandMetadata {
 /// 包含执行结果和幂等性/追踪信息
 /// 使用 Result<CommandResponse<T>, CommandError> 的方式返回
 #[derive(Debug, Clone)]
-pub struct CommandResponse<T> {
+pub struct CmdResp<T> {
     /// 命令元数据
-    pub metadata: CommandMetadata,
+    pub metadata: CmdMetadata,
     /// 成功结果
-    pub result: T
+    pub result: T,
 }
 
-impl<T> CommandResponse<T> {
+impl<T> CmdResp<T> {
     /// 创建新响应
     #[inline]
     pub fn new(nonce: Nonce, result: T) -> Self {
-        Self {
-            metadata: CommandMetadata::new(nonce),
-            result
-        }
+        Self { metadata: CmdMetadata::new(nonce), result }
     }
 
     /// 创建重复命令的响应
     #[inline]
     pub fn duplicate(nonce: Nonce, result: T) -> Self {
-        Self {
-            metadata: CommandMetadata::new(nonce).mark_duplicate(),
-            result
-        }
+        Self { metadata: CmdMetadata::new(nonce).mark_duplicate(), result }
     }
 
     /// 映射结果值
     #[inline]
-    pub fn map<U, F>(self, f: F) -> CommandResponse<U>
+    pub fn map<U, F>(self, f: F) -> CmdResp<U>
     where
-        F: FnOnce(T) -> U
+        F: FnOnce(T) -> U,
     {
-        CommandResponse {
-            metadata: self.metadata,
-            result: f(self.result)
-        }
+        CmdResp { metadata: self.metadata, result: f(self.result) }
     }
 }
 
 /// 类型别名 - 各类幂等命令
-pub type IdempotentSpotCommand = Command<SpotCommand>;
-pub type IdempotentAlgoCommand = Command<AlgoCommand>;
-pub type IdempotentConditionalCommand = Command<ConditionalCommand>;
-pub type IdempotentMarketMakerCommand = Command<MarketMakerCommand>;
+pub type IdempotentSpotCmd = Cmd<SpotCmdAny>;
+pub type IdempotentAlgoCmd = Cmd<AlgoCmdAny>;
+pub type IdempotentConditionalCmd = Cmd<ConditionalCmdAny>;
+pub type IdempotentMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 
 /// 类型别名 - 各类命令结果
 ///
 /// 使用标准 Result 包装，支持 ? 操作符和所有 Result 方法
 /// 每个命令类型使用自己的错误类型，提供类型安全
-pub type IdempotentSpotResult = Result<CommandResponse<SpotCommandResult>, SpotCommandError>;
-pub type IdempotentAlgoResult = Result<CommandResponse<AlgoCommandResult>, AlgoCommandError>;
-pub type IdempotentConditionalResult = Result<CommandResponse<ConditionalCommandResult>, ConditionalCommandError>;
-pub type IdempotentMarketMakerResult = Result<CommandResponse<MarketMakerCommandResult>, MarketMakerCommandError>;
+pub type IdempotentSpotResult = Result<CmdResp<SpotCmdResult>, SpotCmdError>;
+pub type IdempotentAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
+pub type IdempotentConditionalResult = Result<CmdResp<ConditionalCmdResult>, ConditionalCmdError>;
+pub type IdempotentMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
 
 // ============================================================================
 // 核心现货命令 (SpotCommand)
 // ============================================================================
 
+#[derive(Debug, Clone)]
+pub struct LimitOrder {
+    pub trader: TraderId,
+    pub account_id: AccountId,
+    pub trading_pair: TradingPair,
+    pub side: Side,
+    pub price: Price,
+    pub quantity: Quantity,
+    pub time_in_force: TimeInForce,
+    pub client_order_id: Option<String>, // 客户端订单ID（可选）
+}
+
+#[derive(Debug, Clone)]
+pub struct MarketOrder {
+    pub trader: TraderId,
+    pub account_id: AccountId,
+    pub trading_pair: TradingPair,
+    pub side: Side,
+    pub quantity: Quantity,
+    pub price_limit: Option<Price>, // 价格保护：买单最高价/卖单最低价
+    pub time_in_force: Option<TimeInForce>, /* None=IOC(默认), Some(FOK)=全部成交或全部取消,
+                                     * Some(IOC)=立即成交或取消 */
+    pub client_order_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CancelOrder {
+    pub order_id: OrderId,
+}
+
+#[derive(Debug, Clone)]
+pub struct CancelAllOrders {
+    pub trader: TraderId,
+    pub trading_pair: Option<TradingPair>, // 可选：只取消指定交易对
+    pub side: Option<Side>,
+}
+
 /// 现货订单命令
 ///
 /// 核心订单类型，由 MatchingService 直接处理
 #[derive(Debug, Clone)]
-pub enum SpotCommand {
+pub enum SpotCmdAny {
     /// 限价单
-    LimitOrder {
-        trader: TraderId,
-        account_id: AccountId,
-        trading_pair: TradingPair,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-        time_in_force: TimeInForce,
-        client_order_id: Option<String> // 客户端订单ID（可选）
-    },
-
+    LimitOrder(LimitOrder),
     /// 市价单
-    MarketOrder {
-        trader: TraderId,
-        account_id: AccountId,
-        trading_pair: TradingPair,
-        side: Side,
-        quantity: Quantity,
-        price_limit: Option<Price>, // 价格保护：买单最高价/卖单最低价
-        time_in_force: Option<TimeInForce>, /* None=IOC(默认), Some(FOK)=全部成交或全部取消,
-                                     * Some(IOC)=立即成交或取消 */
-        client_order_id: Option<String>
-    },
-
+    MarketOrder(MarketOrder),
     /// 取消订单
-    CancelOrder { order_id: OrderId },
-
+    CancelOrder(CancelOrder),
     /// 批量取消订单
-    CancelAllOrders {
-        trader: TraderId,
-        trading_pair: Option<TradingPair>, // 可选：只取消指定交易对
-        side: Option<Side>
-    }
+    CancelAllOrders(CancelAllOrders),
 }
 
 /// 现货命令执行结果
 ///
 /// 只包含成功情况，错误通过 CommandError 返回
 #[derive(Debug, Clone)]
-pub enum SpotCommandResult {
+pub enum SpotCmdResult {
     /// 限价单结果
     LimitOrder {
         order_id: OrderId,
         status: OrderStatus,
         filled_quantity: Quantity,
         remaining_quantity: Quantity,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     /// 市价单结果
@@ -496,9 +437,8 @@ pub enum SpotCommandResult {
     CancelOrder { order_id: OrderId, status: OrderStatus },
 
     /// 批量取消订单结果
-    CancelAllOrders { cancelled_count: usize, order_ids: Vec<OrderId> }
+    CancelAllOrders { cancelled_count: usize, order_ids: Vec<OrderId> },
 }
-
 
 // ============================================================================
 // 算法交易命令 (AlgoCommand)
@@ -509,14 +449,14 @@ pub enum SpotCommandResult {
 pub enum UrgencyLevel {
     Low,
     Medium,
-    High
+    High,
 }
 
 /// 算法交易命令
 ///
 /// 由 AlgoService 处理，内部拆分为多个 SpotCommand
 #[derive(Debug, Clone)]
-pub enum AlgoCommand {
+pub enum AlgoCmdAny {
     /// TWAP订单 (Time-Weighted Average Price)
     /// 按时间均匀分配订单
     Twap { trader: TraderId, side: Side, total_quantity: Quantity, duration_secs: u64, interval_secs: u64 },
@@ -531,17 +471,17 @@ pub enum AlgoCommand {
         trader: TraderId,
         side: Side,
         total_quantity: Quantity,
-        participation_rate: u32 // basis points (1/10000)
+        participation_rate: u32, // basis points (1/10000)
     },
 
     /// 实施缺口订单 (Implementation Shortfall)
     /// 最小化执行成本与决策价格的差异
-    ImplementationShortfall { trader: TraderId, side: Side, total_quantity: Quantity, urgency: UrgencyLevel }
+    ImplementationShortfall { trader: TraderId, side: Side, total_quantity: Quantity, urgency: UrgencyLevel },
 }
 
 /// 算法命令执行结果
 #[derive(Debug, Clone)]
-pub enum AlgoCommandResult {
+pub enum AlgoCmdResult {
     /// TWAP结果
     Twap { parent_order_id: OrderId, child_orders: Vec<OrderId>, total_traded: Quantity, avg_price: Option<Price> },
 
@@ -556,16 +496,16 @@ pub enum AlgoCommandResult {
         parent_order_id: OrderId,
         child_orders: Vec<OrderId>,
         total_traded: Quantity,
-        shortfall_bps: i32 // basis points, 可为负
+        shortfall_bps: i32, // basis points, 可为负
     },
 
     /// 未实现
-    NotImplemented
+    NotImplemented,
 }
 
 /// 算法订单处理器
 pub trait AlgoOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentAlgoCommand) -> IdempotentAlgoResult;
+    fn handle(&mut self, cmd: IdempotentAlgoCmd) -> IdempotentAlgoResult;
 }
 
 // ============================================================================
@@ -580,7 +520,7 @@ pub enum PegType {
     /// 钉住对手价 (Market Peg)
     Market,
     /// 钉住中间价 (Midpoint Peg)
-    Midpoint
+    Midpoint,
 }
 
 /// 拍卖类型
@@ -588,14 +528,14 @@ pub enum PegType {
 pub enum AuctionType {
     Opening,
     Closing,
-    Intraday
+    Intraday,
 }
 
 /// 条件订单命令
 ///
 /// 由 ConditionalService 处理，触发后转为 SpotCommand
 #[derive(Debug, Clone)]
-pub enum ConditionalCommand {
+pub enum ConditionalCmdAny {
     // ========== 止损订单 ==========
     /// 止损市价单
     /// 当市价达到触发价时，转为市价单
@@ -614,14 +554,14 @@ pub enum ConditionalCommand {
         trader: TraderId,
         side: Side,
         trail_percent: u32, // basis points
-        quantity: Quantity
+        quantity: Quantity,
     },
 
     // ========== 组合订单 ==========
     // 注意：FOK、IOC、GTD 已移至 TimeInForce，应通过 SpotCommand::LimitOrder 使用
     /// OCO订单 (One-Cancels-Other)
     /// 一个成交则取消另一个
-    Oco { trader: TraderId, order1: Box<ConditionalCommand>, order2: Box<ConditionalCommand> },
+    Oco { trader: TraderId, order1: Box<ConditionalCmdAny>, order2: Box<ConditionalCmdAny> },
 
     /// 括号订单 (Bracket Order)
     /// 入场单 + 止盈单 + 止损单
@@ -631,7 +571,7 @@ pub enum ConditionalCommand {
         entry_price: Price,
         entry_quantity: Quantity,
         take_profit_price: Price,
-        stop_loss_price: Price
+        stop_loss_price: Price,
     },
 
     // ========== 高级订单 ==========
@@ -648,44 +588,44 @@ pub enum ConditionalCommand {
     Pegged { trader: TraderId, side: Side, offset: i32, quantity: Quantity, peg_type: PegType },
 
     /// 最小成交量订单
-    MinimumQuantity { trader: TraderId, side: Side, price: Price, quantity: Quantity, min_quantity: Quantity }
+    MinimumQuantity { trader: TraderId, side: Side, price: Price, quantity: Quantity, min_quantity: Quantity },
 }
 
 /// 条件命令执行结果
 #[derive(Debug, Clone)]
-pub enum ConditionalCommandResult {
+pub enum ConditionalCmdResult {
     // ========== 止损订单结果 ==========
     StopMarket {
         order_id: OrderId,
         triggered: bool,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     StopLimit {
         order_id: OrderId,
         triggered: bool,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     TrailingStop {
         order_id: OrderId,
         current_stop_price: Price,
         triggered: bool,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     TrailingStopPercent {
         order_id: OrderId,
         current_stop_price: Price,
         triggered: bool,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     // ========== 组合订单结果 ==========
     // 注意：FOK、IOC、GTD 结果通过 SpotCommandResult::LimitOrder 返回
     Oco {
-        executed_order: Box<ConditionalCommandResult>,
-        cancelled_order_id: Option<OrderId>
+        executed_order: Box<ConditionalCmdResult>,
+        cancelled_order_id: Option<OrderId>,
     },
 
     Bracket {
@@ -693,7 +633,7 @@ pub enum ConditionalCommandResult {
         take_profit_order_id: OrderId,
         stop_loss_order_id: OrderId,
         entry_trades: Vec<SpotTrade>,
-        exit_trades: Vec<SpotTrade>
+        exit_trades: Vec<SpotTrade>,
     },
 
     // ========== 高级订单结果 ==========
@@ -702,33 +642,33 @@ pub enum ConditionalCommandResult {
         order_id: OrderId,
         trades: Vec<SpotTrade>,
         remaining_total: Quantity,
-        current_display: Quantity
+        current_display: Quantity,
     },
 
     Hidden {
         order_id: OrderId,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     Pegged {
         order_id: OrderId,
         current_price: Price,
-        trades: Vec<SpotTrade>
+        trades: Vec<SpotTrade>,
     },
 
     MinimumQuantity {
         order_id: OrderId,
         trades: Vec<SpotTrade>,
-        all_fills_meet_minimum: bool
+        all_fills_meet_minimum: bool,
     },
 
     /// 未实现
-    NotImplemented
+    NotImplemented,
 }
 
 /// 条件订单处理器
 pub trait ConditionalOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentConditionalCommand) -> IdempotentConditionalResult;
+    fn handle(&mut self, cmd: IdempotentConditionalCmd) -> IdempotentConditionalResult;
 }
 
 // ============================================================================
@@ -737,27 +677,27 @@ pub trait ConditionalOrderProc: Send + Sync {
 
 /// 做市商命令
 #[derive(Debug, Clone)]
-pub enum MarketMakerCommand {
+pub enum MarketMakerCmdAny {
     /// 双向报价
     TwoWayQuote { trader: TraderId, bid_price: Price, bid_quantity: Quantity, ask_price: Price, ask_quantity: Quantity },
 
     /// 拍卖订单
-    AuctionOrder { trader: TraderId, side: Side, price: Price, quantity: Quantity, auction_type: AuctionType }
+    AuctionOrder { trader: TraderId, side: Side, price: Price, quantity: Quantity, auction_type: AuctionType },
 }
 
 /// 做市商命令结果
 #[derive(Debug, Clone)]
-pub enum MarketMakerCommandResult {
+pub enum MarketMakerCmdResult {
     TwoWayQuote { bid_order_id: OrderId, ask_order_id: OrderId, bid_trades: Vec<SpotTrade>, ask_trades: Vec<SpotTrade> },
 
     AuctionOrder { order_id: OrderId, auction_price: Option<Price>, trades: Vec<SpotTrade> },
 
-    NotImplemented
+    NotImplemented,
 }
 
 /// 做市商处理器
 pub trait MarketMakerProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentMarketMakerCommand) -> IdempotentMarketMakerResult;
+    fn handle(&mut self, cmd: IdempotentMarketMakerCmd) -> IdempotentMarketMakerResult;
 }
 
 // ============================================================================
@@ -776,36 +716,25 @@ pub enum QueryError {
     /// 非法参数
     InvalidParameter { field: &'static str, reason: &'static str },
     /// 系统内部错误
-    Internal { message: String }
+    Internal { message: String },
 }
 
 impl std::fmt::Display for QueryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OrderNotFound {
-                order_id
-            } => {
+            Self::OrderNotFound { order_id } => {
                 write!(f, "Order not found: {}", order_id)
             }
-            Self::PermissionDenied {
-                reason
-            } => {
+            Self::PermissionDenied { reason } => {
                 write!(f, "Permission denied: {}", reason)
             }
-            Self::DatabaseError {
-                message
-            } => {
+            Self::DatabaseError { message } => {
                 write!(f, "Database error: {}", message)
             }
-            Self::InvalidParameter {
-                field,
-                reason
-            } => {
+            Self::InvalidParameter { field, reason } => {
                 write!(f, "Invalid parameter '{}': {}", field, reason)
             }
-            Self::Internal {
-                message
-            } => {
+            Self::Internal { message } => {
                 write!(f, "Internal error: {}", message)
             }
         }
@@ -816,7 +745,7 @@ impl std::error::Error for QueryError {}
 
 /// 订单查询命令
 #[derive(Debug, Clone)]
-pub enum OrderQueryCommand {
+pub enum OrderQueryCmd {
     /// 查询当前活跃订单
     QueryOpenOrders { trader: TraderId, trading_pair: Option<TradingPair>, side: Option<Side>, page: Option<u32> },
 
@@ -829,7 +758,7 @@ pub enum OrderQueryCommand {
         trading_pair: Option<TradingPair>,
         start_time: Option<u64>,
         end_time: Option<u64>,
-        page: Option<u32>
+        page: Option<u32>,
     },
 
     /// 查询成交历史
@@ -838,8 +767,8 @@ pub enum OrderQueryCommand {
         trading_pair: Option<TradingPair>,
         order_id: Option<OrderId>,
         start_time: Option<u64>,
-        end_time: Option<u64>
-    }
+        end_time: Option<u64>,
+    },
 }
 
 /// 订单视图（只读DTO）
@@ -853,7 +782,7 @@ pub struct OrderView {
     pub filled_quantity: Quantity,
     pub status: OrderStatus,
     pub time_in_force: TimeInForce,
-    pub created_at: u64
+    pub created_at: u64,
 }
 
 /// 订单详情视图
@@ -870,7 +799,7 @@ pub struct OrderDetailView {
     pub time_in_force: TimeInForce,
     pub created_at: u64,
     pub updated_at: u64,
-    pub trades: Vec<TradeView>
+    pub trades: Vec<TradeView>,
 }
 
 /// 成交视图
@@ -882,7 +811,7 @@ pub struct TradeView {
     pub quantity: Quantity,
     pub side: Side,
     pub timestamp: u64,
-    pub is_maker: bool
+    pub is_maker: bool,
 }
 
 /// 查询结果
@@ -898,14 +827,14 @@ pub enum OrderQueryResult {
     OrderHistory { orders: Vec<OrderView>, total: usize, page: u32 },
 
     /// 成交历史
-    TradeHistory { trades: Vec<TradeView>, total: usize }
+    TradeHistory { trades: Vec<TradeView>, total: usize },
 }
 
 /// 订单查询处理器接口
 ///
 /// 负责处理所有只读查询操作（CQRS 读侧）
 pub trait OrderQueryProc: Send + Sync {
-    fn handle(&self, query: OrderQueryCommand) -> Result<OrderQueryResult, QueryError>;
+    fn handle(&self, query: OrderQueryCmd) -> Result<OrderQueryResult, QueryError>;
 }
 
 /// 现货订单处理器
@@ -913,5 +842,5 @@ pub trait OrderQueryProc: Send + Sync {
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
 pub trait SpotOrderExchangeProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult;
+    fn handle(&mut self, cmd: IdempotentSpotCmd) -> IdempotentSpotResult;
 }

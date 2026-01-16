@@ -1,7 +1,7 @@
-use lob::lob::{IdempotentSpotCommand, IdempotentSpotResult, SpotOrderExchangeProc};
+use lob::lob::{IdempotentSpotCmd, IdempotentSpotResult, SpotOrderExchangeProc};
 
 pub struct JsonRpcClient {}
 
 impl SpotOrderExchangeProc for JsonRpcClient {
-    fn handle(&mut self, _command: IdempotentSpotCommand) -> IdempotentSpotResult { todo!() }
+    fn handle(&mut self, _command: IdempotentSpotCmd) -> IdempotentSpotResult { todo!() }
 }

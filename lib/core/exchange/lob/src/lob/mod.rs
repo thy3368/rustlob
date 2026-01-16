@@ -27,7 +27,7 @@
 //!
 //! ```no_run
 //! use lob::lob::{
-//!     Command, SpotCommand, TimeInForce,
+//!     Cmd, SpotCmdAny, TimeInForce,
 //!     TraderId, Side, Symbol
 //! };
 //!
@@ -36,9 +36,9 @@
 //! let symbol = Symbol::from_str("BTCUSDT");
 //! let nonce = 1001;
 //!
-//! let limit_order = Command::new(
+//! let limit_order = Cmd::new(
 //!     nonce,
-//!     SpotCommand::LimitOrder {
+//!     SpotCmdAny::LimitOrder {
 //!         trader,
 //!         trading_pair:symbol,
 //!         side: Side::Buy,
@@ -57,7 +57,7 @@
 //!
 //! ```no_run
 //! use lob::lob::{
-//!     Command, SpotCommand, TimeInForce,
+//!     Cmd, SpotCmdAny, TimeInForce,
 //!     TraderId, Side, Symbol
 //! };
 //!
@@ -67,9 +67,9 @@
 //! let symbol = Symbol::from_str("BTCUSDT");
 //!
 //! // 卖单：卖出 100 @ 10000
-//! let sell_order = Command::new(
+//! let sell_order = Cmd::new(
 //!     1001,
-//!     SpotCommand::LimitOrder {
+//!     SpotCmdAny::LimitOrder {
 //!         trader: seller,
 //!         trading_pair:symbol,
 //!         side: Side::Sell,
@@ -81,9 +81,9 @@
 //! );
 //!
 //! // 买单：买入 50 @ 10000（会与卖单撮合）
-//! let buy_order = Command::new(
+//! let buy_order = Cmd::new(
 //!     1002,
-//!     SpotCommand::LimitOrder {
+//!     SpotCmdAny::LimitOrder {
 //!         trader: buyer,
 //!         trading_pair:symbol,
 //!         side: Side::Buy,
@@ -126,13 +126,13 @@ pub use domain::{
     },
     service::{
         trading_spot_order_proc::{
-            AlgoCommand, AlgoCommandError, AlgoCommandResult, AlgoOrderProc, AuctionType, Command, CommandMetadata,
-            CommandResponse, CommonError, ConditionalCommand, ConditionalCommandError, ConditionalCommandResult,
-            ConditionalOrderProc, IdempotentAlgoCommand, IdempotentAlgoResult, IdempotentConditionalCommand,
-            IdempotentConditionalResult, IdempotentMarketMakerCommand, IdempotentMarketMakerResult,
-            IdempotentSpotCommand, IdempotentSpotResult, MarketMakerCommand, MarketMakerCommandError,
-            MarketMakerCommandResult, MarketMakerProc, Nonce, PegType, QueryError, SpotCommand, SpotCommandError,
-            SpotCommandResult, SpotOrderExchangeProc, UrgencyLevel
+            AlgoCmdAny, AlgoCmdError, AlgoCmdResult, AlgoOrderProc, AuctionType, Cmd, CmdMetadata,
+            CmdResp, CommonError, ConditionalCmdAny, ConditionalCmdError, ConditionalCmdResult,
+            ConditionalOrderProc, IdempotentAlgoCmd, IdempotentAlgoResult, IdempotentConditionalCmd,
+            IdempotentConditionalResult, IdempotentMarketMakerCmd, IdempotentMarketMakerResult,
+            IdempotentSpotCmd, IdempotentSpotResult, MarketMakerCmdAny, MarketMakerCmdError,
+            MarketMakerCmdResult, MarketMakerProc, Nonce, PegType, QueryError, SpotCmdAny, SpotCmdError,
+            SpotCmdResult, SpotOrderExchangeProc, UrgencyLevel
         }
     }
 };

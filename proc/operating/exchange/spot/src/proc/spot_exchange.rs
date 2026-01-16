@@ -4,8 +4,8 @@ use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
 use lob::lob::{
-    Command, CommandResponse, CommonError, IdempotentSpotCommand, IdempotentSpotResult, SpotCommand, SpotCommandError,
-    SpotCommandResult, SpotOrder, SpotOrderExchangeProc, SpotTrade, TraderId
+    Cmd, CmdResp, CommonError, IdempotentSpotCmd, IdempotentSpotResult, SpotCmdAny, SpotCmdError,
+    SpotCmdResult, SpotOrder, SpotOrderExchangeProc, SpotTrade, TraderId,
 };
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
@@ -20,33 +20,26 @@ pub struct SpotOrderExchangeProcImpl {
     lob_repo: StandaloneLobRepo<SpotOrder>,
 
     /// ID生成器（节点ID为0）
-    id_generator: IdGenerator
+    id_generator: IdGenerator,
 }
 
 impl SpotOrderExchangeProcImpl {
     /// 生成订单ID
-    fn generate_order_id(&self) -> u64 { self.id_generator.next_id() as u64 }
+    fn generate_order_id(&self) -> u64 {
+        self.id_generator.next_id() as u64
+    }
 
     fn limit_order(
-        &mut self, cmd: Command<SpotCommand>
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError> {
+        &mut self, cmd: Cmd<SpotCmdAny>,
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
         // 转成 LimitOrder
-        let (trader, account_id, trading_pair, side, price, quantity, time_in_force, client_order_id) =
+        let limitOrder =
             match cmd.payload {
-                SpotCommand::LimitOrder {
-                    trader,
-                    account_id,
-                    trading_pair,
-                    side,
-                    price,
-                    quantity,
-                    time_in_force,
-                    client_order_id
-                } => (trader, account_id, trading_pair, side, price, quantity, time_in_force, client_order_id),
+                SpotCmdAny::LimitOrder  (limitOrder) => limitOrder,
                 _ => {
-                    return Err(SpotCommandError::Common(CommonError::InvalidParameter {
+                    return Err(SpotCmdError::Common(CommonError::InvalidParameter {
                         field: "payload",
-                        reason: "Expected LimitOrder command"
+                        reason: "Expected LimitOrder command",
                     }))
                 }
             };
@@ -60,7 +53,6 @@ impl SpotOrderExchangeProcImpl {
         // 4 通过entity trait 获得所有的实体变更changelog并持久化  生成事件（订单更新 +
         // 交易记录）持久化事件到仓储
 
-
         // ========================================================================
         // 1. 命令验证
         // ========================================================================
@@ -69,51 +61,47 @@ impl SpotOrderExchangeProcImpl {
         let order_id = self.generate_order_id();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
-
-
         let mut internal_order = SpotOrder::create_limit(
             order_id,
-            trader,
-            account_id,
-            trading_pair,
-            side,
-            price,
-            quantity,
-            time_in_force,
-            client_order_id
+            limitOrder.trader,
+            limitOrder.account_id,
+            limitOrder.trading_pair,
+            limitOrder.side,
+            limitOrder.price,
+            limitOrder.quantity,
+            limitOrder.time_in_force,
+            limitOrder.client_order_id,
         );
 
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
 
-        let base_asset_balance_id = format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
+        let base_asset_balance_id =
+            format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
 
         let mut frozen_asset_balance = match self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().flatten() {
             Some(b) => b,
-            None => todo!() // todo 应该报错
+            None => todo!(), // todo 应该报错
         };
 
         let mut base_asset_balance = match self.balance_repo.find_by_id(&base_asset_balance_id).ok().flatten() {
             Some(b) => b,
-            None => todo!() // todo 应该报错
+            None => todo!(), // todo 应该报错
         };
-
 
         // 2 风控检查 - 余额检查并冻结保证金
         internal_order.frozen_margin(&mut frozen_asset_balance, now);
 
-
         // todo time_in_force 没有用
-
 
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
             internal_order.trading_pair,
             match internal_order.side {
                 Side::Buy => base_types::Side::Buy,
-                Side::Sell => base_types::Side::Sell
+                Side::Sell => base_types::Side::Sell,
             },
             internal_order.price.unwrap(),
-            internal_order.total_qty
+            internal_order.total_qty,
         );
 
         if matched_orders.is_some() {
@@ -129,15 +117,14 @@ impl SpotOrderExchangeProcImpl {
                     let mut o_quote_asset_balance =
                         match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {
                             Some(b) => b,
-                            None => todo!() // todo 应该报错
+                            None => todo!(), // todo 应该报错
                         };
 
                     let mut o_base_asset_balance =
                         match self.balance_repo.find_by_id(&base_asset_balance_id).ok().flatten() {
                             Some(b) => b,
-                            None => todo!() // todo 应该报错
+                            None => todo!(), // todo 应该报错
                         };
-
 
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
@@ -145,7 +132,7 @@ impl SpotOrderExchangeProcImpl {
                         &mut frozen_asset_balance,
                         &mut base_asset_balance,
                         &mut o_quote_asset_balance,
-                        &mut o_base_asset_balance
+                        &mut o_base_asset_balance,
                     );
 
                     trades.push(trade);
@@ -160,7 +147,6 @@ impl SpotOrderExchangeProcImpl {
         if !internal_order.is_all_filled() {
             let _ = self.lob_repo.add_order(internal_order.trading_pair, internal_order);
         }
-
 
         // 所有数据持久化操作
         let all_events: Vec<ChangeLogEntry> = Vec::new();
@@ -193,35 +179,41 @@ impl SpotOrderExchangeProcImpl {
             }
         }
 
-
         todo!()
     }
 }
 
 impl SpotOrderExchangeProc for SpotOrderExchangeProcImpl {
-    fn handle(&mut self, cmd: IdempotentSpotCommand) -> IdempotentSpotResult {
+    fn handle(&mut self, cmd: IdempotentSpotCmd) -> IdempotentSpotResult {
         match cmd.payload {
-            SpotCommand::LimitOrder {
-                ..
-            } => self.limit_order(cmd),
-            SpotCommand::MarketOrder {
-                ..
-            } => Err(SpotCommandError::Common(CommonError::InvalidParameter {
+
+            // SpotCommand::LimitOrder {
+            //     trader,
+            //     account_id,
+            //     trading_pair,
+            //     side,
+            //     price,
+            //     quantity,
+            //     time_in_force,
+            //     client_order_id
+            // } => (trader, account_id, trading_pair, side, price, quantity, time_in_force, client_order_id)
+            
+            
+            
+            
+            SpotCmdAny::LimitOrder (limitOrder) => self.limit_order(cmd),
+            SpotCmdAny::MarketOrder { .. } => Err(SpotCmdError::Common(CommonError::InvalidParameter {
                 field: "payload",
-                reason: "MarketOrder not yet implemented"
+                reason: "MarketOrder not yet implemented",
             })),
-            SpotCommand::CancelOrder {
-                ..
-            } => Err(SpotCommandError::Common(CommonError::InvalidParameter {
+            SpotCmdAny::CancelOrder { .. } => Err(SpotCmdError::Common(CommonError::InvalidParameter {
                 field: "payload",
-                reason: "CancelOrder not yet implemented"
+                reason: "CancelOrder not yet implemented",
             })),
-            SpotCommand::CancelAllOrders {
-                ..
-            } => Err(SpotCommandError::Common(CommonError::InvalidParameter {
+            SpotCmdAny::CancelAllOrders { .. } => Err(SpotCmdError::Common(CommonError::InvalidParameter {
                 field: "payload",
-                reason: "CancelAllOrders not yet implemented"
-            }))
+                reason: "CancelAllOrders not yet implemented",
+            })),
         }
     }
 }
@@ -249,23 +241,23 @@ mod tests {
         let trader_id = TraderId::new([1, 2, 3, 4, 5, 6, 7, 8]);
         let account_id = AccountId(100);
         let trading_pair = TradingPair {
-            base_asset: AssetId::BTC,    // BTC
-            quote_asset: AssetId::USDT,  // USDT
+            base_asset: AssetId::BTC,   // BTC
+            quote_asset: AssetId::USDT, // USDT
         };
         let price = Price::from_raw(1_000_000_000_000); // 10000.00 USDT
-        let quantity = Quantity::from_raw(100_000_000);  // 1.00 BTC
+        let quantity = Quantity::from_raw(100_000_000); // 1.00 BTC
 
         // 2. 创建限价单
         let order = SpotOrder::create_limit(
-            12345,           // order_id
-            trader_id,       // trader
-            account_id,      // account_id
-            trading_pair,    // trading_pair
-            Side::Buy,       // Buy order
-            price,           // price
-            quantity,        // quantity
-            lob::lob::TimeInForce::GTC, // GTC: Good Till Cancel
-            Some("CLIENT-001".to_string()) // client_order_id
+            12345,                          // order_id
+            trader_id,                      // trader
+            account_id,                     // account_id
+            trading_pair,                   // trading_pair
+            Side::Buy,                      // Buy order
+            price,                          // price
+            quantity,                       // quantity
+            lob::lob::TimeInForce::GTC,     // GTC: Good Till Cancel
+            Some("CLIENT-001".to_string()), // client_order_id
         );
 
         // ========================================================================
@@ -298,15 +290,6 @@ mod tests {
         assert!(order.timestamp > 1_000_000_000, "时间戳应为合理的毫秒值");
 
         // 8. 验证客户端订单ID
-        assert_eq!(
-            order.client_order_id,
-            Some("CLIENT-001".to_string()),
-            "客户端订单ID应被保存"
-        );
+        assert_eq!(order.client_order_id, Some("CLIENT-001".to_string()), "客户端订单ID应被保存");
     }
-
-
 }
-
-
-

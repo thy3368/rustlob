@@ -10,8 +10,8 @@
 // 模拟的账户服务（实际使用时需要真实实现）
 use account::AccountService;
 use lob::lob::{
-    Command, CommandResponse, MemoryOrderRepo, OrderId, OrderRepo, OrderStatus, Price, Quantity, Side, SpotCommand,
-    SpotCommandError, SpotCommandResult, SpotMatchingService, SpotOrderExchangeProc, Symbol, TimeInForce, TraderId
+    Cmd, CmdResp, MemoryOrderRepo, OrderId, OrderRepo, OrderStatus, Price, Quantity, Side, SpotCmdAny,
+    SpotCmdError, SpotCmdResult, SpotMatchingService, SpotOrderExchangeProc, Symbol, TimeInForce, TraderId
 };
 
 /// 交易员结构体
@@ -43,7 +43,7 @@ impl Trader {
     /// 如果无法立即成交，订单会挂在订单簿上等待
     pub fn place_limit_buy_gtc<R, A>(
         &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -56,7 +56,7 @@ impl Trader {
         println!("数量: {} BTC", quantity);
         println!("有效期: GTC (撤单前一直有效)");
 
-        let command = SpotCommand::LimitOrder {
+        let command = SpotCmdAny::LimitOrder {
             trader: self.trader_id,
             trading_pair: symbol,
             side: Side::Buy,
@@ -66,7 +66,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-BUY-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -79,7 +79,7 @@ impl Trader {
     /// PostOnly 确保订单不会立即成交（只做流动性提供者）
     pub fn place_limit_sell_post_only<R, A>(
         &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -92,7 +92,7 @@ impl Trader {
         println!("数量: {} BTC", quantity);
         println!("有效期: PostOnly (只做 Maker，不吃单)");
 
-        let command = SpotCommand::LimitOrder {
+        let command = SpotCmdAny::LimitOrder {
             trader: self.trader_id,
             trading_pair: symbol,
             side: Side::Sell,
@@ -102,7 +102,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-SELL-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -115,7 +115,7 @@ impl Trader {
     /// 适合需要快速执行但不想挂单的场景
     pub fn place_limit_buy_ioc<R, A>(
         &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -128,7 +128,7 @@ impl Trader {
         println!("数量: {} BTC", quantity);
         println!("有效期: IOC (立即成交，未成交部分取消)");
 
-        let command = SpotCommand::LimitOrder {
+        let command = SpotCmdAny::LimitOrder {
             trader: self.trader_id,
             trading_pair: symbol,
             side: Side::Buy,
@@ -138,7 +138,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-IOC-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -151,7 +151,7 @@ impl Trader {
     /// 适合大单执行，避免部分成交的风险
     pub fn place_limit_buy_fok<R, A>(
         &mut self, matching_service: &mut SpotMatchingService<R, A>, symbol: Symbol, price: Price, quantity: Quantity
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -164,7 +164,7 @@ impl Trader {
         println!("数量: {} BTC", quantity);
         println!("有效期: FOK (全部成交或全部拒绝)");
 
-        let command = SpotCommand::LimitOrder {
+        let command = SpotCmdAny::LimitOrder {
             trader: self.trader_id,
             trading_pair: symbol,
             side: Side::Buy,
@@ -174,7 +174,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-FOK-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -191,7 +191,7 @@ impl Trader {
         symbol: Symbol,
         quantity: Quantity,
         price_limit: Option<Price> // 价格保护：最高愿意支付的价格
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -207,7 +207,7 @@ impl Trader {
             println!("价格保护: 无限制（风险较高）");
         }
 
-        let command = SpotCommand::MarketOrder {
+        let command = SpotCmdAny::MarketOrder {
             trader: self.trader_id,
             symbol,
             side: Side::Buy,
@@ -217,7 +217,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-MARKET-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -233,7 +233,7 @@ impl Trader {
         symbol: Symbol,
         quantity: Quantity,
         price_limit: Option<Price> // 价格保护：最低愿意接受的价格
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -248,7 +248,7 @@ impl Trader {
         }
         println!("有效期: FOK (全部成交或全部拒绝)");
 
-        let command = SpotCommand::MarketOrder {
+        let command = SpotCmdAny::MarketOrder {
             trader: self.trader_id,
             symbol,
             side: Side::Sell,
@@ -258,7 +258,7 @@ impl Trader {
             client_order_id: Some(format!("CLIENT-MARKET-FOK-{}", self.nonce_counter))
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -270,7 +270,7 @@ impl Trader {
     /// 交易员想取消之前挂的订单
     pub fn cancel_order<R, A>(
         &mut self, matching_service: &mut SpotMatchingService<R, A>, order_id: OrderId
-    ) -> Result<CommandResponse<SpotCommandResult>, SpotCommandError>
+    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError>
     where
         R: OrderRepo + Send + Sync,
         A: AccountService
@@ -279,11 +279,11 @@ impl Trader {
         println!("交易员: {:?}", self.trader_id);
         println!("订单ID: {}", order_id);
 
-        let command = SpotCommand::CancelOrder {
+        let command = SpotCmdAny::CancelOrder {
             order_id
         };
 
-        let idempotent_cmd = Command::new(self.next_nonce(), command);
+        let idempotent_cmd = Cmd::new(self.next_nonce(), command);
         let result = matching_service.handle(idempotent_cmd)?;
 
         self.print_result(&result);
@@ -291,12 +291,12 @@ impl Trader {
     }
 
     /// 打印命令执行结果
-    fn print_result(&self, response: &CommandResponse<SpotCommandResult>) {
+    fn print_result(&self, response: &CmdResp<SpotCmdResult>) {
         println!("\n--- 执行结果 ---");
         println!("Nonce: {}", response.metadata.nonce);
 
         match &response.result {
-            SpotCommandResult::LimitOrder {
+            SpotCmdResult::LimitOrder {
                 order_id,
                 status,
                 filled_quantity,
@@ -329,7 +329,7 @@ impl Trader {
                     _ => {}
                 }
             }
-            SpotCommandResult::MarketOrder {
+            SpotCmdResult::MarketOrder {
                 status,
                 filled_quantity,
                 trades
@@ -352,7 +352,7 @@ impl Trader {
                     _ => {}
                 }
             }
-            SpotCommandResult::CancelOrder {
+            SpotCmdResult::CancelOrder {
                 order_id,
                 status
             } => {
@@ -361,7 +361,7 @@ impl Trader {
                 println!("状态: {:?}", status);
                 println!("✅ 订单已成功取消");
             }
-            SpotCommandResult::CancelAllOrders {
+            SpotCmdResult::CancelAllOrders {
                 cancelled_count,
                 order_ids
             } => {
@@ -415,7 +415,7 @@ mod tests {
 
         match result {
             Ok(response) => {
-                if let SpotCommandResult::LimitOrder {
+                if let SpotCmdResult::LimitOrder {
                     order_id, ..
                 } = response.result
                 {
@@ -518,7 +518,7 @@ mod tests {
         );
 
         if let Ok(response) = result {
-            if let SpotCommandResult::LimitOrder {
+            if let SpotCmdResult::LimitOrder {
                 status, ..
             } = response.result
             {
@@ -538,7 +538,7 @@ mod tests {
         );
 
         if let Ok(response) = result {
-            if let SpotCommandResult::LimitOrder {
+            if let SpotCmdResult::LimitOrder {
                 status, ..
             } = response.result
             {

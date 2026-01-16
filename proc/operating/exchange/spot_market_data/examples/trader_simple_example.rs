@@ -4,7 +4,7 @@
 //! 注意：这是一个概念演示，实际运行需要完整的基础设施实现
 
 use lob::lob::{
-    Command, OrderId, OrderStatus, Price, Quantity, Side, SpotCommand, SpotCommandResult, Symbol, TimeInForce, TraderId
+    Cmd, OrderId, OrderStatus, Price, Quantity, Side, SpotCmdAny, SpotCmdResult, Symbol, TimeInForce, TraderId
 };
 
 fn main() {
@@ -20,7 +20,7 @@ fn main() {
 
     // 3. 场景1：限价买单（GTC）
     println!("--- 场景1: 限价买单 (GTC) ---");
-    let limit_buy_order = SpotCommand::LimitOrder {
+    let limit_buy_order = SpotCmdAny::LimitOrder {
         trader: trader_id,
         trading_pair: symbol,
         side: Side::Buy,
@@ -30,14 +30,14 @@ fn main() {
         client_order_id: Some("CLIENT-BUY-001".to_string())
     };
 
-    let cmd = Command::new(1001, limit_buy_order);
+    let cmd = Cmd::new(1001, limit_buy_order);
     println!("命令: {:?}", cmd);
     println!("说明: 以 50000 USDT 的价格买入 1.5 BTC");
     println!("有效期: GTC (撤单前一直有效)\n");
 
     // 4. 场景2：限价卖单（PostOnly）
     println!("--- 场景2: 限价卖单 (PostOnly) ---");
-    let limit_sell_order = SpotCommand::LimitOrder {
+    let limit_sell_order = SpotCmdAny::LimitOrder {
         trader: trader_id,
         trading_pair: symbol,
         side: Side::Sell,
@@ -47,14 +47,14 @@ fn main() {
         client_order_id: Some("CLIENT-SELL-001".to_string())
     };
 
-    let cmd = Command::new(1002, limit_sell_order);
+    let cmd = Cmd::new(1002, limit_sell_order);
     println!("命令: {:?}", cmd);
     println!("说明: 以 50100 USDT 的价格卖出 2.0 BTC");
     println!("有效期: PostOnly (只做 Maker，不吃单)\n");
 
     // 5. 场景3：市价买单
     println!("--- 场景3: 市价买单 ---");
-    let market_buy_order = SpotCommand::MarketOrder {
+    let market_buy_order = SpotCmdAny::MarketOrder {
         trader: trader_id,
         symbol,
         side: Side::Buy,
@@ -64,17 +64,17 @@ fn main() {
         client_order_id: Some("CLIENT-MARKET-001".to_string())
     };
 
-    let cmd = Command::new(1003, market_buy_order);
+    let cmd = Cmd::new(1003, market_buy_order);
     println!("命令: {:?}", cmd);
     println!("说明: 立即买入 1.0 BTC，价格保护最高 51000 USDT\n");
 
     // 6. 场景4：取消订单
     println!("--- 场景4: 取消订单 ---");
-    let cancel_order = SpotCommand::CancelOrder {
+    let cancel_order = SpotCmdAny::CancelOrder {
         order_id: 12345
     };
 
-    let cmd = Command::new(1004, cancel_order);
+    let cmd = Cmd::new(1004, cancel_order);
     println!("命令: {:?}", cmd);
     println!("说明: 取消订单 ID 12345\n");
 

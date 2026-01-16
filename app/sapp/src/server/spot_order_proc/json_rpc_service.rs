@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{Command, Side, SpotCommand, SpotCommandResult, SpotOrderExchangeProc, TraderId};
+use lob::lob::{Cmd, Side, SpotCmdAny, SpotCmdResult, SpotOrderExchangeProc, TraderId};
 
 use crate::models::*;
 
@@ -47,11 +47,11 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
     /// 将请求转换为 SpotCommand
     /// 注意: IcebergOrder 已移至 ConditionalCommand，需通过
     /// ConditionalOrderHandler 处理
-    fn parse_command(cmd: &CommandRequest) -> std::result::Result<SpotCommand, jsonrpc_core::Error> {
+    fn parse_command(cmd: &CommandRequest) -> std::result::Result<SpotCmdAny, jsonrpc_core::Error> {
         use lob::lob::{Symbol, TimeInForce};
 
         match cmd.command.as_str() {
-            "LimitOrder" => Ok(SpotCommand::LimitOrder {
+            "LimitOrder" => Ok(SpotCmdAny::LimitOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
                 trading_pair: Symbol::from_str(cmd.symbol.as_deref().unwrap_or("BTCUSDT")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
@@ -60,7 +60,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 time_in_force: TimeInForce::GoodTillCancel,
                 client_order_id: cmd.client_order_id.clone()
             }),
-            "MarketOrder" => Ok(SpotCommand::MarketOrder {
+            "MarketOrder" => Ok(SpotCmdAny::MarketOrder {
                 trader: TraderId::from_str(cmd.trader_id.as_deref().unwrap_or("")),
                 symbol: Symbol::from_str(cmd.symbol.as_deref().unwrap_or("BTCUSDT")),
                 side: parse_side(cmd.side.as_deref().unwrap_or(""))?,
@@ -69,7 +69,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 time_in_force: None,
                 client_order_id: cmd.client_order_id.clone()
             }),
-            "CancelOrder" => Ok(SpotCommand::CancelOrder {
+            "CancelOrder" => Ok(SpotCmdAny::CancelOrder {
                 order_id: cmd.order_id.ok_or_else(|| jsonrpc_core::Error::invalid_params("missing order_id"))?
             }),
             _ => Err(jsonrpc_core::Error::invalid_params(format!("unknown command: {}", cmd.command)))
@@ -77,11 +77,11 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
     }
 
     /// 将 SpotCommandResult 转换为响应
-    fn to_response(result: SpotCommandResult) -> CommandResponse {
+    fn to_response(result: SpotCmdResult) -> CommandResponse {
         use lob::lob::OrderStatus;
 
         match result {
-            SpotCommandResult::LimitOrder {
+            SpotCmdResult::LimitOrder {
                 order_id,
                 status,
                 filled_quantity,
@@ -105,7 +105,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 ),
                 ..Default::default()
             },
-            SpotCommandResult::MarketOrder {
+            SpotCmdResult::MarketOrder {
                 status,
                 filled_quantity,
                 trades
@@ -125,7 +125,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
                 ),
                 ..Default::default()
             },
-            SpotCommandResult::CancelOrder {
+            SpotCmdResult::CancelOrder {
                 order_id,
                 status
             } => CommandResponse {
@@ -149,7 +149,7 @@ impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> 
         let nonce = cmd.nonce.unwrap_or_else(|| {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
         });
-        let idempotent_cmd = Command::new(nonce, spot_command);
+        let idempotent_cmd = Cmd::new(nonce, spot_command);
 
         let mut h = self.handler.lock().unwrap();
         let idempotent_result = h.handle(idempotent_cmd);
