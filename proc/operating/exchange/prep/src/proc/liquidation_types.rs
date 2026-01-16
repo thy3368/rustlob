@@ -85,25 +85,25 @@ pub enum OrderPriority {
 /// 保险基金接口
 #[async_trait::async_trait]
 pub trait InsuranceFund: Send + Sync {
-    async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCommandError>;
-    async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCommandError>;
+    async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCmdError>;
+    async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCmdError>;
 }
 
 /// ADL引擎接口
 #[async_trait::async_trait]
 pub trait ADLEngine: Send + Sync {
-    async fn find_counterparties(&self, symbol: TradingPair, side: Side) -> Result<Vec<PrepPosition>, PrepCommandError>;
+    async fn find_counterparties(&self, symbol: TradingPair, side: Side) -> Result<Vec<PrepPosition>, PrepCmdError>;
 
     async fn execute_adl(
         &self, liquidated_position: &PrepPosition, counterparties: Vec<PrepPosition>
-    ) -> Result<ADLResult, PrepCommandError>;
+    ) -> Result<ADLResult, PrepCmdError>;
 }
 
 // ============================================================================
 // 错误类型扩展
 // ============================================================================
 
-impl PrepCommandError {
+impl PrepCmdError {
     /// 市场流动性不足错误
     pub fn market_liquidity_insufficient() -> Self {
         Self::RiskControlRejected("市场流动性不足，无法完成市场强平".to_string())

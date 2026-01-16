@@ -50,7 +50,7 @@ mod open_to_liquidation_tutorial {
         let symbol = TradingPair::new("BTCUSDT");
         let leverage = 10;
 
-        service.set_leverage(SetLeverageCommand::new(symbol, leverage)).expect("设置杠杆应该成功");
+        service.set_leverage(SetLeverageCmd::new(symbol, leverage)).expect("设置杠杆应该成功");
 
         println!("✅ 张三设置 {}x 杠杆", leverage);
         println!();
@@ -62,7 +62,7 @@ mod open_to_liquidation_tutorial {
 
         let quantity = Quantity::from_f64(1.0);
 
-        let open_cmd = OpenPositionCommand::market_long(symbol, quantity).with_leverage(leverage);
+        let open_cmd = OpenPositionCmd::market_long(symbol, quantity).with_leverage(leverage);
 
         println!("→ 张三开多仓 {} BTC @ 市价", quantity.to_f64());
 
@@ -79,7 +79,7 @@ mod open_to_liquidation_tutorial {
         // ================================================================
         println!("✅ THEN - 持仓验证\n");
 
-        let position = service.query_position(QueryPositionCommand::long(symbol)).expect("应该能查询到持仓");
+        let position = service.query_position(QueryPositionCmd::long(symbol)).expect("应该能查询到持仓");
 
         assert!(position.has_position(), "应该有持仓");
         assert_eq!(position.quantity.to_f64(), 1.0, "持仓数量应该是1 BTC");
@@ -164,12 +164,12 @@ mod open_to_liquidation_tutorial {
         struct MockInsuranceFund;
         #[async_trait::async_trait]
         impl InsuranceFund for MockInsuranceFund {
-            async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCommandError> {
+            async fn check_capacity(&self) -> Result<InsuranceFundCapacity, PrepCmdError> {
                 Ok(InsuranceFundCapacity {
                     available_balance: Price::from_f64(100000.0)
                 })
             }
-            async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCommandError> {
+            async fn takeover(&self, position: &PrepPosition) -> Result<InsuranceFundTakeover, PrepCmdError> {
                 Ok(InsuranceFundTakeover {
                     total_loss: position.margin
                 })
@@ -181,12 +181,12 @@ mod open_to_liquidation_tutorial {
         impl ADLEngine for MockADLEngine {
             async fn find_counterparties(
                 &self, _symbol: TradingPair, _side: Side
-            ) -> Result<Vec<PrepPosition>, PrepCommandError> {
+            ) -> Result<Vec<PrepPosition>, PrepCmdError> {
                 Ok(Vec::new())
             }
             async fn execute_adl(
                 &self, _liquidated_position: &PrepPosition, _counterparties: Vec<PrepPosition>
-            ) -> Result<ADLResult, PrepCommandError> {
+            ) -> Result<ADLResult, PrepCmdError> {
                 Ok(ADLResult {
                     affected_positions: Vec::new()
                 })

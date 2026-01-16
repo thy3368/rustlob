@@ -17,14 +17,14 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use crate::proc::{
     prep_types::PrepOrder,
     trading_prep_order_proc::{
-        AccountBalance, AccountInfo, CancelAllOrdersCommand, CancelAllOrdersResult, CancelOrderCommand,
-        CancelOrderResult, ClosePositionCommand, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
-        MarkPriceInfo, ModifyOrderCommand, ModifyOrderResult, OpenPositionCommand, OpenPositionResult,
-        OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchProc, PerpOrderExchQueryProc, PrepCommandError,
-        PrepTrade, Price, Quantity, QueryAccountBalanceCommand, QueryAccountInfoCommand, QueryFundingFeeCommand,
-        QueryFundingRateHistoryCommand, QueryMarkPriceCommand, QueryOrderBookCommand, QueryOrderCommand,
-        QueryPositionCommand, QueryTradesCommand, SetLeverageCommand, SetLeverageResult, SetMarginTypeCommand,
-        SetMarginTypeResult, SetPositionModeCommand, SetPositionModeResult, Side, TradeId, TradesQueryResult
+        AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd,
+        CancelOrderResult, ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
+        MarkPriceInfo, ModifyOrderCmd, ModifyOrderResult, OpenPositionCmd, OpenPositionResult,
+        OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchProc, PerpOrderExchQueryProc, PrepCmdError,
+        PrepTrade, Price, Quantity, QueryAccountBalanceCmd, QueryAccountInfoCmd, QueryFundingFeeCmd,
+        QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd, QueryOrderCmd,
+        QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
+        SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, Side, TradeId, TradesQueryResult
     }
 };
 
@@ -93,20 +93,20 @@ impl PrepMatchingService {
     /// # 返回
     /// - `Ok(())`: 扣减成功
     /// - `Err(InsufficientBalance)`: 余额不足
-    fn deduct_balance(&self, amount: Price, now: Timestamp) -> Result<(), PrepCommandError> {
+    fn deduct_balance(&self, amount: Price, now: Timestamp) -> Result<(), PrepCmdError> {
         // 获取变更事件
         let event = self.deduct_balance2(amount, now)?;
 
         // 回放事件到数据库
         self.balance_repo
             .replay_event(&event)
-            .map_err(|e| PrepCommandError::MatchingEngineError(format!("Failed to replay balance event: {:?}", e)))?;
+            .map_err(|e| PrepCmdError::MatchingEngineError(format!("Failed to replay balance event: {:?}", e)))?;
 
         Ok(())
     }
 
     /// 生成扣减余额变更事件（内部实现）
-    fn deduct_balance2(&self, amount: Price, now: Timestamp) -> Result<diff::ChangeLogEntry, PrepCommandError> {
+    fn deduct_balance2(&self, amount: Price, now: Timestamp) -> Result<diff::ChangeLogEntry, PrepCmdError> {
         // TODO: 从数据库获取当前余额并验证充足
         // 然后生成变更事件
         // let event = diff::ChangeLogEntry::new(
@@ -275,11 +275,11 @@ impl PrepMatchingService {
     // Rejected = 6
 
 
-    fn handle_limit_order3(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+    fn handle_limit_order3(&self, cmd: OpenPositionCmd) -> Result<OpenPositionResult, PrepCmdError> {
         // ========================================================================
         // 1. 命令验证
         // ========================================================================
-        cmd.validate().map_err(PrepCommandError::ValidationError)?;
+        cmd.validate().map_err(PrepCmdError::ValidationError)?;
 
         // todo time_in_force 没有用
         let order_id = self.generate_order_id();
@@ -405,15 +405,15 @@ impl PerpOrderExchProc for PrepMatchingService {
     /// 4. 根据订单类型进行撮合
     /// 5. 更新持仓和余额
     /// 6. 返回撮合结果
-    fn open_position(&self, cmd: OpenPositionCommand) -> Result<OpenPositionResult, PrepCommandError> {
+    fn open_position(&self, cmd: OpenPositionCmd) -> Result<OpenPositionResult, PrepCmdError> {
         self.handle_limit_order3(cmd)
     }
 
-    fn close_position(&self, cmd: ClosePositionCommand) -> Result<ClosePositionResult, PrepCommandError> {
+    fn close_position(&self, cmd: ClosePositionCmd) -> Result<ClosePositionResult, PrepCmdError> {
         // ========================================================================
         // 1. 命令验证
         // ========================================================================
-        cmd.validate().map_err(PrepCommandError::ValidationError)?;
+        cmd.validate().map_err(PrepCmdError::ValidationError)?;
 
         // ========================================================================
         // 2. 查询持仓并克隆数据
@@ -422,23 +422,23 @@ impl PerpOrderExchProc for PrepMatchingService {
 
         // 验证持仓存在
         if !self.has_position(cmd.trading_pair) {
-            return Err(PrepCommandError::InsufficientPosition);
+            return Err(PrepCmdError::InsufficientPosition);
         }
 
         // 验证持仓方向
         if position.position_side != cmd.position_side {
-            return Err(PrepCommandError::InsufficientPosition);
+            return Err(PrepCmdError::InsufficientPosition);
         }
 
         // 验证持仓数量
         if !position.has_position() {
-            return Err(PrepCommandError::InsufficientPosition);
+            return Err(PrepCmdError::InsufficientPosition);
         }
 
         // 确定平仓数量
         let close_qty = cmd.quantity.unwrap_or(position.quantity);
         if close_qty > position.quantity {
-            return Err(PrepCommandError::InsufficientPosition);
+            return Err(PrepCmdError::InsufficientPosition);
         }
 
         // ========================================================================
@@ -565,7 +565,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         Ok(ClosePositionResult::filled(order_id, vec![trade], realized_pnl_price, match_seq))
     }
 
-    fn cancel_order(&self, cmd: CancelOrderCommand) -> Result<CancelOrderResult, PrepCommandError> {
+    fn cancel_order(&self, cmd: CancelOrderCmd) -> Result<CancelOrderResult, PrepCmdError> {
         // 1. 先从元数据中获取订单信息 2. order.cancel
 
         let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.quote_asset.0);
@@ -584,8 +584,8 @@ impl PerpOrderExchProc for PrepMatchingService {
         todo!()
     }
 
-    fn modify_order(&self, cmd: ModifyOrderCommand) -> Result<ModifyOrderResult, PrepCommandError> {
-        cmd.validate().map_err(PrepCommandError::ValidationError)?;
+    fn modify_order(&self, cmd: ModifyOrderCmd) -> Result<ModifyOrderResult, PrepCmdError> {
+        cmd.validate().map_err(PrepCmdError::ValidationError)?;
 
         // TODO: 需要实现修改LOB中的订单
         // 修改订单需要：
@@ -597,7 +597,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         todo!()
     }
 
-    fn cancel_all_orders(&self, cmd: CancelAllOrdersCommand) -> Result<CancelAllOrdersResult, PrepCommandError> {
+    fn cancel_all_orders(&self, cmd: CancelAllOrdersCmd) -> Result<CancelAllOrdersResult, PrepCmdError> {
         // TODO: 需要遍历LOB获取所有订单
         // 当前简化实现：只处理元数据
         let mut cancelled_ids: Vec<OrderId> = Vec::new();
@@ -625,8 +625,8 @@ impl PerpOrderExchProc for PrepMatchingService {
     }
 
     // todo 设计某持仓的杠杆会影响保证金
-    fn set_leverage(&self, cmd: SetLeverageCommand) -> Result<SetLeverageResult, PrepCommandError> {
-        cmd.validate().map_err(PrepCommandError::ValidationError)?;
+    fn set_leverage(&self, cmd: SetLeverageCmd) -> Result<SetLeverageResult, PrepCmdError> {
+        cmd.validate().map_err(PrepCmdError::ValidationError)?;
 
         // 获取当前持仓信息，以便获取旧的杠杆倍数
         let position = self.get_position(cmd.trading_pair);
@@ -646,7 +646,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         })
     }
 
-    fn set_margin_type(&self, cmd: SetMarginTypeCommand) -> Result<SetMarginTypeResult, PrepCommandError> {
+    fn set_margin_type(&self, cmd: SetMarginTypeCmd) -> Result<SetMarginTypeResult, PrepCmdError> {
         Ok(SetMarginTypeResult {
             trading_pair: cmd.trading_pair,
             margin_type: cmd.margin_type,
@@ -654,7 +654,7 @@ impl PerpOrderExchProc for PrepMatchingService {
         })
     }
 
-    fn set_position_mode(&self, cmd: SetPositionModeCommand) -> Result<SetPositionModeResult, PrepCommandError> {
+    fn set_position_mode(&self, cmd: SetPositionModeCmd) -> Result<SetPositionModeResult, PrepCmdError> {
         Ok(SetPositionModeResult {
             dual_side: cmd.dual_side,
             success: true
@@ -663,7 +663,7 @@ impl PerpOrderExchProc for PrepMatchingService {
 }
 
 impl PerpOrderExchQueryProc for PrepMatchingService {
-    fn query_order(&self, cmd: QueryOrderCommand) -> Result<OrderQueryResult, PrepCommandError> {
+    fn query_order(&self, cmd: QueryOrderCmd) -> Result<OrderQueryResult, PrepCmdError> {
         // TODO: 需要从LOB获取完整订单信息
         // 当前简化实现：从元数据获取部分信息
 
@@ -671,21 +671,21 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         todo!()
     }
 
-    fn query_position(&self, cmd: QueryPositionCommand) -> Result<PrepPosition, PrepCommandError> {
+    fn query_position(&self, cmd: QueryPositionCmd) -> Result<PrepPosition, PrepCmdError> {
         Ok(self.get_position(cmd.trading_pair))
     }
 
-    fn query_order_book(&self, _cmd: QueryOrderBookCommand) -> Result<OrderBookSnapshot, PrepCommandError> {
+    fn query_order_book(&self, _cmd: QueryOrderBookCmd) -> Result<OrderBookSnapshot, PrepCmdError> {
         // 简化实现：返回空订单簿
         Ok(OrderBookSnapshot::empty(_cmd.trading_pair))
     }
 
-    fn query_trades(&self, _cmd: QueryTradesCommand) -> Result<TradesQueryResult, PrepCommandError> {
+    fn query_trades(&self, _cmd: QueryTradesCmd) -> Result<TradesQueryResult, PrepCmdError> {
         // 简化实现：返回空结果
         Ok(TradesQueryResult::empty())
     }
 
-    fn query_account_balance(&self, cmd: QueryAccountBalanceCommand) -> Result<Vec<AccountBalance>, PrepCommandError> {
+    fn query_account_balance(&self, cmd: QueryAccountBalanceCmd) -> Result<Vec<AccountBalance>, PrepCmdError> {
         let balance = self.get_balance();
 
         let account_balance = AccountBalance::new(
@@ -700,7 +700,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         Ok(vec![account_balance])
     }
 
-    fn query_account_info(&self, _cmd: QueryAccountInfoCommand) -> Result<AccountInfo, PrepCommandError> {
+    fn query_account_info(&self, _cmd: QueryAccountInfoCmd) -> Result<AccountInfo, PrepCmdError> {
         let balance = self.get_balance();
 
         // Mock 实现：返回空的持仓列表
@@ -709,7 +709,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         Ok(AccountInfo::new(balance, Price::from_raw(0), Price::from_raw(0), balance, positions_vec, Vec::new()))
     }
 
-    fn query_mark_price(&self, cmd: QueryMarkPriceCommand) -> Result<Vec<MarkPriceInfo>, PrepCommandError> {
+    fn query_mark_price(&self, cmd: QueryMarkPriceCmd) -> Result<Vec<MarkPriceInfo>, PrepCmdError> {
         // 简化实现：返回模拟标记价格
         let symbol = cmd.trading_pair.unwrap_or_else(|| TradingPair::USDT_USDT);
 
@@ -727,13 +727,13 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
     }
 
     fn query_funding_rate_history(
-        &self, _cmd: QueryFundingRateHistoryCommand
-    ) -> Result<Vec<FundingRateRecord>, PrepCommandError> {
+        &self, _cmd: QueryFundingRateHistoryCmd
+    ) -> Result<Vec<FundingRateRecord>, PrepCmdError> {
         // 简化实现：返回空历史
         Ok(Vec::new())
     }
 
-    fn query_funding_fee(&self, _cmd: QueryFundingFeeCommand) -> Result<Vec<FundingFeeRecord>, PrepCommandError> {
+    fn query_funding_fee(&self, _cmd: QueryFundingFeeCmd) -> Result<Vec<FundingFeeRecord>, PrepCmdError> {
         // 简化实现：返回空记录
         Ok(Vec::new())
     }

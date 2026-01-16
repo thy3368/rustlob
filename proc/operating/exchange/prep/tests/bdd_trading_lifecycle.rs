@@ -37,11 +37,11 @@ mod trading_lifecycle {
         // ====================================================================
         // Step 2: 开仓 - 以市价开多仓 1 BTC，5倍杠杆
         // ====================================================================
-        let set_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 5);
+        let set_leverage_cmd = SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 5);
         matching_service.set_leverage(set_leverage_cmd).unwrap();
 
         let open_cmd =
-            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
+            OpenPositionCmd::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
 
         let open_result = matching_service.open_position(open_cmd).unwrap();
 
@@ -56,7 +56,7 @@ mod trading_lifecycle {
         // ====================================================================
         // Step 3: 查询持仓 - 验证持仓已创建
         // ====================================================================
-        let position_query = QueryPositionCommand::long(TradingPair::new("BTCUSDT"));
+        let position_query = QueryPositionCmd::long(TradingPair::new("BTCUSDT"));
         let position = matching_service.query_position(position_query).unwrap();
 
         assert!(position.has_position());
@@ -82,7 +82,7 @@ mod trading_lifecycle {
         // Step 4: 调整杠杆 - 从5倍调整到10倍
         // ====================================================================
         let new_leverage = 10;
-        let adjust_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), new_leverage);
+        let adjust_leverage_cmd = SetLeverageCmd::new(TradingPair::new("BTCUSDT"), new_leverage);
 
         let leverage_result = matching_service.set_leverage(adjust_leverage_cmd);
         assert!(leverage_result.is_ok());
@@ -98,7 +98,7 @@ mod trading_lifecycle {
         // 这里我们验证杠杆配置已更新
 
         let position_after_leverage =
-            matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+            matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         println!("✅ Step 5: 验证杠杆调整影响");
         println!("   持仓数量: {} BTC（不变）", position_after_leverage.quantity.to_f64());
@@ -123,7 +123,7 @@ mod trading_lifecycle {
         // Step 6: 部分平仓 - 平掉0.5 BTC
         // ====================================================================
         let partial_close_cmd =
-            ClosePositionCommand::market_close_long(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(0.5)));
+            ClosePositionCmd::market_close_long(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(0.5)));
 
         let close_result = matching_service.close_position(partial_close_cmd).unwrap();
 
@@ -139,7 +139,7 @@ mod trading_lifecycle {
         // Step 7: 验证部分平仓后的持仓
         // ====================================================================
         let position_after_partial_close =
-            matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+            matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         assert_eq!(position_after_partial_close.quantity.to_f64(), 0.5);
         println!("✅ Step 7: 部分平仓后持仓验证");
@@ -152,7 +152,7 @@ mod trading_lifecycle {
         // Step 8: 完全平仓 - 平掉剩余的0.5 BTC
         // ====================================================================
         let full_close_cmd =
-            ClosePositionCommand::market_close_long(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(0.5)));
+            ClosePositionCmd::market_close_long(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(0.5)));
 
         let final_close_result = matching_service.close_position(full_close_cmd).unwrap();
 
@@ -166,7 +166,7 @@ mod trading_lifecycle {
         // Step 9: 验证持仓已清空
         // ====================================================================
         let final_position =
-            matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+            matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         assert!(!final_position.has_position(), "持仓应该已清空");
         println!("✅ Step 9: 持仓清空验证");
@@ -217,11 +217,11 @@ mod trading_lifecycle {
         // ====================================================================
         // Step 2: 开空仓 - 以市价开空仓 1 BTC，5倍杠杆
         // ====================================================================
-        let set_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 5);
+        let set_leverage_cmd = SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 5);
         matching_service.set_leverage(set_leverage_cmd).unwrap();
 
         let open_cmd =
-            OpenPositionCommand::market_short(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
+            OpenPositionCmd::market_short(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
 
         let open_result = matching_service.open_position(open_cmd).unwrap();
 
@@ -235,7 +235,7 @@ mod trading_lifecycle {
         // ====================================================================
         // Step 3: 查询持仓
         // ====================================================================
-        let position_query = QueryPositionCommand::short(TradingPair::new("BTCUSDT"));
+        let position_query = QueryPositionCmd::short(TradingPair::new("BTCUSDT"));
         let position = matching_service.query_position(position_query).unwrap();
 
         assert!(position.has_position());
@@ -263,7 +263,7 @@ mod trading_lifecycle {
         // Step 4: 调整杠杆 - 从5倍调整到20倍
         // ====================================================================
         let new_leverage = 20;
-        let adjust_leverage_cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), new_leverage);
+        let adjust_leverage_cmd = SetLeverageCmd::new(TradingPair::new("BTCUSDT"), new_leverage);
 
         matching_service.set_leverage(adjust_leverage_cmd).unwrap();
 
@@ -292,7 +292,7 @@ mod trading_lifecycle {
         // ====================================================================
         // Step 6: 平仓 - 完全平仓
         // ====================================================================
-        let close_cmd = ClosePositionCommand::market_close_short(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(1.0)));
+        let close_cmd = ClosePositionCmd::market_close_short(TradingPair::new("BTCUSDT"), Some(Quantity::from_f64(1.0)));
 
         let close_result = matching_service.close_position(close_cmd).unwrap();
 
@@ -306,7 +306,7 @@ mod trading_lifecycle {
         // Step 7: 验证持仓已清空
         // ====================================================================
         let final_position =
-            matching_service.query_position(QueryPositionCommand::short(TradingPair::new("BTCUSDT"))).unwrap();
+            matching_service.query_position(QueryPositionCmd::short(TradingPair::new("BTCUSDT"))).unwrap();
 
         assert!(!final_position.has_position());
         println!("✅ Step 7: 空仓持仓清空验证");
@@ -346,14 +346,14 @@ mod trading_lifecycle {
         let matching_service = Arc::new(PrepMatchingService::new(Price::from_f64(10000.0)));
 
         // 开仓
-        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 5)).unwrap();
+        matching_service.set_leverage(SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 5)).unwrap();
 
         let open_cmd =
-            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
+            OpenPositionCmd::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(5);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+        let position = matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         let entry_price = position.entry_price.to_f64();
 

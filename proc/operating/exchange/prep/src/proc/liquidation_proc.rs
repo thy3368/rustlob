@@ -39,7 +39,7 @@ impl LiquidationProcessor {
     /// 强平结果，包含强平类型和损失分配
     pub async fn execute_liquidation(
         &self, position_id: PositionId, trigger_price: Price
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 0. 冻结持仓
         self.freeze_position(&position_id).await?;
 
@@ -59,7 +59,7 @@ impl LiquidationProcessor {
     /// 强平结果，包含强平类型和损失分配
     pub async fn execute_liquidation_with_position(
         &self, position: PrepPosition, trigger_price: Price
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 确定平仓方向（与持仓方向相反）
         let liquidation_side = match position.position_side {
             PositionSide::Long => Side::Sell,
@@ -118,9 +118,9 @@ impl LiquidationProcessor {
     /// 尝试市场强平
     async fn try_market_liquidation(
         &self, position: &PrepPosition, side: Side
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 提交紧急市价单
-        let order_cmd = OpenPositionCommand {
+        let order_cmd = OpenPositionCmd {
             trading_pair: position.trading_pair,
             side,
             order_type: OrderType::Market,
@@ -148,19 +148,19 @@ impl LiquidationProcessor {
                 // 结算市场强平
                 self.settle_market_liquidation(position, avg_price, loss).await
             }
-            _ => Err(PrepCommandError::market_liquidity_insufficient())
+            _ => Err(PrepCmdError::market_liquidity_insufficient())
         }
     }
 
     /// 尝试保险基金接管
     async fn try_insurance_fund_takeover(
         &self, position: &PrepPosition
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 检查保险基金容量
         let capacity = self.insurance_fund.check_capacity().await?;
 
         if !capacity.can_takeover(position) {
-            return Err(PrepCommandError::insurance_fund_insufficient());
+            return Err(PrepCmdError::insurance_fund_insufficient());
         }
 
         // 执行接管
@@ -173,12 +173,12 @@ impl LiquidationProcessor {
     /// 触发自动减仓
     async fn trigger_auto_deleveraging(
         &self, position: &PrepPosition, side: Side
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 查找对手方盈利仓位（按ADL队列优先级）
         let counterparties = self.adl_engine.find_counterparties(position.trading_pair, side).await?;
 
         if counterparties.is_empty() {
-            return Err(PrepCommandError::no_counterparties_for_adl());
+            return Err(PrepCmdError::no_counterparties_for_adl());
         }
 
         // 执行ADL
@@ -194,7 +194,7 @@ impl LiquidationProcessor {
     }
 
     /// 冻结持仓
-    async fn freeze_position(&self, position_id: &PositionId) -> Result<(), PrepCommandError> {
+    async fn freeze_position(&self, position_id: &PositionId) -> Result<(), PrepCmdError> {
         // 更新持仓状态为 LIQUIDATING
         // 防止用户继续操作该持仓
         log::info!("🔒 Freezing position {}", position_id);
@@ -203,7 +203,7 @@ impl LiquidationProcessor {
     }
 
     /// 获取持仓信息
-    async fn get_position(&self, position_id: &PositionId) -> Result<PrepPosition, PrepCommandError> {
+    async fn get_position(&self, position_id: &PositionId) -> Result<PrepPosition, PrepCmdError> {
         // 尝试从 matching_service 查询持仓
         // 但是 query_position 需要 Symbol，而我们只有 position_id
         // 这是一个设计问题：需要一个 position_id -> Symbol 的映射
@@ -213,7 +213,7 @@ impl LiquidationProcessor {
         log::warn!("TODO: Implement proper get_position by position_id: {}", position_id);
 
         // 返回错误，提示需要实现
-        Err(PrepCommandError::Unknown(format!(
+        Err(PrepCmdError::Unknown(format!(
             "Position lookup by ID not implemented. Need PositionRepository. ID: {}",
             position_id
         )))
@@ -249,7 +249,7 @@ impl LiquidationProcessor {
 
     async fn settle_market_liquidation(
         &self, position: &PrepPosition, avg_price: Price, loss: Price
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         // 扣除保证金
         let margin_loss = position.margin;
 
@@ -270,7 +270,7 @@ impl LiquidationProcessor {
 
     async fn settle_insurance_fund_liquidation(
         &self, position: &PrepPosition, takeover: InsuranceFundTakeover
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         Ok(LiquidationResult {
             position_id: position.position_id.clone(),
             liquidation_type: LiquidationType::InsuranceFund,
@@ -284,7 +284,7 @@ impl LiquidationProcessor {
 
     async fn settle_adl_liquidation(
         &self, position: &PrepPosition, _adl_result: ADLResult
-    ) -> Result<LiquidationResult, PrepCommandError> {
+    ) -> Result<LiquidationResult, PrepCmdError> {
         Ok(LiquidationResult {
             position_id: position.position_id.clone(),
             liquidation_type: LiquidationType::ADL,
@@ -296,7 +296,7 @@ impl LiquidationProcessor {
         })
     }
 
-    async fn notify_adl_counterparty(&self, position_id: &PositionId) -> Result<(), PrepCommandError> {
+    async fn notify_adl_counterparty(&self, position_id: &PositionId) -> Result<(), PrepCmdError> {
         // 发送通知给被ADL的用户
         log::info!("📧 Sending ADL notification to position {}", position_id);
         // TODO: 实际实现：发送邮件/推送通知

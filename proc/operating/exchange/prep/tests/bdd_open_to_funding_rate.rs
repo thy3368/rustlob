@@ -185,7 +185,7 @@ mod opening_preparation_scenarios {
         let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
 
         // When: 用户设置BTCUSDT的杠杆为10倍
-        let cmd = SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10);
+        let cmd = SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 10);
         let result = matching_service.set_leverage(cmd);
 
         // Then: 杠杆设置成功
@@ -217,11 +217,11 @@ mod order_execution_scenarios {
 
         // Given: 用户有10000 USDT余额，设置了10倍杠杆
         let matching_service = PrepMatchingService::new(Price::from_f64(10000.0));
-        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
+        matching_service.set_leverage(SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
 
         // When: 用户以市价开多仓1 BTC
         let open_cmd =
-            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCmd::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         let open_result = matching_service.open_position(open_cmd);
 
@@ -238,7 +238,7 @@ mod order_execution_scenarios {
         assert_eq!(result.filled_quantity.to_f64(), 1.0);
 
         // And: 持仓应该被创建
-        let position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+        let position = matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         assert!(position.has_position());
         println!("\n✅ 持仓创建成功:");
@@ -780,16 +780,16 @@ mod complete_open_to_funding_workflow {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         // Step 1: 设置杠杆
-        matching_service.set_leverage(SetLeverageCommand::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
+        matching_service.set_leverage(SetLeverageCmd::new(TradingPair::new("BTCUSDT"), 10)).unwrap();
         println!("✅ 杠杆设置: 10x");
 
         // Step 2: 开多仓
         let open_cmd =
-            OpenPositionCommand::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
+            OpenPositionCmd::market_long(TradingPair::new("BTCUSDT"), Quantity::from_f64(1.0)).with_leverage(10);
 
         matching_service.open_position(open_cmd).unwrap();
 
-        let mut position = matching_service.query_position(QueryPositionCommand::long(TradingPair::new("BTCUSDT"))).unwrap();
+        let mut position = matching_service.query_position(QueryPositionCmd::long(TradingPair::new("BTCUSDT"))).unwrap();
 
         println!("✅ 开仓成功:");
         println!("   数量: {} BTC", position.quantity.to_f64());
