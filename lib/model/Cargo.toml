@@ -1,5 +1,5 @@
 [package]
-name = "fast"
+name = "model"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

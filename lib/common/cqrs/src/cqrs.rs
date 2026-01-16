@@ -67,24 +67,24 @@ use serde::{Deserialize, Serialize};
 /// - 事件溯源
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Command<T> {
+pub struct Cmd<T> {
     /// 业务命令负载
     pub payload: T,
     /// 命令元数据
-    pub metadata: CommandMetadata
+    pub metadata: CmdMetadata
 }
 
-impl<T> Command<T> {
+impl<T> Cmd<T> {
     /// 创建新命令（自动生成元数据）
     pub fn new(payload: T) -> Self {
         Self {
             payload,
-            metadata: CommandMetadata::new()
+            metadata: CmdMetadata::new()
         }
     }
 
     /// 创建带自定义元数据的命令
-    pub fn with_metadata(payload: T, metadata: CommandMetadata) -> Self {
+    pub fn with_metadata(payload: T, metadata: CmdMetadata) -> Self {
         Self {
             payload,
             metadata
@@ -92,11 +92,11 @@ impl<T> Command<T> {
     }
 
     /// 映射命令负载
-    pub fn map<U, F>(self, f: F) -> Command<U>
+    pub fn map<U, F>(self, f: F) -> Cmd<U>
     where
         F: FnOnce(T) -> U
     {
-        Command {
+        Cmd {
             payload: f(self.payload),
             metadata: self.metadata
         }
@@ -106,7 +106,7 @@ impl<T> Command<T> {
 /// 命令元数据
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CommandMetadata {
+pub struct CmdMetadata {
     /// 命令唯一ID（用于幂等性和追踪）
     pub command_id: String,
     /// 命令创建时间戳（Unix 毫秒）
@@ -121,7 +121,7 @@ pub struct CommandMetadata {
     pub attributes: Vec<(String, String)>
 }
 
-impl CommandMetadata {
+impl CmdMetadata {
     /// 创建新的命令元数据
     pub fn new() -> Self {
         Self {
@@ -159,21 +159,21 @@ impl CommandMetadata {
     }
 }
 
-impl Default for CommandMetadata {
+impl Default for CmdMetadata {
     fn default() -> Self { Self::new() }
 }
 
 /// 命令结果包装器
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CommandResult<T> {
+pub struct CmdResult<T> {
     /// 结果数据
     pub data: T,
     /// 结果元数据
     pub metadata: ResultMetadata
 }
 
-impl<T> CommandResult<T> {
+impl<T> CmdResult<T> {
     /// 创建成功结果
     pub fn success(data: T) -> Self {
         Self {
@@ -191,11 +191,11 @@ impl<T> CommandResult<T> {
     }
 
     /// 映射结果数据
-    pub fn map<U, F>(self, f: F) -> CommandResult<U>
+    pub fn map<U, F>(self, f: F) -> CmdResult<U>
     where
         F: FnOnce(T) -> U
     {
-        CommandResult {
+        CmdResult {
             data: f(self.data),
             metadata: self.metadata
         }
@@ -504,7 +504,7 @@ pub trait CommandHandler<T>: Send + Sync {
     type Result;
 
     /// 执行命令
-    async fn handle(&self, command: Command<T>) -> Result<CommandResult<Self::Result>, CqrsError>;
+    async fn handle(&self, command: Cmd<T>) -> Result<CmdResult<Self::Result>, CqrsError>;
 }
 
 /// 查询处理器 trait
@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn test_command_creation() {
-        let cmd = Command::new(42);
+        let cmd = Cmd::new(42);
         assert_eq!(cmd.payload, 42);
         assert!(cmd.metadata.command_id.starts_with("cmd_"));
     }
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_command_result() {
-        let result = CommandResult::success("ok");
+        let result = CmdResult::success("ok");
         assert!(result.is_success());
         assert_eq!(result.data, "ok");
     }
