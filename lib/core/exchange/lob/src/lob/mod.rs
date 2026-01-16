@@ -100,7 +100,7 @@
 //! ```
 
 mod adaptor;
-mod domain;
+pub mod domain;
 // OrderQueryService CQRS 重构版本
 // 数据类型定义
 // pub mod level_types; // Level 1-3 市场数据类型

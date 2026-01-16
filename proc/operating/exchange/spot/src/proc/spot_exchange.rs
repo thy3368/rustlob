@@ -3,9 +3,10 @@ use base_types::{Price, Quantity, Side};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
+use lob::lob::domain::service::trading_spot_order_proc::LimitOrder;
 use lob::lob::{
-    Cmd, CmdResp, CommonError, IdempotentSpotCmd, IdempotentSpotResult, SpotCmdAny, SpotCmdError,
-    SpotCmdResult, SpotOrder, SpotOrderExchangeProc, SpotTrade, TraderId,
+    Cmd, CmdResp, CommonError, IdempotentSpotCmd, IdempotentSpotResult, SpotCmdAny, SpotCmdError, SpotCmdResult,
+    SpotOrder, SpotOrderExchangeProc, SpotTrade, TraderId,
 };
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
@@ -29,21 +30,7 @@ impl SpotOrderExchangeProcImpl {
         self.id_generator.next_id() as u64
     }
 
-    fn limit_order(
-        &mut self, cmd: Cmd<SpotCmdAny>,
-    ) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
-        // 转成 LimitOrder
-        let limitOrder =
-            match cmd.payload {
-                SpotCmdAny::LimitOrder  (limitOrder) => limitOrder,
-                _ => {
-                    return Err(SpotCmdError::Common(CommonError::InvalidParameter {
-                        field: "payload",
-                        reason: "Expected LimitOrder command",
-                    }))
-                }
-            };
-
+    fn limit_order(&mut self, limitOrder: LimitOrder) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
         // todo
         // 1 检查余额并下单（根据买单还是卖单
         // 买单冻结quote_asset余额，卖单冻结base_asset余额）
@@ -78,15 +65,8 @@ impl SpotOrderExchangeProcImpl {
         let base_asset_balance_id =
             format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
 
-        let mut frozen_asset_balance = match self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().flatten() {
-            Some(b) => b,
-            None => todo!(), // todo 应该报错
-        };
-
-        let mut base_asset_balance = match self.balance_repo.find_by_id(&base_asset_balance_id).ok().flatten() {
-            Some(b) => b,
-            None => todo!(), // todo 应该报错
-        };
+        let mut frozen_asset_balance = self.balance_repo.find_by_id(&frozen_asset_balance_id)?.unwrap();
+        let mut base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id)?.unwrap();
 
         // 2 风控检查 - 余额检查并冻结保证金
         internal_order.frozen_margin(&mut frozen_asset_balance, now);
@@ -96,10 +76,7 @@ impl SpotOrderExchangeProcImpl {
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
             internal_order.trading_pair,
-            match internal_order.side {
-                Side::Buy => base_types::Side::Buy,
-                Side::Sell => base_types::Side::Sell,
-            },
+            internal_order.side,
             internal_order.price.unwrap(),
             internal_order.total_qty,
         );
@@ -114,17 +91,8 @@ impl SpotOrderExchangeProcImpl {
                         format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset.0);
                     let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
-                    let mut o_quote_asset_balance =
-                        match self.balance_repo.find_by_id(&quote_asset_balance_id).ok().flatten() {
-                            Some(b) => b,
-                            None => todo!(), // todo 应该报错
-                        };
-
-                    let mut o_base_asset_balance =
-                        match self.balance_repo.find_by_id(&base_asset_balance_id).ok().flatten() {
-                            Some(b) => b,
-                            None => todo!(), // todo 应该报错
-                        };
+                    let mut o_quote_asset_balance = self.balance_repo.find_by_id(&quote_asset_balance_id)?.unwrap();
+                    let mut o_base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id)?.unwrap();
 
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
@@ -184,24 +152,10 @@ impl SpotOrderExchangeProcImpl {
 }
 
 impl SpotOrderExchangeProc for SpotOrderExchangeProcImpl {
-    fn handle(&mut self, cmd: IdempotentSpotCmd) -> IdempotentSpotResult {
-        match cmd.payload {
-
-            // SpotCommand::LimitOrder {
-            //     trader,
-            //     account_id,
-            //     trading_pair,
-            //     side,
-            //     price,
-            //     quantity,
-            //     time_in_force,
-            //     client_order_id
-            // } => (trader, account_id, trading_pair, side, price, quantity, time_in_force, client_order_id)
-            
-            
-            
-            
-            SpotCmdAny::LimitOrder (limitOrder) => self.limit_order(cmd),
+    fn handle(&mut self, cmd: SpotCmdAny) -> IdempotentSpotResult {
+        match cmd {
+            //todo 移动后使用的值 [E0382]
+            SpotCmdAny::LimitOrder(limitOrder) => self.limit_order(limitOrder),
             SpotCmdAny::MarketOrder { .. } => Err(SpotCmdError::Common(CommonError::InvalidParameter {
                 field: "payload",
                 reason: "MarketOrder not yet implemented",

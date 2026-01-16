@@ -80,6 +80,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/model/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />

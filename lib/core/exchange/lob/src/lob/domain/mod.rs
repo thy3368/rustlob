@@ -1,3 +1,3 @@
-pub(crate) mod entity;
+pub mod entity;
 // 匹配服务
-pub(crate) mod service;
+pub mod service;

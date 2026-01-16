@@ -365,7 +365,24 @@ pub type IdempotentMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, Mar
 // ============================================================================
 
 #[derive(Debug, Clone)]
+pub struct CMetadata {
+    /// 命令唯一ID（用于幂等性和追踪）
+    pub command_id: String,
+    /// 命令创建时间戳（Unix 毫秒）
+    pub timestamp: u64,
+    /// 关联ID（用于分布式追踪）
+    pub correlation_id: Option<String>,
+    /// 因果ID（用于事件溯源）
+    pub causation_id: Option<String>,
+    /// 用户/系统标识
+    pub actor: Option<String>,
+    /// 自定义属性
+    pub attributes: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone)]
 pub struct LimitOrder {
+    pub metadata: CMetadata,
     pub trader: TraderId,
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
@@ -378,6 +395,8 @@ pub struct LimitOrder {
 
 #[derive(Debug, Clone)]
 pub struct MarketOrder {
+    pub metadata: CMetadata,
+
     pub trader: TraderId,
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
@@ -391,11 +410,14 @@ pub struct MarketOrder {
 
 #[derive(Debug, Clone)]
 pub struct CancelOrder {
+    pub metadata: CMetadata,
     pub order_id: OrderId,
 }
 
 #[derive(Debug, Clone)]
 pub struct CancelAllOrders {
+    pub metadata: CMetadata,
+
     pub trader: TraderId,
     pub trading_pair: Option<TradingPair>, // 可选：只取消指定交易对
     pub side: Option<Side>,
@@ -842,5 +864,5 @@ pub trait OrderQueryProc: Send + Sync {
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
 pub trait SpotOrderExchangeProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentSpotCmd) -> IdempotentSpotResult;
+    fn handle(&mut self, cmd: SpotCmdAny) -> IdempotentSpotResult;
 }
