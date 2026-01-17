@@ -65,8 +65,8 @@ impl SpotOrderExchangeProcImpl {
         let base_asset_balance_id =
             format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
 
-        let mut frozen_asset_balance = self.balance_repo.find_by_id(&frozen_asset_balance_id)?.unwrap();
-        let mut base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id)?.unwrap();
+        let mut frozen_asset_balance = self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().unwrap().unwrap();
+        let mut base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
 
         // 2 风控检查 - 余额检查并冻结保证金
         internal_order.frozen_margin(&mut frozen_asset_balance, now);
@@ -91,8 +91,8 @@ impl SpotOrderExchangeProcImpl {
                         format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset.0);
                     let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
-                    let mut o_quote_asset_balance = self.balance_repo.find_by_id(&quote_asset_balance_id)?.unwrap();
-                    let mut o_base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id)?.unwrap();
+                    let mut o_quote_asset_balance = self.balance_repo.find_by_id(&quote_asset_balance_id).ok().unwrap().unwrap();
+                    let mut o_base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
 
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
