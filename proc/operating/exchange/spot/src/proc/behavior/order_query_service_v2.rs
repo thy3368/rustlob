@@ -27,8 +27,7 @@
 
 use base_types::exchange::spot::spot_types::TraderId;
 use base_types::{OrderId, Price, Quantity, Side};
-use cqrs::*;
-
+use cqrs::{CqrsError, Query, QueryResult};
 // use crate::lob::{
 //     domain::entity::spot_types::{OrderId, Price, Quantity, Side},
 //     TraderId
@@ -515,6 +514,7 @@ impl OrderQueryServiceV2 for OrderQueryServiceImpl {
 
 #[cfg(test)]
 mod tests {
+    use cqrs::QueryMetadata;
     use super::*;
 
     #[tokio::test]

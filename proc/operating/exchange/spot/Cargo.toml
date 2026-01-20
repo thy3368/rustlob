@@ -11,6 +11,8 @@ license.workspace = true
 
 # LOB 仓储依赖
 lob_repo = { path = "../../../../lib/common/lob_repo" }
+cqrs = { path = "../../../../lib/common/cqrs" }
+
 base_types = { path = "../../../../lib/common/base_types" }
 
 # Diff tracking
@@ -26,4 +28,6 @@ id_generator = { path = "../../../../lib/common/id_generator" }
 # Logging
 log = "0.4"
 
-lob = { path = "../../../../lib/core/exchange/lob" }
+async-trait = "0.1.89"
+tokio = "1.48.0"
+once_cell = "1.21.3"

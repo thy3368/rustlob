@@ -4,14 +4,14 @@ use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use lob::lob::domain::service::trading_spot_order_proc::{
+use crate::proc::behavior::trading_spot_order_proc::{
     CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdResult, SpotOrderExgProc,
+    SpotCmdError, SpotCmdResult, SpotOrderExchProc,
 };
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
-pub struct SpotOrderExgProcImpl {
+pub struct SpotOrderExchProcImpl {
     /// 余额仓储（依赖注入）
     balance_repo: MySqlDbRepo<Balance>,
     trade_repo: MySqlDbRepo<SpotTrade>,
@@ -21,11 +21,19 @@ pub struct SpotOrderExgProcImpl {
     id_generator: IdGenerator,
 }
 
-impl SpotOrderExgProcImpl {
+impl SpotOrderExchProcImpl {
+    /// 生成订单ID
+    fn generate_order_id(&self) -> u64 {
+        self.id_generator.next_id() as u64
+    }
+
     pub(crate) fn handle_cancel_order(&self, p0: CancelOrder) -> IdemSpotResult {
         todo!()
     }
     pub(crate) fn handle_market_order(&self, p0: MarketOrder) -> IdemSpotResult {
+        //todo 风控检查
+        //todo 匹配
+
         todo!()
     }
 
@@ -34,18 +42,13 @@ impl SpotOrderExgProcImpl {
     }
 }
 
-impl SpotOrderExgProcImpl {
-    /// 生成订单ID
-    fn generate_order_id(&self) -> u64 {
-        self.id_generator.next_id() as u64
-    }
-
+impl SpotOrderExchProcImpl {
     fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
         // ========================================================================
-        // 1. 命令验证
+        // 1. 命令验证 风控检查 - 余额检查并冻结保证金
         // ========================================================================
         // cmd.validate().map_err(PrepCommandError::ValidationError)?;
-        //  风控检查 - 余额检查并冻结保证金
+        //
         let order_id = self.generate_order_id();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
@@ -78,41 +81,47 @@ impl SpotOrderExgProcImpl {
             internal_order.total_qty,
         );
 
-        // todo time_in_force 没有用
-        match internal_order.time_in_force {
-            TimeInForce::GTC => {}
-            TimeInForce::IOC => {}
-            TimeInForce::FOK => {}
-            TimeInForce::GTX => {}
-            TimeInForce::GTD => {}
-        }
-
         // 如果匹配
         let mut trades = Vec::new();
-        if let Some(matched) = matched_orders {
-            // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
-            for matched_order in matched {
-                let quote_asset_balance_id =
-                    format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset.0);
-                let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
-                let mut o_quote_asset_balance =
-                    self.balance_repo.find_by_id(&quote_asset_balance_id).ok().unwrap().unwrap();
-                let mut o_base_asset_balance =
-                    self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
+        match matched_orders {
+            None => {
+                todo!()
+            }
+            Some(matched) => {
+                // todo time_in_force 没有用
+                match internal_order.time_in_force {
+                    TimeInForce::GTC => {}
+                    TimeInForce::IOC => {}
+                    TimeInForce::FOK => {}
+                    TimeInForce::GTX => {}
+                    TimeInForce::GTD => {}
+                }
 
-                let mut matched_order_mut = matched_order.clone();
-                let trade = internal_order.make_trade(
-                    &mut matched_order_mut,
-                    &mut frozen_asset_balance,
-                    &mut base_asset_balance,
-                    &mut o_quote_asset_balance,
-                    &mut o_base_asset_balance,
-                );
+                // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
+                for matched_order in matched {
+                    let quote_asset_balance_id =
+                        format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset.0);
+                    let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
-                trades.push(trade);
-                if internal_order.is_all_filled() {
-                    break;
+                    let mut o_quote_asset_balance =
+                        self.balance_repo.find_by_id(&quote_asset_balance_id).ok().unwrap().unwrap();
+                    let mut o_base_asset_balance =
+                        self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
+
+                    let mut matched_order_mut = matched_order.clone();
+                    let trade = internal_order.make_trade(
+                        &mut matched_order_mut,
+                        &mut frozen_asset_balance,
+                        &mut base_asset_balance,
+                        &mut o_quote_asset_balance,
+                        &mut o_base_asset_balance,
+                    );
+
+                    trades.push(trade);
+                    if internal_order.is_all_filled() {
+                        break;
+                    }
                 }
             }
         }
@@ -122,10 +131,8 @@ impl SpotOrderExgProcImpl {
             let _ = self.lob_repo.add_order(internal_order.trading_pair, internal_order);
         }
 
-        // 所有数据持久化操作
+        // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
-
-        // 3. 一次性回放所有事件到数据库
         if !all_events.is_empty() {
             // 回放 matched_order 更新和 trade 创建事件到各自的 repo
             for event in &all_events {
@@ -157,7 +164,7 @@ impl SpotOrderExgProcImpl {
     }
 }
 
-impl SpotOrderExgProc for SpotOrderExgProcImpl {
+impl SpotOrderExchProc for SpotOrderExchProcImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),
