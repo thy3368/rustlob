@@ -15,11 +15,11 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::trading_prep_order_proc::{
+use crate::proc::trading_prep_order_behavior::{
     AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd,
     CancelOrderResult, ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
     MarkPriceInfo, ModifyOrderCmd, ModifyOrderResult, OpenPositionCmd, OpenPositionResult,
-    OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchProc, PerpOrderExchQueryProc, PrepCmdError,
+    OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchBehavior, PerpOrderExchQueryProc, PrepCmdError,
     PrepTrade, Price, Quantity, QueryAccountBalanceCmd, QueryAccountInfoCmd, QueryFundingFeeCmd,
     QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd, QueryOrderCmd,
     QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
@@ -233,7 +233,7 @@ impl PrepMatchingService {
     /// - `leverage`: 杠杆倍数
     fn update_position(
         &self, trading_pair: TradingPair, _side: Side,
-        position_side: crate::proc::trading_prep_order_proc::PositionSide, quantity: Quantity, avg_price: Price,
+        position_side: crate::proc::trading_prep_order_behavior::PositionSide, quantity: Quantity, avg_price: Price,
         leverage: u8
     ) {
         // 获取或创建持仓（通过 self.position_repo）
@@ -393,7 +393,7 @@ impl PrepMatchingService {
     }
 }
 
-impl PerpOrderExchProc for PrepMatchingService {
+impl PerpOrderExchBehavior for PrepMatchingService {
     /// 处理开仓命令
     ///
     /// # 流程
@@ -477,15 +477,15 @@ impl PerpOrderExchProc for PrepMatchingService {
         let qty = close_qty.to_f64();
 
         let realized_pnl = match position.position_side {
-            crate::proc::trading_prep_order_proc::PositionSide::Long => {
+            crate::proc::trading_prep_order_behavior::PositionSide::Long => {
                 // 多仓平仓盈亏 = (平仓价 - 开仓价) × 数量
                 (close_price - entry_price) * qty
             }
-            crate::proc::trading_prep_order_proc::PositionSide::Short => {
+            crate::proc::trading_prep_order_behavior::PositionSide::Short => {
                 // 空仓平仓盈亏 = (开仓价 - 平仓价) × 数量
                 (entry_price - close_price) * qty
             }
-            crate::proc::trading_prep_order_proc::PositionSide::Both => {
+            crate::proc::trading_prep_order_behavior::PositionSide::Both => {
                 // 单向模式，根据side判断
                 if cmd.side == Side::Sell {
                     (close_price - entry_price) * qty

@@ -63,7 +63,7 @@ impl OpenPositionCmd {
     ///
     /// # 示例
     /// ```
-    /// use prep_proc::proc::trading_prep_order_proc::{OpenPositionCmd, TradingPair, AssetId, Quantity};
+    /// use prep_proc::proc::trading_prep_order_behavior::{OpenPositionCmd, TradingPair, AssetId, Quantity};
     ///
     /// // 开多BTC，数量1.0
     /// let cmd = OpenPositionCmd::market_long(
@@ -206,7 +206,7 @@ impl ClosePositionCmd {
     ///
     /// # 示例
     /// ```
-    /// use prep_proc::proc::trading_prep_order_proc::{ClosePositionCmd, TradingPair, Quantity};
+    /// use prep_proc::proc::trading_prep_order_behavior::{ClosePositionCmd, TradingPair, Quantity};
     ///
     /// // 全部平多仓
     /// let cmd = ClosePositionCmd::market_close_long(
@@ -1938,7 +1938,7 @@ impl OrderBookSnapshot {
 /// }
 /// ```
 
-pub trait PerpOrderExchProc: Send + Sync {
+pub trait PerpOrderExchBehavior: Send + Sync {
     /// 处理开仓命令（本地撮合）
     ///
     /// # 参数

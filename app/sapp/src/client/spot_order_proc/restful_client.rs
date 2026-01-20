@@ -1,4 +1,4 @@
-use spot_proc::proc::behavior::trading_spot_order_proc::{IdemSpotResult, SpotCmdAny, SpotOrderExchProc};
+use spot_proc::proc::behavior::trading_spot_order_behavior::{IdemSpotResult, SpotCmdAny, SpotOrderExchProc};
 
 // 实现restful的的client
 pub struct RestfulClient {}

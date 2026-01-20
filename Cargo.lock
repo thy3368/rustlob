@@ -2929,6 +2929,10 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base_types",
+ "db_repo",
+ "id_generator",
+ "lob_repo",
+ "mysql",
  "sbe",
  "serde",
  "serde_json",

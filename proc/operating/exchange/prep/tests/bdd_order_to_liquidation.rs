@@ -10,7 +10,7 @@
 use prep_proc::proc::{
     liquidation_proc::*,
     liquidation_types::{LiquidationType, PositionId},
-    trading_prep_order_proc::*,
+    trading_prep_order_behavior::*,
     trading_prep_order_proc_impl::PrepMatchingService
 };
 

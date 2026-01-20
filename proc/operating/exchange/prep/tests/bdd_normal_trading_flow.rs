@@ -7,7 +7,7 @@
 //!
 //! 这是最常见的正常交易场景，区别于强平流程。
 
-use prep_proc::proc::{trading_prep_order_proc::*, trading_prep_order_proc_impl::PrepMatchingService};
+use prep_proc::proc::{trading_prep_order_behavior::*, trading_prep_order_proc_impl::PrepMatchingService};
 
 // ============================================================================
 // 完整正常交易流程 - 设置杠杆 → 开仓 → 平仓

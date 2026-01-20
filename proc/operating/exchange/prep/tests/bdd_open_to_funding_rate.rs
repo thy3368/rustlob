@@ -12,7 +12,7 @@
 use std::sync::{Arc, Mutex};
 
 use prep_proc::proc::{
-    liquidation_types::*, trading_prep_order_proc::*, trading_prep_order_proc_impl::PrepMatchingService
+    liquidation_types::*, trading_prep_order_behavior::*, trading_prep_order_proc_impl::PrepMatchingService
 };
 
 // ============================================================================

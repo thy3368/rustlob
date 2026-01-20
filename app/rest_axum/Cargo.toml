@@ -19,3 +19,11 @@ uuid = { version = "1.0", features = ["v4"] }
 # Spot 订单处理依赖
 spot_proc = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
 base_types = { path = "../../lib/common/base_types", features = ["serde"] }
+
+# 数据库和仓储依赖
+db_repo = { path = "../../lib/common/db_repo" }
+lob_repo = { path = "../../lib/common/lob_repo" }
+id_generator = { path = "../../lib/common/id_generator" }
+
+# 数据库驱动
+mysql = "24.0"

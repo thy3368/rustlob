@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use prep_proc::proc::{
-    liquidation_proc::*, liquidation_types::*, trading_prep_order_proc::*,
+    liquidation_proc::*, liquidation_types::*, trading_prep_order_behavior::*,
     trading_prep_order_proc_impl::PrepMatchingService
 };
 

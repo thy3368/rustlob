@@ -6,7 +6,7 @@
 //! 3. 平仓（close_position）
 
 use prep_proc::proc::{
-    liquidation_proc::calculate_liquidation_price, trading_prep_order_proc::*,
+    liquidation_proc::calculate_liquidation_price, trading_prep_order_behavior::*,
     trading_prep_order_proc_impl::PrepMatchingService
 };
 

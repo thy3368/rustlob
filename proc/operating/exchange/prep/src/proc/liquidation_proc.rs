@@ -8,11 +8,11 @@
 use std::{sync::Arc, time::Duration};
 use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::PrepPosition;
-use crate::proc::{liquidation_types::*, trading_prep_order_proc::*};
+use crate::proc::{liquidation_types::*, trading_prep_order_behavior::*};
 
 /// 强平流程处理器
 pub struct LiquidationProcessor {
-    matching_service: Arc<dyn PerpOrderExchProc>,
+    matching_service: Arc<dyn PerpOrderExchBehavior>,
     insurance_fund: Arc<dyn InsuranceFund>,
     adl_engine: Arc<dyn ADLEngine>
 }
@@ -20,7 +20,7 @@ pub struct LiquidationProcessor {
 impl LiquidationProcessor {
     /// 创建新的强平处理器
     pub fn new(
-        matching_service: Arc<dyn PerpOrderExchProc>, insurance_fund: Arc<dyn InsuranceFund>,
+        matching_service: Arc<dyn PerpOrderExchBehavior>, insurance_fund: Arc<dyn InsuranceFund>,
         adl_engine: Arc<dyn ADLEngine>
     ) -> Self {
         Self {

@@ -1,41 +1,166 @@
 pub mod trade_gw;
 use axum::{
-    extract::Json,
+    extract::{Json, State},
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 use tracing_subscriber;
 
 // Spot 订单处理相关导入
-use base_types::{
-    exchange::spot::spot_types::{TimeInForce, TraderId},
-    AccountId, AssetId, Price, Quantity, Side, TradingPair,
+use spot_proc::proc::behavior::trading_spot_order_behavior::{
+    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdResult, SpotOrderExchProc,
 };
-use spot_proc::proc::behavior::trading_spot_order_proc::{CMetadata, CancelOrder, CmdMetadata, LimitOrder, MarketOrder, SpotCmdAny};
+use spot_proc::proc::spot_exch::SpotOrderExchBehaviorImpl;
 
-// 请求数据结构
-#[derive(Debug, Deserialize)]
-struct RequestData {
-    name: String,
-    age: u32,
-    email: String,
+// 基础设施依赖
+use base_types::account::balance::Balance;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
+use db_repo::{CmdRepo, MySqlDbRepo};
+use id_generator::generator::IdGenerator;
+use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
+
+/// 应用服务 - 封装订单处理器
+pub struct OrderService {
+    processor: Arc<Mutex<SpotOrderExchBehaviorImpl>>,
 }
 
-// 响应数据结构
-#[derive(Debug, Serialize)]
-struct ResponseData {
-    message: String,
-    user: UserInfo,
-}
+impl OrderService {
+    /// 创建新的订单服务实例
+    pub fn new(db_url: &str) -> Self {
+        // 1. 初始化数据库连接
+        let db_pool = mysql::Pool::new(db_url).expect("Failed to create database pool");
 
-#[derive(Debug, Serialize)]
-struct UserInfo {
-    name: String,
-    age: u32,
-    email: String,
-    is_adult: bool,
+        // 2. 初始化各个仓储
+        let balance_repo = MySqlDbRepo::<Balance>::new(db_pool.clone());
+        let trade_repo = MySqlDbRepo::<SpotTrade>::new(db_pool.clone());
+        let order_repo = MySqlDbRepo::<SpotOrder>::new(db_pool.clone());
+
+        // 3. 初始化 LOB 仓储（内存版本）
+        let lob_repo = StandaloneLobRepo::<SpotOrder>::new();
+
+        // 4. 初始化 ID 生成器（节点ID为0）
+        let id_generator = IdGenerator::new(0);
+
+        // 5. 创建处理器实例
+        let processor = SpotOrderExchBehaviorImpl { balance_repo, trade_repo, order_repo, lob_repo, id_generator };
+
+        Self { processor: Arc::new(Mutex::new(processor)) }
+    }
+
+    /// 处理限价单命令
+    pub async fn handle_limit_order(&self, limit_order: LimitOrder) -> Result<OrderResponse, String> {
+        println!("🔑 命令ID: {}", limit_order.metadata.command_id);
+        println!("⏰ 时间戳: {}", limit_order.metadata.timestamp);
+
+        let spot_cmd = SpotCmdAny::LimitOrder(limit_order);
+
+        // 调用真实的处理器
+        let result = self
+            .processor
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?
+            .handle(spot_cmd)
+            .map_err(|e| format!("{:?}", e))?;
+
+        // 转换为 HTTP 响应
+        self.convert_to_response(result)
+    }
+
+    /// 处理市价单命令
+    pub async fn handle_market_order(&self, market_order: MarketOrder) -> Result<OrderResponse, String> {
+        println!("🔑 命令ID: {}", market_order.metadata.command_id);
+
+        let spot_cmd = SpotCmdAny::MarketOrder(market_order);
+
+        let result = self
+            .processor
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?
+            .handle(spot_cmd)
+            .map_err(|e| format!("{:?}", e))?;
+
+        self.convert_to_response(result)
+    }
+
+    /// 处理取消订单命令
+    pub async fn handle_cancel_order(&self, cancel_order: CancelOrder) -> Result<OrderResponse, String> {
+        println!("🔑 命令ID: {}", cancel_order.metadata.command_id);
+
+        let order_id = cancel_order.order_id;
+        let spot_cmd = SpotCmdAny::CancelOrder(cancel_order);
+
+        let result = self
+            .processor
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?
+            .handle(spot_cmd)
+            .map_err(|e| format!("{:?}", e))?;
+
+        self.convert_to_response(result)
+    }
+
+    /// 将领域层结果转换为 HTTP 响应
+    fn convert_to_response(&self, result: CmdResp<SpotCmdResult>) -> Result<OrderResponse, String> {
+
+        //todo 可能需要直接返回
+        match result.result {
+            SpotCmdResult::LimitOrder { order_id, status, filled_quantity, remaining_quantity, trades } => {
+                Ok(OrderResponse {
+                    success: true,
+                    message: format!("Limit order {} placed successfully (status: {:?})", order_id, status),
+                    order_id: Some(order_id),
+                    filled_quantity: Some(filled_quantity.to_f64()),
+                    remaining_quantity: Some(remaining_quantity.to_f64()),
+                    trades: Some(self.convert_trades(trades)),
+                    error: None,
+                })
+            }
+            SpotCmdResult::MarketOrder { status, filled_quantity, trades } => Ok(OrderResponse {
+                success: true,
+                message: format!("Market order executed (status: {:?})", status),
+                order_id: None,
+                filled_quantity: Some(filled_quantity.to_f64()),
+                remaining_quantity: None,
+                trades: Some(self.convert_trades(trades)),
+                error: None,
+            }),
+            SpotCmdResult::CancelOrder { order_id, status } => Ok(OrderResponse {
+                success: true,
+                message: format!("Order {} cancelled (status: {:?})", order_id, status),
+                order_id: Some(order_id),
+                filled_quantity: None,
+                remaining_quantity: None,
+                trades: None,
+                error: None,
+            }),
+            SpotCmdResult::CancelAllOrders { cancelled_count, order_ids } => Ok(OrderResponse {
+                success: true,
+                message: format!("Cancelled {} orders", cancelled_count),
+                order_id: None,
+                filled_quantity: None,
+                remaining_quantity: None,
+                trades: None,
+                error: None,
+            }),
+        }
+    }
+
+    /// 转换成交记录
+    fn convert_trades(&self, trades: Vec<SpotTrade>) -> Vec<TradeInfo> {
+        trades
+            .into_iter()
+            .map(|trade| TradeInfo {
+                trade_id: trade.trade_id,
+                price: trade.price.to_f64(),
+                quantity: trade.quantity.to_f64(),
+                side: format!("{:?}", trade.side),
+                timestamp: trade.timestamp,
+            })
+            .collect()
+    }
 }
 
 #[tokio::main]
@@ -43,16 +168,31 @@ async fn main() {
     // 初始化日志
     tracing_subscriber::fmt::init();
 
-    // 创建路由
+    // 从环境变量读取数据库配置
+    let db_url =
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://root:password@localhost:3306/trading_db".to_string());
+
+    println!("📊 Connecting to database: {}", db_url);
+
+    // 创建应用服务（单例，全局共享）
+    let order_service = Arc::new(OrderService::new(&db_url));
+
+    // 创建路由，注入服务依赖
     let app = Router::new()
         .route("/health", get(health_check))
-        // Spot 订单处理接口
         .route("/api/spot/order/limit", post(handle_limit_order))
         .route("/api/spot/order/market", post(handle_market_order))
-        .route("/api/spot/order/cancel", post(handle_cancel_order));
+        .route("/api/spot/order/cancel", post(handle_cancel_order))
+        .with_state(order_service);
 
     // 启动服务器
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.expect("Failed to bind port");
+
+    println!("🚀 Server started at http://localhost:3000");
+    println!("📊 Health check: GET /health");
+    println!("💹 Spot Limit Order: POST /api/spot/order/limit (JSON)");
+    println!("💹 Spot Market Order: POST /api/spot/order/market (JSON)");
+    println!("💹 Spot Cancel Order: POST /api/spot/order/cancel (JSON)");
 
     axum::serve(listener, app).await.expect("Server failed to start");
 }
@@ -62,236 +202,68 @@ async fn health_check() -> &'static str {
 }
 
 // ============================================================================
-// Spot 订单处理接口
+// Spot 订单处理接口 - 使用应用服务层
 // ============================================================================
-
-/// 限价单请求 DTO
-#[derive(Debug, Deserialize)]
-struct LimitOrderRequest {
-    trader_id: [u8; 8],
-    account_id: u64,
-    base_asset: String,    // 例如: "BTC"
-    quote_asset: String,   // 例如: "USDT"
-    side: String,          // "Buy" 或 "Sell"
-    price: f64,            // 价格（浮点数，内部会转换为定点数）
-    quantity: f64,         // 数量（浮点数，内部会转换为定点数）
-    time_in_force: String, // "GTC", "IOC", "FOK", "GTX", "GTD"
-    client_order_id: Option<String>,
-}
-
-/// 市价单请求 DTO
-#[derive(Debug, Deserialize)]
-struct MarketOrderRequest {
-    trader_id: [u8; 8],
-    account_id: u64,
-    base_asset: String,
-    quote_asset: String,
-    side: String,
-    quantity: f64,
-    price_limit: Option<f64>, // 价格保护
-    client_order_id: Option<String>,
-}
-
-/// 取消订单请求 DTO
-#[derive(Debug, Deserialize)]
-struct CancelOrderRequest {
-    order_id: u64,
-}
 
 /// 订单响应 DTO
 #[derive(Debug, Serialize)]
 struct OrderResponse {
     success: bool,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     order_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filled_quantity: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remaining_quantity: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trades: Option<Vec<TradeInfo>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
 
-/// 处理限价单
-/// todo 可以直接用 Json<LimitOrder> 么？
-async fn handle_limit_order(Json(request): Json<LimitOrderRequest>) -> impl IntoResponse {
-    println!("📋 收到限价单请求: {:?}", request);
-
-    // 解析 Side
-    let side = match request.side.as_str() {
-        "Buy" => Side::Buy,
-        "Sell" => Side::Sell,
-        _ => {
-            return create_error_response("Invalid side, must be 'Buy' or 'Sell'");
-        }
-    };
-
-    // 解析 TimeInForce
-    let time_in_force = match request.time_in_force.as_str() {
-        "GTC" => TimeInForce::GTC,
-        "IOC" => TimeInForce::IOC,
-        "FOK" => TimeInForce::FOK,
-        "GTX" => TimeInForce::GTX,
-        "GTD" => TimeInForce::GTD,
-        _ => {
-            return create_error_response("Invalid time_in_force");
-        }
-    };
-
-    // 解析资产
-    let base_asset = match parse_asset(&request.base_asset) {
-        Some(asset) => asset,
-        None => {
-            return create_error_response(&format!("Invalid base_asset: {}", request.base_asset));
-        }
-    };
-
-    let quote_asset = match parse_asset(&request.quote_asset) {
-        Some(asset) => asset,
-        None => {
-            return create_error_response(&format!("Invalid quote_asset: {}", request.quote_asset));
-        }
-    };
-
-    // 创建交易对
-    let trading_pair = TradingPair { base_asset, quote_asset };
-
-    // 创建命令元数据
-    let metadata = CMetadata {
-        command_id: uuid::Uuid::new_v4().to_string(),
-        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
-        correlation_id: None,
-        causation_id: None,
-        actor: Some("rest_api".to_string()),
-        attributes: vec![],
-    };
-
-    // 创建限价单命令
-    let limit_order = LimitOrder {
-        metadata,
-        trader: TraderId::new(request.trader_id),
-        account_id: AccountId(request.account_id),
-        trading_pair,
-        side,
-        price: Price::from_f64(request.price),
-        quantity: Quantity::from_f64(request.quantity),
-        time_in_force,
-        client_order_id: request.client_order_id,
-    };
-
-    // 包装为 SpotCmdAny
-    let _spot_cmd = SpotCmdAny::LimitOrder(limit_order);
-
-    // TODO: 调用 SpotOrderExchProc::handle() 处理命令
-    // let result = processor.handle(spot_cmd);
-
-    // 暂时返回成功响应（实际应该根据处理结果返回）
-    let response = OrderResponse {
-        success: true,
-        message: "Limit order received and queued for processing".to_string(),
-        order_id: Some(12345), // TODO: 使用实际生成的订单ID
-        error: None,
-    };
-
-    create_json_response(response)
+#[derive(Debug, Serialize)]
+struct TradeInfo {
+    trade_id: u64,
+    price: f64,
+    quantity: f64,
+    side: String,
+    timestamp: u64,
 }
 
-/// 处理市价单
-async fn handle_market_order(Json(request): Json<MarketOrderRequest>) -> impl IntoResponse {
-    println!("📋 收到市价单请求: {:?}", request);
+/// 处理限价单 - 使用服务层
+async fn handle_limit_order(
+    State(service): State<Arc<OrderService>>, Json(limit_order): Json<LimitOrder>,
+) -> impl IntoResponse {
+    println!("📋 收到限价单请求: {:?}", limit_order);
 
-    let side = match request.side.as_str() {
-        "Buy" => Side::Buy,
-        "Sell" => Side::Sell,
-        _ => {
-            return create_error_response("Invalid side");
-        }
-    };
-
-    let base_asset = match parse_asset(&request.base_asset) {
-        Some(asset) => asset,
-        None => return create_error_response("Invalid base_asset"),
-    };
-
-    let quote_asset = match parse_asset(&request.quote_asset) {
-        Some(asset) => asset,
-        None => return create_error_response("Invalid quote_asset"),
-    };
-
-    let trading_pair = TradingPair { base_asset, quote_asset };
-
-    let metadata = CmdMetadata {
-        command_id: uuid::Uuid::new_v4().to_string(),
-        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
-        correlation_id: None,
-        causation_id: None,
-        actor: Some("rest_api".to_string()),
-        attributes: vec![],
-    };
-
-    let market_order = MarketOrder {
-        metadata,
-        trader: TraderId::new(request.trader_id),
-        account_id: AccountId(request.account_id),
-        trading_pair,
-        side,
-        quantity: Quantity::from_f64(request.quantity),
-        price_limit: request.price_limit.map(Price::from_f64),
-        time_in_force: Some(TimeInForce::IOC),
-        client_order_id: request.client_order_id,
-    };
-
-    let _spot_cmd = SpotCmdAny::MarketOrder(market_order);
-
-    // TODO: 调用处理器
-    let response = OrderResponse {
-        success: true,
-        message: "Market order received and queued for processing".to_string(),
-        order_id: Some(12346),
-        error: None,
-    };
-
-    create_json_response(response)
+    match service.handle_limit_order(limit_order).await {
+        Ok(response) => create_json_response(response),
+        Err(err) => create_error_response(&err),
+    }
 }
 
-/// 处理取消订单
-async fn handle_cancel_order(Json(request): Json<CancelOrderRequest>) -> impl IntoResponse {
-    println!("📋 收到取消订单请求: {:?}", request);
+/// 处理市价单 - 使用服务层
+async fn handle_market_order(
+    State(service): State<Arc<OrderService>>, Json(market_order): Json<MarketOrder>,
+) -> impl IntoResponse {
+    println!("📋 收到市价单请求: {:?}", market_order);
 
-    let metadata = CmdMetadata {
-        command_id: uuid::Uuid::new_v4().to_string(),
-        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
-        correlation_id: None,
-        causation_id: None,
-        actor: Some("rest_api".to_string()),
-        attributes: vec![],
-    };
-
-    let cancel_order = CancelOrder { metadata, order_id: request.order_id };
-
-    let _spot_cmd = SpotCmdAny::CancelOrder(cancel_order);
-
-    // TODO: 调用处理器
-    let response = OrderResponse {
-        success: true,
-        message: "Cancel order received and queued for processing".to_string(),
-        order_id: Some(request.order_id),
-        error: None,
-    };
-
-    create_json_response(response)
+    match service.handle_market_order(market_order).await {
+        Ok(response) => create_json_response(response),
+        Err(err) => create_error_response(&err),
+    }
 }
 
-/// 解析资产字符串到 AssetId
-fn parse_asset(asset_str: &str) -> Option<AssetId> {
-    match asset_str.to_uppercase().as_str() {
-        "BTC" => Some(AssetId::BTC),
-        "ETH" => Some(AssetId::ETH),
-        "USDT" => Some(AssetId::USDT),
-        "USDC" => Some(AssetId::USDC),
-        "BNB" => Some(AssetId::BNB),
-        "SOL" => Some(AssetId::SOL),
-        "XRP" => Some(AssetId::XRP),
-        "ADA" => Some(AssetId::ADA),
-        "DOGE" => Some(AssetId::DOGE),
-        "TRX" => Some(AssetId::TRX),
-        _ => None,
+/// 处理取消订单 - 使用服务层
+async fn handle_cancel_order(
+    State(service): State<Arc<OrderService>>, Json(cancel_order): Json<CancelOrder>,
+) -> impl IntoResponse {
+    println!("📋 收到取消订单请求: {:?}", cancel_order);
+
+    match service.handle_cancel_order(cancel_order).await {
+        Ok(response) => create_json_response(response),
+        Err(err) => create_error_response(&err),
     }
 }
 
@@ -307,6 +279,9 @@ fn create_error_response(error_msg: &str) -> impl IntoResponse {
         success: false,
         message: "Request failed".to_string(),
         order_id: None,
+        filled_quantity: None,
+        remaining_quantity: None,
+        trades: None,
         error: Some(error_msg.to_string()),
     };
     let json = serde_json::to_string(&response).unwrap();

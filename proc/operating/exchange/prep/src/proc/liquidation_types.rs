@@ -2,7 +2,7 @@
 //! 定义强平流程涉及的核心类型
 
 use base_types::PrepPosition;
-use crate::proc::trading_prep_order_proc::*;
+use crate::proc::trading_prep_order_behavior::*;
 
 // ============================================================================
 // 强平类型

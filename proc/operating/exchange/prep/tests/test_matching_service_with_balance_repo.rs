@@ -7,7 +7,7 @@ use account::{
     domain::entity::{AccountId, AssetId}
 };
 use prep_proc::proc::{
-    trading_prep_order_proc::{
+    trading_prep_order_behavior::{
         OpenPositionCmd, OrderType, PositionSide, Price, Quantity, Side, TradingPair, TimeInForce
     },
     trading_prep_order_proc_impl::PrepMatchingService

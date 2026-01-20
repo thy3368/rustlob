@@ -4,14 +4,14 @@ use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use crate::proc::behavior::trading_spot_order_proc::{
+use crate::proc::behavior::trading_spot_order_behavior::{
     CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
     SpotCmdError, SpotCmdResult, SpotOrderExchProc,
 };
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
-pub struct SpotOrderExchProcImpl {
+pub struct SpotOrderExchBehaviorImpl {
     /// 余额仓储（依赖注入）
     balance_repo: MySqlDbRepo<Balance>,
     trade_repo: MySqlDbRepo<SpotTrade>,
@@ -21,7 +21,7 @@ pub struct SpotOrderExchProcImpl {
     id_generator: IdGenerator,
 }
 
-impl SpotOrderExchProcImpl {
+impl SpotOrderExchBehaviorImpl {
     /// 生成订单ID
     fn generate_order_id(&self) -> u64 {
         self.id_generator.next_id() as u64
@@ -42,7 +42,7 @@ impl SpotOrderExchProcImpl {
     }
 }
 
-impl SpotOrderExchProcImpl {
+impl SpotOrderExchBehaviorImpl {
     fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
         // ========================================================================
         // 1. 命令验证 风控检查 - 余额检查并冻结保证金
@@ -164,7 +164,7 @@ impl SpotOrderExchProcImpl {
     }
 }
 
-impl SpotOrderExchProc for SpotOrderExchProcImpl {
+impl SpotOrderExchProc for SpotOrderExchBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),
