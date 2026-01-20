@@ -22,8 +22,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/spot/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/funds/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/settlement/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/support/algo/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/support/algo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/id_generator/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/src" isTestSource="false" />
@@ -83,6 +81,8 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/model/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />

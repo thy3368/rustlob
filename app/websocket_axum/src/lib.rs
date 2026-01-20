@@ -1,3 +1,4 @@
+pub mod mdgw;
 use axum::{
     extract::WebSocketUpgrade,
     response::IntoResponse,
