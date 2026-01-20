@@ -9,7 +9,7 @@
 //! 3. 大单追踪策略：监控 L3 订单簿，识别大额订单
 
 use lob::lob::{Price, Quantity, Side, TraderId};
-use spot_market_data::domain::entity::level_types::{
+use base_types::mark_data::spot::level_types::{
     BboChangeEvent, Level1, Level2, Level3, Level3Order, MarketDataDelta, OrderChangeType, OrderDelta, PriceLevel,
     SymbolId, TradeEvent
 };

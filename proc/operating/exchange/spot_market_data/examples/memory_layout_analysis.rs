@@ -10,7 +10,7 @@
 use std::mem::{align_of, offset_of, size_of};
 
 use lob::lob::{Side, TraderId};
-use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
+use base_types::mark_data::spot::level_types::{OrderChangeType, OrderDelta};
 
 fn main() {
     println!("=== OrderDelta 内存布局分析 ===\n");

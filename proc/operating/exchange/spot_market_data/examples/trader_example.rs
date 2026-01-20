@@ -11,7 +11,7 @@
 use account::AccountService;
 use lob::lob::{
     Cmd, CmdResp, MemoryOrderRepo, OrderId, OrderRepo, OrderStatus, Price, Quantity, Side, SpotCmdAny,
-    SpotCmdError, SpotCmdResult, SpotMatchingService, SpotOrderExchangeProc, Symbol, TimeInForce, TraderId
+    SpotCmdError, SpotCmdResult, SpotMatchingService, SpotOrderExgProc, Symbol, TimeInForce, TraderId
 };
 
 /// 交易员结构体

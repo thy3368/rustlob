@@ -36,7 +36,7 @@ use criterion::{
     Criterion        // 基准测试上下文
 };
 use lob::lob::{Side, TraderId};
-use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
+use base_types::mark_data::spot::level_types::{OrderChangeType, OrderDelta};
 
 // ============================================================================
 // 辅助函数：创建测试数据

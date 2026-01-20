@@ -15,7 +15,6 @@ bincode = "1.3"
 rand = "0.8"
 
 # Clean Architecture 依赖
-account = { path = "../../../../lib/core/account" }
 
 # LOB 仓储依赖
 lob_repo = { path = "../../../../lib/common/lob_repo" }

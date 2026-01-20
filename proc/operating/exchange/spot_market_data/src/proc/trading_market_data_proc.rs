@@ -38,7 +38,7 @@
 use std::fmt;
 
 use lob::lob::*;
-use spot_market_data::domain::entity::level_types::{
+use base_types::mark_data::spot::level_types::{
     BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber,
     SymbolId, TradeEvent
 };
@@ -1066,7 +1066,7 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
-    use spot_market_data::domain::entity::level_types::OrderChangeType;
+    use base_types::mark_data::spot::level_types::OrderChangeType;
 
     use super::*;
 

@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 lob = { path = "../../lib/core/exchange/lob" }
-account = { path = "../../lib/core/account" }
 tokio = { version = "1", features = ["full"] }
 
 # JSON-RPC (现有)

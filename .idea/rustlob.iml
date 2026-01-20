@@ -81,6 +81,8 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/lob_repo/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/model/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
@@ -88,6 +90,7 @@
       <excludeFolder url="file://$MODULE_DIR$/study/web3/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/lob/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/target" />
+      <excludeFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

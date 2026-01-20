@@ -11,7 +11,7 @@ use std::num::NonZeroU64;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lob::lob::{Side, TraderId};
-use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
+use base_types::mark_data::spot::level_types::{OrderChangeType, OrderDelta};
 
 // ============================================================================
 // 优化方案 2: 使用 NonZeroU64

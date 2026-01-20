@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{DomainsValidation, Server, ServerBuilder};
-use lob::lob::{Cmd, Side, SpotCmdAny, SpotCmdResult, SpotOrderExchangeProc, TraderId};
+use lob::lob::{Cmd, Side, SpotCmdAny, SpotCmdResult, SpotOrderExgProc, TraderId};
 
 use crate::models::*;
 
@@ -33,11 +33,11 @@ pub trait LobRpc {
 }
 
 /// LOB RPC 服务实现
-pub struct LobRpcImpl<H: SpotOrderExchangeProc + Send + 'static> {
+pub struct LobRpcImpl<H: SpotOrderExgProc + Send + 'static> {
     handler: Arc<Mutex<H>>
 }
 
-impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
+impl<H: SpotOrderExgProc + Send + 'static> LobRpcImpl<H> {
     pub fn new(handler: H) -> Self {
         Self {
             handler: Arc::new(Mutex::new(handler))
@@ -142,7 +142,7 @@ impl<H: SpotOrderExchangeProc + Send + 'static> LobRpcImpl<H> {
     }
 }
 
-impl<H: SpotOrderExchangeProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
+impl<H: SpotOrderExgProc + Send + Sync + 'static> LobRpc for LobRpcImpl<H> {
     fn execute(&self, cmd: CommandRequest) -> Result<CommandResponse> {
         let spot_command = Self::parse_command(&cmd)?;
         // 使用请求中的 nonce，如果没有则生成一个
@@ -186,7 +186,7 @@ impl LobRpcService {
         }
     }
 
-    pub fn start<H: SpotOrderExchangeProc + Send + Sync + 'static>(self, handler: H) -> Server {
+    pub fn start<H: SpotOrderExgProc + Send + Sync + 'static>(self, handler: H) -> Server {
         let rpc_impl = LobRpcImpl::new(handler);
         let mut io = jsonrpc_core::IoHandler::new();
         io.extend_with(rpc_impl.to_delegate());

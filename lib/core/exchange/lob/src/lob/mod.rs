@@ -132,7 +132,7 @@ pub use domain::{
             IdempotentConditionalResult, IdempotentMarketMakerCmd, IdempotentMarketMakerResult,
             IdempotentSpotCmd, IdempotentSpotResult, MarketMakerCmdAny, MarketMakerCmdError,
             MarketMakerCmdResult, MarketMakerProc, Nonce, PegType, QueryError, SpotCmdAny, SpotCmdError,
-            SpotCmdResult, SpotOrderExchangeProc, UrgencyLevel
+            SpotCmdResult, SpotOrderExgProc, UrgencyLevel
         }
     }
 };

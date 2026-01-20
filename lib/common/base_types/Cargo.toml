@@ -9,3 +9,4 @@ license.workspace = true
 entity_derive = { path = "../entity_derive" }
 diff = { path = "../diff" }
 decimal = { path = "../decimal" }
+chrono = "0.4.43"

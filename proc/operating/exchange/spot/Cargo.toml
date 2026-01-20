@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 
 # Clean Architecture 依赖
-account = { path = "../../../../lib/core/account" }
 
 # LOB 仓储依赖
 lob_repo = { path = "../../../../lib/common/lob_repo" }

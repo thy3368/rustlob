@@ -18,7 +18,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use lob::lob::{Side, TraderId};
-use spot_market_data::domain::entity::level_types::{OrderChangeType, OrderDelta};
+use base_types::mark_data::spot::level_types::{OrderChangeType, OrderDelta};
 
 /// 创建一个示例 OrderBookDelta
 #[inline]

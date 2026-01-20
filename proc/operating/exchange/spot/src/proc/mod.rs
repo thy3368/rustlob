@@ -1,5 +1,5 @@
-pub mod spot_exchange;
+pub mod spot_exg;
 
-pub mod spot_conditional_exchange;
+pub mod spot_cond_exg;
 
-pub mod spot_algo_exchange;
+pub mod spot_algo_exg;

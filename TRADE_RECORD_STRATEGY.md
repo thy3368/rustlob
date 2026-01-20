@@ -265,7 +265,7 @@ pub fn make_trade(...) -> (SpotTrade, SpotTrade) {
 
 ### 当前代码（需要修改）
 ```rust
-// proc/operating/exchange/spot/src/proc/spot_exchange.rs:118
+// proc/operating/exchange/spot/src/proc/spot_exg:118
 let trade = internal_order.make_trade(...);  // 返回单个
 // → 需改为：
 let (taker_trade, maker_trade) = internal_order.make_trade(...);
