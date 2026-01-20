@@ -6,7 +6,7 @@ use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
 use crate::proc::behavior::trading_spot_order_behavior::{
     CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdResult, SpotOrderExchBehavior,
+    SpotCmdError, SpotCmdRes, SpotOrderExchBehavior,
 };
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
@@ -56,7 +56,7 @@ impl SpotOrderExchBehaviorImpl {
 }
 
 impl SpotOrderExchBehaviorImpl {
-    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdResult>, SpotCmdError> {
+    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
         // ========================================================================
         // 1. 命令验证 风控检查 - 余额检查并冻结保证金
         // ========================================================================

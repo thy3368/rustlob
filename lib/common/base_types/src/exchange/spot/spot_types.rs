@@ -773,6 +773,8 @@ impl SpotOrder {
 /// - Coinbase: trade_id, order_id, price, size, fee, liquidity, created_at
 #[derive(Debug, Clone, Copy, Entity)]
 #[entity(id = "trade_id")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SpotTrade {
     // ===== 交易标识字段（24字节）=====
     /// 交易唯一标识（对标币安/OKX/Coinbase）

@@ -279,6 +279,7 @@ impl From<CommonError> for MarketMakerCmdError {
 ///
 /// 包含幂等性和追踪信息
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CmdMetadata {
     /// 命令唯一标识（客户端生成）
     pub nonce: Nonce,
@@ -312,6 +313,7 @@ impl CmdMetadata {
 /// 包含执行结果和幂等性/追踪信息
 /// 使用 Result<CommandResponse<T>, CommandError> 的方式返回
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CmdResp<T> {
     /// 命令元数据
     pub metadata: CmdMetadata,
@@ -352,7 +354,7 @@ pub type IdemMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 ///
 /// 使用标准 Result 包装，支持 ? 操作符和所有 Result 方法
 /// 每个命令类型使用自己的错误类型，提供类型安全
-pub type IdemSpotResult = Result<CmdResp<SpotCmdResult>, SpotCmdError>;
+pub type IdemSpotResult = Result<CmdResp<SpotCmdRes>, SpotCmdError>;
 pub type IdemAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
 pub type IdemCondResult = Result<CmdResp<CondCmdResult>, CondCmdError>;
 pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
@@ -459,7 +461,8 @@ pub enum SpotCmdAny {
 }
 
 #[derive(Clone, Debug)]
-pub struct LimitOrderResult {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LimitOrderRes {
     order_id: OrderId,
     status: OrderStatus,
     filled_quantity: Quantity,
@@ -467,41 +470,101 @@ pub struct LimitOrderResult {
     trades: Vec<SpotTrade>,
 }
 
+impl LimitOrderRes {
+    pub fn order_id(&self) -> OrderId {
+        self.order_id
+    }
+
+    pub fn status(&self) -> OrderStatus {
+        self.status
+    }
+
+    pub fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
+    }
+
+    pub fn remaining_quantity(&self) -> Quantity {
+        self.remaining_quantity
+    }
+
+    pub fn trades(&self) -> &[SpotTrade] {
+        &self.trades
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct MarketOrderResult {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MarketOrderRes {
     status: OrderStatus,
     filled_quantity: Quantity,
     trades: Vec<SpotTrade>,
 }
 
+impl MarketOrderRes {
+    pub fn status(&self) -> OrderStatus {
+        self.status
+    }
+
+    pub fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
+    }
+
+    pub fn trades(&self) -> &[SpotTrade] {
+        &self.trades
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct CancelOrderResult {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CancelOrderRes {
     order_id: OrderId,
     status: OrderStatus,
 }
 
+impl CancelOrderRes {
+    pub fn order_id(&self) -> OrderId {
+        self.order_id
+    }
+
+    pub fn status(&self) -> OrderStatus {
+        self.status
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct CancelAllOrdersResult {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CancelAllOrdersRes {
     cancelled_count: usize,
     order_ids: Vec<OrderId>,
+}
+
+impl CancelAllOrdersRes {
+    pub fn cancelled_count(&self) -> usize {
+        self.cancelled_count
+    }
+
+    pub fn order_ids(&self) -> &[OrderId] {
+        &self.order_ids
+    }
 }
 
 /// 现货命令执行结果
 ///
 /// 只包含成功情况，错误通过 CommandError 返回
 #[derive(Debug, Clone)]
-pub enum SpotCmdResult {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SpotCmdRes {
     /// 限价单结果
-    LimitOrder(LimitOrderResult),
+    LimitOrder(LimitOrderRes),
 
     /// 市价单结果
-    MarketOrder(MarketOrderResult),
+    MarketOrder(MarketOrderRes),
 
     /// 取消订单结果
-    CancelOrder(CancelOrderResult),
+    CancelOrder(CancelOrderRes),
 
     /// 批量取消订单结果
-    CancelAllOrders(CancelAllOrdersResult),
+    CancelAllOrders(CancelAllOrdersRes),
 }
 
 // ============================================================================

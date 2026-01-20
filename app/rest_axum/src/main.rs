@@ -10,10 +10,10 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber;
 
 // Spot 订单处理相关导入
-use spot_proc::proc::behavior::trading_spot_order_behavior::{
-    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdResult, SpotOrderExchBehavior,
+use spot_behavior::proc::behavior::trading_spot_order_behavior::{
+    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotOrderExchBehavior,
 };
-use spot_proc::proc::spot_exch::SpotOrderExchBehaviorImpl;
+use spot_behavior::proc::spot_exch::SpotOrderExchBehaviorImpl;
 
 // 基础设施依赖
 use base_types::account::balance::Balance;
@@ -48,89 +48,44 @@ impl OrderService {
     }
 
     /// 处理限价单命令
-    pub async fn handle_limit_order(&self, limit_order: LimitOrder) -> Result<OrderResponse, String> {
+    pub async fn handle_limit_order(&self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, String> {
         println!("🔑 命令ID: {}", limit_order.metadata.command_id);
         println!("⏰ 时间戳: {}", limit_order.metadata.timestamp);
 
         let spot_cmd = SpotCmdAny::LimitOrder(limit_order);
 
-        // 调用真实的处理器
-        let result = self
-            .processor
+        // 调用真实的处理器，直接返回领域层结果
+        self.processor
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?
             .handle(spot_cmd)
-            .map_err(|e| format!("{:?}", e))?;
-
-        // 转换为 HTTP 响应
-        self.convert_to_response(result)
+            .map_err(|e| format!("{:?}", e))
     }
 
     /// 处理市价单命令
-    pub async fn handle_market_order(&self, market_order: MarketOrder) -> Result<OrderResponse, String> {
+    pub async fn handle_market_order(&self, market_order: MarketOrder) -> Result<CmdResp<SpotCmdRes>, String> {
         println!("🔑 命令ID: {}", market_order.metadata.command_id);
 
         let spot_cmd = SpotCmdAny::MarketOrder(market_order);
 
-        let result = self
-            .processor
+        self.processor
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?
             .handle(spot_cmd)
-            .map_err(|e| format!("{:?}", e))?;
-
-        self.convert_to_response(result)
+            .map_err(|e| format!("{:?}", e))
     }
 
     /// 处理取消订单命令
-    pub async fn handle_cancel_order(&self, cancel_order: CancelOrder) -> Result<OrderResponse, String> {
+    pub async fn handle_cancel_order(&self, cancel_order: CancelOrder) -> Result<CmdResp<SpotCmdRes>, String> {
         println!("🔑 命令ID: {}", cancel_order.metadata.command_id);
 
-        let order_id = cancel_order.order_id;
         let spot_cmd = SpotCmdAny::CancelOrder(cancel_order);
 
-        let result = self
-            .processor
+        self.processor
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?
             .handle(spot_cmd)
-            .map_err(|e| format!("{:?}", e))?;
-
-        self.convert_to_response(result)
-    }
-
-    /// 将领域层结果转换为 HTTP 响应
-    fn convert_to_response(&self, result: CmdResp<SpotCmdResult>) -> Result<OrderResponse, String> {
-        //todo 可能需要直接返回
-        match result.result {
-            SpotCmdResult::LimitOrder(order_result) => {
-                //todo 直接返回result值
-                todo!()
-            }
-            SpotCmdResult::MarketOrder(order_result) => {
-                todo!()
-            }
-            SpotCmdResult::CancelOrder(order_result) => {
-                todo!()
-            }
-            SpotCmdResult::CancelAllOrders(order_result) => {
-                todo!()
-            }
-        }
-    }
-
-    /// 转换成交记录
-    fn convert_trades(&self, trades: Vec<SpotTrade>) -> Vec<TradeInfo> {
-        trades
-            .into_iter()
-            .map(|trade| TradeInfo {
-                trade_id: trade.trade_id,
-                price: trade.price.to_f64(),
-                quantity: trade.quantity.to_f64(),
-                side: format!("{:?}", trade.taker_side),
-                timestamp: trade.timestamp,
-            })
-            .collect()
+            .map_err(|e| format!("{:?}", e))
     }
 }
 
@@ -187,23 +142,9 @@ struct OrderResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     order_id: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    filled_quantity: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    remaining_quantity: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    trades: Option<Vec<TradeInfo>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct TradeInfo {
-    trade_id: u64,
-    price: f64,
-    quantity: f64,
-    side: String,
-    timestamp: u64,
-}
 
 /// 处理限价单 - 使用服务层
 async fn handle_limit_order(
@@ -243,7 +184,7 @@ async fn handle_cancel_order(
 
 /// 创建 JSON 响应
 fn create_json_response(
-    response: OrderResponse,
+    response: CmdResp<SpotCmdRes>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
@@ -257,9 +198,6 @@ fn create_error_response(
         success: false,
         message: "Request failed".to_string(),
         order_id: None,
-        filled_quantity: None,
-        remaining_quantity: None,
-        trades: None,
         error: Some(error_msg.to_string()),
     };
     let json = serde_json::to_string(&response).unwrap();
