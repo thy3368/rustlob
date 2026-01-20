@@ -8,42 +8,18 @@ use std::fmt;
 // ============================================================================
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
-pub use crate::proc::prep_types::{OrderStatus, OrderType};
+pub use base_types::exchange::prep::prep_order::{OrderStatus, OrderType};
 // ============================================================================
 // 从 account crate 导入领域实体
 // ============================================================================
 use base_types::{AssetId, PrepPosition};
 pub use base_types::{OrderId, PositionId, PositionSide, PrepTrade, Price, Quantity, Side, TradeId, TradingPair};
+use base_types::exchange::spot::spot_types::TimeInForce;
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
 
-/// 订单有效期类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum TimeInForce {
-    /// 成交为止（一直有效）
-    GTC = 1,
-    /// 立即成交或取消
-    IOC = 2,
-    /// 全部成交或取消
-    FOK = 3,
-    /// 只做Maker（Post only）
-    GTX = 4,
-}
 
-impl TimeInForce {
-    /// 转换为字符串
-    #[inline(always)]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            TimeInForce::GTC => "GTC",
-            TimeInForce::IOC => "IOC",
-            TimeInForce::FOK => "FOK",
-            TimeInForce::GTX => "GTX",
-        }
-    }
-}
 
 pub enum PerpCmdAny {
     OpenPositionCmd(OpenPositionCmd),

@@ -4,9 +4,10 @@ use std::{
 };
 
 // Clean Architecture: 引入 MySqlDbRepo 和相关接口
-use account::domain::entity::{AccountId, AssetId, Balance, Timestamp};
 // Base types
-use base_types::{PositionSide, PrepPosition, Side as BaseSide, TradingPair};
+use base_types::{AccountId, AssetId, PositionSide, PrepPosition, Side as BaseSide, Timestamp, TradingPair};
+use base_types::account::balance::Balance;
+use base_types::exchange::prep::prep_order::PrepOrder;
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
 use diff::{ChangeLogEntry, Entity};
@@ -14,18 +15,15 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::{
-    prep_types::PrepOrder,
-    trading_prep_order_proc::{
-        AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd,
-        CancelOrderResult, ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
-        MarkPriceInfo, ModifyOrderCmd, ModifyOrderResult, OpenPositionCmd, OpenPositionResult,
-        OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchProc, PerpOrderExchQueryProc, PrepCmdError,
-        PrepTrade, Price, Quantity, QueryAccountBalanceCmd, QueryAccountInfoCmd, QueryFundingFeeCmd,
-        QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd, QueryOrderCmd,
-        QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
-        SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, Side, TradeId, TradesQueryResult
-    }
+use crate::proc::trading_prep_order_proc::{
+    AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd,
+    CancelOrderResult, ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
+    MarkPriceInfo, ModifyOrderCmd, ModifyOrderResult, OpenPositionCmd, OpenPositionResult,
+    OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchProc, PerpOrderExchQueryProc, PrepCmdError,
+    PrepTrade, Price, Quantity, QueryAccountBalanceCmd, QueryAccountInfoCmd, QueryFundingFeeCmd,
+    QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd, QueryOrderCmd,
+    QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
+    SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, Side, TradeId, TradesQueryResult
 };
 
 /// 本地撮合引擎服务

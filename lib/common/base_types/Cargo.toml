@@ -7,6 +7,9 @@ license.workspace = true
 
 [dependencies]
 entity_derive = { path = "../entity_derive" }
+#lob_repo = { path = "../lob_repo" }
+
+
 diff = { path = "../diff" }
 decimal = { path = "../decimal" }
 chrono = "0.4.43"

@@ -36,12 +36,13 @@
 //! ```
 
 use std::fmt;
-
-use lob::lob::*;
-use base_types::mark_data::spot::level_types::{
-    BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber,
-    SymbolId, TradeEvent
-};
+use base_types::mark_data::spot::level_types::{BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber, SymbolId, TradeEvent};
+use base_types::{OrderId, Quantity, Side};
+// use lob::lob::*;
+// use base_types::mark_data::spot::level_types::{
+//     BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber,
+//     SymbolId, TradeEvent
+// };
 
 
 // ============================================================================
@@ -1066,8 +1067,9 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
+    use base_types::exchange::spot::spot_types::TraderId;
     use base_types::mark_data::spot::level_types::OrderChangeType;
-
+    use base_types::Price;
     use super::*;
 
     #[test]

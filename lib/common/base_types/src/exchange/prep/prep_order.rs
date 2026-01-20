@@ -1,10 +1,5 @@
-use account::Balance;
-use base_types::{
-    AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair
-};
-
-
-
+use crate::account::balance::Balance;
+use crate::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -190,7 +185,7 @@ impl PrepOrder {
             fill_price,
             self.leverage,
             self.side,
-            crate::proc::trading_prep_order_proc::PositionSide::Long
+            crate::PositionSide::Long
         );
 
         if self.remaining_qty() == 0 {
@@ -246,7 +241,7 @@ impl PrepOrder {
 }
 /// 实现 Order trait 以适配 LOB 仓储
 impl lob_repo::core::symbol_lob_repo::Order for PrepOrder {
-    fn order_id(&self) -> base_types::OrderId { self.order_id }
+    fn order_id(&self) -> crate::OrderId { self.order_id }
 
     fn price(&self) -> Price { self.price.unwrap_or_else(|| Price::from_raw(0)) }
 
@@ -254,7 +249,7 @@ impl lob_repo::core::symbol_lob_repo::Order for PrepOrder {
 
     fn filled_quantity(&self) -> Quantity { self.filled_quantity }
 
-    fn side(&self) -> base_types::Side { self.side }
+    fn side(&self) -> crate::Side { self.side }
 
     fn symbol(&self) -> TradingPair { self.trading_pair }
 }
