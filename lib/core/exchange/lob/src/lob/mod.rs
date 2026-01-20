@@ -118,24 +118,7 @@ pub mod domain;
 // 条件订单命令
 // 做市商命令
 // 核心现货命令
-pub use domain::{
-    entity::spot_types::{
-        AlgorithmStrategy, ConditionalType, ExecutionMethod, MakerConstraint, OrderSource,
-        OrderStatus, OrderType, SelfTradePrevention, SpotOrder, SpotTrade,
-        TimeInForce, TraderId
-    },
-    service::{
-        trading_spot_order_proc::{
-            AlgoCmdAny, AlgoCmdError, AlgoCmdResult, AlgoOrderProc, AuctionType, Cmd, CmdMetadata,
-            CmdResp, CommonError, ConditionalCmdAny, ConditionalCmdError, ConditionalCmdResult,
-            ConditionalOrderProc, IdempotentAlgoCmd, IdempotentAlgoResult, IdempotentConditionalCmd,
-            IdempotentConditionalResult, IdempotentMarketMakerCmd, IdempotentMarketMakerResult,
-            IdempotentSpotCmd, IdempotentSpotResult, MarketMakerCmdAny, MarketMakerCmdError,
-            MarketMakerCmdResult, MarketMakerProc, Nonce, PegType, QueryError, SpotCmdAny, SpotCmdError,
-            SpotCmdResult, SpotOrderExgProc, UrgencyLevel
-        }
-    }
-};
+
 
 // Re-export base types for convenience
 pub use base_types::{OrderId, Price, Quantity, Side};

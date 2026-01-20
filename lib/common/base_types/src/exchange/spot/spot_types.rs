@@ -1,9 +1,9 @@
 use std::fmt;
 
 use crate::account::balance::Balance;
-use crate::fee::fee_types::{CexFeeEntity, FeeType, InstrumentType};
-use crate::{AccountId, AssetId, OrderId, Price, Quantity, Side, TradingPair};
+use crate::{AccountId, AssetId, InstrumentType, OrderId, Price, Quantity, Side, TradingPair};
 use entity_derive::Entity;
+use crate::fee::fee_types::{CexFeeEntity, FeeType};
 
 /// 订单来源标识 - Phase 3: 区分订单的来源
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -438,14 +438,15 @@ impl SpotOrder {
         // 根据方向调用 CexFeeEntity 的费率计算
         let fee_type = if is_taker { FeeType::Taker } else { FeeType::Maker };
 
-        // 调用费率计算函数
-        match fee_entity.calculate_trading_fee(
+        // 调用费率计算函数（使用新的 API）
+        match fee_entity.calculate_product_trading_fee(
+            InstrumentType::Spot,  // 现货交易
             fee_type,
             &base_asset,
             &quote_asset,
-            self.total_qty.to_f64(),
-            self.price.unwrap_or_default().to_f64(),
-            user_tier,
+            filled.to_f64(),
+            price.to_f64(),
+            user_tier.map(|t| t as f64),  // 30天交易量（用户分层）
             user_vip_level,
             is_market_maker,
         ) {
@@ -717,35 +718,6 @@ impl SpotOrder {
     }
 }
 
-//todo 移到调用方去
-// impl Order for SpotOrder {
-//     fn order_id(&self) -> OrderId {
-//         self.order_id
-//     }
-//
-//     fn price(&self) -> Price {
-//         self.price.unwrap_or_default()
-//     }
-//
-//     fn quantity(&self) -> Quantity {
-//         self.total_qty
-//     }
-//
-//     fn filled_quantity(&self) -> Quantity {
-//         self.executed_qty
-//     }
-//
-//     fn side(&self) -> Side {
-//         match self.side {
-//             Side::Buy => Side::Buy,
-//             Side::Sell => Side::Sell,
-//         }
-//     }
-//
-//     fn symbol(&self) -> TradingPair {
-//         self.trading_pair
-//     }
-// }
 
 /// 交易执行记录
 ///

@@ -25,12 +25,14 @@
 //! 3. **可序列化**：支持查询日志和缓存
 //! 4. **元数据支持**：内置追踪、缓存、性能监控
 
+use base_types::exchange::spot::spot_types::TraderId;
+use base_types::{OrderId, Price, Quantity, Side};
 use cqrs::*;
 
-use crate::lob::{
-    domain::entity::spot_types::{OrderId, Price, Quantity, Side},
-    TraderId
-};
+// use crate::lob::{
+//     domain::entity::spot_types::{OrderId, Price, Quantity, Side},
+//     TraderId
+// };
 // ==================== 临时类型定义（原来在 mgn.rs 中）====================
 
 /// 订单查询请求（临时定义，实际应从 mgn 模块导入）

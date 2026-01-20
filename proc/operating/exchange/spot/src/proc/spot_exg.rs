@@ -1,15 +1,44 @@
-use base_types::{Price, Quantity, Side};
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use lob::lob::domain::service::trading_spot_order_proc::LimitOrder;
-use lob::lob::{
-    Cmd, CmdResp, CommonError, IdempotentSpotCmd, IdempotentSpotResult, SpotCmdAny, SpotCmdError, SpotCmdResult,
-     SpotOrderExgProc,
-};
+use lob::lob::domain::service::trading_spot_order_proc::{CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotCmdResult, SpotOrderExgProc};
+
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
+use lob_repo::core::symbol_lob_repo::Order;
+
+//todo 移到调用方去
+// impl Order for SpotOrder {
+//     fn order_id(&self) -> OrderId {
+//         self.order_id
+//     }
+//
+//     fn price(&self) -> Price {
+//         self.price.unwrap_or_default()
+//     }
+//
+//     fn quantity(&self) -> Quantity {
+//         self.total_qty
+//     }
+//
+//     fn filled_quantity(&self) -> Quantity {
+//         self.executed_qty
+//     }
+//
+//     fn side(&self) -> Side {
+//         match self.side {
+//             Side::Buy => Side::Buy,
+//             Side::Sell => Side::Sell,
+//         }
+//     }
+//
+//     fn symbol(&self) -> TradingPair {
+//         self.trading_pair
+//     }
+// }
+
 
 pub struct SpotOrderExgProcImpl {
     /// 余额仓储（依赖注入）
@@ -155,7 +184,7 @@ impl SpotOrderExgProcImpl {
 }
 
 impl SpotOrderExgProc for SpotOrderExgProcImpl {
-    fn handle(&mut self, cmd: SpotCmdAny) -> IdempotentSpotResult {
+    fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),
             SpotCmdAny::MarketOrder(market_order) => self.handle_market_order(market_order),

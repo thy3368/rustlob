@@ -8,15 +8,15 @@
 //! 幂等性设计：
 //! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
-use account::{AccountId, TradingPair, UserId};
 
-use crate::lob::domain::entity::spot_types::{
-    OrderId, OrderStatus, Price, Quantity, Side, SpotTrade, TimeInForce, TraderId,
-};
+
 
 // ============================================================================
 // 幂等性包装 (Idempotent Command)
 // ============================================================================
+
+use base_types::{AccountId, OrderId, Price, Quantity, Side, TradingPair, UserId};
+use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce, TraderId};
 
 /// Nonce 类型 - 客户端生成的唯一标识
 pub type Nonce = u64;
@@ -355,10 +355,10 @@ pub type IdempotentMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 ///
 /// 使用标准 Result 包装，支持 ? 操作符和所有 Result 方法
 /// 每个命令类型使用自己的错误类型，提供类型安全
-pub type IdempotentSpotResult = Result<CmdResp<SpotCmdResult>, SpotCmdError>;
-pub type IdempotentAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
-pub type IdempotentConditionalResult = Result<CmdResp<ConditionalCmdResult>, ConditionalCmdError>;
-pub type IdempotentMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
+pub type IdemSpotResult = Result<CmdResp<SpotCmdResult>, SpotCmdError>;
+pub type IdemAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
+pub type IdemConditionalResult = Result<CmdResp<ConditionalCmdResult>, ConditionalCmdError>;
+pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
 
 // ============================================================================
 // 核心现货命令 (SpotCommand)
@@ -527,7 +527,7 @@ pub enum AlgoCmdResult {
 
 /// 算法订单处理器
 pub trait AlgoOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentAlgoCmd) -> IdempotentAlgoResult;
+    fn handle(&mut self, cmd: IdempotentAlgoCmd) -> IdemAlgoResult;
 }
 
 // ============================================================================
@@ -690,7 +690,7 @@ pub enum ConditionalCmdResult {
 
 /// 条件订单处理器
 pub trait ConditionalOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentConditionalCmd) -> IdempotentConditionalResult;
+    fn handle(&mut self, cmd: IdempotentConditionalCmd) -> IdemConditionalResult;
 }
 
 // ============================================================================
@@ -719,7 +719,7 @@ pub enum MarketMakerCmdResult {
 
 /// 做市商处理器
 pub trait MarketMakerProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentMarketMakerCmd) -> IdempotentMarketMakerResult;
+    fn handle(&mut self, cmd: IdempotentMarketMakerCmd) -> IdemMarketMakerResult;
 }
 
 // ============================================================================
@@ -864,5 +864,5 @@ pub trait OrderQueryProc: Send + Sync {
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
 pub trait SpotOrderExgProc: Send + Sync {
-    fn handle(&mut self, cmd: SpotCmdAny) -> IdempotentSpotResult;
+    fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult;
 }
