@@ -1,14 +1,15 @@
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
-use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
+use base_types::lob::lob::LobOrder;
+use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
 // todo 通过rpc连接远程的lob
 //todo 用type 代码范型
-pub struct RemoteLob<O: Order> {
+pub struct RemoteLob<O: LobOrder> {
     symbol: TradingPair,
     _phantom: std::marker::PhantomData<O>
 }
 
-impl<O: Order> RemoteLob<O> {
+impl<O: LobOrder> RemoteLob<O> {
     pub fn new(symbol: TradingPair) -> Self {
         Self {
             symbol,
@@ -21,7 +22,7 @@ impl<O: Order> RemoteLob<O> {
     }
 }
 
-impl<O: Order> SymbolLob for RemoteLob<O> {
+impl<O: LobOrder> SymbolLob for RemoteLob<O> {
     type Order = O;
 
     fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {

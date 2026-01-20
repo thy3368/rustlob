@@ -1,43 +1,44 @@
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::lob::lob::LobOrder;
 use diff::Entity;
 
 pub(crate) use crate::core::repo_snapshot_support::RepoError;
 
-/// 仓储接口定义
-
-/// 订单抽象 trait
-///
-/// 定义订单的核心行为，遵循依赖倒置原则
-/// 业务层依赖此抽象接口，而非具体的 InternalOrder 实现
-///
-/// Order trait 继承 Entity trait，支持完整的事件溯源和审计能力
-pub trait Order: Entity + Send + Sync {
-    /// 获取订单ID
-    fn order_id(&self) -> OrderId;
-
-    /// 获取价格
-    fn price(&self) -> Price;
-
-    /// 获取数量（订单总数量）
-    fn quantity(&self) -> Quantity;
-
-    /// 获取已成交数量
-    ///
-    /// # 返回
-    /// 订单的已成交数量
-    ///
-    /// # 说明
-    /// - 对于未成交订单，返回 0
-    /// - 对于部分成交订单，返回已成交的数量
-    /// - 对于完全成交订单，返回值等于 `quantity()`
-    fn filled_quantity(&self) -> Quantity;
-
-    /// 获取方向
-    fn side(&self) -> Side;
-
-    /// 获取交易对
-    fn symbol(&self) -> TradingPair;
-}
+// /// 仓储接口定义
+// 
+// /// 订单抽象 trait
+// ///
+// /// 定义订单的核心行为，遵循依赖倒置原则
+// /// 业务层依赖此抽象接口，而非具体的 InternalOrder 实现
+// ///
+// /// Order trait 继承 Entity trait，支持完整的事件溯源和审计能力
+// pub trait Order: Entity + Send + Sync {
+//     /// 获取订单ID
+//     fn order_id(&self) -> OrderId;
+// 
+//     /// 获取价格
+//     fn price(&self) -> Price;
+// 
+//     /// 获取数量（订单总数量）
+//     fn quantity(&self) -> Quantity;
+// 
+//     /// 获取已成交数量
+//     ///
+//     /// # 返回
+//     /// 订单的已成交数量
+//     ///
+//     /// # 说明
+//     /// - 对于未成交订单，返回 0
+//     /// - 对于部分成交订单，返回已成交的数量
+//     /// - 对于完全成交订单，返回值等于 `quantity()`
+//     fn filled_quantity(&self) -> Quantity;
+// 
+//     /// 获取方向
+//     fn side(&self) -> Side;
+// 
+//     /// 获取交易对
+//     fn symbol(&self) -> TradingPair;
+// }
 
 /// LOB 快照数据
 ///
@@ -84,7 +85,7 @@ impl LobSnapshot {
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
 pub trait SymbolLob {
     /// 订单类型关联类型
-    type Order: Order;
+    type Order: LobOrder;
 
     /// 匹配订单，返回匹配到的订单引用列表
     ///
@@ -197,7 +198,7 @@ impl std::error::Error for RepoError {}
 /// - `Order`: 实现了 Order trait 的订单类型
 pub trait MultiSymbolLobRepo: Send + Sync {
     /// 订单类型关联类型
-    type Order: Order;
+    type Order: LobOrder;
 
     /// 匹配订单
     ///

@@ -1,7 +1,7 @@
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use lob_repo::{
     adapter::local_lob_impl::LocalLob,
-    core::symbol_lob_repo::{Order, SymbolLob}
+    core::symbol_lob_repo::{LobOrder, SymbolLob}
 };
 
 // 创建模拟订单用于测试
@@ -21,7 +21,7 @@ struct MockOrder {
 }
 
 
-impl Order for MockOrder {
+impl LobOrder for MockOrder {
     fn order_id(&self) -> OrderId { self.id }
 
     fn price(&self) -> Price { self.price }

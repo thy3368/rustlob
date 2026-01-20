@@ -6,6 +6,7 @@
 //! 3. 自动减仓（ADL）
 
 use std::{sync::Arc, time::Duration};
+use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::PrepPosition;
 use crate::proc::{liquidation_types::*, trading_prep_order_proc::*};
 

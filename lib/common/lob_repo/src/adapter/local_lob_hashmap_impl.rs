@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
-use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
+use base_types::lob::lob::LobOrder;
+use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
 /// 价格点结构
 ///
@@ -27,13 +28,13 @@ impl PricePoint {
 /// 订单包装器
 ///
 /// 包装 Order trait 对象，并添加链表指针
-struct OrderNode<O: Order> {
+struct OrderNode<O: LobOrder> {
     order: O,
     /// 指向同价格级别下一个订单的索引
     next_idx: Option<usize>,
 }
 
-impl<O: Order> OrderNode<O> {
+impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
         Self {
             order,
@@ -56,7 +57,7 @@ impl<O: Order> OrderNode<O> {
 /// - 低价币（SHIB, PEPE 等需要高精度）
 /// - 价格波动范围大的币种
 /// - 内存受限的环境
-pub struct LocalLobHashMap<O: Order> {
+pub struct LocalLobHashMap<O: LobOrder> {
     symbol: TradingPair,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
@@ -78,7 +79,7 @@ pub struct LocalLobHashMap<O: Order> {
     next_slot: usize,
 }
 
-impl<O: Order> LocalLobHashMap<O> {
+impl<O: LobOrder> LocalLobHashMap<O> {
     /// 创建新的本地 LOB（使用默认 tick size）
     ///
     /// # 参数
@@ -218,7 +219,7 @@ impl<O: Order> LocalLobHashMap<O> {
     }
 }
 
-impl<O: Order> SymbolLob for LocalLobHashMap<O> {
+impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
     type Order = O;
     /// 匹配订单
     ///

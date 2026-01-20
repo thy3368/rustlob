@@ -1,5 +1,6 @@
 use crate::account::balance::Balance;
 use crate::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
+use crate::lob::lob::LobOrder;
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -240,7 +241,7 @@ impl PrepOrder {
     pub fn is_all_filled(&self) -> bool { self.quantity == self.filled_quantity }
 }
 /// 实现 Order trait 以适配 LOB 仓储
-impl lob_repo::core::symbol_lob_repo::Order for PrepOrder {
+impl LobOrder for PrepOrder {
     fn order_id(&self) -> crate::OrderId { self.order_id }
 
     fn price(&self) -> Price { self.price.unwrap_or_else(|| Price::from_raw(0)) }

@@ -9,6 +9,7 @@ pub mod fee;
 pub mod mark_data;
 pub mod exchange;
 
+pub mod lob;
 pub mod instrument;
 
 // Re-export all types

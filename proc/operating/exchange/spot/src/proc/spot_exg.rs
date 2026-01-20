@@ -4,40 +4,11 @@ use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use lob::lob::domain::service::trading_spot_order_proc::{CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotCmdResult, SpotOrderExgProc};
+use lob::lob::domain::service::trading_spot_order_proc::{CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdError, SpotCmdResult, SpotOrderExgProc};
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
-use lob_repo::core::symbol_lob_repo::Order;
 
-//todo 移到调用方去
-// impl Order for SpotOrder {
-//     fn order_id(&self) -> OrderId {
-//         self.order_id
-//     }
-//
-//     fn price(&self) -> Price {
-//         self.price.unwrap_or_default()
-//     }
-//
-//     fn quantity(&self) -> Quantity {
-//         self.total_qty
-//     }
-//
-//     fn filled_quantity(&self) -> Quantity {
-//         self.executed_qty
-//     }
-//
-//     fn side(&self) -> Side {
-//         match self.side {
-//             Side::Buy => Side::Buy,
-//             Side::Sell => Side::Sell,
-//         }
-//     }
-//
-//     fn symbol(&self) -> TradingPair {
-//         self.trading_pair
-//     }
-// }
+
 
 
 pub struct SpotOrderExgProcImpl {
@@ -52,6 +23,12 @@ pub struct SpotOrderExgProcImpl {
 
     /// ID生成器（节点ID为0）
     id_generator: IdGenerator,
+}
+
+impl SpotOrderExgProcImpl {
+    pub(crate) fn handle_market_order(&self, p0: MarketOrder) -> IdemSpotResult {
+        todo!()
+    }
 }
 
 impl SpotOrderExgProcImpl {

@@ -1,9 +1,10 @@
 use std::fmt;
 
 use crate::account::balance::Balance;
+use crate::fee::fee_types::{CexFeeEntity, FeeType};
+use crate::lob::lob::LobOrder;
 use crate::{AccountId, AssetId, InstrumentType, OrderId, Price, Quantity, Side, TradingPair};
 use entity_derive::Entity;
-use crate::fee::fee_types::{CexFeeEntity, FeeType};
 
 /// 订单来源标识 - Phase 3: 区分订单的来源
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -346,6 +347,35 @@ impl Default for TimeInForce {
     }
 }
 
+impl LobOrder for SpotOrder {
+    fn order_id(&self) -> OrderId {
+        self.order_id
+    }
+
+    fn price(&self) -> Price {
+        self.price.unwrap_or_default()
+    }
+
+    fn quantity(&self) -> Quantity {
+        self.total_qty
+    }
+
+    fn filled_quantity(&self) -> Quantity {
+        self.executed_qty
+    }
+
+    fn side(&self) -> Side {
+        match self.side {
+            Side::Buy => Side::Buy,
+            Side::Sell => Side::Sell,
+        }
+    }
+
+    fn symbol(&self) -> TradingPair {
+        self.trading_pair
+    }
+}
+
 /// 订单簿条目（64字节缓存行对齐以提升性能）
 #[repr(align(64))]
 #[derive(Debug, Clone, Entity)]
@@ -440,13 +470,13 @@ impl SpotOrder {
 
         // 调用费率计算函数（使用新的 API）
         match fee_entity.calculate_product_trading_fee(
-            InstrumentType::Spot,  // 现货交易
+            InstrumentType::Spot, // 现货交易
             fee_type,
             &base_asset,
             &quote_asset,
             filled.to_f64(),
             price.to_f64(),
-            user_tier.map(|t| t as f64),  // 30天交易量（用户分层）
+            user_tier.map(|t| t as f64), // 30天交易量（用户分层）
             user_vip_level,
             is_market_maker,
         ) {
@@ -717,7 +747,6 @@ impl SpotOrder {
         self
     }
 }
-
 
 /// 交易执行记录
 ///

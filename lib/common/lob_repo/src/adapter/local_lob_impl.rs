@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::lob::lob::LobOrder;
 use diff::{ChangeLogEntry, FromCreatedEvent};
 use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
-use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
+use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
+// use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
 
 /// 价格点结构
 ///
@@ -32,13 +34,13 @@ impl PricePoint {
 ///
 /// 包装 Order trait 对象，并添加链表指针
 #[derive(Clone)]
-struct OrderNode<O: Order> {
+struct OrderNode<O: LobOrder> {
     order: O,
     /// 指向同价格级别下一个订单的索引
     next_idx: Option<usize>
 }
 
-impl<O: Order> OrderNode<O> {
+impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
         Self {
             order,
@@ -52,7 +54,7 @@ impl<O: Order> OrderNode<O> {
 /// 使用内存存储订单，支持 O(1) 的价格查找和 O(k) 的订单匹配
 /// 使用 Tick Size 将价格映射到数组索引，支持不同精度的交易对
 #[derive(Clone)]
-pub struct LocalLob<O: Order> {
+pub struct LocalLob<O: LobOrder> {
     symbol: TradingPair,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
@@ -74,7 +76,7 @@ pub struct LocalLob<O: Order> {
     next_slot: usize
 }
 
-impl<O: Order + Clone> RepoSnapshot for LocalLob<O> {
+impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
     type Snapshot = LocalLob<O>;
 
     fn create_snapshot(&self, _timestamp: u64, _sequence: u64) -> Result<Self::Snapshot, RepoError> {
@@ -98,7 +100,7 @@ impl<O: Order + Clone> RepoSnapshot for LocalLob<O> {
     }
 }
 
-impl<O: Order + FromCreatedEvent> EventReplay for LocalLob<O> {
+impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
     type Event = ChangeLogEntry;
 
     fn replay_event(&mut self, event: &Self::Event) -> Result<(), RepoError> {
@@ -165,7 +167,7 @@ impl<O: Order + FromCreatedEvent> EventReplay for LocalLob<O> {
 }
 
 
-impl<O: Order> LocalLob<O> {
+impl<O: LobOrder> LocalLob<O> {
     /// 创建新的本地 LOB（使用默认 tick size）
     ///
     /// # 参数
@@ -290,7 +292,7 @@ impl<O: Order> LocalLob<O> {
     }
 }
 
-impl<O: Order> SymbolLob for LocalLob<O> {
+impl<O: LobOrder> SymbolLob for LocalLob<O> {
     type Order = O;
 
     /// 匹配订单

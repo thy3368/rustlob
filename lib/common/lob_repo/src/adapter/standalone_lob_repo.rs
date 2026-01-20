@@ -1,27 +1,24 @@
 use std::collections::HashMap;
 
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
-
+use crate::core::repo_snapshot_support::RepoError;
 use crate::{
     adapter::local_lob_impl::LocalLob,
-    core::symbol_lob_repo::{MultiSymbolLobRepo, Order, SymbolLob}
+    core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob},
 };
-use crate::core::repo_snapshot_support::RepoError;
-
+use base_types::lob::lob::LobOrder;
+use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 
 /// 单一 LOB 仓储
 ///
 /// 使用 HashMap 存储多个交易对的 LOB，实现 O(1) 查找性能
 #[allow(dead_code)]
-pub struct StandaloneLobRepo<O: Order> {
-    lobs: HashMap<TradingPair, LocalLob<O>>
+pub struct StandaloneLobRepo<O: LobOrder> {
+    lobs: HashMap<TradingPair, LocalLob<O>>,
 }
 
-impl<O: Order> StandaloneLobRepo<O> {
+impl<O: LobOrder> StandaloneLobRepo<O> {}
 
-}
-
-impl<O: Order> StandaloneLobRepo<O> {
+impl<O: LobOrder> StandaloneLobRepo<O> {
     /// 创建新的 SingleLobRepo
     ///
     /// # 参数
@@ -32,11 +29,8 @@ impl<O: Order> StandaloneLobRepo<O> {
         for lob in lobs {
             map.insert(*lob.symbol(), lob);
         }
-        Self {
-            lobs: map
-        }
+        Self { lobs: map }
     }
-
 
     /// 匹配订单
     ///
@@ -59,10 +53,12 @@ impl<O: Order> StandaloneLobRepo<O> {
 }
 
 /// 实现 MultiLobRepo trait
-impl<O: Order> MultiSymbolLobRepo for StandaloneLobRepo<O> {
+impl<O: LobOrder> MultiSymbolLobRepo for StandaloneLobRepo<O> {
     type Order = O;
 
-    fn match_orders(&self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
+    fn match_orders(
+        &self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity,
+    ) -> Option<Vec<&Self::Order>> {
         // O(1) 查找对应的 LOB
         let lob = self.lobs.get(&symbol)?;
 
@@ -80,7 +76,9 @@ impl<O: Order> MultiSymbolLobRepo for StandaloneLobRepo<O> {
         lob.best_ask()
     }
 
-    fn contains_symbol(&self, symbol: &TradingPair) -> bool { self.lobs.contains_key(symbol) }
+    fn contains_symbol(&self, symbol: &TradingPair) -> bool {
+        self.lobs.contains_key(symbol)
+    }
 
     fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), RepoError> {
         todo!()
@@ -121,25 +119,32 @@ mod tests {
         filled_quantity: Quantity,
         #[replay(skip)]
         #[created(skip)]
-        side: Side
+        side: Side,
     }
 
-    impl Order for MockOrder {
-        fn order_id(&self) -> base_types::OrderId { self.id }
+    impl LobOrder for MockOrder {
+        fn order_id(&self) -> base_types::OrderId {
+            self.id
+        }
 
-        fn price(&self) -> Price { self.price }
+        fn price(&self) -> Price {
+            self.price
+        }
 
-        fn quantity(&self) -> Quantity { self.quantity }
+        fn quantity(&self) -> Quantity {
+            self.quantity
+        }
 
-        fn filled_quantity(&self) -> Quantity { self.filled_quantity }
+        fn filled_quantity(&self) -> Quantity {
+            self.filled_quantity
+        }
 
-        fn side(&self) -> Side { self.side }
+        fn side(&self) -> Side {
+            self.side
+        }
 
-        fn symbol(&self) -> TradingPair { self.symbol }
+        fn symbol(&self) -> TradingPair {
+            self.symbol
+        }
     }
-
-
-
-
-
 }
