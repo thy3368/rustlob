@@ -24,6 +24,7 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 
 /// 应用服务 - 封装订单处理器
 pub struct OrderService {
+    //todo SpotOrderExchBehaviorImpl是无状态的，是不是可以不用mutex
     processor: Arc<Mutex<SpotOrderExchBehaviorImpl>>,
 }
 

@@ -3391,7 +3391,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "spot_market_data_behavior"
+name = "spot_md_behavior"
 version = "0.1.0"
 dependencies = [
  "base_types",

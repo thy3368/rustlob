@@ -1,5 +1,5 @@
 [package]
-name = "spot_market_data_behavior"
+name = "spot_md_behavior"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
