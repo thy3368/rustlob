@@ -9,6 +9,7 @@ use entity_derive::Entity;
 /// 订单来源标识 - Phase 3: 区分订单的来源
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderSource {
     /// REST API 直接提交
     API = 1,
@@ -46,6 +47,7 @@ impl fmt::Display for OrderSource {
 /// 交易员标识符（8字节固定长度）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(align(8))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraderId([u8; 8]);
 
 impl Default for TraderId {
@@ -65,6 +67,7 @@ impl TraderId {
 /// 订单执行方式 - 定义订单如何与市场交互
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ExecutionMethod {
     /// 限价单：按指定价格或更优价格执行
     Limit = 1,
@@ -81,6 +84,7 @@ impl Default for ExecutionMethod {
 /// 做市商约束 - 定义订单是否只做Maker
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MakerConstraint {
     /// 无约束：可作为Taker或Maker
     None = 0,
@@ -96,6 +100,7 @@ impl Default for MakerConstraint {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ConditionalType {
     /// 无条件：普通订单，无触发条件
     None = 0,
@@ -134,6 +139,7 @@ impl Default for ConditionalType {
 /// - 用户体验好：用户提交的新单不会被拒（除非自交易）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SelfTradePrevention {
     /// 取消 Taker（推荐且固定）
     /// - 新订单作为Taker时，如发生自交易则新订单被取消
@@ -151,6 +157,7 @@ impl Default for SelfTradePrevention {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AlgorithmStrategy {
     /// 无算法：直接执行，不分拆
     None = 0,
@@ -192,6 +199,7 @@ impl Default for AlgorithmStrategy {
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderType {
     Limit = 1,  // 限价单
     Market = 2, // 市价单
@@ -200,6 +208,7 @@ pub enum OrderType {
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderStatus {
     Pending = 1,         // 待成交
     PartiallyFilled = 2, // 部分成交
@@ -242,6 +251,7 @@ impl fmt::Display for OrderStatus {
 /// | **GTD**     | ✅ 支持    | ❌ 不支持  |
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimeInForce {
     /// GTC (Good Till Cancel) - 持续有效直到取消
     /// 订单会一直保留在订单簿中，直到完全成交或用户手动取消

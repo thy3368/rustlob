@@ -16,6 +16,7 @@ use std::fmt;
 /// - 最小单位：0.00000001
 /// - 避免浮点数精度问题
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Decimal(i64);
 
 impl Decimal {

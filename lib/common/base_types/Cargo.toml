@@ -14,6 +14,6 @@ entity_derive = { path = "../entity_derive" }
 #lob_repo = { path = "../lob_repo" }
 
 diff = { path = "../diff" }
-decimal = { path = "../decimal" }
+decimal = { path = "../decimal", features = ["serde"] }
 chrono = "0.4.43"
 serde = { version = "1.0", features = ["derive"], optional = true }

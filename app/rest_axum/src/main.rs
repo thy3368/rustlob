@@ -11,7 +11,7 @@ use tracing_subscriber;
 
 // Spot 订单处理相关导入
 use spot_proc::proc::behavior::trading_spot_order_behavior::{
-    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdResult, SpotOrderExchProc,
+    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdResult, SpotOrderExchBehavior,
 };
 use spot_proc::proc::spot_exch::SpotOrderExchBehaviorImpl;
 
@@ -30,21 +30,18 @@ pub struct OrderService {
 impl OrderService {
     /// 创建新的订单服务实例
     pub fn new(db_url: &str) -> Self {
-        // 1. 初始化数据库连接
-        let db_pool = mysql::Pool::new(db_url).expect("Failed to create database pool");
+        // 1. 初始化各个仓储（使用 URL 字符串）
+        let balance_repo = MySqlDbRepo::<Balance>::new(db_url).expect("Failed to create balance repo");
+        let trade_repo = MySqlDbRepo::<SpotTrade>::new(db_url).expect("Failed to create trade repo");
+        let order_repo = MySqlDbRepo::<SpotOrder>::new(db_url).expect("Failed to create order repo");
 
-        // 2. 初始化各个仓储
-        let balance_repo = MySqlDbRepo::<Balance>::new(db_pool.clone());
-        let trade_repo = MySqlDbRepo::<SpotTrade>::new(db_pool.clone());
-        let order_repo = MySqlDbRepo::<SpotOrder>::new(db_pool.clone());
+        // 2. 初始化 LOB 仓储（内存版本，空的 LOB 列表）
+        let lob_repo = StandaloneLobRepo::<SpotOrder>::new(vec![]);
 
-        // 3. 初始化 LOB 仓储（内存版本）
-        let lob_repo = StandaloneLobRepo::<SpotOrder>::new();
-
-        // 4. 初始化 ID 生成器（节点ID为0）
+        // 3. 初始化 ID 生成器（节点ID为0）
         let id_generator = IdGenerator::new(0);
 
-        // 5. 创建处理器实例
+        // 4. 创建处理器实例
         let processor = SpotOrderExchBehaviorImpl { balance_repo, trade_repo, order_repo, lob_repo, id_generator };
 
         Self { processor: Arc::new(Mutex::new(processor)) }

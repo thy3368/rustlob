@@ -364,7 +364,7 @@ pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMak
 // 核心现货命令 (SpotCommand)
 // ============================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CMetadata {
     /// 命令唯一ID（用于幂等性和追踪）
@@ -889,6 +889,6 @@ pub trait OrderQueryProc: Send + Sync {
 ///
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
-pub trait SpotOrderExchProc: Send + Sync {
+pub trait SpotOrderExchBehavior: Send + Sync {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult;
 }

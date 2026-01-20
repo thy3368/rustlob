@@ -10,6 +10,7 @@ use decimal::Decimal;
 // ============================================================================
 
 /// 价格（语义别名，实际使用 Decimal）
+
 pub type Price = Decimal;
 
 /// 数量（语义别名，实际使用 Decimal）
@@ -22,6 +23,7 @@ pub type Timestamp = u64;
 /// 用户ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserId(pub u64);
 
 impl From<u64> for UserId {
@@ -34,6 +36,8 @@ impl From<u64> for UserId {
 /// 账户ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AccountId(pub u64);
 
 impl From<u64> for AccountId {
@@ -46,6 +50,8 @@ impl From<u64> for AccountId {
 /// 资产ID（使用 u32 高性能）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AssetId(pub u32);
 
 impl AssetId {
@@ -68,6 +74,8 @@ impl From<u32> for AssetId {
 /// - base_asset = BTC (基础资产，卖出时检查)
 /// - quote_asset = USDT (计价资产，买入时检查)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct TradingPair {
     /// 基础资产（如 BTC）
     pub base_asset: AssetId,
@@ -179,6 +187,7 @@ pub type OrderId = u64;
 /// 定义交易的买卖方向，供 LOB、Account 等模块共享使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Side {
     Buy = 0,
     Sell = 1
@@ -203,6 +212,7 @@ impl Default for Side {
 
 /// 持仓ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PositionId(pub u64);
 
 impl PositionId {
@@ -226,6 +236,7 @@ impl Default for PositionId {
 
 /// 成交ID
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradeId(String);
 
 impl TradeId {

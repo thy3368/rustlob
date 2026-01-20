@@ -6,7 +6,7 @@ use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
 use crate::proc::behavior::trading_spot_order_behavior::{
     CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdResult, SpotOrderExchProc,
+    SpotCmdError, SpotCmdResult, SpotOrderExchBehavior,
 };
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
@@ -164,7 +164,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotOrderExchProc for SpotOrderExchBehaviorImpl {
+impl SpotOrderExchBehavior for SpotOrderExchBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),
