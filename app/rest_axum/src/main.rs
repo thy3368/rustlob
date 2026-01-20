@@ -28,12 +28,12 @@ pub struct OrderService {
 }
 
 impl OrderService {
-    /// 创建新的订单服务实例
-    pub fn new(db_url: &str) -> Self {
-        // 1. 初始化各个仓储（使用 URL 字符串）
-        let balance_repo = MySqlDbRepo::<Balance>::new(db_url).expect("Failed to create balance repo");
-        let trade_repo = MySqlDbRepo::<SpotTrade>::new(db_url).expect("Failed to create trade repo");
-        let order_repo = MySqlDbRepo::<SpotOrder>::new(db_url).expect("Failed to create order repo");
+    /// 创建新的订单服务实例（使用 Mock 仓储）
+    pub fn new() -> Self {
+        // 1. 初始化各个仓储（使用 Mock 版本）
+        let balance_repo = MySqlDbRepo::<Balance>::new_mock();
+        let trade_repo = MySqlDbRepo::<SpotTrade>::new_mock();
+        let order_repo = MySqlDbRepo::<SpotOrder>::new_mock();
 
         // 2. 初始化 LOB 仓储（内存版本，空的 LOB 列表）
         let lob_repo = StandaloneLobRepo::<SpotOrder>::new(vec![]);
@@ -42,7 +42,7 @@ impl OrderService {
         let id_generator = IdGenerator::new(0);
 
         // 4. 创建处理器实例
-        let processor = SpotOrderExchBehaviorImpl { balance_repo, trade_repo, order_repo, lob_repo, id_generator };
+        let processor = SpotOrderExchBehaviorImpl::new(balance_repo, trade_repo, order_repo, lob_repo, id_generator);
 
         Self { processor: Arc::new(Mutex::new(processor)) }
     }
@@ -101,47 +101,21 @@ impl OrderService {
 
     /// 将领域层结果转换为 HTTP 响应
     fn convert_to_response(&self, result: CmdResp<SpotCmdResult>) -> Result<OrderResponse, String> {
-
         //todo 可能需要直接返回
         match result.result {
-            SpotCmdResult::LimitOrder { order_id, status, filled_quantity, remaining_quantity, trades } => {
-                Ok(OrderResponse {
-                    success: true,
-                    message: format!("Limit order {} placed successfully (status: {:?})", order_id, status),
-                    order_id: Some(order_id),
-                    filled_quantity: Some(filled_quantity.to_f64()),
-                    remaining_quantity: Some(remaining_quantity.to_f64()),
-                    trades: Some(self.convert_trades(trades)),
-                    error: None,
-                })
+            SpotCmdResult::LimitOrder(order_result) => {
+                //todo 直接返回result值
+                todo!()
             }
-            SpotCmdResult::MarketOrder { status, filled_quantity, trades } => Ok(OrderResponse {
-                success: true,
-                message: format!("Market order executed (status: {:?})", status),
-                order_id: None,
-                filled_quantity: Some(filled_quantity.to_f64()),
-                remaining_quantity: None,
-                trades: Some(self.convert_trades(trades)),
-                error: None,
-            }),
-            SpotCmdResult::CancelOrder { order_id, status } => Ok(OrderResponse {
-                success: true,
-                message: format!("Order {} cancelled (status: {:?})", order_id, status),
-                order_id: Some(order_id),
-                filled_quantity: None,
-                remaining_quantity: None,
-                trades: None,
-                error: None,
-            }),
-            SpotCmdResult::CancelAllOrders { cancelled_count, order_ids } => Ok(OrderResponse {
-                success: true,
-                message: format!("Cancelled {} orders", cancelled_count),
-                order_id: None,
-                filled_quantity: None,
-                remaining_quantity: None,
-                trades: None,
-                error: None,
-            }),
+            SpotCmdResult::MarketOrder(order_result) => {
+                todo!()
+            }
+            SpotCmdResult::CancelOrder(order_result) => {
+                todo!()
+            }
+            SpotCmdResult::CancelAllOrders(order_result) => {
+                todo!()
+            }
         }
     }
 
@@ -153,7 +127,7 @@ impl OrderService {
                 trade_id: trade.trade_id,
                 price: trade.price.to_f64(),
                 quantity: trade.quantity.to_f64(),
-                side: format!("{:?}", trade.side),
+                side: format!("{:?}", trade.taker_side),
                 timestamp: trade.timestamp,
             })
             .collect()
@@ -165,14 +139,17 @@ async fn main() {
     // 初始化日志
     tracing_subscriber::fmt::init();
 
-    // 从环境变量读取数据库配置
-    let db_url =
-        std::env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://root:password@localhost:3306/trading_db".to_string());
+    println!("🚀 Starting REST API server...");
+    println!("⚠️  Running in MOCK mode (no database connection)");
 
-    println!("📊 Connecting to database: {}", db_url);
+    // 从环境变量读取数据库配置
+    // let db_url =
+    //     std::env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://root:password@localhost:3306/trading_db".to_string());
+    //
+    // println!("📊 Connecting to database: {}", db_url);
 
     // 创建应用服务（单例，全局共享）
-    let order_service = Arc::new(OrderService::new(&db_url));
+    let order_service = Arc::new(OrderService::new());
 
     // 创建路由，注入服务依赖
     let app = Router::new()
@@ -265,13 +242,17 @@ async fn handle_cancel_order(
 }
 
 /// 创建 JSON 响应
-fn create_json_response(response: OrderResponse) -> impl IntoResponse {
+fn create_json_response(
+    response: OrderResponse,
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
 }
 
 /// 创建错误响应
-fn create_error_response(error_msg: &str) -> impl IntoResponse {
+fn create_error_response(
+    error_msg: &str,
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let response = OrderResponse {
         success: false,
         message: "Request failed".to_string(),

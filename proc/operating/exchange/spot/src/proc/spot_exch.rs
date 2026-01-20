@@ -13,12 +13,25 @@ use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob
 
 pub struct SpotOrderExchBehaviorImpl {
     /// 余额仓储（依赖注入）
-    balance_repo: MySqlDbRepo<Balance>,
-    trade_repo: MySqlDbRepo<SpotTrade>,
-    order_repo: MySqlDbRepo<SpotOrder>,
-    lob_repo: StandaloneLobRepo<SpotOrder>,
+    pub balance_repo: MySqlDbRepo<Balance>,
+    pub trade_repo: MySqlDbRepo<SpotTrade>,
+    pub order_repo: MySqlDbRepo<SpotOrder>,
+    pub lob_repo: StandaloneLobRepo<SpotOrder>,
     /// ID生成器（节点ID为0）
-    id_generator: IdGenerator,
+    pub id_generator: IdGenerator,
+}
+
+impl SpotOrderExchBehaviorImpl {
+    /// 创建新的 SpotOrderExchBehaviorImpl 实例
+    pub fn new(
+        balance_repo: MySqlDbRepo<Balance>,
+        trade_repo: MySqlDbRepo<SpotTrade>,
+        order_repo: MySqlDbRepo<SpotOrder>,
+        lob_repo: StandaloneLobRepo<SpotOrder>,
+        id_generator: IdGenerator,
+    ) -> Self {
+        Self { balance_repo, trade_repo, order_repo, lob_repo, id_generator }
+    }
 }
 
 impl SpotOrderExchBehaviorImpl {
@@ -27,17 +40,17 @@ impl SpotOrderExchBehaviorImpl {
         self.id_generator.next_id() as u64
     }
 
-    pub(crate) fn handle_cancel_order(&self, p0: CancelOrder) -> IdemSpotResult {
+    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> IdemSpotResult {
         todo!()
     }
-    pub(crate) fn handle_market_order(&self, p0: MarketOrder) -> IdemSpotResult {
+
+    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> IdemSpotResult {
         //todo 风控检查
         //todo 匹配
-
         todo!()
     }
 
-    pub(crate) fn handle_cancel_all_orders(&self, p0: CancelAllOrders) -> IdemSpotResult {
+    pub(crate) fn handle_cancel_all_orders(&self, _p0: CancelAllOrders) -> IdemSpotResult {
         todo!()
     }
 }

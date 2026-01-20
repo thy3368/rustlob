@@ -8,15 +8,12 @@
 //! 幂等性设计：
 //! - 所有命令通过 Command<C> 包装，携带 nonce 实现幂等
 
-
-
-
 // ============================================================================
 // 幂等性包装 (Idempotent Command)
 // ============================================================================
 
-use base_types::{AccountId, OrderId, Price, Quantity, Side, TradingPair, UserId};
 use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce, TraderId};
+use base_types::{AccountId, OrderId, Price, Quantity, Side, TradingPair, UserId};
 
 /// Nonce 类型 - 客户端生成的唯一标识
 pub type Nonce = u64;
@@ -394,10 +391,7 @@ fn default_command_id() -> String {
 
 #[cfg(feature = "serde")]
 fn default_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 #[derive(Debug, Clone)]
@@ -464,28 +458,50 @@ pub enum SpotCmdAny {
     CancelAllOrders(CancelAllOrders),
 }
 
+#[derive(Clone, Debug)]
+pub struct LimitOrderResult {
+    order_id: OrderId,
+    status: OrderStatus,
+    filled_quantity: Quantity,
+    remaining_quantity: Quantity,
+    trades: Vec<SpotTrade>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MarketOrderResult {
+    status: OrderStatus,
+    filled_quantity: Quantity,
+    trades: Vec<SpotTrade>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CancelOrderResult {
+    order_id: OrderId,
+    status: OrderStatus,
+}
+
+#[derive(Clone, Debug)]
+pub struct CancelAllOrdersResult {
+    cancelled_count: usize,
+    order_ids: Vec<OrderId>,
+}
+
 /// 现货命令执行结果
 ///
 /// 只包含成功情况，错误通过 CommandError 返回
 #[derive(Debug, Clone)]
 pub enum SpotCmdResult {
     /// 限价单结果
-    LimitOrder {
-        order_id: OrderId,
-        status: OrderStatus,
-        filled_quantity: Quantity,
-        remaining_quantity: Quantity,
-        trades: Vec<SpotTrade>,
-    },
+    LimitOrder(LimitOrderResult),
 
     /// 市价单结果
-    MarketOrder { status: OrderStatus, filled_quantity: Quantity, trades: Vec<SpotTrade> },
+    MarketOrder(MarketOrderResult),
 
     /// 取消订单结果
-    CancelOrder { order_id: OrderId, status: OrderStatus },
+    CancelOrder(CancelOrderResult),
 
     /// 批量取消订单结果
-    CancelAllOrders { cancelled_count: usize, order_ids: Vec<OrderId> },
+    CancelAllOrders(CancelAllOrdersResult),
 }
 
 // ============================================================================

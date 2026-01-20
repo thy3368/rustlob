@@ -1,5 +1,5 @@
 [package]
-name = "spot_proc"
+name = "spot_behavior"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

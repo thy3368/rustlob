@@ -1,5 +1,5 @@
 [package]
-name = "prep_proc"
+name = "prep_behavior"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
