@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+serde = ["base_types/serde", "dep:serde", "dep:uuid"]
+
 [dependencies]
 
 # Clean Architecture 依赖
@@ -31,3 +35,8 @@ log = "0.4"
 async-trait = "0.1.89"
 tokio = "1.48.0"
 once_cell = "1.21.3"
+serde = { version = "1.0", features = ["derive"], optional = true }
+uuid = { version = "1.0", features = ["v4"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

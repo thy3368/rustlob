@@ -40,3 +40,9 @@ crossbeam = "0.8"
 # 性能监控
 metrics = "0.21"
 metrics-exporter-prometheus = "0.13"
+
+# Spot 处理依赖
+spot_proc = { path = "../../proc/operating/exchange/spot" }
+base_types = { path = "../../lib/common/base_types" }
+
+#//todo 依赖common/basetype

@@ -91,6 +91,7 @@
       <excludeFolder url="file://$MODULE_DIR$/lib/lob/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/target" />
+      <excludeFolder url="file://$MODULE_DIR$/app/websocket_sockudo/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

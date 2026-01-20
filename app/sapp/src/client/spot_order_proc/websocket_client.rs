@@ -1,8 +1,10 @@
-use lob::lob::{IdempotentSpotCmd, IdempotentSpotResult, SpotOrderExgProc};
+use spot_proc::proc::behavior::trading_spot_order_proc::{IdemSpotResult, SpotCmdAny, SpotOrderExchProc};
 
 // 实现websocket的client
 pub struct WebSocketClient {}
 
-impl SpotOrderExgProc for WebSocketClient {
-    fn handle(&mut self, _command: IdempotentSpotCmd) -> IdempotentSpotResult { todo!() }
+impl SpotOrderExchProc for WebSocketClient {
+    fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
+        todo!()
+    }
 }

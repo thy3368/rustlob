@@ -365,23 +365,45 @@ pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMak
 // ============================================================================
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CMetadata {
     /// 命令唯一ID（用于幂等性和追踪）
+    #[cfg_attr(feature = "serde", serde(default = "default_command_id"))]
     pub command_id: String,
     /// 命令创建时间戳（Unix 毫秒）
+    #[cfg_attr(feature = "serde", serde(default = "default_timestamp"))]
     pub timestamp: u64,
     /// 关联ID（用于分布式追踪）
+    #[cfg_attr(feature = "serde", serde(default))]
     pub correlation_id: Option<String>,
     /// 因果ID（用于事件溯源）
+    #[cfg_attr(feature = "serde", serde(default))]
     pub causation_id: Option<String>,
     /// 用户/系统标识
+    #[cfg_attr(feature = "serde", serde(default))]
     pub actor: Option<String>,
     /// 自定义属性
+    #[cfg_attr(feature = "serde", serde(default))]
     pub attributes: Vec<(String, String)>,
 }
 
+#[cfg(feature = "serde")]
+fn default_command_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+#[cfg(feature = "serde")]
+fn default_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrder {
+    #[cfg_attr(feature = "serde", serde(default))]
     pub metadata: CMetadata,
     pub trader: TraderId,
     pub account_id: AccountId,
@@ -394,7 +416,9 @@ pub struct LimitOrder {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarketOrder {
+    #[cfg_attr(feature = "serde", serde(default))]
     pub metadata: CMetadata,
 
     pub trader: TraderId,
@@ -409,7 +433,9 @@ pub struct MarketOrder {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CancelOrder {
+    #[cfg_attr(feature = "serde", serde(default))]
     pub metadata: CMetadata,
     pub order_id: OrderId,
 }

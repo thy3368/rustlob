@@ -274,6 +274,7 @@ dependencies = [
  "decimal",
  "diff",
  "entity_derive",
+ "serde",
 ]
 
 [[package]]
@@ -2927,13 +2928,16 @@ name = "rest_axum"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base_types",
  "sbe",
  "serde",
  "serde_json",
  "simd-json",
+ "spot_proc",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -3049,6 +3053,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "axum-extra",
+ "base_types",
  "chrono",
  "crossbeam",
  "dashmap 5.5.3",
@@ -3061,6 +3066,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "serde",
  "serde_json",
+ "spot_proc",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "tower 0.4.13",
@@ -3359,7 +3365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
-name = "spot_market_data_proc"
+name = "spot_market_data"
 version = "0.1.0"
 dependencies = [
  "base_types",
@@ -3380,7 +3386,9 @@ dependencies = [
  "lob_repo",
  "log",
  "once_cell",
+ "serde",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4047,6 +4055,7 @@ version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
+ "getrandom 0.3.4",
  "js-sys",
  "wasm-bindgen",
 ]

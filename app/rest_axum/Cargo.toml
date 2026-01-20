@@ -14,3 +14,8 @@ simd-json = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sbe = { path = "../../lib/common/sbe" }
+uuid = { version = "1.0", features = ["v4"] }
+
+# Spot 订单处理依赖
+spot_proc = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
+base_types = { path = "../../lib/common/base_types", features = ["serde"] }
