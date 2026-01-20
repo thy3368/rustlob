@@ -194,7 +194,7 @@ impl From<CommonError> for AlgoCmdError {
 
 /// 条件订单命令错误
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConditionalCmdError {
+pub enum CondCmdError {
     /// 通用错误
     Common(CommonError),
     /// 止损价格非法
@@ -209,7 +209,7 @@ pub enum ConditionalCmdError {
     ConflictingOcoOrders { reason: &'static str },
 }
 
-impl std::fmt::Display for ConditionalCmdError {
+impl std::fmt::Display for CondCmdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
@@ -232,9 +232,9 @@ impl std::fmt::Display for ConditionalCmdError {
     }
 }
 
-impl std::error::Error for ConditionalCmdError {}
+impl std::error::Error for CondCmdError {}
 
-impl From<CommonError> for ConditionalCmdError {
+impl From<CommonError> for CondCmdError {
     fn from(e: CommonError) -> Self {
         Self::Common(e)
     }
@@ -346,10 +346,10 @@ impl<T> CmdResp<T> {
 }
 
 /// 类型别名 - 各类幂等命令
-pub type IdempotentSpotCmd = Cmd<SpotCmdAny>;
-pub type IdempotentAlgoCmd = Cmd<AlgoCmdAny>;
-pub type IdempotentConditionalCmd = Cmd<ConditionalCmdAny>;
-pub type IdempotentMarketMakerCmd = Cmd<MarketMakerCmdAny>;
+pub type IdemSpotCmd = Cmd<SpotCmdAny>;
+pub type IdemAlgoCmd = Cmd<AlgoCmdAny>;
+pub type IdemCondCmd = Cmd<ConditionalCmdAny>;
+pub type IdemMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 
 /// 类型别名 - 各类命令结果
 ///
@@ -357,7 +357,7 @@ pub type IdempotentMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 /// 每个命令类型使用自己的错误类型，提供类型安全
 pub type IdemSpotResult = Result<CmdResp<SpotCmdResult>, SpotCmdError>;
 pub type IdemAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
-pub type IdemConditionalResult = Result<CmdResp<ConditionalCmdResult>, ConditionalCmdError>;
+pub type IdemCondResult = Result<CmdResp<CondCmdResult>, CondCmdError>;
 pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
 
 // ============================================================================
@@ -527,7 +527,7 @@ pub enum AlgoCmdResult {
 
 /// 算法订单处理器
 pub trait AlgoOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentAlgoCmd) -> IdemAlgoResult;
+    fn handle(&mut self, cmd: IdemAlgoCmd) -> IdemAlgoResult;
 }
 
 // ============================================================================
@@ -615,7 +615,7 @@ pub enum ConditionalCmdAny {
 
 /// 条件命令执行结果
 #[derive(Debug, Clone)]
-pub enum ConditionalCmdResult {
+pub enum CondCmdResult {
     // ========== 止损订单结果 ==========
     StopMarket {
         order_id: OrderId,
@@ -646,7 +646,7 @@ pub enum ConditionalCmdResult {
     // ========== 组合订单结果 ==========
     // 注意：FOK、IOC、GTD 结果通过 SpotCommandResult::LimitOrder 返回
     Oco {
-        executed_order: Box<ConditionalCmdResult>,
+        executed_order: Box<CondCmdResult>,
         cancelled_order_id: Option<OrderId>,
     },
 
@@ -690,7 +690,7 @@ pub enum ConditionalCmdResult {
 
 /// 条件订单处理器
 pub trait ConditionalOrderProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentConditionalCmd) -> IdemConditionalResult;
+    fn handle(&mut self, cmd: IdemCondCmd) -> IdemCondResult;
 }
 
 // ============================================================================
@@ -719,7 +719,7 @@ pub enum MarketMakerCmdResult {
 
 /// 做市商处理器
 pub trait MarketMakerProc: Send + Sync {
-    fn handle(&mut self, cmd: IdempotentMarketMakerCmd) -> IdemMarketMakerResult;
+    fn handle(&mut self, cmd: IdemMarketMakerCmd) -> IdemMarketMakerResult;
 }
 
 // ============================================================================

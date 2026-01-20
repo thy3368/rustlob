@@ -1,8 +1,9 @@
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::lob::lob::LobOrder;
 use lob_repo::{
     adapter::local_lob_impl::LocalLob,
-    core::symbol_lob_repo::{LobOrder, SymbolLob}
 };
+use lob_repo::core::symbol_lob_repo::SymbolLob;
 
 // 创建模拟订单用于测试
 #[derive(Debug, Clone, PartialEq, entity_derive::Entity)]

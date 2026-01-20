@@ -6,15 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-#lob = { path = "../../../../lib/core/exchange/lob" }
 base_types = { path = "../../../../lib/common/base_types" }
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 
-[[bench]]
-name = "orderbook_delta_allocation"
-harness = false
-
-[[bench]]
-name = "orderdelta_optimized"
-harness = false

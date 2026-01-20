@@ -1,5 +1,5 @@
-pub mod spot_exg;
+pub mod spot_exch;
 
-pub mod spot_cond_exg;
+pub mod spot_cond_exch;
 
-pub mod spot_algo_exg;
+pub mod spot_algo_exch;
