@@ -900,7 +900,7 @@ impl QueryIncrementalDataBuilder {
 ///
 /// 包含查询到的增量事件列表和分页信息
 #[derive(Debug, Clone)]
-pub struct IncrementalDataResult {
+pub struct IncrementalDataRes {
     /// 交易对ID
     pub symbol_id: SymbolId,
     /// 增量事件列表
@@ -913,7 +913,7 @@ pub struct IncrementalDataResult {
     pub has_more: bool
 }
 
-impl IncrementalDataResult {
+impl IncrementalDataRes {
     /// 创建增量数据查询结果
     pub fn new(
         symbol_id: SymbolId, deltas: Vec<MarketDataDelta>, from_sequence: SequenceNumber, to_sequence: SequenceNumber,
@@ -1057,7 +1057,7 @@ pub trait MarketDataQueryProc {
     /// 处理增量数据查询
     fn query_incremental_data(
         &self, query: QueryIncrementalData
-    ) -> Result<IncrementalDataResult, MarketDataQueryError>;
+    ) -> Result<IncrementalDataRes, MarketDataQueryError>;
 }
 
 

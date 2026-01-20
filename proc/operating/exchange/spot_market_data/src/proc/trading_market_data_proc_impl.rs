@@ -104,7 +104,7 @@ where
     /// 处理增量数据查询
     fn query_incremental_data(
         &self, query: QueryIncrementalData
-    ) -> Result<IncrementalDataResult, MarketDataQueryError> {
+    ) -> Result<IncrementalDataRes, MarketDataQueryError> {
         // 验证序列号范围
         if query.from_sequence >= query.to_sequence {
             return Err(MarketDataQueryError::InvalidParameter {
@@ -122,7 +122,7 @@ where
 
         let has_more = query.to_sequence < latest_sequence;
 
-        Ok(IncrementalDataResult {
+        Ok(IncrementalDataRes {
             symbol_id: query.symbol_id,
             deltas,
             from_sequence: query.from_sequence,
