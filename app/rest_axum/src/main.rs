@@ -16,7 +16,7 @@ use tracing_subscriber;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
     CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotOrderTradeBehavior,
 };
-use spot_behavior::proc::trade::spot_exch::SpotOrderExchBehaviorImpl;
+use spot_behavior::proc::trade::spot_trade::SpotOrderExchBehaviorImpl;
 
 // 基础设施依赖
 use base_types::account::balance::Balance;

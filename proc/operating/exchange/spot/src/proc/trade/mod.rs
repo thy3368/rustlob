@@ -1,3 +1,3 @@
-pub mod spot_exch;
-pub mod spot_cond_exch;
-pub mod spot_algo_exch;
+pub mod spot_trade;
+pub mod spot_cond_trade;
+pub mod spot_algo_trade;
