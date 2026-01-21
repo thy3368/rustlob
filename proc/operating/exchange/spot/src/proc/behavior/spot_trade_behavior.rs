@@ -73,6 +73,30 @@ pub enum CommonError {
     Internal { message: String },
 }
 
+impl CommonError {
+    pub fn Runtime(p0: String) -> CommonError {
+        todo!()
+    }
+}
+
+impl CommonError {
+    pub fn NotImplemented(p0: String) -> CommonError {
+        todo!()
+    }
+}
+
+impl CommonError {
+    pub fn Serialization(p0: String) -> CommonError {
+        todo!()
+    }
+}
+
+impl CommonError {
+    pub fn Network(p0: String) -> CommonError {
+        todo!()
+    }
+}
+
 impl std::fmt::Display for CommonError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -437,6 +461,8 @@ pub struct CancelOrder {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelAllOrders {
     pub metadata: CMetadata,
 
@@ -968,6 +994,6 @@ pub trait OrderQueryProc: Send + Sync {
 ///
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
-pub trait SpotOrderTradeBehavior: Send + Sync {
+pub trait SpotTradeBehavior: Send + Sync {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult;
 }

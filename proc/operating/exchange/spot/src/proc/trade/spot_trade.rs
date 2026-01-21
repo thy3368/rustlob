@@ -1,6 +1,6 @@
 use crate::proc::behavior::spot_trade_behavior::{
     CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotOrderTradeBehavior,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotTradeBehavior,
 };
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
@@ -177,7 +177,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotOrderTradeBehavior for SpotOrderExchBehaviorImpl {
+impl SpotTradeBehavior for SpotOrderExchBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => {

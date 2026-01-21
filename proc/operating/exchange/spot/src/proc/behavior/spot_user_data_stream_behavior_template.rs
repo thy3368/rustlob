@@ -27,47 +27,7 @@ pub struct AccountCmd {
 
 /// User Data 响应枚举
 #[derive(Debug, Clone)]
-pub enum SpotUserDataRes {
-    /// 账户信息响应
-    Account(AccountInfo),
-}
-
-/// 账户信息
-#[derive(Debug, Clone)]
-pub struct AccountInfo {
-    /// Maker 佣金
-    pub maker_commission: i32,
-    /// Taker 佣金
-    pub taker_commission: i32,
-    /// 买方佣金
-    pub buyer_commission: i32,
-    /// 卖方佣金
-    pub seller_commission: i32,
-    /// 佣金费率
-    pub commission_rates: CommissionRates,
-    /// 可交易
-    pub can_trade: bool,
-    /// 可提现
-    pub can_withdraw: bool,
-    /// 可充值
-    pub can_deposit: bool,
-    /// 经纪账户
-    pub brokered: bool,
-    /// 需要自成交防护
-    pub require_self_trade_prevention: bool,
-    /// 阻止 SOR
-    pub prevent_sor: bool,
-    /// 更新时间
-    pub update_time: i64,
-    /// 账户类型
-    pub account_type: String,
-    /// 余额列表
-    pub balances: Vec<Balance>,
-    /// 权限列表
-    pub permissions: Vec<String>,
-    /// 用户ID
-    pub uid: i64,
-}
+pub enum SpotUserDataRes {}
 
 /// User Data 行为接口
 pub trait SpotUserDataStreamBehavior: Send + Sync {

@@ -1,6 +1,5 @@
 mod client;
 mod models;
-mod server;
 
 use std::env;
 

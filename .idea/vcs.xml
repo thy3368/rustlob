@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/design/other/binance-spot-api-docs" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/design/other/binance_derivatives_api" vcs="Git" />
   </component>
 </project>

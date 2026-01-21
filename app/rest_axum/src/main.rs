@@ -1,5 +1,5 @@
-pub mod trade_gw;
 pub mod md_gw;
+pub mod trade_gw;
 pub mod ud_gw;
 
 use axum::{
@@ -14,7 +14,7 @@ use tracing_subscriber;
 
 // Spot 订单处理相关导入
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotOrderTradeBehavior,
+    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotTradeBehavior,
 };
 use spot_behavior::proc::trade::spot_trade::SpotOrderExchBehaviorImpl;
 
@@ -33,6 +33,8 @@ pub struct OrderService {
 
 impl OrderService {
     /// 创建新的订单服务实例（使用 Mock 仓储）
+    #[hotpath::measure]
+
     pub fn new() -> Self {
         // 1. 初始化各个仓储（使用 Mock 版本）
         let balance_repo = MySqlDbRepo::<Balance>::new_mock();
@@ -94,6 +96,7 @@ impl OrderService {
 }
 
 #[tokio::main]
+#[hotpath::main]
 async fn main() {
     // 初始化日志
     tracing_subscriber::fmt::init();
@@ -149,8 +152,8 @@ struct OrderResponse {
     error: Option<String>,
 }
 
-
 /// 处理限价单 - 使用服务层
+#[hotpath::measure]
 async fn handle_limit_order(
     State(service): State<Arc<OrderService>>, Json(limit_order): Json<LimitOrder>,
 ) -> impl IntoResponse {
@@ -163,6 +166,8 @@ async fn handle_limit_order(
 }
 
 /// 处理市价单 - 使用服务层
+#[hotpath::measure]
+
 async fn handle_market_order(
     State(service): State<Arc<OrderService>>, Json(market_order): Json<MarketOrder>,
 ) -> impl IntoResponse {
@@ -175,6 +180,8 @@ async fn handle_market_order(
 }
 
 /// 处理取消订单 - 使用服务层
+#[hotpath::measure]
+
 async fn handle_cancel_order(
     State(service): State<Arc<OrderService>>, Json(cancel_order): Json<CancelOrder>,
 ) -> impl IntoResponse {
@@ -187,6 +194,8 @@ async fn handle_cancel_order(
 }
 
 /// 创建 JSON 响应
+#[hotpath::measure]
+
 fn create_json_response(
     response: CmdResp<SpotCmdRes>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
@@ -195,6 +204,8 @@ fn create_json_response(
 }
 
 /// 创建错误响应
+#[hotpath::measure]
+
 fn create_error_response(
     error_msg: &str,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
