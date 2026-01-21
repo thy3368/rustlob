@@ -1,5 +1,7 @@
 pub mod md_gw;
 pub mod ud_gw;
+
+pub mod trade_gw;
 // User Data Streams
 use axum::{
     extract::WebSocketUpgrade,
