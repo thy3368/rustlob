@@ -1,13 +1,13 @@
+use crate::proc::behavior::spot_trade_behavior::{
+    CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotOrderTradeBehavior,
+};
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use crate::proc::behavior::spot_trade_behavior::{
-    CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdRes, SpotOrderTradeBehavior,
-};
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
@@ -24,11 +24,8 @@ pub struct SpotOrderExchBehaviorImpl {
 impl SpotOrderExchBehaviorImpl {
     /// 创建新的 SpotOrderExchBehaviorImpl 实例
     pub fn new(
-        balance_repo: MySqlDbRepo<Balance>,
-        trade_repo: MySqlDbRepo<SpotTrade>,
-        order_repo: MySqlDbRepo<SpotOrder>,
-        lob_repo: StandaloneLobRepo<SpotOrder>,
-        id_generator: IdGenerator,
+        balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
+        lob_repo: StandaloneLobRepo<SpotOrder>, id_generator: IdGenerator,
     ) -> Self {
         Self { balance_repo, trade_repo, order_repo, lob_repo, id_generator }
     }
@@ -40,23 +37,26 @@ impl SpotOrderExchBehaviorImpl {
         self.id_generator.next_id() as u64
     }
 
-    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> IdemSpotResult {
+    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> Result<CmdResp<CancelOrderRes>, SpotCmdError> {
         todo!()
     }
 
-    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> IdemSpotResult {
+    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> Result<CmdResp<MarketOrderRes>, SpotCmdError> {
         //todo 风控检查
         //todo 匹配
         todo!()
     }
 
-    pub(crate) fn handle_cancel_all_orders(&self, _p0: CancelAllOrders) -> IdemSpotResult {
+    pub(crate) fn handle_cancel_all_orders(
+        &self, _p0: CancelAllOrders,
+    ) -> Result<CmdResp<CancelAllOrdersRes>, SpotCmdError> {
         todo!()
     }
 }
 
 impl SpotOrderExchBehaviorImpl {
-    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
+    // Result<CmdResp<SpotCmdRes>, SpotCmdError>;
+    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<LimitOrderRes>, SpotCmdError> {
         // ========================================================================
         // 1. 命令验证 风控检查 - 余额检查并冻结保证金
         // ========================================================================
@@ -180,10 +180,19 @@ impl SpotOrderExchBehaviorImpl {
 impl SpotOrderTradeBehavior for SpotOrderExchBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
-            SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),
-            SpotCmdAny::MarketOrder(market_order) => self.handle_market_order(market_order),
-            SpotCmdAny::CancelOrder(cancel_order) => self.handle_cancel_order(cancel_order),
-            SpotCmdAny::CancelAllOrders(cancel_all_orders) => self.handle_cancel_all_orders(cancel_all_orders),
+            SpotCmdAny::LimitOrder(limit_order) => {
+                // 将 LimitOrderRes 包装到 SpotCmdRes::LimitOrder 中
+                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotCmdRes::LimitOrder))
+            }
+            SpotCmdAny::MarketOrder(market_order) => {
+                self.handle_market_order(market_order).map(|resp| resp.map(SpotCmdRes::MarketOrder))
+            }
+            SpotCmdAny::CancelOrder(cancel_order) => {
+                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotCmdRes::CancelOrder))
+            }
+            SpotCmdAny::CancelAllOrders(cancel_all_orders) => {
+                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotCmdRes::CancelAllOrders))
+            }
         }
     }
 }
