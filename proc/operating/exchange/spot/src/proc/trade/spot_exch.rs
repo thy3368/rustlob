@@ -4,9 +4,9 @@ use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use crate::proc::behavior::trading_spot_order_behavior::{
+use crate::proc::behavior::spot_trade_behavior::{
     CancelAllOrders, CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdRes, SpotOrderExchBehavior,
+    SpotCmdError, SpotCmdRes, SpotOrderTradeBehavior,
 };
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
@@ -177,7 +177,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotOrderExchBehavior for SpotOrderExchBehaviorImpl {
+impl SpotOrderTradeBehavior for SpotOrderExchBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => self.handle_limit_order(limit_order),

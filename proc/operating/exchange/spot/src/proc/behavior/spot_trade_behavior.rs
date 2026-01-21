@@ -968,6 +968,6 @@ pub trait OrderQueryProc: Send + Sync {
 ///
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
-pub trait SpotOrderExchBehavior: Send + Sync {
+pub trait SpotOrderTradeBehavior: Send + Sync {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult;
 }

@@ -13,10 +13,10 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber;
 
 // Spot 订单处理相关导入
-use spot_behavior::proc::behavior::trading_spot_order_behavior::{
-    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotOrderExchBehavior,
+use spot_behavior::proc::behavior::spot_trade_behavior::{
+    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotOrderTradeBehavior,
 };
-use spot_behavior::proc::spot_exch::SpotOrderExchBehaviorImpl;
+use spot_behavior::proc::trade::spot_exch::SpotOrderExchBehaviorImpl;
 
 // 基础设施依赖
 use base_types::account::balance::Balance;
