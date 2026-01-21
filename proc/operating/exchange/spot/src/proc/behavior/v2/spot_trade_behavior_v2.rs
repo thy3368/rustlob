@@ -1396,7 +1396,7 @@ pub struct Allocation {
 // ==================== 行为接口定义 ====================
 
 /// Spot Trading 行为接口
-pub trait SpotTradeBehavior: Send + Sync {
+pub trait SpotTradeBehaviorV2: Send + Sync {
     /// 处理 Spot Trading 命令
     fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeRes>, SpotCmdError>;
 }

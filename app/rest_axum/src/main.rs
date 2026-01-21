@@ -16,7 +16,7 @@ use tracing_subscriber;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
     CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotTradeBehavior,
 };
-use spot_behavior::proc::trade::spot_trade::SpotOrderExchBehaviorImpl;
+use spot_behavior::proc::trade::spot_trade::SpotTradeBehaviorImpl;
 
 // 基础设施依赖
 use base_types::account::balance::Balance;
@@ -28,7 +28,7 @@ use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
 /// 应用服务 - 封装订单处理器
 pub struct OrderService {
     //todo SpotOrderExchBehaviorImpl是无状态的，是不是可以不用mutex
-    processor: Arc<Mutex<SpotOrderExchBehaviorImpl>>,
+    processor: Arc<Mutex<SpotTradeBehaviorImpl>>,
 }
 
 impl OrderService {
@@ -48,12 +48,13 @@ impl OrderService {
         let id_generator = IdGenerator::new(0);
 
         // 4. 创建处理器实例
-        let processor = SpotOrderExchBehaviorImpl::new(balance_repo, trade_repo, order_repo, lob_repo, id_generator);
+        let processor = SpotTradeBehaviorImpl::new(balance_repo, trade_repo, order_repo, lob_repo, id_generator);
 
         Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
     /// 处理限价单命令
+    #[hotpath::measure]
     pub async fn handle_limit_order(&self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, String> {
         println!("🔑 命令ID: {}", limit_order.metadata.command_id);
         println!("⏰ 时间戳: {}", limit_order.metadata.timestamp);
@@ -69,6 +70,8 @@ impl OrderService {
     }
 
     /// 处理市价单命令
+    #[hotpath::measure]
+
     pub async fn handle_market_order(&self, market_order: MarketOrder) -> Result<CmdResp<SpotCmdRes>, String> {
         println!("🔑 命令ID: {}", market_order.metadata.command_id);
 

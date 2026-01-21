@@ -11,7 +11,7 @@ use id_generator::generator::IdGenerator;
 
 use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
-pub struct SpotOrderExchBehaviorImpl {
+pub struct SpotTradeBehaviorImpl {
     /// 余额仓储（依赖注入）
     pub balance_repo: MySqlDbRepo<Balance>,
     pub trade_repo: MySqlDbRepo<SpotTrade>,
@@ -21,7 +21,7 @@ pub struct SpotOrderExchBehaviorImpl {
     pub id_generator: IdGenerator,
 }
 
-impl SpotOrderExchBehaviorImpl {
+impl SpotTradeBehaviorImpl {
     /// 创建新的 SpotOrderExchBehaviorImpl 实例
     pub fn new(
         balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
@@ -31,7 +31,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotOrderExchBehaviorImpl {
+impl SpotTradeBehaviorImpl {
     /// 生成订单ID
     fn generate_order_id(&self) -> u64 {
         self.id_generator.next_id() as u64
@@ -54,7 +54,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotOrderExchBehaviorImpl {
+impl SpotTradeBehaviorImpl {
     // Result<CmdResp<SpotCmdRes>, SpotCmdError>;
     fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<LimitOrderRes>, SpotCmdError> {
         // ========================================================================
@@ -177,7 +177,7 @@ impl SpotOrderExchBehaviorImpl {
     }
 }
 
-impl SpotTradeBehavior for SpotOrderExchBehaviorImpl {
+impl SpotTradeBehavior for SpotTradeBehaviorImpl {
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => {

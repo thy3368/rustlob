@@ -657,7 +657,7 @@ pub enum AlgoCmdResult {
 }
 
 /// 算法订单处理器
-pub trait AlgoOrderProc: Send + Sync {
+pub trait AlgoTradeProc: Send + Sync {
     fn handle(&mut self, cmd: IdemAlgoCmd) -> IdemAlgoResult;
 }
 
@@ -820,7 +820,7 @@ pub enum CondCmdResult {
 }
 
 /// 条件订单处理器
-pub trait ConditionalOrderProc: Send + Sync {
+pub trait ConditionalTradeProc: Send + Sync {
     fn handle(&mut self, cmd: IdemCondCmd) -> IdemCondResult;
 }
 
