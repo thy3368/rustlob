@@ -1,6 +1,6 @@
 // 参考 ## Account Endpoints / Account information (USER_DATA) /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 user data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdError};
+use base_types::cqrs::cqrs_types::CMetadata;
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
