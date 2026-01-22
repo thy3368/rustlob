@@ -48,6 +48,7 @@ impl fmt::Display for OrderSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(align(8))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//todo 币安是怎么定义
 pub struct TraderId([u8; 8]);
 
 impl Default for TraderId {

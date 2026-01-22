@@ -13,9 +13,7 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber;
 
 // Spot 订单处理相关导入
-use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CancelOrder, CmdResp, LimitOrder, MarketOrder, SpotCmdAny, SpotCmdRes, SpotTradeBehavior,
-};
+use spot_behavior::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdAny, SpotCmdRes, SpotTradeBehavior};
 use spot_behavior::proc::trade::spot_trade::SpotTradeBehaviorImpl;
 
 // 基础设施依赖
@@ -24,8 +22,6 @@ use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use id_generator::generator::IdGenerator;
 use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
-
-
 
 /// 应用服务 - 封装订单处理器
 pub struct OrderService {
@@ -55,47 +51,19 @@ impl OrderService {
         Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
-    /// 处理限价单命令
+    /// 处理限价单 - 使用服务层
     #[hotpath::measure]
-    pub async fn handle_limit_order(&self, limit_order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, String> {
-        println!("🔑 命令ID: {}", limit_order.metadata.command_id);
-        println!("⏰ 时间戳: {}", limit_order.metadata.timestamp);
+    pub async fn handle_all(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotCmdRes>, String> {
+        println!("📋 收到限价单请求: {:?}", cmd);
 
-        let spot_cmd = SpotCmdAny::LimitOrder(limit_order);
+        // println!("🔑 命令ID: {}", limit_order.metadata.command_id);
+        // println!("⏰ 时间戳: {}", limit_order.metadata.timestamp);
 
         // 调用真实的处理器，直接返回领域层结果
         self.processor
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?
-            .handle(spot_cmd)
-            .map_err(|e| format!("{:?}", e))
-    }
-
-    /// 处理市价单命令
-    #[hotpath::measure]
-
-    pub async fn handle_market_order(&self, market_order: MarketOrder) -> Result<CmdResp<SpotCmdRes>, String> {
-        println!("🔑 命令ID: {}", market_order.metadata.command_id);
-
-        let spot_cmd = SpotCmdAny::MarketOrder(market_order);
-
-        self.processor
-            .lock()
-            .map_err(|e| format!("Failed to acquire lock: {}", e))?
-            .handle(spot_cmd)
-            .map_err(|e| format!("{:?}", e))
-    }
-
-    /// 处理取消订单命令
-    pub async fn handle_cancel_order(&self, cancel_order: CancelOrder) -> Result<CmdResp<SpotCmdRes>, String> {
-        println!("🔑 命令ID: {}", cancel_order.metadata.command_id);
-
-        let spot_cmd = SpotCmdAny::CancelOrder(cancel_order);
-
-        self.processor
-            .lock()
-            .map_err(|e| format!("Failed to acquire lock: {}", e))?
-            .handle(spot_cmd)
+            .handle(cmd)
             .map_err(|e| format!("{:?}", e))
     }
 }
@@ -121,9 +89,7 @@ async fn main() {
     // 创建路由，注入服务依赖
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/spot/order/limit", post(handle_limit_order))
-        .route("/api/spot/order/market", post(handle_market_order))
-        .route("/api/spot/order/cancel", post(handle_cancel_order))
+        .route("/api/spot/order/", post(handle))
         .with_state(order_service);
 
     // 启动服务器
@@ -131,9 +97,7 @@ async fn main() {
 
     println!("🚀 Server started at http://localhost:3000");
     println!("📊 Health check: GET /health");
-    println!("💹 Spot Limit Order: POST /api/spot/order/limit (JSON)");
-    println!("💹 Spot Market Order: POST /api/spot/order/market (JSON)");
-    println!("💹 Spot Cancel Order: POST /api/spot/order/cancel (JSON)");
+    println!("💹 Spot trade: POST /api/spot/order/ (JSON)");
 
     axum::serve(listener, app).await.expect("Server failed to start");
 }
@@ -157,42 +121,11 @@ struct OrderResponse {
     error: Option<String>,
 }
 
-/// 处理限价单 - 使用服务层
 #[hotpath::measure]
-async fn handle_limit_order(
-    State(service): State<Arc<OrderService>>, Json(limit_order): Json<LimitOrder>,
-) -> impl IntoResponse {
-    println!("📋 收到限价单请求: {:?}", limit_order);
+async fn handle(State(service): State<Arc<OrderService>>, Json(cmd): Json<SpotCmdAny>) -> impl IntoResponse {
+    println!("📋 收到限价单请求: {:?}", cmd);
 
-    match service.handle_limit_order(limit_order).await {
-        Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(&err),
-    }
-}
-
-/// 处理市价单 - 使用服务层
-#[hotpath::measure]
-
-async fn handle_market_order(
-    State(service): State<Arc<OrderService>>, Json(market_order): Json<MarketOrder>,
-) -> impl IntoResponse {
-    println!("📋 收到市价单请求: {:?}", market_order);
-
-    match service.handle_market_order(market_order).await {
-        Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(&err),
-    }
-}
-
-/// 处理取消订单 - 使用服务层
-#[hotpath::measure]
-
-async fn handle_cancel_order(
-    State(service): State<Arc<OrderService>>, Json(cancel_order): Json<CancelOrder>,
-) -> impl IntoResponse {
-    println!("📋 收到取消订单请求: {:?}", cancel_order);
-
-    match service.handle_cancel_order(cancel_order).await {
+    match service.handle_all(cmd).await {
         Ok(response) => create_json_response(response),
         Err(err) => create_error_response(&err),
     }

@@ -12,6 +12,8 @@ pub mod exchange;
 pub mod lob;
 pub mod instrument;
 
+pub mod cqrs;
+
 // Re-export all types
 pub use base_types::{
     AccountId, AssetId, OrderId, PositionId, Price, Quantity, Side, Timestamp, TradeId, TradingPair, UserId

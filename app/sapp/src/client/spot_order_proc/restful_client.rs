@@ -1,7 +1,6 @@
 use reqwest::Client;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CancelOrder, CmdResp, CommonError, IdemSpotResult, LimitOrder, MarketOrder, SpotCmdAny,
-    SpotCmdError, SpotCmdRes, SpotTradeBehavior,
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotTradeBehavior,
 };
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
@@ -41,62 +40,22 @@ impl RestfulClient {
 
     /// 发送限价单请求
     #[inline]
-    async fn post_limit_order(&self, order: LimitOrder) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
-        let url = format!("{}/api/spot/order/limit", self.base_url);
+    async fn post_cmd(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
+        let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
             .post(&url)
-            .json(&order)
+            .json(&cmd)
             .send()
             .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("HTTP request failed: {}", e)
-            }))?
+            .map_err(|e| {
+                SpotCmdError::Common(CommonError::Internal { message: format!("HTTP request failed: {}", e) })
+            })?
             .json::<CmdResp<SpotCmdRes>>()
             .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("Failed to parse response: {}", e)
-            }))
-    }
-
-    /// 发送市价单请求
-    #[inline]
-    async fn post_market_order(&self, order: MarketOrder) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
-        let url = format!("{}/api/spot/order/market", self.base_url);
-
-        self.client
-            .post(&url)
-            .json(&order)
-            .send()
-            .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("HTTP request failed: {}", e)
-            }))?
-            .json::<CmdResp<SpotCmdRes>>()
-            .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("Failed to parse response: {}", e)
-            }))
-    }
-
-    /// 发送取消订单请求
-    #[inline]
-    async fn post_cancel_order(&self, order: CancelOrder) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
-        let url = format!("{}/api/spot/order/cancel", self.base_url);
-
-        self.client
-            .post(&url)
-            .json(&order)
-            .send()
-            .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("HTTP request failed: {}", e)
-            }))?
-            .json::<CmdResp<SpotCmdRes>>()
-            .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("Failed to parse response: {}", e)
-            }))
+            .map_err(|e| {
+                SpotCmdError::Common(CommonError::Internal { message: format!("Failed to parse response: {}", e) })
+            })
     }
 }
 
@@ -108,23 +67,11 @@ impl SpotTradeBehavior for RestfulClient {
     /// 在高性能场景下，建议使用异步版本的 trait
     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
         // 使用 tokio runtime 执行异步调用
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal {
-                message: format!("Failed to create runtime: {}", e)
-            }))?;
+        let rt = tokio::runtime::Runtime::new().map_err(|e| {
+            SpotCmdError::Common(CommonError::Internal { message: format!("Failed to create runtime: {}", e) })
+        })?;
 
-        rt.block_on(async {
-            match cmd {
-                SpotCmdAny::LimitOrder(order) => self.post_limit_order(order).await,
-                SpotCmdAny::MarketOrder(order) => self.post_market_order(order).await,
-                SpotCmdAny::CancelOrder(order) => self.post_cancel_order(order).await,
-                SpotCmdAny::CancelAllOrders(_) => {
-                    Err(SpotCmdError::Common(CommonError::Internal {
-                        message: "CancelAllOrders is not yet supported".to_string()
-                    }))
-                }
-            }
-        })
+        rt.block_on(async { self.post_cmd(cmd).await })
     }
 }
 
