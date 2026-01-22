@@ -928,7 +928,7 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
 
 **Rust Trait 实现**：
 ```rust
-// proc/operating/exchange/prep/src/proc/trading_prep_order_proc_impl.rs
+// proc/operating/exchange/derivatives/src/proc/trading_prep_order_proc_impl.rs
 pub struct LocalMatchingEngine {
     order_book: Arc<OrderBook>,
     positions: Arc<RwLock<HashMap<(Symbol, PositionSide), PositionInfo>>>,

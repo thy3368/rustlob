@@ -37,7 +37,7 @@
 
 ```bash
 # 进入项目目录
-cd proc/operating/exchange/prep
+cd proc/operating/exchange/derivatives
 
 # 运行所有BDD测试
 cargo test --test bdd_normal_trading_flow -- --nocapture
@@ -348,7 +348,7 @@ cargo test --test file_name -- --nocapture
 
 ```bash
 # 1. 克隆或进入项目
-cd /path/to/proc/operating/exchange/prep
+cd /path/to/proc/operating/exchange/derivatives
 
 # 2. 运行示例测试
 cargo test --test bdd_normal_trading_flow -- --nocapture

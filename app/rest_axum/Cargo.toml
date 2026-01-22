@@ -7,7 +7,7 @@ license.workspace = true
 
 [dependencies]
 hotpath = "0.9"
-
+utoipa = "5"
 
 
 axum = "0.7"

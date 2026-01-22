@@ -41,7 +41,7 @@ rustlob/proc/operating/exchange/prep/
 ### 基本运行
 
 ```bash
-cd /Users/hongyaotang/src/rustlob/proc/operating/exchange/prep
+cd /Users/hongyaotang/src/rustlob/proc/operating/exchange/derivatives
 
 # 运行所有测试
 cargo test
@@ -309,7 +309,7 @@ bdd_tests:
   stage: test
   image: rust:latest
   script:
-    - cd proc/operating/exchange/prep
+    - cd proc/operating/exchange/derivatives
     - cargo test workflow_bdd -- --nocapture
   only:
     - main
@@ -404,7 +404,7 @@ error[E0433]: failed to resolve: use of undeclared crate or module `prep`
 **解决方案**:
 ```bash
 # 确保在正确的目录
-cd /Users/hongyaotang/src/rustlob/proc/operating/exchange/prep
+cd /Users/hongyaotang/src/rustlob/proc/operating/exchange/derivatives
 
 # 检查 Cargo.toml 依赖
 cat Cargo.toml

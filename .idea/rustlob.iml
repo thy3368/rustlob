@@ -29,8 +29,6 @@
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/account/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/base_types/src" isTestSource="false" />
@@ -41,7 +39,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/tests" isTestSource="true" />
@@ -83,6 +80,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />

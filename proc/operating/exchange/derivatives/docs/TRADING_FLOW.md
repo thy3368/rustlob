@@ -550,7 +550,7 @@ if distance < 5.0 {
 ### 正常交易流程测试
 ```bash
 # 运行正常交易流程BDD测试
-cd proc/operating/exchange/prep
+cd proc/operating/exchange/derivatives
 cargo test --test bdd_normal_trading_flow -- --nocapture
 
 # 测试场景:

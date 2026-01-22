@@ -47,7 +47,7 @@
 
 ```bash
 # 进入项目目录
-cd proc/operating/exchange/prep
+cd proc/operating/exchange/derivatives
 
 # 运行教程测试
 cargo test --test bdd_open_to_liquidation_tutorial -- --nocapture
