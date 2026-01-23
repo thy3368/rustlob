@@ -572,7 +572,7 @@ const USAGE_GUIDE: () = ();
 // ==================== User Data Stream 行为接口 ====================
 
 /// User Data Stream 行为接口
-pub trait SpotUserDataStreamBehavior: Send + Sync {
+pub trait SpotUserDataSSEBehavior: Send + Sync {
     /// 处理 User Data Stream 命令（REST API）
     fn handle(&mut self, cmd: SpotUserDataStreamCmd) -> Result<CmdResp<SpotUserDataStreamRes>, SpotCmdError>;
 

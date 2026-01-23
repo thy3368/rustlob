@@ -667,7 +667,7 @@ pub struct AccountInfo {
 }
 
 /// Market Data Stream 行为接口
-pub trait SpotMarketDataStreamBehavior: Send + Sync {
+pub trait SpotMarketDataSSEBehavior: Send + Sync {
     /// 处理订阅命令
     fn handle_subscription(
         &mut self, cmd: MarketDataSubscriptionCmd,

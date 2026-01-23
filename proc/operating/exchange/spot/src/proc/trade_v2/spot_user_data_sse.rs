@@ -1,11 +1,11 @@
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdError};
-use crate::proc::behavior::v2::spot_user_data_stream_behavior::{
-    SpotUserDataStreamBehavior, SpotUserDataStreamCmd, SpotUserDataStreamRes, UserDataStreamEvent,
+use crate::proc::behavior::v2::spot_user_data_sse_behavior::{
+    SpotUserDataSSEBehavior, SpotUserDataStreamCmd, SpotUserDataStreamRes, UserDataStreamEvent,
 };
 
 pub struct SpotUserDataStreamImpl {}
 
-impl SpotUserDataStreamBehavior for SpotUserDataStreamImpl {
+impl SpotUserDataSSEBehavior for SpotUserDataStreamImpl {
     fn handle(&mut self, cmd: SpotUserDataStreamCmd) -> Result<CmdResp<SpotUserDataStreamRes>, SpotCmdError> {
         match cmd {
             SpotUserDataStreamCmd::CreateListenKey(_) => {}

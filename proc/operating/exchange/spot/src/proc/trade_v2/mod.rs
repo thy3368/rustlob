@@ -3,5 +3,5 @@ pub mod spot_user_data;
 
 pub mod spot_market_data;
 
-pub mod spot_user_data_stream;
-pub mod spot_market_data_stream;
+pub mod spot_user_data_sse;
+pub mod spot_market_data_sse;

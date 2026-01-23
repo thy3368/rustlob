@@ -31,6 +31,7 @@ id_generator = { path = "../../lib/common/id_generator" }
 
 # 数据库驱动
 mysql = "24.0"
+chrono = "0.4.43"
 [features]
 hotpath = ["hotpath/hotpath"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]

@@ -1,11 +1,11 @@
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdError};
-use crate::proc::behavior::v2::spot_market_data_stream_behavior::{MarketDataSubscriptionCmd, SpotMarketDataStream, SpotMarketDataStreamBehavior, SubscriptionResponse};
+use crate::proc::behavior::v2::spot_market_data_sse_behavior::{MarketDataSubscriptionCmd, SpotMarketDataStream, SpotMarketDataSSEBehavior, SubscriptionResponse};
 
-pub struct SpotMarketDataStreamImpl {
+pub struct SpotMarketDataSSEImpl {
 
 }
 
-impl SpotMarketDataStreamBehavior for SpotMarketDataStreamImpl {
+impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
     fn handle_subscription(&mut self, cmd: MarketDataSubscriptionCmd) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError> {
      
         match cmd {

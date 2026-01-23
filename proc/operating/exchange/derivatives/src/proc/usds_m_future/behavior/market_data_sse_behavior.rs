@@ -806,7 +806,7 @@ pub enum UsdsMFutureMarketDataStreamCmdError {
 // ============================================================================
 
 /// USDS-M期货市场数据流行为接口
-pub trait UsdsMFutureMarketDataStreamBehavior: Send + Sync {
+pub trait UsdsMFutureMarketDataSSEBehavior: Send + Sync {
     /// 处理市场数据流命令
     fn handle(
         &mut self,
