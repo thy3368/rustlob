@@ -7,3 +7,4 @@ pub mod market_data_behavior;
 pub mod market_data_stream_behavior;
 
 pub mod trade_behavior;
+pub mod trade_stream_behavior;
