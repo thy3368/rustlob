@@ -1,38 +1,38 @@
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdError};
-use crate::proc::behavior::v2::spot_market_data_sse_behavior::{MarketDataSubscriptionCmd, SpotMarketDataStream, SpotMarketDataSSEBehavior, SubscriptionResponse};
+use crate::proc::behavior::v2::spot_market_data_sse_behavior::{MarketDataSubscriptionCmdAny, SpotMarketDataStreamAny, SpotMarketDataSSEBehavior, SubscriptionResponse};
 
 pub struct SpotMarketDataSSEImpl {
 
 }
 
 impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
-    fn handle_subscription(&mut self, cmd: MarketDataSubscriptionCmd) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError> {
+    fn handle_subscription(&mut self, cmd: MarketDataSubscriptionCmdAny) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError> {
      
         match cmd {
-            MarketDataSubscriptionCmd::Subscribe { .. } => {}
-            MarketDataSubscriptionCmd::Unsubscribe { .. } => {}
-            MarketDataSubscriptionCmd::ListSubscriptions { .. } => {}
-            MarketDataSubscriptionCmd::SetProperty { .. } => {}
-            MarketDataSubscriptionCmd::GetProperty { .. } => {}
+            MarketDataSubscriptionCmdAny::Subscribe { .. } => {}
+            MarketDataSubscriptionCmdAny::Unsubscribe { .. } => {}
+            MarketDataSubscriptionCmdAny::ListSubscriptions { .. } => {}
+            MarketDataSubscriptionCmdAny::SetProperty { .. } => {}
+            MarketDataSubscriptionCmdAny::GetProperty { .. } => {}
         }
         todo!()
     }
 
-    fn handle_stream_data(&mut self, data: SpotMarketDataStream) -> Result<(), SpotCmdError> {
+    fn handle_stream_data(&mut self, data: SpotMarketDataStreamAny) -> Result<(), SpotCmdError> {
         match data {
-            SpotMarketDataStream::AggregateTrade(_) => {}
-            SpotMarketDataStream::Trade(_) => {}
-            SpotMarketDataStream::Kline(_) => {}
-            SpotMarketDataStream::KlineWithTimezone(_) => {}
-            SpotMarketDataStream::MiniTicker(_) => {}
-            SpotMarketDataStream::AllMiniTickers(_) => {}
-            SpotMarketDataStream::Ticker(_) => {}
-            SpotMarketDataStream::RollingWindowStats(_) => {}
-            SpotMarketDataStream::AllRollingWindowStats(_) => {}
-            SpotMarketDataStream::BookTicker(_) => {}
-            SpotMarketDataStream::AveragePrice(_) => {}
-            SpotMarketDataStream::PartialDepth(_) => {}
-            SpotMarketDataStream::DiffDepth(_) => {}
+            SpotMarketDataStreamAny::AggregateTrade(_) => {}
+            SpotMarketDataStreamAny::Trade(_) => {}
+            SpotMarketDataStreamAny::Kline(_) => {}
+            SpotMarketDataStreamAny::KlineWithTimezone(_) => {}
+            SpotMarketDataStreamAny::MiniTicker(_) => {}
+            SpotMarketDataStreamAny::AllMiniTickers(_) => {}
+            SpotMarketDataStreamAny::Ticker(_) => {}
+            SpotMarketDataStreamAny::RollingWindowStats(_) => {}
+            SpotMarketDataStreamAny::AllRollingWindowStats(_) => {}
+            SpotMarketDataStreamAny::BookTicker(_) => {}
+            SpotMarketDataStreamAny::AveragePrice(_) => {}
+            SpotMarketDataStreamAny::PartialDepth(_) => {}
+            SpotMarketDataStreamAny::DiffDepth(_) => {}
         }
         todo!()
     }
