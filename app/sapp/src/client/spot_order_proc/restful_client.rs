@@ -1,6 +1,6 @@
 use reqwest::Client;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotTradeBehavior,
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotResAny, SpotTradeBehavior,
 };
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
@@ -40,7 +40,7 @@ impl RestfulClient {
 
     /// 发送限价单请求
     #[inline]
-    async fn post_cmd(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotCmdRes>, SpotCmdError> {
+    async fn post_cmd(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotResAny>, SpotCmdError> {
         let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
@@ -51,7 +51,7 @@ impl RestfulClient {
             .map_err(|e| {
                 SpotCmdError::Common(CommonError::Internal { message: format!("HTTP request failed: {}", e) })
             })?
-            .json::<CmdResp<SpotCmdRes>>()
+            .json::<CmdResp<SpotResAny>>()
             .await
             .map_err(|e| {
                 SpotCmdError::Common(CommonError::Internal { message: format!("Failed to parse response: {}", e) })

@@ -1,6 +1,6 @@
 use crate::proc::behavior::spot_trade_behavior::{
     CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotCmdRes, SpotTradeBehavior,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotResAny, SpotTradeBehavior,
 };
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
@@ -182,16 +182,16 @@ impl SpotTradeBehavior for SpotTradeBehaviorImpl {
         match cmd {
             SpotCmdAny::LimitOrder(limit_order) => {
                 // 将 LimitOrderRes 包装到 SpotCmdRes::LimitOrder 中
-                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotCmdRes::LimitOrder))
+                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotResAny::LimitOrder))
             }
             SpotCmdAny::MarketOrder(market_order) => {
-                self.handle_market_order(market_order).map(|resp| resp.map(SpotCmdRes::MarketOrder))
+                self.handle_market_order(market_order).map(|resp| resp.map(SpotResAny::MarketOrder))
             }
             SpotCmdAny::CancelOrder(cancel_order) => {
-                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotCmdRes::CancelOrder))
+                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotResAny::CancelOrder))
             }
             SpotCmdAny::CancelAllOrders(cancel_all_orders) => {
-                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotCmdRes::CancelAllOrders))
+                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotResAny::CancelAllOrders))
             }
         }
     }

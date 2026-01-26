@@ -4,6 +4,7 @@ use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErro
 
 /// Market Data 命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotMarketDataCmdAny {
     /// 订单簿 GET /api/v3/depth
     /// Weight: 5-250 (根据limit调整)
@@ -59,6 +60,7 @@ pub enum SpotMarketDataCmdAny {
 /// Weight: 根据limit调整 (1-100: 5, 101-500: 25, 501-1000: 50, 1001-5000: 250)
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderBookCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -74,6 +76,7 @@ pub struct OrderBookCmd {
 /// Weight: 25
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RecentTradesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -87,6 +90,7 @@ pub struct RecentTradesCmd {
 /// Weight: 25
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HistoricalTradesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -102,6 +106,7 @@ pub struct HistoricalTradesCmd {
 /// Weight: 4
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AggTradesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -121,6 +126,7 @@ pub struct AggTradesCmd {
 /// Weight: 2
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KlinesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -143,6 +149,7 @@ pub struct KlinesCmd {
 /// Data Source: Database
 /// 返回优化后的K线数据，适合图表展示
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UIKlinesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -164,6 +171,7 @@ pub struct UIKlinesCmd {
 /// Weight: 2
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AvgPriceCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -175,6 +183,7 @@ pub struct AvgPriceCmd {
 /// Weight: 2 (单symbol) / 40 (21-100 symbols) / 80 (>100 或全部)
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Ticker24hrCmd {
     pub metadata: CMetadata,
     /// 单个交易对（与 symbols 互斥）
@@ -192,6 +201,7 @@ pub struct Ticker24hrCmd {
 /// Weight: 4 per symbol (max 200 when >50 symbols)
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradingDayTickerCmd {
     pub metadata: CMetadata,
     /// 单个交易对（与 symbols 互斥，二选一）
@@ -211,6 +221,7 @@ pub struct TradingDayTickerCmd {
 /// Weight: 2 (单symbol) / 4 (多symbol或全部)
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolPriceTickerCmd {
     pub metadata: CMetadata,
     /// 单个交易对（与 symbols 互斥）
@@ -226,6 +237,7 @@ pub struct SymbolPriceTickerCmd {
 /// Weight: 2 (单symbol) / 4 (多symbol或全部)
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BookTickerCmd {
     pub metadata: CMetadata,
     /// 单个交易对（与 symbols 互斥）
@@ -241,6 +253,7 @@ pub struct BookTickerCmd {
 /// Weight: 4 per symbol (max 200 when >50 symbols)
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RollingWindowTickerCmd {
     pub metadata: CMetadata,
     /// 单个交易对（与 symbols 互斥，二选一）
@@ -257,6 +270,7 @@ pub struct RollingWindowTickerCmd {
 
 /// Market Data 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotMarketDataRes {
     /// 订单簿响应
     OrderBook(OrderBookData),
@@ -306,6 +320,7 @@ pub enum SpotMarketDataRes {
 
 /// 订单簿数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderBookData {
     /// 最后更新ID
     pub last_update_id: i64,
@@ -317,6 +332,7 @@ pub struct OrderBookData {
 
 /// 成交数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradeData {
     /// 成交ID
     pub id: i64,
@@ -336,6 +352,7 @@ pub struct TradeData {
 
 /// 聚合成交数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AggTradeData {
     /// 聚合成交ID
     pub agg_trade_id: i64,
@@ -357,6 +374,7 @@ pub struct AggTradeData {
 
 /// K线数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KlineData {
     /// 开盘时间
     pub open_time: i64,
@@ -384,6 +402,7 @@ pub struct KlineData {
 
 /// 平均价格数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AvgPriceData {
     /// 平均价格间隔（分钟）
     pub mins: i32,
@@ -395,6 +414,7 @@ pub struct AvgPriceData {
 
 /// 24小时Ticker数据（完整）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Ticker24hrData {
     /// 交易对
     pub symbol: String,
@@ -442,6 +462,7 @@ pub struct Ticker24hrData {
 
 /// 交易日Ticker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradingDayTickerData {
     /// 交易对
     pub symbol: String,
@@ -477,6 +498,7 @@ pub struct TradingDayTickerData {
 
 /// 价格Ticker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PriceTickerData {
     /// 交易对
     pub symbol: String,
@@ -486,6 +508,7 @@ pub struct PriceTickerData {
 
 /// 订单簿Ticker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BookTickerData {
     /// 交易对
     pub symbol: String,
@@ -501,6 +524,7 @@ pub struct BookTickerData {
 
 /// 滚动窗口Ticker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RollingWindowTickerData {
     /// 交易对
     pub symbol: String,

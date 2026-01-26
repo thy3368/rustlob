@@ -275,7 +275,7 @@ pub type IdemMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 ///
 /// 使用标准 Result 包装，支持 ? 操作符和所有 Result 方法
 /// 每个命令类型使用自己的错误类型，提供类型安全
-pub type IdemSpotResult = Result<CmdResp<SpotCmdRes>, SpotCmdError>;
+pub type IdemSpotResult = Result<CmdResp<SpotResAny>, SpotCmdError>;
 pub type IdemAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
 pub type IdemCondResult = Result<CmdResp<CondCmdResult>, CondCmdError>;
 pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
@@ -454,7 +454,7 @@ impl CancelAllOrdersRes {
 /// 只包含成功情况，错误通过 CommandError 返回
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotCmdRes {
+pub enum SpotResAny {
     /// 限价单结果
     LimitOrder(LimitOrderRes),
 
