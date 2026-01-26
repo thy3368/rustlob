@@ -18,22 +18,5 @@ impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
         todo!()
     }
 
-    fn handle_stream_data(&mut self, data: SpotMarketDataStreamAny) -> Result<(), SpotCmdError> {
-        match data {
-            SpotMarketDataStreamAny::AggregateTrade(_) => {}
-            SpotMarketDataStreamAny::Trade(_) => {}
-            SpotMarketDataStreamAny::Kline(_) => {}
-            SpotMarketDataStreamAny::KlineWithTimezone(_) => {}
-            SpotMarketDataStreamAny::MiniTicker(_) => {}
-            SpotMarketDataStreamAny::AllMiniTickers(_) => {}
-            SpotMarketDataStreamAny::Ticker(_) => {}
-            SpotMarketDataStreamAny::RollingWindowStats(_) => {}
-            SpotMarketDataStreamAny::AllRollingWindowStats(_) => {}
-            SpotMarketDataStreamAny::BookTicker(_) => {}
-            SpotMarketDataStreamAny::AveragePrice(_) => {}
-            SpotMarketDataStreamAny::PartialDepth(_) => {}
-            SpotMarketDataStreamAny::DiffDepth(_) => {}
-        }
-        todo!()
-    }
+
 }

@@ -98,7 +98,7 @@ pub enum SpotTradeCmdAny {
 // ==================== 订单类型枚举 ====================
 
 /// 订单类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum OrderType {
     /// 限价单
     Limit,
@@ -117,7 +117,7 @@ pub enum OrderType {
 }
 
 /// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum OrderSide {
     /// 买入
     Buy,
@@ -891,7 +891,7 @@ pub struct QueryCommissionRatesCmd {
 // ==================== 响应类型定义 ====================
 
 /// Spot Trading 响应枚举
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum SpotTradeRes {
     /// 新订单响应（ACK 模式）
     NewOrderAck(NewOrderAck),

@@ -15,15 +15,5 @@ impl SpotUserDataSSEBehavior for SpotUserDataStreamImpl {
         todo!()
     }
 
-    fn on_event(&mut self, event: UserDataStreamEvent) -> Result<(), SpotCmdError> {
-        match event {
-            UserDataStreamEvent::OutboundAccountPosition(_) => {}
-            UserDataStreamEvent::BalanceUpdate(_) => {}
-            UserDataStreamEvent::ExecutionReport(_) => {}
-            UserDataStreamEvent::ListStatus(_) => {}
-            UserDataStreamEvent::EventStreamTerminated(_) => {}
-            UserDataStreamEvent::ExternalLockUpdate(_) => {}
-        }
-        todo!()
-    }
+
 }

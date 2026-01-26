@@ -576,6 +576,6 @@ pub trait SpotUserDataSSEBehavior: Send + Sync {
     /// 处理 User Data Stream 命令（REST API）
     fn handle(&mut self, cmd: SpotUserDataStreamCmd) -> Result<CmdResp<SpotUserDataStreamRes>, SpotCmdError>;
 
-    /// 处理 User Data Stream 事件（WebSocket 推送）
-    fn on_event(&mut self, event: UserDataStreamEvent) -> Result<(), SpotCmdError>;
+    // /// 处理 User Data Stream 事件（WebSocket 推送）
+    // fn on_event(&mut self, event: UserDataStreamEvent) -> Result<(), SpotCmdError>;
 }

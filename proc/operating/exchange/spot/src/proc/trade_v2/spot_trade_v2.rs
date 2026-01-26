@@ -5,7 +5,7 @@ use crate::proc::trade::spot_trade::SpotTradeBehaviorImpl;
 pub struct SpotTradeBehaviorV2Impl {
 
 }
-impl SpotTradeBehaviorV2 for SpotTradeBehaviorImpl {
+impl SpotTradeBehaviorV2 for SpotTradeBehaviorV2Impl {
     fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeRes>, SpotCmdError> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;

@@ -516,7 +516,7 @@ pub enum SubscriptionResult {
 }
 
 /// 订阅错误
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubscriptionError {
     /// 错误码
@@ -528,7 +528,7 @@ pub struct SubscriptionError {
 }
 
 /// Market Data Stream 订阅命令
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MarketDataSubscriptionCmdAny {
     /// 订阅流
@@ -679,6 +679,14 @@ pub trait SpotMarketDataSSEBehavior: Send + Sync {
         &mut self, cmd: MarketDataSubscriptionCmdAny,
     ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError>;
 
-    /// 处理市场数据流消息
-    fn handle_stream_data(&mut self, data: SpotMarketDataStreamAny) -> Result<(), SpotCmdError>;
+
+
+    
+    // /// 处理市场数据流消息
+    // fn handle_stream_data(&mut self, data: SpotMarketDataStreamAny) -> Result<(), SpotCmdError>;
+}
+
+
+pub trait SpotMarketDataPublishBehavior: Send + Sync {
+    fn generate_stream_message(&self) -> SpotMarketDataStreamAny;   
 }
