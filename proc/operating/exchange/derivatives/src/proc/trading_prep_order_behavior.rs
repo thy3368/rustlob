@@ -656,7 +656,7 @@ impl QueryOrderCmd {
 }
 
 /// 订单查询结果
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OrderQueryResult {
     /// 订单ID
     pub order_id: OrderId,

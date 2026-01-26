@@ -661,12 +661,10 @@ impl PerpOrderExchBehavior for PrepMatchingService {
 }
 
 impl PerpOrderExchQueryProc for PrepMatchingService {
-    fn query_order(&self, cmd: QueryOrderCmd) -> Result<OrderQueryResult, PrepCmdError> {
+    fn query_order(&self, _cmd: QueryOrderCmd) -> Result<OrderQueryResult, PrepCmdError> {
         // TODO: 需要从LOB获取完整订单信息
-        // 当前简化实现：从元数据获取部分信息
-
-
-        todo!()
+        // 当前简化实现：返回空结果
+        Ok(OrderQueryResult::default())
     }
 
     fn query_position(&self, cmd: QueryPositionCmd) -> Result<PrepPosition, PrepCmdError> {

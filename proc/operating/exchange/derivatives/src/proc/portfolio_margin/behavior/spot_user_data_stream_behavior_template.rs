@@ -32,6 +32,22 @@ pub struct AccountCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotUserDataRes {}
 
+/// User Data 命令错误
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SpotCmdError {
+    /// 无效参数
+    InvalidParameter(String),
+    /// API错误
+    ApiError { code: i32, msg: String },
+    /// 网络错误
+    NetworkError(String),
+    /// 未授权
+    Unauthorized,
+    /// 其他错误
+    Other(String),
+}
+
 /// User Data 行为接口
 pub trait SpotUserDataStreamBehavior: Send + Sync {
     /// 处理 User Data 命令

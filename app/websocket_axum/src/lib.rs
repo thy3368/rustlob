@@ -1,38 +1,48 @@
-pub mod md_gw;
-pub mod ud_gw;
+pub mod interfaces {
+    pub mod spot_websocket {
 
-pub mod trade_gw;
+        pub mod md_sse_controller;
+        pub mod ud_sse_controller;
+    }
+
+    pub mod usds_m_future_websocket {
+        pub mod md_sse_controller;
+        pub mod ud_sse_controller;
+    }
+
+    pub mod coin_m_future_websocket {
+        pub mod md_sse_controller;
+        pub mod ud_sse_controller;
+    }
+
+    pub mod option_websocket {
+        pub mod md_sse_controller;
+        pub mod ud_sse_controller;
+    }
+}
+
+
 // User Data Streams
-use axum::{
-    extract::WebSocketUpgrade,
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
+use axum::{extract::WebSocketUpgrade, response::IntoResponse, routing::get, Router};
 use serde::Deserialize;
-use simd_json::json;
-use tokio::net::TcpListener;
+use simd_json::{json, owned::Value};
+use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
-use tokio::sync::broadcast;
-use simd_json::owned::Value;
 
 #[derive(Deserialize, Debug)]
 pub struct Message {
-    pub text: String,
+    pub text: String
 }
 
 /// WebSocket 事件数据类型
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct WebSocketEvent {
     pub r#type: String,
-    pub data: Value,
+    pub data: Value
 }
 
 /// WebSocket 连接处理器
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    tx: broadcast::Sender<WebSocketEvent>,
-) -> impl IntoResponse {
+pub async fn websocket_handler(ws: WebSocketUpgrade, tx: broadcast::Sender<WebSocketEvent>) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         println!("New WebSocket connection established");
 
@@ -91,16 +101,11 @@ pub async fn websocket_handler(
 
 /// 创建包含 WebSocket 路由的 Axum 应用
 pub fn create_app(tx: broadcast::Sender<WebSocketEvent>) -> Router {
-    Router::new()
-        .route("/ws", get(move |ws| websocket_handler(ws, tx.clone())))
-        .nest_service("/", ServeDir::new("."))
+    Router::new().route("/ws", get(move |ws| websocket_handler(ws, tx.clone()))).nest_service("/", ServeDir::new("."))
 }
 
 /// 启动 WebSocket 服务器
-pub async fn start_server(
-    port: u16,
-    tx: broadcast::Sender<WebSocketEvent>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_server(port: u16, tx: broadcast::Sender<WebSocketEvent>) -> Result<(), Box<dyn std::error::Error>> {
     let app = create_app(tx);
 
     println!("WebSocket server starting on http://localhost:{}", port);
