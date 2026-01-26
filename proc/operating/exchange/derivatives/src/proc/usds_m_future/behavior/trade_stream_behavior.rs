@@ -8,6 +8,7 @@ use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
 /// 订单方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderSide {
     Buy,
     Sell,
@@ -15,6 +16,7 @@ pub enum OrderSide {
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderType {
     Limit,
     Market,
@@ -27,6 +29,7 @@ pub enum OrderType {
 
 /// 有效时间类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimeInForce {
     /// Good Till Cancel - 成交为止
     GTC,
@@ -42,6 +45,7 @@ pub enum TimeInForce {
 
 /// 持仓方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PositionSide {
     /// 单向持仓
     Both,
@@ -53,6 +57,7 @@ pub enum PositionSide {
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderStatus {
     New,
     PartiallyFilled,
@@ -65,6 +70,7 @@ pub enum OrderStatus {
 
 /// 工作类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorkingType {
     MarkPrice,
     ContractPrice,
@@ -72,6 +78,7 @@ pub enum WorkingType {
 
 /// 响应类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ResponseType {
     Ack,
     Result,
@@ -79,6 +86,7 @@ pub enum ResponseType {
 
 /// 自成交防护模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SelfTradePreventionMode {
     None,
     ExpireTaker,
@@ -88,6 +96,7 @@ pub enum SelfTradePreventionMode {
 
 /// 价格匹配模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PriceMatchMode {
     None,
     Opponent,
@@ -102,6 +111,7 @@ pub enum PriceMatchMode {
 
 /// 保证金类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MarginType {
     Isolated,
     Crossed,
@@ -109,6 +119,7 @@ pub enum MarginType {
 
 /// 比率类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RateLimitType {
     Orders,
     RequestWeight,
@@ -116,6 +127,7 @@ pub enum RateLimitType {
 
 /// 比率间隔
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RateLimitInterval {
     Second,
     Minute,
@@ -128,6 +140,7 @@ pub enum RateLimitInterval {
 
 /// USDS-M期货WebSocket交易流命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureTradeStreamCmdAny {
     /// 下单 order.place
     /// Request Weight: 0
@@ -158,6 +171,7 @@ pub enum UsdsMFutureTradeStreamCmdAny {
 /// Method: order.place
 /// Request Weight: 0
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderPlaceWsCmd {
     pub metadata: CMetadata,
     /// WebSocket请求ID
@@ -214,6 +228,7 @@ pub struct OrderPlaceWsCmd {
 /// Method: order.cancel
 /// Request Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderCancelWsCmd {
     pub metadata: CMetadata,
     /// WebSocket请求ID
@@ -240,6 +255,7 @@ pub struct OrderCancelWsCmd {
 /// Method: order.modify
 /// Request Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderModifyWsCmd {
     pub metadata: CMetadata,
     /// WebSocket请求ID
@@ -274,6 +290,7 @@ pub struct OrderModifyWsCmd {
 /// Method: order.status
 /// Request Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderStatusWsCmd {
     pub metadata: CMetadata,
     /// WebSocket请求ID
@@ -300,6 +317,7 @@ pub struct OrderStatusWsCmd {
 /// Method: account.position
 /// Request Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountPositionWsCmd {
     pub metadata: CMetadata,
     /// WebSocket请求ID
@@ -320,6 +338,7 @@ pub struct AccountPositionWsCmd {
 
 /// WebSocket Trade Stream 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureTradeStreamRes {
     /// 下单响应
     OrderPlace(OrderPlaceWsResponse),
@@ -335,6 +354,7 @@ pub enum UsdsMFutureTradeStreamRes {
 
 /// 比率限制信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RateLimit {
     /// 比率限制类型
     pub rate_limit_type: RateLimitType,
@@ -350,6 +370,7 @@ pub struct RateLimit {
 
 /// 下单响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderPlaceWsResponse {
     /// 请求ID
     pub id: String,
@@ -363,6 +384,7 @@ pub struct OrderPlaceWsResponse {
 
 /// 订单信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderInfo {
     /// 客户端订单ID
     pub client_order_id: String,
@@ -420,6 +442,7 @@ pub struct OrderInfo {
 
 /// 撤销订单响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderCancelWsResponse {
     /// 请求ID
     pub id: String,
@@ -433,6 +456,7 @@ pub struct OrderCancelWsResponse {
 
 /// 修改订单响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderModifyWsResponse {
     /// 请求ID
     pub id: String,
@@ -446,6 +470,7 @@ pub struct OrderModifyWsResponse {
 
 /// 查询订单响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderStatusWsResponse {
     /// 请求ID
     pub id: String,
@@ -459,6 +484,7 @@ pub struct OrderStatusWsResponse {
 
 /// 持仓信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PositionInfo {
     /// 入场价格
     pub entry_price: String,
@@ -494,6 +520,7 @@ pub struct PositionInfo {
 
 /// 查询持仓响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountPositionWsResponse {
     /// 请求ID
     pub id: String,
@@ -511,6 +538,7 @@ pub struct AccountPositionWsResponse {
 
 /// WebSocket Trade Stream 命令错误
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureTradeStreamCmdError {
     /// 无效的交易对
     InvalidSymbol(String),

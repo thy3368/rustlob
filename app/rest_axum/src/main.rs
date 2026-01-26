@@ -54,6 +54,11 @@ async fn main() {
     let market_data_service = Arc::new(interfaces::spot_http::md_controller::MarketDataService::new());
     let user_data_service = Arc::new(interfaces::spot_http::ud_controller::UserDataService::new());
 
+    // USDS-M期货服务
+    let usds_m_future_trade_service = Arc::new(interfaces::usds_m_future_http::trade_controller::TradeService::new());
+    let usds_m_future_md_service = Arc::new(interfaces::usds_m_future_http::md_controller::MarketDataService::new());
+    let usds_m_future_ud_service = Arc::new(interfaces::usds_m_future_http::ud_controller::UserDataService::new());
+
     // 创建路由，注入服务依赖
     let order_routes = Router::new()
         .route("/api/spot/order/", post(interfaces::spot_http::trade_controller::handle))
@@ -71,12 +76,28 @@ async fn main() {
         .route("/api/spot/user/data", post(interfaces::spot_http::ud_controller::handle))
         .with_state(user_data_service);
 
+    // USDS-M期货路由
+    let usds_m_future_trade_routes = Router::new()
+        .route("/api/usds-m-future/order/", post(interfaces::usds_m_future_http::trade_controller::handle))
+        .with_state(usds_m_future_trade_service);
+
+    let usds_m_future_md_routes = Router::new()
+        .route("/api/usds-m-future/market/data", post(interfaces::usds_m_future_http::md_controller::handle))
+        .with_state(usds_m_future_md_service);
+
+    let usds_m_future_ud_routes = Router::new()
+        .route("/api/usds-m-future/user/data", post(interfaces::usds_m_future_http::ud_controller::handle))
+        .with_state(usds_m_future_ud_service);
+
     let app = Router::new()
         .route("/health", get(health_check))
         .nest("/", order_routes)
         .nest("/", trade_v2_routes)
         .nest("/", market_data_routes)
-        .nest("/", user_data_routes);
+        .nest("/", user_data_routes)
+        .nest("/", usds_m_future_trade_routes)
+        .nest("/", usds_m_future_md_routes)
+        .nest("/", usds_m_future_ud_routes);
 
     // 启动服务器
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.expect("Failed to bind port");
@@ -87,6 +108,9 @@ async fn main() {
     println!("💹 Spot trade v2: POST /api/spot/trade/v2/ (JSON)");
     println!("📈 Spot market data: POST /api/spot/market/data (JSON)");
     println!("👤 Spot user data: POST /api/spot/user/data (JSON)");
+    println!("📉 USDS-M Future trade: POST /api/usds-m-future/order/ (JSON)");
+    println!("📈 USDS-M Future market data: POST /api/usds-m-future/market/data (JSON)");
+    println!("👤 USDS-M Future user data: POST /api/usds-m-future/user/data (JSON)");
 
     axum::serve(listener, app).await.expect("Server failed to start");
 }

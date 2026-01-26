@@ -1,6 +1,6 @@
 use crate::proc::behavior::spot_trade_behavior::SpotCmdError;
 use crate::proc::behavior::v2::spot_market_data_behavior::{
-    SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataRes, OrderBookData,
+    SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataRes, OrderBookData, AvgPriceData,
 };
 use base_types::cqrs::cqrs_types::CmdResp;
 
@@ -38,7 +38,7 @@ impl SpotMarketDataBehavior for SpotMarketDataImpl {
             SpotMarketDataCmdAny::AvgPrice(_) => {
                 // 暂时返回一个默认的平均价格响应
                 Ok(CmdResp::new(nonce, SpotMarketDataRes::AvgPrice(
-                    base_types::exchange::spot::spot_types::AvgPriceData {
+                    AvgPriceData {
                         mins: 5,
                         price: "50000.00".to_string(),
                         close_time: 0,

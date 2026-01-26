@@ -22,6 +22,9 @@ uuid = { version = "1.0", features = ["v4"] }
 
 # Spot 订单处理依赖
 spot_behavior = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
+
+derivatives_behavior = { path = "../../proc/operating/exchange/derivatives", features = ["serde"] }
+
 base_types = { path = "../../lib/common/base_types", features = ["serde"] }
 
 # 数据库和仓储依赖

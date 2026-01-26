@@ -3126,6 +3126,7 @@ dependencies = [
  "base_types",
  "chrono",
  "db_repo",
+ "derivatives_behavior",
  "hotpath",
  "id_generator",
  "lob_repo",

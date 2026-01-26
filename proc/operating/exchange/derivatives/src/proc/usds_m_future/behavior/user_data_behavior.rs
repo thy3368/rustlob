@@ -4,6 +4,8 @@ use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataCmdAny {
     /// 账户信息查询 V3 - GET /fapi/v3/account
     /// Weight: 5
@@ -117,6 +119,8 @@ pub enum UsdsMFutureUserDataCmdAny {
 /// Weight: 5
 /// 获取当前账户信息，单资产/多资产模式显示不同数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountInfoV3Cmd {
     pub metadata: CMetadata,
     /// 接收窗口（毫秒），不超过 60000
@@ -127,6 +131,8 @@ pub struct AccountInfoV3Cmd {
 
 /// 账户信息响应 V3
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountInfoV3Res {
     /// 总初始保证金（单资产模式仅USDT，多资产模式为USD价值）
     pub total_initial_margin: String,
@@ -158,6 +164,8 @@ pub struct AccountInfoV3Res {
 
 /// 账户资产信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountAsset {
     /// 资产名称
     pub asset: String,
@@ -191,6 +199,8 @@ pub struct AccountAsset {
 
 /// 账户持仓信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountPosition {
     /// 交易对
     pub symbol: String,
@@ -220,6 +230,8 @@ pub struct AccountPosition {
 /// GET /fapi/v2/account
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountInfoV2Cmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -232,6 +244,8 @@ pub struct AccountInfoV2Cmd {
 /// GET /fapi/v3/balance
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountBalanceV3Cmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -245,6 +259,8 @@ pub struct AccountBalanceV3Cmd {
 /// Weight: 5
 /// 查询账户余额信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountBalanceV2Cmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -253,12 +269,16 @@ pub struct AccountBalanceV2Cmd {
 
 /// 账户余额响应 V2
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountBalanceV2Res {
     pub balances: Vec<BalanceInfo>,
 }
 
 /// 余额信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BalanceInfo {
     /// 账户别名
     pub account_alias: String,
@@ -286,6 +306,8 @@ pub struct BalanceInfo {
 /// GET /fapi/v1/positionSide/dual
 /// Weight: 30
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetPositionModeCmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -294,6 +316,8 @@ pub struct GetPositionModeCmd {
 
 /// 持仓模式响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PositionModeRes {
     /// true: 双向持仓模式; false: 单向持仓模式
     pub dual_side_position: bool,
@@ -303,6 +327,8 @@ pub struct PositionModeRes {
 /// POST /fapi/v1/positionSide/dual
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChangePositionModeCmd {
     pub metadata: CMetadata,
     /// true: 双向持仓模式; false: 单向持仓模式
@@ -317,6 +343,8 @@ pub struct ChangePositionModeCmd {
 /// GET /fapi/v1/multiAssetsMargin
 /// Weight: 30
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetMultiAssetsModeCmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -325,6 +353,8 @@ pub struct GetMultiAssetsModeCmd {
 
 /// 多资产模式响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiAssetsModeRes {
     /// true: 多资产模式开启; false: 多资产模式关闭
     pub multi_assets_margin: bool,
@@ -334,6 +364,8 @@ pub struct MultiAssetsModeRes {
 /// POST /fapi/v1/multiAssetsMargin
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChangeMultiAssetsModeCmd {
     pub metadata: CMetadata,
     /// true: 开启; false: 关闭
@@ -348,6 +380,8 @@ pub struct ChangeMultiAssetsModeCmd {
 /// GET /fapi/v1/commissionRate
 /// Weight: 20
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommissionRateCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -358,6 +392,8 @@ pub struct CommissionRateCmd {
 
 /// 佣金率响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommissionRateRes {
     /// 交易对
     pub symbol: String,
@@ -373,6 +409,8 @@ pub struct CommissionRateRes {
 /// GET /fapi/v1/leverageBracket
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LeverageBracketCmd {
     pub metadata: CMetadata,
     /// 交易对（可选，不填查询所有）
@@ -383,12 +421,16 @@ pub struct LeverageBracketCmd {
 
 /// 杠杆分层响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LeverageBracketRes {
     pub brackets: Vec<SymbolLeverageBracket>,
 }
 
 /// 交易对杠杆分层
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolLeverageBracket {
     /// 交易对
     pub symbol: String,
@@ -398,6 +440,8 @@ pub struct SymbolLeverageBracket {
 
 /// 杠杆档位
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LeverageBracket {
     /// 档位
     pub bracket: i32,
@@ -419,6 +463,8 @@ pub struct LeverageBracket {
 /// GET /fapi/v1/income
 /// Weight: 30
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IncomeHistoryCmd {
     pub metadata: CMetadata,
     /// 交易对（可选）
@@ -437,6 +483,8 @@ pub struct IncomeHistoryCmd {
 
 /// 收入记录
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IncomeRecord {
     /// 交易对
     pub symbol: String,
@@ -462,6 +510,8 @@ pub struct IncomeRecord {
 /// GET /fapi/v1/accountConfig
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountConfigCmd {
     pub metadata: CMetadata,
     /// 交易对（可选）
@@ -476,6 +526,8 @@ pub struct AccountConfigCmd {
 /// GET /fapi/v1/apiTradingStatus
 /// Weight: 10
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradingStatusCmd {
     pub metadata: CMetadata,
     /// 交易对（可选）
@@ -490,6 +542,8 @@ pub struct TradingStatusCmd {
 /// GET /fapi/v1/userTrades
 /// Weight: 20
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserTradesCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -512,6 +566,8 @@ pub struct UserTradesCmd {
 /// GET /fapi/v1/feeBurn
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetBNBBurnStatusCmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -520,6 +576,8 @@ pub struct GetBNBBurnStatusCmd {
 
 /// BNB抵扣状态响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BNBBurnStatusRes {
     /// 是否开启BNB抵扣
     pub fee_burn: bool,
@@ -529,6 +587,8 @@ pub struct BNBBurnStatusRes {
 /// POST /fapi/v1/feeBurn
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SetBNBBurnCmd {
     pub metadata: CMetadata,
     /// 是否开启BNB抵扣
@@ -543,6 +603,8 @@ pub struct SetBNBBurnCmd {
 /// POST /fapi/v1/futures/transfer
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuturesTransferCmd {
     pub metadata: CMetadata,
     /// 资产类型
@@ -557,6 +619,8 @@ pub struct FuturesTransferCmd {
 
 /// 转账响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuturesTransferRes {
     /// 转账ID
     pub tran_id: i64,
@@ -566,6 +630,8 @@ pub struct FuturesTransferRes {
 /// GET /fapi/v1/futures/transfer
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransferHistoryCmd {
     pub metadata: CMetadata,
     /// 资产类型
@@ -588,6 +654,8 @@ pub struct TransferHistoryCmd {
 /// GET /fapi/v1/order/asyn
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetOrderDownloadIdCmd {
     pub metadata: CMetadata,
     /// 起始时间（毫秒）
@@ -600,6 +668,8 @@ pub struct GetOrderDownloadIdCmd {
 
 /// 下载ID响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownloadIdRes {
     /// 平均生成时间（毫秒）
     pub avg_cost_timestamp: String,
@@ -611,6 +681,8 @@ pub struct DownloadIdRes {
 /// GET /fapi/v1/order/asyn/id
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetOrderDownloadLinkCmd {
     pub metadata: CMetadata,
     /// 下载ID
@@ -621,6 +693,8 @@ pub struct GetOrderDownloadLinkCmd {
 
 /// 下载链接响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownloadLinkRes {
     /// 下载链接
     pub download_url: String,
@@ -634,6 +708,8 @@ pub struct DownloadLinkRes {
 /// GET /fapi/v1/trade/asyn
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetTradeDownloadIdCmd {
     pub metadata: CMetadata,
     pub start_time: i64,
@@ -646,6 +722,8 @@ pub struct GetTradeDownloadIdCmd {
 /// GET /fapi/v1/trade/asyn/id
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetTradeDownloadLinkCmd {
     pub metadata: CMetadata,
     pub download_id: String,
@@ -657,6 +735,8 @@ pub struct GetTradeDownloadLinkCmd {
 /// GET /fapi/v1/income/asyn
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetIncomeDownloadIdCmd {
     pub metadata: CMetadata,
     pub start_time: i64,
@@ -669,6 +749,8 @@ pub struct GetIncomeDownloadIdCmd {
 /// GET /fapi/v1/income/asyn/id
 /// Weight: 5
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetIncomeDownloadLinkCmd {
     pub metadata: CMetadata,
     pub download_id: String,
@@ -682,6 +764,8 @@ pub struct GetIncomeDownloadLinkCmd {
 /// GET /fapi/v1/rateLimit/order
 /// Weight: 20
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RateLimitCmd {
     pub metadata: CMetadata,
     pub recv_window: Option<i64>,
@@ -694,6 +778,8 @@ pub struct RateLimitCmd {
 /// GET /fapi/v1/symbolConfig
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolConfigCmd {
     pub metadata: CMetadata,
     /// 交易对（可选）
@@ -706,6 +792,8 @@ pub struct SymbolConfigCmd {
 
 /// User Data 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataRes {
     /// 账户信息 V3
     AccountInfoV3(AccountInfoV3Res),
@@ -737,6 +825,8 @@ pub enum UsdsMFutureUserDataRes {
 
 /// User Data 命令错误
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataError {
     /// 无效参数
     InvalidParameter(String),

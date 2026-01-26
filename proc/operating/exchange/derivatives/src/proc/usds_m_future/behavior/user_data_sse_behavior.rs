@@ -8,6 +8,7 @@ use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
 /// 执行类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ExecutionType {
     /// 新订单
     New,
@@ -25,6 +26,7 @@ pub enum ExecutionType {
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderStatus {
     New,
     PartiallyFilled,
@@ -36,6 +38,7 @@ pub enum OrderStatus {
 
 /// 订单方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderSide {
     Buy,
     Sell,
@@ -43,6 +46,7 @@ pub enum OrderSide {
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrderType {
     Limit,
     Market,
@@ -56,6 +60,7 @@ pub enum OrderType {
 
 /// 有效时间类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimeInForce {
     GTC,
     IOC,
@@ -66,6 +71,7 @@ pub enum TimeInForce {
 
 /// 工作类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorkingType {
     MarkPrice,
     ContractPrice,
@@ -73,6 +79,7 @@ pub enum WorkingType {
 
 /// 持仓方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PositionSide {
     Both,
     Long,
@@ -81,6 +88,7 @@ pub enum PositionSide {
 
 /// 保证金类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MarginType {
     Isolated,
     Crossed,
@@ -88,6 +96,7 @@ pub enum MarginType {
 
 /// 账户更新原因类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AccountUpdateReasonType {
     /// 充值
     Deposit,
@@ -127,6 +136,7 @@ pub enum AccountUpdateReasonType {
 
 /// 自成交防护模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SelfTradePreventionMode {
     None,
     ExpireTaker,
@@ -136,6 +146,7 @@ pub enum SelfTradePreventionMode {
 
 /// 价格匹配模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PriceMatchMode {
     None,
     Opponent,
@@ -154,6 +165,7 @@ pub enum PriceMatchMode {
 
 /// USDS-M期货用户数据流命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataStreamCmdAny {
     // ========== ListenKey管理 ==========
     /// 创建ListenKey POST /fapi/v1/listenKey
@@ -205,6 +217,7 @@ pub enum UsdsMFutureUserDataStreamCmdAny {
 /// POST /fapi/v1/listenKey
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StartUserDataStreamCmd {
     pub metadata: CMetadata,
 }
@@ -213,6 +226,7 @@ pub struct StartUserDataStreamCmd {
 /// PUT /fapi/v1/listenKey
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeepaliveUserDataStreamCmd {
     pub metadata: CMetadata,
     /// ListenKey
@@ -223,6 +237,7 @@ pub struct KeepaliveUserDataStreamCmd {
 /// DELETE /fapi/v1/listenKey
 /// Weight: 1
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CloseUserDataStreamCmd {
     pub metadata: CMetadata,
     /// ListenKey
@@ -237,6 +252,7 @@ pub struct CloseUserDataStreamCmd {
 /// Event: ORDER_TRADE_UPDATE
 /// 当新订单创建、订单状态变化时推送此事件
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderTradeUpdateEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -251,6 +267,7 @@ pub struct OrderTradeUpdateEvent {
 
 /// 订单更新详情
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderUpdate {
     /// 交易对
     pub symbol: String,
@@ -334,6 +351,7 @@ pub struct OrderUpdate {
 /// Event: ACCOUNT_UPDATE
 /// 当余额或持仓更新时推送此事件
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountUpdateEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -348,6 +366,7 @@ pub struct AccountUpdateEvent {
 
 /// 账户更新数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountUpdateData {
     /// 事件原因类型
     pub reason_type: AccountUpdateReasonType,
@@ -359,6 +378,7 @@ pub struct AccountUpdateData {
 
 /// 余额更新
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BalanceUpdate {
     /// 资产
     pub asset: String,
@@ -372,6 +392,7 @@ pub struct BalanceUpdate {
 
 /// 持仓更新
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PositionUpdate {
     /// 交易对
     pub symbol: String,
@@ -397,6 +418,7 @@ pub struct PositionUpdate {
 /// Event: ACCOUNT_CONFIG_UPDATE
 /// 当账户配置变更时推送此事件
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountConfigUpdateEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -413,6 +435,7 @@ pub struct AccountConfigUpdateEvent {
 
 /// 账户配置（杠杆）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountConfig {
     /// 交易对
     pub symbol: String,
@@ -422,6 +445,7 @@ pub struct AccountConfig {
 
 /// 账户信息（多资产模式）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountInfo {
     /// 多资产模式
     pub multi_assets_mode: bool,
@@ -432,6 +456,7 @@ pub struct AccountInfo {
 /// 当用户持仓风险率过高时推送此事件
 /// 注意：此消息仅作为风险指导信息，不建议作为投资策略使用
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarginCallEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -446,6 +471,7 @@ pub struct MarginCallEvent {
 
 /// 保证金追缴持仓
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarginCallPosition {
     /// 交易对
     pub symbol: String,
@@ -468,6 +494,7 @@ pub struct MarginCallPosition {
 /// 条件订单触发拒绝事件
 /// Event: conditional_order_trigger_reject
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConditionalOrderTriggerRejectEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -485,6 +512,7 @@ pub struct ConditionalOrderTriggerRejectEvent {
 /// 成交Lite事件
 /// Event: ACCOUNT_TRADE_UPDATE
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradeLiteEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -516,6 +544,7 @@ pub struct TradeLiteEvent {
 /// 用户数据流过期事件
 /// Event: listenKeyExpired
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ListenKeyExpiredEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -529,6 +558,7 @@ pub struct ListenKeyExpiredEvent {
 /// 策略更新事件
 /// Event: STRATEGY_UPDATE
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StrategyUpdateEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -550,6 +580,7 @@ pub struct StrategyUpdateEvent {
 /// 网格更新事件
 /// Event: GRID_UPDATE
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GridUpdateEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -572,6 +603,7 @@ pub struct GridUpdateEvent {
 
 /// User Data Stream 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataStreamRes {
     /// 启动用户数据流响应
     StartUserDataStream(StartUserDataStreamResponse),
@@ -585,6 +617,7 @@ pub enum UsdsMFutureUserDataStreamRes {
 
 /// 启动用户数据流响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StartUserDataStreamResponse {
     /// ListenKey（60分钟有效期）
     pub listen_key: String,
@@ -592,12 +625,14 @@ pub struct StartUserDataStreamResponse {
 
 /// Keepalive响应（空响应，返回成功即可）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeepaliveUserDataStreamResponse {
     pub success: bool,
 }
 
 /// 关闭用户数据流响应（空响应，返回成功即可）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CloseUserDataStreamResponse {
     pub success: bool,
 }
@@ -608,6 +643,7 @@ pub struct CloseUserDataStreamResponse {
 
 /// User Data Stream 命令错误
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureUserDataStreamCmdError {
     /// 无效的ListenKey
     InvalidListenKey(String),

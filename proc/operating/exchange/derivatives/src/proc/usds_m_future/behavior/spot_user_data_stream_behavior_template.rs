@@ -1,9 +1,10 @@
 // 参考 ## Account Endpoints / Account information (USER_DATA) /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 user data 接口
 
-use base_types::cqrs::cqrs_types::CMetadata;
+use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotUserDataCmdAny {
     /// 账户信息查询 GET /api/v3/account
     /// Weight: 20
@@ -15,6 +16,7 @@ pub enum SpotUserDataCmdAny {
 /// Weight: 20
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountCmd {
     pub metadata: CMetadata,
     /// 仅返回非零余额，默认 false
@@ -27,6 +29,7 @@ pub struct AccountCmd {
 
 /// User Data 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotUserDataRes {}
 
 /// User Data 行为接口

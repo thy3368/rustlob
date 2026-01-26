@@ -8,6 +8,7 @@ use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
 /// WebSocket更新速度
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UpdateSpeed {
     /// 100毫秒
     Ms100,
@@ -23,6 +24,7 @@ pub enum UpdateSpeed {
 
 /// 深度档位级别
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DepthLevel {
     /// 5档
     Level5,
@@ -34,6 +36,7 @@ pub enum DepthLevel {
 
 /// K线时间间隔（复用market_data_behavior.rs中的定义）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum KlineInterval {
     M1,   // 1分钟
     M3,   // 3分钟
@@ -54,6 +57,7 @@ pub enum KlineInterval {
 
 /// 持续合约类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ContractType {
     Perpetual,
     CurrentQuarter,
@@ -62,6 +66,7 @@ pub enum ContractType {
 
 /// WebSocket方法
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WsMethod {
     /// 订阅流
     Subscribe,
@@ -81,6 +86,7 @@ pub enum WsMethod {
 
 /// USDS-M期货市场数据流命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureMarketDataStreamCmdAny {
     // ========== 订阅管理 ==========
     /// 订阅流
@@ -160,6 +166,7 @@ pub enum UsdsMFutureMarketDataStreamCmdAny {
 
 /// 订阅流命令
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubscribeCmd {
     pub metadata: CMetadata,
     /// 订阅的流名称列表
@@ -170,6 +177,7 @@ pub struct SubscribeCmd {
 
 /// 取消订阅流命令
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnsubscribeCmd {
     pub metadata: CMetadata,
     /// 取消订阅的流名称列表
@@ -180,6 +188,7 @@ pub struct UnsubscribeCmd {
 
 /// 列出订阅命令
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ListSubscriptionsCmd {
     pub metadata: CMetadata,
     /// 请求ID
@@ -188,6 +197,7 @@ pub struct ListSubscriptionsCmd {
 
 /// 设置属性命令
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SetPropertyCmd {
     pub metadata: CMetadata,
     /// 属性名称（如"combined"）
@@ -200,6 +210,7 @@ pub struct SetPropertyCmd {
 
 /// 获取属性命令
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetPropertyCmd {
     pub metadata: CMetadata,
     /// 属性名称
@@ -216,6 +227,7 @@ pub struct GetPropertyCmd {
 /// Stream: <symbol>@aggTrade
 /// Update Speed: 100ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AggTradeStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -244,6 +256,7 @@ pub struct AggTradeStreamEvent {
 /// Stream: <symbol>@markPrice 或 <symbol>@markPrice@1s
 /// Update Speed: 3s 或 1s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarkPriceStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -268,6 +281,7 @@ pub struct MarkPriceStreamEvent {
 /// Stream: !markPrice@arr 或 !markPrice@arr@1s
 /// Update Speed: 3s 或 1s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarkPriceAllMarketStreamEvent {
     pub metadata: CMetadata,
     /// 标记价格列表
@@ -276,6 +290,7 @@ pub struct MarkPriceAllMarketStreamEvent {
 
 /// 标记价格数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarkPriceData {
     pub event_type: String,
     pub event_time: i64,
@@ -291,6 +306,7 @@ pub struct MarkPriceData {
 /// Stream: <symbol>@kline_<interval>
 /// Update Speed: 250ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KlineStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -305,6 +321,7 @@ pub struct KlineStreamEvent {
 
 /// K线数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KlineData {
     /// K线开始时间
     pub start_time: i64,
@@ -346,6 +363,7 @@ pub struct KlineData {
 /// Stream: <pair>_<contractType>@continuousKline_<interval>
 /// Update Speed: 250ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContinuousContractKlineStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -364,6 +382,7 @@ pub struct ContinuousContractKlineStreamEvent {
 /// Stream: <symbol>@ticker
 /// Update Speed: 500ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndividualSymbolTickerStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -408,6 +427,7 @@ pub struct IndividualSymbolTickerStreamEvent {
 /// Stream: !ticker@arr
 /// Update Speed: 500ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllMarketTickersStreamEvent {
     pub metadata: CMetadata,
     /// Ticker列表
@@ -416,6 +436,7 @@ pub struct AllMarketTickersStreamEvent {
 
 /// Ticker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TickerData {
     pub event_type: String,
     pub event_time: i64,
@@ -441,6 +462,7 @@ pub struct TickerData {
 /// Stream: <symbol>@miniTicker
 /// Update Speed: 500ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndividualSymbolMiniTickerStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -467,6 +489,7 @@ pub struct IndividualSymbolMiniTickerStreamEvent {
 /// Stream: !miniTicker@arr
 /// Update Speed: 1s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllMarketMiniTickersStreamEvent {
     pub metadata: CMetadata,
     /// MiniTicker列表
@@ -475,6 +498,7 @@ pub struct AllMarketMiniTickersStreamEvent {
 
 /// MiniTicker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MiniTickerData {
     pub event_type: String,
     pub event_time: i64,
@@ -491,6 +515,7 @@ pub struct MiniTickerData {
 /// Stream: <symbol>@bookTicker
 /// Update Speed: Real-time
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndividualSymbolBookTickerStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -517,6 +542,7 @@ pub struct IndividualSymbolBookTickerStreamEvent {
 /// Stream: !bookTicker
 /// Update Speed: Real-time
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllBookTickersStreamEvent {
     pub metadata: CMetadata,
     /// BookTicker数据
@@ -525,6 +551,7 @@ pub struct AllBookTickersStreamEvent {
 
 /// BookTicker数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BookTickerData {
     pub event_type: String,
     pub update_id: i64,
@@ -541,6 +568,7 @@ pub struct BookTickerData {
 /// Stream: <symbol>@forceOrder
 /// Update Speed: Real-time
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LiquidationOrderStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -553,6 +581,7 @@ pub struct LiquidationOrderStreamEvent {
 
 /// 强平订单数据
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LiquidationOrderData {
     pub symbol: String,
     pub side: String,
@@ -571,6 +600,7 @@ pub struct LiquidationOrderData {
 /// Stream: !forceOrder@arr
 /// Update Speed: Real-time
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllMarketLiquidationOrderStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -586,6 +616,7 @@ pub struct AllMarketLiquidationOrderStreamEvent {
 /// Update Speed: 250ms, 500ms, 100ms
 /// Levels: 5, 10, 20
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartialBookDepthStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -608,6 +639,7 @@ pub struct PartialBookDepthStreamEvent {
 /// Stream: <symbol>@depth 或 <symbol>@depth@500ms 或 <symbol>@depth@100ms
 /// Update Speed: 250ms, 500ms, 100ms
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiffBookDepthStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -632,6 +664,7 @@ pub struct DiffBookDepthStreamEvent {
 
 /// 价格档位
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PriceLevel {
     pub price: String,
     pub quantity: String,
@@ -641,6 +674,7 @@ pub struct PriceLevel {
 /// Stream: <symbol>@compositeIndex
 /// Update Speed: 1s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompositeIndexStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -657,6 +691,7 @@ pub struct CompositeIndexStreamEvent {
 
 /// 复合指数成分
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompositeIndexComponent {
     pub base_asset: String,
     pub quote_asset: String,
@@ -668,6 +703,7 @@ pub struct CompositeIndexComponent {
 /// Stream: !contractInfo
 /// Update Speed: 3s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContractInfoStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -694,6 +730,7 @@ pub struct ContractInfoStreamEvent {
 /// Stream: <symbol>@assetIndex 或 <symbol>@assetIndex@1s
 /// Update Speed: 3s 或 1s
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AssetIndexStreamEvent {
     pub metadata: CMetadata,
     /// 事件类型
@@ -728,6 +765,7 @@ pub struct AssetIndexStreamEvent {
 
 /// Market Data Stream 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureMarketDataStreamRes {
     /// 订阅响应
     SubscribeResponse(SubscribeResponse),
@@ -745,6 +783,7 @@ pub enum UsdsMFutureMarketDataStreamRes {
 
 /// 订阅响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubscribeResponse {
     pub result: Option<String>,
     pub id: u64,
@@ -752,6 +791,7 @@ pub struct SubscribeResponse {
 
 /// 取消订阅响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnsubscribeResponse {
     pub result: Option<String>,
     pub id: u64,
@@ -759,6 +799,7 @@ pub struct UnsubscribeResponse {
 
 /// 列出订阅响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ListSubscriptionsResponse {
     pub result: Vec<String>,
     pub id: u64,
@@ -766,6 +807,7 @@ pub struct ListSubscriptionsResponse {
 
 /// 设置属性响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SetPropertyResponse {
     pub result: Option<String>,
     pub id: u64,
@@ -773,6 +815,7 @@ pub struct SetPropertyResponse {
 
 /// 获取属性响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetPropertyResponse {
     pub result: bool,
     pub id: u64,
@@ -784,6 +827,7 @@ pub struct GetPropertyResponse {
 
 /// Market Data Stream 命令错误
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UsdsMFutureMarketDataStreamCmdError {
     /// 未知属性
     UnknownProperty { code: i32, msg: String },

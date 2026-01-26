@@ -5,11 +5,15 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+serde = ["base_types/serde", "dep:serde"]
+
 [dependencies]
 async-trait = "0.1.89"
 tokio = { version = "1.43", features = ["full"] }
 log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = "1.0"
 bincode = "1.3"
 rand = "0.8"
