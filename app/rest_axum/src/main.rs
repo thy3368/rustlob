@@ -15,9 +15,13 @@ pub mod interfaces {
             pub mod spot_market_data_pusher;
             pub mod spot_user_data_pusher;
             pub mod ud_sse_controller;
+            pub mod connection_types;
+            pub mod user_data_ws_handler;
         }
 
         pub mod starter;
+        pub mod http_server;
+        pub mod websocket_server;
     }
 
     pub mod usds_m_future {

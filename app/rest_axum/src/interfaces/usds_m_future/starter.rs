@@ -123,7 +123,7 @@ impl UsdsMFutureStarter {
                     "message": "Hello from USDS-M Future WebSocket!"
                 });
                 if socket.send(axum::extract::ws::Message::Text(
-                    serde_json::to_string(&welcome_msg).unwrap()
+                    serde_json::to_string(&welcome_msg).unwrap().into()
                 )).await.is_err() {
                     return;
                 }

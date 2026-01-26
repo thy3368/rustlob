@@ -2,22 +2,26 @@ use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
     UserDataStreamEvent, OutboundAccountPositionEvent, BalanceItem, BalanceUpdateEvent,
     ExecutionReportEvent, ListStatusEvent, EventStreamTerminatedEvent, ExternalLockUpdateEvent,
     OrderSide, OrderType, TimeInForce, ExecutionType, OrderStatus, OrderRejectReason,
-    SelfTradePreventionMode
+    SelfTradePreventionMode, ListOrderItem
 };
-use tokio::sync::broadcast;
+use serde_json::json;
+use futures::SinkExt;
+use tokio::sync::mpsc;
+
+use crate::interfaces::spot::websocket::connection_types::ConnectionRepo;
 
 /// UserDataStreamEvent 消息推送器
 pub struct SpotUserDataPusher {
-    tx: broadcast::Sender<UserDataStreamEvent>,
+    connection_repo: std::sync::Arc<ConnectionRepo>,
     interval: tokio::time::Duration,
     counter: u64
 }
 
 impl SpotUserDataPusher {
     /// 创建新的 SpotUserDataPusher 实例
-    pub fn new(tx: broadcast::Sender<UserDataStreamEvent>) -> Self {
+    pub fn new(connection_repo: std::sync::Arc<ConnectionRepo>) -> Self {
         Self {
-            tx,
+            connection_repo,
             interval: tokio::time::Duration::from_secs(8),
             counter: 0
         }
@@ -47,9 +51,38 @@ impl SpotUserDataPusher {
             // 模拟生成不同类型的用户数据消息
             let stream_msg: UserDataStreamEvent = self.generate_stream_message();
 
-            let _ = self.tx.send(stream_msg);
+            // 推送消息给所有连接
+            self.broadcast_message(stream_msg).await;
         }
     }
+
+    /// 广播消息给所有连接
+    async fn broadcast_message(&self, msg: UserDataStreamEvent) {
+        let all_senders = self.connection_repo.get_all_senders().await;
+        let msg_text = serde_json::to_string(&json!({
+            "stream_type": "user_data",
+            "data": msg
+        })).unwrap();
+
+        for sender in all_senders {
+            let _ = sender.send(axum::extract::ws::Message::Text(msg_text.clone().into()));
+        }
+    }
+
+    /// 向指定用户推送消息
+    pub async fn send_to_user(&self, user_id: &str, msg: UserDataStreamEvent) {
+        let user_senders = self.connection_repo.get_senders_by_user(user_id).await;
+        let msg_text = serde_json::to_string(&json!({
+            "stream_type": "user_data",
+            "data": msg
+        })).unwrap();
+
+        for sender in user_senders {
+            let _ = sender.send(axum::extract::ws::Message::Text(msg_text.clone().into()));
+        }
+    }
+
+
 
     /// 生成模拟的 UserDataStreamEvent 消息
     fn generate_stream_message(&self) -> UserDataStreamEvent {
@@ -166,12 +199,12 @@ impl SpotUserDataPusher {
                 list_client_order_id: format!("oco_order_{}", counter),
                 transaction_time: now,
                 orders: vec![
-                    crate::interfaces::spot::websocket::ud_sse_controller::ListOrderItem {
+                    ListOrderItem {
                         symbol: "ETHUSDT".to_string(),
                         order_id: counter as i64,
                         client_order_id: format!("oco_order_{}_1", counter)
                     },
-                    crate::interfaces::spot::websocket::ud_sse_controller::ListOrderItem {
+                    ListOrderItem {
                         symbol: "ETHUSDT".to_string(),
                         order_id: counter as i64 + 1,
                         client_order_id: format!("oco_order_{}_2", counter)
@@ -190,13 +223,13 @@ impl SpotUserDataPusher {
 }
 
 /// 便捷函数：创建并启动 SpotUserDataPusher
-pub fn start_spot_user_data_pusher(tx: broadcast::Sender<UserDataStreamEvent>) {
-    SpotUserDataPusher::new(tx).start();
+pub fn start_spot_user_data_pusher(connection_repo: std::sync::Arc<ConnectionRepo>) {
+    SpotUserDataPusher::new(connection_repo).start();
 }
 
 /// 便捷函数：创建并启动带有自定义间隔的 SpotUserDataPusher
 pub fn start_spot_user_data_pusher_with_interval(
-    tx: broadcast::Sender<UserDataStreamEvent>, interval_seconds: u64
+    connection_repo: std::sync::Arc<ConnectionRepo>, interval_seconds: u64
 ) {
-    SpotUserDataPusher::new(tx).with_interval(interval_seconds).start();
+    SpotUserDataPusher::new(connection_repo).with_interval(interval_seconds).start();
 }
