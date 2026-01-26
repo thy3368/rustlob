@@ -6,6 +6,8 @@ use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErro
 
 /// User Data Stream 事件类型（WebSocket 推送）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum UserDataStreamEvent {
     /// 账户位置更新事件
     /// 事件类型: outboundAccountPosition
@@ -48,6 +50,8 @@ pub enum UserDataStreamEvent {
 /// 账户位置更新事件
 /// outboundAccountPosition
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OutboundAccountPositionEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -63,6 +67,8 @@ pub struct OutboundAccountPositionEvent {
 
 /// 余额项
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct BalanceItem {
     /// 资产名称
     pub asset: String,
@@ -77,6 +83,8 @@ pub struct BalanceItem {
 /// 余额更新事件
 /// balanceUpdate
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct BalanceUpdateEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -97,6 +105,8 @@ pub struct BalanceUpdateEvent {
 /// 执行报告事件（订单更新）
 /// executionReport
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ExecutionReportEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -226,6 +236,8 @@ pub struct ExecutionReportEvent {
 /// 订单列表状态事件
 /// listStatus
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ListStatusEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -255,6 +267,8 @@ pub struct ListStatusEvent {
 
 /// 订单列表中的订单项
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ListOrderItem {
     /// 交易对
     pub symbol: String,
@@ -269,6 +283,8 @@ pub struct ListOrderItem {
 /// 事件流终止事件
 /// eventStreamTerminated
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct EventStreamTerminatedEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -283,6 +299,8 @@ pub struct EventStreamTerminatedEvent {
 /// 外部锁定更新事件
 /// externalLockUpdate
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ExternalLockUpdateEvent {
     /// 订阅 ID
     pub subscription_id: i32,
@@ -302,6 +320,8 @@ pub struct ExternalLockUpdateEvent {
 
 /// 订单方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderSide {
     /// 买入
     BUY,
@@ -311,6 +331,8 @@ pub enum OrderSide {
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderType {
     /// 限价单
     LIMIT,
@@ -330,6 +352,8 @@ pub enum OrderType {
 
 /// 有效方式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum TimeInForce {
     /// 成交为止（一直有效）
     GTC,
@@ -341,6 +365,8 @@ pub enum TimeInForce {
 
 /// 执行类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum ExecutionType {
     /// 订单已被引擎接受
     NEW,
@@ -360,6 +386,8 @@ pub enum ExecutionType {
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderStatus {
     /// 新建订单
     NEW,
@@ -381,6 +409,8 @@ pub enum OrderStatus {
 
 /// 订单拒绝原因
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderRejectReason {
     /// 无拒绝（订单未被拒绝）
     NONE,
@@ -400,6 +430,8 @@ pub enum OrderRejectReason {
 
 /// 自成交保护模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SelfTradePreventionMode {
     /// 无保护
     NONE,
@@ -415,6 +447,8 @@ pub enum SelfTradePreventionMode {
 
 /// User Data Stream 命令枚举（用于 REST API 管理订阅）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotUserDataStreamCmd {
     /// 创建 Listen Key（开启 User Data Stream）
     /// POST /api/v3/userDataStream
@@ -437,6 +471,8 @@ pub enum SpotUserDataStreamCmd {
 /// Weight: 2
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CreateListenKeyCmd {
     pub metadata: CMetadata,
 }
@@ -446,6 +482,8 @@ pub struct CreateListenKeyCmd {
 /// Weight: 2
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct KeepAliveListenKeyCmd {
     pub metadata: CMetadata,
     /// Listen Key
@@ -457,6 +495,8 @@ pub struct KeepAliveListenKeyCmd {
 /// Weight: 2
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CloseListenKeyCmd {
     pub metadata: CMetadata,
     /// Listen Key
@@ -467,6 +507,8 @@ pub struct CloseListenKeyCmd {
 
 /// User Data Stream 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotUserDataStreamRes {
     /// 创建 Listen Key 响应
     CreateListenKey(ListenKeyResponse),
@@ -478,6 +520,8 @@ pub enum SpotUserDataStreamRes {
 
 /// Listen Key 响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ListenKeyResponse {
     /// Listen Key（用于 WebSocket 订阅）
     /// 有效期：60 分钟
