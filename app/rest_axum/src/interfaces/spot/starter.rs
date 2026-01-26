@@ -29,9 +29,6 @@ pub struct SpotStarter;
 impl SpotStarter {
     /// 启动 Spot 模块的 HTTP 和 WebSocket 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-        // 初始化日志
-        tracing_subscriber::fmt::init();
-
         println!("🚀 Starting Spot module...");
         println!("⚠️  Running in MOCK mode (no database connection)");
 

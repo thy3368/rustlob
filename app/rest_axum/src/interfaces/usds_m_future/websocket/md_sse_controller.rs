@@ -1,5 +1,3 @@
-use derivatives_behavior::proc::usds_m_future::behavior::market_data_behavior::UsdsMFutureMarketDataStreamAny;
-
 /// USDS-M 期货市场数据 SSE 实现
 pub struct UsdsMFutureMarketDataSSEImpl;
 
@@ -10,7 +8,7 @@ impl UsdsMFutureMarketDataSSEImpl {
     }
 
     /// 发布市场数据事件
-    pub fn publish_event(&mut self, event: UsdsMFutureMarketDataStreamAny) {
+    pub fn publish_event(&mut self, event: String) {
         println!("📡 Publishing USDS-M Future market data event: {:?}", event);
     }
 }

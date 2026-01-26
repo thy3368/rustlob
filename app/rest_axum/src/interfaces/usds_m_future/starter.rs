@@ -26,9 +26,6 @@ pub struct UsdsMFutureStarter;
 impl UsdsMFutureStarter {
     /// 启动 USDS-M Future 模块的 HTTP 和 WebSocket 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-        // 初始化日志
-        tracing_subscriber::fmt::init();
-
         println!("🚀 Starting USDS-M Future module...");
         println!("⚠️  Running in MOCK mode (no database connection)");
 

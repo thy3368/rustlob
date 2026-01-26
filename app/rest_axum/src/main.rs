@@ -58,6 +58,9 @@ use interfaces::{spot, usds_m_future};
 #[tokio::main]
 #[hotpath::main]
 async fn main() {
+    // 初始化日志（只在主线程中执行一次）
+    tracing_subscriber::fmt::init();
+
     // 启动 Spot 模块
     if let Err(e) = spot::starter::start_spot_module().await {
         eprintln!("❌ Failed to start Spot module: {}", e);

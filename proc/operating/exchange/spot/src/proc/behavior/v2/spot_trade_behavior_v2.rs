@@ -1,9 +1,12 @@
-// 参考 Trading endpoints /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 Trading endpoints 接口;用中文注
+// 参考 Trading endpoints
+// /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
+// 定义所有 Trading endpoints 接口;用中文注
 
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdError};
 
 /// Spot Trading 命令枚举 - 包含所有交易端点
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotTradeCmdAny {
     /// 创建新订单 POST /api/v3/order
     /// Weight: 1
@@ -11,7 +14,8 @@ pub enum SpotTradeCmdAny {
     NewOrder(NewOrderCmd),
 
     /// 测试下单 POST /api/v3/order/test
-    /// Weight: 1 (不带 computeCommissionRates) 或 20 (带 computeCommissionRates)
+    /// Weight: 1 (不带 computeCommissionRates) 或 20 (带
+    /// computeCommissionRates)
     TestNewOrder(TestNewOrderCmd),
 
     /// 取消订单 DELETE /api/v3/order
@@ -92,13 +96,15 @@ pub enum SpotTradeCmdAny {
 
     /// 查询佣金费率 GET /api/v3/account/commission
     /// Weight: 20
-    QueryCommissionRates(QueryCommissionRatesCmd),
+    QueryCommissionRates(QueryCommissionRatesCmd)
 }
 
 // ==================== 订单类型枚举 ====================
 
 /// 订单类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderType {
     /// 限价单
     Limit,
@@ -113,42 +119,50 @@ pub enum OrderType {
     /// 止盈限价单
     TakeProfitLimit,
     /// 限价只挂单
-    LimitMaker,
+    LimitMaker
 }
 
 /// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderSide {
     /// 买入
     Buy,
     /// 卖出
-    Sell,
+    Sell
 }
 
 /// 有效方式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum TimeInForce {
     /// 成交为止 (一直有效)
     GTC,
     /// 无法立即成交的部分就撤销
     IOC,
     /// 无法全部立即成交就撤销
-    FOK,
+    FOK
 }
 
 /// 订单响应类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum NewOrderRespType {
     /// 仅返回确认信息
     ACK,
     /// 返回订单结果
     RESULT,
     /// 返回完整订单信息（包含成交明细）
-    FULL,
+    FULL
 }
 
 /// 自成交保护模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SelfTradePreventionMode {
     /// 无保护
     NONE,
@@ -157,54 +171,66 @@ pub enum SelfTradePreventionMode {
     /// 过期挂单方
     EXPIRE_MAKER,
     /// 过期双方
-    EXPIRE_BOTH,
+    EXPIRE_BOTH
 }
 
 /// 价格钉住类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum PegPriceType {
     /// 主要价格钉住（同侧最优价）
     PRIMARY_PEG,
     /// 市场价格钉住（对侧最优价）
-    MARKET_PEG,
+    MARKET_PEG
 }
 
 /// 价格偏移类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum PegOffsetType {
     /// 价格级别
-    PRICE_LEVEL,
+    PRICE_LEVEL
 }
 
 /// 取消限制
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum CancelRestrictions {
     /// 仅当订单状态为 NEW 时取消
     ONLY_NEW,
     /// 仅当订单状态为 PARTIALLY_FILLED 时取消
-    ONLY_PARTIALLY_FILLED,
+    ONLY_PARTIALLY_FILLED
 }
 
 /// 撤销替换模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum CancelReplaceMode {
     /// 取消失败则不下新单
     STOP_ON_FAILURE,
     /// 即使取消失败也尝试下新单
-    ALLOW_FAILURE,
+    ALLOW_FAILURE
 }
 
 /// 订单限流超限模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderRateLimitExceededMode {
     /// 不执行操作（默认）
     DO_NOTHING,
     /// 仅取消订单
-    CANCEL_ONLY,
+    CANCEL_ONLY
 }
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderStatus {
     /// 新建订单
     NEW,
@@ -221,38 +247,44 @@ pub enum OrderStatus {
     /// 订单过期
     EXPIRED,
     /// 订单过期（在匹配引擎中）
-    EXPIRED_IN_MATCH,
+    EXPIRED_IN_MATCH
 }
 
 /// OCO 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OcoOrderStatus {
     /// 执行中
     EXECUTING,
     /// 全部成交
     ALL_DONE,
     /// 订单被拒绝
-    REJECTED,
+    REJECTED
 }
 
 /// OCO 状态类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OcoStatusType {
     /// 响应
     RESPONSE,
     /// 执行开始
     EXEC_STARTED,
     /// 全部成交
-    ALL_DONE,
+    ALL_DONE
 }
 
 /// 订单列表条件类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum ContingencyType {
     /// OCO 订单
     OCO,
     /// OTO 订单
-    OTO,
+    OTO
 }
 
 // ==================== 订单命令定义 ====================
@@ -263,6 +295,8 @@ pub enum ContingencyType {
 /// Unfilled Order Count: 1
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -304,7 +338,7 @@ pub struct NewOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 测试下单命令
@@ -312,11 +346,12 @@ pub struct NewOrderCmd {
 /// Weight: 1 (不带 computeCommissionRates) 或 20 (带 computeCommissionRates)
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TestNewOrderCmd {
     /// 继承 NewOrderCmd 的所有字段
     pub new_order: NewOrderCmd,
     /// 计算佣金费率（默认 false）
-    pub compute_commission_rates: Option<bool>,
+    pub compute_commission_rates: Option<bool>
 }
 
 /// 取消订单命令
@@ -324,6 +359,8 @@ pub struct TestNewOrderCmd {
 /// Weight: 1
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -339,7 +376,7 @@ pub struct CancelOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 取消某交易对的所有挂单命令
@@ -347,6 +384,8 @@ pub struct CancelOrderCmd {
 /// Weight: 1
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelAllOpenOrdersCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -354,7 +393,7 @@ pub struct CancelAllOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 撤销订单并创建新订单命令
@@ -363,6 +402,8 @@ pub struct CancelAllOpenOrdersCmd {
 /// Unfilled Order Count: 1
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelReplaceOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -416,7 +457,7 @@ pub struct CancelReplaceOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询订单命令
@@ -424,6 +465,8 @@ pub struct CancelReplaceOrderCmd {
 /// Weight: 4
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -435,7 +478,7 @@ pub struct QueryOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 当前挂单查询命令
@@ -443,6 +486,8 @@ pub struct QueryOrderCmd {
 /// Weight: 6 (单个交易对) 或 80 (所有交易对)
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CurrentOpenOrdersCmd {
     pub metadata: CMetadata,
     /// 交易对（可选，不传则查询所有交易对）
@@ -450,7 +495,7 @@ pub struct CurrentOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询所有订单命令
@@ -458,6 +503,8 @@ pub struct CurrentOpenOrdersCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AllOrdersCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -473,7 +520,7 @@ pub struct AllOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 // ==================== OCO 订单命令定义 ====================
@@ -484,6 +531,8 @@ pub struct AllOrdersCmd {
 /// Unfilled Order Count: 2
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOcoOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -527,7 +576,7 @@ pub struct NewOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 创建 OTO 订单命令（One-Triggers-the-Other）
@@ -536,6 +585,8 @@ pub struct NewOcoOrderCmd {
 /// Unfilled Order Count: 2
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOtoOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -598,7 +649,7 @@ pub struct NewOtoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 创建 OTOCO 订单命令（One-Triggers-OCO）
@@ -607,6 +658,8 @@ pub struct NewOtoOrderCmd {
 /// Unfilled Order Count: 3
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOtocoOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -695,7 +748,7 @@ pub struct NewOtocoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 取消 OCO 订单命令
@@ -703,6 +756,8 @@ pub struct NewOtocoOrderCmd {
 /// Weight: 1
 /// Data Source: Matching Engine
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelOcoOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -716,7 +771,7 @@ pub struct CancelOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询 OCO 订单命令
@@ -724,6 +779,8 @@ pub struct CancelOcoOrderCmd {
 /// Weight: 4
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryOcoOrderCmd {
     pub metadata: CMetadata,
     /// 订单列表 ID
@@ -733,7 +790,7 @@ pub struct QueryOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询所有 OCO 订单命令
@@ -741,6 +798,8 @@ pub struct QueryOcoOrderCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AllOcoOrdersCmd {
     pub metadata: CMetadata,
     /// 起始订单列表 ID（返回 ID >= fromId 的订单列表）
@@ -754,7 +813,7 @@ pub struct AllOcoOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询挂起的 OCO 订单命令
@@ -762,12 +821,14 @@ pub struct AllOcoOrdersCmd {
 /// Weight: 6
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OpenOcoOrdersCmd {
     pub metadata: CMetadata,
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 // ==================== 账户查询命令定义 ====================
@@ -777,6 +838,8 @@ pub struct OpenOcoOrdersCmd {
 /// Weight: 20
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AccountCmd {
     pub metadata: CMetadata,
     /// 仅返回非零余额，默认 false
@@ -784,7 +847,7 @@ pub struct AccountCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 账户成交历史查询命令
@@ -792,6 +855,8 @@ pub struct AccountCmd {
 /// Weight: 20
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct MyTradesCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -809,7 +874,7 @@ pub struct MyTradesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询目前下单数命令
@@ -817,12 +882,14 @@ pub struct MyTradesCmd {
 /// Weight: 40
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryUnfilledOrderCountCmd {
     pub metadata: CMetadata,
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询已阻止的匹配命令
@@ -830,6 +897,8 @@ pub struct QueryUnfilledOrderCountCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryPreventedMatchesCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -845,7 +914,7 @@ pub struct QueryPreventedMatchesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询分配结果命令
@@ -853,6 +922,8 @@ pub struct QueryPreventedMatchesCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryAllocationsCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -870,7 +941,7 @@ pub struct QueryAllocationsCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询佣金费率命令
@@ -878,6 +949,8 @@ pub struct QueryAllocationsCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct QueryCommissionRatesCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -885,13 +958,15 @@ pub struct QueryCommissionRatesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 // ==================== 响应类型定义 ====================
 
 /// Spot Trading 响应枚举
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotTradeRes {
     /// 新订单响应（ACK 模式）
     NewOrderAck(NewOrderAck),
@@ -939,13 +1014,15 @@ pub enum SpotTradeRes {
     /// 分配结果查询响应
     Allocations(Vec<Allocation>),
     /// 佣金费率查询响应
-    CommissionRates(CommissionRates),
+    CommissionRates(CommissionRates)
 }
 
 // ==================== 订单响应结构 ====================
 
 /// 新订单 ACK 响应
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOrderAck {
     /// 交易对
     pub symbol: String,
@@ -956,11 +1033,13 @@ pub struct NewOrderAck {
     /// 用户自定义订单 ID
     pub client_order_id: String,
     /// 交易时间戳
-    pub transact_time: i64,
+    pub transact_time: i64
 }
 
 /// 新订单 RESULT 响应
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOrderResult {
     /// 交易对
     pub symbol: String,
@@ -1023,20 +1102,24 @@ pub struct NewOrderResult {
     /// 价格偏移值
     pub peg_offset_value: Option<i32>,
     /// 当前钉住价格
-    pub pegged_price: Option<String>,
+    pub pegged_price: Option<String>
 }
 
 /// 新订单 FULL 响应
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct NewOrderFull {
     /// 基础订单信息
     pub base: NewOrderResult,
     /// 成交明细
-    pub fills: Vec<Fill>,
+    pub fills: Vec<Fill>
 }
 
 /// 成交明细
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Fill {
     /// 成交价格
     pub price: String,
@@ -1047,11 +1130,13 @@ pub struct Fill {
     /// 佣金资产
     pub commission_asset: String,
     /// 成交 ID
-    pub trade_id: i64,
+    pub trade_id: i64
 }
 
 /// 订单信息（通用）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OrderInfo {
     /// 交易对
     pub symbol: String,
@@ -1092,20 +1177,24 @@ pub struct OrderInfo {
     /// 订单开始时间
     pub working_time: i64,
     /// 自成交保护模式
-    pub self_trade_prevention_mode: SelfTradePreventionMode,
+    pub self_trade_prevention_mode: SelfTradePreventionMode
 }
 
 /// 取消订单结果（可能是单个订单或 OCO 订单列表）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum CancelOrderResult {
     /// 单个订单
     Order(OrderInfo),
     /// OCO 订单列表
-    OcoOrder(OcoOrderInfo),
+    OcoOrder(OcoOrderInfo)
 }
 
 /// 撤销替换订单结果
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CancelReplaceResult {
     /// 取消结果（SUCCESS 或 FAILURE）
     pub cancel_result: String,
@@ -1114,21 +1203,25 @@ pub struct CancelReplaceResult {
     /// 取消响应
     pub cancel_response: Option<OrderInfo>,
     /// 新订单响应（根据 newOrderRespType 返回不同类型）
-    pub new_order_response: Option<NewOrderResponse>,
+    pub new_order_response: Option<NewOrderResponse>
 }
 
 /// 新订单响应（用于撤销替换）
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum NewOrderResponse {
     Ack(NewOrderAck),
     Result(NewOrderResult),
-    Full(NewOrderFull),
+    Full(NewOrderFull)
 }
 
 // ==================== OCO 订单响应结构 ====================
 
 /// OCO 订单结果
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OcoOrderResult {
     /// 订单列表 ID
     pub order_list_id: i64,
@@ -1147,11 +1240,13 @@ pub struct OcoOrderResult {
     /// 订单列表
     pub orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    pub order_reports: Vec<OrderInfo>,
+    pub order_reports: Vec<OrderInfo>
 }
 
 /// OTO 订单结果
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OtoOrderResult {
     /// 订单列表 ID
     pub order_list_id: i64,
@@ -1170,11 +1265,12 @@ pub struct OtoOrderResult {
     /// 订单列表
     pub orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    pub order_reports: Vec<OrderInfo>,
+    pub order_reports: Vec<OrderInfo>
 }
 
 /// OTOCO 订单结果
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OtocoOrderResult {
     /// 订单列表 ID
     pub order_list_id: i64,
@@ -1193,22 +1289,26 @@ pub struct OtocoOrderResult {
     /// 订单列表
     pub orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    pub order_reports: Vec<OrderInfo>,
+    pub order_reports: Vec<OrderInfo>
 }
 
 /// OCO 订单条目
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OcoOrderEntry {
     /// 交易对
     pub symbol: String,
     /// 订单 ID
     pub order_id: i64,
     /// 用户自定义订单 ID
-    pub client_order_id: String,
+    pub client_order_id: String
 }
 
 /// OCO 订单信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OcoOrderInfo {
     /// 订单列表 ID
     pub order_list_id: i64,
@@ -1225,13 +1325,15 @@ pub struct OcoOrderInfo {
     /// 交易对
     pub symbol: String,
     /// 订单列表
-    pub orders: Vec<OrderInfo>,
+    pub orders: Vec<OrderInfo>
 }
 
 // ==================== 账户信息响应结构 ====================
 
 /// 账户信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct AccountInfo {
     /// Maker 佣金率（bps）
     pub maker_commission: i32,
@@ -1264,22 +1366,26 @@ pub struct AccountInfo {
     /// 权限列表
     pub permissions: Vec<String>,
     /// UID
-    pub uid: i64,
+    pub uid: i64
 }
 
 /// 余额信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Balance {
     /// 资产名称
     pub asset: String,
     /// 可用余额
     pub free: String,
     /// 冻结余额
-    pub locked: String,
+    pub locked: String
 }
 
 /// 佣金费率
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CommissionRates {
     /// Maker 标准佣金率
     pub maker: String,
@@ -1288,11 +1394,13 @@ pub struct CommissionRates {
     /// Buyer 佣金率（保留字段）
     pub buyer: Option<String>,
     /// Seller 佣金率（保留字段）
-    pub seller: Option<String>,
+    pub seller: Option<String>
 }
 
 /// 成交信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct TradeInfo {
     /// 交易对
     pub symbol: String,
@@ -1319,11 +1427,13 @@ pub struct TradeInfo {
     /// 是否是挂单方
     pub is_maker: bool,
     /// 是否是最优成交
-    pub is_best_match: bool,
+    pub is_best_match: bool
 }
 
 /// 未成交订单计数
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct UnfilledOrderCount {
     /// 速率限制类型
     pub rate_limit_type: String,
@@ -1334,11 +1444,13 @@ pub struct UnfilledOrderCount {
     /// 限制值
     pub limit: i32,
     /// 当前计数
-    pub count: i32,
+    pub count: i32
 }
 
 /// 阻止匹配信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct PreventedMatch {
     /// 交易对
     pub symbol: String,
@@ -1357,11 +1469,13 @@ pub struct PreventedMatch {
     /// Maker 阻止数量
     pub maker_prevented_quantity: String,
     /// 交易时间戳
-    pub transact_time: i64,
+    pub transact_time: i64
 }
 
 /// 分配信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Allocation {
     /// 分配 ID
     pub id: i64,
@@ -1390,7 +1504,7 @@ pub struct Allocation {
     /// 是否是挂单方
     pub is_maker: bool,
     /// 是否是分配方
-    pub is_allocator: bool,
+    pub is_allocator: bool
 }
 
 // ==================== 行为接口定义 ====================
