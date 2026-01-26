@@ -4,6 +4,7 @@ use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErro
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotUserDataCmdAny {
     /// 账户信息查询 GET /api/v3/account
     /// Weight: 20
@@ -59,6 +60,7 @@ pub enum SpotUserDataCmdAny {
 /// Weight: 20
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountCmd {
     pub metadata: CMetadata,
     /// 仅返回非零余额，默认 false
@@ -74,6 +76,7 @@ pub struct AccountCmd {
 /// Weight: 4
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrderCmd {
     pub metadata: CMetadata,
     /// 交易对
@@ -93,6 +96,7 @@ pub struct QueryOrderCmd {
 /// Weight: 6 (单交易对) / 80 (所有交易对)
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CurrentOpenOrdersCmd {
     pub metadata: CMetadata,
     /// 交易对（可选，不传则返回所有交易对）
@@ -108,6 +112,7 @@ pub struct CurrentOpenOrdersCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllOrdersCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -131,6 +136,7 @@ pub struct AllOrdersCmd {
 /// Weight: 4
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrderListCmd {
     pub metadata: CMetadata,
     /// 订单列表ID（与 orig_client_order_id 二选一）
@@ -148,6 +154,7 @@ pub struct QueryOrderListCmd {
 /// Weight: 20
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryAllOrderListCmd {
     pub metadata: CMetadata,
     /// 从该ID开始（与时间参数互斥）
@@ -169,6 +176,7 @@ pub struct QueryAllOrderListCmd {
 /// Weight: 6
 /// Data Source: Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOpenOrderListCmd {
     pub metadata: CMetadata,
     /// 接收窗口
@@ -182,6 +190,7 @@ pub struct QueryOpenOrderListCmd {
 /// Weight: 20 (无orderId) / 5 (有orderId)
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MyTradesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -207,6 +216,7 @@ pub struct MyTradesCmd {
 /// Weight: 40
 /// Data Source: Memory
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryUnfilledOrderCountCmd {
     pub metadata: CMetadata,
     /// 接收窗口
@@ -226,6 +236,7 @@ pub struct QueryUnfilledOrderCountCmd {
 /// - symbol + orderId + fromPreventedMatchId
 /// - symbol + orderId + fromPreventedMatchId + limit
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryPreventedMatchesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -258,6 +269,7 @@ pub struct QueryPreventedMatchesCmd {
 /// - symbol + orderId
 /// - symbol + orderId + fromAllocationId
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryAllocationsCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -282,6 +294,7 @@ pub struct QueryAllocationsCmd {
 /// GET /api/v3/account/commission
 /// Weight: 20
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryCommissionRatesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
@@ -294,6 +307,7 @@ pub struct QueryCommissionRatesCmd {
 
 /// User Data 响应枚举
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpotUserDataRes {
     /// 账户信息响应
     Account(AccountInfo),
@@ -328,6 +342,7 @@ pub enum SpotUserDataRes {
 
 /// 账户信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccountInfo {
     /// Maker 佣金
     pub maker_commission: i32,
@@ -365,6 +380,7 @@ pub struct AccountInfo {
 
 /// 佣金费率
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CommissionRates {
     /// Maker 费率
     pub maker: String,
@@ -378,6 +394,7 @@ pub struct CommissionRates {
 
 /// 余额信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Balance {
     /// 资产名称
     pub asset: String,
@@ -389,6 +406,7 @@ pub struct Balance {
 
 /// 订单信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderInfo {
     /// 交易对
     pub symbol: String,
@@ -434,6 +452,7 @@ pub struct OrderInfo {
 
 /// 订单列表信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderListInfo {
     /// 订单列表ID
     pub order_list_id: i64,
@@ -455,6 +474,7 @@ pub struct OrderListInfo {
 
 /// 订单列表中的订单
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderListOrder {
     /// 交易对
     pub symbol: String,
@@ -466,6 +486,7 @@ pub struct OrderListOrder {
 
 /// 成交信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradeInfo {
     /// 交易对
     pub symbol: String,
@@ -497,6 +518,7 @@ pub struct TradeInfo {
 
 /// 速率限制信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RateLimitInfo {
     /// 速率限制类型
     pub rate_limit_type: String,
@@ -512,6 +534,7 @@ pub struct RateLimitInfo {
 
 /// 被阻止的匹配信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreventedMatch {
     /// 交易对
     pub symbol: String,
@@ -537,6 +560,7 @@ pub struct PreventedMatch {
 
 /// 分配信息
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AllocationInfo {
     /// 交易对
     pub symbol: String,

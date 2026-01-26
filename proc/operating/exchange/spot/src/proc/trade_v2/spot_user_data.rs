@@ -6,19 +6,42 @@ pub struct SpotUserDataImpl {}
 impl SpotUserDataBehavior for SpotUserDataImpl {
     fn handle(&mut self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdError> {
         match cmd {
-            SpotUserDataCmdAny::Account(_) => {}
-            SpotUserDataCmdAny::QueryOrder(_) => {}
-            SpotUserDataCmdAny::CurrentOpenOrders(_) => {}
-            SpotUserDataCmdAny::AllOrders(_) => {}
-            SpotUserDataCmdAny::QueryOrderList(_) => {}
-            SpotUserDataCmdAny::QueryAllOrderList(_) => {}
-            SpotUserDataCmdAny::QueryOpenOrderList(_) => {}
-            SpotUserDataCmdAny::MyTrades(_) => {}
-            SpotUserDataCmdAny::QueryUnfilledOrderCount(_) => {}
-            SpotUserDataCmdAny::QueryPreventedMatches(_) => {}
-            SpotUserDataCmdAny::QueryAllocations(_) => {}
-            SpotUserDataCmdAny::QueryCommissionRates(_) => {}
+            SpotUserDataCmdAny::Account(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryOrder(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::CurrentOpenOrders(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::AllOrders(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryOrderList(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryAllOrderList(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryOpenOrderList(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::MyTrades(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryUnfilledOrderCount(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryPreventedMatches(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryAllocations(_) => {
+                todo!()
+            }
+            SpotUserDataCmdAny::QueryCommissionRates(_) => {
+                todo!()
+            }
         }
-        todo!()
     }
 }

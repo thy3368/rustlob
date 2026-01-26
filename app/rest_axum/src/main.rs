@@ -1,18 +1,34 @@
-pub mod md_gw;
-pub mod trade_gw;
-pub mod ud_gw;
-
-pub mod spot_gw;
 
 // HTTP 接口层
 pub mod interfaces {
-    pub mod http {
+    pub mod spot_http {
         pub mod trade_controller;
         pub mod trade_v2_controller;
         pub mod md_controller;
         pub mod ud_controller;
-
     }
+
+    pub mod usds_m_future_http {
+        pub mod trade_controller;
+
+        pub mod md_controller;
+        pub mod ud_controller;
+    }
+
+    pub mod coin_m_future_http {
+        pub mod trade_controller;
+
+        pub mod md_controller;
+        pub mod ud_controller;
+    }
+
+    pub mod option_http {
+        pub mod trade_controller;
+
+        pub mod md_controller;
+        pub mod ud_controller;
+    }
+
 }
 
 use axum::{
@@ -33,22 +49,34 @@ async fn main() {
     println!("⚠️  Running in MOCK mode (no database connection)");
 
     // 创建应用服务（单例，全局共享）
-    let trade_service = Arc::new(interfaces::http::trade_controller::TradeService::new());
-    let market_data_service = Arc::new(interfaces::http::md_controller::MarketDataService::new());
+    let trade_service = Arc::new(interfaces::spot_http::trade_controller::TradeService::new());
+    let trade_v2_service = Arc::new(interfaces::spot_http::trade_v2_controller::TradeV2Service::new());
+    let market_data_service = Arc::new(interfaces::spot_http::md_controller::MarketDataService::new());
+    let user_data_service = Arc::new(interfaces::spot_http::ud_controller::UserDataService::new());
 
     // 创建路由，注入服务依赖
     let order_routes = Router::new()
-        .route("/api/spot/order/", post(interfaces::http::trade_controller::handle))
+        .route("/api/spot/order/", post(interfaces::spot_http::trade_controller::handle))
         .with_state(trade_service);
 
+    let trade_v2_routes = Router::new()
+        .route("/api/spot/trade/v2/", post(interfaces::spot_http::trade_v2_controller::handle))
+        .with_state(trade_v2_service);
+
     let market_data_routes = Router::new()
-        .route("/api/spot/market/data", post(interfaces::http::md_controller::handle))
+        .route("/api/spot/market/data", post(interfaces::spot_http::md_controller::handle))
         .with_state(market_data_service);
+
+    let user_data_routes = Router::new()
+        .route("/api/spot/user/data", post(interfaces::spot_http::ud_controller::handle))
+        .with_state(user_data_service);
 
     let app = Router::new()
         .route("/health", get(health_check))
         .nest("/", order_routes)
-        .nest("/", market_data_routes);
+        .nest("/", trade_v2_routes)
+        .nest("/", market_data_routes)
+        .nest("/", user_data_routes);
 
     // 启动服务器
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.expect("Failed to bind port");
@@ -56,7 +84,9 @@ async fn main() {
     println!("🚀 Server started at http://localhost:3000");
     println!("📊 Health check: GET /health");
     println!("💹 Spot trade: POST /api/spot/order/ (JSON)");
+    println!("💹 Spot trade v2: POST /api/spot/trade/v2/ (JSON)");
     println!("📈 Spot market data: POST /api/spot/market/data (JSON)");
+    println!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 
     axum::serve(listener, app).await.expect("Server failed to start");
 }
