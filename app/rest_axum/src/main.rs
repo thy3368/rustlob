@@ -52,15 +52,8 @@ pub mod interfaces {
     }
 }
 
-use std::sync::Arc;
-
-use axum::{
-    response::IntoResponse,
-    routing::{get, post},
-    Router
-};
+use axum::response::IntoResponse;
 use interfaces::{spot, usds_m_future};
-use tracing_subscriber;
 
 #[tokio::main]
 #[hotpath::main]

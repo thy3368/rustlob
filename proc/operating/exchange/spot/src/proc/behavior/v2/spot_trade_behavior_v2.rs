@@ -945,7 +945,7 @@ pub enum SpotTradeRes {
 // ==================== 订单响应结构 ====================
 
 /// 新订单 ACK 响应
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct NewOrderAck {
     /// 交易对
     pub symbol: String,
@@ -960,7 +960,7 @@ pub struct NewOrderAck {
 }
 
 /// 新订单 RESULT 响应
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct NewOrderResult {
     /// 交易对
     pub symbol: String,
