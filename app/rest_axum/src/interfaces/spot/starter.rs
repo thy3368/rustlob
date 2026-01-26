@@ -34,49 +34,7 @@ impl SpotStarter {
 
         // ==================== HTTP 服务器启动 ====================
         println!("📡 Starting Spot HTTP API server...");
-
-        // 创建应用服务（单例，全局共享）
-        let trade_service = Arc::new(TradeService::new());
-        let trade_v2_service = Arc::new(TradeV2Service::new());
-        let market_data_service = Arc::new(MarketDataService::new());
-        let user_data_service = Arc::new(UserDataService::new());
-
-        // 创建路由，注入服务依赖
-        let order_routes = Router::new()
-            .route("/api/spot/order/", post(trade_controller::handle))
-            .with_state(trade_service);
-
-        let trade_v2_routes = Router::new()
-            .route("/api/spot/trade/v2/", post(trade_v2_controller::handle))
-            .with_state(trade_v2_service);
-
-        let market_data_routes = Router::new()
-            .route("/api/spot/market/data", post(md_controller::handle))
-            .with_state(market_data_service);
-
-        let user_data_routes = Router::new()
-            .route("/api/spot/user/data", post(ud_controller::handle))
-            .with_state(user_data_service);
-
-        let http_app = Router::new()
-            .route("/api/spot/health", get(Self::health_check))
-            .nest("/", order_routes)
-            .nest("/", trade_v2_routes)
-            .nest("/", market_data_routes)
-            .nest("/", user_data_routes);
-
-        // 启动 HTTP 服务器（在后台运行）
-        let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-        println!("🚀 Spot HTTP server started at http://localhost:3001");
-        println!("📊 Spot health check: GET /api/spot/health");
-        println!("💹 Spot trade: POST /api/spot/order/ (JSON)");
-        println!("💹 Spot trade v2: POST /api/spot/trade/v2/ (JSON)");
-        println!("📈 Spot market data: POST /api/spot/market/data (JSON)");
-        println!("👤 Spot user data: POST /api/spot/user/data (JSON)");
-
-        tokio::spawn(async move {
-            axum::serve(http_listener, http_app).await.expect("Spot HTTP server failed to start");
-        });
+        Self::start_http_server().await?;
 
         // ==================== WebSocket 服务器启动 ====================
         println!("🔌 Starting Spot WebSocket server...");
@@ -97,6 +55,7 @@ impl SpotStarter {
         // 创建 WebSocket 应用
         let ws_app = Self::create_websocket_app(tx.clone());
 
+        //todo 下面代码移到 create_websocket_app里面？
         // 启动 WebSocket 服务器（在后台运行）
         let ws_listener = tokio::net::TcpListener::bind("0.0.0.0:8084").await?;
         println!("🚀 Spot WebSocket server started at ws://localhost:8084/ws");
@@ -118,6 +77,7 @@ impl SpotStarter {
         use tower_http::services::ServeDir;
 
         // WebSocket 连接处理器
+        //todo user data怎么处理？
         async fn websocket_handler(
             ws: WebSocketUpgrade,
             tx: broadcast::Sender<SpotMarketDataStreamAny>,
@@ -163,6 +123,7 @@ impl SpotStarter {
                                     axum::extract::ws::Message::Text(text) => {
                                         println!("Received Spot WebSocket message: {}", text);
 
+                                        //todo market_data_sse处理订阅
                                         // 这里可以添加消息处理逻辑
                                         // 例如解析 MarketDataSubscriptionCmdAny 等
                                     },
@@ -185,6 +146,54 @@ impl SpotStarter {
         Router::new()
             .route("/ws", get(move |ws| websocket_handler(ws, tx.clone())))
             .nest_service("/", ServeDir::new("."))
+    }
+
+    /// 启动 HTTP 服务器
+    async fn start_http_server() -> Result<(), Box<dyn std::error::Error>> {
+        // 创建应用服务（单例，全局共享）
+        let trade_service = Arc::new(TradeService::new());
+        let trade_v2_service = Arc::new(TradeV2Service::new());
+        let market_data_service = Arc::new(MarketDataService::new());
+        let user_data_service = Arc::new(UserDataService::new());
+
+        // 创建路由，注入服务依赖
+        let order_routes = Router::new()
+            .route("/api/spot/order/", post(trade_controller::handle))
+            .with_state(trade_service);
+
+        let trade_v2_routes = Router::new()
+            .route("/api/spot/trade/v2/", post(trade_v2_controller::handle))
+            .with_state(trade_v2_service);
+
+        let market_data_routes = Router::new()
+            .route("/api/spot/market/data", post(md_controller::handle))
+            .with_state(market_data_service);
+
+        let user_data_routes = Router::new()
+            .route("/api/spot/user/data", post(ud_controller::handle))
+            .with_state(user_data_service);
+
+        let http_app = Router::new()
+            .route("/api/spot/health", get(Self::health_check))
+            .nest("/", order_routes)
+            .nest("/", trade_v2_routes)
+            .nest("/", market_data_routes)
+            .nest("/", user_data_routes);
+
+        // 启动 HTTP 服务器（在后台运行）
+        let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
+        println!("🚀 Spot HTTP server started at http://localhost:3001");
+        println!("📊 Spot health check: GET /api/spot/health");
+        println!("💹 Spot trade: POST /api/spot/order/ (JSON)");
+        println!("💹 Spot trade v2: POST /api/spot/trade/v2/ (JSON)");
+        println!("📈 Spot market data: POST /api/spot/market/data (JSON)");
+        println!("👤 Spot user data: POST /api/spot/user/data (JSON)");
+
+        tokio::spawn(async move {
+            axum::serve(http_listener, http_app).await.expect("Spot HTTP server failed to start");
+        });
+
+        Ok(())
     }
 
     /// 健康检查

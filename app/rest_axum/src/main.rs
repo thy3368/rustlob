@@ -67,9 +67,9 @@ async fn main() {
     }
 
     // 启动 USDS-M Future 模块
-    if let Err(e) = usds_m_future::starter::start_usds_m_future_module().await {
-        eprintln!("❌ Failed to start USDS-M Future module: {}", e);
-    }
+    // if let Err(e) = usds_m_future::starter::start_usds_m_future_module().await {
+    //     eprintln!("❌ Failed to start USDS-M Future module: {}", e);
+    // }
 
     // 保持主线程运行
     tokio::signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
