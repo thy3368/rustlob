@@ -5,7 +5,7 @@ use chrono;
 use tokio::sync::{mpsc, Mutex};
 
 /// 连接信息结构体
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConnectionInfo {
     /// 用户ID（可选，未认证用户可能没有）
     pub user_id: Option<String>,
@@ -46,6 +46,7 @@ impl ConnectionRepo {
     /// 添加连接信息和发送器
     pub async fn add_connection(&self, conn_info: ConnectionInfo) {
         let mut all_conns = self.all_connections.lock().await;
+        // 因为 ConnectionInfo 现在没有实现 Clone，所以我们直接推入
         all_conns.push(conn_info.clone());
 
         let mut conn_senders = self.connection_senders.lock().await;
@@ -56,7 +57,7 @@ impl ConnectionRepo {
             user_conns.entry(user_id.clone()).or_insert(Vec::new()).push(conn_info.clone());
 
             let mut user_senders = self.user_senders.lock().await;
-            user_senders.entry(user_id.clone()).or_insert(Vec::new()).push(conn_info.sender);
+            user_senders.entry(user_id.clone()).or_insert(Vec::new()).push(conn_info.sender.clone());
         }
 
         println!("Connection added: {:?}", conn_info);
@@ -198,6 +199,19 @@ impl ConnectionRepo {
             if let Some(sender) = self.get_sender_by_addr(client_addr).await {
                 user_senders.entry(new_user_id).or_insert(Vec::new()).push(sender);
             }
+        }
+    }
+}
+
+// 为 ConnectionInfo 手动实现 Clone trait，因为 mpsc::UnboundedSender 没有实现 Clone
+impl Clone for ConnectionInfo {
+    fn clone(&self) -> Self {
+        Self {
+            user_id: self.user_id.clone(),
+            client_addr: self.client_addr,
+            connected_at: self.connected_at,
+            last_active_at: self.last_active_at,
+            sender: self.sender.clone()
         }
     }
 }
