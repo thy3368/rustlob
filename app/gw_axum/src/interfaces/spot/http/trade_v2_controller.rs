@@ -14,35 +14,7 @@ use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
 use spot_behavior::proc::trade_v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
 
-// ============================================================================
-// 应用服务 - 封装交易处理器
-// ============================================================================
 
-/// 交易服务 - 封装交易处理器
-pub struct TradeV2Service {
-    processor: Arc<Mutex<SpotTradeBehaviorV2Impl>>,
-}
-
-impl TradeV2Service {
-    /// 创建新的交易服务实例
-    #[hotpath::measure]
-    pub fn new() -> Self {
-        let processor = SpotTradeBehaviorV2Impl {};
-        Self { processor: Arc::new(Mutex::new(processor)) }
-    }
-
-    /// 处理交易请求 - 使用服务层
-    #[hotpath::measure]
-    pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, String> {
-        println!("📋 收到交易请求: {:?}", cmd);
-
-        self.processor
-            .lock()
-            .map_err(|e| format!("Failed to acquire lock: {}", e))?
-            .handle(cmd)
-            .map_err(|e| format!("{:?}", e))
-    }
-}
 
 // ============================================================================
 // Spot 交易处理接口 - 使用应用服务层
@@ -58,13 +30,22 @@ pub struct TradeV2Response {
 }
 
 #[hotpath::measure]
-pub async fn handle(State(service): State<Arc<TradeV2Service>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
+pub async fn handle(State(service): State<Arc<SpotTradeBehaviorV2Impl>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
     println!("📋 收到交易请求: {:?}", cmd);
 
-    match service.handle_all(cmd).await {
-        Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(&err),
+
+    //todo 调用SpotTradeBehaviorV2Impl处理
+    
+    match service.handle(cmd).await {
+            Ok(response) => create_json_response(response),
+            Err(err) => create_error_response(&err),
     }
+        
+        
+    // match service.handle(cmd).await {
+    //     Ok(response) => create_json_response(response),
+    //     Err(err) => create_error_response(&err),
+    // }
 }
 
 /// 创建 JSON 响应

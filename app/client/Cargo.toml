@@ -1,7 +1,15 @@
 [package]
-name = "sapp"
+name = "cex_client"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "sapp"
+path = "src/main.rs"
+
+[lib]
+name = "sapp"
+path = "src/lib.rs"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -12,8 +20,8 @@ jsonrpc-derive = "18.0"
 jsonrpc-http-server = "18.0"
 
 # HTTP REST API (新增axum)
-axum = { version = "0.7", features = ["ws"] }
-tower = "0.4"
+axum = { version = "0.8.8", features = ["ws"] }
+tower = "0.4.13"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # 序列化
@@ -27,12 +35,12 @@ reqwest = { version = "0.11", features = ["json"] }
 chrono = "0.4"
 
 # 日志
-tracing = "0.1"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # WebSocket (高性能)
-axum-extra = { version = "0.9", features = ["typed-header"] }
-tokio-tungstenite = "0.21"
+axum-extra = { version = "0.12.5", features = ["typed-header"] }
+tokio-tungstenite = "0.28.0"
 futures-util = "0.3"
 futures-channel = "0.3"
 
@@ -41,7 +49,7 @@ dashmap = "5.5"
 crossbeam = "0.8"
 
 # 性能监控
-metrics = "0.21"
+metrics = "0.24.3"
 metrics-exporter-prometheus = "0.13"
 
 # Spot 处理依赖

@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_restful_client_limit_order() {
-        // 注意：需要先启动服务端 (rest_axum)
+        // 注意：需要先启动服务端 (gw_axum)
         let mut client = RestfulClient::new("http://localhost:3000");
 
         let limit_order = LimitOrder {

@@ -3,7 +3,7 @@ use spot_behavior::proc::behavior::spot_trade_behavior::{SpotCmdError, CommonErr
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny};
 use reqwest::Client;
 
-// 实现HTTP调用客户端，参考 /Users/hongyaotang/src/rustlob/app/rest_axum/src/interfaces/spot/http_server.rs
+// 实现HTTP调用客户端，参考 /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
 pub struct SpotTradeV2HttpClient {
     http_client: Client,
     base_url: String,
@@ -89,7 +89,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trade_v2_http_connection() {
-        // 注意：需要先启动服务端 (rest_axum)
+        // 注意：需要先启动服务端 (gw_axum)
         println!("🧪 测试 Trade V2 HTTP 连接...");
 
         // 创建客户端实例（使用默认地址 http://localhost:3001）
@@ -134,8 +134,8 @@ mod tests {
             Err(error) => {
                 println!("❌ 连接失败: {:?}", error);
                 // 如果服务端未启动，测试将失败 - 这是预期的行为
-                // 提示用户需要先启动 rest_axum 服务端
-                panic!("无法连接到 Trade V2 服务端。请确保已启动 rest_axum 服务端（监听端口 3001）。错误: {:?}", error);
+                // 提示用户需要先启动 gw_axum 服务端
+                panic!("无法连接到 Trade V2 服务端。请确保已启动 gw_axum 服务端（监听端口 3001）。错误: {:?}", error);
             }
         }
     }

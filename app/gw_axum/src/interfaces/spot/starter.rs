@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
-use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use tokio::sync::broadcast;
 
 use crate::interfaces::spot::{
-    http_server::HttpServer,
-    websocket_server::WebSocketServer
+    http_server::HttpServer, websocket::connection_types::ConnectionRepo, websocket_server::WebSocketServer
 };
-use crate::interfaces::spot::websocket::connection_types::ConnectionRepo;
 
 /// Spot 模块启动器
 pub struct SpotStarter;

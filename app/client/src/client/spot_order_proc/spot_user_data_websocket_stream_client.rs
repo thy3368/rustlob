@@ -112,7 +112,7 @@ impl SpotUserDataWebSocketStreamClient {
     pub async fn send_text(&self, text: impl Into<String>) -> Result<(), Box<dyn std::error::Error>> {
         let mut guard = self.connection.lock().await;
         if let Some(state) = &mut *guard {
-            state.sender.send(Message::Text(text.into())).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            state.sender.send(Message::Text(text.into().into())).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             Ok(())
         } else {
             Err("WebSocket connection not established".into())
@@ -123,7 +123,7 @@ impl SpotUserDataWebSocketStreamClient {
     pub async fn send_binary(&self, data: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
         let mut guard = self.connection.lock().await;
         if let Some(state) = &mut *guard {
-            state.sender.send(Message::Binary(data)).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            state.sender.send(Message::Binary(data.into())).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             Ok(())
         } else {
             Err("WebSocket connection not established".into())
@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_data_websocket_connection() {
-        // 注意：需要先启动服务端 (rest_axum)
+        // 注意：需要先启动服务端 (gw_axum)
         let client = SpotUserDataWebSocketStreamClient::new("ws://localhost:8084");
 
         match client.connect().await {

@@ -181,7 +181,7 @@ cargo test --all
 ### 启动 WebSocket 服务
 
 ```bash
-cd app/sapp
+cd app/client
 cargo run --release
 # 🚀 服务启动: ws://localhost:9090/ws
 ```
@@ -189,7 +189,7 @@ cargo run --release
 ### 运行示例客户端
 
 ```bash
-cd app/sapp
+cd app/client
 cargo run --example ws_client --release
 # 实时查看订单执行和成交推送
 ```
@@ -218,7 +218,7 @@ cargo run --example ws_client --release
 { "type": "trade", "trade_id": 789012, "buyer": "alice", "seller": "bob", "price": 50000 }
 ```
 
-详细 API 文档：[WEBSOCKET.md](app/sapp/WEBSOCKET.md)
+详细 API 文档：[WEBSOCKET.md](app/client/WEBSOCKET.md)
 
 ---
 
@@ -307,7 +307,7 @@ spec:
 ## 📊 性能基准
 
 ```bash
-cd app/sapp
+cd app/client
 cargo run --example ws_benchmark --release
 ```
 
@@ -339,7 +339,7 @@ Ping/Pong 延迟:
 | [hard.md](design/process/story/hardware/hard.md) | 硬件需求分析（三级配置方案） |
 | [futures_design.md](design/process/story/futures_design.md) | 永续合约设计 |
 | [options_design.md](design/process/story/options_design.md) | 期权交易设计 |
-| [WEBSOCKET.md](app/sapp/WEBSOCKET.md) | WebSocket API 详细文档 |
+| [WEBSOCKET.md](app/client/WEBSOCKET.md) | WebSocket API 详细文档 |
 
 ---
 
@@ -362,9 +362,9 @@ CMD ["sapp"]
 ### 编译优化
 
 ```bash
-cd app/sapp
+cd app/client
 cargo build --release --target x86_64-unknown-linux-gnu
-# 二进制: target/release/sapp
+# 二进制: target/release/client
 ```
 
 ---

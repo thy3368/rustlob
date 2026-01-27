@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use axum::{
-    response::IntoResponse,
     routing::{get, post},
     Router
 };
+use spot_behavior::proc::trade_v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 use crate::interfaces::spot::http::{
-    md_controller, md_controller::MarketDataService, trade_controller, trade_controller::TradeService,
-    trade_v2_controller, trade_v2_controller::TradeV2Service, ud_controller, ud_controller::UserDataService
+    md_handler, md_handler::MarketDataService, trade_handler, trade_handler::TradeService,
+    trade_v2_controller, ud_handler, ud_handler::UserDataService
 };
 
 /// HTTP 服务器启动器
@@ -19,22 +19,22 @@ impl HttpServer {
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）
         let trade_service = Arc::new(TradeService::new());
-        let trade_v2_service = Arc::new(TradeV2Service::new());
+        let trade_v2_service = Arc::new(SpotTradeBehaviorV2Impl::new());
         let market_data_service = Arc::new(MarketDataService::new());
         let user_data_service = Arc::new(UserDataService::new());
 
         // 创建路由，注入服务依赖
         let order_routes =
-            Router::new().route("/api/spot/order/", post(trade_controller::handle)).with_state(trade_service);
+            Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
 
         let trade_v2_routes =
             Router::new().route("/api/spot/trade/v2/", post(trade_v2_controller::handle)).with_state(trade_v2_service);
 
         let market_data_routes =
-            Router::new().route("/api/spot/market/data", post(md_controller::handle)).with_state(market_data_service);
+            Router::new().route("/api/spot/market/data", post(md_handler::handle)).with_state(market_data_service);
 
         let user_data_routes =
-            Router::new().route("/api/spot/user/data", post(ud_controller::handle)).with_state(user_data_service);
+            Router::new().route("/api/spot/user/data", post(ud_handler::handle)).with_state(user_data_service);
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
