@@ -16,11 +16,12 @@ use spot_behavior::proc::{
 
 
 pub async fn handle(
-    State(service): State<Arc<SpotTradeBehaviorV2Impl>>, Json(cmd): Json<SpotTradeCmdAny>
+    State(service): State<Arc<SpotTradeBehaviorV2Impl>>,
+    Json(cmd): Json<SpotTradeCmdAny>
 ) -> impl IntoResponse {
     tracing::info!("📋 收到交易请求: {:?}", cmd);
 
-    match service.handle(cmd) {
+    match service.handle(cmd).await {
         Ok(response) => create_json_response(response),
         Err(err) => create_error_response(err)
     }

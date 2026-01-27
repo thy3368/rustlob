@@ -1,18 +1,19 @@
+use std::sync::{Arc, Mutex};
+
 use axum::{
     extract::{Json, State},
     response::IntoResponse,
     routing::post,
-    Router,
+    Router
 };
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-
 // USDS-M期货市场数据相关导入
 use derivatives_behavior::proc::usds_m_future::behavior::market_data_behavior::{
-    UsdsMFutureMarketDataBehavior, UsdsMFutureMarketDataCmdAny, UsdsMFutureMarketDataRes,
+    UsdsMFutureMarketDataBehavior, UsdsMFutureMarketDataCmdAny, UsdsMFutureMarketDataRes
 };
-use derivatives_behavior::proc::usds_m_future::usds_market_data::UsdsMFutureMarketDataBehaviorImpl;
-use derivatives_behavior::proc::usds_m_future::behavior::market_data_behavior::UsdsMFutureMarketDataCmdError;
+use derivatives_behavior::proc::usds_m_future::{
+    behavior::market_data_behavior::UsdsMFutureMarketDataCmdError, usds_market_data::UsdsMFutureMarketDataBehaviorImpl
+};
+use serde::{Deserialize, Serialize};
 use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
 
 // ============================================================================
@@ -21,20 +22,22 @@ use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
 
 /// 市场数据服务 - 封装市场数据处理器
 pub struct MarketDataService {
-    processor: Arc<Mutex<UsdsMFutureMarketDataBehaviorImpl>>,
+    processor: Arc<Mutex<UsdsMFutureMarketDataBehaviorImpl>>
 }
 
 impl MarketDataService {
     /// 创建新的市场数据服务实例
-    #[hotpath::measure]
     pub fn new() -> Self {
         let processor = UsdsMFutureMarketDataBehaviorImpl {};
-        Self { processor: Arc::new(Mutex::new(processor)) }
+        Self {
+            processor: Arc::new(Mutex::new(processor))
+        }
     }
 
     /// 处理市场数据请求 - 使用服务层
-    #[hotpath::measure]
-    pub async fn handle_all(&self, cmd: UsdsMFutureMarketDataCmdAny) -> Result<CmdResp<UsdsMFutureMarketDataRes>, String> {
+    pub async fn handle_all(
+        &self, cmd: UsdsMFutureMarketDataCmdAny
+    ) -> Result<CmdResp<UsdsMFutureMarketDataRes>, String> {
         println!("📊 收到USDS-M期货市场数据请求: {:?}", cmd);
 
         self.processor
@@ -55,37 +58,36 @@ pub struct MarketDataResponse {
     success: bool,
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    error: Option<String>
 }
 
-#[hotpath::measure]
-pub async fn handle(State(service): State<Arc<MarketDataService>>, Json(cmd): Json<UsdsMFutureMarketDataCmdAny>) -> impl IntoResponse {
+pub async fn handle(
+    State(service): State<Arc<MarketDataService>>, Json(cmd): Json<UsdsMFutureMarketDataCmdAny>
+) -> impl IntoResponse {
     println!("📊 收到USDS-M期货市场数据请求: {:?}", cmd);
 
     match service.handle_all(cmd).await {
         Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(&err),
+        Err(err) => create_error_response(&err)
     }
 }
 
 /// 创建 JSON 响应
-#[hotpath::measure]
 fn create_json_response(
-    response: CmdResp<UsdsMFutureMarketDataRes>,
+    response: CmdResp<UsdsMFutureMarketDataRes>
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
 }
 
 /// 创建错误响应
-#[hotpath::measure]
 fn create_error_response(
-    error_msg: &str,
+    error_msg: &str
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let response = MarketDataResponse {
         success: false,
         message: "Request failed".to_string(),
-        error: Some(error_msg.to_string()),
+        error: Some(error_msg.to_string())
     };
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::BAD_REQUEST, [(axum::http::header::CONTENT_TYPE, "application/json")], json)

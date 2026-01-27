@@ -13,16 +13,16 @@ pub mod interfaces {
         }
 
         pub mod websocket {
+            pub mod connection_types;
             pub mod md_sse_controller;
             pub mod spot_market_data_pusher;
             pub mod spot_user_data_pusher;
             pub mod ud_sse_controller;
-            pub mod connection_types;
             pub mod user_data_ws_handler;
         }
 
-        pub mod starter;
         pub mod http_server;
+        pub mod starter;
         pub mod websocket_server;
     }
 
@@ -60,10 +60,9 @@ pub mod interfaces {
 }
 
 use axum::response::IntoResponse;
-use interfaces::{spot, usds_m_future};
+use interfaces::spot;
 
 #[tokio::main]
-#[hotpath::main]
 async fn main() {
     // 初始化日志（只在主线程中执行一次）
     tracing_subscriber::fmt::init();

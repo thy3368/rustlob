@@ -29,7 +29,6 @@ pub struct TradeService {
 
 impl TradeService {
     /// 创建新的订单服务实例（使用 Mock 仓储）
-    #[hotpath::measure]
     pub fn new() -> Self {
         // 1. 初始化各个仓储（使用 Mock 版本）
         let balance_repo = MySqlDbRepo::<Balance>::new_mock();
@@ -51,7 +50,6 @@ impl TradeService {
     }
 
     /// 处理限价单 - 使用服务层
-    #[hotpath::measure]
     pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, String> {
         println!("📋 收到限价单请求: {:?}", cmd);
 

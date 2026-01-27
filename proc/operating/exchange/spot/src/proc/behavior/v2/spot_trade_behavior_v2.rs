@@ -1512,5 +1512,5 @@ pub struct Allocation {
 /// Spot Trading 行为接口
 pub trait SpotTradeBehaviorV2: Send + Sync {
     /// 处理 Spot Trading 命令
-    fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny>;
+    async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny>;
 }

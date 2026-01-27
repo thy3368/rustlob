@@ -6,8 +6,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-hotpath = "0.9"
-utoipa = "5.4.0"
+#hotpath = "0.9"
+#utoipa = "5.4.0"
 
 
 axum = { version = "0.8.8", features = ["ws", "macros"] }
@@ -39,9 +39,9 @@ tower-http = { version = "0.5", features = ["fs"] }
 futures = "0.3.31"
 tokio-stream = "0.1.18"
 
-[features]
-hotpath = ["hotpath/hotpath"]
-hotpath-alloc = ["hotpath/hotpath-alloc"]
+#[features]
+#hotpath = ["hotpath/hotpath"]
+#hotpath-alloc = ["hotpath/hotpath-alloc"]
 
 [dev-dependencies]
 tokio-tungstenite = "0.21"

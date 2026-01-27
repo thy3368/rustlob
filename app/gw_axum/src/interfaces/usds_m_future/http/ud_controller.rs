@@ -26,14 +26,12 @@ pub struct UserDataService {
 
 impl UserDataService {
     /// 创建新的用户数据服务实例
-    #[hotpath::measure]
     pub fn new() -> Self {
         let processor = UsdsMFutureUserDataBehaviorImpl {};
         Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
     /// 处理用户数据请求 - 使用服务层
-    #[hotpath::measure]
     pub async fn handle_all(&self, cmd: UsdsMFutureUserDataCmdAny) -> Result<CmdResp<UsdsMFutureUserDataRes>, String> {
         println!("👤 收到USDS-M期货用户数据请求: {:?}", cmd);
 
@@ -58,7 +56,6 @@ pub struct UserDataResponse {
     error: Option<String>,
 }
 
-#[hotpath::measure]
 pub async fn handle(State(service): State<Arc<UserDataService>>, Json(cmd): Json<UsdsMFutureUserDataCmdAny>) -> impl IntoResponse {
     println!("👤 收到USDS-M期货用户数据请求: {:?}", cmd);
 
@@ -69,7 +66,6 @@ pub async fn handle(State(service): State<Arc<UserDataService>>, Json(cmd): Json
 }
 
 /// 创建 JSON 响应
-#[hotpath::measure]
 fn create_json_response(
     response: CmdResp<UsdsMFutureUserDataRes>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
@@ -78,7 +74,6 @@ fn create_json_response(
 }
 
 /// 创建错误响应
-#[hotpath::measure]
 fn create_error_response(
     error_msg: &str,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {

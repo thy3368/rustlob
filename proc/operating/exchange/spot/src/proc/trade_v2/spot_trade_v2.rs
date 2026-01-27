@@ -10,12 +10,18 @@ impl SpotTradeBehaviorV2Impl {
 }
 
 impl SpotTradeBehaviorV2 for SpotTradeBehaviorV2Impl {
-    fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 
         match cmd {
-            SpotTradeCmdAny::NewOrder(_) => Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty)),
+            SpotTradeCmdAny::NewOrder(_) => {
+                // todo
+                // todo
+                // todo 匹配 通知
+                Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
+            }
+
             SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty)),
             SpotTradeCmdAny::CancelOrder(_) => {
                 todo!()

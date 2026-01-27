@@ -37,16 +37,12 @@ impl HttpServer {
         let user_data_routes =
             Router::new().route("/api/spot/user/data", post(ud_handler::handle)).with_state(user_data_service);
 
-        use axum::extract::connect_info::MockConnectInfo;
-        use std::net::SocketAddr;
-
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
             .merge(order_routes)
             .merge(trade_v2_routes)
             .merge(market_data_routes)
-            .merge(user_data_routes)
-            .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 8080))));
+            .merge(user_data_routes);
 
         // 启动 HTTP 服务器（在后台运行）
         let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
@@ -58,8 +54,10 @@ impl HttpServer {
         tracing::info!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 
         tokio::spawn(async move {
-            let make_service = http_app.into_make_service_with_connect_info::<std::net::SocketAddr>();
-            axum::serve(http_listener, make_service).await.expect("Spot HTTP server failed to start");
+            axum::serve(
+                http_listener,
+                http_app.into_make_service()
+            ).await.expect("Spot HTTP server failed to start");
         });
 
         Ok(())

@@ -26,14 +26,12 @@ pub struct TradeService {
 
 impl TradeService {
     /// 创建新的交易服务实例
-    #[hotpath::measure]
     pub fn new() -> Self {
         let processor = UsdsMFutureTradeBehaviorImpl {};
         Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
     /// 处理交易请求 - 使用服务层
-    #[hotpath::measure]
     pub async fn handle_all(&self, cmd: UsdsMFutureTradeCmdAny) -> Result<CmdResp<UsdsMFutureTradeRes>, String> {
         println!("📋 收到USDS-M期货交易请求: {:?}", cmd);
 
@@ -60,7 +58,6 @@ pub struct TradeResponse {
     error: Option<String>,
 }
 
-#[hotpath::measure]
 pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<UsdsMFutureTradeCmdAny>) -> impl IntoResponse {
     println!("📋 收到USDS-M期货交易请求: {:?}", cmd);
 
@@ -71,7 +68,6 @@ pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<Us
 }
 
 /// 创建 JSON 响应
-#[hotpath::measure]
 fn create_json_response(
     response: CmdResp<UsdsMFutureTradeRes>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
@@ -80,7 +76,6 @@ fn create_json_response(
 }
 
 /// 创建错误响应
-#[hotpath::measure]
 fn create_error_response(
     error_msg: &str,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {

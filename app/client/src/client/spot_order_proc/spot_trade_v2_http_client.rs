@@ -55,12 +55,8 @@ impl SpotTradeV2HttpClient {
 }
 
 impl SpotTradeBehaviorV2 for SpotTradeV2HttpClient {
-    fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        let client = self.clone();
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(async move { client.send_command(cmd).await })
+    async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        self.send_command(cmd).await
     }
 }
 
