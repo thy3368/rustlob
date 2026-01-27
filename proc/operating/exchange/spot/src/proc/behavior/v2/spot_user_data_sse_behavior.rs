@@ -8,7 +8,7 @@ use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErro
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum UserDataStreamEvent {
+pub enum UserDataStreamEventAny {
     /// 账户位置更新事件
     /// 事件类型: outboundAccountPosition
     /// 当账户余额发生变化时推送，包含可能被事件改变的资产
@@ -449,7 +449,7 @@ pub enum SelfTradePreventionMode {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum SpotUserDataStreamCmd {
+pub enum SpotUserDataListenKeyCmdAny {
     /// 创建 Listen Key（开启 User Data Stream）
     /// POST /api/v3/userDataStream
     /// Weight: 2
@@ -509,7 +509,7 @@ pub struct CloseListenKeyCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum SpotUserDataStreamRes {
+pub enum SpotUserDataStreamResAny {
     /// 创建 Listen Key 响应
     CreateListenKey(ListenKeyResponse),
     /// 延长 Listen Key 响应（空响应）
@@ -616,9 +616,9 @@ const USAGE_GUIDE: () = ();
 // ==================== User Data Stream 行为接口 ====================
 
 /// User Data Stream 行为接口
-pub trait SpotUserDataSSEBehavior: Send + Sync {
+pub trait SpotUserDataListenKeyBehavior: Send + Sync {
     /// 处理 User Data Stream 命令（REST API）
-    fn handle(&mut self, cmd: SpotUserDataStreamCmd) -> Result<CmdResp<SpotUserDataStreamRes>, SpotCmdError>;
+    fn handle(&mut self, cmd: SpotUserDataListenKeyCmdAny) -> Result<CmdResp<SpotUserDataStreamResAny>, SpotCmdError>;
 
     // /// 处理 User Data Stream 事件（WebSocket 推送）
     // fn on_event(&mut self, event: UserDataStreamEvent) -> Result<(), SpotCmdError>;

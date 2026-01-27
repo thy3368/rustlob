@@ -42,12 +42,13 @@ impl WebSocketServer {
         // 创建 WebSocket 应用
         // 路由分离：市场数据和用户数据使用不同的 WebSocket 端点
 
+        //todo 检查一下websocket 路由信息,用“get"对不对
         let ws_app = Router::new()
             .route(
                 "/ws/user_data",
                 get(move |ws, conn_info| user_data_websocket_handler(ws, conn_info, connection_repo.clone()))
             )
-            .nest_service("/", ServeDir::new("."));
+            .fallback_service(ServeDir::new("."));
 
 
         // 启动 WebSocket 服务器（在后台运行）
@@ -76,6 +77,6 @@ impl WebSocketServer {
                 "/ws/user_data",
                 get(move |ws, conn_info| user_data_websocket_handler(ws, conn_info, connection_repo.clone()))
             )
-            .nest_service("/", ServeDir::new("."))
+            .fallback_service(ServeDir::new("."))
     }
 }

@@ -8,6 +8,8 @@ pub mod interfaces {
             pub mod trade_controller;
             pub mod trade_v2_controller;
             pub mod ud_controller;
+
+            pub mod ud_listen_key_controller;
         }
 
         pub mod websocket {

@@ -38,10 +38,10 @@ impl HttpServer {
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
-            .nest("/", order_routes)
-            .nest("/", trade_v2_routes)
-            .nest("/", market_data_routes)
-            .nest("/", user_data_routes);
+            .merge(order_routes)
+            .merge(trade_v2_routes)
+            .merge(market_data_routes)
+            .merge(user_data_routes);
 
         // 启动 HTTP 服务器（在后台运行）
         let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;

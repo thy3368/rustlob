@@ -1,5 +1,5 @@
 use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
-    UserDataStreamEvent, OutboundAccountPositionEvent, BalanceItem, BalanceUpdateEvent,
+    UserDataStreamEventAny, OutboundAccountPositionEvent, BalanceItem, BalanceUpdateEvent,
     ExecutionReportEvent, ListStatusEvent, EventStreamTerminatedEvent, ExternalLockUpdateEvent,
     OrderSide, OrderType, TimeInForce, ExecutionType, OrderStatus, OrderRejectReason,
     SelfTradePreventionMode, ListOrderItem
@@ -49,7 +49,7 @@ impl SpotUserDataPusher {
             self.counter += 1;
 
             // 模拟生成不同类型的用户数据消息
-            let stream_msg: UserDataStreamEvent = self.generate_stream_message();
+            let stream_msg: UserDataStreamEventAny = self.generate_stream_message();
 
             // 推送消息给所有连接
             self.broadcast_message(stream_msg).await;
@@ -57,7 +57,7 @@ impl SpotUserDataPusher {
     }
 
     /// 广播消息给所有连接
-    async fn broadcast_message(&self, msg: UserDataStreamEvent) {
+    async fn broadcast_message(&self, msg: UserDataStreamEventAny) {
         let all_senders = self.connection_repo.get_all_senders().await;
         let msg_text = serde_json::to_string(&json!({
             "stream_type": "user_data",
@@ -70,7 +70,7 @@ impl SpotUserDataPusher {
     }
 
     /// 向指定用户推送消息
-    pub async fn send_to_user(&self, user_id: &str, msg: UserDataStreamEvent) {
+    pub async fn send_to_user(&self, user_id: &str, msg: UserDataStreamEventAny) {
         let user_senders = self.connection_repo.get_senders_by_user(user_id).await;
         let msg_text = serde_json::to_string(&json!({
             "stream_type": "user_data",
@@ -85,13 +85,13 @@ impl SpotUserDataPusher {
 
 
     /// 生成模拟的 UserDataStreamEvent 消息
-    fn generate_stream_message(&self) -> UserDataStreamEvent {
+    fn generate_stream_message(&self) -> UserDataStreamEventAny {
         let counter = self.counter;
         let now = chrono::Utc::now().timestamp_millis();
 
         if counter % 5 == 0 {
             // 账户位置更新事件
-            UserDataStreamEvent::OutboundAccountPosition(OutboundAccountPositionEvent {
+            UserDataStreamEventAny::OutboundAccountPosition(OutboundAccountPositionEvent {
                 subscription_id: 1,
                 event_type: "outboundAccountPosition".to_string(),
                 event_time: now,
@@ -116,7 +116,7 @@ impl SpotUserDataPusher {
             })
         } else if counter % 5 == 1 {
             // 余额更新事件
-            UserDataStreamEvent::BalanceUpdate(BalanceUpdateEvent {
+            UserDataStreamEventAny::BalanceUpdate(BalanceUpdateEvent {
                 subscription_id: 1,
                 event_type: "balanceUpdate".to_string(),
                 event_time: now,
@@ -126,7 +126,7 @@ impl SpotUserDataPusher {
             })
         } else if counter % 5 == 2 {
             // 执行报告事件（订单更新）
-            UserDataStreamEvent::ExecutionReport(ExecutionReportEvent {
+            UserDataStreamEventAny::ExecutionReport(ExecutionReportEvent {
                 subscription_id: 1,
                 event_type: "executionReport".to_string(),
                 event_time: now,
@@ -186,7 +186,7 @@ impl SpotUserDataPusher {
             })
         } else if counter % 5 == 3 {
             // 订单列表状态事件
-            UserDataStreamEvent::ListStatus(ListStatusEvent {
+            UserDataStreamEventAny::ListStatus(ListStatusEvent {
                 subscription_id: 1,
                 event_type: "listStatus".to_string(),
                 event_time: now,
@@ -213,7 +213,7 @@ impl SpotUserDataPusher {
             })
         } else {
             // 事件流终止事件
-            UserDataStreamEvent::EventStreamTerminated(EventStreamTerminatedEvent {
+            UserDataStreamEventAny::EventStreamTerminated(EventStreamTerminatedEvent {
                 subscription_id: 1,
                 event_type: "eventStreamTerminated".to_string(),
                 event_time: now

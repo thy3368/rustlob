@@ -23,13 +23,13 @@ pub struct ConnectionInfo {
 #[derive(Debug, Clone, Default)]
 pub struct ConnectionRepo {
     /// 用户连接映射：user_id -> Vec<ConnectionInfo>
-    pub user_connections: Arc<Mutex<HashMap<String, Vec<ConnectionInfo>>>>,
+     user_connections: Arc<Mutex<HashMap<String, Vec<ConnectionInfo>>>>,
     /// 所有连接列表
-    pub all_connections: Arc<Mutex<Vec<ConnectionInfo>>>,
+     all_connections: Arc<Mutex<Vec<ConnectionInfo>>>,
     /// 连接发送器映射：client_addr -> tokio::sync::mpsc::UnboundedSender<Message>
-    pub connection_senders: Arc<Mutex<HashMap<SocketAddr, mpsc::UnboundedSender<Message>>>>,
+     connection_senders: Arc<Mutex<HashMap<SocketAddr, mpsc::UnboundedSender<Message>>>>,
     /// 用户发送器映射：user_id -> Vec<tokio::sync::mpsc::UnboundedSender<Message>>
-    pub user_senders: Arc<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>
+     user_senders: Arc<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>
 }
 
 impl ConnectionRepo {
