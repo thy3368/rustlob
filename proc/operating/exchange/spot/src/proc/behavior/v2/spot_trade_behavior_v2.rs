@@ -2,7 +2,7 @@
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdError};
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Spot Trading 命令枚举 - 包含所有交易端点
 #[derive(Debug, Clone)]
@@ -1512,5 +1512,5 @@ pub struct Allocation {
 /// Spot Trading 行为接口
 pub trait SpotTradeBehaviorV2: Send + Sync {
     /// 处理 Spot Trading 命令
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError>;
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny>;
 }

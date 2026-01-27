@@ -1,6 +1,6 @@
 use crate::proc::behavior::spot_trade_behavior::{
     CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotTradeCmdAny, SpotCmdError, SpotTradeResAny, SpotTradeBehavior,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotTradeCmdAny, SpotCmdErrorAny, SpotTradeResAny, SpotTradeBehavior,
 };
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
@@ -37,11 +37,11 @@ impl SpotTradeBehaviorImpl {
         self.id_generator.next_id() as u64
     }
 
-    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> Result<CmdResp<CancelOrderRes>, SpotCmdError> {
+    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> Result<CmdResp<CancelOrderRes>, SpotCmdErrorAny> {
         todo!()
     }
 
-    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> Result<CmdResp<MarketOrderRes>, SpotCmdError> {
+    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> Result<CmdResp<MarketOrderRes>, SpotCmdErrorAny> {
         //todo 风控检查
         //todo 匹配
         todo!()
@@ -49,14 +49,14 @@ impl SpotTradeBehaviorImpl {
 
     pub(crate) fn handle_cancel_all_orders(
         &self, _p0: CancelAllOrders,
-    ) -> Result<CmdResp<CancelAllOrdersRes>, SpotCmdError> {
+    ) -> Result<CmdResp<CancelAllOrdersRes>, SpotCmdErrorAny> {
         todo!()
     }
 }
 
 impl SpotTradeBehaviorImpl {
     // Result<CmdResp<SpotCmdRes>, SpotCmdError>;
-    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<LimitOrderRes>, SpotCmdError> {
+    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<LimitOrderRes>, SpotCmdErrorAny> {
         // ========================================================================
         // 1. 命令验证 风控检查 - 余额检查并冻结保证金
         // ========================================================================

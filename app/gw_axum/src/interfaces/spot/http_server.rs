@@ -8,7 +8,7 @@ use spot_behavior::proc::trade_v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 use crate::interfaces::spot::http::{
     md_handler, md_handler::MarketDataService, trade_handler, trade_handler::TradeService,
-    trade_v2_controller, ud_handler, ud_handler::UserDataService
+    trade_v2_handler, ud_handler, ud_handler::UserDataService
 };
 
 /// HTTP 服务器启动器
@@ -28,7 +28,7 @@ impl HttpServer {
             Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
 
         let trade_v2_routes =
-            Router::new().route("/api/spot/trade/v2/", post(trade_v2_controller::handle)).with_state(trade_v2_service);
+            Router::new().route("/api/spot/trade/v2/", post(trade_v2_handler::handle)).with_state(trade_v2_service);
 
         let market_data_routes =
             Router::new().route("/api/spot/market/data", post(md_handler::handle)).with_state(market_data_service);

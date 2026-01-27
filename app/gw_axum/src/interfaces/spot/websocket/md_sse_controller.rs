@@ -1,5 +1,5 @@
 use spot_behavior::proc::behavior::{
-    spot_trade_behavior::{CmdResp, CommonError, SpotCmdError},
+    spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny},
     v2::spot_market_data_sse_behavior::{
         MarketDataSubscriptionCmdAny, SpotMarketDataSSEBehavior, SubscriptionResponse,
         SubscriptionResult
@@ -28,7 +28,7 @@ impl SpotMarketDataSSEImpl {
 impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
     fn handle_subscription(
         &mut self, cmd: MarketDataSubscriptionCmdAny
-    ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError> {
+    ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdErrorAny> {
         let nonce = 0; // 临时值，实际应该从 metadata 中获取或生成
 
         match cmd {
@@ -87,7 +87,7 @@ impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
                         id: None
                     }))
                 } else {
-                    Err(SpotCmdError::Common(CommonError::InvalidParameter {
+                    Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
                         field: "property",
                         reason: "Unknown property"
                     }))
@@ -105,7 +105,7 @@ impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
                         id: None
                     }))
                 } else {
-                    Err(SpotCmdError::Common(CommonError::InvalidParameter {
+                    Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
                         field: "property",
                         reason: "Unknown property"
                     }))

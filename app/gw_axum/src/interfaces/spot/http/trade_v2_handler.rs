@@ -30,18 +30,18 @@ pub struct TradeV2Response {
 }
 
 #[hotpath::measure]
-pub async fn handle(State(service): State<Arc<SpotTradeBehaviorV2Impl>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
+pub async fn handle(State(mut service): State<Arc<SpotTradeBehaviorV2Impl>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
     println!("📋 收到交易请求: {:?}", cmd);
 
 
     //todo 调用SpotTradeBehaviorV2Impl处理
-    
-    match service.handle(cmd).await {
+
+    match service.handle(cmd) {
             Ok(response) => create_json_response(response),
             Err(err) => create_error_response(&err),
     }
-        
-        
+
+
     // match service.handle(cmd).await {
     //     Ok(response) => create_json_response(response),
     //     Err(err) => create_error_response(&err),
@@ -59,6 +59,7 @@ fn create_json_response(
 
 /// 创建错误响应
 #[hotpath::measure]
+//todo 入参改为 SpotCmdErrorAny
 fn create_error_response(
     error_msg: &str,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {

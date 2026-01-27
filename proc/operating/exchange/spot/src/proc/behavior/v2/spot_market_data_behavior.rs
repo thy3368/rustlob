@@ -1,6 +1,6 @@
 // 参考 Market Data endpoints 在 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 market data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdError};
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data 命令枚举
 #[derive(Debug, Clone)]
@@ -561,5 +561,5 @@ pub struct RollingWindowTickerData {
 /// Market Data 行为接口
 pub trait SpotMarketDataBehavior: Send + Sync {
     /// 处理 Market Data 命令
-    fn handle(&mut self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdError>;
+    fn handle(&mut self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdErrorAny>;
 }

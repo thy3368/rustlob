@@ -1,6 +1,6 @@
 // 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/web-socket-streams.md 定义所有 market data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdError};
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data Stream 消息枚举
 #[derive(Debug, Clone, serde::Serialize)]
@@ -677,7 +677,7 @@ pub trait SpotMarketDataSSEBehavior: Send + Sync {
     /// 处理订阅命令
     fn handle_subscription(
         &mut self, cmd: MarketDataSubscriptionCmdAny,
-    ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdError>;
+    ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdErrorAny>;
 
 
 

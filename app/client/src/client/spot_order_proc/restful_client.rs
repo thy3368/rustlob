@@ -1,6 +1,6 @@
 use reqwest::Client;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotTradeCmdAny, SpotCmdError, SpotTradeResAny, SpotTradeBehavior,
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotTradeCmdAny, SpotCmdErrorAny, SpotTradeResAny, SpotTradeBehavior,
 };
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
@@ -40,7 +40,7 @@ impl RestfulClient {
 
     /// 发送限价单请求
     #[inline]
-    async fn post_cmd(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError> {
+    async fn post_cmd(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
@@ -49,12 +49,12 @@ impl RestfulClient {
             .send()
             .await
             .map_err(|e| {
-                SpotCmdError::Common(CommonError::Internal { message: format!("HTTP request failed: {}", e) })
+                SpotCmdErrorAny::Common(CommonError::Internal { message: format!("HTTP request failed: {}", e) })
             })?
             .json::<CmdResp<SpotTradeResAny>>()
             .await
             .map_err(|e| {
-                SpotCmdError::Common(CommonError::Internal { message: format!("Failed to parse response: {}", e) })
+                SpotCmdErrorAny::Common(CommonError::Internal { message: format!("Failed to parse response: {}", e) })
             })
     }
 }
@@ -68,7 +68,7 @@ impl SpotTradeBehavior for RestfulClient {
     fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult {
         // 使用 tokio runtime 执行异步调用
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            SpotCmdError::Common(CommonError::Internal { message: format!("Failed to create runtime: {}", e) })
+            SpotCmdErrorAny::Common(CommonError::Internal { message: format!("Failed to create runtime: {}", e) })
         })?;
 
         rt.block_on(async { self.post_cmd(cmd).await })

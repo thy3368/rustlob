@@ -1,4 +1,4 @@
-use crate::proc::behavior::spot_trade_behavior::SpotCmdError;
+use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataRes, OrderBookData, AvgPriceData,
 };
@@ -7,7 +7,7 @@ use base_types::cqrs::cqrs_types::CmdResp;
 pub struct SpotMarketDataImpl {}
 
 impl SpotMarketDataBehavior for SpotMarketDataImpl {
-    fn handle(&mut self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdError> {
+    fn handle(&mut self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 

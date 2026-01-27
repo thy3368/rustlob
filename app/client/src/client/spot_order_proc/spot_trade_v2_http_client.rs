@@ -1,5 +1,5 @@
 use base_types::cqrs::cqrs_types::CmdResp;
-use spot_behavior::proc::behavior::spot_trade_behavior::{SpotCmdError, CommonError};
+use spot_behavior::proc::behavior::spot_trade_behavior::{SpotCmdErrorAny, CommonError};
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny};
 use reqwest::Client;
 
@@ -17,7 +17,7 @@ impl SpotTradeV2HttpClient {
         }
     }
 
-    async fn send_command(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError> {
+    async fn send_command(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         let url = format!("{}/api/spot/trade/v2/", self.base_url);
 
         println!("📡 发送HTTP请求到: {}", url);
@@ -28,7 +28,7 @@ impl SpotTradeV2HttpClient {
             .json(&cmd)
             .send()
             .await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal { message: format!("HTTP请求失败: {}", e) }))?;
+            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: format!("HTTP请求失败: {}", e) }))?;
 
         let status = response.status();
         println!("📨 服务器响应状态: {}", status);
@@ -36,7 +36,7 @@ impl SpotTradeV2HttpClient {
         if !status.is_success() {
             let error_text = response.text().await
                 .unwrap_or_else(|_| "无法读取错误响应".to_string());
-            return Err(SpotCmdError::Common(CommonError::Internal { message: format!(
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal { message: format!(
                 "服务器返回错误状态: {} - {}",
                 status,
                 error_text
@@ -44,7 +44,7 @@ impl SpotTradeV2HttpClient {
         }
 
         let cmd_resp: CmdResp<SpotTradeResAny> = response.json().await
-            .map_err(|e| SpotCmdError::Common(CommonError::Internal { message: format!("响应解析失败: {}", e) }))?;
+            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: format!("响应解析失败: {}", e) }))?;
 
         println!("✅ 响应解析成功: {:?}", cmd_resp);
 
@@ -53,7 +53,7 @@ impl SpotTradeV2HttpClient {
 }
 
 impl SpotTradeBehaviorV2 for SpotTradeV2HttpClient {
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError> {
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         let client = self.clone();
         tokio::runtime::Builder::new_current_thread()
             .build()
