@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 // Spot 交易相关导入
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-    SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeRes,
+    SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny,
 };
 use spot_behavior::proc::trade_v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
@@ -33,7 +33,7 @@ impl TradeV2Service {
 
     /// 处理交易请求 - 使用服务层
     #[hotpath::measure]
-    pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeRes>, String> {
+    pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, String> {
         println!("📋 收到交易请求: {:?}", cmd);
 
         self.processor
@@ -70,7 +70,7 @@ pub async fn handle(State(service): State<Arc<TradeV2Service>>, Json(cmd): Json<
 /// 创建 JSON 响应
 #[hotpath::measure]
 fn create_json_response(
-    response: CmdResp<SpotTradeRes>,
+    response: CmdResp<SpotTradeResAny>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)

@@ -3,6 +3,10 @@ todo 增加一个例子 出参入参都是sbe, 用/Users/hongyaotang/src/rustlob
 
 //json post方式 调用 /Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/behavior/trading_spot_order_proc.rs；
 
+//写个bdd测试 下发一个limitorder订单 通过http，收到user data event 通过websocket
+
+//写个bdd测试 下发一个limitorder订单 ，收到user data event 
+
 
 
 参考 /Users/hongyaotang/src/rustlob/app/rest/readme.md 发布 SpotOrderExchangeProc//Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/spot_exchange.rs 服务

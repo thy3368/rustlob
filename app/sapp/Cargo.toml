@@ -47,6 +47,7 @@ metrics-exporter-prometheus = "0.13"
 # Spot 处理依赖
 spot_behavior = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
 base_types = { path = "../../lib/common/base_types" }
+futures = "0.3.31"
 
 #//todo 依赖common/basetype
 

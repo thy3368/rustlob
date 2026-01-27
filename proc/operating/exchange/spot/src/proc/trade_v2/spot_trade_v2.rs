@@ -1,21 +1,21 @@
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdError};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeRes};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny};
 use crate::proc::trade::spot_trade::SpotTradeBehaviorImpl;
 
 pub struct SpotTradeBehaviorV2Impl {
 
 }
 impl SpotTradeBehaviorV2 for SpotTradeBehaviorV2Impl {
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeRes>, SpotCmdError> {
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 
         match cmd {
             SpotTradeCmdAny::NewOrder(_) => {
-                Ok(CmdResp::new(nonce, SpotTradeRes::TestNewOrderEmpty))
+                Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
             }
             SpotTradeCmdAny::TestNewOrder(_) => {
-                Ok(CmdResp::new(nonce, SpotTradeRes::TestNewOrderEmpty))
+                Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
             }
             SpotTradeCmdAny::CancelOrder(_) => {
                 todo!()

@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::sync::{Arc, Mutex};
 
 // Spot 订单处理相关导入
-use spot_behavior::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdAny, SpotResAny, SpotTradeBehavior};
+use spot_behavior::proc::behavior::spot_trade_behavior::{CmdResp, SpotTradeCmdAny, SpotTradeResAny, SpotTradeBehavior};
 use spot_behavior::proc::trade::spot_trade::SpotTradeBehaviorImpl;
 
 // 基础设施依赖
@@ -49,7 +49,7 @@ impl TradeService {
 
     /// 处理限价单 - 使用服务层
     #[hotpath::measure]
-    pub async fn handle_all(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotResAny>, String> {
+    pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, String> {
         println!("📋 收到限价单请求: {:?}", cmd);
 
         // 调用真实的处理器，直接返回领域层结果
@@ -77,7 +77,7 @@ pub struct OrderResponse {
 }
 
 #[hotpath::measure]
-pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<SpotCmdAny>) -> impl IntoResponse {
+pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
     println!("📋 收到限价单请求: {:?}", cmd);
 
     match service.handle_all(cmd).await {
@@ -89,7 +89,7 @@ pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<Sp
 /// 创建 JSON 响应
 #[hotpath::measure]
 fn create_json_response(
-    response: CmdResp<SpotResAny>,
+    response: CmdResp<SpotTradeResAny>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)

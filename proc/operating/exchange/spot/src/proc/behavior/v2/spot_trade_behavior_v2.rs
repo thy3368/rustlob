@@ -967,7 +967,7 @@ pub struct QueryCommissionRatesCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum SpotTradeRes {
+pub enum SpotTradeResAny {
     /// 新订单响应（ACK 模式）
     NewOrderAck(NewOrderAck),
     /// 新订单响应（RESULT 模式）
@@ -1512,5 +1512,5 @@ pub struct Allocation {
 /// Spot Trading 行为接口
 pub trait SpotTradeBehaviorV2: Send + Sync {
     /// 处理 Spot Trading 命令
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeRes>, SpotCmdError>;
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError>;
 }

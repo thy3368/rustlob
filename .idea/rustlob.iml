@@ -83,6 +83,7 @@
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/rest_axum/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/sapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />

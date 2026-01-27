@@ -1,6 +1,6 @@
 use reqwest::Client;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdAny, SpotCmdError, SpotResAny, SpotTradeBehavior,
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotTradeCmdAny, SpotCmdError, SpotTradeResAny, SpotTradeBehavior,
 };
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
@@ -40,7 +40,7 @@ impl RestfulClient {
 
     /// 发送限价单请求
     #[inline]
-    async fn post_cmd(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotResAny>, SpotCmdError> {
+    async fn post_cmd(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdError> {
         let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
@@ -51,7 +51,7 @@ impl RestfulClient {
             .map_err(|e| {
                 SpotCmdError::Common(CommonError::Internal { message: format!("HTTP request failed: {}", e) })
             })?
-            .json::<CmdResp<SpotResAny>>()
+            .json::<CmdResp<SpotTradeResAny>>()
             .await
             .map_err(|e| {
                 SpotCmdError::Common(CommonError::Internal { message: format!("Failed to parse response: {}", e) })
@@ -65,7 +65,7 @@ impl SpotTradeBehavior for RestfulClient {
     /// # 注意
     /// 这是同步接口，内部使用 tokio::runtime 进行异步调用
     /// 在高性能场景下，建议使用异步版本的 trait
-    fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult {
         // 使用 tokio runtime 执行异步调用
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             SpotCmdError::Common(CommonError::Internal { message: format!("Failed to create runtime: {}", e) })
@@ -108,7 +108,7 @@ mod tests {
 
         // 调用1000次
         for i in 0..10000000 {
-            let result = client.handle(SpotCmdAny::LimitOrder(limit_order.clone()));
+            let result = client.handle(SpotTradeCmdAny::LimitOrder(limit_order.clone()));
             println!("[{}] Result: {:?}", i, result);
         }
     }

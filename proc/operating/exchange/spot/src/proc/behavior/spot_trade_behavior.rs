@@ -266,7 +266,7 @@ impl From<CommonError> for MarketMakerCmdError {
 }
 
 /// 类型别名 - 各类幂等命令
-pub type IdemSpotCmd = Cmd<SpotCmdAny>;
+pub type IdemSpotCmd = Cmd<SpotTradeCmdAny>;
 pub type IdemAlgoCmd = Cmd<AlgoCmdAny>;
 pub type IdemCondCmd = Cmd<ConditionalCmdAny>;
 pub type IdemMarketMakerCmd = Cmd<MarketMakerCmdAny>;
@@ -275,7 +275,7 @@ pub type IdemMarketMakerCmd = Cmd<MarketMakerCmdAny>;
 ///
 /// 使用标准 Result 包装，支持 ? 操作符和所有 Result 方法
 /// 每个命令类型使用自己的错误类型，提供类型安全
-pub type IdemSpotResult = Result<CmdResp<SpotResAny>, SpotCmdError>;
+pub type IdemSpotResult = Result<CmdResp<SpotTradeResAny>, SpotCmdError>;
 pub type IdemAlgoResult = Result<CmdResp<AlgoCmdResult>, AlgoCmdError>;
 pub type IdemCondResult = Result<CmdResp<CondCmdResult>, CondCmdError>;
 pub type IdemMarketMakerResult = Result<CmdResp<MarketMakerCmdResult>, MarketMakerCmdError>;
@@ -350,7 +350,7 @@ pub struct CancelAllOrders {
 /// 核心订单类型，由 MatchingService 直接处理
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotCmdAny {
+pub enum SpotTradeCmdAny {
     /// 限价单
     LimitOrder(LimitOrder),
     /// 市价单
@@ -454,7 +454,7 @@ impl CancelAllOrdersRes {
 /// 只包含成功情况，错误通过 CommandError 返回
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotResAny {
+pub enum SpotTradeResAny {
     /// 限价单结果
     LimitOrder(LimitOrderRes),
 
@@ -870,5 +870,5 @@ pub trait OrderQueryProc: Send + Sync {
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
 pub trait SpotTradeBehavior: Send + Sync {
-     fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult;
+     fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult;
 }

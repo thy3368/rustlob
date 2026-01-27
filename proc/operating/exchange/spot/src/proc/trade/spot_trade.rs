@@ -1,6 +1,6 @@
 use crate::proc::behavior::spot_trade_behavior::{
     CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdAny, SpotCmdError, SpotResAny, SpotTradeBehavior,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotTradeCmdAny, SpotCmdError, SpotTradeResAny, SpotTradeBehavior,
 };
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
@@ -178,20 +178,20 @@ impl SpotTradeBehaviorImpl {
 }
 
 impl SpotTradeBehavior for SpotTradeBehaviorImpl {
-    fn handle(&mut self, cmd: SpotCmdAny) -> IdemSpotResult {
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult {
         match cmd {
-            SpotCmdAny::LimitOrder(limit_order) => {
+            SpotTradeCmdAny::LimitOrder(limit_order) => {
                 // 将 LimitOrderRes 包装到 SpotCmdRes::LimitOrder 中
-                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotResAny::LimitOrder))
+                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotTradeResAny::LimitOrder))
             }
-            SpotCmdAny::MarketOrder(market_order) => {
-                self.handle_market_order(market_order).map(|resp| resp.map(SpotResAny::MarketOrder))
+            SpotTradeCmdAny::MarketOrder(market_order) => {
+                self.handle_market_order(market_order).map(|resp| resp.map(SpotTradeResAny::MarketOrder))
             }
-            SpotCmdAny::CancelOrder(cancel_order) => {
-                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotResAny::CancelOrder))
+            SpotTradeCmdAny::CancelOrder(cancel_order) => {
+                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotTradeResAny::CancelOrder))
             }
-            SpotCmdAny::CancelAllOrders(cancel_all_orders) => {
-                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotResAny::CancelAllOrders))
+            SpotTradeCmdAny::CancelAllOrders(cancel_all_orders) => {
+                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotTradeResAny::CancelAllOrders))
             }
         }
     }
