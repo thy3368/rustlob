@@ -22,6 +22,8 @@ use base_types::{AccountId, OrderId, Price, Quantity, Side, TradingPair};
 
 /// 通用命令错误（所有命令共享）
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum CommonError {
     /// 账户余额不足
     InsufficientBalance { required: u64, available: u64 },
@@ -95,6 +97,8 @@ impl std::error::Error for CommonError {}
 
 /// 现货命令错误
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotCmdErrorAny {
     /// 通用错误
     Common(CommonError),
