@@ -1,4 +1,6 @@
-// 参考 ## Account Endpoints / Account information (USER_DATA) /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 user data 接口
+// 参考 ## Account Endpoints / Account information (USER_DATA)
+// /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
+// 定义所有 user data 接口
 
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
@@ -52,7 +54,7 @@ pub enum SpotUserDataCmdAny {
 
     /// 查询佣金费率 GET /api/v3/account/commission
     /// Weight: 20
-    QueryCommissionRates(QueryCommissionRatesCmd),
+    QueryCommissionRates(QueryCommissionRatesCmd)
 }
 
 /// 账户信息查询命令
@@ -68,7 +70,7 @@ pub struct AccountCmd {
     /// 接收窗口（微秒精度），不超过 60000
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询订单命令
@@ -88,7 +90,7 @@ pub struct QueryOrderCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 当前挂单查询命令
@@ -104,7 +106,7 @@ pub struct CurrentOpenOrdersCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 所有订单查询命令
@@ -128,7 +130,7 @@ pub struct AllOrdersCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询订单列表命令
@@ -146,7 +148,7 @@ pub struct QueryOrderListCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询所有订单列表命令
@@ -168,7 +170,7 @@ pub struct QueryAllOrderListCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询当前挂单列表命令
@@ -182,7 +184,7 @@ pub struct QueryOpenOrderListCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 账户成交历史查询命令
@@ -208,7 +210,7 @@ pub struct MyTradesCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询未完成订单计数命令
@@ -222,7 +224,7 @@ pub struct QueryUnfilledOrderCountCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询被阻止的匹配命令
@@ -252,7 +254,7 @@ pub struct QueryPreventedMatchesCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询分配记录命令
@@ -287,7 +289,7 @@ pub struct QueryAllocationsCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// 查询佣金费率命令
@@ -302,7 +304,7 @@ pub struct QueryCommissionRatesCmd {
     /// 接收窗口
     pub recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64,
+    pub timestamp: i64
 }
 
 /// User Data 响应枚举
@@ -337,7 +339,7 @@ pub enum SpotUserDataRes {
     Allocations(Vec<AllocationInfo>),
 
     /// 佣金费率响应
-    CommissionRates(CommissionRates),
+    CommissionRates(CommissionRates)
 }
 
 /// 账户信息
@@ -375,7 +377,7 @@ pub struct AccountInfo {
     /// 权限列表
     pub permissions: Vec<String>,
     /// 用户ID
-    pub uid: i64,
+    pub uid: i64
 }
 
 /// 佣金费率
@@ -389,7 +391,7 @@ pub struct CommissionRates {
     /// 买方费率
     pub buyer: String,
     /// 卖方费率
-    pub seller: String,
+    pub seller: String
 }
 
 /// 余额信息
@@ -401,7 +403,7 @@ pub struct Balance {
     /// 可用余额
     pub free: String,
     /// 锁定余额
-    pub locked: String,
+    pub locked: String
 }
 
 /// 订单信息
@@ -447,7 +449,7 @@ pub struct OrderInfo {
     /// 原始报价订单数量
     pub orig_quote_order_qty: String,
     /// 自成交防护模式
-    pub self_trade_prevention_mode: String,
+    pub self_trade_prevention_mode: String
 }
 
 /// 订单列表信息
@@ -469,7 +471,7 @@ pub struct OrderListInfo {
     /// 交易对
     pub symbol: String,
     /// 订单列表
-    pub orders: Vec<OrderListOrder>,
+    pub orders: Vec<OrderListOrder>
 }
 
 /// 订单列表中的订单
@@ -481,7 +483,7 @@ pub struct OrderListOrder {
     /// 订单ID
     pub order_id: i64,
     /// 客户端订单ID
-    pub client_order_id: String,
+    pub client_order_id: String
 }
 
 /// 成交信息
@@ -513,7 +515,7 @@ pub struct TradeInfo {
     /// 是否为挂单方
     pub is_maker: bool,
     /// 是否为最佳匹配
-    pub is_best_match: bool,
+    pub is_best_match: bool
 }
 
 /// 速率限制信息
@@ -529,7 +531,7 @@ pub struct RateLimitInfo {
     /// 限制值
     pub limit: i32,
     /// 当前计数
-    pub count: i32,
+    pub count: i32
 }
 
 /// 被阻止的匹配信息
@@ -555,7 +557,7 @@ pub struct PreventedMatch {
     /// Maker 被阻止的数量
     pub maker_prevented_quantity: String,
     /// 交易时间
-    pub transact_time: i64,
+    pub transact_time: i64
 }
 
 /// 分配信息
@@ -589,11 +591,11 @@ pub struct AllocationInfo {
     /// 是否为挂单方
     pub is_maker: bool,
     /// 是否为分配者
-    pub is_allocator: bool,
+    pub is_allocator: bool
 }
 
 /// User Data 行为接口
 pub trait SpotUserDataBehavior: Send + Sync {
     /// 处理 User Data 命令
-    fn handle(&mut self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny>;
+    fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny>;
 }

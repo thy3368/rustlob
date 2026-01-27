@@ -1,10 +1,16 @@
-use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_user_data_behavior::{SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataRes};
+use crate::proc::behavior::{
+    spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
+    v2::spot_user_data_behavior::{SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataRes}
+};
 
 pub struct SpotUserDataImpl {}
 
+impl SpotUserDataImpl {
+    pub fn new() -> Self { Self {} }
+}
+
 impl SpotUserDataBehavior for SpotUserDataImpl {
-    fn handle(&mut self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny> {
+    fn handle(& self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny> {
         match cmd {
             SpotUserDataCmdAny::Account(_) => {
                 todo!()

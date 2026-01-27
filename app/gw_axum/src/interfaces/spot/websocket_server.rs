@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    routing::get,
-    Router
-};
+use axum::{routing::get, Router};
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use tokio::sync::broadcast;
 use tower_http::services::ServeDir;
@@ -18,6 +15,8 @@ pub struct WebSocketServer;
 
 impl WebSocketServer {
     /// 启动 Spot WebSocket 服务器
+    ///
+    /// todo 用tracing打日志
     pub async fn start(
         md_tx: broadcast::Sender<SpotMarketDataStreamAny>, connection_repo: Arc<ConnectionRepo>
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -42,7 +41,7 @@ impl WebSocketServer {
         // 创建 WebSocket 应用
         // 路由分离：市场数据和用户数据使用不同的 WebSocket 端点
 
-        //todo 检查一下websocket 路由信息,用“get"对不对
+        // todo 检查一下websocket 路由信息,用“get"对不对
         let ws_app = Router::new()
             .route(
                 "/ws/user_data",

@@ -1,19 +1,22 @@
 use base_types::cqrs::cqrs_types::CmdResp;
-use spot_behavior::proc::behavior::spot_trade_behavior::{SpotCmdErrorAny, CommonError};
-use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny};
 use reqwest::Client;
+use spot_behavior::proc::behavior::{
+    spot_trade_behavior::{CommonError, SpotCmdErrorAny},
+    v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny}
+};
 
-// 实现HTTP调用客户端，参考 /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
+// 实现HTTP调用客户端，参考
+// /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
 pub struct SpotTradeV2HttpClient {
     http_client: Client,
-    base_url: String,
+    base_url: String
 }
 
 impl SpotTradeV2HttpClient {
     pub fn new(base_url: &str) -> Self {
         Self {
             http_client: Client::new(),
-            base_url: base_url.to_string(),
+            base_url: base_url.to_string()
         }
     }
 
@@ -23,28 +26,27 @@ impl SpotTradeV2HttpClient {
         println!("📡 发送HTTP请求到: {}", url);
         println!("🔧 请求命令: {:?}", cmd);
 
-        let response = self.http_client
-            .post(&url)
-            .json(&cmd)
-            .send()
-            .await
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: format!("HTTP请求失败: {}", e) }))?;
+        let response = self.http_client.post(&url).json(&cmd).send().await.map_err(|e| {
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("HTTP请求失败: {}", e)
+            })
+        })?;
 
         let status = response.status();
         println!("📨 服务器响应状态: {}", status);
 
         if !status.is_success() {
-            let error_text = response.text().await
-                .unwrap_or_else(|_| "无法读取错误响应".to_string());
-            return Err(SpotCmdErrorAny::Common(CommonError::Internal { message: format!(
-                "服务器返回错误状态: {} - {}",
-                status,
-                error_text
-            ) }));
+            let error_text = response.text().await.unwrap_or_else(|_| "无法读取错误响应".to_string());
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("服务器返回错误状态: {} - {}", status, error_text)
+            }));
         }
 
-        let cmd_resp: CmdResp<SpotTradeResAny> = response.json().await
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: format!("响应解析失败: {}", e) }))?;
+        let cmd_resp: CmdResp<SpotTradeResAny> = response.json().await.map_err(|e| {
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("响应解析失败: {}", e)
+            })
+        })?;
 
         println!("✅ 响应解析成功: {:?}", cmd_resp);
 
@@ -53,14 +55,12 @@ impl SpotTradeV2HttpClient {
 }
 
 impl SpotTradeBehaviorV2 for SpotTradeV2HttpClient {
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         let client = self.clone();
         tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap()
-            .block_on(async move {
-                client.send_command(cmd).await
-            })
+            .block_on(async move { client.send_command(cmd).await })
     }
 }
 
@@ -68,24 +68,23 @@ impl Clone for SpotTradeV2HttpClient {
     fn clone(&self) -> Self {
         Self {
             http_client: Client::new(),
-            base_url: self.base_url.clone(),
+            base_url: self.base_url.clone()
         }
     }
 }
 
 impl Default for SpotTradeV2HttpClient {
-    fn default() -> Self {
-        Self::new("http://localhost:3001")
-    }
+    fn default() -> Self { Self::new("http://localhost:3001") }
 }
 
 #[cfg(test)]
 mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
-    use super::*;
     use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-        SpotTradeCmdAny, TestNewOrderCmd, NewOrderCmd, OrderSide, OrderType
+        NewOrderCmd, OrderSide, OrderType, SpotTradeCmdAny, TestNewOrderCmd
     };
+
+    use super::*;
 
     #[tokio::test]
     async fn test_trade_v2_http_connection() {
@@ -118,9 +117,9 @@ mod tests {
                 peg_offset_value: None,
                 peg_offset_type: None,
                 recv_window: None,
-                timestamp: chrono::Utc::now().timestamp_millis(),
+                timestamp: chrono::Utc::now().timestamp_millis()
             },
-            compute_commission_rates: Some(false),
+            compute_commission_rates: Some(false)
         });
 
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");

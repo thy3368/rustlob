@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tokio::sync::broadcast;
+use tracing;
 
 use crate::interfaces::spot::{
     http_server::HttpServer, websocket::connection_types::ConnectionRepo, websocket_server::WebSocketServer
@@ -13,15 +14,16 @@ pub struct SpotStarter;
 impl SpotStarter {
     /// 启动 Spot 模块的 HTTP 和 WebSocket 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-        println!("🚀 Starting Spot module...");
-        println!("⚠️  Running in MOCK mode (no database connection)");
+
+        tracing::info!("🚀 Starting Spot module...");
+        tracing::warn!("⚠️  Running in MOCK mode (no database connection)");
 
         // ==================== HTTP 服务器启动 ====================
-        println!("📡 Starting Spot HTTP API server...");
+        tracing::info!("📡 Starting Spot HTTP API server...");
         HttpServer::start().await?;
 
         // ==================== WebSocket 服务器启动 ====================
-        println!("🔌 Starting Spot WebSocket server...");
+        tracing::info!("🔌 Starting Spot WebSocket server...");
 
         // 创建事件广播通道（仅用于市场数据，用户数据使用定向推送）
         let (md_tx, _) = broadcast::channel(1024);
@@ -32,7 +34,7 @@ impl SpotStarter {
         // 启动 WebSocket 服务器
         WebSocketServer::start(md_tx.clone(), connection_manager.clone()).await?;
 
-        println!("✅ Spot module started successfully");
+        tracing::info!("✅ Spot module started successfully");
 
         Ok(())
     }

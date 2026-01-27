@@ -10,7 +10,7 @@ impl SpotTradeBehaviorV2Impl {
 }
 
 impl SpotTradeBehaviorV2 for SpotTradeBehaviorV2Impl {
-    fn handle(&mut self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 

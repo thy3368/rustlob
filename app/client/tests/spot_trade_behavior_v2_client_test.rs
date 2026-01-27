@@ -24,7 +24,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
     assert!(ws_client.is_connected().await);
 
     // 创建HTTP客户端实例
-    let mut http_client = SpotTradeV2HttpClient::new("http://localhost:3001");
+    let mut http_client = SpotTradeV2HttpClient::new("http://localhost:3001/");
 
     // 构建NewOrder命令
     let new_order_cmd = SpotTradeCmdAny::NewOrder(NewOrderCmd {
