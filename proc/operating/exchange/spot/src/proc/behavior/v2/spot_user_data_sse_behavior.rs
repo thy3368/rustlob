@@ -1,8 +1,9 @@
 // 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/
 // user-data-stream.md 定义所有 user data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use base_types::handler::handler::Handler;
 
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 // ==================== User Data Stream 事件枚举 ====================
 
 /// User Data Stream 事件类型（WebSocket 推送）
@@ -621,9 +622,7 @@ const USAGE_GUIDE: () = ();
 // ==================== User Data Stream 行为接口 ====================
 
 /// User Data Stream 行为接口
-pub trait SpotUserDataListenKeyBehavior: Send + Sync {
-    /// 处理 User Data Stream 命令（REST API）
-    async fn handle(
-        &mut self, cmd: SpotUserDataListenKeyCmdAny
-    ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny>;
+pub trait SpotUserDataListenKeyBehavior:
+    Send + Sync + Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny>
+{
 }

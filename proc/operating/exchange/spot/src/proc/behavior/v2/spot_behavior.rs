@@ -1,4 +1,4 @@
-use base_types::cqrs::cqrs_types::CmdResp;
+use base_types::handler::handler::Handler;
 
 use crate::proc::behavior::{
     spot_trade_behavior::SpotCmdErrorAny,
@@ -25,16 +25,5 @@ pub enum SpotResAny {
 }
 
 
-/// 命令处理行为的泛型接口
-pub trait CommandHandler<C, R>: Send + Sync {
-    async fn handle(&self, cmd: C) -> Result<CmdResp<R>, SpotCmdErrorAny>;
-}
-
-//todo 可以表态分发？
-type SpotBehavior2 = dyn CommandHandler<SpotCmdAny, SpotResAny>;
-
 /// Spot Trading 行为接口
-pub trait SpotBehavior: Send + Sync {
-    /// 处理 Spot Trading 命令
-    async fn handle(&self, cmd: SpotCmdAny) -> Result<CmdResp<SpotResAny>, SpotCmdErrorAny>;
-}
+pub trait SpotBehavior: Send + Sync + Handler<SpotCmdAny, SpotResAny, SpotCmdErrorAny> {}

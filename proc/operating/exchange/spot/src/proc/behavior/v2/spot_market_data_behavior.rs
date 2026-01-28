@@ -1,6 +1,13 @@
-// 参考 Market Data endpoints 在 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 market data 接口
+// 参考 Market Data endpoints 在
+// /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
+// 定义所有 market data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use base_types::handler::handler::Handler;
+
+use crate::proc::behavior::{
+    spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny},
+    v2::spot_behavior::{SpotCmdAny, SpotResAny}
+};
 
 /// Market Data 命令枚举
 #[derive(Debug, Clone)]
@@ -52,7 +59,7 @@ pub enum SpotMarketDataCmdAny {
 
     /// 滚动窗口价格变动统计 GET /api/v3/ticker
     /// Weight: 4 per symbol (max 200)
-    RollingWindowTicker(RollingWindowTickerCmd),
+    RollingWindowTicker(RollingWindowTickerCmd)
 }
 
 /// 订单簿查询命令
@@ -68,7 +75,7 @@ pub struct OrderBookCmd {
     /// 深度限制，默认 100，最大 5000
     pub limit: Option<i32>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// 最近成交查询命令
@@ -82,7 +89,7 @@ pub struct RecentTradesCmd {
     /// 交易对（必填）
     pub symbol: String,
     /// 限制数量，默认 500，最大 1000
-    pub limit: Option<i32>,
+    pub limit: Option<i32>
 }
 
 /// 历史成交查询命令
@@ -98,7 +105,7 @@ pub struct HistoricalTradesCmd {
     /// 限制数量，默认 500，最大 1000
     pub limit: Option<i32>,
     /// 从该成交ID开始，默认返回最近的成交
-    pub from_id: Option<i64>,
+    pub from_id: Option<i64>
 }
 
 /// 聚合成交查询命令
@@ -118,7 +125,7 @@ pub struct AggTradesCmd {
     /// 结束时间（毫秒，包含）
     pub end_time: Option<i64>,
     /// 限制数量，默认 500，最大 1000
-    pub limit: Option<i32>,
+    pub limit: Option<i32>
 }
 
 /// K线数据查询命令
@@ -131,7 +138,8 @@ pub struct KlinesCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
     pub symbol: String,
-    /// 时间间隔（必填）：1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
+    /// 时间间隔（必填）：1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d,
+    /// 3d, 1w, 1M
     pub interval: String,
     /// 开始时间（毫秒）
     pub start_time: Option<i64>,
@@ -140,7 +148,7 @@ pub struct KlinesCmd {
     /// 时区，默认 0 (UTC)，范围 [-12:00 到 +14:00]
     pub time_zone: Option<String>,
     /// 限制数量，默认 500，最大 1000
-    pub limit: Option<i32>,
+    pub limit: Option<i32>
 }
 
 /// UI K线数据查询命令
@@ -163,7 +171,7 @@ pub struct UIKlinesCmd {
     /// 时区，默认 0 (UTC)
     pub time_zone: Option<String>,
     /// 限制数量，默认 500，最大 1000
-    pub limit: Option<i32>,
+    pub limit: Option<i32>
 }
 
 /// 当前平均价格查询命令
@@ -175,7 +183,7 @@ pub struct UIKlinesCmd {
 pub struct AvgPriceCmd {
     pub metadata: CMetadata,
     /// 交易对（必填）
-    pub symbol: String,
+    pub symbol: String
 }
 
 /// 24小时价格变动统计查询命令
@@ -193,7 +201,7 @@ pub struct Ticker24hrCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     pub ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// 交易日价格变动查询命令
@@ -213,7 +221,7 @@ pub struct TradingDayTickerCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     pub ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// 最新价格查询命令
@@ -229,7 +237,7 @@ pub struct SymbolPriceTickerCmd {
     /// 多个交易对数组（与 symbol 互斥）
     pub symbols: Option<Vec<String>>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// 最优挂单查询命令
@@ -245,7 +253,7 @@ pub struct BookTickerCmd {
     /// 多个交易对数组（与 symbol 互斥）
     pub symbols: Option<Vec<String>>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// 滚动窗口价格变动统计查询命令
@@ -265,7 +273,7 @@ pub struct RollingWindowTickerCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     pub ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    pub symbol_status: Option<String>,
+    pub symbol_status: Option<String>
 }
 
 /// Market Data 响应枚举
@@ -315,7 +323,7 @@ pub enum SpotMarketDataResAny {
     RollingWindowTicker(RollingWindowTickerData),
 
     /// 滚动窗口Ticker响应（数组）
-    RollingWindowTickerList(Vec<RollingWindowTickerData>),
+    RollingWindowTickerList(Vec<RollingWindowTickerData>)
 }
 
 /// 订单簿数据
@@ -327,7 +335,7 @@ pub struct OrderBookData {
     /// 买单列表 [[价格, 数量], ...]
     pub bids: Vec<(String, String)>,
     /// 卖单列表 [[价格, 数量], ...]
-    pub asks: Vec<(String, String)>,
+    pub asks: Vec<(String, String)>
 }
 
 /// 成交数据
@@ -347,7 +355,7 @@ pub struct TradeData {
     /// 是否为买方maker
     pub is_buyer_maker: bool,
     /// 是否为最佳匹配
-    pub is_best_match: bool,
+    pub is_best_match: bool
 }
 
 /// 聚合成交数据
@@ -369,7 +377,7 @@ pub struct AggTradeData {
     /// 是否为买方maker
     pub is_buyer_maker: bool,
     /// 是否为最佳匹配
-    pub is_best_match: bool,
+    pub is_best_match: bool
 }
 
 /// K线数据
@@ -397,7 +405,7 @@ pub struct KlineData {
     /// Taker买入成交量
     pub taker_buy_base_asset_volume: String,
     /// Taker买入成交额
-    pub taker_buy_quote_asset_volume: String,
+    pub taker_buy_quote_asset_volume: String
 }
 
 /// 平均价格数据
@@ -409,7 +417,7 @@ pub struct AvgPriceData {
     /// 平均价格
     pub price: String,
     /// 最后成交时间
-    pub close_time: i64,
+    pub close_time: i64
 }
 
 /// 24小时Ticker数据（完整）
@@ -457,7 +465,7 @@ pub struct Ticker24hrData {
     /// 最后一笔成交ID
     pub last_id: Option<i64>,
     /// 成交笔数
-    pub count: i64,
+    pub count: i64
 }
 
 /// 交易日Ticker数据
@@ -493,7 +501,7 @@ pub struct TradingDayTickerData {
     /// 最后一笔成交ID
     pub last_id: i64,
     /// 成交笔数
-    pub count: i64,
+    pub count: i64
 }
 
 /// 价格Ticker数据
@@ -503,7 +511,7 @@ pub struct PriceTickerData {
     /// 交易对
     pub symbol: String,
     /// 价格
-    pub price: String,
+    pub price: String
 }
 
 /// 订单簿Ticker数据
@@ -519,7 +527,7 @@ pub struct BookTickerData {
     /// 卖一价
     pub ask_price: String,
     /// 卖一量
-    pub ask_qty: String,
+    pub ask_qty: String
 }
 
 /// 滚动窗口Ticker数据
@@ -555,11 +563,13 @@ pub struct RollingWindowTickerData {
     /// 最后一笔成交ID
     pub last_id: i64,
     /// 成交笔数
-    pub count: i64,
+    pub count: i64
 }
 
+
+
 /// Market Data 行为接口
-pub trait SpotMarketDataBehavior: Send + Sync {
-    /// 处理 Market Data 命令
-    async fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny>;
+pub trait SpotMarketDataBehavior:
+    Send + Sync + Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny>
+{
 }

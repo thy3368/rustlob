@@ -1,9 +1,10 @@
 // 发布 SpotUserDataStreamImpl
 
+use base_types::handler::handler::Handler;
 use spot_behavior::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::spot_user_data_sse_behavior::{
-        ListenKeyResponse, SpotUserDataListenKeyBehavior, SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny
+        ListenKeyResponse, SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny
     }
 };
 
@@ -26,9 +27,10 @@ impl SpotUserDataSSEImpl {
 
 impl SpotUserDataSSEImpl {}
 
-impl SpotUserDataListenKeyBehavior for SpotUserDataSSEImpl {
+
+impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotUserDataSSEImpl {
     async fn handle(
-        &mut self, cmd: SpotUserDataListenKeyCmdAny
+        &self, cmd: SpotUserDataListenKeyCmdAny
     ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
         let nonce = 0; // 临时值，实际应该从 metadata 中获取或生成
 

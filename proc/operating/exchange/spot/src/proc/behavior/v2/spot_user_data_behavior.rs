@@ -2,7 +2,9 @@
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 user data 接口
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use base_types::handler::handler::Handler;
+
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
@@ -595,7 +597,7 @@ pub struct AllocationInfo {
 }
 
 /// User Data 行为接口
-pub trait SpotUserDataBehavior: Send + Sync {
-    /// 处理 User Data 命令
-    async fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny>;
+pub trait SpotUserDataBehavior:
+    Send + Sync + Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny>
+{
 }

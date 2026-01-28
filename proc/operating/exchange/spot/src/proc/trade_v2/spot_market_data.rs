@@ -1,9 +1,9 @@
-use base_types::cqrs::cqrs_types::CmdResp;
+use base_types::{cqrs::cqrs_types::CmdResp, handler::handler::Handler};
 
 use crate::proc::behavior::{
     spot_trade_behavior::SpotCmdErrorAny,
     v2::spot_market_data_behavior::{
-        AvgPriceData, OrderBookData, SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny
+        AvgPriceData, OrderBookData, SpotMarketDataCmdAny, SpotMarketDataResAny
     }
 };
 
@@ -13,7 +13,8 @@ impl SpotMarketDataImpl {
     pub fn new() -> Self { Self {} }
 }
 
-impl SpotMarketDataBehavior for SpotMarketDataImpl {
+
+impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for SpotMarketDataImpl {
     async fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
@@ -56,7 +57,9 @@ impl SpotMarketDataBehavior for SpotMarketDataImpl {
             SpotMarketDataCmdAny::SymbolPriceTicker(_) => {
                 Ok(CmdResp::new(nonce, SpotMarketDataResAny::PriceTickerList(vec![])))
             }
-            SpotMarketDataCmdAny::BookTicker(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::BookTickerList(vec![]))),
+            SpotMarketDataCmdAny::BookTicker(_) => {
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::BookTickerList(vec![])))
+            }
             SpotMarketDataCmdAny::RollingWindowTicker(_) => {
                 Ok(CmdResp::new(nonce, SpotMarketDataResAny::RollingWindowTickerList(vec![])))
             }

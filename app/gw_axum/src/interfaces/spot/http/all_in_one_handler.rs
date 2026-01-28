@@ -4,6 +4,7 @@ use axum::{
     extract::{Json, State},
     response::IntoResponse
 };
+use base_types::handler::handler::Handler;
 // Spot 市场数据相关导入
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny

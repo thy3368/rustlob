@@ -1,4 +1,4 @@
-use base_types::cqrs::cqrs_types::CmdResp;
+use base_types::{cqrs::cqrs_types::CmdResp, handler::handler::Handler};
 use reqwest::Client;
 use spot_behavior::proc::behavior::{
     spot_trade_behavior::{CommonError, SpotCmdErrorAny},
@@ -67,30 +67,34 @@ impl SpotHttpClient {
     }
 }
 
+
 // 实现SpotTradeBehaviorV2
-impl SpotTradeBehaviorV2 for SpotHttpClient {
+impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "trade/v2").await
     }
 }
 
+
 // 实现SpotUserDataBehavior
-impl SpotUserDataBehavior for SpotHttpClient {
+impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "user_data").await
     }
 }
 
+
 // 实现SpotMarketDataBehavior
-impl SpotMarketDataBehavior for SpotHttpClient {
+impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "market_data").await
     }
 }
 
-impl SpotUserDataListenKeyBehavior for SpotHttpClient {
+
+impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(
-        &mut self, cmd: SpotUserDataListenKeyCmdAny
+        & self, cmd: SpotUserDataListenKeyCmdAny
     ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "listen_key").await
     }
@@ -157,7 +161,7 @@ mod tests {
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");
 
         // 发送测试命令
-        match SpotTradeBehaviorV2::handle(&client, test_cmd).await {
+        match (&client).handle(test_cmd).await {
             Ok(response) => {
                 println!("✅ 连接成功！响应: {:?}", response);
                 // assert!(response.success, "响应成功标志应为 true");

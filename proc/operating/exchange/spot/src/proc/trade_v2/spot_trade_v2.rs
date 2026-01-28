@@ -1,3 +1,4 @@
+use base_types::handler::handler::Handler;
 use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny}
@@ -11,7 +12,9 @@ impl SpotTradeBehaviorV2Impl {
     pub fn new() -> Self { Self {} }
 }
 
-impl SpotTradeBehaviorV2 for SpotTradeBehaviorV2Impl {
+
+
+impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV2Impl {
     async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
