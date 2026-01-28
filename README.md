@@ -215,7 +215,7 @@ cargo run --example ws_client --release
 { "type": "order_ack", "order_id": 123456, "status": "open", "latency_us": 87 }
 
 // 成交广播
-{ "type": "trade", "trade_id": 789012, "buyer": "alice", "seller": "bob", "price": 50000 }
+{ "type": "v1", "trade_id": 789012, "buyer": "alice", "seller": "bob", "price": 50000 }
 ```
 
 详细 API 文档：[WEBSOCKET.md](app/client/WEBSOCKET.md)

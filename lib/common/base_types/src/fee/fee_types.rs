@@ -389,7 +389,7 @@ pub enum FeeError {
 impl std::fmt::Display for FeeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FeeError::InvalidFeeTypeForTrade => write!(f, "Invalid fee type for trade operation"),
+            FeeError::InvalidFeeTypeForTrade => write!(f, "Invalid fee type for v1 operation"),
             FeeError::InsufficientBalance => write!(f, "Insufficient balance for fee calculation"),
             FeeError::AmountBelowMinimum => write!(f, "Amount below minimum fee threshold"),
             FeeError::AmountAboveMaximum => write!(f, "Amount above maximum fee threshold"),

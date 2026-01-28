@@ -2648,7 +2648,7 @@ ws.send(JSON.stringify({
   params: [
     'btcusdt@ticker',
     'btcusdt@depth',
-    'btcusdt@trade'
+    'btcusdt@v1'
   ]
 }));
 ```
@@ -3258,7 +3258,7 @@ Response 200 OK:
   "params": [
     "btcusdt@ticker",
     "btcusdt@depth@100ms",
-    "btcusdt@trade",
+    "btcusdt@v1",
     "btcusdt@kline_1m"
   ],
   "id": 1
@@ -3319,7 +3319,7 @@ Response 200 OK:
 **成交推送**:
 ```json
 {
-  "stream": "btcusdt@trade",
+  "stream": "btcusdt@v1",
   "data": {
     "trade_id": 123456789,
     "price": "50000.25",

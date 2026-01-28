@@ -1,4 +1,4 @@
-// 参考 trade stream Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/trade/websocket-api 定义所有 trade stream 接口
+// 参考 v1 stream Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/v1/websocket-api 定义所有 v1 stream 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 

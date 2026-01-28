@@ -10,7 +10,7 @@ use spot_behavior::proc::{
         spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
         spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny}
     },
-    trade_v2::{
+    v2::{
         spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl
     }
 };
@@ -36,7 +36,7 @@ impl HttpServer {
 
         let trade_v2_routes = Router::new()
             .route(
-                "/api/spot/trade/v2/",
+                "/api/spot/v1/v2/",
                 post(handle_generic::<SpotTradeBehaviorV2Impl, SpotTradeCmdAny, SpotTradeResAny>)
             )
             .with_state(trade_v2_service);
@@ -66,8 +66,8 @@ impl HttpServer {
         let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
         tracing::info!("🚀 Spot HTTP server started at http://localhost:3001");
         tracing::info!("📊 Spot health check: GET /api/spot/health");
-        tracing::info!("💹 Spot trade: POST /api/spot/order/ (JSON)");
-        tracing::info!("💹 Spot trade v2: POST /api/spot/trade/v2/ (JSON)");
+        tracing::info!("💹 Spot v1: POST /api/spot/order/ (JSON)");
+        tracing::info!("💹 Spot v1 v2: POST /api/spot/v1/v2/ (JSON)");
         tracing::info!("📈 Spot market data: POST /api/spot/market/data (JSON)");
         tracing::info!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 

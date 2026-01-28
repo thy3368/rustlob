@@ -1,4 +1,4 @@
-// 参考 ## trade Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/trade
+// 参考 ## v1 Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/v1
 // 定义所有trade 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};

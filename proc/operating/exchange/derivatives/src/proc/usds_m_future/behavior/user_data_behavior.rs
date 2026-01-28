@@ -86,11 +86,11 @@ pub enum UsdsMFutureUserDataCmdAny {
     /// Weight: 5
     GetOrderDownloadLink(GetOrderDownloadLinkCmd),
 
-    /// 获取成交历史下载ID - GET /fapi/v1/trade/asyn
+    /// 获取成交历史下载ID - GET /fapi/v1/v1/asyn
     /// Weight: 5
     GetTradeDownloadId(GetTradeDownloadIdCmd),
 
-    /// 获取成交下载链接 - GET /fapi/v1/trade/asyn/id
+    /// 获取成交下载链接 - GET /fapi/v1/v1/asyn/id
     /// Weight: 5
     GetTradeDownloadLink(GetTradeDownloadLinkCmd),
 
@@ -668,7 +668,7 @@ pub struct DownloadLinkRes {
 }
 
 /// 获取成交历史下载ID
-/// GET /fapi/v1/trade/asyn
+/// GET /fapi/v1/v1/asyn
 /// Weight: 5
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -681,7 +681,7 @@ pub struct GetTradeDownloadIdCmd {
 }
 
 /// 获取成交下载链接
-/// GET /fapi/v1/trade/asyn/id
+/// GET /fapi/v1/v1/asyn/id
 /// Weight: 5
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

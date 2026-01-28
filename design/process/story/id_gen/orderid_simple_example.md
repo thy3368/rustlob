@@ -208,7 +208,7 @@ impl Order {
 ## 集成到成交系统
 
 ```rust
-// src/lob_repo/domain/entity/trade.rs
+// src/lob_repo/domain/entity/v1.rs
 
 use crate::id_generator::generate_trade_id;
 

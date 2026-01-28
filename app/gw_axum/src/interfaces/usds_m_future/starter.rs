@@ -60,7 +60,7 @@ impl UsdsMFutureStarter {
         let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3002").await?;
         println!("🚀 USDS-M Future HTTP server started at http://localhost:3002");
         println!("📊 USDS-M Future health check: GET /api/usds-m-future/health");
-        println!("💹 USDS-M Future trade: POST /api/usds-m-future/order/ (JSON)");
+        println!("💹 USDS-M Future v1: POST /api/usds-m-future/order/ (JSON)");
         println!("📈 USDS-M Future market data: POST /api/usds-m-future/market/data (JSON)");
         println!("👤 USDS-M Future user data: POST /api/usds-m-future/user/data (JSON)");
 

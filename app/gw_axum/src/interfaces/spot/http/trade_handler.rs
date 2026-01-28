@@ -15,7 +15,7 @@ use serde::Serialize;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
     CmdResp, SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny
 };
-use spot_behavior::proc::trade::spot_trade::SpotTradeBehaviorImpl;
+use spot_behavior::proc::v1::spot_trade::SpotTradeBehaviorImpl;
 
 // ============================================================================
 // 应用服务 - 封装订单处理器

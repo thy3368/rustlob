@@ -72,7 +72,7 @@ impl SpotMarketDataPublishBehavior for SpotMarketDataPusher {
             })
         } else if counter % 3 == 1 {
             SpotMarketDataStreamAny::Trade(TradeStream {
-                event_type: "trade".to_string(),
+                event_type: "v1".to_string(),
                 event_time: now,
                 symbol: "ETHUSDT".to_string(),
                 trade_id: counter as i64,

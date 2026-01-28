@@ -336,7 +336,7 @@ VIP2 Bronze 用户: 0.10% × (1 - 0.4) = 0.06%
 
 #### 2. 订单成交时（核心应用）
 ```rust
-// 在 SpotOrder::trade() 方法中
+// 在 SpotOrder::v1() 方法中
 let (commission_rate, commission_qty) = self.calculate_fee_with_amount(
     &fee_entity,          // CEX 手续费配置元数据
     is_taker,            // 区分 Maker/Taker
@@ -490,7 +490,7 @@ println!("Taker 费率: {:.6} ({:.4}%)",
 ### 示例 5: 在 SpotOrder 中应用
 
 ```rust
-// 在 trade() 方法中自动计算费率
+// 在 v1() 方法中自动计算费率
 let (commission_rate, commission_qty) = order.calculate_fee_with_amount(
     &fee_config,
     true,           // is_taker

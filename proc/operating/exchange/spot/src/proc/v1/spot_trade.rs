@@ -147,7 +147,7 @@ impl SpotTradeBehaviorImpl {
         // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
         if !all_events.is_empty() {
-            // 回放 matched_order 更新和 trade 创建事件到各自的 repo
+            // 回放 matched_order 更新和 v1 创建事件到各自的 repo
             for event in &all_events {
                 // 根据 entity_type 判断回放到哪个 repo
                 // todo 增加balance position
@@ -159,7 +159,7 @@ impl SpotTradeBehaviorImpl {
                     }
                     "SpotTrade" => {
                         if let Err(e) = self.trade_repo.replay_event(event) {
-                            log::error!("Failed to replay trade event: {:?}", e);
+                            log::error!("Failed to replay v1 event: {:?}", e);
                         }
                     }
                     "Balance" => {
