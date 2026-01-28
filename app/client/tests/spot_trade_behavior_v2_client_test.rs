@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use base_types::cqrs::cqrs_types::CMetadata;
-use sapp::client::spot_order_proc::{
+use sapp::client::spot::{
     spot_trade_v2_http_client::SpotTradeV2HttpClient,
     spot_user_data_websocket_stream_client::SpotUserDataWebSocketStreamClient
 };

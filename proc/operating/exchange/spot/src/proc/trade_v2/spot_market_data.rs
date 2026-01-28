@@ -3,7 +3,7 @@ use base_types::cqrs::cqrs_types::CmdResp;
 use crate::proc::behavior::{
     spot_trade_behavior::SpotCmdErrorAny,
     v2::spot_market_data_behavior::{
-        AvgPriceData, OrderBookData, SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataRes
+        AvgPriceData, OrderBookData, SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny
     }
 };
 
@@ -14,7 +14,7 @@ impl SpotMarketDataImpl {
 }
 
 impl SpotMarketDataBehavior for SpotMarketDataImpl {
-    fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdErrorAny> {
+    fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 
@@ -23,23 +23,23 @@ impl SpotMarketDataBehavior for SpotMarketDataImpl {
                 // 暂时返回一个空的订单簿响应
                 Ok(CmdResp::new(
                     nonce,
-                    SpotMarketDataRes::OrderBook(OrderBookData {
+                    SpotMarketDataResAny::OrderBook(OrderBookData {
                         last_update_id: 0,
                         bids: vec![],
                         asks: vec![]
                     })
                 ))
             }
-            SpotMarketDataCmdAny::RecentTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::Trades(vec![]))),
-            SpotMarketDataCmdAny::HistoricalTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::Trades(vec![]))),
-            SpotMarketDataCmdAny::AggTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::AggTrades(vec![]))),
-            SpotMarketDataCmdAny::Klines(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::Klines(vec![]))),
-            SpotMarketDataCmdAny::UIKlines(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::Klines(vec![]))),
+            SpotMarketDataCmdAny::RecentTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Trades(vec![]))),
+            SpotMarketDataCmdAny::HistoricalTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Trades(vec![]))),
+            SpotMarketDataCmdAny::AggTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::AggTrades(vec![]))),
+            SpotMarketDataCmdAny::Klines(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Klines(vec![]))),
+            SpotMarketDataCmdAny::UIKlines(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Klines(vec![]))),
             SpotMarketDataCmdAny::AvgPrice(_) => {
                 // 暂时返回一个默认的平均价格响应
                 Ok(CmdResp::new(
                     nonce,
-                    SpotMarketDataRes::AvgPrice(AvgPriceData {
+                    SpotMarketDataResAny::AvgPrice(AvgPriceData {
                         mins: 5,
                         price: "50000.00".to_string(),
                         close_time: 0
@@ -48,17 +48,17 @@ impl SpotMarketDataBehavior for SpotMarketDataImpl {
             }
             SpotMarketDataCmdAny::Ticker24hr(_) => {
                 // 暂时返回一个空的24小时Ticker响应列表
-                Ok(CmdResp::new(nonce, SpotMarketDataRes::Ticker24hrList(vec![])))
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::Ticker24hrList(vec![])))
             }
             SpotMarketDataCmdAny::TradingDayTicker(_) => {
-                Ok(CmdResp::new(nonce, SpotMarketDataRes::TradingDayTickerList(vec![])))
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::TradingDayTickerList(vec![])))
             }
             SpotMarketDataCmdAny::SymbolPriceTicker(_) => {
-                Ok(CmdResp::new(nonce, SpotMarketDataRes::PriceTickerList(vec![])))
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::PriceTickerList(vec![])))
             }
-            SpotMarketDataCmdAny::BookTicker(_) => Ok(CmdResp::new(nonce, SpotMarketDataRes::BookTickerList(vec![]))),
+            SpotMarketDataCmdAny::BookTicker(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::BookTickerList(vec![]))),
             SpotMarketDataCmdAny::RollingWindowTicker(_) => {
-                Ok(CmdResp::new(nonce, SpotMarketDataRes::RollingWindowTickerList(vec![])))
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::RollingWindowTickerList(vec![])))
             }
         }
     }

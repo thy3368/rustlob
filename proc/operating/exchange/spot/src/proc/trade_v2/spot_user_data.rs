@@ -1,6 +1,6 @@
 use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-    v2::spot_user_data_behavior::{SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataRes}
+    v2::spot_user_data_behavior::{SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataResAny}
 };
 
 pub struct SpotUserDataImpl {}
@@ -10,7 +10,7 @@ impl SpotUserDataImpl {
 }
 
 impl SpotUserDataBehavior for SpotUserDataImpl {
-    fn handle(& self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny> {
+    fn handle(& self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
         match cmd {
             SpotUserDataCmdAny::Account(_) => {
                 todo!()

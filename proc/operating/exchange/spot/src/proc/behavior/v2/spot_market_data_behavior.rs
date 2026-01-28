@@ -271,7 +271,7 @@ pub struct RollingWindowTickerCmd {
 /// Market Data 响应枚举
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotMarketDataRes {
+pub enum SpotMarketDataResAny {
     /// 订单簿响应
     OrderBook(OrderBookData),
 
@@ -561,5 +561,5 @@ pub struct RollingWindowTickerData {
 /// Market Data 行为接口
 pub trait SpotMarketDataBehavior: Send + Sync {
     /// 处理 Market Data 命令
-    fn handle(& self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataRes>, SpotCmdErrorAny>;
+    fn handle(& self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny>;
 }

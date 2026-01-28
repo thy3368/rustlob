@@ -6,7 +6,7 @@ use axum::{
 };
 // Spot 用户数据相关导入
 use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
-    SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataRes
+    SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataResAny
 };
 use spot_behavior::proc::{
     behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
@@ -27,7 +27,7 @@ pub async fn handle(
 
 /// 创建 JSON 响应
 fn create_json_response(
-    response: CmdResp<SpotUserDataRes>
+    response: CmdResp<SpotUserDataResAny>
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)

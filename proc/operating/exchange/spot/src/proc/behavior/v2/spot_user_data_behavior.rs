@@ -310,7 +310,7 @@ pub struct QueryCommissionRatesCmd {
 /// User Data 响应枚举
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotUserDataRes {
+pub enum SpotUserDataResAny {
     /// 账户信息响应
     Account(AccountInfo),
 
@@ -597,5 +597,5 @@ pub struct AllocationInfo {
 /// User Data 行为接口
 pub trait SpotUserDataBehavior: Send + Sync {
     /// 处理 User Data 命令
-    fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny>;
+    fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny>;
 }

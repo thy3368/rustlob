@@ -6,7 +6,7 @@ use axum::{
 };
 // Spot 市场数据相关导入
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
-    SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataRes
+    SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny
 };
 use spot_behavior::proc::{
     behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
@@ -27,7 +27,7 @@ pub async fn handle(
 
 /// 创建 JSON 响应
 fn create_json_response(
-    response: CmdResp<SpotMarketDataRes>
+    response: CmdResp<SpotMarketDataResAny>
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)

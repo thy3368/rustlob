@@ -7,12 +7,16 @@ use spot_behavior::proc::behavior::{
 
 // 实现HTTP调用客户端，参考
 // /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
-pub struct SpotTradeV2HttpClient {
+
+
+
+//todo 有没可能设计一个泛型 支持 SpotTradeBehaviorV2/SpotUserDataBehavior/SpotMarketDataBehavior
+pub struct SpotHttpClient {
     http_client: Client,
     base_url: String
 }
 
-impl SpotTradeV2HttpClient {
+impl SpotHttpClient {
     pub fn new(base_url: &str) -> Self {
         Self {
             http_client: Client::new(),
@@ -54,13 +58,13 @@ impl SpotTradeV2HttpClient {
     }
 }
 
-impl SpotTradeBehaviorV2 for SpotTradeV2HttpClient {
+impl SpotTradeBehaviorV2 for SpotHttpClient {
     async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         self.send_command(cmd).await
     }
 }
 
-impl Clone for SpotTradeV2HttpClient {
+impl Clone for SpotHttpClient {
     fn clone(&self) -> Self {
         Self {
             http_client: Client::new(),
@@ -69,7 +73,7 @@ impl Clone for SpotTradeV2HttpClient {
     }
 }
 
-impl Default for SpotTradeV2HttpClient {
+impl Default for SpotHttpClient {
     fn default() -> Self { Self::new("http://localhost:3001") }
 }
 
@@ -88,7 +92,7 @@ mod tests {
         println!("🧪 测试 Trade V2 HTTP 连接...");
 
         // 创建客户端实例（使用默认地址 http://localhost:3001）
-        let client = SpotTradeV2HttpClient::default();
+        let client = SpotHttpClient::default();
 
         // 创建测试命令 - 使用 TestNewOrder 命令进行连接测试
         let test_cmd = SpotTradeCmdAny::TestNewOrder(TestNewOrderCmd {

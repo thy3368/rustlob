@@ -3,7 +3,9 @@ use crate::proc::behavior::{
     v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny}
 };
 
-pub struct SpotTradeBehaviorV2Impl {}
+pub struct SpotTradeBehaviorV2Impl {
+    //todo
+}
 
 impl SpotTradeBehaviorV2Impl {
     pub fn new() -> Self { Self {} }
