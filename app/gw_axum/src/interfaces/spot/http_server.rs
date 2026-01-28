@@ -4,15 +4,18 @@ use axum::{
     routing::{get, post},
     Router
 };
-use spot_behavior::proc::trade_v2::{
-    spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl
+use spot_behavior::proc::{
+    behavior::v2::{
+        spot_market_data_behavior::{SpotMarketDataCmdAny, SpotMarketDataResAny},
+        spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
+        spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny}
+    },
+    trade_v2::{
+        spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl
+    }
 };
 
-use crate::interfaces::spot::http::{
-    all_in_one_handler::{handle_market_data, handle_trade_v2, handle_user_data},
-    trade_handler,
-    trade_handler::TradeService
-};
+use crate::interfaces::spot::http::{all_in_one_handler::handle_generic, trade_handler, trade_handler::TradeService};
 
 /// HTTP 服务器启动器
 pub struct HttpServer;
@@ -30,14 +33,27 @@ impl HttpServer {
         let order_routes =
             Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
 
-        let trade_v2_routes =
-            Router::new().route("/api/spot/trade/v2/", post(handle_trade_v2)).with_state(trade_v2_service);
 
-        let market_data_routes =
-            Router::new().route("/api/spot/market/data", post(handle_market_data)).with_state(market_data_service);
+        let trade_v2_routes = Router::new()
+            .route(
+                "/api/spot/trade/v2/",
+                post(handle_generic::<SpotTradeBehaviorV2Impl, SpotTradeCmdAny, SpotTradeResAny>)
+            )
+            .with_state(trade_v2_service);
 
-        let user_data_routes =
-            Router::new().route("/api/spot/user/data", post(handle_user_data)).with_state(user_data_service);
+        let market_data_routes = Router::new()
+            .route(
+                "/api/spot/market/data",
+                post(handle_generic::<SpotMarketDataImpl, SpotMarketDataCmdAny, SpotMarketDataResAny>)
+            )
+            .with_state(market_data_service);
+
+        let user_data_routes = Router::new()
+            .route(
+                "/api/spot/user/data",
+                post(handle_generic::<SpotUserDataImpl, SpotUserDataCmdAny, SpotUserDataResAny>)
+            )
+            .with_state(user_data_service);
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))

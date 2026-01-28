@@ -1,27 +1,12 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use axum::{
     extract::{Json, State},
     response::IntoResponse
 };
 use base_types::handler::handler::Handler;
-use serde::Serialize;
-// Spot 市场数据相关导入
-use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
-    SpotMarketDataCmdAny, SpotMarketDataResAny
-};
-use spot_behavior::proc::{
-    behavior::{
-        spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-        v2::{
-            spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
-            spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny}
-        }
-    },
-    trade_v2::{
-        spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl
-    }
-};
+use serde::{de::DeserializeOwned, Serialize};
+use spot_behavior::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
 
 
 // ==================== 通用 JSON 响应创建 ====================
@@ -35,48 +20,28 @@ fn create_json_response<T: Serialize>(
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
 }
 
-//todo handle_market_data/handle_user_data/handle_trade_v2 可统一处理吗？
-// ==================== 市场数据处理 ====================
+// ==================== 通用 Handler 处理模板 ====================
 
-pub async fn handle_market_data(
-    State(service): State<Arc<SpotMarketDataImpl>>, Json(cmd): Json<SpotMarketDataCmdAny>
-) -> impl IntoResponse {
-    println!("📊 收到市场数据请求: {:?}", cmd);
-
-    match service.handle(cmd).await {
-        Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(err)
-    }
-}
-
-// ==================== 用户数据处理 ====================
-
-pub async fn handle_user_data(
-    State(service): State<Arc<SpotUserDataImpl>>, Json(cmd): Json<SpotUserDataCmdAny>
-) -> impl IntoResponse {
-    println!("👤 收到用户数据请求: {:?}", cmd);
+/// 泛型 handler 模板函数 - 统一处理所有类型的请求
+///
+/// 类型参数:
+/// - `S`: Service 类型,必须实现 `Handler<C, R, SpotCmdErrorAny>`
+/// - `C`: Command 类型,必须可序列化和调试
+/// - `R`: Response 类型,必须可序列化
+#[inline]
+pub async fn handle_generic<S, C, R>(State(service): State<Arc<S>>, Json(cmd): Json<C>) -> impl IntoResponse
+where
+    S: Handler<C, R, SpotCmdErrorAny>,
+    C: Debug + DeserializeOwned,
+    R: Serialize
+{
+    println!("收到请求: {:?}", cmd);
 
     match service.handle(cmd).await {
         Ok(response) => create_json_response(response),
         Err(err) => create_error_response(err)
     }
 }
-
-// ==================== 交易处理 ====================
-
-pub async fn handle_trade_v2(
-    State(service): State<Arc<SpotTradeBehaviorV2Impl>>, Json(cmd): Json<SpotTradeCmdAny>
-) -> impl IntoResponse {
-    println!("💹 收到交易请求: {:?}", cmd);
-
-    match service.handle(cmd).await {
-        Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(err)
-    }
-}
-
-
-// todo 增加user data listen key
 
 
 // ==================== 通用错误处理 ====================
