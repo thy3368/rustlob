@@ -1,12 +1,11 @@
 use std::error::Error;
 
-use base_types::cqrs::cqrs_types::CMetadata;
+use base_types::{cqrs::cqrs_types::CMetadata, handler::handler::Handler};
 use sapp::client::spot::{
-    spot_user_data_websocket_stream_client::SpotUserDataWebSocketStreamClient
+    spot_http_client::SpotHttpClient, spot_user_data_websocket_stream_client::SpotUserDataWebSocketStreamClient
 };
-use sapp::client::spot::spot_http_client::SpotHttpClient;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-    NewOrderCmd, NewOrderRespType, OrderSide, OrderType, SpotTradeBehaviorV2, SpotTradeCmdAny, TestNewOrderCmd,
+    NewOrderCmd, NewOrderRespType, OrderSide, OrderType, SpotTradeCmdAny, TestNewOrderCmd,
     TimeInForce
 };
 

@@ -94,7 +94,7 @@ impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for Sp
 
 impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(
-        & self, cmd: SpotUserDataListenKeyCmdAny
+        &self, cmd: SpotUserDataListenKeyCmdAny
     ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "listen_key").await
     }
