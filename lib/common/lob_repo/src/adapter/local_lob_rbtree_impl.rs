@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use base_types::{OrderId, Price, Quantity, Side, TradingPair};
-use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
+use base_types::lob::lob::LobOrder;
+use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
 /// 价格点结构
 ///
@@ -28,13 +29,13 @@ impl PricePoint {
 /// 订单包装器
 ///
 /// 包装 Order trait 对象，并添加链表指针
-struct OrderNode<O: Order> {
+struct OrderNode<O: LobOrder> {
     order: O,
     /// 指向同价格级别下一个订单的索引
     next_idx: Option<usize>,
 }
 
-impl<O: Order> OrderNode<O> {
+impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
         Self {
             order,
@@ -59,7 +60,7 @@ impl<O: Order> OrderNode<O> {
 /// - 订单匹配引擎（价格优先原则）
 /// - 市场深度查询
 /// - 对确定性性能有要求的系统
-pub struct LocalLobBTreeMap<O: Order> {
+pub struct LocalLobBTreeMap<O: LobOrder> {
     symbol: TradingPair,
     /// 最小价格变动单位（tick size）
     tick_size: Price,
@@ -81,7 +82,7 @@ pub struct LocalLobBTreeMap<O: Order> {
     next_slot: usize,
 }
 
-impl<O: Order> LocalLobBTreeMap<O> {
+impl<O: LobOrder> LocalLobBTreeMap<O> {
     /// 创建新的本地 LOB（使用默认 tick size）
     ///
     /// # 参数
@@ -277,7 +278,7 @@ impl<O: Order> LocalLobBTreeMap<O> {
     }
 }
 
-impl<O: Order> SymbolLob for LocalLobBTreeMap<O> {
+impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
     type Order = O;
     /// 匹配订单
     ///

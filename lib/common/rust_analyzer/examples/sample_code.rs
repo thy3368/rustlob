@@ -140,3 +140,5 @@ pub fn multiply_arrays_optimized(a: &[f64], b: &[f64]) -> Vec<f64> {
         .map(|(x, y)| x * y)
         .collect()
 }
+
+fn main() {}
