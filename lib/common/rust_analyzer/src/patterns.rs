@@ -15,7 +15,7 @@ lazy_static! {
 
     // 非对齐结构体
     static ref UNALIGNED_STRUCT: Regex = Regex::new(
-        r"(?m)^pub struct \w+\s*\{(?![\s\S]*#\[repr\(align)"
+        r"(?m)^pub struct \w+\s*\{[^}]*"
     ).unwrap();
 
     // 使用unwrap而非?
@@ -46,9 +46,9 @@ lazy_static! {
         r"Mutex::new|RwLock::new"
     ).unwrap();
 
-    // 递归函数没有尾调用优化
+    // 递归函数没有尾调用优化 - 简化版本，不使用反向引用
     static ref RECURSIVE_FUNCTION: Regex = Regex::new(
-        r"fn\s+(\w+)[^{]*\{[^}]*\1\s*\([^}]*\}"
+        r"fn\s+\w+[^{]*\{[^}]*\b\w+\s*\([^}]*\}"
     ).unwrap();
 }
 
@@ -91,15 +91,21 @@ impl PatternDetector {
 
         // 检测未对齐的结构体
         for cap in UNALIGNED_STRUCT.captures_iter(content) {
-            issues.push(OptimizationIssue {
-                file: file_path.to_path_buf(),
-                line: Self::get_line_number(content, cap.get(0).unwrap().start()),
-                category: IssueCategory::CacheAlignment,
-                severity: Severity::Medium,
-                message: "结构体未指定对齐方式".to_string(),
-                suggestion: "考虑添加 #[repr(align(64))] 或 #[repr(align(128))] 以优化缓存性能".to_string(),
-                estimated_impact: 0.5,
-            });
+            if let Some(whole_match) = cap.get(0) {
+                let struct_def = whole_match.as_str();
+                // 检查结构体定义中是否包含 align 属性
+                if !struct_def.contains("#[repr(align") {
+                    issues.push(OptimizationIssue {
+                        file: file_path.to_path_buf(),
+                        line: Self::get_line_number(content, whole_match.start()),
+                        category: IssueCategory::CacheAlignment,
+                        severity: Severity::Medium,
+                        message: "结构体未指定对齐方式".to_string(),
+                        suggestion: "考虑添加 #[repr(align(64))] 或 #[repr(align(128))] 以优化缓存性能".to_string(),
+                        estimated_impact: 0.5,
+                    });
+                }
+            }
         }
 
         // 检测错误的对齐值

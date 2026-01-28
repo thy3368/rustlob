@@ -86,10 +86,10 @@ fn main() -> anyhow::Result<()> {
                 let llvm_result = llvm_analyzer.generate_and_analyze()?;
 
                 let reporter = Reporter::new(analysis_result, Some(llvm_result));
-                reporter.generate_report(&output, output_file.as_ref())?;
+                reporter.generate_report(&output, output_file.as_ref().map(|v| &**v))?;
             } else {
                 let reporter = Reporter::new(analysis_result, None);
-                reporter.generate_report(&output, output_file.as_ref())?;
+                reporter.generate_report(&output, output_file.as_ref().map(|v| &**v))?;
             }
 
             println!("{}", "✅ 分析完成!".green().bold());

@@ -7,7 +7,7 @@ use syn::{visit::Visit, File, Item};
 use crate::patterns::PatternDetector;
 use crate::scorer::OptimizationScore;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct AnalysisResult {
     pub files_analyzed: usize,
     pub total_lines: usize,
@@ -16,7 +16,7 @@ pub struct AnalysisResult {
     pub statistics: Statistics,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct OptimizationIssue {
     pub file: PathBuf,
     pub line: Option<usize>,
@@ -27,7 +27,7 @@ pub struct OptimizationIssue {
     pub estimated_impact: f32, // 0.0 - 1.0
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum IssueCategory {
     Vectorization,
     MemoryAllocation,
@@ -39,7 +39,7 @@ pub enum IssueCategory {
     Algorithmic,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum Severity {
     Critical, // 严重性能问题
     High,     // 高优先级
@@ -48,7 +48,7 @@ pub enum Severity {
     Info,     // 信息提示
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Statistics {
     pub total_functions: usize,
     pub inline_candidates: usize,
@@ -175,7 +175,7 @@ impl RustCodeAnalyzer {
             return 100.0;
         }
 
-        let mut score = 100.0;
+        let mut score: f32 = 100.0;
         for issue in category_issues {
             let deduction = match issue.severity {
                 Severity::Critical => 10.0,
