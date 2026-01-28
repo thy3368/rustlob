@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{routing::get, Router};
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
@@ -42,7 +41,6 @@ impl WebSocketServer {
         // 创建 WebSocket 应用
         // 路由分离：市场数据和用户数据使用不同的 WebSocket 端点
 
-        // todo 检查一下websocket 路由信息,用“get"对不对
         let ws_app = Router::new()
             .route(
                 "/ws/user_data",
@@ -58,30 +56,9 @@ impl WebSocketServer {
         tracing::info!("👤 User data stream: ws://localhost:8084/ws/user_data");
 
         tokio::spawn(async move {
-            // axum::serve(ws_listener, ws_app).await.expect("Spot WebSocket server failed to start");
-
-            axum::serve(ws_listener, ws_app.into_make_service_with_connect_info::<SocketAddr>())
-                .await
-                .unwrap();
-
+            axum::serve(ws_listener, ws_app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
         });
 
         Ok(())
-    }
-
-    /// 创建 WebSocket 应用
-    fn create_websocket_app(
-        md_tx: broadcast::Sender<SpotMarketDataStreamAny>, connection_repo: Arc<ConnectionRepo>
-    ) -> Router {
-        use axum::routing::get;
-        use tower_http::services::ServeDir;
-
-        // 路由分离：市场数据和用户数据使用不同的 WebSocket 端点
-        Router::new()
-            .route(
-                "/ws/user_data",
-                get(move |ws, conn_info| user_data_websocket_handler(ws, conn_info, connection_repo.clone()))
-            )
-            .fallback_service(ServeDir::new("."))
     }
 }

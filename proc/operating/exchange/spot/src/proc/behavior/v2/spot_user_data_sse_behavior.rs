@@ -1,4 +1,5 @@
-// 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/user-data-stream.md 定义所有 user data 接口
+// 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/
+// user-data-stream.md 定义所有 user data 接口
 
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
@@ -28,7 +29,8 @@ pub enum UserDataStreamEventAny {
 
     /// 订单列表状态事件
     /// 事件类型: listStatus
-    /// 如果订单是订单列表（OCO/OTO/OTOCO），除了 executionReport 外还会发送此事件
+    /// 如果订单是订单列表（OCO/OTO/OTOCO），除了 executionReport
+    /// 外还会发送此事件
     ListStatus(ListStatusEvent),
 
     /// 事件流终止事件
@@ -42,7 +44,7 @@ pub enum UserDataStreamEventAny {
     /// 外部锁定更新事件
     /// 事件类型: externalLockUpdate
     /// 当现货钱包余额的一部分被外部系统锁定/解锁时推送（例如用作保证金抵押品）
-    ExternalLockUpdate(ExternalLockUpdateEvent),
+    ExternalLockUpdate(ExternalLockUpdateEvent)
 }
 
 // ==================== 账户位置更新事件 ====================
@@ -62,7 +64,7 @@ pub struct OutboundAccountPositionEvent {
     /// 最后一次账户更新时间
     pub last_account_update_time: i64,
     /// 余额数组
-    pub balances: Vec<BalanceItem>,
+    pub balances: Vec<BalanceItem>
 }
 
 /// 余额项
@@ -75,7 +77,7 @@ pub struct BalanceItem {
     /// 可用余额
     pub free: String,
     /// 锁定余额
-    pub locked: String,
+    pub locked: String
 }
 
 // ==================== 余额更新事件 ====================
@@ -97,7 +99,7 @@ pub struct BalanceUpdateEvent {
     /// 余额变化量
     pub balance_delta: String,
     /// 清算时间
-    pub clear_time: i64,
+    pub clear_time: i64
 }
 
 // ==================== 订单更新事件（执行报告）====================
@@ -228,7 +230,7 @@ pub struct ExecutionReportEvent {
     /// 价格偏移值（仅用于钉住订单）
     pub pegged_offset_value: Option<i32>,
     /// 当前钉住价格（仅用于钉住订单）
-    pub pegged_price: Option<String>,
+    pub pegged_price: Option<String>
 }
 
 // ==================== 订单列表状态事件 ====================
@@ -262,7 +264,7 @@ pub struct ListStatusEvent {
     /// 交易时间
     pub transaction_time: i64,
     /// 订单数组
-    pub orders: Vec<ListOrderItem>,
+    pub orders: Vec<ListOrderItem>
 }
 
 /// 订单列表中的订单项
@@ -275,7 +277,7 @@ pub struct ListOrderItem {
     /// 订单 ID
     pub order_id: i64,
     /// 客户端订单 ID
-    pub client_order_id: String,
+    pub client_order_id: String
 }
 
 // ==================== 事件流终止事件 ====================
@@ -291,7 +293,7 @@ pub struct EventStreamTerminatedEvent {
     /// 事件类型 "eventStreamTerminated"
     pub event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    pub event_time: i64
 }
 
 // ==================== 外部锁定更新事件 ====================
@@ -313,7 +315,7 @@ pub struct ExternalLockUpdateEvent {
     /// 变化量
     pub delta: String,
     /// 交易时间
-    pub transaction_time: i64,
+    pub transaction_time: i64
 }
 
 // ==================== 枚举类型定义 ====================
@@ -326,7 +328,7 @@ pub enum OrderSide {
     /// 买入
     BUY,
     /// 卖出
-    SELL,
+    SELL
 }
 
 /// 订单类型
@@ -347,7 +349,7 @@ pub enum OrderType {
     /// 止盈限价单
     TAKE_PROFIT_LIMIT,
     /// 限价只挂单
-    LIMIT_MAKER,
+    LIMIT_MAKER
 }
 
 /// 有效方式
@@ -360,7 +362,7 @@ pub enum TimeInForce {
     /// 无法立即成交的部分就撤销
     IOC,
     /// 无法全部立即成交就撤销
-    FOK,
+    FOK
 }
 
 /// 执行类型
@@ -378,10 +380,11 @@ pub enum ExecutionType {
     REJECTED,
     /// 订单的部分或全部数量已成交
     TRADE,
-    /// 订单根据订单类型规则或交易所规则被取消（例如无成交的 LIMIT FOK 订单，部分成交的 LIMIT IOC 或 MARKET 订单）
+    /// 订单根据订单类型规则或交易所规则被取消（例如无成交的 LIMIT FOK
+    /// 订单，部分成交的 LIMIT IOC 或 MARKET 订单）
     EXPIRED,
     /// 订单因 STP（自成交保护）而过期
-    TRADE_PREVENTION,
+    TRADE_PREVENTION
 }
 
 /// 订单状态
@@ -404,7 +407,7 @@ pub enum OrderStatus {
     /// 订单过期
     EXPIRED,
     /// 订单过期（在匹配引擎中）
-    EXPIRED_IN_MATCH,
+    EXPIRED_IN_MATCH
 }
 
 /// 订单拒绝原因
@@ -424,8 +427,9 @@ pub enum OrderRejectReason {
     /// 错误信息: "Order would immediately match and take."
     WOULD_MATCH_IMMEDIATELY,
     /// OCO 订单价格关系不正确
-    /// 错误信息: "The relationship of the prices for the orders is not correct."
-    OCO_BAD_PRICES,
+    /// 错误信息: "The relationship of the prices for the orders is not
+    /// correct."
+    OCO_BAD_PRICES
 }
 
 /// 自成交保护模式
@@ -440,7 +444,7 @@ pub enum SelfTradePreventionMode {
     /// 过期挂单方
     EXPIRE_MAKER,
     /// 过期双方
-    EXPIRE_BOTH,
+    EXPIRE_BOTH
 }
 
 // ==================== User Data Stream 命令枚举 ====================
@@ -463,7 +467,7 @@ pub enum SpotUserDataListenKeyCmdAny {
     /// 关闭 User Data Stream
     /// DELETE /api/v3/userDataStream
     /// Weight: 2
-    CloseListenKey(CloseListenKeyCmd),
+    CloseListenKey(CloseListenKeyCmd)
 }
 
 /// 创建 Listen Key 命令
@@ -474,7 +478,7 @@ pub enum SpotUserDataListenKeyCmdAny {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
 pub struct CreateListenKeyCmd {
-    pub metadata: CMetadata,
+    pub metadata: CMetadata
 }
 
 /// 延长 Listen Key 有效期命令
@@ -487,7 +491,7 @@ pub struct CreateListenKeyCmd {
 pub struct KeepAliveListenKeyCmd {
     pub metadata: CMetadata,
     /// Listen Key
-    pub listen_key: String,
+    pub listen_key: String
 }
 
 /// 关闭 Listen Key 命令
@@ -500,7 +504,7 @@ pub struct KeepAliveListenKeyCmd {
 pub struct CloseListenKeyCmd {
     pub metadata: CMetadata,
     /// Listen Key
-    pub listen_key: String,
+    pub listen_key: String
 }
 
 // ==================== User Data Stream 响应枚举 ====================
@@ -509,13 +513,13 @@ pub struct CloseListenKeyCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum SpotUserDataStreamResAny {
+pub enum SpotUserDataListenKeyResAny {
     /// 创建 Listen Key 响应
     CreateListenKey(ListenKeyResponse),
     /// 延长 Listen Key 响应（空响应）
     KeepAliveListenKey,
     /// 关闭 Listen Key 响应（空响应）
-    CloseListenKey,
+    CloseListenKey
 }
 
 /// Listen Key 响应
@@ -525,7 +529,7 @@ pub enum SpotUserDataStreamResAny {
 pub struct ListenKeyResponse {
     /// Listen Key（用于 WebSocket 订阅）
     /// 有效期：60 分钟
-    pub listen_key: String,
+    pub listen_key: String
 }
 
 // ==================== 辅助类型和常量 ====================
@@ -537,14 +541,14 @@ pub struct UserDataStreamConfig {
     pub listen_key_ttl_ms: i64,
     /// 建议保活间隔（毫秒）
     /// 建议每 30 分钟延长一次有效期
-    pub keep_alive_interval_ms: i64,
+    pub keep_alive_interval_ms: i64
 }
 
 impl Default for UserDataStreamConfig {
     fn default() -> Self {
         Self {
             listen_key_ttl_ms: 60 * 60 * 1000,      // 60 分钟
-            keep_alive_interval_ms: 30 * 60 * 1000, // 30 分钟
+            keep_alive_interval_ms: 30 * 60 * 1000  // 30 分钟
         }
     }
 }
@@ -608,7 +612,8 @@ pub mod event_types {
 /// - 所有时间戳均为毫秒
 /// - 账户事件为实时推送
 /// - 支持 JSON 和 SBE 两种输出格式
-/// - 如果资产或交易对名称包含非 ASCII 字符，事件可能包含 UTF-8 编码的非 ASCII 字符
+/// - 如果资产或交易对名称包含非 ASCII 字符，事件可能包含 UTF-8 编码的非 ASCII
+///   字符
 /// - 平均价格可通过 `累计成交金额 / 累计成交数量` 计算
 #[allow(dead_code)]
 const USAGE_GUIDE: () = ();
@@ -618,8 +623,7 @@ const USAGE_GUIDE: () = ();
 /// User Data Stream 行为接口
 pub trait SpotUserDataListenKeyBehavior: Send + Sync {
     /// 处理 User Data Stream 命令（REST API）
-    fn handle(&mut self, cmd: SpotUserDataListenKeyCmdAny) -> Result<CmdResp<SpotUserDataStreamResAny>, SpotCmdErrorAny>;
-
-    // /// 处理 User Data Stream 事件（WebSocket 推送）
-    // fn on_event(&mut self, event: UserDataStreamEvent) -> Result<(), SpotCmdError>;
+    async fn handle(
+        &mut self, cmd: SpotUserDataListenKeyCmdAny
+    ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny>;
 }

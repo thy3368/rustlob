@@ -597,5 +597,5 @@ pub struct AllocationInfo {
 /// User Data 行为接口
 pub trait SpotUserDataBehavior: Send + Sync {
     /// 处理 User Data 命令
-    fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny>;
+    async fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny>;
 }

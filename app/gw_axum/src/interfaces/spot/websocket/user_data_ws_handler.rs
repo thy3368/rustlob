@@ -7,10 +7,7 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 
-use crate::interfaces::spot::websocket::{
-    connection_types::{ConnectionInfo, ConnectionRepo},
-    ud_sse_controller::SpotUserDataSSEImpl
-};
+use crate::interfaces::spot::websocket::connection_types::{ConnectionInfo, ConnectionRepo};
 
 /// 用户数据 WebSocket 连接处理器
 pub async fn user_data_websocket_handler(
@@ -38,10 +35,8 @@ pub async fn user_data_websocket_handler(
         // 添加到连接管理器（使用 mpsc Sender）
         connection_repo.add_connection(conn_info).await;
 
-        // 创建 SSE 实例
-        let mut user_data_sse = SpotUserDataSSEImpl::new();
 
-        // 处理客户端消息和服务端主动推送
+        // 处理客户端消息和服务端主动推送，有多少个连接便有多少个这个
         loop {
             tokio::select! {
                 // 处理服务端主动推送消息
@@ -54,6 +49,8 @@ pub async fn user_data_websocket_handler(
 
                 // 处理客户端消息
                 msg = receiver.next() => {
+
+                    //todo 是否处理订阅命令？
                     match msg {
                         Some(Ok(msg)) => match msg {
                             axum::extract::ws::Message::Text(text) => {

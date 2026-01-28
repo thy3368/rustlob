@@ -9,7 +9,9 @@ use spot_behavior::proc::trade_v2::{
 };
 
 use crate::interfaces::spot::http::{
-    md_handler, trade_handler, trade_handler::TradeService, trade_v2_handler, ud_handler
+    all_in_one_handler::{handle_market_data, handle_trade_v2, handle_user_data},
+    trade_handler,
+    trade_handler::TradeService
 };
 
 /// HTTP 服务器启动器
@@ -29,13 +31,13 @@ impl HttpServer {
             Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
 
         let trade_v2_routes =
-            Router::new().route("/api/spot/trade/v2/", post(trade_v2_handler::handle)).with_state(trade_v2_service);
+            Router::new().route("/api/spot/trade/v2/", post(handle_trade_v2)).with_state(trade_v2_service);
 
         let market_data_routes =
-            Router::new().route("/api/spot/market/data", post(md_handler::handle)).with_state(market_data_service);
+            Router::new().route("/api/spot/market/data", post(handle_market_data)).with_state(market_data_service);
 
         let user_data_routes =
-            Router::new().route("/api/spot/user/data", post(ud_handler::handle)).with_state(user_data_service);
+            Router::new().route("/api/spot/user/data", post(handle_user_data)).with_state(user_data_service);
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
@@ -54,10 +56,7 @@ impl HttpServer {
         tracing::info!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 
         tokio::spawn(async move {
-            axum::serve(
-                http_listener,
-                http_app.into_make_service()
-            ).await.expect("Spot HTTP server failed to start");
+            axum::serve(http_listener, http_app.into_make_service()).await.expect("Spot HTTP server failed to start");
         });
 
         Ok(())

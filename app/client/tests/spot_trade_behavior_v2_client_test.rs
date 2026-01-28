@@ -2,9 +2,9 @@ use std::error::Error;
 
 use base_types::cqrs::cqrs_types::CMetadata;
 use sapp::client::spot::{
-    spot_trade_v2_http_client::SpotTradeV2HttpClient,
     spot_user_data_websocket_stream_client::SpotUserDataWebSocketStreamClient
 };
+use sapp::client::spot::spot_http_client::SpotHttpClient;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderCmd, NewOrderRespType, OrderSide, OrderType, SpotTradeBehaviorV2, SpotTradeCmdAny, TestNewOrderCmd,
     TimeInForce
@@ -24,7 +24,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
     assert!(ws_client.is_connected().await);
 
     // 创建HTTP客户端实例
-    let mut http_client = SpotTradeV2HttpClient::new("http://localhost:3001");
+    let mut http_client = SpotHttpClient::new("http://localhost:3001");
 
     // 构建NewOrder命令
     let new_order_cmd = SpotTradeCmdAny::NewOrder(NewOrderCmd {

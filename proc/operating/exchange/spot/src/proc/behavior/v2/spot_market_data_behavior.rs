@@ -561,5 +561,5 @@ pub struct RollingWindowTickerData {
 /// Market Data 行为接口
 pub trait SpotMarketDataBehavior: Send + Sync {
     /// 处理 Market Data 命令
-    fn handle(& self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny>;
+    async fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny>;
 }

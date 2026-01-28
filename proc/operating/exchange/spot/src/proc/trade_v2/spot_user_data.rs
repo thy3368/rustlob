@@ -10,7 +10,7 @@ impl SpotUserDataImpl {
 }
 
 impl SpotUserDataBehavior for SpotUserDataImpl {
-    fn handle(& self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
+    async fn handle(& self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
         match cmd {
             SpotUserDataCmdAny::Account(_) => {
                 todo!()

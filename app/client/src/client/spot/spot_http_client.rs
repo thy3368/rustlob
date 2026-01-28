@@ -2,15 +2,19 @@ use base_types::cqrs::cqrs_types::CmdResp;
 use reqwest::Client;
 use spot_behavior::proc::behavior::{
     spot_trade_behavior::{CommonError, SpotCmdErrorAny},
-    v2::spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny}
+    v2::{
+        spot_market_data_behavior::{SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny},
+        spot_trade_behavior_v2::{SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny},
+        spot_user_data_behavior::{SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataResAny},
+        spot_user_data_sse_behavior::{
+            SpotUserDataListenKeyBehavior, SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny
+        }
+    }
 };
-
 // 实现HTTP调用客户端，参考
 // /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
 
-
-
-//todo 有没可能设计一个泛型 支持 SpotTradeBehaviorV2/SpotUserDataBehavior/SpotMarketDataBehavior
+/// 泛型Spot HTTP客户端，支持多种行为类型
 pub struct SpotHttpClient {
     http_client: Client,
     base_url: String
@@ -24,8 +28,13 @@ impl SpotHttpClient {
         }
     }
 
-    async fn send_command(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        let url = format!("{}/api/spot/trade/v2/", self.base_url);
+    /// 通用发送命令方法，接受路径参数
+    async fn send_generic_command<C, R>(&self, cmd: C, path: &str) -> Result<CmdResp<R>, SpotCmdErrorAny>
+    where
+        C: serde::Serialize + std::fmt::Debug,
+        R: serde::de::DeserializeOwned + std::fmt::Debug
+    {
+        let url = format!("{}/api/spot/{}/", self.base_url, path);
 
         println!("📡 发送HTTP请求到: {}", url);
         println!("🔧 请求命令: {:?}", cmd);
@@ -46,7 +55,7 @@ impl SpotHttpClient {
             }));
         }
 
-        let cmd_resp: CmdResp<SpotTradeResAny> = response.json().await.map_err(|e| {
+        let cmd_resp: CmdResp<R> = response.json().await.map_err(|e| {
             SpotCmdErrorAny::Common(CommonError::Internal {
                 message: format!("响应解析失败: {}", e)
             })
@@ -58,9 +67,32 @@ impl SpotHttpClient {
     }
 }
 
+// 实现SpotTradeBehaviorV2
 impl SpotTradeBehaviorV2 for SpotHttpClient {
     async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        self.send_command(cmd).await
+        self.send_generic_command(cmd, "trade/v2").await
+    }
+}
+
+// 实现SpotUserDataBehavior
+impl SpotUserDataBehavior for SpotHttpClient {
+    async fn handle(&self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
+        self.send_generic_command(cmd, "user_data").await
+    }
+}
+
+// 实现SpotMarketDataBehavior
+impl SpotMarketDataBehavior for SpotHttpClient {
+    async fn handle(&self, cmd: SpotMarketDataCmdAny) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny> {
+        self.send_generic_command(cmd, "market_data").await
+    }
+}
+
+impl SpotUserDataListenKeyBehavior for SpotHttpClient {
+    async fn handle(
+        &mut self, cmd: SpotUserDataListenKeyCmdAny
+    ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
+        self.send_generic_command(cmd, "listen_key").await
     }
 }
 
@@ -125,7 +157,7 @@ mod tests {
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");
 
         // 发送测试命令
-        match client.send_command(test_cmd).await {
+        match SpotTradeBehaviorV2::handle(&client, test_cmd).await {
             Ok(response) => {
                 println!("✅ 连接成功！响应: {:?}", response);
                 // assert!(response.success, "响应成功标志应为 true");

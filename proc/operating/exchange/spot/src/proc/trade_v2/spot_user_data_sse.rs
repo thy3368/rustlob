@@ -1,12 +1,12 @@
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::{
-    SpotUserDataListenKeyBehavior, SpotUserDataListenKeyCmdAny, SpotUserDataStreamResAny, UserDataStreamEventAny,
+    SpotUserDataListenKeyBehavior, SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, UserDataStreamEventAny,
 };
 
 pub struct SpotUserDataStreamImpl {}
 
 impl SpotUserDataListenKeyBehavior for SpotUserDataStreamImpl {
-    fn handle(&mut self, cmd: SpotUserDataListenKeyCmdAny) -> Result<CmdResp<SpotUserDataStreamResAny>, SpotCmdErrorAny> {
+    async fn handle(&mut self, cmd: SpotUserDataListenKeyCmdAny) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
         match cmd {
             SpotUserDataListenKeyCmdAny::CreateListenKey(_) => {}
             SpotUserDataListenKeyCmdAny::KeepAliveListenKey(_) => {}
@@ -14,6 +14,4 @@ impl SpotUserDataListenKeyBehavior for SpotUserDataStreamImpl {
         }
         todo!()
     }
-
-
 }

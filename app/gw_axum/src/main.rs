@@ -4,12 +4,9 @@ pub mod interfaces {
     pub mod spot {
 
         pub mod http {
-            pub mod md_handler;
             pub mod trade_handler;
-            pub mod trade_v2_handler;
-            pub mod ud_handler;
 
-            pub mod ud_listen_key_handler;
+            pub mod all_in_one_handler;
         }
 
         pub mod websocket {
