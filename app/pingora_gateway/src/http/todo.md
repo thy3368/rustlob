@@ -10,3 +10,13 @@
 
 # websocket server 
 http history data 根据uid 转发到axum_server
+
+
+trade[写]/user_data[读]  通过user_id实现API(Command/Query)分区路由，每分区多服务器容灾， 分区实现水平扩展 通过pingora实现
+
+
+api路由/仓储路由
+
+
+
+

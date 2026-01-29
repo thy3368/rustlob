@@ -1,10 +1,14 @@
 // 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/
 // web-socket-streams.md 定义所有 market data 接口
 
+use entity_derive::Entity;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data Stream 消息枚举
 #[derive(Debug, Clone, serde::Serialize)]
+
+// #[entity(id = "order_id")]
+
 pub enum SpotMarketDataStreamAny {
     /// 归集交易流 <symbol>@aggTrade
     AggregateTrade(AggregateTradeStream),
@@ -675,7 +679,7 @@ pub struct AccountInfo {
 }
 
 /// Market Data Stream 行为接口
-pub trait SpotMarketDataSSEBehavior: Send + Sync {
+pub trait SpotMarketDataSubscriptionBehavior: Send + Sync {
     /// 处理订阅命令
     fn handle_subscription(
         &mut self, cmd: MarketDataSubscriptionCmdAny

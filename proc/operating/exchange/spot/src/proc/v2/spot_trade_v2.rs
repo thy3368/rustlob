@@ -4,11 +4,16 @@ use base_types::{
     handler::handler::Handler
 };
 use db_repo::MySqlDbRepo;
+use diff::ChangeLogEntry;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-    v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny}
+    v2::{
+        spot_market_data_sse_behavior::SpotMarketDataStreamAny,
+        spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
+        spot_user_data_sse_behavior::UserDataStreamEventAny
+    }
 };
 
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
@@ -18,10 +23,21 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     pub trade_repo: MySqlDbRepo<SpotTrade>,
     // uid路由
     pub order_repo: MySqlDbRepo<SpotOrder>,
+
+    // todo?
+    pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
+
     // uid路由
     pub user_data_repo: MySqlDbRepo<SpotOrder>,
+
     // 交易对路由
     pub market_data_repo: MySqlDbRepo<SpotOrder>,
+
+    // uid路由
+    pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
+    // 交易对路由
+    pub market_data_update_repo: MySqlDbRepo<SpotMarketDataStreamAny>,
+
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
     pub lob_repo: L
@@ -57,6 +73,11 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
                 // todo
                 // todo
                 // todo 匹配 通知
+
+                // 生成user data
+                // 生成market data
+
+
                 Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
             }
 

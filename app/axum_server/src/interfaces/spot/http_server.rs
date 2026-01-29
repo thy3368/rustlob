@@ -14,10 +14,12 @@ use spot_behavior::proc::{
     behavior::v2::{
         spot_market_data_behavior::{SpotMarketDataCmdAny, SpotMarketDataResAny},
         spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
-        spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny}
+        spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny},
+        spot_user_data_sse_behavior::{SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny}
     },
     v2::{
-        spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl
+        spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl,
+        spot_user_data_key::SpotUserDataListenKeyImpl
     }
 };
 
@@ -62,6 +64,9 @@ impl HttpServer {
         let market_data_service = Arc::new(SpotMarketDataImpl::new());
         let user_data_service = Arc::new(SpotUserDataImpl::new());
 
+        let listen_key_service = Arc::new(SpotUserDataListenKeyImpl::new());
+
+
         // 创建路由，注入服务依赖
         let order_routes =
             Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
@@ -94,12 +99,28 @@ impl HttpServer {
             )
             .with_state(user_data_service);
 
+        let user_key_routes =
+            Router::new()
+                .route(
+                    "/api/spot/user/listen_key",
+                    post(
+                        handle_generic::<
+                            SpotUserDataListenKeyImpl,
+                            SpotUserDataListenKeyCmdAny,
+                            SpotUserDataListenKeyResAny
+                        >
+                    )
+                )
+                .with_state(listen_key_service);
+
+
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
             .merge(order_routes)
             .merge(trade_v2_routes)
             .merge(market_data_routes)
-            .merge(user_data_routes);
+            .merge(user_data_routes)
+            .merge(user_key_routes);
 
         // 启动 HTTP 服务器（在后台运行）
         let http_listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;

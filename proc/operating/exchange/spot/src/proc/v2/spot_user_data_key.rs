@@ -5,10 +5,15 @@ use crate::proc::behavior::{
     v2::spot_user_data_sse_behavior::{SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny}
 };
 
-pub struct SpotUserDataStreamImpl {}
+pub struct SpotUserDataListenKeyImpl {}
 
+impl SpotUserDataListenKeyImpl {
+    pub fn new() -> Self {
+        todo!()
+    }
+}
 
-impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotUserDataStreamImpl {
+impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotUserDataListenKeyImpl {
     async fn handle(
         &self, cmd: SpotUserDataListenKeyCmdAny
     ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {

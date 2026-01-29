@@ -279,6 +279,7 @@ impl std::fmt::Display for TableSchema {
 
 /// 变更日志条目
 #[derive(Debug, Clone, PartialEq)]
+
 pub struct ChangeLogEntry {
     /// 实体唯一标识符
     pub entity_id: String,
@@ -305,6 +306,28 @@ impl ChangeLogEntry {
             timestamp,
             sequence
         }
+    }
+}
+impl Entity for ChangeLogEntry {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        todo!()
+    }
+
+    fn entity_type() -> &'static str
+    where
+        Self: Sized
+    {
+        todo!()
+    }
+
+    fn diff(&self, other: &Self) -> Vec<FieldChange> {
+        todo!()
+    }
+
+    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> {
+        todo!()
     }
 }
 

@@ -1,7 +1,7 @@
 use spot_behavior::proc::behavior::{
     spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny},
     v2::spot_market_data_sse_behavior::{
-        MarketDataSubscriptionCmdAny, SpotMarketDataSSEBehavior, SubscriptionResponse,
+        MarketDataSubscriptionCmdAny, SpotMarketDataSubscriptionBehavior, SubscriptionResponse,
         SubscriptionResult
     }
 };
@@ -25,7 +25,7 @@ impl SpotMarketDataSSEImpl {
     }
 }
 
-impl SpotMarketDataSSEBehavior for SpotMarketDataSSEImpl {
+impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
     fn handle_subscription(
         &mut self, cmd: MarketDataSubscriptionCmdAny
     ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdErrorAny> {
