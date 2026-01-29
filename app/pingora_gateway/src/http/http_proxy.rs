@@ -88,7 +88,7 @@ pub struct HttpProxyServer;
 
 impl HttpProxyServer {
     /// 启动代理服务器
-    // todo POST /api/spot/v2/;POST /api/spot/user/data 需要用户认证
+
     pub fn start() -> ! {
         use clap::Parser;
         use pingora::server::{configuration::Opt, Server};
