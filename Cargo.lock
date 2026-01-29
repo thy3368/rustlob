@@ -298,6 +298,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base_types",
+ "chrono",
+ "db_repo",
+ "derivatives_behavior",
+ "futures",
+ "id_generator",
+ "lob_repo",
+ "mysql 27.0.0",
+ "reqwest 0.13.1",
+ "sbe",
+ "serde",
+ "serde_json",
+ "spot_behavior",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.21.0",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -581,37 +608,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
-name = "cex_client"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "base_types",
- "chrono",
- "crossbeam",
- "dashmap 5.5.3",
- "futures",
- "futures-channel",
- "futures-util",
- "jsonrpc-core",
- "jsonrpc-derive",
- "jsonrpc-http-server",
- "metrics 0.24.3",
- "metrics-exporter-prometheus",
- "reqwest 0.11.27",
- "rust_decimal",
- "serde",
- "serde_json",
- "spot_behavior",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tower 0.4.13",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -795,6 +791,37 @@ name = "clap_lex"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
+
+[[package]]
+name = "client"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "base_types",
+ "chrono",
+ "crossbeam",
+ "dashmap 5.5.3",
+ "futures",
+ "futures-channel",
+ "futures-util",
+ "jsonrpc-core",
+ "jsonrpc-derive",
+ "jsonrpc-http-server",
+ "metrics 0.24.3",
+ "metrics-exporter-prometheus",
+ "reqwest 0.11.27",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "spot_behavior",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "cmake"
@@ -1570,33 +1597,6 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax",
-]
-
-[[package]]
-name = "gw_axum"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base_types",
- "chrono",
- "db_repo",
- "derivatives_behavior",
- "futures",
- "id_generator",
- "lob_repo",
- "mysql 27.0.0",
- "reqwest 0.13.1",
- "sbe",
- "serde",
- "serde_json",
- "spot_behavior",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.21.0",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -4075,7 +4075,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-optimizer-analyzer"
+name = "rust_analyzer"
 version = "0.1.0"
 dependencies = [
  "anyhow",

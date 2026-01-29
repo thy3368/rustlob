@@ -103,6 +103,7 @@ impl HttpProxyServer {
         server.bootstrap();
 
         // 配置代理服务：监听 8080 端口，代理到 Axum 服务器的 3001 端口
+        //todo 如果 url 是/api/spot/v2/；/api/spot/user/data 根据消息里的的userid进行不同的路由，由uid找到我配置的ip列表，再选中一个ip进行转发
         let proxy_service = Service::with_listeners(
             "HTTP Proxy Service".to_string(),
             Listeners::tcp("0.0.0.0:8080"),

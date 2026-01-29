@@ -92,7 +92,7 @@ cargo run
 参考 `/Users/hongyaotang/src/rustlob/app/rest_axum` 项目：
 
 ```rust
-// gw_axum/src/main.rs
+// axum_server/src/main.rs
 use hotpath::measure;
 
 /// 应用服务 - 封装订单处理器

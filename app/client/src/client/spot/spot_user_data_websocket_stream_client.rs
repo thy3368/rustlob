@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_data_websocket_connection() {
-        // 注意：需要先启动服务端 (gw_axum)
+        // 注意：需要先启动服务端 (axum_server)
         let client = SpotUserDataWebSocketStreamClient::new("ws://localhost:8084");
 
         match client.connect().await {

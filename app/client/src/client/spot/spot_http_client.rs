@@ -12,7 +12,7 @@ use spot_behavior::proc::behavior::{
     }
 };
 // 实现HTTP调用客户端，参考
-// /Users/hongyaotang/src/rustlob/app/gw_axum/src/interfaces/spot/http_server.rs
+// /Users/hongyaotang/src/rustlob/app/axum_server/src/interfaces/spot/http_server.rs
 
 /// 泛型Spot HTTP客户端，支持多种行为类型
 pub struct SpotHttpClient {
@@ -124,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_trade_v2_http_connection() {
-        // 注意：需要先启动服务端 (gw_axum)
+        // 注意：需要先启动服务端 (axum_server)
         println!("🧪 测试 Trade V2 HTTP 连接...");
 
         // 创建客户端实例（使用默认地址 http://localhost:3001）
@@ -169,8 +169,8 @@ mod tests {
             Err(error) => {
                 println!("❌ 连接失败: {:?}", error);
                 // 如果服务端未启动，测试将失败 - 这是预期的行为
-                // 提示用户需要先启动 gw_axum 服务端
-                panic!("无法连接到 Trade V2 服务端。请确保已启动 gw_axum 服务端（监听端口 3001）。错误: {:?}", error);
+                // 提示用户需要先启动 axum_server 服务端
+                panic!("无法连接到 Trade V2 服务端。请确保已启动 axum_server 服务端（监听端口 3001）。错误: {:?}", error);
             }
         }
     }
