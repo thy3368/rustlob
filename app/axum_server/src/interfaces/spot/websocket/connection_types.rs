@@ -11,6 +11,8 @@ pub struct ConnectionInfo {
     pub user_id: Option<String>,
     /// 客户端IP地址
     pub client_addr: SocketAddr,
+    /// todo 订阅消息
+    pub subscription: Vec<String>,
     /// 连接建立时间戳（毫秒）
     pub connected_at: i64,
     /// 最后活动时间戳（毫秒）
@@ -23,13 +25,15 @@ pub struct ConnectionInfo {
 #[derive(Debug, Clone, Default)]
 pub struct ConnectionRepo {
     /// 用户连接映射：user_id -> Vec<ConnectionInfo>
-     user_connections: Arc<Mutex<HashMap<String, Vec<ConnectionInfo>>>>,
+    user_connections: Arc<Mutex<HashMap<String, Vec<ConnectionInfo>>>>,
     /// 所有连接列表
-     all_connections: Arc<Mutex<Vec<ConnectionInfo>>>,
-    /// 连接发送器映射：client_addr -> tokio::sync::mpsc::UnboundedSender<Message>
-     connection_senders: Arc<Mutex<HashMap<SocketAddr, mpsc::UnboundedSender<Message>>>>,
-    /// 用户发送器映射：user_id -> Vec<tokio::sync::mpsc::UnboundedSender<Message>>
-     user_senders: Arc<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>
+    all_connections: Arc<Mutex<Vec<ConnectionInfo>>>,
+    /// 连接发送器映射：client_addr ->
+    /// tokio::sync::mpsc::UnboundedSender<Message>
+    connection_senders: Arc<Mutex<HashMap<SocketAddr, mpsc::UnboundedSender<Message>>>>,
+    /// 用户发送器映射：user_id ->
+    /// Vec<tokio::sync::mpsc::UnboundedSender<Message>>
+    user_senders: Arc<Mutex<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>
 }
 
 impl ConnectionRepo {
@@ -203,12 +207,14 @@ impl ConnectionRepo {
     }
 }
 
-// 为 ConnectionInfo 手动实现 Clone trait，因为 mpsc::UnboundedSender 没有实现 Clone
+// 为 ConnectionInfo 手动实现 Clone trait，因为 mpsc::UnboundedSender 没有实现
+// Clone
 impl Clone for ConnectionInfo {
     fn clone(&self) -> Self {
         Self {
             user_id: self.user_id.clone(),
             client_addr: self.client_addr,
+            subscription: self.subscription.clone(),
             connected_at: self.connected_at,
             last_active_at: self.last_active_at,
             sender: self.sender.clone()
