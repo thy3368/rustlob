@@ -12,13 +12,13 @@ use base_types::{OrderId, Price, Quantity, Side, TradingPair};
 ///
 /// 使用 HashMap 存储多个交易对的 LOB，实现 O(1) 查找性能
 #[allow(dead_code)]
-pub struct StandaloneLobRepo<O: LobOrder> {
+pub struct EmbeddedLobRepo<O: LobOrder> {
     lobs: HashMap<TradingPair, LocalLob<O>>,
 }
 
-impl<O: LobOrder> StandaloneLobRepo<O> {}
+impl<O: LobOrder> EmbeddedLobRepo<O> {}
 
-impl<O: LobOrder> StandaloneLobRepo<O> {
+impl<O: LobOrder> EmbeddedLobRepo<O> {
     /// 创建新的 SingleLobRepo
     ///
     /// # 参数
@@ -53,7 +53,7 @@ impl<O: LobOrder> StandaloneLobRepo<O> {
 }
 
 /// 实现 MultiLobRepo trait
-impl<O: LobOrder> MultiSymbolLobRepo for StandaloneLobRepo<O> {
+impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
     type Order = O;
 
     fn match_orders(

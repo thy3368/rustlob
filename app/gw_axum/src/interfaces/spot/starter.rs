@@ -13,14 +13,22 @@ pub struct SpotStarter;
 
 impl SpotStarter {
     /// 启动 Spot 模块的 HTTP 和 WebSocket 服务器
-    pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-
+    pub async fn start(ds: bool) -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("🚀 Starting Spot module...");
         tracing::warn!("⚠️  Running in MOCK mode (no database connection)");
 
         // ==================== HTTP 服务器启动 ====================
         tracing::info!("📡 Starting Spot HTTP API server...");
-        HttpServer::start().await?;
+
+        match ds {
+            true => {
+                HttpServer::start_4_ds().await?;
+            }
+            false => {
+                HttpServer::start().await?;
+            }
+        }
+
 
         // ==================== WebSocket 服务器启动 ====================
         tracing::info!("🔌 Starting Spot WebSocket server...");
@@ -40,5 +48,5 @@ impl SpotStarter {
     }
 }
 
-/// 便捷函数：启动 Spot 模块
-pub async fn start_spot_module() -> Result<(), Box<dyn std::error::Error>> { SpotStarter::start().await }
+/// 便捷函数：启动 Spot 模块单机怎么
+pub async fn start_spot_module(ds: bool) -> Result<(), Box<dyn std::error::Error>> { SpotStarter::start(ds).await }

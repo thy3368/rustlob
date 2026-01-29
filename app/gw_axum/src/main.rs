@@ -1,12 +1,14 @@
 // HTTP 接口层
 pub mod interfaces {
 
+    pub mod common {
+        pub mod http_handler_util;
+    }
+
     pub mod spot {
 
         pub mod http {
             pub mod trade_handler;
-
-            pub mod all_in_one_handler;
         }
 
         pub mod websocket {
@@ -64,10 +66,11 @@ async fn main() {
     // 初始化日志（只在主线程中执行一次）
     tracing_subscriber::fmt::init();
 
-    // 启动 Spot 模块
-    if let Err(e) = spot::starter::start_spot_module().await {
+    // 启动 Spot 模块单机版
+    if let Err(e) = spot::starter::start_spot_module(false).await {
         eprintln!("❌ Failed to start Spot module: {}", e);
     }
+
 
     // 启动 USDS-M Future 模块
     // if let Err(e) = usds_m_future::starter::start_usds_m_future_module().await {

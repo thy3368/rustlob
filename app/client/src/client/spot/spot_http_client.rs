@@ -71,7 +71,7 @@ impl SpotHttpClient {
 // 实现SpotTradeBehaviorV2
 impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        self.send_generic_command(cmd, "v1/v2").await
+        self.send_generic_command(cmd, "v2").await
     }
 }
 

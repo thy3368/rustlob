@@ -9,14 +9,14 @@ use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
 
-use lob_repo::{adapter::standalone_lob_repo::StandaloneLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
+use lob_repo::{adapter::embedded_lob_repo::EmbeddedLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
 
 pub struct SpotTradeBehaviorImpl {
     /// 余额仓储（依赖注入）
     pub balance_repo: MySqlDbRepo<Balance>,
     pub trade_repo: MySqlDbRepo<SpotTrade>,
     pub order_repo: MySqlDbRepo<SpotOrder>,
-    pub lob_repo: StandaloneLobRepo<SpotOrder>,
+    pub lob_repo: EmbeddedLobRepo<SpotOrder>,
     /// ID生成器（节点ID为0）
     pub id_generator: IdGenerator,
 }
@@ -25,7 +25,7 @@ impl SpotTradeBehaviorImpl {
     /// 创建新的 SpotOrderExchBehaviorImpl 实例
     pub fn new(
         balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
-        lob_repo: StandaloneLobRepo<SpotOrder>, id_generator: IdGenerator,
+        lob_repo: EmbeddedLobRepo<SpotOrder>, id_generator: IdGenerator,
     ) -> Self {
         Self { balance_repo, trade_repo, order_repo, lob_repo, id_generator }
     }

@@ -11,7 +11,7 @@ use base_types::exchange::prep::prep_order::PrepOrder;
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
 use diff::{ChangeLogEntry, Entity};
-use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
+use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
@@ -45,7 +45,7 @@ pub struct PrepMatchingService {
 
     order_repo: MySqlDbRepo<PrepOrder>,
 
-    lob_repo: StandaloneLobRepo<PrepOrder>,
+    lob_repo: EmbeddedLobRepo<PrepOrder>,
 
     /// 账户ID（固定账户）
     account_id: AccountId,
@@ -68,7 +68,7 @@ impl PrepMatchingService {
     /// - `asset_id`: 资产ID（如 USDT）
     pub fn new(
         balance_repo: MySqlDbRepo<Balance>, position_repo: MySqlDbRepo<PrepPosition>,
-        trade_repo: MySqlDbRepo<PrepTrade>, order_repo: MySqlDbRepo<PrepOrder>, lob_repo: StandaloneLobRepo<PrepOrder>,
+        trade_repo: MySqlDbRepo<PrepTrade>, order_repo: MySqlDbRepo<PrepOrder>, lob_repo: EmbeddedLobRepo<PrepOrder>,
         account_id: AccountId
     ) -> Self {
         Self {

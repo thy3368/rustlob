@@ -9,7 +9,7 @@ use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::MySqlDbRepo;
 use id_generator::generator::IdGenerator;
-use lob_repo::adapter::standalone_lob_repo::StandaloneLobRepo;
+use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use serde::Serialize;
 // Spot 订单处理相关导入
 use spot_behavior::proc::behavior::spot_trade_behavior::{
@@ -36,7 +36,7 @@ impl TradeService {
         let order_repo = MySqlDbRepo::<SpotOrder>::new_mock();
 
         // 2. 初始化 LOB 仓储（内存版本，空的 LOB 列表）
-        let lob_repo = StandaloneLobRepo::<SpotOrder>::new(vec![]);
+        let lob_repo = EmbeddedLobRepo::<SpotOrder>::new(vec![]);
 
         // 3. 初始化 ID 生成器（节点ID为0）
         let id_generator = IdGenerator::new(0);
