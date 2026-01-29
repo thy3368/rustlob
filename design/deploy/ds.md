@@ -16,6 +16,9 @@
 
 #### 网关
 
+- pingora/nginx
+
+
 #### spot 应用服务
 
 /Users/hongyaotang/src/rustlob/app/gw_axum/src/main.rs

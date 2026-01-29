@@ -1,0 +1,38 @@
+[package]
+name = "pingora_gateway"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+pingora = { version = "0.6.0", features = ["proxy"] }
+pingora-proxy = "0.6.0"
+pingora-core = "0.6.0"
+pingora-http = "0.6.0"
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sbe = { path = "../../lib/common/sbe" }
+uuid = { version = "1.0", features = ["v4"] }
+async-trait = "0.1.89"
+clap = "4.5.4"
+
+# Spot 订单处理依赖
+spot_behavior = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
+
+derivatives_behavior = { path = "../../proc/operating/exchange/derivatives", features = ["serde"] }
+
+base_types = { path = "../../lib/common/base_types", features = ["serde"] }
+
+# 数据库和仓储依赖
+db_repo = { path = "../../lib/common/db_repo" }
+lob_repo = { path = "../../lib/common/lob_repo" }
+id_generator = { path = "../../lib/common/id_generator" }
+
+# 数据库驱动
+mysql = "27.0.0"
+chrono = "0.4.43"
+futures = "0.3.31"

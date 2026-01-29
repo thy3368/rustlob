@@ -26,6 +26,9 @@ use crate::interfaces::{
     spot::http::{trade_handler, trade_handler::TradeService}
 };
 
+
+// todo 认证： /api/spot/v2/；/api/spot/user/data
+// todo 不认证： /api/spot/v2/；/api/spot/market/data
 /// HTTP 服务器启动器
 pub struct HttpServer;
 impl HttpServer {
@@ -156,7 +159,7 @@ impl HttpServer {
 
         let trade_v2_routes = Router::new()
             .route(
-                "/api/spot/v1/v2/",
+                "/api/spot/v2/",
                 post(
                     handle_generic::<
                         SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>,
