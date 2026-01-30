@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{routing::get, Router};
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
@@ -12,6 +12,7 @@ use crate::interfaces::spot::websocket::{
 };
 
 /// WebSocket 服务器启动器
+// #[stateless]
 pub struct WebSocketServer;
 
 impl WebSocketServer {
@@ -39,11 +40,14 @@ impl WebSocketServer {
         // spot_user_data_pusher::SpotUserDataPusher::new(connection_repo.clone()).
         // with_interval(8); // 每8秒推送一次 ud_pusher.start();
 
+        // 启动订阅服务（无状态设计，不需要克隆）
         let change_log_repo = Arc::new(ChangeLogChannelQueueRepo::new());
         let sub_service = Arc::new(SubscriptionService::new(connection_repo.clone(), change_log_repo));
-        <SubscriptionService as Clone>::clone(&sub_service).start();
 
-        tracing::info!("SpotUserDataPusher started successfully");
+        // 使用 100ms 轮询间隔启动后台任务
+        sub_service.start(Duration::from_millis(100));
+
+        tracing::info!("SubscriptionService started successfully");
 
 
         let ws_app = Router::new()
