@@ -31,6 +31,12 @@ pub struct MySqlDbRepo<E: Entity> {
 }
 
 impl<E: Entity> MySqlDbRepo<E> {
+    pub fn batch_insert(&self, p0: &Vec<E>) {
+        todo!()
+    }
+}
+
+impl<E: Entity> MySqlDbRepo<E> {
     /// 创建新的 MySQL 适配器
     ///
     /// # 参数

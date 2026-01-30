@@ -3,7 +3,9 @@ use base_types::{
     exchange::spot::spot_types::{SpotOrder, SpotTrade},
     handler::handler::Handler
 };
-use db_repo::MySqlDbRepo;
+use db_repo::{
+    adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo, MySqlDbRepo
+};
 use diff::ChangeLogEntry;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
@@ -11,7 +13,7 @@ use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::{
         spot_market_data_sse_behavior::SpotMarketDataStreamAny,
-        spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
+        spot_trade_behavior_v2::{NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
         spot_user_data_sse_behavior::UserDataStreamEventAny
     }
 };
@@ -24,15 +26,14 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // uid路由
     pub order_repo: MySqlDbRepo<SpotOrder>,
 
-    // todo?
-    pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
-
     // uid路由
     pub user_data_repo: MySqlDbRepo<SpotOrder>,
 
     // 交易对路由
     pub market_data_repo: MySqlDbRepo<SpotOrder>,
 
+    // // todo?
+    // pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
     // // uid路由
     // pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
     // // 交易对路由
@@ -58,6 +59,45 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             lob_repo
         }
     }
+
+    fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        // 所有数据持久化操作，一次性回放所有事件到数据库
+        let all_events: Vec<ChangeLogEntry> = Vec::new();
+
+
+        let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
+        change_log_queue_repo.send_batch(&all_events);
+
+
+        if !all_events.is_empty() {
+            // 回放 matched_order 更新和 v1 创建事件到各自的 repo
+            for event in &all_events {
+                // 根据 entity_type 判断回放到哪个 repo
+                // todo 增加balance position
+                match event.entity_type.as_str() {
+                    "SpotOrder" => {
+                        if let Err(e) = self.order_repo.replay_event(event) {
+                            log::error!("Failed to replay order event: {:?}", e);
+                        }
+                    }
+                    "SpotTrade" => {
+                        if let Err(e) = self.trade_repo.replay_event(event) {
+                            log::error!("Failed to replay v1 event: {:?}", e);
+                        }
+                    }
+                    "Balance" => {
+                        if let Err(e) = self.balance_repo.replay_event(event) {
+                            log::error!("Failed to replay balance event: {:?}", e);
+                        }
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+
+        todo!()
+    }
 }
 
 
@@ -69,7 +109,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
         let nonce = 0;
 
         match cmd {
-            SpotTradeCmdAny::NewOrder(_) => {
+            SpotTradeCmdAny::NewOrder(new_order) => {
                 // todo
                 // todo
                 // todo 匹配 通知
@@ -77,8 +117,9 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
                 // 生成user data
                 // 生成market data
 
+                self.handle(new_order)
 
-                Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
+                // Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
             }
 
             SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty)),

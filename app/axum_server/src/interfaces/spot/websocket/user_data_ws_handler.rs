@@ -7,12 +7,15 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 
-use crate::interfaces::spot::websocket::connection_types::{ConnectionInfo, ConnectionRepo};
+use crate::interfaces::spot::websocket::{
+    connection_types::{ConnectionInfo, ConnectionRepo},
+    subscription_service::SubscriptionService
+};
 
 /// 用户数据 WebSocket 连接处理器
 pub async fn user_data_websocket_handler(
     ws: WebSocketUpgrade, ConnectInfo(client_addr): ConnectInfo<std::net::SocketAddr>,
-    connection_repo: Arc<ConnectionRepo>
+    sub_service: Arc<SubscriptionService>
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| async move {
         println!("New Spot User Data WebSocket connection established from {}", client_addr);
@@ -22,19 +25,20 @@ pub async fn user_data_websocket_handler(
         // 创建 mpsc 通道用于服务端推送消息
         let (tx, mut rx) = mpsc::unbounded_channel();
 
+        
         let timestamp: i64 = chrono::Utc::now().timestamp_millis();
         // 创建连接信息
         let conn_info = ConnectionInfo {
             user_id: None, // 初始为 None，需要用户认证后设置
             client_addr,
+            subscription: vec![],
             connected_at: timestamp,
             last_active_at: timestamp,
             sender: tx
         };
 
         // 添加到连接管理器（使用 mpsc Sender）
-        connection_repo.add_connection(conn_info).await;
-
+        sub_service.add_connection(conn_info).await;
 
         // 处理客户端消息和服务端主动推送，有多少个连接便有多少个这个
         loop {
@@ -46,6 +50,7 @@ pub async fn user_data_websocket_handler(
                         break;
                     }
                 }
+
 
                 // 处理客户端消息
                 msg = receiver.next() => {
@@ -72,7 +77,7 @@ pub async fn user_data_websocket_handler(
         }
 
         // 连接关闭时移除连接信息
-        connection_repo.remove_connection(client_addr).await;
+        sub_service.remove_connection(client_addr).await;
         println!("Spot User Data WebSocket connection closed: {}", client_addr);
     })
 }

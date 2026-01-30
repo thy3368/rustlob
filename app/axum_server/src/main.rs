@@ -18,6 +18,9 @@ pub mod interfaces {
             pub mod spot_user_data_pusher;
             pub mod ud_sse_controller;
             pub mod user_data_ws_handler;
+
+            pub mod subscription_service;
+
         }
 
         pub mod http_server;

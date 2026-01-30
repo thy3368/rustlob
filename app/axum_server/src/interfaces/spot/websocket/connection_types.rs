@@ -24,6 +24,7 @@ pub struct ConnectionInfo {
 /// 连接管理器
 #[derive(Debug, Clone, Default)]
 pub struct ConnectionRepo {
+    // todo 这里数据可能放DB 或其它cache
     /// 用户连接映射：user_id -> Vec<ConnectionInfo>
     user_connections: Arc<Mutex<HashMap<String, Vec<ConnectionInfo>>>>,
     /// 所有连接列表
@@ -45,6 +46,43 @@ impl ConnectionRepo {
             connection_senders: Arc::new(Mutex::new(HashMap::new())),
             user_senders: Arc::new(Mutex::new(HashMap::new()))
         }
+    }
+
+    /// 根据事件类型获取对该事件感兴趣的所有发送器
+    /// 事件类型可以是实体类型（如 "Order"）或具体事件名称
+    pub async fn get_senders_by_event(&self, event_type: &str) -> Vec<mpsc::UnboundedSender<Message>> {
+        let mut matched_senders = Vec::new();
+        let all_conns = self.all_connections.lock().await;
+
+        for conn in &*all_conns {
+            // 检查连接是否对该事件类型感兴趣
+            if conn.subscription.iter().any(|sub| sub == event_type || sub == "*" || sub.contains(event_type)) {
+                matched_senders.push(conn.sender.clone());
+            }
+        }
+
+        matched_senders
+    }
+
+    /// 根据实体类型和实体ID获取相关的发送器（用于特定实体的事件）
+    pub async fn get_senders_by_entity(
+        &self, entity_type: &str, entity_id: &str
+    ) -> Vec<mpsc::UnboundedSender<Message>> {
+        let mut matched_senders = Vec::new();
+        let all_conns = self.all_connections.lock().await;
+
+        for conn in &*all_conns {
+            // 检查连接是否对该实体类型或特定实体ID感兴趣
+            if conn
+                .subscription
+                .iter()
+                .any(|sub| sub.as_str() == entity_type || sub == &format!("{}:{}", entity_type, entity_id) || sub.as_str() == "*")
+            {
+                matched_senders.push(conn.sender.clone());
+            }
+        }
+
+        matched_senders
     }
 
     /// 添加连接信息和发送器
