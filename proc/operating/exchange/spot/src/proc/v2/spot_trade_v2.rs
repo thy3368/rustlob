@@ -33,10 +33,10 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // 交易对路由
     pub market_data_repo: MySqlDbRepo<SpotOrder>,
 
-    // uid路由
-    pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
-    // 交易对路由
-    pub market_data_update_repo: MySqlDbRepo<SpotMarketDataStreamAny>,
+    // // uid路由
+    // pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
+    // // 交易对路由
+    // pub market_data_update_repo: MySqlDbRepo<SpotMarketDataStreamAny>,
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
