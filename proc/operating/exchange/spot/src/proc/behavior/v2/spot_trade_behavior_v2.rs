@@ -1423,7 +1423,6 @@ pub struct Balance {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
-
 pub struct CommissionRates {
     /// Maker 标准佣金率
     maker: String,

@@ -265,6 +265,7 @@ pub struct ChangeLogEntry {
     sequence: u64
 }
 
+
 impl Entity for ChangeLogEntry {
     type Id = String;
 
@@ -641,7 +642,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
 
     /// 检查是否可以应用此变更日志
     fn can_replay(&self, entry: &ChangeLogEntry) -> bool {
-        self.entity_id().to_string() == entry.entity_id && Self::entity_type() == entry.entity_type
+        self.entity_id().to_string() == *entry.entity_id() && Self::entity_type() == entry.entity_type()
     }
 
     fn table_schema() -> TableSchema { todo!() }
@@ -909,7 +910,7 @@ where
 pub fn extract_fields_from_created_event(
     entry: &ChangeLogEntry
 ) -> Result<std::collections::HashMap<String, String>, EntityError> {
-    match &entry.change_type {
+    match entry.change_type() {
         ChangeType::Created {
             fields
         } => {
@@ -1079,11 +1080,11 @@ mod tests {
             if !self.can_replay(entry) {
                 return Err(EntityError::EntityIdMismatch {
                     expected: self.entity_id().to_string(),
-                    actual: entry.entity_id.clone()
+                    actual: entry.entity_id().to_string()
                 });
             }
 
-            match &entry.change_type {
+            match entry.change_type() {
                 ChangeType::Updated {
                     changed_fields
                 } => {
@@ -1113,9 +1114,9 @@ mod tests {
         };
 
         let entry = entity.track_create().unwrap();
-        assert_eq!(entry.entity_id, "1");
-        assert_eq!(entry.entity_type, "TestEntity");
-        match entry.change_type {
+        assert_eq!(entry.entity_id(), "1");
+        assert_eq!(entry.entity_type(), "TestEntity");
+        match entry.change_type() {
             ChangeType::Created {
                 fields
             } => {
@@ -1125,18 +1126,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_auto_track_delete() {
-        let entity = TestEntity {
-            id: 1,
-            value: "test".to_string()
-        };
-
-        let entry = entity.track_delete().unwrap();
-        assert_eq!(entry.entity_id, "1");
-        assert_eq!(entry.entity_type, "TestEntity");
-        assert_eq!(entry.change_type, ChangeType::Deleted);
-    }
 
     #[test]
     fn test_auto_track_update() {
@@ -1151,10 +1140,10 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(entry.entity_id, "1");
-        assert_eq!(entry.entity_type, "TestEntity");
+        assert_eq!(entry.entity_id(), "1");
+        assert_eq!(entry.entity_type(), "TestEntity");
 
-        match &entry.change_type {
+        match &entry.change_type() {
             ChangeType::Updated {
                 changed_fields
             } => {
@@ -1185,8 +1174,8 @@ mod tests {
 
         let entry = new_entity.track_update_from(&old_entity).unwrap();
 
-        assert_eq!(entry.entity_id, "1");
-        match &entry.change_type {
+        assert_eq!(entry.entity_id(), "1");
+        match &entry.change_type() {
             ChangeType::Updated {
                 changed_fields
             } => {

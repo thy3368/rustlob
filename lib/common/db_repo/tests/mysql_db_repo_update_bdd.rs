@@ -5,8 +5,7 @@
 //! 场景：实体被创建后，通过 Updated 事件更新其字段
 
 use base_types::{Price, Quantity, Side, TradingPair};
-use db_repo::core::db_repo::CmdRepo;
-use db_repo::adapter::mysql_db_repo::MySqlDbRepo;
+use db_repo::{adapter::mysql_db_repo::MySqlDbRepo, core::db_repo::CmdRepo};
 use diff::Entity;
 
 // ============================================================================
@@ -21,7 +20,7 @@ struct TestEntity {
     price: Price,
     quantity: Quantity,
     filled_quantity: Quantity,
-    side: Side,
+    side: Side
 }
 
 // ============================================================================
@@ -38,7 +37,7 @@ fn scenario_update_single_field_after_creation() {
         price: Price::from_raw(50000),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
-        side: Side::Buy,
+        side: Side::Buy
     };
 
     let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
@@ -56,6 +55,6 @@ fn scenario_update_single_field_after_creation() {
     // ========== Then（那么）==========
     // 则更新事件应该被成功处理（在 mock repo 中应该失败，因为实体不存在）
     // 但我们主要验证事件生成是否正确
-    assert_eq!(updated_event.entity_id, "1", "事件应该包含正确的实体 ID");
+    assert_eq!(updated_event.entity_id(), "1", "事件应该包含正确的实体 ID");
     println!("✓ 单个字段更新事件生成成功");
 }

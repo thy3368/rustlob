@@ -151,7 +151,7 @@ impl SpotTradeBehaviorImpl {
             for event in &all_events {
                 // 根据 entity_type 判断回放到哪个 repo
                 // todo 增加balance position
-                match event.entity_type.as_str() {
+                match event.entity_type().as_str() {
                     "SpotOrder" => {
                         if let Err(e) = self.order_repo.replay_event(event) {
                             log::error!("Failed to replay order event: {:?}", e);

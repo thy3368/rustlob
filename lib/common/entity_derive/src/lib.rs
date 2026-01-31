@@ -210,11 +210,11 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
                 if !self.can_replay(entry) {
                     return Err(diff::EntityError::EntityIdMismatch {
                         expected: self.entity_id().to_string(),
-                        actual: entry.entity_id.clone(),
+                        actual: entry.entity_id().to_string(),
                     });
                 }
 
-                match &entry.change_type {
+                match entry.change_type() {
                     diff::ChangeType::Deleted => {
                         Err(diff::EntityError::CannotReplayOnDeleted)
                     }
@@ -229,11 +229,11 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
                 if !self.can_replay(entry) {
                     return Err(diff::EntityError::EntityIdMismatch {
                         expected: self.entity_id().to_string(),
-                        actual: entry.entity_id.clone(),
+                        actual: entry.entity_id().to_string(),
                     });
                 }
 
-                match &entry.change_type {
+                match entry.change_type() {
                     diff::ChangeType::Updated { changed_fields } => {
                         for field in changed_fields {
                             match field.field_name.as_ref() {

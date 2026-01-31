@@ -85,6 +85,7 @@
       <sourceFolder url="file://$MODULE_DIR$/app/axum_server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/axum_server/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/pingora_gateway/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/immutable_derive/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

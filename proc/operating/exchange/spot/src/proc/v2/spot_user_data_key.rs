@@ -9,11 +9,7 @@ use crate::proc::behavior::{
 
 pub struct SpotUserDataListenKeyImpl {}
 
-impl SpotUserDataListenKeyImpl {
-    pub fn new() -> Self {
-        todo!()
-    }
-}
+
 
 impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny> for SpotUserDataListenKeyImpl {
     async fn handle(

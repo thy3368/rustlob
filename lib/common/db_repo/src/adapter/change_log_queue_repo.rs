@@ -12,9 +12,6 @@ use crate::{
 #[immutable]
 pub struct ChangeLogChannelQueueRepo {}
 
-impl ChangeLogChannelQueueRepo {
-    pub fn new() -> Self { todo!() }
-}
 
 
 impl ChangeLogQueueRepo for ChangeLogChannelQueueRepo {

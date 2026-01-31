@@ -412,6 +412,7 @@ pub struct KlineData {
 /// 平均价格数据
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[immutable]
 pub struct AvgPriceData {
     /// 平均价格间隔（分钟）
     mins: i32,

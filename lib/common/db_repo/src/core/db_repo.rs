@@ -355,7 +355,7 @@ pub trait CmdRepo: Send + Sync {
         from_sequence: u64,
     ) -> Result<(), RepoError> {
         for event in events {
-            if event.sequence >= from_sequence {
+            if event.sequence() >= &from_sequence {
                 self.replay_event(event)?;
             }
         }

@@ -1,19 +1,14 @@
 use base_types::{cqrs::cqrs_types::CmdResp, handler::handler::Handler};
 use immutable_derive::immutable;
+
 use crate::proc::behavior::{
     spot_trade_behavior::SpotCmdErrorAny,
-    v2::spot_market_data_behavior::{
-        AvgPriceData, OrderBookData, SpotMarketDataCmdAny, SpotMarketDataResAny
-    }
+    v2::spot_market_data_behavior::{AvgPriceData, OrderBookData, SpotMarketDataCmdAny, SpotMarketDataResAny}
 };
 
 
 #[immutable]
 pub struct SpotMarketDataImpl {}
-
-impl SpotMarketDataImpl {
-    pub fn new() -> Self { Self {} }
-}
 
 
 impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for SpotMarketDataImpl {
@@ -24,14 +19,7 @@ impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for Sp
         match cmd {
             SpotMarketDataCmdAny::OrderBook(_) => {
                 // 暂时返回一个空的订单簿响应
-                Ok(CmdResp::new(
-                    nonce,
-                    SpotMarketDataResAny::OrderBook(OrderBookData {
-                        last_update_id: 0,
-                        bids: vec![],
-                        asks: vec![]
-                    })
-                ))
+                Ok(CmdResp::new(nonce, SpotMarketDataResAny::OrderBook(OrderBookData::new(0, vec![], vec![]))))
             }
             SpotMarketDataCmdAny::RecentTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Trades(vec![]))),
             SpotMarketDataCmdAny::HistoricalTrades(_) => Ok(CmdResp::new(nonce, SpotMarketDataResAny::Trades(vec![]))),
@@ -42,11 +30,11 @@ impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for Sp
                 // 暂时返回一个默认的平均价格响应
                 Ok(CmdResp::new(
                     nonce,
-                    SpotMarketDataResAny::AvgPrice(AvgPriceData {
-                        mins: 5,
-                        price: "50000.00".to_string(),
-                        close_time: 0
-                    })
+                    SpotMarketDataResAny::AvgPrice(AvgPriceData::new(
+                         5,
+                         "50000.00".to_string(),
+                         0
+                    ))
                 ))
             }
             SpotMarketDataCmdAny::Ticker24hr(_) => {

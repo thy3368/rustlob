@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
-use base_types::lob::lob::LobOrder;
+use base_types::{lob::lob::LobOrder, OrderId, Price, Quantity, Side, TradingPair};
 use diff::{ChangeLogEntry, FromCreatedEvent};
-use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
-use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
-// use crate::core::symbol_lob_repo::{Order, RepoError, SymbolLob};
+
+use crate::core::{
+    repo_snapshot_support::{EventReplay, RepoSnapshot},
+    symbol_lob_repo::{RepoError, SymbolLob}
+};
 
 /// 价格点结构
 ///
@@ -28,7 +29,7 @@ impl PricePoint {
     }
 }
 
-//todo 用type 代码范型
+// todo 用type 代码范型
 
 /// 订单包装器
 ///
@@ -107,8 +108,10 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
         // 根据变更类型处理事件
         use diff::ChangeType;
 
-        match &event.change_type {
-            ChangeType::Created { .. } => {
+        match &event.change_type() {
+            ChangeType::Created {
+                ..
+            } => {
                 // 订单创建事件
                 // 使用 from_created_event 从 Created 事件重构订单对象
 
@@ -132,14 +135,16 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
 
                 Ok(())
             }
-            ChangeType::Updated { changed_fields: _ } => {
+            ChangeType::Updated {
+                changed_fields: _
+            } => {
                 // 订单更新事件
                 // Updated 事件包含变更字段（old_value -> new_value）
 
                 // 提取订单 ID
-                let order_id: OrderId = match event.entity_id.parse::<u64>() {
+                let order_id: OrderId = match event.entity_id().parse::<u64>() {
                     Ok(id) => id,
-                    Err(_) => return Ok(()), // 无法解析 ID，忽略该事件
+                    Err(_) => return Ok(()) // 无法解析 ID，忽略该事件
                 };
 
                 // 获取订单的可变引用，使用 Entity trait 的 replay 方法应用变更
@@ -156,7 +161,7 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
                 // 根据 entity_id 删除订单
 
                 // 提取订单 ID
-                if let Ok(id) = event.entity_id.parse::<u64>() {
+                if let Ok(id) = event.entity_id().parse::<u64>() {
                     self.remove_order(id);
                 }
 

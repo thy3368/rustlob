@@ -4,7 +4,8 @@ use base_types::{
     handler::handler::Handler
 };
 use db_repo::{
-    adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo, MySqlDbRepo
+    adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo,
+    MySqlDbRepo
 };
 use diff::ChangeLogEntry;
 use immutable_derive::immutable;
@@ -22,20 +23,20 @@ use crate::proc::behavior::{
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // uid路由
-     balance_repo: MySqlDbRepo<Balance>,
+    balance_repo: MySqlDbRepo<Balance>,
     // uid路由
-     trade_repo: MySqlDbRepo<SpotTrade>,
+    trade_repo: MySqlDbRepo<SpotTrade>,
     // uid路由
-     order_repo: MySqlDbRepo<SpotOrder>,
+    order_repo: MySqlDbRepo<SpotOrder>,
 
     // uid路由
-     user_data_repo: MySqlDbRepo<SpotOrder>,
+    user_data_repo: MySqlDbRepo<SpotOrder>,
 
     // 交易对路由
-     market_data_repo: MySqlDbRepo<SpotOrder>,
+    market_data_repo: MySqlDbRepo<SpotOrder>,
 
     // // todo?
-    pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
+    // pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
     // // uid路由
     // pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
     // // 交易对路由
@@ -43,24 +44,25 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
-     lob_repo: L
+    lob_repo: L
 }
 
 
 impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
-    pub fn new(
-        balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
-        user_data_repo: MySqlDbRepo<SpotOrder>, market_data_repo: MySqlDbRepo<SpotOrder>, lob_repo: L
-    ) -> Self {
-        Self {
-            balance_repo,
-            trade_repo,
-            order_repo,
-            user_data_repo,
-            market_data_repo,
-            lob_repo
-        }
-    }
+    // pub fn new(
+    //     balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>,
+    // order_repo: MySqlDbRepo<SpotOrder>,     user_data_repo:
+    // MySqlDbRepo<SpotOrder>, market_data_repo: MySqlDbRepo<SpotOrder>, lob_repo: L
+    // ) -> Self {
+    //     Self {
+    //         balance_repo,
+    //         trade_repo,
+    //         order_repo,
+    //         user_data_repo,
+    //         market_data_repo,
+    //         lob_repo
+    //     }
+    // }
 
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 所有数据持久化操作，一次性回放所有事件到数据库
@@ -76,7 +78,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             for event in &all_events {
                 // 根据 entity_type 判断回放到哪个 repo
                 // todo 增加balance position
-                match event.entity_type.as_str() {
+                match event.entity_type().as_str() {
                     "SpotOrder" => {
                         if let Err(e) = self.order_repo.replay_event(event) {
                             log::error!("Failed to replay order event: {:?}", e);

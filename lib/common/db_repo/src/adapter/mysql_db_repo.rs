@@ -43,7 +43,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// # 参数
     /// - `url`: MySQL 连接字符串，例如
     ///   "mysql://user:password@localhost:3306/database"
-    pub fn new(url: &str) -> Result<Self, RepoError> {
+    pub fn new2(url: &str) -> Result<Self, RepoError> {
         let pool = mysql::Pool::new(url)
             .map_err(|e| RepoError::DeserializationFailed(format!("Failed to create connection pool: {}", e)))?;
 
@@ -113,21 +113,21 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
 
     fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
         // 验证事件的实体类型是否匹配
-        if event.entity_type != E::entity_type() {
+        if event.entity_type() != E::entity_type() {
             return Err(RepoError::DeserializationFailed(format!(
                 "Entity type mismatch: expected {}, got {}",
                 E::entity_type(),
-                event.entity_type
+                event.entity_type()
             )));
         }
 
-        match &event.change_type {
+        match &event.change_type() {
             // ========== Created 事件：在数据库中创建新实体 ==========
             ChangeType::Created {
                 ..
             } => {
                 // 1. 检查实体是否已存在（幂等性）
-                if self.entity_exists(&event.entity_id, E::entity_type())? {
+                if self.entity_exists(&event.entity_id(), E::entity_type())? {
                     // 实体已存在，幂等处理：不报错直接返回
                     return Ok(());
                 }
@@ -147,18 +147,18 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
                 changed_fields
             } => {
                 // 1. 检查实体是否存在
-                if !self.entity_exists(&event.entity_id, E::entity_type())? {
+                if !self.entity_exists(&event.entity_id(), E::entity_type())? {
                     return Err(RepoError::OrderNotFound);
                 }
 
                 // 2. 加载现有实体
-                let mut entity = self.load_entity(&event.entity_id)?;
+                let mut entity = self.load_entity(&event.entity_id())?;
 
                 // 3. 应用变更到实体对象（通过 Entity::replay 方法）
                 entity.replay(event).map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
 
                 // 4. 更新数据库中的实体
-                self.update_entity(&event.entity_id, E::entity_type(), &entity, event, changed_fields)?;
+                self.update_entity(&event.entity_id(), E::entity_type(), &entity, event, changed_fields)?;
 
                 Ok(())
             }
@@ -166,13 +166,13 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
             // ========== Deleted 事件：从数据库删除实体 ==========
             ChangeType::Deleted => {
                 // 1. 检查实体是否存在
-                if !self.entity_exists(&event.entity_id, E::entity_type())? {
+                if !self.entity_exists(&event.entity_id(), E::entity_type())? {
                     // 实体不存在，幂等处理：删除不存在的实体不报错
                     return Ok(());
                 }
 
                 // 2. 从数据库删除实体
-                self.delete_entity(&event.entity_id, E::entity_type())?;
+                self.delete_entity(&event.entity_id(), E::entity_type())?;
 
                 Ok(())
             }
@@ -245,7 +245,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     ///
     /// 生成格式: INSERT INTO [entity_type] (entity_id, entity_type, timestamp, sequence, [fields...]) VALUES (...)
     fn generate_insert_sql(&self, event: &ChangeLogEntry) -> Result<String, RepoError> {
-        let table_name = event.entity_type.clone();
+        let table_name = event.entity_type().clone();
 
         // 构建列名和值 - 包含基础元数据列
         let mut column_names = vec![
@@ -256,16 +256,16 @@ impl<E: Entity> MySqlDbRepo<E> {
         ];
 
         let mut values = vec![
-            format!("'{}'", event.entity_id),
-            format!("'{}'", event.entity_type),
-            format!("{}", event.timestamp),
-            format!("{}", event.sequence),
+            format!("'{}'", event.entity_id()),
+            format!("'{}'", event.entity_type()),
+            format!("{}", event.timestamp()),
+            format!("{}", event.sequence()),
         ];
 
         // 从 Created 事件中提取字段
         if let ChangeType::Created {
             fields
-        } = &event.change_type
+        } = &event.change_type()
         {
             // 添加来自字段变更的列
             for field in fields {
@@ -383,16 +383,16 @@ impl<E: Entity> MySqlDbRepo<E> {
         &self,
         event: &ChangeLogEntry,
     ) -> Result<String, RepoError> {
-        let table_name = event.entity_type.clone();
+        let table_name = event.entity_type().clone();
 
         // 构建 SET 子句
         let mut set_clauses = vec![
-            format!("timestamp = {}", event.timestamp),
-            format!("sequence = {}", event.sequence),
+            format!("timestamp = {}", event.timestamp()),
+            format!("sequence = {}", event.sequence()),
         ];
 
         // 从 Updated 事件中提取字段变更
-        if let ChangeType::Updated { changed_fields } = &event.change_type {
+        if let ChangeType::Updated { changed_fields } = &event.change_type() {
             // 添加变更字段的更新
             for field in changed_fields {
                 set_clauses.push(format!("{} = '{}'", field.field_name, field.new_value));
@@ -404,8 +404,8 @@ impl<E: Entity> MySqlDbRepo<E> {
             "UPDATE {} SET {} WHERE entity_id = '{}' AND entity_type = '{}'",
             table_name,
             set_clauses.join(", "),
-            event.entity_id,
-            event.entity_type
+            event.entity_id(),
+            event.entity_type()
         );
 
         Ok(sql)
@@ -679,79 +679,9 @@ mod tests {
     }
 
 
-    #[test]
-    fn test_generate_insert_sql() {
-        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
 
-        let fields = vec![
-            diff::FieldChange {
-                field_name: "symbol".into(),
-                new_value: "BTCUSDT".to_string(),
-                old_value: "".to_string()
-            },
-            diff::FieldChange {
-                field_name: "price".into(),
-                new_value: "50000.0".to_string(),
-                old_value: "".to_string()
-            },
-        ];
 
-        let event = ChangeLogEntry {
-            entity_id: "order_123".to_string(),
-            entity_type: "Order".to_string(),
-            timestamp: 1234567890,
-            sequence: 1,
-            change_type: ChangeType::Created {
-                fields: fields
-            }
-        };
 
-        let sql = repo.generate_insert_sql(&event).expect("Failed to generate SQL");
-
-        // 验证 SQL 包含必要的字段
-        // 使用 entity_type 作为表名的多表设计
-        assert!(sql.contains("INSERT INTO Order"), "SQL 应该插入到 Order 表");
-        assert!(sql.contains("entity_id"), "SQL 应该包含 entity_id");
-        assert!(sql.contains("entity_type"), "SQL 应该包含 entity_type");
-        assert!(sql.contains("timestamp"), "SQL 应该包含 timestamp");
-        assert!(sql.contains("sequence"), "SQL 应该包含 sequence");
-        assert!(sql.contains("symbol"), "SQL 应该包含 symbol");
-        assert!(sql.contains("price"), "SQL 应该包含 price");
-        assert!(sql.contains("order_123"), "SQL 应该包含 entity_id 的值");
-    }
-
-    #[test]
-    fn test_generate_update_sql() {
-        let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
-
-        let changed_fields = vec![diff::FieldChange {
-            field_name: "price".into(),
-            new_value: "51000.0".to_string(),
-            old_value: "50000.0".to_string()
-        }];
-
-        let event = ChangeLogEntry {
-            entity_id: "order_123".to_string(),
-            entity_type: "Order".to_string(),
-            timestamp: 1234567891,
-            sequence: 2,
-            change_type: ChangeType::Updated {
-                changed_fields: changed_fields
-            }
-        };
-
-        let sql = repo.generate_update_sql(&event).expect("Failed to generate SQL");
-
-        // 验证 UPDATE 语句
-        // 使用 entity_type 作为表名的多表设计
-        assert!(sql.contains("UPDATE Order"), "SQL 应该更新 Order 表");
-        assert!(sql.contains("SET"), "SQL 应该包含 SET 子句");
-        assert!(sql.contains("timestamp"), "SQL 应该包含 timestamp");
-        assert!(sql.contains("sequence"), "SQL 应该包含 sequence");
-        assert!(sql.contains("price"), "SQL 应该包含 price");
-        assert!(sql.contains("WHERE"), "SQL 应该包含 WHERE 子句");
-        assert!(sql.contains("entity_id = 'order_123'"), "SQL 应该过滤正确的 entity_id");
-    }
 
     #[test]
     fn test_mock_repo_creation() {

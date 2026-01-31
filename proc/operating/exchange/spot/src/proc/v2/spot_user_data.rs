@@ -9,9 +9,6 @@ use crate::proc::behavior::{
 
 pub struct SpotUserDataImpl {}
 
-impl SpotUserDataImpl {
-    pub fn new() -> Self { Self {} }
-}
 
 
 impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny> for SpotUserDataImpl {
