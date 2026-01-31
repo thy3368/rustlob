@@ -7,7 +7,7 @@
 - adapter
 - service
 - repo
-
+handle 实现  sync+send
 
 ## 数据类
 
@@ -18,7 +18,7 @@
 ### 可变
 
 - entity（state）内存化状态 数据库化状态
-- 内存态 状态变更 在需要arc+mutex
+- 内存态 状态变更 在需要arc+mutex;无锁对列等
 - 数据库态  需要select for update, 即数据库锁实现数据竞争。
 
 

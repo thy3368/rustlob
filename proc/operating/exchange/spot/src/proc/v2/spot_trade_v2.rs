@@ -19,6 +19,7 @@ use crate::proc::behavior::{
         spot_user_data_sse_behavior::UserDataStreamEventAny
     }
 };
+use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderAck;
 
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
@@ -64,7 +65,42 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
     //     }
     // }
 
+    fn dj(&self, cmd: NewOrderCmd) -> Result<CmdResp<NewOrderAck>, SpotCmdErrorAny>{
+
+
+        //todo 生成 spot order
+        let mut internal_order = SpotOrder::create_limit(
+            order_id,
+            limit_order.trader,
+            limit_order.account_id,
+            limit_order.trading_pair,
+            limit_order.side,
+            limit_order.price,
+            limit_order.quantity,
+            limit_order.time_in_force,
+            limit_order.client_order_id,
+        );
+
+        //数据竞争点是 余额账户 需要加锁
+        //todo 根据买卖单 分别冻结不同的余额账户
+        // 生成新增/账户冻结 eventlog
+        // 发送eventlog到消息对列，行情对外发布消息
+        //todo 在db中回放eventlog
+        // 对order进行撮合操作
+
+
+        let mut frozen_asset_balance = self.balance_repo.find_by_id(&"xxxxx").unwrap().unwrap();
+        let mut base_asset_balance = self.balance_repo.find_by_id(&"base_asset_balance_id").unwrap().unwrap();
+
+    }
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+
+
+
+
+
+
+
         // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
 

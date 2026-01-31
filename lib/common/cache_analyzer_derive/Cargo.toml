@@ -16,3 +16,4 @@ cache_analyzer_types = { path = "../cache_analyzer_types" }
 
 [dev-dependencies]
 cache_analyzer_types = { path = "../cache_analyzer_types" }
+single_thread_derive = { path = "../single_thread_derive" }

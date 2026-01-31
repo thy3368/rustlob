@@ -31,7 +31,7 @@ pub struct TradingOrder {
     order_id: u64,
     timestamp: u64,
 
-    #[cold]
+    // #[cold]
     user_metadata: String,
 }
 

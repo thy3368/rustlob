@@ -3,11 +3,10 @@ use std::{
     sync::{Arc, Mutex, RwLock}
 };
 
+use base_types::{account::balance::Balance, exchange::prep::prep_order::PrepOrder};
 // Clean Architecture: 引入 MySqlDbRepo 和相关接口
 // Base types
 use base_types::{AccountId, AssetId, PositionSide, PrepPosition, Side as BaseSide, Timestamp, TradingPair};
-use base_types::account::balance::Balance;
-use base_types::exchange::prep::prep_order::PrepOrder;
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
 use diff::{ChangeLogEntry, Entity};
@@ -16,13 +15,12 @@ use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::trading_prep_order_behavior::{
-    AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd,
-    CancelOrderResult, ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord,
-    MarkPriceInfo, ModifyOrderCmd, ModifyOrderResult, OpenPositionCmd, OpenPositionResult,
-    OrderBookSnapshot, OrderId, OrderQueryResult, PerpOrderExchBehavior, PerpOrderExchQueryProc, PrepCmdError,
-    PrepTrade, Price, Quantity, QueryAccountBalanceCmd, QueryAccountInfoCmd, QueryFundingFeeCmd,
-    QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd, QueryOrderCmd,
-    QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
+    AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd, CancelOrderResult,
+    ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord, MarkPriceInfo, ModifyOrderCmd,
+    ModifyOrderResult, OpenPositionCmd, OpenPositionResult, OrderBookSnapshot, OrderId, OrderQueryResult,
+    PerpOrderExchBehavior, PerpOrderExchQueryProc, PrepCmdError, PrepTrade, Price, Quantity, QueryAccountBalanceCmd,
+    QueryAccountInfoCmd, QueryFundingFeeCmd, QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd,
+    QueryOrderCmd, QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
     SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, Side, TradeId, TradesQueryResult
 };
 
@@ -369,7 +367,7 @@ impl PrepMatchingService {
             for event in &all_events {
                 // 根据 entity_type 判断回放到哪个 repo
                 // todo 增加balance position
-                match event.entity_type.as_str() {
+                match event.entity_type().as_str() {
                     "PrepOrder" => {
                         if let Err(e) = self.order_repo.replay_event(event) {
                             log::error!("Failed to replay order event: {:?}", e);

@@ -2,8 +2,50 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
-/// SingleThread 派生宏实现
-pub fn impl_single_thread_derive(input: TokenStream) -> TokenStream {
+/// SingleThread 派生宏 - 标记结构体为单线程类型
+///
+/// # 功能
+/// - 提供运行时线程检查方法
+/// - 支持 `#[thread_bound]` 属性标记线程绑定字段
+///
+/// # 注意
+/// 由于稳定版 Rust 不支持直接的 `!Send` 和 `!Sync`，
+/// 此宏只提供运行时检查，不能在编译时完全防止跨线程访问。
+/// 如果需要编译时保证，请使用包含 `PhantomData<*const ()>` 的字段。
+///
+/// # 生成的方法
+/// - `can_send_to_other_thread() -> bool` - 总是返回 false
+/// - `check_thread_bound() -> Result<(), String>` - 运行时线程检查
+/// - `thread_safe_get(&self) -> &Self` - 带线程检查的引用获取
+///
+/// # 示例
+///
+/// ```ignore
+/// use single_thread_derive::SingleThread;
+///
+/// #[derive(SingleThread)]
+/// struct DatabaseConnection {
+///     url: String,
+///     #[thread_bound]
+///     connection_handle: usize,
+/// }
+///
+/// fn main() {
+///     let conn = DatabaseConnection {
+///         url: "localhost".to_string(),
+///         connection_handle: 123,
+///     };
+///
+///     // 正常使用
+///     let _ = conn.thread_safe_get();
+///     assert!(!conn.can_send_to_other_thread());
+///
+///     // 线程检查
+///     assert!(conn.check_thread_bound().is_ok());
+/// }
+/// ```
+#[proc_macro_derive(SingleThread, attributes(thread_bound))]
+pub fn single_thread_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;

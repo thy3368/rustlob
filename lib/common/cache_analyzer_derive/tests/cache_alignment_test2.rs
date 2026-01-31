@@ -1,4 +1,5 @@
-use cache_analyzer_derive::{CacheAnalyzer, SingleThread};
+use cache_analyzer_derive::CacheAnalyzer;
+use single_thread_derive::SingleThread;
 
 // 测试1：基本的 SingleThread 功能
 #[derive(SingleThread)]

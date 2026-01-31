@@ -2,18 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use axum::{
     extract::{Json, State},
-    response::IntoResponse,
-    routing::post,
-    Router
+    response::IntoResponse
 };
 // USDS-M期货市场数据相关导入
 use derivatives_behavior::proc::usds_m_future::behavior::market_data_behavior::{
     UsdsMFutureMarketDataBehavior, UsdsMFutureMarketDataCmdAny, UsdsMFutureMarketDataRes
 };
-use derivatives_behavior::proc::usds_m_future::{
-    behavior::market_data_behavior::UsdsMFutureMarketDataCmdError, usds_market_data::UsdsMFutureMarketDataBehaviorImpl
-};
-use serde::{Deserialize, Serialize};
+use derivatives_behavior::proc::usds_m_future::usds_market_data::UsdsMFutureMarketDataBehaviorImpl;
+use serde::Serialize;
 use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
 
 // ============================================================================

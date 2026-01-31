@@ -84,7 +84,8 @@
       "Bash(do sed -i '' '/^#[derive\\(Debug,/ {\n    :a\n    N\n    /\\)]$/!ba\n    s/^\\\\\\(#[derive\\(.*\\)]\\\\\\)$/\\\\1\\\\n#[cfg_attr\\(feature = \"\"serde\"\", derive\\(serde::Serialize, serde::Deserialize\\)\\)]/g\n}' $file)",
       "Bash(done:*)",
       "Bash(grep:*)",
-      "Bash(cargo info:*)"
+      "Bash(cargo info:*)",
+      "Bash(cargo new:*)"
     ],
     "deny": [],
     "ask": []
