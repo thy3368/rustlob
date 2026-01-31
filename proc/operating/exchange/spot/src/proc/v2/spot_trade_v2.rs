@@ -7,6 +7,7 @@ use db_repo::{
     adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo, MySqlDbRepo
 };
 use diff::ChangeLogEntry;
+use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::{
@@ -18,22 +19,23 @@ use crate::proc::behavior::{
     }
 };
 
+#[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // uid路由
-    pub balance_repo: MySqlDbRepo<Balance>,
+     balance_repo: MySqlDbRepo<Balance>,
     // uid路由
-    pub trade_repo: MySqlDbRepo<SpotTrade>,
+     trade_repo: MySqlDbRepo<SpotTrade>,
     // uid路由
-    pub order_repo: MySqlDbRepo<SpotOrder>,
+     order_repo: MySqlDbRepo<SpotOrder>,
 
     // uid路由
-    pub user_data_repo: MySqlDbRepo<SpotOrder>,
+     user_data_repo: MySqlDbRepo<SpotOrder>,
 
     // 交易对路由
-    pub market_data_repo: MySqlDbRepo<SpotOrder>,
+     market_data_repo: MySqlDbRepo<SpotOrder>,
 
     // // todo?
-    // pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
+    pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
     // // uid路由
     // pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
     // // 交易对路由
@@ -41,7 +43,7 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
-    pub lob_repo: L
+     lob_repo: L
 }
 
 

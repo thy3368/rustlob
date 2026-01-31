@@ -1,3 +1,4 @@
+use immutable_derive::immutable;
 use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::spot_market_data_sse_behavior::{
@@ -5,6 +6,7 @@ use crate::proc::behavior::{
     }
 };
 
+#[immutable]
 pub struct SpotMarketDataSubscriptionImpl {}
 
 impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSubscriptionImpl {

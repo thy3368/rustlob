@@ -44,27 +44,27 @@ pub enum SpotMarketDataStreamAny {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AggregateTradeStream {
     /// 事件类型 "aggTrade"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 归集交易ID
-    pub agg_trade_id: i64,
+    agg_trade_id: i64,
     /// 价格
-    pub price: String,
+    price: String,
     /// 数量
-    pub quantity: String,
+    quantity: String,
     /// 首个交易ID
-    pub first_trade_id: i64,
+    first_trade_id: i64,
     /// 最后交易ID
-    pub last_trade_id: i64,
+    last_trade_id: i64,
     /// 交易时间 (毫秒)
-    pub trade_time: i64,
+    trade_time: i64,
     /// 买方是否为做市方
-    pub is_buyer_maker: bool,
+    is_buyer_maker: bool,
     /// 忽略字段
-    pub ignore: bool
+    ignore: bool
 }
 
 /// 逐笔交易流数据
@@ -73,23 +73,23 @@ pub struct AggregateTradeStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TradeStream {
     /// 事件类型 "v1"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 交易ID
-    pub trade_id: i64,
+    trade_id: i64,
     /// 价格
-    pub price: String,
+    price: String,
     /// 数量
-    pub quantity: String,
+    quantity: String,
     /// 交易时间 (毫秒)
-    pub trade_time: i64,
+    trade_time: i64,
     /// 买方是否为做市方
-    pub is_buyer_maker: bool,
+    is_buyer_maker: bool,
     /// 忽略字段
-    pub ignore: bool
+    ignore: bool
 }
 
 /// K线间隔枚举
@@ -131,7 +131,7 @@ pub enum KlineInterval {
 
 impl KlineInterval {
     /// 转换为字符串表示
-    pub fn as_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             KlineInterval::S1 => "1s",
             KlineInterval::M1 => "1m",
@@ -157,39 +157,39 @@ impl KlineInterval {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct KlineData {
     /// K线开始时间 (毫秒)
-    pub start_time: i64,
+    start_time: i64,
     /// K线关闭时间 (毫秒)
-    pub close_time: i64,
+    close_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 间隔
-    pub interval: String,
+    interval: String,
     /// 首个交易ID
-    pub first_trade_id: i64,
+    first_trade_id: i64,
     /// 最后交易ID
-    pub last_trade_id: i64,
+    last_trade_id: i64,
     /// 开盘价
-    pub open_price: String,
+    open_price: String,
     /// 收盘价
-    pub close_price: String,
+    close_price: String,
     /// 最高价
-    pub high_price: String,
+    high_price: String,
     /// 最低价
-    pub low_price: String,
+    low_price: String,
     /// 成交量 (基础资产)
-    pub base_volume: String,
+    base_volume: String,
     /// 成交笔数
-    pub number_of_trades: i64,
+    number_of_trades: i64,
     /// K线是否完结
-    pub is_closed: bool,
+    is_closed: bool,
     /// 成交额 (计价资产)
-    pub quote_volume: String,
+    quote_volume: String,
     /// 主动买入成交量 (基础资产)
-    pub taker_buy_base_volume: String,
+    taker_buy_base_volume: String,
     /// 主动买入成交额 (计价资产)
-    pub taker_buy_quote_volume: String,
+    taker_buy_quote_volume: String,
     /// 忽略字段
-    pub ignore: String
+    ignore: String
 }
 
 /// K线流数据
@@ -198,13 +198,13 @@ pub struct KlineData {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct KlineStream {
     /// 事件类型 "kline"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// K线数据
-    pub kline: KlineData
+    kline: KlineData
 }
 
 /// Mini Ticker 流数据
@@ -213,23 +213,23 @@ pub struct KlineStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MiniTickerStream {
     /// 事件类型 "24hrMiniTicker"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 收盘价
-    pub close_price: String,
+    close_price: String,
     /// 开盘价
-    pub open_price: String,
+    open_price: String,
     /// 最高价
-    pub high_price: String,
+    high_price: String,
     /// 最低价
-    pub low_price: String,
+    low_price: String,
     /// 成交量 (基础资产)
-    pub base_volume: String,
+    base_volume: String,
     /// 成交额 (计价资产)
-    pub quote_volume: String
+    quote_volume: String
 }
 
 /// 24小时 Ticker 流数据
@@ -238,51 +238,51 @@ pub struct MiniTickerStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TickerStream {
     /// 事件类型 "24hrTicker"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 价格变化
-    pub price_change: String,
+    price_change: String,
     /// 价格变化百分比
-    pub price_change_percent: String,
+    price_change_percent: String,
     /// 加权平均价
-    pub weighted_avg_price: String,
+    weighted_avg_price: String,
     /// 前一个收盘价
-    pub prev_close_price: String,
+    prev_close_price: String,
     /// 最新价格
-    pub last_price: String,
+    last_price: String,
     /// 最新成交量
-    pub last_quantity: String,
+    last_quantity: String,
     /// 最优买价
-    pub best_bid_price: String,
+    best_bid_price: String,
     /// 最优买量
-    pub best_bid_quantity: String,
+    best_bid_quantity: String,
     /// 最优卖价
-    pub best_ask_price: String,
+    best_ask_price: String,
     /// 最优卖量
-    pub best_ask_quantity: String,
+    best_ask_quantity: String,
     /// 开盘价
-    pub open_price: String,
+    open_price: String,
     /// 最高价
-    pub high_price: String,
+    high_price: String,
     /// 最低价
-    pub low_price: String,
+    low_price: String,
     /// 成交量 (基础资产)
-    pub base_volume: String,
+    base_volume: String,
     /// 成交额 (计价资产)
-    pub quote_volume: String,
+    quote_volume: String,
     /// 统计开始时间 (毫秒)
-    pub open_time: i64,
+    open_time: i64,
     /// 统计结束时间 (毫秒)
-    pub close_time: i64,
+    close_time: i64,
     /// 首个交易ID
-    pub first_trade_id: i64,
+    first_trade_id: i64,
     /// 最后交易ID
-    pub last_trade_id: i64,
+    last_trade_id: i64,
     /// 成交笔数
-    pub number_of_trades: i64
+    number_of_trades: i64
 }
 
 /// 滚动窗口统计流数据
@@ -292,39 +292,39 @@ pub struct TickerStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RollingWindowStatsStream {
     /// 事件类型 "1hTicker", "4hTicker", "1dTicker"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 价格变化
-    pub price_change: String,
+    price_change: String,
     /// 价格变化百分比
-    pub price_change_percent: String,
+    price_change_percent: String,
     /// 开盘价
-    pub open_price: String,
+    open_price: String,
     /// 最高价
-    pub high_price: String,
+    high_price: String,
     /// 最低价
-    pub low_price: String,
+    low_price: String,
     /// 最新价格
-    pub last_price: String,
+    last_price: String,
     /// 加权平均价
-    pub weighted_avg_price: String,
+    weighted_avg_price: String,
     /// 成交量 (基础资产)
-    pub base_volume: String,
+    base_volume: String,
     /// 成交额 (计价资产)
-    pub quote_volume: String,
+    quote_volume: String,
     /// 统计开始时间 (毫秒)
-    pub open_time: i64,
+    open_time: i64,
     /// 统计结束时间 (毫秒)
-    pub close_time: i64,
+    close_time: i64,
     /// 首个交易ID
-    pub first_trade_id: i64,
+    first_trade_id: i64,
     /// 最后交易ID
-    pub last_trade_id: i64,
+    last_trade_id: i64,
     /// 成交笔数
-    pub number_of_trades: i64
+    number_of_trades: i64
 }
 
 /// 滚动窗口大小枚举
@@ -340,7 +340,7 @@ pub enum WindowSize {
 
 impl WindowSize {
     /// 转换为字符串表示
-    pub fn as_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             WindowSize::H1 => "1h",
             WindowSize::H4 => "4h",
@@ -355,17 +355,17 @@ impl WindowSize {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BookTickerStream {
     /// 订单簿更新ID
-    pub update_id: i64,
+    update_id: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 最优买价
-    pub best_bid_price: String,
+    best_bid_price: String,
     /// 最优买量
-    pub best_bid_quantity: String,
+    best_bid_quantity: String,
     /// 最优卖价
-    pub best_ask_price: String,
+    best_ask_price: String,
     /// 最优卖量
-    pub best_ask_quantity: String
+    best_ask_quantity: String
 }
 
 /// 平均价格流数据
@@ -374,26 +374,26 @@ pub struct BookTickerStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AveragePriceStream {
     /// 事件类型 "avgPrice"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 平均价格间隔
-    pub interval: String,
+    interval: String,
     /// 平均价格
-    pub avg_price: String,
+    avg_price: String,
     /// 最后交易时间 (毫秒)
-    pub last_trade_time: i64
+    last_trade_time: i64
 }
 
 /// 价格档位
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PriceLevel {
     /// 价格
-    pub price: String,
+    price: String,
     /// 数量
-    pub quantity: String
+    quantity: String
 }
 
 /// 部分深度流数据
@@ -403,11 +403,11 @@ pub struct PriceLevel {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PartialDepthStream {
     /// 最后更新ID
-    pub last_update_id: i64,
+    last_update_id: i64,
     /// 买单深度
-    pub bids: Vec<PriceLevel>,
+    bids: Vec<PriceLevel>,
     /// 卖单深度
-    pub asks: Vec<PriceLevel>
+    asks: Vec<PriceLevel>
 }
 
 /// 增量深度流数据
@@ -416,19 +416,19 @@ pub struct PartialDepthStream {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffDepthStream {
     /// 事件类型 "depthUpdate"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间 (毫秒)
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 首个更新ID
-    pub first_update_id: i64,
+    first_update_id: i64,
     /// 最后更新ID
-    pub last_update_id: i64,
+    last_update_id: i64,
     /// 买单更新
-    pub bids: Vec<PriceLevel>,
+    bids: Vec<PriceLevel>,
     /// 卖单更新
-    pub asks: Vec<PriceLevel>
+    asks: Vec<PriceLevel>
 }
 
 /// 深度档位枚举
@@ -444,7 +444,7 @@ pub enum DepthLevel {
 
 impl DepthLevel {
     /// 转换为数字
-    pub fn as_number(&self) -> u8 {
+    fn as_number(&self) -> u8 {
         match self {
             DepthLevel::Level5 => 5,
             DepthLevel::Level10 => 10,
@@ -464,7 +464,7 @@ pub enum UpdateSpeed {
 
 impl UpdateSpeed {
     /// 转换为字符串表示
-    pub fn as_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             UpdateSpeed::Ms1000 => "1000ms",
             UpdateSpeed::Ms100 => "100ms"
@@ -478,11 +478,11 @@ impl UpdateSpeed {
 pub struct SubscriptionRequest {
     /// 方法: SUBSCRIBE, UNSUBSCRIBE, LIST_SUBSCRIPTIONS, SET_PROPERTY,
     /// GET_PROPERTY
-    pub method: String,
+    method: String,
     /// 参数列表
-    pub params: Vec<String>,
+    params: Vec<String>,
     /// 请求ID (可选)
-    pub id: Option<SubscriptionId>
+    id: Option<SubscriptionId>
 }
 
 /// 订阅ID类型
@@ -502,9 +502,9 @@ pub enum SubscriptionId {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubscriptionResponse {
     /// 结果 (null表示成功)
-    pub result: Option<SubscriptionResult>,
+    result: Option<SubscriptionResult>,
     /// 请求ID
-    pub id: Option<SubscriptionId>
+    id: Option<SubscriptionId>
 }
 
 /// 订阅结果类型
@@ -526,11 +526,11 @@ pub enum SubscriptionResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SubscriptionError {
     /// 错误码
-    pub code: i32,
+    code: i32,
     /// 错误消息
-    pub msg: String,
+    msg: String,
     /// 请求ID
-    pub id: Option<SubscriptionId>
+    id: Option<SubscriptionId>
 }
 
 /// Market Data Stream 订阅命令
@@ -578,9 +578,9 @@ pub enum MarketDataSubscriptionCmdAny {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CombinedStreamWrapper {
     /// 流名称
-    pub stream: String,
+    stream: String,
     /// 原始数据
-    pub data: SpotMarketDataStreamAny
+    data: SpotMarketDataStreamAny
 }
 
 // ============================================================================
@@ -591,24 +591,24 @@ pub struct CombinedStreamWrapper {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CommissionRates {
     /// Maker 佣金费率
-    pub maker: String,
+    maker: String,
     /// Taker 佣金费率
-    pub taker: String,
+    taker: String,
     /// 买方佣金费率
-    pub buyer: String,
+    buyer: String,
     /// 卖方佣金费率
-    pub seller: String
+    seller: String
 }
 
 /// 余额信息
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Balance {
     /// 资产名称
-    pub asset: String,
+    asset: String,
     /// 可用余额
-    pub free: String,
+    free: String,
     /// 锁定余额
-    pub locked: String
+    locked: String
 }
 
 /// User Data 命令枚举
@@ -625,13 +625,13 @@ pub enum SpotUserDataCmdAny {
 /// Data Source: Memory => Database
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AccountCmd {
-    pub metadata: CMetadata,
+    metadata: CMetadata,
     /// 仅返回非零余额，默认 false
-    pub omit_zero_balances: Option<bool>,
+    omit_zero_balances: Option<bool>,
     /// 接收窗口（微秒精度），不超过 60000
-    pub recv_window: Option<f64>,
+    recv_window: Option<f64>,
     /// 时间戳
-    pub timestamp: i64
+    timestamp: i64
 }
 
 /// User Data 响应枚举
@@ -645,37 +645,37 @@ pub enum SpotUserDataRes {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AccountInfo {
     /// Maker 佣金
-    pub maker_commission: i32,
+    maker_commission: i32,
     /// Taker 佣金
-    pub taker_commission: i32,
+    taker_commission: i32,
     /// 买方佣金
-    pub buyer_commission: i32,
+    buyer_commission: i32,
     /// 卖方佣金
-    pub seller_commission: i32,
+    seller_commission: i32,
     /// 佣金费率
-    pub commission_rates: CommissionRates,
+    commission_rates: CommissionRates,
     /// 可交易
-    pub can_trade: bool,
+    can_trade: bool,
     /// 可提现
-    pub can_withdraw: bool,
+    can_withdraw: bool,
     /// 可充值
-    pub can_deposit: bool,
+    can_deposit: bool,
     /// 经纪账户
-    pub brokered: bool,
+    brokered: bool,
     /// 需要自成交防护
-    pub require_self_trade_prevention: bool,
+    require_self_trade_prevention: bool,
     /// 阻止 SOR
-    pub prevent_sor: bool,
+    prevent_sor: bool,
     /// 更新时间
-    pub update_time: i64,
+    update_time: i64,
     /// 账户类型
-    pub account_type: String,
+    account_type: String,
     /// 余额列表
-    pub balances: Vec<Balance>,
+    balances: Vec<Balance>,
     /// 权限列表
-    pub permissions: Vec<String>,
+    permissions: Vec<String>,
     /// 用户ID
-    pub uid: i64
+    uid: i64
 }
 
 /// Market Data Stream 行为接口

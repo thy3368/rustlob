@@ -22,6 +22,7 @@ base_types = { path = "../../../../lib/common/base_types" }
 # Diff tracking
 diff = { path = "../../../../lib/common/diff" }
 entity_derive = { path = "../../../../lib/common/entity_derive" }
+immutable_derive = { path = "../../../../lib/common/immutable_derive" }
 
 # Database repository
 db_repo = { path = "../../../../lib/common/db_repo" }

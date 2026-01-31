@@ -1,5 +1,5 @@
 use base_types::{cqrs::cqrs_types::CmdResp, handler::handler::Handler};
-
+use immutable_derive::immutable;
 use crate::proc::behavior::{
     spot_trade_behavior::SpotCmdErrorAny,
     v2::spot_market_data_behavior::{
@@ -7,6 +7,8 @@ use crate::proc::behavior::{
     }
 };
 
+
+#[immutable]
 pub struct SpotMarketDataImpl {}
 
 impl SpotMarketDataImpl {

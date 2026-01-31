@@ -1,8 +1,11 @@
 use diff::Entity;
 use crate::{CmdRepo, QueryRepo, PageRequest, PageResult, RepoError};
 use diff::ChangeLogEntry;
+use immutable_derive::immutable;
 
 /// 基于内存的仓储实现，支持所有实现了 Entity trait 的类型
+#[immutable]
+
 pub struct MemRepo<E: Entity> {
     _entity: std::marker::PhantomData<E>,
 }

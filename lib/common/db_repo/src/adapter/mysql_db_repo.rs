@@ -1,7 +1,7 @@
 use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
 use mysql::prelude::*;
 use std::sync::Mutex;
-
+use immutable_derive::immutable;
 use crate::core::db_repo::{CmdRepo, QueryRepo, RepoError, PageRequest, PageResult};
 
 /// MySQL 数据库适配器
@@ -25,6 +25,7 @@ use crate::core::db_repo::{CmdRepo, QueryRepo, RepoError, PageRequest, PageResul
 ///     INDEX idx_timestamp (timestamp)
 /// ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /// ```
+#[immutable]
 pub struct MySqlDbRepo<E: Entity> {
     connection: Mutex<Option<mysql::PooledConn>>,
     _entity: std::marker::PhantomData<E>

@@ -11,9 +11,11 @@ serde = ["dep:serde"]
 
 [dependencies]
 entity_derive = { path = "../entity_derive" }
+immutable_derive = { path = "../immutable_derive" }
 #lob_repo = { path = "../lob_repo" }
 
 diff = { path = "../diff" }
 decimal = { path = "../decimal", features = ["serde"] }
 chrono = "0.4.43"
 serde = { version = "1.0", features = ["derive"], optional = true }
+sealed = "0.6.0"

@@ -9,6 +9,7 @@ use base_types::{
     exchange::spot::spot_types::{SpotOrder, SpotTrade}
 };
 use db_repo::MySqlDbRepo;
+use immutable_derive::immutable;
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use spot_behavior::proc::{
     behavior::v2::{
@@ -32,7 +33,11 @@ use crate::interfaces::{
 // todo 认证： /api/spot/v2/；/api/spot/user/data
 // todo 不认证： /api/spot/v2/；/api/spot/market/data
 /// HTTP 服务器启动器
-pub struct HttpServer;
+
+
+#[immutable]
+pub struct HttpServer{
+}
 impl HttpServer {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）

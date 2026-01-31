@@ -57,15 +57,15 @@ pub enum UserDataStreamEventAny {
 
 pub struct OutboundAccountPositionEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "outboundAccountPosition"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    event_time: i64,
     /// 最后一次账户更新时间
-    pub last_account_update_time: i64,
+    last_account_update_time: i64,
     /// 余额数组
-    pub balances: Vec<BalanceItem>
+    balances: Vec<BalanceItem>
 }
 
 /// 余额项
@@ -74,11 +74,11 @@ pub struct OutboundAccountPositionEvent {
 
 pub struct BalanceItem {
     /// 资产名称
-    pub asset: String,
+    asset: String,
     /// 可用余额
-    pub free: String,
+    free: String,
     /// 锁定余额
-    pub locked: String
+    locked: String
 }
 
 // ==================== 余额更新事件 ====================
@@ -90,17 +90,17 @@ pub struct BalanceItem {
 
 pub struct BalanceUpdateEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "balanceUpdate"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    event_time: i64,
     /// 资产名称
-    pub asset: String,
+    asset: String,
     /// 余额变化量
-    pub balance_delta: String,
+    balance_delta: String,
     /// 清算时间
-    pub clear_time: i64
+    clear_time: i64
 }
 
 // ==================== 订单更新事件（执行报告）====================
@@ -112,126 +112,126 @@ pub struct BalanceUpdateEvent {
 
 pub struct ExecutionReportEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "executionReport"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 客户端订单 ID
-    pub client_order_id: String,
+    client_order_id: String,
     /// 订单方向（BUY/SELL）
-    pub side: OrderSide,
+    side: OrderSide,
     /// 订单类型（LIMIT/MARKET等）
-    pub order_type: OrderType,
+    order_type: OrderType,
     /// 有效方式（GTC/IOC/FOK）
-    pub time_in_force: TimeInForce,
+    time_in_force: TimeInForce,
     /// 订单数量
-    pub order_quantity: String,
+    order_quantity: String,
     /// 订单价格
-    pub order_price: String,
+    order_price: String,
     /// 止损价格
-    pub stop_price: String,
+    stop_price: String,
     /// 冰山订单数量
-    pub iceberg_quantity: String,
+    iceberg_quantity: String,
     /// 订单列表 ID（-1 表示不属于订单列表）
-    pub order_list_id: i64,
+    order_list_id: i64,
     /// 原始客户端订单 ID（被取消订单的 ID）
-    pub original_client_order_id: String,
+    original_client_order_id: String,
     /// 当前执行类型
-    pub current_execution_type: ExecutionType,
+    current_execution_type: ExecutionType,
     /// 当前订单状态
-    pub current_order_status: OrderStatus,
+    current_order_status: OrderStatus,
     /// 订单拒绝原因
-    pub order_reject_reason: OrderRejectReason,
+    order_reject_reason: OrderRejectReason,
     /// 订单 ID
-    pub order_id: i64,
+    order_id: i64,
     /// 最后执行的数量
-    pub last_executed_quantity: String,
+    last_executed_quantity: String,
     /// 累计成交数量
-    pub cumulative_filled_quantity: String,
+    cumulative_filled_quantity: String,
     /// 最后执行的价格
-    pub last_executed_price: String,
+    last_executed_price: String,
     /// 佣金金额
-    pub commission_amount: String,
+    commission_amount: String,
     /// 佣金资产（可能为 null）
-    pub commission_asset: Option<String>,
+    commission_asset: Option<String>,
     /// 交易时间
-    pub transaction_time: i64,
+    transaction_time: i64,
     /// 成交 ID
-    pub trade_id: i64,
+    trade_id: i64,
     /// 执行 ID
-    pub execution_id: i64,
+    execution_id: i64,
     /// 订单是否在订单簿上
-    pub is_on_book: bool,
+    is_on_book: bool,
     /// 是否是挂单方
-    pub is_maker: bool,
+    is_maker: bool,
     /// 忽略（废弃字段）
-    pub ignore: bool,
+    ignore: bool,
     /// 订单创建时间
-    pub order_creation_time: i64,
+    order_creation_time: i64,
     /// 累计成交金额
-    pub cumulative_quote_transacted_quantity: String,
+    cumulative_quote_transacted_quantity: String,
     /// 最后成交金额（lastPrice * lastQty）
-    pub last_quote_transacted_quantity: String,
+    last_quote_transacted_quantity: String,
     /// 报价订单数量
-    pub quote_order_quantity: String,
+    quote_order_quantity: String,
     /// 自成交保护模式
-    pub self_trade_prevention_mode: SelfTradePreventionMode,
+    self_trade_prevention_mode: SelfTradePreventionMode,
 
     // ==================== 条件字段 ====================
     /// 跟踪止损回调幅度（仅用于跟踪止损订单）
-    pub trailing_delta: Option<i64>,
+    trailing_delta: Option<i64>,
     /// 跟踪止损激活时间（仅用于跟踪止损订单）
-    pub trailing_time: Option<i64>,
+    trailing_time: Option<i64>,
 
     /// 策略 ID（仅当下单时提供了 strategyId 参数）
-    pub strategy_id: Option<i64>,
+    strategy_id: Option<i64>,
     /// 策略类型（仅当下单时提供了 strategyType 参数）
-    pub strategy_type: Option<i32>,
+    strategy_type: Option<i32>,
 
     /// 阻止匹配 ID（仅当订单因 STP 过期时可见）
-    pub prevented_match_id: Option<i64>,
+    prevented_match_id: Option<i64>,
     /// 阻止数量（仅当订单因 STP 过期时）
-    pub prevented_quantity: Option<String>,
+    prevented_quantity: Option<String>,
     /// 最后阻止数量（仅当订单因 STP 过期时）
-    pub last_prevented_quantity: Option<String>,
+    last_prevented_quantity: Option<String>,
     /// 交易组 ID（仅当订单因 STP 过期时）
-    pub trade_group_id: Option<i64>,
+    trade_group_id: Option<i64>,
     /// 对手方订单 ID（仅当订单因 STP 过期时）
-    pub counter_order_id: Option<i64>,
+    counter_order_id: Option<i64>,
     /// 对手方交易对（仅当订单因 STP 过期时）
-    pub counter_symbol: Option<String>,
+    counter_symbol: Option<String>,
     /// 阻止执行数量（仅当订单因 STP 过期时）
-    pub prevented_execution_quantity: Option<String>,
+    prevented_execution_quantity: Option<String>,
     /// 阻止执行价格（仅当订单因 STP 过期时）
-    pub prevented_execution_price: Option<String>,
+    prevented_execution_price: Option<String>,
     /// 阻止执行报价数量（仅当订单因 STP 过期时）
-    pub prevented_execution_quote_quantity: Option<String>,
+    prevented_execution_quote_quantity: Option<String>,
 
     /// 工作时间（当订单在订单簿上工作时出现）
-    pub working_time: Option<i64>,
+    working_time: Option<i64>,
 
     /// 匹配类型（用于有分配的订单）
-    pub match_type: Option<String>,
+    match_type: Option<String>,
     /// 分配 ID（用于有分配的订单）
-    pub allocation_id: Option<i64>,
+    allocation_id: Option<i64>,
 
     /// 工作层（用于可能有分配的订单）
-    pub working_floor: Option<String>,
+    working_floor: Option<String>,
 
     /// 是否使用了 SOR（智能订单路由）
-    pub used_sor: Option<bool>,
+    used_sor: Option<bool>,
 
     /// 价格钉住类型（仅用于钉住订单）
-    pub pegged_price_type: Option<String>,
+    pegged_price_type: Option<String>,
     /// 价格偏移类型（仅用于钉住订单）
-    pub pegged_offset_type: Option<String>,
+    pegged_offset_type: Option<String>,
     /// 价格偏移值（仅用于钉住订单）
-    pub pegged_offset_value: Option<i32>,
+    pegged_offset_value: Option<i32>,
     /// 当前钉住价格（仅用于钉住订单）
-    pub pegged_price: Option<String>
+    pegged_price: Option<String>
 }
 
 // ==================== 订单列表状态事件 ====================
@@ -243,29 +243,29 @@ pub struct ExecutionReportEvent {
 
 pub struct ListStatusEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "listStatus"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    event_time: i64,
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 订单列表 ID
-    pub order_list_id: i64,
+    order_list_id: i64,
     /// 条件类型（OCO/OTO）
-    pub contingency_type: String,
+    contingency_type: String,
     /// 列表状态类型
-    pub list_status_type: String,
+    list_status_type: String,
     /// 列表订单状态
-    pub list_order_status: String,
+    list_order_status: String,
     /// 列表拒绝原因
-    pub list_reject_reason: String,
+    list_reject_reason: String,
     /// 列表客户端订单 ID
-    pub list_client_order_id: String,
+    list_client_order_id: String,
     /// 交易时间
-    pub transaction_time: i64,
+    transaction_time: i64,
     /// 订单数组
-    pub orders: Vec<ListOrderItem>
+    orders: Vec<ListOrderItem>
 }
 
 /// 订单列表中的订单项
@@ -274,11 +274,11 @@ pub struct ListStatusEvent {
 
 pub struct ListOrderItem {
     /// 交易对
-    pub symbol: String,
+    symbol: String,
     /// 订单 ID
-    pub order_id: i64,
+    order_id: i64,
     /// 客户端订单 ID
-    pub client_order_id: String
+    client_order_id: String
 }
 
 // ==================== 事件流终止事件 ====================
@@ -290,11 +290,11 @@ pub struct ListOrderItem {
 
 pub struct EventStreamTerminatedEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "eventStreamTerminated"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64
+    event_time: i64
 }
 
 // ==================== 外部锁定更新事件 ====================
@@ -306,17 +306,17 @@ pub struct EventStreamTerminatedEvent {
 
 pub struct ExternalLockUpdateEvent {
     /// 订阅 ID
-    pub subscription_id: i32,
+    subscription_id: i32,
     /// 事件类型 "externalLockUpdate"
-    pub event_type: String,
+    event_type: String,
     /// 事件时间
-    pub event_time: i64,
+    event_time: i64,
     /// 资产名称
-    pub asset: String,
+    asset: String,
     /// 变化量
-    pub delta: String,
+    delta: String,
     /// 交易时间
-    pub transaction_time: i64
+    transaction_time: i64
 }
 
 // ==================== 枚举类型定义 ====================
@@ -479,7 +479,7 @@ pub enum SpotUserDataListenKeyCmdAny {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
 pub struct CreateListenKeyCmd {
-    pub metadata: CMetadata
+    metadata: CMetadata
 }
 
 /// 延长 Listen Key 有效期命令
@@ -490,9 +490,9 @@ pub struct CreateListenKeyCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
 pub struct KeepAliveListenKeyCmd {
-    pub metadata: CMetadata,
+    metadata: CMetadata,
     /// Listen Key
-    pub listen_key: String
+    listen_key: String
 }
 
 /// 关闭 Listen Key 命令
@@ -503,9 +503,9 @@ pub struct KeepAliveListenKeyCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
 pub struct CloseListenKeyCmd {
-    pub metadata: CMetadata,
+    metadata: CMetadata,
     /// Listen Key
-    pub listen_key: String
+    listen_key: String
 }
 
 // ==================== User Data Stream 响应枚举 ====================
@@ -530,7 +530,7 @@ pub enum SpotUserDataListenKeyResAny {
 pub struct ListenKeyResponse {
     /// Listen Key（用于 WebSocket 订阅）
     /// 有效期：60 分钟
-    pub listen_key: String
+    listen_key: String
 }
 
 // ==================== 辅助类型和常量 ====================
@@ -539,10 +539,10 @@ pub struct ListenKeyResponse {
 pub struct UserDataStreamConfig {
     /// Listen Key 有效期（毫秒）
     /// 默认：60 分钟
-    pub listen_key_ttl_ms: i64,
+    listen_key_ttl_ms: i64,
     /// 建议保活间隔（毫秒）
     /// 建议每 30 分钟延长一次有效期
-    pub keep_alive_interval_ms: i64
+    keep_alive_interval_ms: i64
 }
 
 impl Default for UserDataStreamConfig {
@@ -557,17 +557,17 @@ impl Default for UserDataStreamConfig {
 /// User Data Stream 事件类型常量
 pub mod event_types {
     /// 账户位置更新
-    pub const OUTBOUND_ACCOUNT_POSITION: &str = "outboundAccountPosition";
+    const OUTBOUND_ACCOUNT_POSITION: &str = "outboundAccountPosition";
     /// 余额更新
-    pub const BALANCE_UPDATE: &str = "balanceUpdate";
+    const BALANCE_UPDATE: &str = "balanceUpdate";
     /// 执行报告（订单更新）
-    pub const EXECUTION_REPORT: &str = "executionReport";
+    const EXECUTION_REPORT: &str = "executionReport";
     /// 订单列表状态
-    pub const LIST_STATUS: &str = "listStatus";
+    const LIST_STATUS: &str = "listStatus";
     /// 事件流终止
-    pub const EVENT_STREAM_TERMINATED: &str = "eventStreamTerminated";
+    const EVENT_STREAM_TERMINATED: &str = "eventStreamTerminated";
     /// 外部锁定更新
-    pub const EXTERNAL_LOCK_UPDATE: &str = "externalLockUpdate";
+    const EXTERNAL_LOCK_UPDATE: &str = "externalLockUpdate";
 }
 
 // ==================== 使用说明 ====================

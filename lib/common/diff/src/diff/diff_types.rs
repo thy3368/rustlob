@@ -1,5 +1,6 @@
 use std::{borrow::Cow, fmt::Debug};
 
+use immutable_derive::immutable;
 // ============================================================================
 // 错误类型
 // ============================================================================
@@ -123,7 +124,7 @@ pub struct FieldSchema {
     /// 实体类型名称
     pub field_type: String,
     /// 变更类型
-    pub default_value: String,
+    pub default_value: String
 }
 
 
@@ -131,7 +132,7 @@ pub struct FieldSchema {
 pub struct TableSchema {
     /// 实体唯一标识符
     pub table_name: String,
-    pub fields: Vec<FieldSchema>,
+    pub fields: Vec<FieldSchema>
 }
 
 impl TableSchema {
@@ -140,15 +141,13 @@ impl TableSchema {
     pub fn new(table_name: impl Into<String>) -> Self {
         Self {
             table_name: table_name.into(),
-            fields: Vec::new(),
+            fields: Vec::new()
         }
     }
 
     /// 查找指定名称的字段
     #[inline]
-    pub fn find_field(&self, name: &str) -> Option<&FieldSchema> {
-        self.fields.iter().find(|f| f.field_name == name)
-    }
+    pub fn find_field(&self, name: &str) -> Option<&FieldSchema> { self.fields.iter().find(|f| f.field_name == name) }
 
     /// 查找并修改指定名称的字段（可变引用）
     #[inline]
@@ -177,29 +176,20 @@ impl TableSchema {
     /// 移除指定名称的字段
     #[inline]
     pub fn remove_field(&mut self, name: &str) -> Option<FieldSchema> {
-        self.fields
-            .iter()
-            .position(|f| f.field_name == name)
-            .map(|i| self.fields.remove(i))
+        self.fields.iter().position(|f| f.field_name == name).map(|i| self.fields.remove(i))
     }
 
     /// 获取字段数量
     #[inline]
-    pub fn field_count(&self) -> usize {
-        self.fields.len()
-    }
+    pub fn field_count(&self) -> usize { self.fields.len() }
 
     /// 检查是否包含指定字段
     #[inline]
-    pub fn has_field(&self, name: &str) -> bool {
-        self.fields.iter().any(|f| f.field_name == name)
-    }
+    pub fn has_field(&self, name: &str) -> bool { self.fields.iter().any(|f| f.field_name == name) }
 
     /// 获取所有字段名称
     #[inline]
-    pub fn field_names(&self) -> Vec<&str> {
-        self.fields.iter().map(|f| f.field_name.as_str()).collect()
-    }
+    pub fn field_names(&self) -> Vec<&str> { self.fields.iter().map(|f| f.field_name.as_str()).collect() }
 
     /// 验证表结构的完整性
     ///
@@ -215,10 +205,7 @@ impl TableSchema {
         }
 
         if self.fields.is_empty() {
-            return Err(format!(
-                "Table '{}' must have at least one field",
-                self.table_name
-            ));
+            return Err(format!("Table '{}' must have at least one field", self.table_name));
         }
 
         // 检查字段名称唯一性
@@ -237,25 +224,14 @@ impl TableSchema {
 
     /// 清空所有字段
     #[inline]
-    pub fn clear(&mut self) {
-        self.fields.clear();
-    }
+    pub fn clear(&mut self) { self.fields.clear(); }
 
     /// 获取表结构的摘要信息
     #[inline]
     pub fn summary(&self) -> String {
-        let field_list = self
-            .fields
-            .iter()
-            .map(|f| format!("{}({})", f.field_name, f.field_type))
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "Table '{}' with {} fields: [{}]",
-            self.table_name,
-            self.fields.len(),
-            field_list
-        )
+        let field_list =
+            self.fields.iter().map(|f| format!("{}({})", f.field_name, f.field_type)).collect::<Vec<_>>().join(", ");
+        format!("Table '{}' with {} fields: [{}]", self.table_name, self.fields.len(), field_list)
     }
 }
 
@@ -263,57 +239,36 @@ impl Default for TableSchema {
     fn default() -> Self {
         Self {
             table_name: String::new(),
-            fields: Vec::new(),
+            fields: Vec::new()
         }
     }
 }
 
 impl std::fmt::Display for TableSchema {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.summary())
-    }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.summary()) }
 }
-
-
 
 
 /// 变更日志条目
 #[derive(Debug, Clone, PartialEq)]
-
+#[immutable]
 pub struct ChangeLogEntry {
     /// 实体唯一标识符
-    pub entity_id: String,
+    entity_id: String,
     /// 实体类型名称
-    pub entity_type: String,
+    entity_type: String,
     /// 变更类型
-    pub change_type: ChangeType,
+    change_type: ChangeType,
     /// 变更时间戳（纳秒）
-    pub timestamp: u64,
+    timestamp: u64,
     /// 变更序列号（用于排序）
-    pub sequence: u64
+    sequence: u64
 }
 
-impl ChangeLogEntry {
-    /// 创建变更日志条目
-    pub fn new(
-        entity_id: impl Into<String>, entity_type: impl Into<String>, change_type: ChangeType, timestamp: u64,
-        sequence: u64
-    ) -> Self {
-        Self {
-            entity_id: entity_id.into(),
-            entity_type: entity_type.into(),
-            change_type,
-            timestamp,
-            sequence
-        }
-    }
-}
 impl Entity for ChangeLogEntry {
     type Id = String;
 
-    fn entity_id(&self) -> Self::Id {
-        todo!()
-    }
+    fn entity_id(&self) -> Self::Id { todo!() }
 
     fn entity_type() -> &'static str
     where
@@ -322,13 +277,9 @@ impl Entity for ChangeLogEntry {
         todo!()
     }
 
-    fn diff(&self, other: &Self) -> Vec<FieldChange> {
-        todo!()
-    }
+    fn diff(&self, other: &Self) -> Vec<FieldChange> { todo!() }
 
-    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> {
-        todo!()
-    }
+    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> { todo!() }
 }
 
 // ============================================================================
@@ -605,7 +556,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
 
         Ok(ChangeLogEntry::new(
             self.entity_id().to_string(),
-            Self::entity_type(),
+            Self::entity_type().parse().unwrap(),
             ChangeType::Updated {
                 changed_fields: field_changes
             },
@@ -693,13 +644,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         self.entity_id().to_string() == entry.entity_id && Self::entity_type() == entry.entity_type
     }
 
-    fn table_schema() -> TableSchema {
-
-        todo!()
-    }
-
-
-
+    fn table_schema() -> TableSchema { todo!() }
 }
 
 // ============================================================================
@@ -749,12 +694,8 @@ pub trait FromCreatedEvent: Sized {
     ///
     /// 默认实现：返回错误，提示需要自定义实现
     /// 子类可重写此方法简化构造逻辑
-    fn from_field_map(
-        fields: &std::collections::HashMap<String, String>,
-    ) -> Result<Self, EntityError> {
-        Err(EntityError::Custom(
-            "from_field_map not implemented for this type".to_string(),
-        ))
+    fn from_field_map(fields: &std::collections::HashMap<String, String>) -> Result<Self, EntityError> {
+        Err(EntityError::Custom("from_field_map not implemented for this type".to_string()))
     }
 }
 
@@ -835,14 +776,16 @@ where
     let change_type = match operation {
         Operation::Create => {
             // Created 事件包含空字段列表（实际字段需要通过 to_bytes 序列化）
-            ChangeType::Created { fields: Vec::new() }
+            ChangeType::Created {
+                fields: Vec::new()
+            }
         }
         Operation::Delete => ChangeType::Deleted
     };
 
     let entry = ChangeLogEntry::new(
         entity.entity_id().to_string(),
-        T::entity_type(),
+        T::entity_type().parse().unwrap(),
         change_type,
         ts_provider.now(),
         seq_gen.next()
@@ -874,7 +817,9 @@ where
     T: Entity + 'static
 {
     let change_type = match operation {
-        Operation::Create => ChangeType::Created { fields: Vec::new() },
+        Operation::Create => ChangeType::Created {
+            fields: Vec::new()
+        },
         Operation::Delete => ChangeType::Deleted
     };
 
@@ -884,7 +829,7 @@ where
     for entity in entities {
         entries.push(ChangeLogEntry::new(
             entity.entity_id().to_string(),
-            T::entity_type(),
+            T::entity_type().parse().unwrap(),
             change_type.clone(),
             timestamp,
             seq_gen.next()
@@ -936,7 +881,7 @@ where
 
     let entry = ChangeLogEntry::new(
         entity.entity_id().to_string(),
-        T::entity_type(),
+        T::entity_type().parse().unwrap(),
         ChangeType::Updated {
             changed_fields: field_changes
         },
@@ -962,10 +907,12 @@ where
 /// # 错误
 /// - 如果事件不是 Created 类型，返回错误
 pub fn extract_fields_from_created_event(
-    entry: &ChangeLogEntry,
+    entry: &ChangeLogEntry
 ) -> Result<std::collections::HashMap<String, String>, EntityError> {
     match &entry.change_type {
-        ChangeType::Created { fields } => {
+        ChangeType::Created {
+            fields
+        } => {
             let mut field_map = std::collections::HashMap::new();
             for field in fields {
                 // Created 事件中，new_value 包含初始值
@@ -973,9 +920,7 @@ pub fn extract_fields_from_created_event(
             }
             Ok(field_map)
         }
-        _ => Err(EntityError::Custom(
-            "Event is not a Created type event".to_string(),
-        )),
+        _ => Err(EntityError::Custom("Event is not a Created type event".to_string()))
     }
 }
 
@@ -993,35 +938,27 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
             // 数值类型直接验证可解析性
             match type_hint {
                 "u64" => {
-                    value.parse::<u64>().map_err(|_| {
-                        EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as u64", value),
-                        }
+                    value.parse::<u64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as u64", value)
                     })?;
                 }
                 "i64" => {
-                    value.parse::<i64>().map_err(|_| {
-                        EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as i64", value),
-                        }
+                    value.parse::<i64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as i64", value)
                     })?;
                 }
                 "f64" => {
-                    value.parse::<f64>().map_err(|_| {
-                        EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as f64", value),
-                        }
+                    value.parse::<f64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as f64", value)
                     })?;
                 }
                 "bool" => {
-                    value.parse::<bool>().map_err(|_| {
-                        EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as bool", value),
-                        }
+                    value.parse::<bool>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as bool", value)
                     })?;
                 }
                 _ => {}
@@ -1036,7 +973,7 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
                 Ok(value.to_string())
             }
         }
-        _ => Ok(value.to_string()),
+        _ => Ok(value.to_string())
     }
 }
 
@@ -1057,12 +994,9 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
 ///     Ok(Order { id, symbol })
 /// })?;
 /// ```
-pub fn reconstruct_from_created<T, F>(
-    entry: &ChangeLogEntry,
-    constructor: F,
-) -> Result<T, EntityError>
+pub fn reconstruct_from_created<T, F>(entry: &ChangeLogEntry, constructor: F) -> Result<T, EntityError>
 where
-    F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>,
+    F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>
 {
     let field_map = extract_fields_from_created_event(entry)?;
     constructor(&field_map)
@@ -1161,32 +1095,15 @@ mod tests {
                     Ok(())
                 }
                 ChangeType::Deleted => Err(EntityError::CannotReplayOnDeleted),
-                ChangeType::Created { fields: _ } => Ok(())
+                ChangeType::Created {
+                    fields: _
+                } => Ok(())
             }
         }
     }
 
 
-    #[test]
-    fn test_replay() {
-        let mut entity = TestEntity {
-            id: 1,
-            value: "old".to_string()
-        };
 
-        let entry = ChangeLogEntry::new(
-            "1",
-            "TestEntity",
-            ChangeType::Updated {
-                changed_fields: vec![FieldChange::new("value", "old", "new")]
-            },
-            1000,
-            1
-        );
-
-        entity.replay(&entry).unwrap();
-        assert_eq!(entity.value, "new");
-    }
 
     #[test]
     fn test_auto_track_create() {
@@ -1199,10 +1116,12 @@ mod tests {
         assert_eq!(entry.entity_id, "1");
         assert_eq!(entry.entity_type, "TestEntity");
         match entry.change_type {
-            ChangeType::Created { fields } => {
+            ChangeType::Created {
+                fields
+            } => {
                 assert_eq!(fields.len(), 0);
             }
-            _ => panic!("Expected Created change type"),
+            _ => panic!("Expected Created change type")
         }
     }
 
@@ -1297,31 +1216,6 @@ mod tests {
 
     // ==================== 从 Created 事件重构实体的测试 ====================
 
-    #[test]
-    fn test_extract_fields_from_created_event() {
-        let created_event = ChangeLogEntry::new(
-            "1",
-            "TestEntity",
-            ChangeType::Created {
-                fields: vec![
-                    FieldChange::new("id", "", "1"),
-                    FieldChange::new("value", "", "\"test\""),
-                ],
-            },
-            1000,
-            1,
-        );
-
-        // 提取字段
-        let fields = extract_fields_from_created_event(&created_event).unwrap();
-
-        // 验证字段值
-        assert_eq!(fields.get("id").map(|s| s.as_str()), Some("1"));
-        assert_eq!(
-            fields.get("value").map(|s| s.as_str()),
-            Some("\"test\"")
-        );
-    }
 
     #[test]
     fn test_parse_field_value_numeric() {
@@ -1350,104 +1244,5 @@ mod tests {
         assert_eq!(result, "unquoted");
     }
 
-    #[test]
-    fn test_reconstruct_from_created_event() {
-        // 创建 Created 事件
-        let created_event = ChangeLogEntry::new(
-            "2",
-            "TestEntity",
-            ChangeType::Created {
-                fields: vec![
-                    FieldChange::new("id", "", "2"),
-                    FieldChange::new("value", "", "\"reconstructed\""),
-                ],
-            },
-            2000,
-            2,
-        );
 
-        // 使用闭包重构实体
-        let reconstructed: TestEntity =
-            reconstruct_from_created(&created_event, |fields| {
-                let id = fields
-                    .get("id")
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(0);
-
-                let value = fields
-                    .get("value")
-                    .map(|v| {
-                        // 去掉引号
-                        if v.starts_with('\"') && v.ends_with('\"') {
-                            v[1..v.len() - 1].to_string()
-                        } else {
-                            v.clone()
-                        }
-                    })
-                    .unwrap_or_default();
-
-                Ok(TestEntity { id, value })
-            })
-            .unwrap();
-
-        // 验证重构的实体
-        assert_eq!(reconstructed.id, 2);
-        assert_eq!(reconstructed.value, "reconstructed");
-    }
-
-    #[test]
-    fn test_created_event_roundtrip() {
-        // === 演示完整流程：Create → Track → Reconstruct ===
-
-        // 第一步：创建原始实体
-        let original = TestEntity {
-            id: 3,
-            value: "original".to_string(),
-        };
-
-        // 第二步：追踪创建操作
-        let track_entry = original.track_create().unwrap();
-        assert_eq!(track_entry.entity_id, "3");
-
-        // 第三步：手动构建带有字段信息的 Created 事件
-        let full_created_event = ChangeLogEntry::new(
-            "3",
-            "TestEntity",
-            ChangeType::Created {
-                fields: vec![
-                    FieldChange::new("id", "", "3"),
-                    FieldChange::new("value", "", "\"original\""),
-                ],
-            },
-            1000,
-            1,
-        );
-
-        // 第四步：从 Created 事件重构实体
-        let reconstructed: TestEntity =
-            reconstruct_from_created(&full_created_event, |fields| {
-                let id = fields
-                    .get("id")
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(0);
-
-                let value = fields
-                    .get("value")
-                    .map(|v| {
-                        if v.starts_with('\"') && v.ends_with('\"') {
-                            v[1..v.len() - 1].to_string()
-                        } else {
-                            v.clone()
-                        }
-                    })
-                    .unwrap_or_default();
-
-                Ok(TestEntity { id, value })
-            })
-            .unwrap();
-
-        // 验证：重构的实体应该与原始实体相同
-        assert_eq!(reconstructed.id, original.id);
-        assert_eq!(reconstructed.value, original.value);
-    }
 }

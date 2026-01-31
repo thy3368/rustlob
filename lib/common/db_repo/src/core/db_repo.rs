@@ -211,7 +211,7 @@ impl<T: fmt::Display> fmt::Display for PageResult<T> {
 /// - 快照支持：通过 RepoSnapshot trait 实现
 /// - 事件回放：通过 EventReplay trait 实现
 /// - 批量操作：支持高效的批量操作
-pub trait CmdRepo {
+pub trait CmdRepo: Send + Sync {
     /// 仓储中存储的实体类型
     type E: Entity;
     /// 从事件日志中回放单个事件
@@ -386,7 +386,7 @@ pub trait CmdRepo {
 /// - 接口隐藏实现细节：调用方无需关心数据存储位置
 /// - 可测试性优先：支持 mock 实现用于单元测试
 /// - 单一职责：分离返回单条和多条数据的方法
-pub trait QueryRepo {
+pub trait QueryRepo:Send + Sync {
     /// 仓储中存储的实体类型
     type E: Entity;
 

@@ -308,6 +308,7 @@ dependencies = [
  "derivatives_behavior",
  "futures",
  "id_generator",
+ "immutable_derive",
  "lob_repo",
  "mysql 27.0.0",
  "reqwest 0.13.1",
@@ -359,6 +360,8 @@ dependencies = [
  "decimal",
  "diff",
  "entity_derive",
+ "immutable_derive",
+ "sealed",
  "serde",
 ]
 
@@ -1118,6 +1121,7 @@ dependencies = [
  "base_types",
  "diff",
  "entity_derive",
+ "immutable_derive",
  "mysql 24.0.0",
  "serde_json",
 ]
@@ -1212,6 +1216,9 @@ dependencies = [
 [[package]]
 name = "diff"
 version = "0.1.0"
+dependencies = [
+ "immutable_derive",
+]
 
 [[package]]
 name = "digest"
@@ -2093,6 +2100,15 @@ checksum = "3acae9609540aa318d1bc588455225fb2085b9ed0c4f6bd0d9d5bcd86f1a0344"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "immutable_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
 ]
 
 [[package]]
@@ -4274,6 +4290,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
+name = "sealed"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f968c5ea23d555e670b449c1c5e7b2fc399fdaec1d304a17cd48e288abc107"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4572,6 +4599,7 @@ dependencies = [
  "diff",
  "entity_derive",
  "id_generator",
+ "immutable_derive",
  "lob_repo",
  "log",
  "once_cell",

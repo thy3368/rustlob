@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use diff::ChangeLogEntry;
+use immutable_derive::immutable;
 
 use crate::{
     core::queue_repo::{ChangeLogQueueRepo, RecordMetadata},
@@ -8,7 +9,8 @@ use crate::{
 };
 
 // 线程间通道
-pub struct ChangeLogChannelQueueRepo;
+#[immutable]
+pub struct ChangeLogChannelQueueRepo {}
 
 impl ChangeLogChannelQueueRepo {
     pub fn new() -> Self { todo!() }
@@ -25,7 +27,9 @@ impl ChangeLogQueueRepo for ChangeLogChannelQueueRepo {
 
 
 // kafka
-pub struct ChangeLogKafkaQueueRepo;
+
+#[immutable]
+pub struct ChangeLogKafkaQueueRepo {}
 impl ChangeLogQueueRepo for ChangeLogKafkaQueueRepo {
     fn send(&self, event: &ChangeLogEntry) -> Result<RecordMetadata, RepoError> { todo!() }
 
@@ -36,7 +40,8 @@ impl ChangeLogQueueRepo for ChangeLogKafkaQueueRepo {
 
 
 // 组播
-pub struct ChangeLogMultiCaseQueueRepo;
+#[immutable]
+pub struct ChangeLogMultiCaseQueueRepo {}
 
 impl ChangeLogQueueRepo for ChangeLogMultiCaseQueueRepo {
     fn send(&self, event: &ChangeLogEntry) -> Result<RecordMetadata, RepoError> { todo!() }

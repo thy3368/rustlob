@@ -43,6 +43,9 @@ impl Default for PositionSide {
 // 持仓信息结构体
 // ============================================================================
 
+//todo fix "entity_derive::Entity" 报钷 "field `change_type` of struct `ChangeLogEntry` is private [E0616]
+//
+// field `entity_id` of struct `ChangeLogEntry` is private [E0616]"
 /// 持仓信息
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "position_id")]
