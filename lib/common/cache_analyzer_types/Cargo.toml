@@ -1,0 +1,9 @@
+[package]
+name = "cache_analyzer_types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full"] }
