@@ -1,4 +1,12 @@
-use base_types::{account::balance::Balance, exchange::spot::spot_types::{SpotOrder, SpotTrade}, handler::handler::Handler, Timestamp};
+use base_types::{
+    account::balance::Balance,
+    base_types::TraderId,
+    exchange::spot::spot_types::{
+        ConditionalType, ExecutionMethod, MakerConstraint, OrderType, SpotOrder, SpotTrade, TimeInForce
+    },
+    handler::handler::Handler,
+    AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair
+};
 use db_repo::{
     adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo,
     MySqlDbRepo
@@ -6,21 +14,152 @@ use db_repo::{
 use diff::ChangeLogEntry;
 use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
+use rand::Rng;
 
 use crate::proc::behavior::{
     spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::{
         spot_market_data_sse_behavior::SpotMarketDataStreamAny,
-        spot_trade_behavior_v2::{NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
+        spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
         spot_user_data_sse_behavior::UserDataStreamEventAny
     }
 };
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderAck;
 
-use rand::Rng;
-use base_types::{OrderId, AccountId, TradingPair, AssetId, Price, Quantity, OrderSide};
-use base_types::base_types::TraderId;
-use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
+
+// 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
+impl From<NewOrderCmd> for SpotOrder {
+    #[inline(always)]
+    fn from(cmd: NewOrderCmd) -> Self {
+        // 生成订单ID（使用时间戳+随机数，实际应该使用更robust的生成方式）
+        let order_id = OrderId::from((cmd.timestamp as u64) << 32 | (rand::random::<u32>() as u64));
+        let trader_id = TraderId::default(); // TODO: 从 metadata 中获取真实的 trader_id
+        let account_id = AccountId(1); // TODO: 从 metadata 中获取真实的 account_id
+        let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
+
+        match cmd.order_type() {
+            OrderType::Limit => {
+                // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
+                SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(cmd.price().unwrap_or(0.0)),
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
+                    *cmd.new_client_order_id()
+                )
+            }
+            OrderType::Market => {
+                // 市价单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(0.0), // 市价单价格为0
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    TimeInForce::IOC, // 市价单默认IOC
+                    *cmd.new_client_order_id()
+                );
+                order.execution_method = ExecutionMethod::Market;
+                order.price = None; // 市价单价格为None
+                order
+            }
+            OrderType::StopLoss => {
+                // 止损单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(0.0), // 市价止损
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    TimeInForce::IOC,
+                    *cmd.new_client_order_id()
+                );
+                order.conditional_type = ConditionalType::StopLoss;
+                order.stop_price = cmd.stop_price().map(Price::from_f64);
+                order.execution_method = ExecutionMethod::Market;
+                order.price = None;
+                order
+            }
+            OrderType::StopLossLimit => {
+                // 止损限价单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(cmd.price().unwrap_or(0.0)),
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
+                    *cmd.new_client_order_id()
+                );
+                order.conditional_type = ConditionalType::StopLoss;
+                order.stop_price = cmd.stop_price().map(Price::from_f64);
+                order
+            }
+            OrderType::TakeProfit => {
+                // 止盈单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(0.0), // 市价止盈
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    TimeInForce::IOC,
+                    *cmd.new_client_order_id()
+                );
+                order.conditional_type = ConditionalType::TakeProfit;
+                order.stop_price = cmd.stop_price().map(Price::from_f64);
+                order.execution_method = ExecutionMethod::Market;
+                order.price = None;
+                order
+            }
+            OrderType::TakeProfitLimit => {
+                // 止盈限价单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(cmd.price().unwrap_or(0.0)),
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
+                    *cmd.new_client_order_id()
+                );
+                order.conditional_type = ConditionalType::TakeProfit;
+                order.stop_price = cmd.stop_price().map(Price::from_f64);
+                order
+            }
+            OrderType::LimitMaker => {
+                // 限价只挂单
+                let mut order = SpotOrder::create_limit(
+                    order_id,
+                    trader_id,
+                    account_id,
+                    trading_pair,
+                    *cmd.side(),
+                    Price::from_f64(cmd.price().unwrap_or(0.0)),
+                    Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                    TimeInForce::GTX, // GTX = PostOnly
+                    *cmd.new_client_order_id()
+                );
+                order.maker_constraint = MakerConstraint::PostOnly;
+                order
+            }
+        }
+    }
+}
+
 
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
@@ -53,43 +192,24 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
 
         // 根据 NewOrderCmd 创建 SpotOrder
-        let mut internal_order = match cmd.order_type() {
-            OrderType::Limit => SpotOrder::create_limit(
-                order_id,
-                trader_id,
-                account_id,
-                trading_pair,
-                *cmd.side(),
-                Price::from_f64(cmd.price().unwrap_or(0.0)),
-                Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
-                cmd.time_in_force().unwrap(),
-                *cmd.new_client_order_id(),
-            ),
-            OrderType::Market => {
-                // 市价单处理
-                todo!("Market order type not implemented yet")
-            }
+        let mut internal_order = SpotOrder::from(cmd);
 
-            OrderType::StopLoss => {
-                todo!("Stop order type not implemented yet")
-            }
-            OrderType::StopLossLimit => {
-                todo!("Stop order type not implemented yet")
+        match internal_order.side {
+            OrderSide::Buy => {}
+            OrderSide::Sell => {}
+        }
+        // 根据买卖方向冻结相应的余额
+        let now = *cmd.timestamp() as u64;
+        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
+        let mut frozen_asset_balance =
+            self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
-            }
-            OrderType::TakeProfit => {
-                todo!("Stop order type not implemented yet")
+        // 冻结余额
+        internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 
-            }
-            OrderType::TakeProfitLimit => {
-                todo!("Stop order type not implemented yet")
-
-            }
-            OrderType::LimitMaker => {
-                todo!("Stop order type not implemented yet")
-
-            }
-        };
+        // TODO: 生成新增/账户冻结 eventlog
+        // TODO: 发送eventlog到消息队列，行情对外发布消息
+        // TODO: 在db中回放eventlog
 
         match internal_order.time_in_force {
             TimeInForce::GTC => {}
@@ -99,25 +219,9 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             TimeInForce::GTD => {}
         }
 
-        match internal_order.side{
-            OrderSide::Buy => {}
-            OrderSide::Sell => {}
-        }
-        // 根据买卖方向冻结相应的余额
-        let now = *cmd.timestamp() as u64;
-        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
-        let mut frozen_asset_balance = self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
-
-        // 冻结余额
-        internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
-
-        // TODO: 生成新增/账户冻结 eventlog
-        // TODO: 发送eventlog到消息队列，行情对外发布消息
-        // TODO: 在db中回放eventlog
-
         // 生成 NewOrderAck 响应
         let ack = NewOrderAck::new(
-            cmd.symbol().to_string(),
+            *cmd.symbol(),
             order_id as i64,
             -1, // 不属于任何订单列表
             (*cmd.new_client_order_id().unwrap()).parse().unwrap(),
@@ -172,7 +276,6 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         Ok(ack_result)
     }
 }
-
 
 
 impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny>
