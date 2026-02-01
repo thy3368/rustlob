@@ -4,6 +4,7 @@ use std::fmt;
 
 use entity_derive::Entity;
 use crate::{AccountId, AssetId, Price, Quantity, Timestamp};
+use crate::exchange::spot::spot_types::SpotOrder;
 
 /// 余额ID（复合键：account_id:asset_id）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -62,6 +63,8 @@ pub struct Balance {
     /// 最后更新时间
     pub updated_at: Timestamp
 }
+
+
 
 impl Balance {
     /// 创建新余额记录

@@ -25,6 +25,31 @@ use crate::proc::behavior::{
     }
 };
 
+pub trait Action<T>{
+     fn frozen_margin_4(&self, p0: T);
+}
+impl Action<SpotOrder> for Balance {
+     fn frozen_margin_4(&self, order: SpotOrder) {
+
+         match order.side {
+             OrderSide::Buy => {
+                 // 冻结，失败则reject
+                 self.frozen_qty = self.total_qty * self.price.unwrap();
+                 self.frozen_asset = self.trading_pair.quote_asset();
+                 balance.frozen(self.frozen_qty, now);
+             }
+             OrderSide::Sell => {
+                 self.frozen_qty = self.total_qty;
+                 self.frozen_asset = self.trading_pair.base_asset();
+                 balance.frozen(self.frozen_qty, now);
+             }
+         };
+         
+         
+        todo!()
+    }
+}
+
 
 // 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
 impl From<NewOrderCmd> for SpotOrder {
@@ -186,10 +211,6 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
     /// 订单预处理 - 负责创建订单、冻结余额和生成事件
     fn pre_process(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
-        let order_id = OrderId::from((*cmd.timestamp() as u64) << 32 | (rand::random::<u32>() as u64));
-        let trader_id = TraderId::default(); //  TODO: 从 metadata 中获取真实的 trader_id
-        let account_id = AccountId(1); //  TODO: 从 metadata 中获取真实的 account_id
-        let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
 
         // 根据 NewOrderCmd 创建 SpotOrder
         let mut internal_order = SpotOrder::from(cmd);
@@ -204,6 +225,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let mut frozen_asset_balance =
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
+        frozen_asset_balance.frozen_margin_4(internal_order);
         // 冻结余额
         internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 
