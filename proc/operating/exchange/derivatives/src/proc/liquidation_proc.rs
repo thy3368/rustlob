@@ -63,14 +63,14 @@ impl LiquidationProcessor {
     ) -> Result<LiquidationResult, PrepCmdError> {
         // 确定平仓方向（与持仓方向相反）
         let liquidation_side = match position.position_side {
-            PositionSide::Long => Side::Sell,
-            PositionSide::Short => Side::Buy,
+            PositionSide::Long => OrderSide::Sell,
+            PositionSide::Short => OrderSide::Buy,
             PositionSide::Both => {
                 // 单向持仓模式，根据数量判断方向
                 if position.quantity.raw() > 0 {
-                    Side::Sell
+                    OrderSide::Sell
                 } else {
-                    Side::Buy
+                    OrderSide::Buy
                 }
             }
         };
@@ -118,7 +118,7 @@ impl LiquidationProcessor {
 
     /// 尝试市场强平
     async fn try_market_liquidation(
-        &self, position: &PrepPosition, side: Side
+        &self, position: &PrepPosition, side: OrderSide
     ) -> Result<LiquidationResult, PrepCmdError> {
         // 提交紧急市价单
         let order_cmd = OpenPositionCmd {
@@ -128,8 +128,8 @@ impl LiquidationProcessor {
             quantity: position.quantity,
             price: None,
             position_side: match side {
-                Side::Buy => PositionSide::Long,
-                Side::Sell => PositionSide::Short
+                OrderSide::Buy => PositionSide::Long,
+                OrderSide::Sell => PositionSide::Short
             },
             time_in_force: TimeInForce::IOC, // 立即成交或取消
             leverage: position.leverage
@@ -173,7 +173,7 @@ impl LiquidationProcessor {
 
     /// 触发自动减仓
     async fn trigger_auto_deleveraging(
-        &self, position: &PrepPosition, side: Side
+        &self, position: &PrepPosition, side: OrderSide
     ) -> Result<LiquidationResult, PrepCmdError> {
         // 查找对手方盈利仓位（按ADL队列优先级）
         let counterparties = self.adl_engine.find_counterparties(position.trading_pair, side).await?;

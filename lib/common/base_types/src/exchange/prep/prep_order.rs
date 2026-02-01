@@ -1,5 +1,5 @@
 use crate::account::balance::Balance;
-use crate::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, Side, Timestamp, TradeId, TradingPair};
+use crate::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair};
 use crate::lob::lob::LobOrder;
 
 /// 订单类型
@@ -78,7 +78,7 @@ pub struct PrepOrder {
     /// 账户ID（固定账户）
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
-    pub side: Side,
+    pub side: OrderSide,
     pub order_type: OrderType,
     pub quantity: Quantity,
     pub price: Option<Price>,
@@ -105,7 +105,7 @@ impl PrepOrder {
 
 
     pub fn pending(
-        order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: Side, order_type: OrderType,
+        order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: OrderSide, order_type: OrderType,
         quantity: Quantity, price: Option<Price>, leverage: u8
     ) -> PrepOrder {
         let mut internal_order = PrepOrder {
@@ -167,8 +167,8 @@ impl PrepOrder {
 
     pub fn filled_qty(&mut self, balance: &mut Balance, match_p: &mut PrepPosition, qty: i64, now: Timestamp) -> f64 {
         match self.side {
-            Side::Buy => {}
-            Side::Sell => {}
+            OrderSide::Buy => {}
+            OrderSide::Sell => {}
         }
 
         self.filled_quantity = Quantity::from_raw(self.filled_quantity.raw() + qty);
@@ -250,7 +250,7 @@ impl LobOrder for PrepOrder {
 
     fn filled_quantity(&self) -> Quantity { self.filled_quantity }
 
-    fn side(&self) -> crate::Side { self.side }
+    fn side(&self) -> crate::OrderSide { self.side }
 
     fn symbol(&self) -> TradingPair { self.trading_pair }
 }

@@ -4,7 +4,7 @@ use crate::proc::behavior::spot_trade_behavior::{
 };
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
@@ -81,8 +81,8 @@ impl SpotTradeBehaviorImpl {
         let base_asset_balance_id =
             format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
 
-        let mut frozen_asset_balance = self.balance_repo.find_by_id(&frozen_asset_balance_id).ok().unwrap().unwrap();
-        let mut base_asset_balance = self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
+        let mut frozen_asset_balance = self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).ok().unwrap().unwrap();
+        let mut base_asset_balance = self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
 
         internal_order.frozen_margin(&mut frozen_asset_balance, now);
 
@@ -118,9 +118,9 @@ impl SpotTradeBehaviorImpl {
                     let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
                     let mut o_quote_asset_balance =
-                        self.balance_repo.find_by_id(&quote_asset_balance_id).ok().unwrap().unwrap();
+                        self.balance_repo.find_by_id_4_update(&quote_asset_balance_id).ok().unwrap().unwrap();
                     let mut o_base_asset_balance =
-                        self.balance_repo.find_by_id(&base_asset_balance_id).ok().unwrap().unwrap();
+                        self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
 
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
@@ -232,7 +232,7 @@ mod tests {
             trader_id,                      // trader
             account_id,                     // account_id
             trading_pair,                   // trading_pair
-            Side::Buy,                      // Buy order
+            OrderSide::Buy,                      // Buy order
             price,                          // price
             quantity,                       // quantity
             TimeInForce::GTC,               // GTC: Good Till Cancel
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(order.account_id, account_id, "账户ID应为100");
 
         // 4. 验证订单方向和价格
-        assert_eq!(order.side, Side::Buy, "订单方向应为Buy");
+        assert_eq!(order.side, OrderSide::Buy, "订单方向应为Buy");
         assert_eq!(order.price, Some(price), "订单价格应为10000 USDT");
         assert_eq!(order.total_qty, quantity, "订单数量应为1.00 BTC");
 

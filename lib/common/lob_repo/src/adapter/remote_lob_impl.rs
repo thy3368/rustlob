@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
 use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
@@ -25,7 +25,7 @@ impl<O: LobOrder> RemoteLob<O> {
 impl<O: LobOrder> SymbolLob for RemoteLob<O> {
     type Order = O;
 
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
+    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
         todo!()
     }
 

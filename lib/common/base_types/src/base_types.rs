@@ -188,25 +188,25 @@ pub type OrderId = u64;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Side {
+pub enum OrderSide {
     Buy = 0,
     Sell = 1
 }
 
-impl Side {
+impl OrderSide {
     /// 获取相反方向
     #[inline]
-    pub fn opposite(&self) -> Side {
+    pub fn opposite(&self) -> OrderSide {
         match self {
-            Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy
+            OrderSide::Buy => OrderSide::Sell,
+            OrderSide::Sell => OrderSide::Buy
         }
     }
 }
 
-impl Default for Side {
+impl Default for OrderSide {
     fn default() -> Self {
-        Side::Buy
+        OrderSide::Buy
     }
 }
 

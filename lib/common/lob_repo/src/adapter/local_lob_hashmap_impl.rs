@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
 use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
@@ -149,39 +149,39 @@ impl<O: LobOrder> LocalLobHashMap<O> {
     }
 
     /// 获取价格点的可变引用
-    fn get_price_point_mut(&mut self, price: Price, side: Side) -> Option<&mut PricePoint> {
+    fn get_price_point_mut(&mut self, price: Price, side: OrderSide) -> Option<&mut PricePoint> {
         let tick = self.price_to_tick(price)?;
         match side {
-            Side::Buy => self.bids.get_mut(&tick),
-            Side::Sell => self.asks.get_mut(&tick),
+            OrderSide::Buy => self.bids.get_mut(&tick),
+            OrderSide::Sell => self.asks.get_mut(&tick),
         }
     }
 
     /// 获取价格点的不可变引用
-    fn get_price_point(&self, price: Price, side: Side) -> Option<&PricePoint> {
+    fn get_price_point(&self, price: Price, side: OrderSide) -> Option<&PricePoint> {
         let tick = self.price_to_tick(price)?;
         match side {
-            Side::Buy => self.bids.get(&tick),
-            Side::Sell => self.asks.get(&tick),
+            OrderSide::Buy => self.bids.get(&tick),
+            OrderSide::Sell => self.asks.get(&tick),
         }
     }
 
     /// 获取指定价格级别的第一个订单索引
     #[inline]
-    fn get_first_order_at_price(&self, price: Price, side: Side) -> Option<usize> {
+    fn get_first_order_at_price(&self, price: Price, side: OrderSide) -> Option<usize> {
         self.get_price_point(price, side).and_then(|pp| pp.first_order_idx)
     }
 
     /// 将订单链接到价格级别的链表尾部
-    fn link_order_to_price_level(&mut self, idx: usize, price: Price, side: Side) {
+    fn link_order_to_price_level(&mut self, idx: usize, price: Price, side: OrderSide) {
         let tick = match self.price_to_tick(price) {
             Some(t) => t,
             None => return,
         };
 
         let price_map = match side {
-            Side::Buy => &mut self.bids,
-            Side::Sell => &mut self.asks,
+            OrderSide::Buy => &mut self.bids,
+            OrderSide::Sell => &mut self.asks,
         };
 
         // 获取或创建价格点
@@ -203,14 +203,14 @@ impl<O: LobOrder> LocalLobHashMap<O> {
 
     /// 更新最佳买卖价缓存
     #[inline]
-    fn update_best_price(&mut self, price: Price, side: Side) {
+    fn update_best_price(&mut self, price: Price, side: OrderSide) {
         match side {
-            Side::Buy => {
+            OrderSide::Buy => {
                 if self.bid_max.map_or(true, |max| price > max) {
                     self.bid_max = Some(price);
                 }
             }
-            Side::Sell => {
+            OrderSide::Sell => {
                 if self.ask_min.map_or(true, |min| price < min) {
                     self.ask_min = Some(price);
                 }
@@ -229,14 +229,14 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
     /// # 算法
     /// - 买单：从最低卖价开始匹配（价格优先，时间优先）
     /// - 卖单：从最高买价开始匹配（价格优先，时间优先）
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
+    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
         let opposite_side = side.opposite();
 
         match side {
-            Side::Buy => {
+            OrderSide::Buy => {
                 // 买单：从最低卖价开始匹配
                 if let Some(ask_min) = self.ask_min {
                     if price < ask_min {
@@ -286,7 +286,7 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                     }
                 }
             }
-            Side::Sell => {
+            OrderSide::Sell => {
                 // 卖单：从最高买价开始匹配
                 if let Some(bid_max) = self.bid_max {
                     if price > bid_max {

@@ -6,7 +6,7 @@ use crate::{
     core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob},
 };
 use base_types::lob::lob::LobOrder;
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 
 /// 单一 LOB 仓储
 ///
@@ -46,7 +46,7 @@ impl<O: LobOrder> EmbeddedLobRepo<O> {
     /// - `Some(Vec<&O>)`: 匹配到的订单列表
     /// - `None`: 找不到对应的 LOB 或无法匹配
     #[allow(dead_code)]
-    pub fn match_orders(&self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
+    pub fn match_orders(&self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&O>> {
         // 使用 trait 方法
         MultiSymbolLobRepo::match_orders(self, symbol, side, price, quantity)
     }
@@ -57,7 +57,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
     type Order = O;
 
     fn match_orders(
-        &self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity,
+        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity,
     ) -> Option<Vec<&Self::Order>> {
         // O(1) 查找对应的 LOB
         let lob = self.lobs.get(&symbol)?;
@@ -119,7 +119,7 @@ mod tests {
         filled_quantity: Quantity,
         #[replay(skip)]
         #[created(skip)]
-        side: Side,
+        side: OrderSide,
     }
 
     impl LobOrder for MockOrder {
@@ -139,7 +139,7 @@ mod tests {
             self.filled_quantity
         }
 
-        fn side(&self) -> Side {
+        fn side(&self) -> OrderSide {
             self.side
         }
 

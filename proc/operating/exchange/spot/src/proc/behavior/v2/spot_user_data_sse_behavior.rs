@@ -321,16 +321,16 @@ pub struct ExternalLockUpdateEvent {
 
 // ==================== 枚举类型定义 ====================
 
-/// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
-pub enum OrderSide {
-    /// 买入
-    BUY,
-    /// 卖出
-    SELL
-}
+// /// 订单方向
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// 
+// pub enum OrderSide {
+//     /// 买入
+//     BUY,
+//     /// 卖出
+//     SELL
+// }
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

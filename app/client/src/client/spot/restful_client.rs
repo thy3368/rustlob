@@ -79,7 +79,7 @@ impl SpotTradeBehavior for RestfulClient {
 mod tests {
     use super::*;
     use base_types::exchange::spot::spot_types::{TimeInForce, TraderId};
-    use base_types::{AccountId, AssetId, Decimal, Side, TradingPair};
+    use base_types::{AccountId, AssetId, Decimal, OrderSide, TradingPair};
     use spot_behavior::proc::behavior::spot_trade_behavior::CMetadata;
 
     #[test]
@@ -99,7 +99,7 @@ mod tests {
             trader: TraderId::new([0, 0, 0, 0, 0, 0, 0, 100]),
             account_id: AccountId(1),
             trading_pair: TradingPair::new(AssetId::BTC, AssetId::USDT),
-            side: Side::Buy,
+            side: OrderSide::Buy,
             price: Decimal::from_f64(50000.0),
             quantity: Decimal::from_f64(1.0),
             time_in_force: TimeInForce::GTC,

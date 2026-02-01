@@ -37,7 +37,7 @@
 
 use std::fmt;
 use base_types::mark_data::spot::level_types::{BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber, SymbolId, TradeEvent};
-use base_types::{OrderId, Quantity, Side};
+use base_types::{OrderId, Quantity, OrderSide};
 // use lob::lob::*;
 // use base_types::mark_data::spot::level_types::{
 //     BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber,
@@ -107,7 +107,7 @@ pub enum MarketDataQueryError {
         /// 交易对ID
         symbol_id: SymbolId,
         /// 买卖方向
-        side: Side,
+        side: OrderSide,
         /// 请求数量
         requested: Quantity,
         /// 可用数量
@@ -239,7 +239,7 @@ impl MarketDataQueryError {
 
     /// 创建流动性不足错误
     #[inline]
-    pub fn insufficient_liquidity(symbol_id: SymbolId, side: Side, requested: Quantity, available: Quantity) -> Self {
+    pub fn insufficient_liquidity(symbol_id: SymbolId, side: OrderSide, requested: Quantity, available: Quantity) -> Self {
         Self::InsufficientLiquidity {
             symbol_id,
             side,
@@ -1102,7 +1102,7 @@ mod tests {
             sequence: 100,
             change_type: OrderChangeType::Add,
             order_id: 12345,
-            side: Side::Buy,
+            side: OrderSide::Buy,
             price: Price::from_raw(50000),
             quantity: Quantity::from_raw(100),
             trader_id: Some(TraderId::default()),

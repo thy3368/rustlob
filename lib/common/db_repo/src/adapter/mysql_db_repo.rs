@@ -69,7 +69,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     ///
     /// 这是一个便利方法，用于按ID快速查询实体
     /// 当仓储为 mock 实例时，返回 Ok(None)
-    pub fn find_by_id(&self, _id: &str) -> Result<Option<E>, RepoError>
+    pub fn find_by_id_4_update(&self, _id: &str) -> Result<Option<E>, RepoError>
     where
         E: FromCreatedEvent,
     {
@@ -657,7 +657,7 @@ impl<E: Entity> MySqlDbRepo<E> {
 
 #[cfg(test)]
 mod tests {
-    use base_types::{Price, Quantity, Side, TradingPair};
+    use base_types::{Price, Quantity, OrderSide, TradingPair};
 
     use super::*;
 
@@ -675,7 +675,7 @@ mod tests {
         // #[replay(skip)]
         filled_quantity: Quantity,
         // #[replay(skip)]
-        side: Side
+        side: OrderSide
     }
 
 

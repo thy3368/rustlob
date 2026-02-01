@@ -14,7 +14,7 @@
 
 pub use base_types::cqrs::cqrs_types::{CMetadata, Cmd, CmdResp};
 use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce, TraderId};
-use base_types::{AccountId, OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{AccountId, OrderId, Price, Quantity, OrderSide, TradingPair};
 
 // ============================================================================
 // 错误类型定义 (混合方案)
@@ -306,7 +306,7 @@ pub struct LimitOrder {
     pub trader: TraderId,
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
-    pub side: Side,
+    pub side: OrderSide,
     pub price: Price,
     pub quantity: Quantity,
     pub time_in_force: TimeInForce,
@@ -322,7 +322,7 @@ pub struct MarketOrder {
     pub trader: TraderId,
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
-    pub side: Side,
+    pub side: OrderSide,
     pub quantity: Quantity,
     pub price_limit: Option<Price>, // 价格保护：买单最高价/卖单最低价
     pub time_in_force: Option<TimeInForce>, /* None=IOC(默认), Some(FOK)=全部成交或全部取消,
@@ -346,7 +346,7 @@ pub struct CancelAllOrders {
 
     pub trader: TraderId,
     pub trading_pair: Option<TradingPair>, // 可选：只取消指定交易对
-    pub side: Option<Side>,
+    pub side: Option<OrderSide>,
 }
 
 /// 现货订单命令
@@ -491,24 +491,24 @@ pub enum UrgencyLevel {
 pub enum AlgoCmdAny {
     /// TWAP订单 (Time-Weighted Average Price)
     /// 按时间均匀分配订单
-    Twap { trader: TraderId, side: Side, total_quantity: Quantity, duration_secs: u64, interval_secs: u64 },
+    Twap { trader: TraderId, side: OrderSide, total_quantity: Quantity, duration_secs: u64, interval_secs: u64 },
 
     /// VWAP订单 (Volume-Weighted Average Price)
     /// 按市场成交量分配订单
-    Vwap { trader: TraderId, side: Side, total_quantity: Quantity, target_vwap: Option<Price> },
+    Vwap { trader: TraderId, side: OrderSide, total_quantity: Quantity, target_vwap: Option<Price> },
 
     /// POV订单 (Percentage of Volume)
     /// 按市场成交量百分比参与
     Pov {
         trader: TraderId,
-        side: Side,
+        side: OrderSide,
         total_quantity: Quantity,
         participation_rate: u32, // basis points (1/10000)
     },
 
     /// 实施缺口订单 (Implementation Shortfall)
     /// 最小化执行成本与决策价格的差异
-    ImplementationShortfall { trader: TraderId, side: Side, total_quantity: Quantity, urgency: UrgencyLevel },
+    ImplementationShortfall { trader: TraderId, side: OrderSide, total_quantity: Quantity, urgency: UrgencyLevel },
 }
 
 /// 算法命令执行结果
@@ -571,20 +571,20 @@ pub enum ConditionalCmdAny {
     // ========== 止损订单 ==========
     /// 止损市价单
     /// 当市价达到触发价时，转为市价单
-    StopMarket { trader: TraderId, side: Side, stop_price: Price, quantity: Quantity },
+    StopMarket { trader: TraderId, side: OrderSide, stop_price: Price, quantity: Quantity },
 
     /// 止损限价单
     /// 当市价达到触发价时，转为限价单
-    StopLimit { trader: TraderId, side: Side, stop_price: Price, limit_price: Price, quantity: Quantity },
+    StopLimit { trader: TraderId, side: OrderSide, stop_price: Price, limit_price: Price, quantity: Quantity },
 
     /// 追踪止损单
     /// 止损价随市价变化而移动
-    TrailingStop { trader: TraderId, side: Side, trail_amount: Price, quantity: Quantity },
+    TrailingStop { trader: TraderId, side: OrderSide, trail_amount: Price, quantity: Quantity },
 
     /// 追踪止损百分比单
     TrailingStopPercent {
         trader: TraderId,
-        side: Side,
+        side: OrderSide,
         trail_percent: u32, // basis points
         quantity: Quantity,
     },
@@ -599,7 +599,7 @@ pub enum ConditionalCmdAny {
     /// 入场单 + 止盈单 + 止损单
     Bracket {
         trader: TraderId,
-        side: Side,
+        side: OrderSide,
         entry_price: Price,
         entry_quantity: Quantity,
         take_profit_price: Price,
@@ -609,18 +609,18 @@ pub enum ConditionalCmdAny {
     // ========== 高级订单 ==========
     /// 冰山单 - 部分隐藏订单
     /// 只显示 display_quantity，成交后自动从隐藏部分补充
-    Iceberg { trader: TraderId, side: Side, price: Price, total_quantity: Quantity, display_quantity: Quantity },
+    Iceberg { trader: TraderId, side: OrderSide, price: Price, total_quantity: Quantity, display_quantity: Quantity },
 
     /// 隐藏订单
     /// 完全不显示在订单簿中
-    Hidden { trader: TraderId, side: Side, price: Price, quantity: Quantity },
+    Hidden { trader: TraderId, side: OrderSide, price: Price, quantity: Quantity },
 
     /// 钉住订单
     /// 价格自动跟随市场最优价
-    Pegged { trader: TraderId, side: Side, offset: i32, quantity: Quantity, peg_type: PegType },
+    Pegged { trader: TraderId, side: OrderSide, offset: i32, quantity: Quantity, peg_type: PegType },
 
     /// 最小成交量订单
-    MinimumQuantity { trader: TraderId, side: Side, price: Price, quantity: Quantity, min_quantity: Quantity },
+    MinimumQuantity { trader: TraderId, side: OrderSide, price: Price, quantity: Quantity, min_quantity: Quantity },
 }
 
 /// 条件命令执行结果
@@ -714,7 +714,7 @@ pub enum MarketMakerCmdAny {
     TwoWayQuote { trader: TraderId, bid_price: Price, bid_quantity: Quantity, ask_price: Price, ask_quantity: Quantity },
 
     /// 拍卖订单
-    AuctionOrder { trader: TraderId, side: Side, price: Price, quantity: Quantity, auction_type: AuctionType },
+    AuctionOrder { trader: TraderId, side: OrderSide, price: Price, quantity: Quantity, auction_type: AuctionType },
 }
 
 /// 做市商命令结果
@@ -779,7 +779,7 @@ impl std::error::Error for QueryError {}
 #[derive(Debug, Clone)]
 pub enum OrderQueryCmd {
     /// 查询当前活跃订单
-    QueryOpenOrders { trader: TraderId, trading_pair: Option<TradingPair>, side: Option<Side>, page: Option<u32> },
+    QueryOpenOrders { trader: TraderId, trading_pair: Option<TradingPair>, side: Option<OrderSide>, page: Option<u32> },
 
     /// 查询订单详情
     QueryOrderDetail { order_id: OrderId },
@@ -808,7 +808,7 @@ pub enum OrderQueryCmd {
 pub struct OrderView {
     pub order_id: OrderId,
     pub trader: TraderId,
-    pub side: Side,
+    pub side: OrderSide,
     pub price: Option<Price>,
     pub quantity: Quantity,
     pub filled_quantity: Quantity,
@@ -822,7 +822,7 @@ pub struct OrderView {
 pub struct OrderDetailView {
     pub order_id: OrderId,
     pub trader: TraderId,
-    pub side: Side,
+    pub side: OrderSide,
     pub price: Option<Price>,
     pub quantity: Quantity,
     pub filled_quantity: Quantity,
@@ -841,7 +841,7 @@ pub struct TradeView {
     pub order_id: OrderId,
     pub price: Price,
     pub quantity: Quantity,
-    pub side: Side,
+    pub side: OrderSide,
     pub timestamp: u64,
     pub is_maker: bool,
 }

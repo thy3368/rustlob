@@ -21,6 +21,10 @@ use crate::proc::behavior::{
 };
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderAck;
 
+use rand::Rng;
+use base_types::{OrderId, AccountId, TradingPair, AssetId, Price, Quantity, OrderSide};
+use base_types::exchange::spot::spot_types::{OrderType, TimeInForce, TraderId};
+
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // uid路由
@@ -36,13 +40,6 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // 交易对路由
     market_data_repo: MySqlDbRepo<SpotOrder>,
 
-    // // todo?
-    // pub change_log_repo: MySqlDbRepo<ChangeLogEntry>,
-    // // uid路由
-    // pub user_data_update_repo: MySqlDbRepo<UserDataStreamEventAny>,
-    // // 交易对路由
-    // pub market_data_update_repo: MySqlDbRepo<SpotMarketDataStreamAny>,
-
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
     lob_repo: L
@@ -50,70 +47,112 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 
 
 impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
-    // pub fn new(
-    //     balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>,
-    // order_repo: MySqlDbRepo<SpotOrder>,     user_data_repo:
-    // MySqlDbRepo<SpotOrder>, market_data_repo: MySqlDbRepo<SpotOrder>, lob_repo: L
-    // ) -> Self {
-    //     Self {
-    //         balance_repo,
-    //         trade_repo,
-    //         order_repo,
-    //         user_data_repo,
-    //         market_data_repo,
-    //         lob_repo
-    //     }
-    // }
+    /// 订单预处理 - 负责创建订单、冻结余额和生成事件
+    fn pre_process(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
+        let order_id = OrderId::from((*cmd.timestamp() as u64) << 32 | (rand::random::<u32>() as u64));
+        let trader_id = TraderId::default(); //  TODO: 从 metadata 中获取真实的 trader_id
+        let account_id = AccountId(1); //  TODO: 从 metadata 中获取真实的 account_id
+        let trading_pair = TradingPair {
+            base_asset: AssetId(1),
+            quote_asset: AssetId(0)
+        }; //  TODO: 根据 symbol 解析 trading_pair
 
-    fn dj(&self, cmd: NewOrderCmd) -> Result<CmdResp<NewOrderAck>, SpotCmdErrorAny>{
+        // 根据 NewOrderCmd 创建 SpotOrder
+        let mut internal_order = match cmd.order_type() {
+            OrderType::Limit => SpotOrder::create_limit(
+                order_id,
+                trader_id,
+                account_id,
+                trading_pair,
+                *cmd.side(),
+                Price::from_f64(cmd.price().unwrap_or(0.0)),
+                Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
+                cmd.time_in_force(),
+                cmd.new_client_order_id().map(|s| s.to_string()),
+            ),
+            OrderType::Market => {
+                // 市价单处理
+                todo!("Market order type not implemented yet")
+            }
 
+            OrderType::StopLoss => {
+                todo!("Stop order type not implemented yet")
+            }
+            OrderType::StopLossLimit => {
+                todo!("Stop order type not implemented yet")
 
-        //todo 生成 spot order
-        let mut internal_order = SpotOrder::create_limit(
-            order_id,
-            limit_order.trader,
-            limit_order.account_id,
-            limit_order.trading_pair,
-            limit_order.side,
-            limit_order.price,
-            limit_order.quantity,
-            limit_order.time_in_force,
-            limit_order.client_order_id,
+            }
+            OrderType::TakeProfit => {
+                todo!("Stop order type not implemented yet")
+
+            }
+            OrderType::TakeProfitLimit => {
+                todo!("Stop order type not implemented yet")
+
+            }
+            OrderType::LimitMaker => {
+                todo!("Stop order type not implemented yet")
+
+            }
+        };
+        
+        match internal_order.time_in_force {
+            TimeInForce::GTC => {}
+            TimeInForce::IOC => {}
+            TimeInForce::FOK => {}
+            TimeInForce::GTX => {}
+            TimeInForce::GTD => {}
+        }
+
+        match internal_order.side{
+            OrderSide::Buy => {}
+            OrderSide::Sell => {}
+        }
+        // 根据买卖方向冻结相应的余额
+        let now = *cmd.timestamp() as u64;
+        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
+        let mut frozen_asset_balance = self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
+
+        // 冻结余额
+        internal_order.frozen_margin(&mut frozen_asset_balance, now);
+
+        // TODO: 生成新增/账户冻结 eventlog
+        // TODO: 发送eventlog到消息队列，行情对外发布消息
+        // TODO: 在db中回放eventlog
+
+        // 生成 NewOrderAck 响应
+        let ack = NewOrderAck::new(
+            cmd.symbol().to_string(),
+            order_id as i64,
+            -1, // 不属于任何订单列表
+            cmd.new_client_order_id().unwrap_or_else(|| format!("{}", order_id.into())),
+            *cmd.timestamp()
         );
 
-        //数据竞争点是 余额账户 需要加锁
-        //todo 根据买卖单 分别冻结不同的余额账户
-        // 生成新增/账户冻结 eventlog
-        // 发送eventlog到消息对列，行情对外发布消息
-        //todo 在db中回放eventlog
-        // 对order进行撮合操作
-
-
-        let mut frozen_asset_balance = self.balance_repo.find_by_id(&"xxxxx").unwrap().unwrap();
-        let mut base_asset_balance = self.balance_repo.find_by_id(&"base_asset_balance_id").unwrap().unwrap();
-
+        Ok(CmdResp::new(0, SpotTradeResAny::NewOrderAck(ack)))
     }
+
+    /// 处理新订单命令的主方法
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        // 执行订单预处理
+        let ack_result = self.pre_process(cmd)?;
 
+        // TODO: 执行订单匹配逻辑
+        // let matches = self.lob_repo.match_order(&internal_order);
 
-
-
-
-
+        // TODO: 处理匹配结果，生成交易记录
 
         // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
 
-
         let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
         change_log_queue_repo.send_batch(&all_events);
 
-
         if !all_events.is_empty() {
-            // 回放 matched_order 更新和 v1 创建事件到各自的 repo
+            // 回放 matched_order 更新和订单创建事件到各自的 repo
             for event in &all_events {
                 // 根据 entity_type 判断回放到哪个 repo
-                // todo 增加balance position
                 match event.entity_type().as_str() {
                     "SpotOrder" => {
                         if let Err(e) = self.order_repo.replay_event(event) {
@@ -122,7 +161,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
                     }
                     "SpotTrade" => {
                         if let Err(e) = self.trade_repo.replay_event(event) {
-                            log::error!("Failed to replay v1 event: {:?}", e);
+                            log::error!("Failed to replay trade event: {:?}", e);
                         }
                     }
                     "Balance" => {
@@ -136,9 +175,10 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             }
         }
 
-        todo!()
+        Ok(ack_result)
     }
 }
+
 
 
 impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny>
@@ -150,16 +190,8 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
 
         match cmd {
             SpotTradeCmdAny::NewOrder(new_order) => {
-                // todo
-                // todo
-                // todo 匹配 通知
-
-                // 生成user data
-                // 生成market data
-
+                // 执行订单处理
                 self.handle(new_order)
-
-                // Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty))
             }
 
             SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty)),

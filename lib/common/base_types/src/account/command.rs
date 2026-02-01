@@ -3,7 +3,7 @@
 //! 统一 LOB 和 Settlement 的所有账户操作
 
 
-use crate::{AccountId, AssetId, OrderId, Price, Side, TradingPair};
+use crate::{AccountId, AssetId, OrderId, Price, OrderSide, TradingPair};
 use crate::account::balance::Balance;
 use crate::account::error::BalanceError;
 
@@ -21,13 +21,13 @@ pub enum AccountCommand {
         account_id: AccountId,
         order_id: OrderId,
         pair: TradingPair,
-        side: Side,
+        side: OrderSide,
         price: Price,
         quantity: Price
     },
 
     /// 解冻资金（撤单时释放）
-    Unfreeze { account_id: AccountId, order_id: OrderId, pair: TradingPair, side: Side, price: Price, quantity: Price },
+    Unfreeze { account_id: AccountId, order_id: OrderId, pair: TradingPair, side: OrderSide, price: Price, quantity: Price },
 
     // ==================== Settlement 调用（直接操作资产） ====================
     /// 冻结指定资产（可用 → 冻结）
@@ -184,11 +184,11 @@ impl AccountCommand {
                 quantity,
                 ..
             } => match side {
-                Side::Buy => {
+                OrderSide::Buy => {
                     let amount = price.checked_mul(*quantity)?;
                     Some((pair.quote_asset, amount))
                 }
-                Side::Sell => Some((pair.base_asset, *quantity))
+                OrderSide::Sell => Some((pair.base_asset, *quantity))
             },
             _ => None
         }

@@ -3,7 +3,7 @@ use std::fmt;
 use crate::account::balance::Balance;
 use crate::fee::fee_types::{CexFeeEntity, FeeType};
 use crate::lob::lob::LobOrder;
-use crate::{AccountId, AssetId, InstrumentType, OrderId, Price, Quantity, Side, TradingPair};
+use crate::{AccountId, AssetId, InstrumentType, OrderId, Price, Quantity, OrderSide, TradingPair};
 use entity_derive::Entity;
 
 /// 订单来源标识 - Phase 3: 区分订单的来源
@@ -197,14 +197,36 @@ impl Default for AlgorithmStrategy {
     }
 }
 
+// /// 订单类型
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[repr(u8)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// pub enum OrderType {
+//     Limit = 1,  // 限价单
+//     Market = 2, // 市价单
+// }
+
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum OrderType {
-    Limit = 1,  // 限价单
-    Market = 2, // 市价单
+    /// 限价单
+    Limit,
+    /// 市价单
+    Market,
+    /// 止损单
+    StopLoss,
+    /// 止损限价单
+    StopLossLimit,
+    /// 止盈单
+    TakeProfit,
+    /// 止盈限价单
+    TakeProfitLimit,
+    /// 限价只挂单
+    LimitMaker
 }
+
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -375,10 +397,10 @@ impl LobOrder for SpotOrder {
         self.executed_qty
     }
 
-    fn side(&self) -> Side {
+    fn side(&self) -> OrderSide {
         match self.side {
-            Side::Buy => Side::Buy,
-            Side::Sell => Side::Sell,
+            OrderSide::Buy => OrderSide::Buy,
+            OrderSide::Sell => OrderSide::Sell,
         }
     }
 
@@ -401,7 +423,7 @@ pub struct SpotOrder {
 
     pub total_qty: Quantity,        // 总数量
     pub price: Option<Price>,       // 订单价格 (0表示市价单)
-    pub side: Side,                 // 买卖方向 (BUY/SELL) (1字节)
+    pub side: OrderSide,                 // 买卖方向 (BUY/SELL) (1字节)
     pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
     pub status: OrderStatus, // 订单状态 (1字节)
@@ -544,12 +566,12 @@ impl SpotOrder {
 
         // 更新账户余额
         match self.side {
-            Side::Buy => {
+            OrderSide::Buy => {
                 // 买方：释放冻结的 quote 资产，增加 base 资产
                 quote_asset_balance.frozen2pay(filled * price, now);
                 base_asset_balance.add_balance(filled, now);
             }
-            Side::Sell => {
+            OrderSide::Sell => {
                 // 卖方：释放冻结的 base 资产，增加 quote 资产
                 base_asset_balance.frozen2pay(filled, now);
                 quote_asset_balance.add_balance(filled * price, now);
@@ -619,13 +641,13 @@ impl SpotOrder {
     pub fn frozen_margin(&mut self, balance: &mut Balance, now: u64) {
         // 根据买卖方向确定冻结资产
         match self.side {
-            Side::Buy => {
+            OrderSide::Buy => {
                 // 冻结，失败则reject
                 self.frozen_qty = self.total_qty * self.price.unwrap();
                 self.frozen_asset = self.trading_pair.quote_asset;
                 balance.frozen(self.frozen_qty, now);
             }
-            Side::Sell => {
+            OrderSide::Sell => {
                 self.frozen_qty = self.total_qty;
                 self.frozen_asset = self.trading_pair.base_asset;
                 balance.frozen(self.frozen_qty, now);
@@ -640,8 +662,8 @@ impl SpotOrder {
 
     #[inline]
     pub fn create_limit(
-        order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: Side,
-        price: Price, quantity: Quantity, time_in_force: TimeInForce, client_order_id: Option<String>,
+        order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: OrderSide,
+        price: Price, quantity: Quantity, time_in_force: &Option<TimeInForce>, client_order_id: Option<String>,
     ) -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -795,7 +817,7 @@ pub struct SpotTrade {
 
     // ===== 交易方向（1字节）=====
     /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
-    pub taker_side: Side,
+    pub taker_side: OrderSide,
 
     // ===== 手续费字段（16字节）=====
     /// 手续费数量（对标币安 commission、Coinbase fee）
@@ -813,7 +835,7 @@ impl SpotTrade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
-        trade_id: u64, order_id: OrderId, timestamp: u64, price: Price, quantity: Quantity, taker_side: Side,
+        trade_id: u64, order_id: OrderId, timestamp: u64, price: Price, quantity: Quantity, taker_side: OrderSide,
         commission_qty: Quantity, commission_asset: AssetId, commission_rate: i32,
     ) -> Self {
         let quote_qty = quantity * price; // 计算成交金额
@@ -859,7 +881,7 @@ mod tests {
             TraderId::default(),
             AccountId(1),
             create_test_trading_pair(),
-            Side::Buy,
+            OrderSide::Buy,
             Price::from_f64(50000.0),
             Quantity::from_f64(1.0),
             TimeInForce::GTC,

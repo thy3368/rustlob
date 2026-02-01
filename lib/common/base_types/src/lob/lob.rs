@@ -1,5 +1,5 @@
 use diff::Entity;
-use crate::{OrderId, Price, Quantity, Side, TradingPair};
+use crate::{OrderId, Price, Quantity, OrderSide, TradingPair};
 
 /// 仓储接口定义
 
@@ -31,7 +31,7 @@ pub trait LobOrder: Entity + Send + Sync {
     fn filled_quantity(&self) -> Quantity;
 
     /// 获取方向
-    fn side(&self) -> Side;
+    fn side(&self) -> OrderSide;
 
     /// 获取交易对
     fn symbol(&self) -> TradingPair;

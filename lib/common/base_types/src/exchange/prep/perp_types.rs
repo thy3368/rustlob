@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::base_types::{
-    AccountId, AssetId, OrderId, PositionId, Price, Quantity, Side, Timestamp, TradeId, TradingPair, UserId
+    AccountId, AssetId, OrderId, PositionId, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair, UserId
 };
 
 // ============================================================================
@@ -183,7 +183,7 @@ impl PrepPosition {
     /// - `side`: 订单方向
     /// - `position_side`: 持仓方向
     pub fn add(
-        &mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::Side,
+        &mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::OrderSide,
         _position_side: crate::PositionSide
     ) {
         // 计算新的持仓数量和均价（加权平均）
@@ -306,7 +306,7 @@ pub struct PrepTrade {
     /// 交易对
     pub trading_pair: TradingPair,
     /// 主动方向
-    pub taker_side: Side,
+    pub taker_side: OrderSide,
     /// 成交价格
     pub price: Price,
     /// 成交数量
@@ -325,7 +325,7 @@ pub struct PrepTrade {
 impl PrepTrade {
     /// 创建新的成交记录
     pub fn new(
-        trade_id: TradeId, ask_order_id: OrderId, bid_order_id: OrderId, symbol: TradingPair, side: Side, price: Price,
+        trade_id: TradeId, ask_order_id: OrderId, bid_order_id: OrderId, symbol: TradingPair, side: OrderSide, price: Price,
         quantity: Quantity, fee: Price, fee_asset: AssetId, is_maker: bool
     ) -> Self {
         Self {

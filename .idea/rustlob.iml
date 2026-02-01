@@ -92,6 +92,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/immutable_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/immutable_derive/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

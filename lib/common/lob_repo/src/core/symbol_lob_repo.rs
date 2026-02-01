@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
 use diff::Entity;
 
@@ -97,7 +97,7 @@ pub trait SymbolLob {
     /// # 返回
     /// - `Some(Vec<&Self::Order>)`: 匹配到的订单列表（总数量 >= quantity）
     /// - `None`: 无法匹配
-    fn match_orders(&self, side: Side, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
+    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
 
     /// 添加订单到仓储
     ///
@@ -218,7 +218,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
     fn match_orders(
-        &self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity
+        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity
     ) -> Option<Vec<&Self::Order>>;
 
     /// 获取指定交易对的最佳买价

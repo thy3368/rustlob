@@ -1,4 +1,4 @@
-use crate::{OrderId, Price, Quantity, Side};
+use crate::{OrderId, Price, Quantity, OrderSide};
 use crate::exchange::spot::spot_types::TraderId;
 
 /// 市场数据等级定义（Level 1-3）
@@ -374,7 +374,7 @@ pub struct OrderDelta {
     /// 订单ID
     pub order_id: OrderId,
     /// 买卖方向
-    pub side: Side,
+    pub side: OrderSide,
     /// 价格
     pub price: Price,
     /// 数量（新数量或变化量）
@@ -403,7 +403,7 @@ pub struct TradeEvent {
     /// 成交数量
     pub quantity: Quantity,
     /// 主动方（买方或卖方）
-    pub aggressor_side: Side
+    pub aggressor_side: OrderSide
 }
 
 /// 最优买卖价变更事件

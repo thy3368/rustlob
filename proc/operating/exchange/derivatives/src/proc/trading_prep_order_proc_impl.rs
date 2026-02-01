@@ -6,7 +6,7 @@ use std::{
 use base_types::{account::balance::Balance, exchange::prep::prep_order::PrepOrder};
 // Clean Architecture: 引入 MySqlDbRepo 和相关接口
 // Base types
-use base_types::{AccountId, AssetId, PositionSide, PrepPosition, Side as BaseSide, Timestamp, TradingPair};
+use base_types::{AccountId, AssetId, PositionSide, PrepPosition, OrderSide as BaseSide, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
 use diff::{ChangeLogEntry, Entity};
@@ -21,7 +21,7 @@ use crate::proc::trading_prep_order_behavior::{
     PerpOrderExchBehavior, PerpOrderExchQueryProc, PrepCmdError, PrepTrade, Price, Quantity, QueryAccountBalanceCmd,
     QueryAccountInfoCmd, QueryFundingFeeCmd, QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd,
     QueryOrderCmd, QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
-    SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, Side, TradeId, TradesQueryResult
+    SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, OrderSide, TradeId, TradesQueryResult
 };
 
 /// 本地撮合引擎服务
@@ -230,7 +230,7 @@ impl PrepMatchingService {
     /// - `avg_price`: 成交均价
     /// - `leverage`: 杠杆倍数
     fn update_position(
-        &self, trading_pair: TradingPair, _side: Side,
+        &self, trading_pair: TradingPair, _side: OrderSide,
         position_side: crate::proc::trading_prep_order_behavior::PositionSide, quantity: Quantity, avg_price: Price,
         leverage: u8
     ) {
@@ -294,7 +294,7 @@ impl PrepMatchingService {
 
 
         let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.base_asset.0);
-        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+        let mut balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
         };
@@ -325,7 +325,7 @@ impl PrepMatchingService {
                     let mut matched_position = self.get_position(matched_order.trading_pair);
 
                     let balance_id = format!("{}:{}", matched_order.account_id.0, cmd.trading_pair.base_asset.0);
-                    let mut matched_balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+                    let mut matched_balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
                         Some(b) => b,
                         None => todo!() // todo 应该报错
                     };
@@ -446,8 +446,8 @@ impl PerpOrderExchBehavior for PrepMatchingService {
         // 4. 模拟平仓成交
         // ========================================================================
         let fill_price = match cmd.side {
-            Side::Buy => Price::from_f64(50000.0), // 平空用买，使用卖一价
-            Side::Sell => Price::from_f64(49990.0) // 平多用卖，使用买一价
+            OrderSide::Buy => Price::from_f64(50000.0), // 平空用买，使用卖一价
+            OrderSide::Sell => Price::from_f64(49990.0) // 平多用卖，使用买一价
         };
 
         // 计算手续费 (0.04% Taker费率)
@@ -485,7 +485,7 @@ impl PerpOrderExchBehavior for PrepMatchingService {
             }
             crate::proc::trading_prep_order_behavior::PositionSide::Both => {
                 // 单向模式，根据side判断
-                if cmd.side == Side::Sell {
+                if cmd.side == OrderSide::Sell {
                     (close_price - entry_price) * qty
                 } else {
                     (entry_price - close_price) * qty
@@ -565,7 +565,7 @@ impl PerpOrderExchBehavior for PrepMatchingService {
         // 1. 先从元数据中获取订单信息 2. order.cancel
 
         let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.quote_asset.0);
-        let mut balance = match self.balance_repo.find_by_id(&balance_id).ok().flatten() {
+        let mut balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
         };

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use base_types::{lob::lob::LobOrder, OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{lob::lob::LobOrder, OrderId, Price, Quantity, OrderSide, TradingPair};
 
 use crate::{
     adapter::remote_lob_impl::RemoteLob,
@@ -35,7 +35,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
 
 
     fn match_orders(
-        &self, symbol: TradingPair, side: Side, price: Price, quantity: Quantity
+        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity
     ) -> Option<Vec<&Self::Order>> {
         // todo 根据Symbol 找到对应的Lob
         todo!()

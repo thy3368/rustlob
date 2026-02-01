@@ -1,4 +1,4 @@
-use base_types::{OrderId, Price, Quantity, Side, TradingPair};
+use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
 use lob_repo::{
     adapter::local_lob_impl::LocalLob,
@@ -18,7 +18,7 @@ struct MockOrder {
     // #[replay(skip)]
     filled_quantity: Quantity,
     // #[replay(skip)]
-    side: Side
+    side: OrderSide
 }
 
 
@@ -31,7 +31,7 @@ impl LobOrder for MockOrder {
 
     fn filled_quantity(&self) -> Quantity { self.filled_quantity }
 
-    fn side(&self) -> Side { self.side }
+    fn side(&self) -> OrderSide { self.side }
 
     fn symbol(&self) -> TradingPair { self.symbol }
 }

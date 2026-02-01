@@ -13,7 +13,7 @@ pub use base_types::exchange::prep::prep_order::{OrderStatus, OrderType};
 // 从 account crate 导入领域实体
 // ============================================================================
 use base_types::{AssetId, PrepPosition};
-pub use base_types::{OrderId, PositionId, PositionSide, PrepTrade, Price, Quantity, Side, TradeId, TradingPair};
+pub use base_types::{OrderId, PositionId, PositionSide, PrepTrade, Price, Quantity, OrderSide, TradeId, TradingPair};
 use base_types::exchange::spot::spot_types::TimeInForce;
 // ============================================================================
 // 核心枚举类型
@@ -43,7 +43,7 @@ pub struct OpenPositionCmd {
     /// 交易对
     pub trading_pair: TradingPair,
     /// 订单方向（Buy=做多, Sell=做空）
-    pub side: Side,
+    pub side: OrderSide,
     /// 订单类型
     pub order_type: OrderType,
     /// 数量
@@ -75,7 +75,7 @@ impl OpenPositionCmd {
     pub fn market_long(trading_pair: TradingPair, quantity: Quantity) -> Self {
         Self {
             trading_pair,
-            side: Side::Buy,
+            side: OrderSide::Buy,
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -90,7 +90,7 @@ impl OpenPositionCmd {
     pub fn market_short(trading_pair: TradingPair, quantity: Quantity) -> Self {
         Self {
             trading_pair,
-            side: Side::Sell,
+            side: OrderSide::Sell,
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -105,7 +105,7 @@ impl OpenPositionCmd {
     pub fn limit_long(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
             trading_pair,
-            side: Side::Buy,
+            side: OrderSide::Buy,
             order_type: OrderType::Limit,
             quantity,
             price: Some(price),
@@ -120,7 +120,7 @@ impl OpenPositionCmd {
     pub fn limit_short(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
             trading_pair,
-            side: Side::Sell,
+            side: OrderSide::Sell,
             order_type: OrderType::Limit,
             quantity,
             price: Some(price),
@@ -188,7 +188,7 @@ pub struct ClosePositionCmd {
     /// 交易对
     pub trading_pair: TradingPair,
     /// 订单方向（平多用Sell，平空用Buy）
-    pub side: Side,
+    pub side: OrderSide,
     /// 订单类型
     pub order_type: OrderType,
     /// 数量（None表示全部平仓）
@@ -224,7 +224,7 @@ impl ClosePositionCmd {
     pub fn market_close_long(trading_pair: TradingPair, quantity: Option<Quantity>) -> Self {
         Self {
             trading_pair,
-            side: Side::Sell, // 平多用卖
+            side: OrderSide::Sell, // 平多用卖
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -238,7 +238,7 @@ impl ClosePositionCmd {
     pub fn market_close_short(trading_pair: TradingPair, quantity: Option<Quantity>) -> Self {
         Self {
             trading_pair,
-            side: Side::Buy, // 平空用买
+            side: OrderSide::Buy, // 平空用买
             order_type: OrderType::Market,
             quantity,
             price: None,
@@ -252,7 +252,7 @@ impl ClosePositionCmd {
     pub fn limit_close_long(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
             trading_pair,
-            side: Side::Sell,
+            side: OrderSide::Sell,
             order_type: OrderType::Limit,
             quantity: Some(quantity),
             price: Some(price),
@@ -266,7 +266,7 @@ impl ClosePositionCmd {
     pub fn limit_close_short(trading_pair: TradingPair, quantity: Quantity, price: Price) -> Self {
         Self {
             trading_pair,
-            side: Side::Buy,
+            side: OrderSide::Buy,
             order_type: OrderType::Limit,
             quantity: Some(quantity),
             price: Some(price),
@@ -277,7 +277,7 @@ impl ClosePositionCmd {
 
     /// 市价平仓（单向持仓模式）
     #[inline]
-    pub fn market_close_both(trading_pair: TradingPair, side: Side, quantity: Option<Quantity>) -> Self {
+    pub fn market_close_both(trading_pair: TradingPair, side: OrderSide, quantity: Option<Quantity>) -> Self {
         Self {
             trading_pair,
             side,
@@ -663,7 +663,7 @@ pub struct OrderQueryResult {
     /// 交易对
     pub trading_pair: TradingPair,
     /// 订单方向
-    pub side: Side,
+    pub side: OrderSide,
     /// 订单类型
     pub order_type: OrderType,
     /// 订单状态

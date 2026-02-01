@@ -18,7 +18,7 @@ pub mod handler;
 
 // Re-export all types
 pub use base_types::{
-    AccountId, AssetId, OrderId, PositionId, Price, Quantity, Side, Timestamp, TradeId, TradingPair, UserId
+    AccountId, AssetId, OrderId, PositionId, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair, UserId
 };
 pub use decimal::Decimal;
 pub use instrument::instrument_types::InstrumentType;
