@@ -23,7 +23,8 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderAck;
 
 use rand::Rng;
 use base_types::{OrderId, AccountId, TradingPair, AssetId, Price, Quantity, OrderSide};
-use base_types::exchange::spot::spot_types::{OrderType, TimeInForce, TraderId};
+use base_types::base_types::TraderId;
+use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
 
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
@@ -53,10 +54,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let order_id = OrderId::from((*cmd.timestamp() as u64) << 32 | (rand::random::<u32>() as u64));
         let trader_id = TraderId::default(); //  TODO: 从 metadata 中获取真实的 trader_id
         let account_id = AccountId(1); //  TODO: 从 metadata 中获取真实的 account_id
-        let trading_pair = TradingPair {
-            base_asset: AssetId(1),
-            quote_asset: AssetId(0)
-        }; //  TODO: 根据 symbol 解析 trading_pair
+        let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
 
         // 根据 NewOrderCmd 创建 SpotOrder
         let mut internal_order = match cmd.order_type() {
@@ -68,7 +66,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
                 *cmd.side(),
                 Price::from_f64(cmd.price().unwrap_or(0.0)),
                 Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
-                cmd.time_in_force(),
+                cmd.time_in_force().unwrap(),
                 cmd.new_client_order_id().map(|s| s.to_string()),
             ),
             OrderType::Market => {
@@ -126,7 +124,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             cmd.symbol().to_string(),
             order_id as i64,
             -1, // 不属于任何订单列表
-            cmd.new_client_order_id().unwrap_or_else(|| format!("{}", order_id.into())),
+            cmd.new_client_order_id().unwrap_or_else(|| format!("{}", order_id)),
             *cmd.timestamp()
         );
 

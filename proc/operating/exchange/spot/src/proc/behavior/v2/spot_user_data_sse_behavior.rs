@@ -2,7 +2,7 @@
 // user-data-stream.md 定义所有 user data 接口
 
 use base_types::handler::handler::Handler;
-
+use base_types::OrderSide;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 // ==================== User Data Stream 事件枚举 ====================
 
@@ -324,7 +324,7 @@ pub struct ExternalLockUpdateEvent {
 // /// 订单方向
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// 
+//
 // pub enum OrderSide {
 //     /// 买入
 //     BUY,

@@ -186,9 +186,9 @@ impl AccountCommand {
             } => match side {
                 OrderSide::Buy => {
                     let amount = price.checked_mul(*quantity)?;
-                    Some((pair.quote_asset, amount))
+                    Some((pair.quote_asset(), amount))
                 }
-                OrderSide::Sell => Some((pair.base_asset, *quantity))
+                OrderSide::Sell => Some((pair.base_asset(), *quantity))
             },
             _ => None
         }

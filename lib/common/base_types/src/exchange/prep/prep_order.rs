@@ -227,7 +227,7 @@ impl PrepOrder {
             price,
             Quantity::from_raw(filled),
             fee,
-            AssetId::USDT,
+            AssetId::Usdt,
             true // Maker
         );
 

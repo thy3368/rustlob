@@ -1,15 +1,17 @@
-use crate::proc::behavior::spot_trade_behavior::{
-    CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotTradeCmdAny, SpotCmdErrorAny, SpotTradeResAny, SpotTradeBehavior,
+use base_types::{
+    account::balance::Balance,
+    exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce},
+    OrderId, OrderSide, Price, Quantity, TradingPair
 };
-use base_types::account::balance::Balance;
-use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
-use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-
 use lob_repo::{adapter::embedded_lob_repo::EmbeddedLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
+
+use crate::proc::behavior::spot_trade_behavior::{
+    CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
+    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdErrorAny, SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny
+};
 
 pub struct SpotTradeBehaviorImpl {
     /// 余额仓储（依赖注入）
@@ -18,37 +20,41 @@ pub struct SpotTradeBehaviorImpl {
     pub order_repo: MySqlDbRepo<SpotOrder>,
     pub lob_repo: EmbeddedLobRepo<SpotOrder>,
     /// ID生成器（节点ID为0）
-    pub id_generator: IdGenerator,
+    pub id_generator: IdGenerator
 }
 
 impl SpotTradeBehaviorImpl {
     /// 创建新的 SpotOrderExchBehaviorImpl 实例
     pub fn new(
         balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
-        lob_repo: EmbeddedLobRepo<SpotOrder>, id_generator: IdGenerator,
+        lob_repo: EmbeddedLobRepo<SpotOrder>, id_generator: IdGenerator
     ) -> Self {
-        Self { balance_repo, trade_repo, order_repo, lob_repo, id_generator }
+        Self {
+            balance_repo,
+            trade_repo,
+            order_repo,
+            lob_repo,
+            id_generator
+        }
     }
 }
 
 impl SpotTradeBehaviorImpl {
     /// 生成订单ID
-    fn generate_order_id(&self) -> u64 {
-        self.id_generator.next_id() as u64
-    }
+    fn generate_order_id(&self) -> u64 { self.id_generator.next_id() as u64 }
 
     pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> Result<CmdResp<CancelOrderRes>, SpotCmdErrorAny> {
         todo!()
     }
 
     pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> Result<CmdResp<MarketOrderRes>, SpotCmdErrorAny> {
-        //todo 风控检查
-        //todo 匹配
+        // todo 风控检查
+        // todo 匹配
         todo!()
     }
 
     pub(crate) fn handle_cancel_all_orders(
-        &self, _p0: CancelAllOrders,
+        &self, _p0: CancelAllOrders
     ) -> Result<CmdResp<CancelAllOrdersRes>, SpotCmdErrorAny> {
         todo!()
     }
@@ -74,15 +80,17 @@ impl SpotTradeBehaviorImpl {
             limit_order.price,
             limit_order.quantity,
             limit_order.time_in_force,
-            limit_order.client_order_id,
+            limit_order.client_order_id
         );
 
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
         let base_asset_balance_id =
-            format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset.0);
+            format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset());
 
-        let mut frozen_asset_balance = self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).ok().unwrap().unwrap();
-        let mut base_asset_balance = self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
+        let mut frozen_asset_balance =
+            self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).ok().unwrap().unwrap();
+        let mut base_asset_balance =
+            self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
 
         internal_order.frozen_margin(&mut frozen_asset_balance, now);
 
@@ -91,7 +99,7 @@ impl SpotTradeBehaviorImpl {
             internal_order.trading_pair,
             internal_order.side,
             internal_order.price.unwrap(),
-            internal_order.total_qty,
+            internal_order.total_qty
         );
 
         // 如果匹配
@@ -114,7 +122,7 @@ impl SpotTradeBehaviorImpl {
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
                     let quote_asset_balance_id =
-                        format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset.0);
+                        format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset());
                     let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
                     let mut o_quote_asset_balance =
@@ -128,7 +136,7 @@ impl SpotTradeBehaviorImpl {
                         &mut frozen_asset_balance,
                         &mut base_asset_balance,
                         &mut o_quote_asset_balance,
-                        &mut o_base_asset_balance,
+                        &mut o_base_asset_balance
                     );
 
                     trades.push(trade);
@@ -199,9 +207,13 @@ impl SpotTradeBehavior for SpotTradeBehaviorImpl {
 
 #[cfg(test)]
 mod tests {
+    use base_types::{
+        base_types::TraderId,
+        exchange::spot::spot_types::{OrderStatus, TimeInForce},
+        AccountId, AssetId, TradingPair
+    };
+
     use super::*;
-    use base_types::exchange::spot::spot_types::{OrderStatus, TimeInForce, TraderId};
-    use base_types::{AccountId, AssetId, TradingPair};
 
     /// 测试：创建限价订单并验证基本流程
     ///
@@ -219,10 +231,7 @@ mod tests {
         // 1. 创建测试数据
         let trader_id = TraderId::new([1, 2, 3, 4, 5, 6, 7, 8]);
         let account_id = AccountId(100);
-        let trading_pair = TradingPair {
-            base_asset: AssetId::BTC,   // BTC
-            quote_asset: AssetId::USDT, // USDT
-        };
+        let trading_pair = TradingPair::BtcUsdt;
         let price = Price::from_raw(1_000_000_000_000); // 10000.00 USDT
         let quantity = Quantity::from_raw(100_000_000); // 1.00 BTC
 
@@ -232,11 +241,11 @@ mod tests {
             trader_id,                      // trader
             account_id,                     // account_id
             trading_pair,                   // trading_pair
-            OrderSide::Buy,                      // Buy order
+            OrderSide::Buy,                 // Buy order
             price,                          // price
             quantity,                       // quantity
             TimeInForce::GTC,               // GTC: Good Till Cancel
-            Some("CLIENT-001".to_string()), // client_order_id
+            Some("CLIENT-001".to_string())  // client_order_id
         );
 
         // ========================================================================
@@ -261,8 +270,8 @@ mod tests {
 
         // 6. 验证交易对信息
         assert_eq!(order.trading_pair, trading_pair, "交易对信息应匹配");
-        assert_eq!(order.trading_pair.base_asset, AssetId::BTC, "基础资产应为BTC");
-        assert_eq!(order.trading_pair.quote_asset, AssetId::USDT, "计价资产应为USDT");
+        assert_eq!(order.trading_pair.base_asset(), AssetId::Btc, "基础资产应为BTC");
+        assert_eq!(order.trading_pair.quote_asset(), AssetId::Usdt, "计价资产应为USDT");
 
         // 7. 验证时间戳（应该是有效的毫秒时间戳）
         assert!(order.timestamp > 0, "时间戳应为正数");

@@ -293,7 +293,7 @@ impl PrepMatchingService {
         );
 
 
-        let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.base_asset.0);
+        let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.base_asset());
         let mut balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
@@ -324,7 +324,7 @@ impl PrepMatchingService {
                 for matched_order in matched {
                     let mut matched_position = self.get_position(matched_order.trading_pair);
 
-                    let balance_id = format!("{}:{}", matched_order.account_id.0, cmd.trading_pair.base_asset.0);
+                    let balance_id = format!("{}:{}", matched_order.account_id.0, cmd.trading_pair.base_asset());
                     let mut matched_balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
                         Some(b) => b,
                         None => todo!() // todo 应该报错
@@ -463,7 +463,7 @@ impl PerpOrderExchBehavior for PrepMatchingService {
             fill_price,
             close_qty,
             fee,
-            AssetId::USDT,
+            AssetId::Usdt,
             false // 市价单为Taker
         );
 
@@ -564,16 +564,16 @@ impl PerpOrderExchBehavior for PrepMatchingService {
     fn cancel_order(&self, cmd: CancelOrderCmd) -> Result<CancelOrderResult, PrepCmdError> {
         // 1. 先从元数据中获取订单信息 2. order.cancel
 
-        let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.quote_asset.0);
+        let balance_id = format!("{}:{}", self.account_id.0, cmd.trading_pair.quote_asset());
         let mut balance = match self.balance_repo.find_by_id_4_update(&balance_id).ok().flatten() {
             Some(b) => b,
             None => todo!() // todo 应该报错
         };
 
 
-        self.lob_repo.remove_order(TradingPair::USDT_USDT, cmd.order_id);
+        self.lob_repo.remove_order(TradingPair::UsdtUsdt, cmd.order_id);
 
-        let order = self.lob_repo.find_order_mut(TradingPair::USDT_USDT, cmd.order_id).unwrap();
+        let order = self.lob_repo.find_order_mut(TradingPair::UsdtUsdt, cmd.order_id).unwrap();
 
         order.cancel(&mut balance, self.now());
 
@@ -683,7 +683,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
         let balance = self.get_balance();
 
         let account_balance = AccountBalance::new(
-            cmd.asset.unwrap_or_else(|| AssetId::USDT),
+            cmd.asset.unwrap_or_else(|| AssetId::Usdt),
             balance,
             balance,
             Price::from_raw(0),
@@ -705,7 +705,7 @@ impl PerpOrderExchQueryProc for PrepMatchingService {
 
     fn query_mark_price(&self, cmd: QueryMarkPriceCmd) -> Result<Vec<MarkPriceInfo>, PrepCmdError> {
         // 简化实现：返回模拟标记价格
-        let symbol = cmd.trading_pair.unwrap_or_else(|| TradingPair::USDT_USDT);
+        let symbol = cmd.trading_pair.unwrap_or_else(|| TradingPair::UsdtUsdt);
 
         let mark_price = MarkPriceInfo::new(
             symbol,

@@ -16,7 +16,6 @@ use std::fmt;
 /// - 最小单位：0.00000001
 /// - 避免浮点数精度问题
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Decimal(i64);
 
 impl Decimal {
@@ -55,6 +54,63 @@ impl Decimal {
     #[inline]
     pub fn is_zero(&self) -> bool {
         self.0 == 0
+    }
+
+    /// 将 Decimal 转换为格式化的字符串
+    pub fn to_string(&self) -> String {
+        let integral = self.0 / Self::DECIMALS;
+        let fractional = self.0 % Self::DECIMALS;
+
+        let fractional_str = format!("{:08}", fractional.abs());
+        let trimmed = fractional_str.trim_end_matches('0').trim_end_matches('.');
+        if fractional < 0 {
+            format!("-{}.{}", integral.abs(), if trimmed.is_empty() { "0" } else { trimmed })
+        } else {
+            format!("{}.{}", integral, if trimmed.is_empty() { "0" } else { trimmed })
+        }
+    }
+
+    /// 从字符串解析 Decimal
+    pub fn from_string(s: &str) -> Result<Self, &'static str> {
+        let parts: Vec<_> = s.split('.').collect();
+        match parts.len() {
+            1 => {
+                // 没有小数部分
+                let integral = match parts[0].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err("Invalid integer part"),
+                };
+                Ok(Decimal(integral * Self::DECIMALS))
+            },
+            2 => {
+                // 有小数部分
+                let integral = match parts[0].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err("Invalid integer part"),
+                };
+                let mut fractional_str = parts[1].to_string();
+
+                // 补零或截断到 8 位小数
+                if fractional_str.len() < 8 {
+                    fractional_str = format!("{:0<8}", fractional_str);
+                } else if fractional_str.len() > 8 {
+                    fractional_str = fractional_str[..8].to_string();
+                }
+
+                let fractional = match fractional_str.parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err("Invalid fractional part"),
+                };
+
+                let mut total = integral.abs() * Self::DECIMALS + fractional;
+                if integral < 0 {
+                    total = -total;
+                }
+
+                Ok(Decimal(total))
+            },
+            _ => Err("Invalid decimal format"),
+        }
     }
 
     /// 定点数乘法：Decimal * Decimal -> Decimal
@@ -147,6 +203,24 @@ impl From<Decimal> for i128 {
 impl fmt::Display for Decimal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_f64())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Decimal {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Decimal {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        match Decimal::from_string(&s) {
+            Ok(d) => Ok(d),
+            Err(_) => Err(serde::de::Error::custom(format!("Invalid decimal format: {}", s))),
+        }
     }
 }
 

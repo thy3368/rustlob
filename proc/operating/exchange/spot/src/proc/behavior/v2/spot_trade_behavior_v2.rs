@@ -7,7 +7,6 @@ use base_types::handler::handler::Handler;
 use base_types::OrderSide;
 use immutable_derive::immutable;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_user_data_sse_behavior::OrderSide;
 
 /// Spot Trading 命令枚举 - 包含所有交易端点
 #[derive(Debug, Clone)]
@@ -104,52 +103,7 @@ pub enum SpotTradeCmdAny {
     QueryCommissionRates(QueryCommissionRatesCmd)
 }
 
-// ==================== 订单类型枚举 ====================
 
-// /// 订单类型
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// 
-// pub enum OrderType {
-//     /// 限价单
-//     Limit,
-//     /// 市价单
-//     Market,
-//     /// 止损单
-//     StopLoss,
-//     /// 止损限价单
-//     StopLossLimit,
-//     /// 止盈单
-//     TakeProfit,
-//     /// 止盈限价单
-//     TakeProfitLimit,
-//     /// 限价只挂单
-//     LimitMaker
-// }
-
-// /// 订单方向
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// 
-// pub enum OrderSide {
-//     /// 买入
-//     Buy,
-//     /// 卖出
-//     Sell
-// }
-
-// /// 有效方式
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// 
-// pub enum TimeInForce {
-//     /// 成交为止 (一直有效)
-//     GTC,
-//     /// 无法立即成交的部分就撤销
-//     IOC,
-//     /// 无法全部立即成交就撤销
-//     FOK
-// }
 
 /// 订单响应类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

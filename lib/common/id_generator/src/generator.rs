@@ -10,13 +10,14 @@ use std::{
 /// - 41位: 时间戳(毫秒)
 /// - 5位: 节点ID (支持32个节点)
 /// - 12位: 序列号 (每毫秒4096个ID)
+
 pub struct IdGenerator {
+    /// 组合的时间戳和序列号 (高48位时间戳 + 低16位序列号)
+    ts_and_seq: AtomicU64,
     /// 自定义起始时间 (2024-01-01 00:00:00 UTC)
     epoch: i64,
     /// 节点ID (0-31)
-    node_id: u8,
-    /// 组合的时间戳和序列号 (高48位时间戳 + 低16位序列号)
-    ts_and_seq: AtomicU64
+    node_id: u8
 }
 
 impl IdGenerator {
@@ -120,6 +121,8 @@ impl IdGenerator {
 
 #[cfg(test)]
 mod tests {
+    use once_cell::sync::Lazy;
+
     use super::*;
 
     #[test]
@@ -191,5 +194,16 @@ mod tests {
         all_ids.dedup();
         assert_eq!(all_ids.len(), original_len);
         println!("✅ {} unique IDs", original_len);
+    }
+
+    #[test]
+    fn abc() {
+        static ORDER_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
+            let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+            IdGenerator::new(node_id)
+        });
+        let id = ORDER_ID_GEN.next_id();
+
+        println!("✅ {} unique IDs", id);
     }
 }

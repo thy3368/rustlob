@@ -20,6 +20,11 @@ pub type Quantity = Decimal;
 /// 时间戳（纳秒）
 pub type Timestamp = u64;
 
+/// 订单ID
+/// todo 要改
+pub type OrderId = u64;
+
+
 /// 用户ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
@@ -47,168 +52,7 @@ impl From<u64> for AccountId {
     }
 }
 
-/// 资产ID（使用 u32 高性能）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub struct AssetId(pub u32);
-
-impl AssetId {
-    pub const USDT: AssetId = AssetId(1);
-    pub const BTC: AssetId = AssetId(2);
-    pub const ETH: AssetId = AssetId(3);
-}
-
-impl From<u32> for AssetId {
-    #[inline]
-    fn from(id: u32) -> Self {
-        Self(id)
-    }
-}
-
-/// 交易对
-///
-/// 定义基础资产和计价资产的关系
-/// 例如：BTC/USDT 交易对
-/// - base_asset = BTC (基础资产，卖出时检查)
-/// - quote_asset = USDT (计价资产，买入时检查)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
-pub struct TradingPair {
-    /// 基础资产（如 BTC）
-    pub base_asset: AssetId,
-    /// 计价资产（如 USDT）
-    pub quote_asset: AssetId
-}
-
-impl TradingPair {
-    #[inline]
-    pub const fn new(base_asset: AssetId, quote_asset: AssetId) -> Self {
-        Self {
-            base_asset,
-            quote_asset
-        }
-    }
-
-    /// 从交易对符号字符串创建 TradingPair
-    ///
-    /// # 说明
-    /// - 假设格式为 `{BASE_ASSET}{QUOTE_ASSET}`，例如 "BTCUSDT"
-    /// - 假设 quote_asset 总是 USDT（4字符）
-    /// - base_asset 是其余部分（通常 3-4 个字符）
-    ///
-    /// # 示例
-    /// ```ignore
-    /// let pair = TradingPair::from_symbol_str("BTCUSDT");
-    /// assert_eq!(pair.base_asset, AssetId::BTC);
-    /// assert_eq!(pair.quote_asset, AssetId::USDT);
-    /// ```
-    pub fn from_symbol_str(symbol: &str) -> Option<Self> {
-        if symbol.len() < 7 {
-            // 最少需要 3 (base) + 4 (USDT) = 7 个字符
-            return None;
-        }
-
-        let quote_str = &symbol[symbol.len() - 4..];
-        let base_str = &symbol[..symbol.len() - 4];
-
-        let base_asset = match base_str.to_uppercase().as_str() {
-            "BTC" => AssetId::BTC,
-            "ETH" => AssetId::ETH,
-            // 可以继续添加其他资产
-            _ => return None,
-        };
-
-        let quote_asset = match quote_str.to_uppercase().as_str() {
-            "USDT" => AssetId::USDT,
-            // 可以继续添加其他计价资产
-            _ => return None,
-        };
-
-        Some(Self {
-            base_asset,
-            quote_asset,
-        })
-    }
-
-    /// 生成交易对符号字符串
-    ///
-    /// # 说明
-    /// - 生成格式为 `{BASE_ASSET}{QUOTE_ASSET}` 的符号
-    /// - 例如：BTC/USDT -> "BTCUSDT"
-    ///
-    /// # 示例
-    /// ```ignore
-    /// let pair = TradingPair::BTC_USDT;
-    /// assert_eq!(pair.to_symbol_string(), "BTCUSDT");
-    /// ```
-    pub fn to_symbol_string(&self) -> String {
-        let base_str = match self.base_asset.0 {
-            2 => "BTC",
-            3 => "ETH",
-            _ => "UNKNOWN",
-        };
-
-        let quote_str = match self.quote_asset.0 {
-            1 => "USDT",
-            _ => "UNKNOWN",
-        };
-
-        format!("{}{}", base_str, quote_str)
-    }
-
-    /// BTC/USDT 交易对
-    pub const BTC_USDT: TradingPair = TradingPair {
-        base_asset: AssetId::BTC,
-        quote_asset: AssetId::USDT
-    };
-
-    /// ETH/USDT 交易对
-    pub const ETH_USDT: TradingPair = TradingPair {
-        base_asset: AssetId::ETH,
-        quote_asset: AssetId::USDT
-    };
-
-    /// USDT/USDT（用于费用资产表示）
-    pub const USDT_USDT: TradingPair = TradingPair {
-        base_asset: AssetId::USDT,
-        quote_asset: AssetId::USDT
-    };
-}
-
-
-/// 订单ID
-pub type OrderId = u64;
-
-/// 买卖方向
-///
-/// 定义交易的买卖方向，供 LOB、Account 等模块共享使用
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum OrderSide {
-    Buy = 0,
-    Sell = 1
-}
-
-impl OrderSide {
-    /// 获取相反方向
-    #[inline]
-    pub fn opposite(&self) -> OrderSide {
-        match self {
-            OrderSide::Buy => OrderSide::Sell,
-            OrderSide::Sell => OrderSide::Buy
-        }
-    }
-}
-
-impl Default for OrderSide {
-    fn default() -> Self {
-        OrderSide::Buy
-    }
-}
 
 /// 持仓ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -234,7 +78,30 @@ impl Default for PositionId {
     fn default() -> Self { Self(0) }
 }
 
+/// 交易员标识符（8字节固定长度）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(align(8))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//todo 币安是怎么定义
+pub struct TraderId( [u8; 8]);
+
+impl Default for TraderId {
+    fn default() -> Self {
+        Self([0; 8])
+    }
+}
+
+impl TraderId {
+    /// 创建新的交易员ID
+    #[inline]
+    pub fn new(bytes: [u8; 8]) -> Self {
+        Self(bytes)
+    }
+}
+
+
 /// 成交ID
+/// todo 要改
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TradeId(String);
@@ -258,3 +125,209 @@ impl fmt::Display for TradeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
 }
 
+/// 资产类型枚举
+///
+/// 提供类型安全的资产定义，支持与 u32 之间的转换
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum AssetId {
+    /// USDT（泰达币）- 稳定币
+    Usdt = 1,
+    /// BTC（比特币）- 主要加密货币
+    Btc = 2,
+    /// ETH（以太坊）- 智能合约平台
+    Eth = 3,
+}
+
+impl AssetId {
+    /// 将资产ID转换为原始数值
+    pub const fn as_u32(self) -> u32 {
+        self as u32
+    }
+
+    /// 将资产ID转换为字符串表示
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            AssetId::Usdt => "USDT",
+            AssetId::Btc => "BTC",
+            AssetId::Eth => "ETH",
+        }
+    }
+
+    /// 从字符串表示转换为资产ID（如果匹配）
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "USDT" => Some(AssetId::Usdt),
+            "BTC" => Some(AssetId::Btc),
+            "ETH" => Some(AssetId::Eth),
+            _ => None,
+        }
+    }
+}
+
+impl Default for AssetId {
+    #[inline]
+    fn default() -> Self {
+        AssetId::Usdt
+    }
+}
+
+impl fmt::Display for AssetId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl From<AssetId> for u32 {
+    #[inline]
+    fn from(asset: AssetId) -> Self {
+        asset as u32
+    }
+}
+
+impl TryFrom<u32> for AssetId {
+    type Error = ();
+
+    #[inline]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(AssetId::Usdt),
+            2 => Ok(AssetId::Btc),
+            3 => Ok(AssetId::Eth),
+            _ => Err(()),
+        }
+    }
+}
+
+/// 交易对
+///
+/// 定义基础资产和计价资产的关系
+/// 例如：BTC/USDT 交易对
+/// - base_asset = BTC (基础资产，卖出时检查)
+/// - quote_asset = USDT (计价资产，买入时检查)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "UPPERCASE"))]
+pub enum TradingPair {
+    /// BTC/USDT 交易对
+    BtcUsdt = 1,
+    /// ETH/USDT 交易对
+    EthUsdt = 2,
+    /// BTC/ETH 交易对
+    BtcEth = 3,
+    /// USDT/USDT（用于费用资产表示）
+    UsdtUsdt = 4,
+}
+
+impl TradingPair {
+    /// 获取基础资产
+    pub const fn base_asset(self) -> AssetId {
+        match self {
+            TradingPair::BtcUsdt => AssetId::Btc,
+            TradingPair::EthUsdt => AssetId::Eth,
+            TradingPair::BtcEth => AssetId::Btc,
+            TradingPair::UsdtUsdt => AssetId::Usdt,
+        }
+    }
+
+    /// 获取计价资产
+    pub const fn quote_asset(self) -> AssetId {
+        match self {
+            TradingPair::BtcUsdt => AssetId::Usdt,
+            TradingPair::EthUsdt => AssetId::Usdt,
+            TradingPair::BtcEth => AssetId::Eth,
+            TradingPair::UsdtUsdt => AssetId::Usdt,
+        }
+    }
+
+    /// 从交易对符号字符串创建 TradingPair
+    ///
+    /// # 说明
+    /// 支持多种格式：
+    /// - `{BASE}{QUOTE}` 例如 "BTCUSDT"
+    /// - `{BASE}_{QUOTE}` 例如 "BTC_USDT"
+    /// - `{BASE}/{QUOTE}` 例如 "BTC/USDT"
+    /// - `{BASE}-{QUOTE}` 例如 "BTC-USDT"
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let pair1 = TradingPair::from_symbol_str("BTCUSDT");
+    /// let pair2 = TradingPair::from_symbol_str("BTC/USDT");
+    /// assert_eq!(pair1, pair2);
+    /// ```
+    pub fn from_symbol_str(symbol: &str) -> Option<Self> {
+        let normalized = symbol.replace(['_', '/', '-'], "").to_uppercase();
+        match normalized.as_str() {
+            "BTCUSDT" => Some(TradingPair::BtcUsdt),
+            "ETHUSDT" => Some(TradingPair::EthUsdt),
+            "BTCETH" => Some(TradingPair::BtcEth),
+            "USDTUSDT" => Some(TradingPair::UsdtUsdt),
+            _ => None,
+        }
+    }
+
+    /// 生成交易对符号字符串
+    ///
+    /// # 说明
+    /// - 生成格式为 `{BASE_ASSET}{QUOTE_ASSET}` 的符号
+    /// - 例如：BTC/USDT -> "BTCUSDT"
+    ///
+    /// # 示例
+    /// ```ignore
+    /// let pair = TradingPair::BtcUsdt;
+    /// assert_eq!(pair.to_symbol_string(), "BTCUSDT");
+    /// ```
+    pub const fn to_symbol_string(self) -> &'static str {
+        match self {
+            TradingPair::BtcUsdt => "BTCUSDT",
+            TradingPair::EthUsdt => "ETHUSDT",
+            TradingPair::BtcEth => "BTCETH",
+            TradingPair::UsdtUsdt => "USDTUSDT",
+        }
+    }
+}
+
+impl Default for TradingPair {
+    #[inline]
+    fn default() -> Self {
+        TradingPair::BtcUsdt
+    }
+}
+
+impl fmt::Display for TradingPair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_symbol_string())
+    }
+}
+
+
+/// 买卖方向
+///
+/// 定义交易的买卖方向，供 LOB、Account 等模块共享使用
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "PascalCase"))]
+pub enum OrderSide {
+    Buy = 0,
+    Sell = 1
+}
+
+impl OrderSide {
+    /// 获取相反方向
+    #[inline]
+    pub fn opposite(&self) -> OrderSide {
+        match self {
+            OrderSide::Buy => OrderSide::Sell,
+            OrderSide::Sell => OrderSide::Buy
+        }
+    }
+}
+
+impl Default for OrderSide {
+    fn default() -> Self {
+        OrderSide::Buy
+    }
+}

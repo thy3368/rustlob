@@ -22,14 +22,14 @@ impl BalanceId {
 }
 
 impl fmt::Display for BalanceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}:{}", self.account_id.0, self.asset_id.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}:{}", self.account_id.0, u32::from(self.asset_id)) }
 }
 
 impl Default for BalanceId {
     fn default() -> Self {
         Self {
             account_id: AccountId(0),
-            asset_id: AssetId(0)
+            asset_id: AssetId::default()
         }
     }
 }

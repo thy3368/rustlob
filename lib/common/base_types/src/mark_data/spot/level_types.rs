@@ -1,5 +1,5 @@
-use crate::{OrderId, Price, Quantity, OrderSide};
-use crate::exchange::spot::spot_types::TraderId;
+use crate::{OrderId, Price, Quantity, OrderSide, Decimal};
+use crate::base_types::TraderId;
 
 /// 市场数据等级定义（Level 1-3）
 ///
@@ -87,7 +87,7 @@ impl Level1 {
         };
 
         let mid_price = match (best_ask, best_bid) {
-            (Some(ask), Some(bid)) => Some((ask + bid) / Price::from_raw(2)),
+            (Some(ask), Some(bid)) => Some((ask + bid) / Decimal::from_raw(200000000)),
             _ => None
         };
 

@@ -13,9 +13,9 @@
 // ============================================================================
 
 pub use base_types::cqrs::cqrs_types::{CMetadata, Cmd, CmdResp};
-use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce, TraderId};
+use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce};
 use base_types::{AccountId, OrderId, Price, Quantity, OrderSide, TradingPair};
-
+use base_types::base_types::TraderId;
 // ============================================================================
 // 错误类型定义 (混合方案)
 // ============================================================================
