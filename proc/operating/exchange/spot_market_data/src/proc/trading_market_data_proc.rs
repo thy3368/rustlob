@@ -1067,7 +1067,7 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
-    use base_types::exchange::spot::spot_types::TraderId;
+    use base_types::base_types::TraderId;
     use base_types::mark_data::spot::level_types::OrderChangeType;
     use base_types::Price;
     use super::*;
