@@ -1,8 +1,4 @@
-use base_types::{
-    account::balance::Balance,
-    exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce},
-    OrderId, OrderSide, Price, Quantity, TradingPair
-};
+use base_types::{account::balance::Balance, exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce}, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
@@ -92,7 +88,7 @@ impl SpotTradeBehaviorImpl {
         let mut base_asset_balance =
             self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
 
-        internal_order.frozen_margin(&mut frozen_asset_balance, now);
+        internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 
         // 匹配
         let matched_orders = self.lob_repo.match_orders(
@@ -274,8 +270,8 @@ mod tests {
         assert_eq!(order.trading_pair.quote_asset(), AssetId::Usdt, "计价资产应为USDT");
 
         // 7. 验证时间戳（应该是有效的毫秒时间戳）
-        assert!(order.timestamp > 0, "时间戳应为正数");
-        assert!(order.timestamp > 1_000_000_000, "时间戳应为合理的毫秒值");
+        assert!(order.timestamp.0 > 0, "时间戳应为正数");
+        assert!(order.timestamp.0 > 1_000_000_000, "时间戳应为合理的毫秒值");
 
         // 8. 验证客户端订单ID
         assert_eq!(order.client_order_id, Some("CLIENT-001".to_string()), "客户端订单ID应被保存");

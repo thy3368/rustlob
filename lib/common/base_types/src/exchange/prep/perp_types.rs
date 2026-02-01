@@ -98,7 +98,7 @@ impl PrepPosition {
             leverage: 1,
             margin: Price::from_raw(0),
             liquidation_price: None,
-            updated_at: current_timestamp()
+            updated_at: Timestamp::now_as_nanos(),  
         }
     }
 
@@ -216,7 +216,7 @@ impl PrepPosition {
         self.liquidation_price = self.calculate_liquidation_price_value();
 
         // 更新时间戳
-        self.updated_at = current_timestamp_ms();
+        self.updated_at = Timestamp::now_as_nanos();
     }
 
     /// 计算未实现盈亏值
@@ -276,17 +276,7 @@ impl PrepPosition {
     pub fn update_realized_pnl(&mut self, pnl: Price) { self.realized_pnl = self.realized_pnl + pnl; }
 }
 
-/// 获取当前时间戳（纳秒）
-fn current_timestamp() -> Timestamp {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
-}
 
-/// 获取当前时间戳（毫秒）
-fn current_timestamp_ms() -> Timestamp {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
-}
 
 // ============================================================================
 // 成交相关类型定义
@@ -318,7 +308,7 @@ pub struct PrepTrade {
     /// 是否为Maker（流动性提供方）//todo 怎么判断？
     pub is_maker: bool,
     /// 成交时间戳（毫秒）
-    pub timestamp: u64
+    pub timestamp: Timestamp
 }
 
 
@@ -339,7 +329,7 @@ impl PrepTrade {
             fee,
             fee_asset,
             is_maker,
-            timestamp: current_timestamp_ms()
+            timestamp: Timestamp::now_as_nanos()
         }
     }
 

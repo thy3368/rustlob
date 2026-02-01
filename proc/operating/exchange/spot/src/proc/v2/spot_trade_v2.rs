@@ -1,8 +1,4 @@
-use base_types::{
-    account::balance::Balance,
-    exchange::spot::spot_types::{SpotOrder, SpotTrade},
-    handler::handler::Handler
-};
+use base_types::{account::balance::Balance, exchange::spot::spot_types::{SpotOrder, SpotTrade}, handler::handler::Handler, Timestamp};
 use db_repo::{
     adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo,
     MySqlDbRepo
@@ -67,7 +63,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
                 Price::from_f64(cmd.price().unwrap_or(0.0)),
                 Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                 cmd.time_in_force().unwrap(),
-                cmd.new_client_order_id().map(|s| s.to_string()),
+                *cmd.new_client_order_id(),
             ),
             OrderType::Market => {
                 // 市价单处理
@@ -94,7 +90,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
 
             }
         };
-        
+
         match internal_order.time_in_force {
             TimeInForce::GTC => {}
             TimeInForce::IOC => {}
@@ -113,7 +109,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let mut frozen_asset_balance = self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
         // 冻结余额
-        internal_order.frozen_margin(&mut frozen_asset_balance, now);
+        internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 
         // TODO: 生成新增/账户冻结 eventlog
         // TODO: 发送eventlog到消息队列，行情对外发布消息
@@ -124,7 +120,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             cmd.symbol().to_string(),
             order_id as i64,
             -1, // 不属于任何订单列表
-            cmd.new_client_order_id().unwrap_or_else(|| format!("{}", order_id)),
+            (*cmd.new_client_order_id().unwrap()).parse().unwrap(),
             *cmd.timestamp()
         );
 

@@ -6,7 +6,7 @@ use std::{
 use base_types::{account::balance::Balance, exchange::prep::prep_order::PrepOrder};
 // Clean Architecture: 引入 MySqlDbRepo 和相关接口
 // Base types
-use base_types::{AccountId, AssetId, PositionSide, PrepPosition, OrderSide as BaseSide, Timestamp, TradingPair};
+use base_types::{AccountId, AssetId, OrderSide as BaseSide, PositionSide, PrepPosition, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
 use diff::{ChangeLogEntry, Entity};
@@ -17,11 +17,11 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use crate::proc::trading_prep_order_behavior::{
     AccountBalance, AccountInfo, CancelAllOrdersCmd, CancelAllOrdersResult, CancelOrderCmd, CancelOrderResult,
     ClosePositionCmd, ClosePositionResult, FundingFeeRecord, FundingRateRecord, MarkPriceInfo, ModifyOrderCmd,
-    ModifyOrderResult, OpenPositionCmd, OpenPositionResult, OrderBookSnapshot, OrderId, OrderQueryResult,
+    ModifyOrderResult, OpenPositionCmd, OpenPositionResult, OrderBookSnapshot, OrderId, OrderQueryResult, OrderSide,
     PerpOrderExchBehavior, PerpOrderExchQueryProc, PrepCmdError, PrepTrade, Price, Quantity, QueryAccountBalanceCmd,
     QueryAccountInfoCmd, QueryFundingFeeCmd, QueryFundingRateHistoryCmd, QueryMarkPriceCmd, QueryOrderBookCmd,
     QueryOrderCmd, QueryPositionCmd, QueryTradesCmd, SetLeverageCmd, SetLeverageResult, SetMarginTypeCmd,
-    SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, OrderSide, TradeId, TradesQueryResult
+    SetMarginTypeResult, SetPositionModeCmd, SetPositionModeResult, TradeId, TradesQueryResult
 };
 
 /// 本地撮合引擎服务
@@ -176,13 +176,6 @@ impl PrepMatchingService {
     }
 
 
-    /// 获取当前时间戳（纳秒）
-    #[inline]
-    fn now(&self) -> Timestamp {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
-    }
-
-
     /// 计算所需保证金
     ///
     /// # 参数
@@ -299,9 +292,9 @@ impl PrepMatchingService {
             None => todo!() // todo 应该报错
         };
 
-        let now = self.now();
+
         // 2 风控检查 - 余额检查并冻结保证金
-        internal_order.frozen_margin(balance.clone(), now);
+        internal_order.frozen_margin(balance.clone(), Timestamp::now_as_nanos());
 
 
         // 匹配
@@ -337,7 +330,7 @@ impl PrepMatchingService {
                         &mut matched_position,
                         &mut balance,
                         &mut position,
-                        now
+                        Timestamp::now_as_nanos()
                     );
 
                     trades.push(trade);
@@ -510,15 +503,14 @@ impl PerpOrderExchBehavior for PrepMatchingService {
 
                 position.quantity = Quantity::from_f64(position.quantity.to_f64() - close_qty.to_f64());
                 position.margin = Price::from_f64(position.margin.to_f64() * (1.0 - close_ratio));
-                position.updated_at =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+                position.updated_at = Timestamp::now_as_nanos();
             });
         }
 
         // ========================================================================
         // 7. 更新账户余额
         // ========================================================================
-        let now = self.now();
+        let now = Timestamp::now_as_nanos();
 
         // 计算归还的保证金
         let margin_return = if is_full_close {
@@ -575,7 +567,7 @@ impl PerpOrderExchBehavior for PrepMatchingService {
 
         let order = self.lob_repo.find_order_mut(TradingPair::UsdtUsdt, cmd.order_id).unwrap();
 
-        order.cancel(&mut balance, self.now());
+        order.cancel(&mut balance, Timestamp::now_as_nanos());
 
         todo!()
     }
@@ -612,7 +604,7 @@ impl PerpOrderExchBehavior for PrepMatchingService {
 
         // 归还总保证金
         if total_refund_u64 > 0 {
-            let now = self.now();
+            let now = Timestamp::now_as_nanos();
             let total_refund_price = Price::from_raw(total_refund_u64 as i64);
             self.add_balance(total_refund_price, now);
         }

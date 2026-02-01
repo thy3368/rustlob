@@ -514,11 +514,8 @@ impl SpotOrder {
         // 重新计算平均成交价 = 累计成交金额 / 已成交数量
         self.average_price = self.cumulative_quote_qty / self.executed_qty;
 
-        // 获取当前时间戳
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(self.timestamp);
+
+        let now = Timestamp::now_as_nanos();
 
         // 更新账户余额
         match self.side {
@@ -535,7 +532,7 @@ impl SpotOrder {
         };
 
         // 生成交易ID（基于时间戳和订单ID）
-        let trade_id = (self.timestamp << 32) | (self.order_id & 0xFFFFFFFF) as u64;
+        let trade_id = (self.timestamp.0 << 32) | (self.order_id & 0xFFFFFFFF) as u64;
 
         // 根据 CexFeeEntity 配置计算手续费率和数量
         let (commission_rate, commission_qty) = self.calculate_fee_with_amount(
@@ -594,7 +591,7 @@ impl SpotOrder {
         vec
     }
 
-    pub fn frozen_margin(&mut self, balance: &mut Balance, now: u64) {
+    pub fn frozen_margin(&mut self, balance: &mut Balance, now: Timestamp) {
         // 根据买卖方向确定冻结资产
         match self.side {
             OrderSide::Buy => {
@@ -619,10 +616,7 @@ impl SpotOrder {
         order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: OrderSide,
         price: Price, quantity: Quantity, time_in_force: TimeInForce, client_order_id: Option<String>
     ) -> Self {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
+        let timestamp = Timestamp::now_as_nanos();
 
         Self {
             order_id,
@@ -682,10 +676,7 @@ impl SpotOrder {
     #[inline]
     pub fn cancel(&mut self) {
         self.status = OrderStatus::Cancelled;
-        self.last_updated = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(self.timestamp);
+        self.last_updated = Timestamp::now_as_nanos();
     }
 
     /// 设置订单来源（Phase 3）
@@ -755,7 +746,7 @@ pub struct SpotTrade {
     /// 订单ID（对标币安 orderId、OKX ordId、Coinbase order_id）
     pub order_id: OrderId,
     /// 成交时间戳 (ms)（对标币安/OKX/Coinbase）
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
 
     // ===== 价格和数量（24字节）=====
     /// 成交价格（对标所有交易所）
@@ -785,8 +776,8 @@ impl SpotTrade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
-        trade_id: u64, order_id: OrderId, timestamp: u64, price: Price, quantity: Quantity, taker_side: OrderSide,
-        commission_qty: Quantity, commission_asset: AssetId, commission_rate: i32
+        trade_id: u64, order_id: OrderId, timestamp: Timestamp, price: Price, quantity: Quantity,
+        taker_side: OrderSide, commission_qty: Quantity, commission_asset: AssetId, commission_rate: i32
     ) -> Self {
         let quote_qty = quantity * price; // 计算成交金额
 
@@ -815,7 +806,7 @@ mod tests {
             AccountId(1),
             AssetId::Usdt,
             1_000_000_000, // 10亿
-            0
+            Timestamp::now_as_nanos()
         )
     }
 
@@ -869,7 +860,7 @@ mod tests {
 
         // 执行成交
         let mut quote_balance = create_test_balance();
-        let mut base_balance = Balance::with_available(AccountId(1), AssetId::Btc, 0, 0);
+        let mut base_balance = Balance::with_available(AccountId(1), AssetId::Btc, 0, Timestamp::now_as_nanos());
 
         let trade = order.trade(
             filled,
