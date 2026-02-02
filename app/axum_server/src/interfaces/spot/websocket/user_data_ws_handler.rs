@@ -5,12 +5,10 @@ use axum::{
     response::IntoResponse
 };
 use futures::{SinkExt, StreamExt};
-use tokio::sync::mpsc;
-
-use crate::interfaces::spot::websocket::{
-    connection_types::{ConnectionInfo, ConnectionRepo},
-    subscription_service::SubscriptionService
+use push::push::{
+    connection_types::ConnectionInfo, subscription_service::SubscriptionService
 };
+use tokio::sync::mpsc;
 
 /// 用户数据 WebSocket 连接处理器
 pub async fn user_data_websocket_handler(
@@ -25,7 +23,7 @@ pub async fn user_data_websocket_handler(
         // 创建 mpsc 通道用于服务端推送消息
         let (tx, mut rx) = mpsc::unbounded_channel();
 
-        
+
         let timestamp: i64 = chrono::Utc::now().timestamp_millis();
         // 创建连接信息
         let conn_info = ConnectionInfo {

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use tracing;
-
+use push::push::connection_types::ConnectionRepo;
 use crate::interfaces::spot::{
-    http_server::HttpServer, websocket::connection_types::ConnectionRepo, websocket_server::WebSocketServer
+    http_server::HttpServer, websocket_server::WebSocketServer
 };
 
 /// Spot 模块启动器

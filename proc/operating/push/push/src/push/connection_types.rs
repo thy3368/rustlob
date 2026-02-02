@@ -81,14 +81,6 @@ pub struct ConnectionRepo {
 
 impl ConnectionRepo {
     /// 创建新的连接管理器实例
-    pub fn new() -> Self {
-        Self {
-            user_connections: Arc::new(RwLock::new(HashMap::new())),
-            all_connections: Arc::new(RwLock::new(HashMap::new())),
-            connection_senders: Arc::new(RwLock::new(HashMap::new())),
-            user_senders: Arc::new(RwLock::new(HashMap::new()))
-        }
-    }
 
     /// 根据事件类型获取对该事件感兴趣的所有发送器
     ///

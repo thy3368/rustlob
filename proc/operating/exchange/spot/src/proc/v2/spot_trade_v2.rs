@@ -25,30 +25,6 @@ use crate::proc::behavior::{
     }
 };
 
-pub trait Action<T>{
-     fn frozen_margin_4(&self, p0: T);
-}
-impl Action<SpotOrder> for Balance {
-     fn frozen_margin_4(&self, order: SpotOrder) {
-
-         match order.side {
-             OrderSide::Buy => {
-                 // 冻结，失败则reject
-                 self.frozen_qty = self.total_qty * self.price.unwrap();
-                 self.frozen_asset = self.trading_pair.quote_asset();
-                 balance.frozen(self.frozen_qty, now);
-             }
-             OrderSide::Sell => {
-                 self.frozen_qty = self.total_qty;
-                 self.frozen_asset = self.trading_pair.base_asset();
-                 balance.frozen(self.frozen_qty, now);
-             }
-         };
-         
-         
-        todo!()
-    }
-}
 
 
 // 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
@@ -61,6 +37,7 @@ impl From<NewOrderCmd> for SpotOrder {
         let account_id = AccountId(1); // TODO: 从 metadata 中获取真实的 account_id
         let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
 
+        //todo 可以simd优化吗
         match cmd.order_type() {
             OrderType::Limit => {
                 // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝

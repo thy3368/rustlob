@@ -1,14 +1,17 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{routing::get, Router};
+use db_repo::adapter::change_log_queue_repo::ChangeLogChannelQueueRepo;
+use push::push::{
+    connection_types::ConnectionRepo, push_service::PushService, subscription_service::SubscriptionService
+};
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use tokio::sync::broadcast;
 use tower_http::services::ServeDir;
-use db_repo::adapter::change_log_queue_repo::ChangeLogChannelQueueRepo;
+
 use crate::interfaces::spot::websocket::{
-    connection_types::ConnectionRepo, md_sse_controller::SpotMarketDataSSEImpl, spot_market_data_pusher,
-    spot_user_data_pusher, subscription_service::SubscriptionService, ud_sse_controller::SpotUserDataSSEImpl,
-    user_data_ws_handler::user_data_websocket_handler
+    md_sse_controller::SpotMarketDataSSEImpl, spot_market_data_pusher, spot_user_data_pusher,
+    ud_sse_controller::SpotUserDataSSEImpl, user_data_ws_handler::user_data_websocket_handler
 };
 
 /// WebSocket 服务器启动器
@@ -35,23 +38,24 @@ impl WebSocketServer {
         md_pusher.start();
         tracing::info!("SpotMarketDataPusher started successfully");
 
-        // 启动 SpotUserDataPusher（现在使用连接管理器而非广播通道）
-        // let ud_pusher =
-        // spot_user_data_pusher::SpotUserDataPusher::new(connection_repo.clone()).
-        // with_interval(8); // 每8秒推送一次 ud_pusher.start();
 
         // 启动订阅服务（无状态设计，不需要克隆）
         let change_log_repo = Arc::new(ChangeLogChannelQueueRepo::new());
-        let sub_service = Arc::new(SubscriptionService::new(connection_repo.clone(), change_log_repo));
+        let push_service = Arc::new(PushService::new(connection_repo.clone(), change_log_repo));
+        let sub_service = Arc::new(SubscriptionService::new(connection_repo.clone()));
+
 
         // 使用 100ms 轮询间隔启动后台任务
-        sub_service.start(Duration::from_millis(100));
+        push_service.start(Duration::from_millis(100));
 
         tracing::info!("SubscriptionService started successfully");
 
 
         let ws_app = Router::new()
-            .route("/ws/user_data", get(move |ws, conn_info| user_data_websocket_handler(ws, conn_info, sub_service.clone())))
+            .route(
+                "/ws/user_data",
+                get(move |ws, conn_info| user_data_websocket_handler(ws, conn_info, sub_service.clone()))
+            )
             .fallback_service(ServeDir::new("."));
 
 

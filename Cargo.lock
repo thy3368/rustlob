@@ -311,6 +311,7 @@ dependencies = [
  "immutable_derive",
  "lob_repo",
  "mysql 27.0.0",
+ "push",
  "reqwest 0.13.1",
  "sbe",
  "serde",
@@ -3707,6 +3708,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "push"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "db_repo",
+ "immutable_derive",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

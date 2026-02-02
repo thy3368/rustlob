@@ -1,0 +1,17 @@
+[package]
+name = "push"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+axum = { version = "0.8.8", features = ["ws", "macros"] }
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+immutable_derive = { path = "../../../../lib/common/immutable_derive" }
+chrono = "0.4.43"
+# Database repository
+db_repo = { path = "../../../../lib/common/db_repo" }
+serde_json = "1.0.149"

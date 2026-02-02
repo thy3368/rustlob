@@ -4,32 +4,36 @@ use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::q
 use immutable_derive::immutable;
 use serde_json::json;
 
-use crate::interfaces::spot::websocket::connection_types::{ConnectionInfo, ConnectionRepo};
+use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
+// use serde_json::json;
+
 
 /// 订阅服务 - 无状态设计，可安全地在多线程间共享
 ///
 /// 该服务只包含不可变的依赖引用，不包含任何运行时状态，
 /// 因此可以被多个线程同时访问而无需克隆。
 #[immutable]
-pub struct SubscriptionService {
+pub struct PushService {
     /// 连接管理仓储（不可变引用）
     connection_repo: Arc<ConnectionRepo>,
     /// 变更日志仓储（不可变引用）
     change_log_repo: Arc<ChangeLogChannelQueueRepo>
 }
 
-impl SubscriptionService {
-    /// 创建新的订阅服务实例
-    ///
-    /// # 参数
-    /// - `connection_repo`: 连接管理仓储
-    /// - `change_log_repo`: 变更日志仓储
-    pub fn new(connection_repo: Arc<ConnectionRepo>, change_log_repo: Arc<ChangeLogChannelQueueRepo>) -> Self {
-        Self {
-            connection_repo,
-            change_log_repo
-        }
-    }
+
+
+impl PushService {
+    // /// 创建新的订阅服务实例
+    // ///
+    // /// # 参数
+    // /// - `connection_repo`: 连接管理仓储
+    // /// - `change_log_repo`: 变更日志仓储
+    // pub fn new(connection_repo: Arc<ConnectionRepo>, change_log_repo:
+    // Arc<ChangeLogChannelQueueRepo>) -> Self {     Self {
+    //         connection_repo,
+    //         change_log_repo
+    //     }
+    // }
 
     /// 启动后台事件轮询任务
     ///
@@ -59,22 +63,6 @@ impl SubscriptionService {
         }
     }
 
-    /// 添加新连接
-    ///
-    /// # 参数
-    /// - `conn_info`: 连接信息
-    pub async fn add_connection(&self, conn_info: ConnectionInfo) {
-        self.connection_repo.add_connection(conn_info).await;
-    }
-
-    /// 移除连接
-    ///
-    /// # 参数
-    /// - `client_addr`: 客户端地址
-    pub async fn remove_connection(&self, client_addr: SocketAddr) {
-        self.connection_repo.remove_connection(client_addr).await;
-    }
-
     /// 尝试发送待处理的事件给相关订阅者
     ///
     /// 该方法：
@@ -94,20 +82,20 @@ impl SubscriptionService {
         for event in events {
             tracing::debug!(
                 "Processing event: entity_type={}, entity_id={}, change_type={:?}",
-                event.entity_type,
-                event.entity_id,
-                event.change_type
+                event.entity_type(),
+                event.entity_id(),
+                event.change_type()
             );
 
             // 通过 ConnectionRepo 找到对该 event 感兴趣的发送器列表
             let interested_senders: Vec<tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>> =
-                self.connection_repo.get_senders_by_entity(&event.entity_type, &event.entity_id).await;
+                self.connection_repo.get_senders_by_entity(&event.entity_type(), &event.entity_id()).await;
 
             if interested_senders.is_empty() {
                 tracing::trace!(
                     "No connections interested in event: entity_type={}, entity_id={}",
-                    event.entity_type,
-                    event.entity_id
+                    event.entity_type(),
+                    event.entity_id()
                 );
                 continue; // 没有感兴趣的连接，直接丢弃该消息
             }
@@ -116,11 +104,11 @@ impl SubscriptionService {
             let msg_text = match serde_json::to_string(&json!({
                 "stream_type": "user_data",
                 "data": {
-                    "entity_id": event.entity_id,
-                    "entity_type": event.entity_type,
-                    "change_type": format!("{:?}", event.change_type),
-                    "timestamp": event.timestamp,
-                    "sequence": event.sequence
+                    "entity_id": event.entity_id(),
+                    "entity_type": event.entity_type(),
+                    "change_type": format!("{:?}", event.change_type()),
+                    "timestamp": event.timestamp(),
+                    "sequence": event.sequence()
                 }
             })) {
                 Ok(text) => text,
@@ -148,8 +136,8 @@ impl SubscriptionService {
                 "Sent event to {}/{} connections: entity_type={}, entity_id={}",
                 success_count,
                 sender_count,
-                event.entity_type,
-                event.entity_id
+                event.entity_type(),
+                event.entity_id()
             );
         }
     }
