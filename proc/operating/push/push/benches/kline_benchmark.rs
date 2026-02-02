@@ -43,7 +43,7 @@ fn benchmark_kline_aggregator(c: &mut Criterion) {
 fn benchmark_kline_aggregator2(c: &mut Criterion) {
     let test_data = generate_test_data(100_000); // 10万笔交易
 
-    c.bench_function("KLineAggregator::process_trades_batch", |b| {
+    c.bench_function("SimdKLineAggregator::process_trades_batch", |b| {
         b.iter(|| {
             let aggregator = SimdKLineAggregator::new();
             aggregator.process_trades_batch(black_box(&test_data)).unwrap();

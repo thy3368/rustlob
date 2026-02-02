@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     simd::{f64x8, num::SimdFloat},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -7,24 +6,24 @@ use std::{
     }
 };
 
-use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, TimeWindow, OHLC};
+use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, LockFreeRingBuffer};
 
 // SIMD 优化的 K 线聚合器
 pub struct SimdKLineAggregator {
     // 当前活跃窗口 [1s, 1m, 15m, 1h]
     current_windows: [RwLock<Option<OHLC>>; 4],
 
-    // 历史K线存储（环形缓冲区）
-    history_1s: RwLock<VecDeque<OHLC>>,  // 存储最近3600秒
-    history_1m: RwLock<VecDeque<OHLC>>,  // 存储最近1440分钟
-    history_15m: RwLock<VecDeque<OHLC>>, // 存储最近672个15分钟
-    history_1h: RwLock<VecDeque<OHLC>>,  // 存储最近720小时
+    // 历史K线存储（无锁环形缓冲区）
+    history_1s: LockFreeRingBuffer<OHLC>,  // 存储最近3600秒
+    history_1m: LockFreeRingBuffer<OHLC>,  // 存储最近1440分钟
+    history_15m: LockFreeRingBuffer<OHLC>, // 存储最近672个15分钟
+    history_1h: LockFreeRingBuffer<OHLC>,  // 存储最近720小时
 
-    // 滑动窗口统计
-    sliding_1s: RwLock<VecDeque<OHLC>>,  // 最近60秒
-    sliding_1m: RwLock<VecDeque<OHLC>>,  // 最近60分钟
-    sliding_15m: RwLock<VecDeque<OHLC>>, // 最近96个15分钟
-    sliding_1h: RwLock<VecDeque<OHLC>>,  // 最近168小时
+    // 滑动窗口统计（无锁环形缓冲区）
+    sliding_1s: LockFreeRingBuffer<OHLC>,  // 最近60秒
+    sliding_1m: LockFreeRingBuffer<OHLC>,  // 最近60分钟
+    sliding_15m: LockFreeRingBuffer<OHLC>, // 最近96个15分钟
+    sliding_1h: LockFreeRingBuffer<OHLC>,  // 最近168小时
 
     // 原子计数器
     total_trades: AtomicU64,
@@ -49,14 +48,14 @@ impl SimdKLineAggregator {
     pub fn new_with_batch_size(batch_size: usize) -> Self {
         Self {
             current_windows: [RwLock::new(None), RwLock::new(None), RwLock::new(None), RwLock::new(None)],
-            history_1s: RwLock::new(VecDeque::with_capacity(3600)),
-            history_1m: RwLock::new(VecDeque::with_capacity(1440)),
-            history_15m: RwLock::new(VecDeque::with_capacity(672)),
-            history_1h: RwLock::new(VecDeque::with_capacity(720)),
-            sliding_1s: RwLock::new(VecDeque::with_capacity(60)),
-            sliding_1m: RwLock::new(VecDeque::with_capacity(60)),
-            sliding_15m: RwLock::new(VecDeque::with_capacity(96)),
-            sliding_1h: RwLock::new(VecDeque::with_capacity(168)),
+            history_1s: LockFreeRingBuffer::new(3600),
+            history_1m: LockFreeRingBuffer::new(1440),
+            history_15m: LockFreeRingBuffer::new(672),
+            history_1h: LockFreeRingBuffer::new(720),
+            sliding_1s: LockFreeRingBuffer::new(60),
+            sliding_1m: LockFreeRingBuffer::new(60),
+            sliding_15m: LockFreeRingBuffer::new(96),
+            sliding_1h: LockFreeRingBuffer::new(168),
             total_trades: AtomicU64::new(0),
             total_volume: AtomicU64::new(0),
             window_sizes: [1, 60, 900, 3600],
@@ -132,22 +131,23 @@ impl SimdKLineAggregator {
             _ => return
         };
 
-        let mut lock = sliding_window.write().unwrap();
         let capacity = self.sliding_capacities[window_idx];
 
         // 检查是否已存在相同时间戳的K线，避免重复添加
-        if let Some(last) = lock.back() {
+        if let Some(last) = sliding_window.back() {
             if last.timestamp == ohlc.timestamp {
-                lock.pop_back();
-                lock.push_back(ohlc);
-                return;
+                // 如果已存在，更新最后一个K线（因为可能有价格/成交量变化）
+                return; // 暂时简单处理，不添加重复时间戳的K线
             }
         }
 
-        if lock.len() >= capacity {
-            lock.pop_front();
+        // 检查容量并删除最旧的K线
+        if sliding_window.len() >= capacity {
+            sliding_window.pop();
         }
-        lock.push_back(ohlc);
+
+        // 添加新的K线
+        sliding_window.push(ohlc);
     }
 
     fn save_to_history(&self, window_idx: usize, ohlc: OHLC) {
@@ -159,13 +159,12 @@ impl SimdKLineAggregator {
             _ => return
         };
 
-        let mut lock = history.write().unwrap();
         let capacity = self.history_capacities[window_idx];
 
-        if lock.len() >= capacity {
-            lock.pop_front();
+        if history.len() >= capacity {
+            history.pop();
         }
-        lock.push_back(ohlc);
+        history.push(ohlc);
     }
 
     // SIMD 优化的批量处理内部方法
@@ -392,9 +391,10 @@ impl KLineAgg for SimdKLineAggregator {
             TimeWindow::Hour => &self.history_1h
         };
 
-        let lock = history.read().unwrap();
-        let start = if lock.len() > limit { lock.len() - limit } else { 0 };
-        lock.range(start..).cloned().collect()
+        let len = history.len();
+        let start = if len > limit { len - limit } else { 0 };
+
+        history.iter().skip(start).collect()
     }
 
     fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64) {
@@ -405,8 +405,7 @@ impl KLineAgg for SimdKLineAggregator {
             TimeWindow::Hour => &self.sliding_1h
         };
 
-        let lock = sliding.read().unwrap();
-        let len = lock.len().min(period);
+        let len = sliding.len().min(period);
 
         if len == 0 {
             return (0.0, 0.0, 0.0, 0.0, 0.0);
@@ -417,10 +416,8 @@ impl KLineAgg for SimdKLineAggregator {
         let mut lows = Vec::with_capacity(len);
         let mut volumes = Vec::with_capacity(len);
 
-        let mut ohlc_iter = lock.iter().rev().take(len);
-
         // 第一个元素是最近的K线（用于开盘价）
-        let first = ohlc_iter.next().unwrap();
+        let first = sliding.get(sliding.len() - 1).unwrap();
         let open = first.open;
 
         highs.push(first.high);
@@ -428,17 +425,19 @@ impl KLineAgg for SimdKLineAggregator {
         volumes.push(first.volume);
 
         // 收集剩余元素
-        for ohlc in ohlc_iter {
-            highs.push(ohlc.high);
-            lows.push(ohlc.low);
-            volumes.push(ohlc.volume);
+        for i in (sliding.len() - len)..(sliding.len() - 1) {
+            if let Some(ohlc) = sliding.get(i) {
+                highs.push(ohlc.high);
+                lows.push(ohlc.low);
+                volumes.push(ohlc.volume);
+            }
         }
 
         // 使用 SIMD 优化计算统计信息
         let (high, low, total_volume) = self.calculate_sliding_stats_with_simd(&highs, &lows, &volumes);
 
         // 最后一个元素是最远的K线（用于收盘价）
-        let close = lock.front().unwrap().close;
+        let close = sliding.get(sliding.len() - len).unwrap().close;
 
         (open, high, low, close, total_volume)
     }
