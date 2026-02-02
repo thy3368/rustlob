@@ -32,3 +32,7 @@ harness = false
 [[bench]]
 name = "kline_benchmark_high_freq"
 harness = false
+
+[[bench]]
+name = "single_thread_kline_benchmark"
+harness = false

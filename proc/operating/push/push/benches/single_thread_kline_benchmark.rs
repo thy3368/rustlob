@@ -80,7 +80,7 @@ fn benchmark_single_thread_simd_kline_aggregator(c: &mut Criterion) {
 
     c.bench_function("SingleThreadSimdKLineAggregator::process_trades_batch", |b| {
         b.iter(|| {
-            let mut aggregator = SingleThreadSimdKLineAggregator::new();
+            let aggregator = SingleThreadSimdKLineAggregator::new();
             aggregator.process_trades_batch(black_box(&test_data)).unwrap();
         });
     });
@@ -114,7 +114,7 @@ fn benchmark_single_thread_simd_kline_aggregator_high_freq(c: &mut Criterion) {
 
     c.bench_function("SingleThreadSimdKLineAggregator::process_trades_batch_high_freq", |b| {
         b.iter(|| {
-            let mut aggregator = SingleThreadSimdKLineAggregator::new();
+            let aggregator = SingleThreadSimdKLineAggregator::new();
             aggregator.process_trades_batch(black_box(&test_data)).unwrap();
         });
     });
