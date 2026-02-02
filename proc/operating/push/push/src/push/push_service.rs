@@ -5,10 +5,9 @@ use immutable_derive::immutable;
 use serde_json::json;
 
 use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
-// use serde_json::json;
 
 
-/// 订阅服务 - 无状态设计，可安全地在多线程间共享
+/// 推送服务 - 无状态设计，可安全地在多线程间共享
 ///
 /// 该服务只包含不可变的依赖引用，不包含任何运行时状态，
 /// 因此可以被多个线程同时访问而无需克隆。
@@ -21,20 +20,7 @@ pub struct PushService {
 }
 
 
-
 impl PushService {
-    // /// 创建新的订阅服务实例
-    // ///
-    // /// # 参数
-    // /// - `connection_repo`: 连接管理仓储
-    // /// - `change_log_repo`: 变更日志仓储
-    // pub fn new(connection_repo: Arc<ConnectionRepo>, change_log_repo:
-    // Arc<ChangeLogChannelQueueRepo>) -> Self {     Self {
-    //         connection_repo,
-    //         change_log_repo
-    //     }
-    // }
-
     /// 启动后台事件轮询任务
     ///
     /// 该方法不获取 self 所有权，而是克隆 Arc 引用在后台任务中使用。
