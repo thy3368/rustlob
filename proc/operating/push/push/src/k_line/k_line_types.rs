@@ -70,6 +70,34 @@ pub enum TimeWindow {
     Hour        // 1小时
 }
 
+// SoA 数据布局（Structure of Arrays）用于 SIMD 优化
+#[derive(Debug)]
+pub struct TradeDataSoA {
+    pub timestamps: Vec<u64>,
+    pub prices: Vec<f64>,
+    pub volumes: Vec<f64>,
+}
+
+impl TradeDataSoA {
+    pub fn from_aos(trades: &[(u64, f64, f64)]) -> Self {
+        let mut timestamps = Vec::with_capacity(trades.len());
+        let mut prices = Vec::with_capacity(trades.len());
+        let mut volumes = Vec::with_capacity(trades.len());
+
+        for &(ts, p, v) in trades.iter() {
+            timestamps.push(ts);
+            prices.push(p);
+            volumes.push(v);
+        }
+
+        Self {
+            timestamps,
+            prices,
+            volumes,
+        }
+    }
+}
+
 impl TimeWindow {
     pub fn duration_seconds(&self) -> u64 {
         match self {

@@ -20,10 +20,15 @@ entity_derive = { path = "../../../../lib/common/entity_derive" }
 diff = { path = "../../../../lib/common/diff" }
 crossbeam-channel = "0.5.15"
 parking_lot = "0.12.5"
+prefetch = "0.2.0"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
 name = "kline_benchmark"
+harness = false
+
+[[bench]]
+name = "kline_benchmark_high_freq"
 harness = false

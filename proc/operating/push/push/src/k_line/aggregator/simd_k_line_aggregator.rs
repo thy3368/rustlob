@@ -6,9 +6,25 @@ use std::{
     }
 };
 
-use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, LockFreeRingBuffer};
+use crate::k_line::k_line_types::{
+    KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, LockFreeRingBuffer, TradeDataSoA
+};
 
 // SIMD 优化的 K 线聚合器
+//
+// TODO 优化空间分析：
+// 1. 内存预取优化（预期提升：15-25%）：在 process_with_simd 方法中添加显式预取
+// 2. SoA 数据布局重构（预期提升：20-30%）：将 Vec<(u64,f64,f64)> 改为 SoA 格式
+// 3. 块处理优化（预期提升：25-40%）：支持更大块大小（16、32、64），利用 AVX-512
+// 4. 快速窗口检查算法（预期提升：10-20%）：使用位操作和 SIMD 比较优化边界检查
+// 5. 并行处理优化（预期提升：30-60%）：使用 Rayon 进行窗口级和分块级并行
+// 6. 无锁数据结构重构（预期提升：15-25%）：将 current_windows 从 RwLock<Option<OHLC>> 改为无锁
+// 7. 编译优化标志（预期提升：10-15%）：在 Cargo.toml 中启用 AVX2/FMA 优化
+// 8. 内存分配优化（预期提升：10-15%）：预分配工作缓冲区并重用
+// 9. 减少分支预测失败（预期提升：5-10%）：使用数组索引代替 match 语句
+// 10. 性能监控（长期优化）：添加性能计数器分析优化效果
+//
+// 预期综合性能提升：从 0.46ms 减少到 0.1-0.2ms（提升 2-4 倍）
 pub struct SimdKLineAggregator {
     // 当前活跃窗口 [1s, 1m, 15m, 1h]
     current_windows: [RwLock<Option<OHLC>>; 4],
@@ -177,21 +193,37 @@ impl SimdKLineAggregator {
             return Ok(());
         }
 
-        // 预分配缓冲区用于 SIMD 处理
-        let mut prices = Vec::with_capacity(trades.len());
-        let mut volumes = Vec::with_capacity(trades.len());
-        let mut timestamps = Vec::with_capacity(trades.len());
+        // 直接在栈上预分配缓冲区，避免堆分配
+        const STACK_BUFFER_SIZE: usize = 256;
+        let mut ts_stack = [0u64; STACK_BUFFER_SIZE];
+        let mut p_stack = [0.0f64; STACK_BUFFER_SIZE];
+        let mut v_stack = [0.0f64; STACK_BUFFER_SIZE];
 
-        for &(ts, p, v) in trades {
-            timestamps.push(ts);
-            prices.push(p);
-            volumes.push(v);
+        if trades.len() <= STACK_BUFFER_SIZE {
+            // 小批量直接使用栈缓冲区
+            for (i, &(ts, p, v)) in trades.iter().enumerate() {
+                ts_stack[i] = ts;
+                p_stack[i] = p;
+                v_stack[i] = v;
+            }
+            self.process_with_simd(
+                &ts_stack[..trades.len()],
+                &p_stack[..trades.len()],
+                &v_stack[..trades.len()]
+            )?;
+        } else {
+            // 大容量使用 SoA 布局
+            let data = TradeDataSoA::from_aos(trades);
+            self.process_with_simd(&data.timestamps, &data.prices, &data.volumes)?;
         }
 
-        // 使用 SIMD 优化滑动窗口统计和 OHLC 计算
-        self.process_with_simd(&timestamps, &prices, &volumes)?;
-
         Ok(())
+    }
+
+    #[inline(always)]
+    unsafe fn prefetch<T>(ptr: *const T, hint: i32) {
+        #[cfg(target_arch = "x86_64")]
+        std::arch::x86_64::_mm_prefetch(ptr as *const i8, hint);
     }
 
     #[inline(always)]
@@ -204,6 +236,17 @@ impl SimdKLineAggregator {
         for i in 0..chunks {
             let start = i * 8;
             let end = start + 8;
+
+            // 预取下一个块的数据（距离设为T0 - 时间局部性）
+            if i < chunks - 1 {
+                let next_start = (i + 1) * 8;
+                unsafe {
+                    // _MM_HINT_T0 = 0x00 - 最高优先级预取
+                    Self::prefetch(timestamps.as_ptr().add(next_start), 0x00);
+                    Self::prefetch(prices.as_ptr().add(next_start), 0x00);
+                    Self::prefetch(volumes.as_ptr().add(next_start), 0x00);
+                }
+            }
 
             // 加载到 SIMD 向量
             let price_vec = f64x8::from_slice(&prices[start..end]);

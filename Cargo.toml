@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [workspace]
 members = [
 
@@ -18,3 +20,14 @@ license = "MIT"
 
 [workspace.dependencies]
 # 共享依赖可以在这里定义
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+target-cpu = "native"
+# 启用 Apple Silicon 的向量扩展
+rustflags = [
+    "-Cllvm-args=--inline-threshold=500",
+    "-Cllvm-args=--unroll-count=8"
+]
