@@ -153,10 +153,53 @@ impl<T: Copy + Default> LockFreeRingBuffer<T> {
     }
 
     #[inline(always)]
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         let head = self.head.load(Ordering::Acquire);
         let tail = self.tail.load(Ordering::Acquire);
         head.wrapping_sub(tail)
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline(always)]
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    #[inline(always)]
+    pub fn get(&self, index: usize) -> Option<T> {
+        let len = self.len();
+        if index >= len {
+            return None;
+        }
+
+        let tail = self.tail.load(Ordering::Acquire);
+        let actual_index = (tail + index) & self.mask;
+        unsafe { Some(std::ptr::read(self.buffer.as_ptr().add(actual_index))) }
+    }
+
+    #[inline(always)]
+    pub fn iter(&self) -> impl Iterator<Item = T> + '_ {
+        let len = self.len();
+        (0..len).filter_map(move |i| self.get(i))
+    }
+
+    #[inline(always)]
+    pub fn back(&self) -> Option<T> {
+        let len = self.len();
+        if len == 0 {
+            None
+        } else {
+            self.get(len - 1)
+        }
+    }
+
+    #[inline(always)]
+    pub fn front(&self) -> Option<T> {
+        self.get(0)
     }
 }
 

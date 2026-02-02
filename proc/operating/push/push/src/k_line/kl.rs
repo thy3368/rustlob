@@ -1,6 +1,6 @@
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rand::Rng;
-use crate::k_line::k_line_aggregator::{KLineAggregator};
+use crate::k_line::aggregator::k_line_aggregator::{KLineAggregator};
 use crate::k_line::k_line_types::{KLineAgg, TimeWindow};
 
 
