@@ -29,6 +29,7 @@ use crate::interfaces::{
     spot::http::{trade_handler, trade_handler::TradeService}
 };
 
+use crate::interfaces::common::ins_repo;
 
 // todo 认证： /api/spot/v2/；/api/spot/user/data
 // todo 不认证： /api/spot/v2/；/api/spot/market/data
@@ -40,36 +41,14 @@ pub struct HttpServer{
 }
 impl HttpServer {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
-        // 创建应用服务（单例，全局共享）
+        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
         let trade_service = Arc::new(TradeService::new());
 
-        // 初始化 SpotTradeBehaviorV2Impl - 使用 mock 数据库和 EmbeddedLobRepo
-
-        let (balance_repo, trade_repo, order_repo, user_data_repo, market_data_repo) = (
-            MySqlDbRepo::<Balance>::new_mock(),
-            MySqlDbRepo::<SpotTrade>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock()
-        );
-
-
-        let ds_lob_repo = DistributedLobRepo::<SpotOrder>::new(vec![]);
-        let trade_behavior = SpotTradeBehaviorV2Impl::new(
-            balance_repo,
-            trade_repo,
-            order_repo,
-            user_data_repo,
-            market_data_repo,
-            ds_lob_repo
-        );
-
-
-        let trade_v2_service = Arc::new(trade_behavior);
-        let market_data_service = Arc::new(SpotMarketDataImpl::new());
-        let user_data_service = Arc::new(SpotUserDataImpl::new());
-
-        let listen_key_service = Arc::new(SpotUserDataListenKeyImpl::new());
+        // 使用 id_repo 中的单例服务
+        let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_distributed();
+        let market_data_service = ins_repo::get_spot_market_data_service();
+        let user_data_service = ins_repo::get_spot_user_data_service();
+        let listen_key_service = ins_repo::get_spot_user_data_listen_key_service();
 
 
         // 创建路由，注入服务依赖
@@ -148,35 +127,13 @@ impl HttpServer {
 impl HttpServer {
     /// 启动 Spot HTTP 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-        // 创建应用服务（单例，全局共享）
+        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
         let trade_service = Arc::new(TradeService::new());
 
-        // 初始化 SpotTradeBehaviorV2Impl - 使用 mock 数据库和 EmbeddedLobRepo
-
-        let (balance_repo, trade_repo, order_repo, user_data_repo, market_data_repo) = (
-            MySqlDbRepo::<Balance>::new_mock(),
-            MySqlDbRepo::<SpotTrade>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock(),
-            MySqlDbRepo::<SpotOrder>::new_mock()
-        );
-
-
-        let lob_repo = EmbeddedLobRepo::<SpotOrder>::new(vec![]);
-
-        let trade_behavior = SpotTradeBehaviorV2Impl::new(
-            balance_repo,
-            trade_repo,
-            order_repo,
-            user_data_repo,
-            market_data_repo,
-            lob_repo
-        );
-
-
-        let trade_v2_service = Arc::new(trade_behavior);
-        let market_data_service = Arc::new(SpotMarketDataImpl::new());
-        let user_data_service = Arc::new(SpotUserDataImpl::new());
+        // 使用 id_repo 中的单例服务
+        let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_embedded();
+        let market_data_service = ins_repo::get_spot_market_data_service();
+        let user_data_service = ins_repo::get_spot_user_data_service();
 
         // 创建路由，注入服务依赖
         let order_routes =

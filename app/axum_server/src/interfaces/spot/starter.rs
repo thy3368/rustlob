@@ -36,11 +36,8 @@ impl SpotStarter {
         // 创建事件广播通道（仅用于市场数据，用户数据使用定向推送）
         let (md_tx, _) = broadcast::channel(1024);
 
-        // 初始化连接管理器
-        let connection_manager = Arc::new(ConnectionRepo::new());
-
         // 启动 WebSocket 服务器
-        WebSocketServer::start(md_tx.clone(), connection_manager.clone()).await?;
+        WebSocketServer::start(md_tx.clone()).await?;
 
         tracing::info!("✅ Spot module started successfully");
 

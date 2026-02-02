@@ -15,18 +15,15 @@ use diff::ChangeLogEntry;
 use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
-
-use crate::proc::{
-    behavior::{
-        spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-        v2::{
-            spot_market_data_sse_behavior::SpotMarketDataStreamAny,
-            spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
-            spot_user_data_sse_behavior::UserDataStreamEventAny
-        }
-    },
-    v2::id_repo::order_next_id
+use crate::proc::behavior::{
+    spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
+    v2::{
+        spot_market_data_sse_behavior::SpotMarketDataStreamAny,
+        spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
+        spot_user_data_sse_behavior::UserDataStreamEventAny
+    }
 };
+use crate::proc::v2::id_repo::order_next_id;
 
 // 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
 impl From<NewOrderCmd> for SpotOrder {
@@ -204,7 +201,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let mut frozen_asset_balance =
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
-        frozen_asset_balance.frozen_margin_4(internal_order);
+        // frozen_asset_balance.frozen_margin_4(internal_order);
         // 冻结余额
         internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 

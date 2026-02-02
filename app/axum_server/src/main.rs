@@ -3,6 +3,7 @@ pub mod interfaces {
 
     pub mod common {
         pub mod http_handler_util;
+        pub mod ins_repo;
     }
 
     pub mod spot {

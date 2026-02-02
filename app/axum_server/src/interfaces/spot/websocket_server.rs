@@ -1,10 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{routing::get, Router};
-use db_repo::adapter::change_log_queue_repo::ChangeLogChannelQueueRepo;
-use push::push::{
-    connection_types::ConnectionRepo, push_service::PushService, subscription_service::SubscriptionService
-};
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use tokio::sync::broadcast;
 use tower_http::services::ServeDir;
@@ -13,6 +9,8 @@ use crate::interfaces::spot::websocket::{
     md_sse_controller::SpotMarketDataSSEImpl, spot_market_data_pusher, spot_user_data_pusher,
     ud_sse_controller::SpotUserDataSSEImpl, user_data_ws_handler::user_data_websocket_handler
 };
+
+use crate::interfaces::common::ins_repo;
 
 /// WebSocket 服务器启动器
 // #[stateless]
@@ -23,8 +21,14 @@ impl WebSocketServer {
     ///
     /// todo 用tracing打日志
     pub async fn start(
-        md_tx: broadcast::Sender<SpotMarketDataStreamAny>, connection_repo: Arc<ConnectionRepo>
+        md_tx: broadcast::Sender<SpotMarketDataStreamAny>
     ) -> Result<(), Box<dyn std::error::Error>> {
+
+        // 使用 id_repo 中的单例服务
+        let connection_repo = ins_repo::get_connection_repo();
+        let push_service = ins_repo::get_push_service();
+        let sub_service = ins_repo::get_subscription_service();
+
         // 发布 SpotMarketDataSSEImpl
         let _market_data_sse = SpotMarketDataSSEImpl::new();
         tracing::info!("SpotMarketDataSSEImpl published successfully");
@@ -37,12 +41,6 @@ impl WebSocketServer {
         let md_pusher = spot_market_data_pusher::SpotMarketDataPusher::new(md_tx.clone()).with_interval(5); // 每5秒推送一次
         md_pusher.start();
         tracing::info!("SpotMarketDataPusher started successfully");
-
-
-        // 启动订阅服务（无状态设计，不需要克隆）
-        let change_log_repo = Arc::new(ChangeLogChannelQueueRepo::new());
-        let push_service = Arc::new(PushService::new(connection_repo.clone(), change_log_repo));
-        let sub_service = Arc::new(SubscriptionService::new(connection_repo.clone()));
 
 
         // 使用 100ms 轮询间隔启动后台任务
