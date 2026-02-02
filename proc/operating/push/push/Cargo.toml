@@ -15,3 +15,6 @@ chrono = "0.4.43"
 # Database repository
 db_repo = { path = "../../../../lib/common/db_repo" }
 serde_json = "1.0.149"
+rand = "0.9.2"
+entity_derive = { path = "../../../../lib/common/entity_derive" }
+diff = { path = "../../../../lib/common/diff" }
