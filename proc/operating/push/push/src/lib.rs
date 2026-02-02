@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 pub mod push;
 pub mod k_line;
 pub fn add(left: u64, right: u64) -> u64 { left + right }

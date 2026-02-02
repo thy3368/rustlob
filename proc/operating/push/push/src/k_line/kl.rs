@@ -1,7 +1,7 @@
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rand::Rng;
-use crate::k_line::k_line_aggregator::KLineAggregator;
-use crate::k_line::k_line_types::TimeWindow;
+use crate::k_line::k_line_aggregator::{KLineAggregator};
+use crate::k_line::k_line_types::{KLineAgg, TimeWindow};
 
 
 #[test]
@@ -10,6 +10,24 @@ fn main2() {
 
     // 创建聚合器
     let aggregator = KLineAggregator::new();
+
+    // 订阅 K 线更新事件
+    aggregator.subscribe(|event| {
+        let window_name = match event.window {
+            TimeWindow::Second => "1秒",
+            TimeWindow::Minute => "1分钟",
+            TimeWindow::FifteenMin => "15分钟",
+            TimeWindow::Hour => "1小时",
+        };
+
+        if event.is_new_window {
+            println!(
+                "[{}] 新窗口 K 线生成: 时间={}, 开盘={:.4}, 最高={:.4}, 最低={:.4}, 收盘={:.4}, 成交量={:.2}",
+                window_name, event.ohlc.timestamp, event.ohlc.open, event.ohlc.high,
+                event.ohlc.low, event.ohlc.close, event.ohlc.volume
+            );
+        }
+    });
 
     // 模拟实时交易流
     let mut timestamp = SystemTime::now()
