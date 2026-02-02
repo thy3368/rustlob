@@ -29,12 +29,12 @@ impl WebSocketServer {
         let push_service = ins_repo::get_push_service();
         let sub_service = ins_repo::get_subscription_service();
 
-        // 发布 SpotMarketDataSSEImpl
-        let _market_data_sse = SpotMarketDataSSEImpl::new();
+        // 使用 id_repo 中的单例服务
+        let _market_data_sse = ins_repo::get_spot_market_data_sse_impl();
         tracing::info!("SpotMarketDataSSEImpl published successfully");
 
-        // 发布 SpotUserDataSSEImpl
-        let _user_data_sse = SpotUserDataSSEImpl::new();
+        // 使用 id_repo 中的单例服务
+        let _user_data_sse = ins_repo::get_spot_user_data_sse_impl();
         tracing::info!("SpotUserDataSSEImpl published successfully");
 
         // 启动 SpotMarketDataPusher

@@ -5,7 +5,6 @@ use base_types::{
     exchange::spot::spot_types::{SpotOrder, SpotTrade}
 };
 use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, MySqlDbRepo};
-use futures::future::Lazy;
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use once_cell::sync::Lazy;
 use push::push::{
@@ -15,6 +14,10 @@ use spot_behavior::proc::v2::{
     spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl,
     spot_user_data_key::SpotUserDataListenKeyImpl
 };
+use crate::interfaces::spot::websocket::{
+    md_sse_controller::SpotMarketDataSSEImpl, ud_sse_controller::SpotUserDataSSEImpl
+};
+
 // todo service/adapter/repo的实例化都可以在这，他们都是单例的
 
 
@@ -64,6 +67,10 @@ static PUSH_SERVICE: Lazy<Arc<PushService>> =
     Lazy::new(|| Arc::new(PushService::new(CONNECTION_REPO.clone(), CHANGE_LOG_REPO.clone())));
 static SUBSCRIPTION_SERVICE: Lazy<Arc<SubscriptionService>> =
     Lazy::new(|| Arc::new(SubscriptionService::new(CONNECTION_REPO.clone())));
+static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
+    Lazy::new(|| Arc::new(SpotMarketDataSSEImpl::new()));
+static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
+    Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
 // Arc 包装的单例
 static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED_ARC: Lazy<Arc<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>>> =
@@ -101,6 +108,10 @@ pub fn get_change_log_repo() -> Arc<ChangeLogChannelQueueRepo> { CHANGE_LOG_REPO
 pub fn get_push_service() -> Arc<PushService> { PUSH_SERVICE.clone() }
 
 pub fn get_subscription_service() -> Arc<SubscriptionService> { SUBSCRIPTION_SERVICE.clone() }
+
+pub fn get_spot_market_data_sse_impl() -> Arc<SpotMarketDataSSEImpl> { SPOT_MARKET_DATA_SSE_IMPL.clone() }
+
+pub fn get_spot_user_data_sse_impl() -> Arc<SpotUserDataSSEImpl> { SPOT_USER_DATA_SSE_IMPL.clone() }
 
 #[test]
 fn abc() {
