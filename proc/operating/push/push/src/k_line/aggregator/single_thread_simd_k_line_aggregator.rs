@@ -6,6 +6,7 @@ use crate::k_line::k_line_types::{
     KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, TradeDataSoA
 };
 
+//todo 优化目标： 100万笔/1毫秒
 // 单线程 SIMD 优化的 K 线聚合器
 // 不考虑数据竞争，专为单线程场景优化性能
 //
