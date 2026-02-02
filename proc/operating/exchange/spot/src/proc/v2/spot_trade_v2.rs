@@ -16,28 +16,30 @@ use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
 
-use crate::proc::behavior::{
-    spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-    v2::{
-        spot_market_data_sse_behavior::SpotMarketDataStreamAny,
-        spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
-        spot_user_data_sse_behavior::UserDataStreamEventAny
-    }
+use crate::proc::{
+    behavior::{
+        spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
+        v2::{
+            spot_market_data_sse_behavior::SpotMarketDataStreamAny,
+            spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
+            spot_user_data_sse_behavior::UserDataStreamEventAny
+        }
+    },
+    v2::id_repo::order_next_id
 };
-
-
 
 // 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
 impl From<NewOrderCmd> for SpotOrder {
     #[inline(always)]
     fn from(cmd: NewOrderCmd) -> Self {
-        // 生成订单ID（使用时间戳+随机数，实际应该使用更robust的生成方式）
-        let order_id = OrderId::from((cmd.timestamp as u64) << 32 | (rand::random::<u32>() as u64));
+        let order_id = order_next_id as u64;
+
+
         let trader_id = TraderId::default(); // TODO: 从 metadata 中获取真实的 trader_id
         let account_id = AccountId(1); // TODO: 从 metadata 中获取真实的 account_id
         let trading_pair = TradingPair::from_symbol_str(cmd.symbol()).unwrap();
 
-        //todo 可以simd优化吗
+        // todo 可以simd优化吗
         match cmd.order_type() {
             OrderType::Limit => {
                 // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
