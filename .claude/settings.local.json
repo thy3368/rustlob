@@ -85,7 +85,8 @@
       "Bash(done:*)",
       "Bash(grep:*)",
       "Bash(cargo info:*)",
-      "Bash(cargo new:*)"
+      "Bash(cargo new:*)",
+      "Bash(RUSTFLAGS=\"--cfg feature=\\\\\"portable_simd\\\\\"\" cargo check:*)"
     ],
     "deny": [],
     "ask": []
