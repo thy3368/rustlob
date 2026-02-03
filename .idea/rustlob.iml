@@ -97,6 +97,7 @@
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/push/push/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_queue/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/test_thread_overhead/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

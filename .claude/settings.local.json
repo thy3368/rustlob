@@ -89,7 +89,9 @@
       "Bash(RUSTFLAGS=\"--cfg feature=\\\\\"portable_simd\\\\\"\" cargo check:*)",
       "Bash(RUSTFLAGS=\"--cfg feature=\\\\\"portable_simd\\\\\"\" cargo bench:*)",
       "Bash(cargo version:*)",
-      "Bash(cargo clean:*)"
+      "Bash(cargo clean:*)",
+      "Bash(./test_thread_overhead:*)",
+      "Bash(cargo add:*)"
     ],
     "deny": [],
     "ask": []
