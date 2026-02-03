@@ -7,13 +7,23 @@ use base_types::{
 use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, MySqlDbRepo};
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use once_cell::sync::Lazy;
-use push::push::{
-    connection_types::ConnectionRepo, push_service::PushService, subscription_service::SubscriptionService
+use push::{
+    push::{
+        connection_types::ConnectionRepo,
+        push_service::PushService,
+
+        subscription_service::SubscriptionService
+    },
+
 };
+use rust_queue::queue::queue::Queue;
+use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
+use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 use spot_behavior::proc::v2::{
     spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl,
     spot_user_data_key::SpotUserDataListenKeyImpl
 };
+
 use crate::interfaces::spot::websocket::{
     md_sse_controller::SpotMarketDataSSEImpl, ud_sse_controller::SpotUserDataSSEImpl
 };
@@ -69,8 +79,7 @@ static SUBSCRIPTION_SERVICE: Lazy<Arc<SubscriptionService>> =
     Lazy::new(|| Arc::new(SubscriptionService::new(CONNECTION_REPO.clone())));
 static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotMarketDataSSEImpl::new()));
-static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
-    Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
+static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> = Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
 // Arc 包装的单例
 static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED_ARC: Lazy<Arc<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>>> =
@@ -82,6 +91,30 @@ static SPOT_MARKET_DATA_SERVICE_ARC: Lazy<Arc<SpotMarketDataImpl>> =
 static SPOT_USER_DATA_SERVICE_ARC: Lazy<Arc<SpotUserDataImpl>> = Lazy::new(|| Arc::new(SPOT_USER_DATA_SERVICE.clone()));
 static SPOT_USER_DATA_LISTEN_KEY_SERVICE_ARC: Lazy<Arc<SpotUserDataListenKeyImpl>> =
     Lazy::new(|| Arc::new(SPOT_USER_DATA_LISTEN_KEY_SERVICE.clone()));
+
+// 创建两个 topic: "kline" 和 "entity_change_log"
+// 队列服务单例
+static MPMC_QUEUE: Lazy<MPMCQueue> = Lazy::new(|| {
+    let queue = MPMCQueue::new();
+    // 预创建 kline topic channel
+    queue.get_or_create_channel("kline");
+    // 预创建 entity_change_log topic channel
+    queue.get_or_create_channel("entity_change_log");
+    queue
+});
+
+static KAFKA_QUEUE: Lazy<KafkaQueue> = Lazy::new(|| {
+    let queue = KafkaQueue::new();
+    // 预创建 kline topic channel（Kafka 会在首次使用时自动创建 topic）
+    queue.get_or_create_channel("kline");
+    // 预创建 entity_change_log topic channel
+    queue.get_or_create_channel("entity_change_log");
+    queue
+});
+
+// Arc 包装的队列单例
+static MPMC_QUEUE_ARC: Lazy<Arc<MPMCQueue>> = Lazy::new(|| Arc::new(MPMC_QUEUE.clone()));
+static KAFKA_QUEUE_ARC: Lazy<Arc<KafkaQueue>> = Lazy::new(|| Arc::new(KAFKA_QUEUE.clone()));
 
 
 pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>> {
@@ -112,6 +145,12 @@ pub fn get_subscription_service() -> Arc<SubscriptionService> { SUBSCRIPTION_SER
 pub fn get_spot_market_data_sse_impl() -> Arc<SpotMarketDataSSEImpl> { SPOT_MARKET_DATA_SSE_IMPL.clone() }
 
 pub fn get_spot_user_data_sse_impl() -> Arc<SpotUserDataSSEImpl> { SPOT_USER_DATA_SSE_IMPL.clone() }
+
+// 队列服务访问方法
+pub fn get_mpmc_queue() -> Arc<MPMCQueue> { MPMC_QUEUE_ARC.clone() }
+
+pub fn get_kafka_queue() -> Arc<KafkaQueue> { KAFKA_QUEUE_ARC.clone() }
+
 
 #[test]
 fn abc() {

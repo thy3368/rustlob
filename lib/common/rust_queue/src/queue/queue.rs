@@ -1,29 +1,25 @@
-use tokio::sync::broadcast;
-use serde::Serialize;
 use bytes::Bytes;
+use serde::Serialize;
+use tokio::sync::broadcast;
 
 /// 转换为字节的 trait，类似于 Kafka 的 ToBytes
 pub trait ToBytes {
-    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error + Send + Sync>>;
+    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error>>;
 }
 
 /// 从字节转换的 trait，类似于 Kafka 的 FromBytes
 pub trait FromBytes: Sized {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>>;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>>;
 }
 
 /// 为实现了 Serialize 的类型自动实现 ToBytes
 impl<T: Serialize> ToBytes for T {
-    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Bytes::from(serde_json::to_vec(self)?))
-    }
+    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error>> { Ok(Bytes::from(serde_json::to_vec(self)?)) }
 }
 
 /// 为实现了 DeserializeOwned 的类型自动实现 FromBytes
 impl<T: serde::de::DeserializeOwned> FromBytes for T {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(serde_json::from_slice(bytes)?)
-    }
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>> { Ok(serde_json::from_slice(bytes)?) }
 }
 
 /// 队列消息发送选项
@@ -36,7 +32,7 @@ pub struct SendOptions {
     /// 启用背压机制（当队列满时阻塞发送）
     pub enable_backpressure: bool,
     /// 背压超时时间（毫秒）
-    pub backpressure_timeout_ms: u32,
+    pub backpressure_timeout_ms: u32
 }
 
 impl SendOptions {
@@ -73,7 +69,7 @@ pub struct SubscribeOptions {
     /// 订阅超时时间（毫秒）
     pub timeout_ms: u32,
     /// 缓冲区大小（用于背压控制）
-    pub buffer_size: usize,
+    pub buffer_size: usize
 }
 
 impl SubscribeOptions {
@@ -129,16 +125,10 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回成功发送到的本地订阅者数量
-    fn send<T: Serialize + ToBytes + Send + Sync + 'static>(
+    fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
         &self, topic: &str, event: T, options: Option<SendOptions>
     ) -> Result<usize, broadcast::error::SendError<T>>;
 
-    /// 发送事件到默认 topic（kline-updates）
-    fn send_default<T: Serialize + ToBytes + Send + Sync + 'static>(
-        &self, event: T, options: Option<SendOptions>
-    ) -> Result<usize, broadcast::error::SendError<T>> {
-        self.send("kline-updates", event, options)
-    }
 
     /// 订阅指定 topic 的事件
     ///
@@ -148,25 +138,16 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回一个接收器，用于异步接收事件
-    fn subscribe<T: serde::de::DeserializeOwned + Send + Sync + 'static>(
+    fn subscribe<T: serde::de::DeserializeOwned + Send + Sync + 'static + Clone>(
         &self, topic: &str, options: Option<SubscribeOptions>
     ) -> broadcast::Receiver<T>;
 
-    /// 订阅默认 topic（kline-updates）的事件
-    fn subscribe_default<T: serde::de::DeserializeOwned + Send + Sync + 'static>(
-        &self, options: Option<SubscribeOptions>
-    ) -> broadcast::Receiver<T> {
-        self.subscribe("kline-updates", options)
-    }
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize;
 
-    /// 获取默认 topic 的当前订阅者数量
-    fn subscriber_count_default(&self) -> usize {
-        self.subscriber_count("kline-updates")
-    }
-
+    fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes>;
+    
     /// 获取所有支持的 topic 列表
     fn topics(&self) -> Vec<String>;
 
@@ -175,7 +156,7 @@ pub trait Queue {
 }
 
 /// 默认 Queue 配置类型
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct DefaultQueueConfig {
     /// Kafka brokers 地址（逗号分隔）
     pub brokers: String,
@@ -190,7 +171,21 @@ pub struct DefaultQueueConfig {
     /// 全局缓冲区大小（用于背压控制）
     pub buffer_size: usize,
     /// 全局启用背压机制
-    pub enable_backpressure: bool,
+    pub enable_backpressure: bool
+}
+
+impl Default for DefaultQueueConfig {
+    fn default() -> Self {
+        Self {
+            brokers: "localhost:9092".to_string(),
+            default_topic: "kline-updates".to_string(),
+            default_group_id: "kline-aggregator-group".to_string(),
+            send_timeout_ms: 5000,
+            recv_timeout_ms: 3000,
+            buffer_size: 1024,
+            enable_backpressure: false,
+        }
+    }
 }
 
 impl DefaultQueueConfig {
@@ -252,12 +247,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_options_builder() {
-        let options =
-            SubscribeOptions::new()
-                .with_group_id("test-group-123")
-                .with_from_latest(false)
-                .with_timeout(5000)
-                .with_buffer_size(2048);
+        let options = SubscribeOptions::new()
+            .with_group_id("test-group-123")
+            .with_from_latest(false)
+            .with_timeout(5000)
+            .with_buffer_size(2048);
 
         assert_eq!(options.group_id, Some("test-group-123".to_string()));
         assert!(!options.from_latest);
@@ -269,16 +263,12 @@ mod tests {
     async fn test_default_config_builder() {
         let config = DefaultQueueConfig::new()
             .with_brokers("localhost:9092,localhost:9093")
-            .with_default_topic("custom-topic")
-            .with_default_group_id("custom-group")
             .with_send_timeout(3000)
             .with_recv_timeout(2000)
             .with_buffer_size(4096)
             .with_backpressure(true);
 
         assert_eq!(config.brokers, "localhost:9092,localhost:9093");
-        assert_eq!(config.default_topic, "custom-topic");
-        assert_eq!(config.default_group_id, "custom-group");
         assert_eq!(config.send_timeout_ms, 3000);
         assert_eq!(config.recv_timeout_ms, 2000);
         assert_eq!(config.buffer_size, 4096);

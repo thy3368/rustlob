@@ -28,6 +28,9 @@ derivatives_behavior = { path = "../../proc/operating/exchange/derivatives", fea
 
 base_types = { path = "../../lib/common/base_types", features = ["serde"] }
 
+rust_queue = { path = "../../lib/common/rust_queue" }
+
+
 # 数据库和仓储依赖
 db_repo = { path = "../../lib/common/db_repo" }
 lob_repo = { path = "../../lib/common/lob_repo" }

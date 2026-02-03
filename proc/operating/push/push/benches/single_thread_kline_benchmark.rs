@@ -120,6 +120,7 @@ fn benchmark_single_thread_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     });
 }
 
+//todo M100SimdKLineAggregator 增加
 criterion_group!(
     benches,
     benchmark_kline_aggregator,

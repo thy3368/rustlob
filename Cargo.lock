@@ -314,6 +314,7 @@ dependencies = [
  "once_cell",
  "push",
  "reqwest 0.13.1",
+ "rust_queue",
  "sbe",
  "serde",
  "serde_json",
@@ -4231,6 +4232,21 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rust_queue"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "diff",
+ "entity_derive",
+ "push",
+ "rdkafka",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

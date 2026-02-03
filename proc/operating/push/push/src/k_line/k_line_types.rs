@@ -259,3 +259,22 @@ pub trait KLineAgg {
     fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64);
     fn get_total_stats(&self) -> (u64, u64);
 }
+
+pub trait KLineAggMut {
+    fn new() -> Self;
+    // 订阅K线更新事件
+    fn subscribe<F>(&mut self, handler: F)
+    where
+        F: Fn(KLineUpdateEvent) + Send + Sync + 'static;
+    // O(1) 复杂度处理单笔成交
+    fn process_trade(&mut  self, timestamp: u64, price: f64, volume: f64) -> Result<(), String>;
+    // 批量处理成交（优化版）
+    fn process_trades_batch(&mut self, trades: &[(u64, f64, f64)]) -> Result<(), String>;
+    // 获取当前K线
+    fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC>;
+    // 获取历史K线
+    fn get_history_ohlc(&self, window: TimeWindow, limit: usize) -> Vec<OHLC>;
+    // 获取滑动窗口统计
+    fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64);
+    fn get_total_stats(&self) -> (u64, u64);
+}

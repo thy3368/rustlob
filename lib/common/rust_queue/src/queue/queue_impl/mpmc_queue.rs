@@ -1,16 +1,20 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use tokio::sync::broadcast;
-use std::time::Instant;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use tokio::sync::broadcast::error::SendError;
-use tokio::sync::broadcast::Receiver;
-use tokio::time::Duration;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+    time::Instant
+};
 
-use crate::k_line::k_line_types::{KLineUpdateEvent, TimeWindow, OHLC};
-use crate::queue::queue::{Queue, SendOptions, SubscribeOptions, DefaultQueueConfig, ToBytes, FromBytes};
+use serde::{de::DeserializeOwned, Serialize};
+use tokio::{
+    sync::{
+        broadcast,
+        broadcast::{error::SendError, Receiver}
+    },
+    time::Duration
+};
+
+use push::k_line::k_line_types::{KLineUpdateEvent, TimeWindow, OHLC};
+use crate::queue::queue::{DefaultQueueConfig, FromBytes, Queue, SendOptions, SubscribeOptions, ToBytes};
 
 /// 高性能异步广播队列，用于分发 K 线更新事件
 /// 基于 Tokio 的 broadcast channel 实现，支持多生产者多消费者模式
@@ -20,7 +24,7 @@ pub struct MPMCQueue {
     /// 每个 topic 对应一个 broadcast channel，存储字节形式的事件
     topic_channels: Arc<RwLock<HashMap<String, broadcast::Sender<bytes::Bytes>>>>,
     /// 配置信息
-    config: DefaultQueueConfig,
+    config: DefaultQueueConfig
 }
 
 impl MPMCQueue {
@@ -28,21 +32,29 @@ impl MPMCQueue {
     /// 容量设置为 1024，足以应对高频 K 线更新场景
     pub fn new_with_config(config: DefaultQueueConfig) -> Self {
         let topic_channels = Arc::new(RwLock::new(HashMap::new()));
-        let default_topic = config.default_topic.clone();
         let queue = MPMCQueue {
             topic_channels,
-            config,
+            config
         };
 
-        // 为默认 topic 初始化 channel
-        queue.get_or_create_channel(&default_topic);
 
         queue
     }
 
+    /// 检查是否需要背压控制
+    fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
+        match options {
+            Some(opts) => opts.enable_backpressure,
+            None => self.config.enable_backpressure
+        }
+    }
+}
+
+
+impl Queue for MPMCQueue {
     /// 为指定 topic 创建或获取 channel
     fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes> {
-        let mut channels = self.topic_channels.blocking_write();
+        let mut channels = self.topic_channels.write().unwrap();
 
         if let Some(existing) = channels.get(topic) {
             return existing.clone();
@@ -53,37 +65,19 @@ impl MPMCQueue {
 
         tx
     }
-
-    /// 检查是否需要背压控制
-    fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
-        match options {
-            Some(opts) => opts.enable_backpressure,
-            None => self.config.enable_backpressure,
-        }
-    }
-}
-
-impl Queue for MPMCQueue {
     type Config = DefaultQueueConfig;
 
     /// 创建新的广播队列
     /// 使用默认配置
-    fn new() -> Self {
-        Self::new_with_config(DefaultQueueConfig::default())
-    }
+    fn new() -> Self { Self::new_with_config(DefaultQueueConfig::default()) }
 
     /// 创建带有自定义配置的广播队列
-    fn new_with_config(config: impl Into<Self::Config>) -> Self {
-        Self::new_with_config(config.into())
-    }
+    fn new_with_config(config: impl Into<Self::Config>) -> Self { Self::new_with_config(config.into()) }
 
     /// 发送事件到指定 topic
     /// 支持序列化的事件类型
     fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
-        &self,
-        topic: &str,
-        event: T,
-        options: Option<SendOptions>,
+        &self, topic: &str, event: T, options: Option<SendOptions>
     ) -> Result<usize, SendError<T>> {
         let channel = self.get_or_create_channel(topic);
 
@@ -98,22 +92,16 @@ impl Queue for MPMCQueue {
         }
 
         // 序列化事件
-        let bytes = event.to_bytes().map_err(|_| {
-            broadcast::error::SendError::Full(event)
-        })?;
+        let bytes = event.to_bytes().map_err(|_| broadcast::error::SendError(event.clone()))?;
 
         // 发送字节数据
-        channel.send(bytes).map_err(|_| {
-            broadcast::error::SendError::Full(event)
-        })
+        channel.send(bytes).map_err(|_| broadcast::error::SendError(event))
     }
 
     /// 订阅指定 topic 的事件
     /// 支持反序列化的事件类型
     fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
-        &self,
-        topic: &str,
-        _options: Option<SubscribeOptions>,
+        &self, topic: &str, _options: Option<SubscribeOptions>
     ) -> broadcast::Receiver<T> {
         let channel = self.get_or_create_channel(topic);
         let mut rx = channel.subscribe();
@@ -139,7 +127,7 @@ impl Queue for MPMCQueue {
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize {
-        if let Ok(channels) = self.topic_channels.try_read() {
+        if let Ok(channels) = self.topic_channels.read() {
             if let Some(channel) = channels.get(topic) {
                 return channel.receiver_count();
             }
@@ -149,7 +137,7 @@ impl Queue for MPMCQueue {
 
     /// 获取所有支持的 topic 列表
     fn topics(&self) -> Vec<String> {
-        if let Ok(channels) = self.topic_channels.try_read() {
+        if let Ok(channels) = self.topic_channels.read() {
             channels.keys().cloned().collect()
         } else {
             vec![]
@@ -158,26 +146,21 @@ impl Queue for MPMCQueue {
 }
 
 impl Default for MPMCQueue {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 #[tokio::test]
 async fn broadcast_example() {
-    let config = DefaultQueueConfig::new()
-        .with_default_topic("test-topic")
-        .with_send_timeout(5000)
-        .with_recv_timeout(3000);
+    let config = DefaultQueueConfig::new().with_send_timeout(5000).with_recv_timeout(3000);
 
     let queue = MPMCQueue::new_with_config(config);
 
-    println!("初始订阅者数量: {}", queue.subscriber_count_default());
+    println!("初始订阅者数量: {}", queue.subscriber_count("test-topic"));
 
     // 创建 3 个订阅者
     let mut subscribers = vec![];
     for i in 0..3 {
-        let mut rx = queue.subscribe_default::<KLineUpdateEvent>(None);
+        let mut rx = queue.subscribe::<KLineUpdateEvent>("test-topic", None);
         subscribers.push(tokio::spawn(async move {
             let mut received = 0;
             while let Ok(event) = rx.recv().await {
@@ -193,7 +176,7 @@ async fn broadcast_example() {
         }));
     }
 
-    println!("订阅后数量: {}", queue.subscriber_count_default());
+    println!("订阅后数量: {}", queue.subscriber_count("test-topic"));
 
     // 模拟发送 K 线更新事件
     let base_timestamp = Instant::now().elapsed().as_secs();
@@ -204,7 +187,7 @@ async fn broadcast_example() {
             is_new_window: i % 2 == 0
         };
 
-        match queue.send_default(event, None) {
+        match queue.send("test-topic", event, None) {
             Ok(count) => println!("[Broadcaster] Sent: Message {}, Received by {} subscribers", i, count),
             Err(e) => println!("[Broadcaster] Error: {}", e)
         }
@@ -254,39 +237,23 @@ async fn test_multiple_topics_with_different_events() {
 
     // 验证 topic 列表
     let topics = queue.topics();
-    assert!(topics.contains(&"kline-updates".to_string())); // 默认 topic
     assert!(topics.contains(&"topic1".to_string()));
     assert!(topics.contains(&"topic2".to_string()));
     println!("All topics: {:?}", topics);
 }
 
-#[tokio::test]
-async fn test_subscriber_count() {
-    let queue = MPMCQueue::new();
-    assert_eq!(queue.subscriber_count_default(), 0);
-
-    let rx1 = queue.subscribe_default::<KLineUpdateEvent>(None);
-    assert_eq!(queue.subscriber_count_default(), 1);
-
-    let _rx2 = queue.subscribe_default::<KLineUpdateEvent>(None);
-    assert_eq!(queue.subscriber_count_default(), 2);
-
-    // drop(rx1);
-    // 注意：drop 后计数不会立即减少，因为 broadcast channel 有内部缓冲
-    // 实际使用中，当接收器被 drop 后，系统会在下次发送时清理
-}
 
 fn create_test_event(window: usize) -> KLineUpdateEvent {
     let time_window = match window {
         0 => TimeWindow::Second,
         1 => TimeWindow::Minute,
         2 => TimeWindow::FifteenMin,
-        _ => TimeWindow::Hour,
+        _ => TimeWindow::Hour
     };
 
     KLineUpdateEvent {
         window: time_window,
         ohlc: OHLC::new(1600000000, 100.0, 1.0),
-        is_new_window: true,
+        is_new_window: true
     }
 }

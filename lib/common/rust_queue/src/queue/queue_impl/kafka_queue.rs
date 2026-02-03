@@ -1,14 +1,15 @@
 use std::sync::Arc;
+use bytes::Bytes;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::SendError;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{Receiver, Sender};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::consumer::{StreamConsumer, Consumer};
 use rdkafka::message::Message;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use crate::k_line::k_line_types::KLineUpdateEvent;
+use push::k_line::k_line_types::KLineUpdateEvent;
 use crate::queue::queue::{Queue, SendOptions, SubscribeOptions, DefaultQueueConfig, ToBytes, FromBytes};
 
 /// Kafka 配置（兼容 Queue trait 的 Config 关联类型）
@@ -16,9 +17,7 @@ use crate::queue::queue::{Queue, SendOptions, SubscribeOptions, DefaultQueueConf
 pub struct KafkaConfig {
     /// Kafka brokers 地址 (逗号分隔)
     pub brokers: String,
-    /// 主题名称（默认值）
-    pub default_topic: String,
-    /// 消费者组 ID（默认值）
+    /// 消费组 ID（全局默认值）
     pub default_group_id: String,
     /// 发送超时 (毫秒)
     pub send_timeout_ms: i32,
@@ -32,9 +31,8 @@ pub struct KafkaConfig {
 
 impl Default for KafkaConfig {
     fn default() -> Self {
-        Self {
+        KafkaConfig {
             brokers: "localhost:9092".to_string(),
-            default_topic: "kline-updates".to_string(),
             default_group_id: "kline-aggregator-group".to_string(),
             send_timeout_ms: 5000,
             recv_timeout_ms: 3000,
@@ -48,7 +46,6 @@ impl From<DefaultQueueConfig> for KafkaConfig {
     fn from(config: DefaultQueueConfig) -> Self {
         KafkaConfig {
             brokers: config.brokers,
-            default_topic: config.default_topic,
             default_group_id: config.default_group_id,
             send_timeout_ms: config.send_timeout_ms as i32,
             recv_timeout_ms: config.recv_timeout_ms as i32,
@@ -81,7 +78,6 @@ impl KafkaQueue {
             .expect("Failed to create Kafka producer");
 
         let topic_channels = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
-        let default_topic = config.default_topic.clone();
 
         let queue = KafkaQueue {
             config,
@@ -89,8 +85,6 @@ impl KafkaQueue {
             topic_channels,
         };
 
-        // 为默认 topic 初始化消费者
-        queue.get_or_create_topic_channel(&default_topic);
 
         queue
     }
@@ -100,23 +94,7 @@ impl KafkaQueue {
         Self::new_with_config(KafkaConfig::default())
     }
 
-    /// 获取或创建 topic 对应的 broadcast channel
-    fn get_or_create_topic_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes> {
-        let mut channels = self.topic_channels.lock().unwrap();
-        channels.entry(topic.to_string())
-            .or_insert_with(|| {
-                let buffer_size = if self.config.buffer_size > 0 {
-                    self.config.buffer_size
-                } else {
-                    1024
-                };
-                let (tx, _) = broadcast::channel(buffer_size);
-                // 启动 Kafka 消费者任务
-                self.spawn_consumer_task(topic, tx.clone());
-                tx
-            })
-            .clone()
-    }
+
 
     /// 检查是否需要背压控制
     fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
@@ -179,15 +157,15 @@ impl KafkaQueue {
         let payload = event.to_bytes()?;
 
         let record = FutureRecord::to(topic)
-            .key("kline-update")
-            .payload(&payload);
+            .key("kline-update".as_bytes())
+            .payload(&payload[..]);
 
         let timeout = options.map(|o| o.timeout_ms as u64).unwrap_or(self.config.send_timeout_ms as u64);
 
         match self.producer.send(record, tokio::time::Duration::from_millis(timeout)).await {
             Ok((_, _)) => {
                 // 同时发送到本地订阅者
-                let tx = self.get_or_create_topic_channel(topic);
+                let tx = self.get_or_create_channel(topic);
                 let count = tx.send(payload)?;
                 Ok(count)
             }
@@ -204,6 +182,25 @@ impl Queue for KafkaQueue {
         Self::new()
     }
 
+    /// 获取或创建 topic 对应的 broadcast channel
+    fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes> {
+        let mut channels = self.topic_channels.lock().unwrap();
+        channels.entry(topic.to_string())
+            .or_insert_with(|| {
+                let buffer_size = if self.config.buffer_size > 0 {
+                    self.config.buffer_size
+                } else {
+                    1024
+                };
+                let (tx, _) = broadcast::channel(buffer_size);
+                // 启动 Kafka 消费者任务
+                self.spawn_consumer_task(topic, tx.clone());
+                tx
+            })
+            .clone()
+    }
+    
+    
     fn new_with_config(config: impl Into<Self::Config>) -> Self
     where
         Self: Sized,
@@ -211,7 +208,7 @@ impl Queue for KafkaQueue {
         Self::new_with_config(config.into())
     }
 
-    fn send<T: Serialize + ToBytes + Send + Sync + 'static>(
+    fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
         &self,
         topic: &str,
         event: T,
@@ -219,7 +216,7 @@ impl Queue for KafkaQueue {
     ) -> Result<usize, SendError<T>> {
         // 背压控制
         if self.should_apply_backpressure(&options) {
-            let channel = self.get_or_create_topic_channel(topic);
+            let channel = self.get_or_create_channel(topic);
             let current_subscribers = channel.receiver_count();
             let channel_capacity = self.config.buffer_size.max(1024);
 
@@ -242,17 +239,17 @@ impl Queue for KafkaQueue {
         });
 
         // 同步发送到本地订阅者
-        let tx = self.get_or_create_topic_channel(topic);
-        let payload = event.to_bytes().map_err(|e| SendError::Closed(event))?;
-        tx.send(payload).map_err(|e| SendError::Closed(event))
+        let tx = self.get_or_create_channel(topic);
+        let payload = event.to_bytes().map_err(|_| SendError(event.clone()))?;
+        tx.send(payload).map_err(|_| SendError(event))
     }
 
-    fn subscribe<T: DeserializeOwned + Send + Sync + 'static>(
+    fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
         &self,
         topic: &str,
         _options: Option<SubscribeOptions>,
     ) -> Receiver<T> {
-        let channel = self.get_or_create_topic_channel(topic);
+        let channel = self.get_or_create_channel(topic);
         let mut rx = channel.subscribe();
 
         // 创建新的 receiver，内部进行反序列化
@@ -290,6 +287,8 @@ impl Queue for KafkaQueue {
             vec![]
         }
     }
+
+
 }
 
 impl Clone for KafkaQueue {
@@ -305,15 +304,12 @@ impl Clone for KafkaQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::k_line::k_line_types::{TimeWindow, OHLC};
     use std::time::Instant;
 
     #[test]
     fn test_kafka_config_default() {
         let config = KafkaConfig::default();
         assert_eq!(config.brokers, "localhost:9092");
-        assert_eq!(config.default_topic, "kline-updates");
-        assert_eq!(config.default_group_id, "kline-aggregator-group");
         assert_eq!(config.send_timeout_ms, 5000);
         assert_eq!(config.recv_timeout_ms, 3000);
     }
@@ -321,29 +317,22 @@ mod tests {
     #[test]
     fn test_kafka_config_conversion() {
         let default_config = DefaultQueueConfig::new()
-            .with_brokers("test:9092")
-            .with_default_topic("test-topic")
-            .with_default_group_id("test-group");
+            .with_brokers("test:9092");
 
         let kafka_config = KafkaConfig::from(default_config);
 
         assert_eq!(kafka_config.brokers, "test:9092");
-        assert_eq!(kafka_config.default_topic, "test-topic");
-        assert_eq!(kafka_config.default_group_id, "test-group");
+
     }
 
     #[test]
     fn test_kafka_config_builder() {
         let config = KafkaConfig::default()
             .with_brokers("localhost:9092,localhost:9093")
-            .with_default_topic("custom-topic")
-            .with_default_group_id("custom-group")
             .with_send_timeout(10000)
             .with_recv_timeout(5000);
 
         assert_eq!(config.brokers, "localhost:9092,localhost:9093");
-        assert_eq!(config.default_topic, "custom-topic");
-        assert_eq!(config.default_group_id, "custom-group");
         assert_eq!(config.send_timeout_ms, 10000);
         assert_eq!(config.recv_timeout_ms, 5000);
     }
@@ -355,15 +344,7 @@ impl KafkaConfig {
         self
     }
 
-    pub fn with_default_topic(mut self, topic: impl Into<String>) -> Self {
-        self.default_topic = topic.into();
-        self
-    }
 
-    pub fn with_default_group_id(mut self, group_id: impl Into<String>) -> Self {
-        self.default_group_id = group_id.into();
-        self
-    }
 
     pub fn with_send_timeout(mut self, ms: i32) -> Self {
         self.send_timeout_ms = ms;
