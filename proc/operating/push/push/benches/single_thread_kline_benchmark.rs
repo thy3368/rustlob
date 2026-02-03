@@ -2,9 +2,10 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use push::k_line::aggregator::k_line_aggregator::KLineAggregator;
 use push::k_line::aggregator::simd_k_line_aggregator::SimdKLineAggregator;
 use push::k_line::aggregator::single_thread_simd_k_line_aggregator::SingleThreadSimdKLineAggregator;
+use push::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
 use rand::Rng;
 use std::time::SystemTime;
-use push::k_line::k_line_types::KLineAgg;
+use push::k_line::k_line_types::{KLineAgg, KLineAggMut};
 
 // 生成模拟交易数据
 fn generate_test_data(count: usize) -> Vec<(u64, f64, f64)> {
@@ -120,14 +121,37 @@ fn benchmark_single_thread_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     });
 }
 
-//todo M100SimdKLineAggregator 增加
+fn benchmark_m100_simd_kline_aggregator(c: &mut Criterion) {
+    let test_data = generate_test_data(100_000); // 10万笔交易
+
+    c.bench_function("M100SimdKLineAggregator::process_trades_batch", |b| {
+        b.iter(|| {
+            let mut aggregator = M100SimdKLineAggregator::new();
+            aggregator.process_trades_batch(black_box(&test_data)).unwrap();
+        });
+    });
+}
+
+fn benchmark_m100_simd_kline_aggregator_high_freq(c: &mut Criterion) {
+    let test_data = generate_high_freq_test_data(100_000); // 10万笔交易
+
+    c.bench_function("M100SimdKLineAggregator::process_trades_batch_high_freq", |b| {
+        b.iter(|| {
+            let mut aggregator = M100SimdKLineAggregator::new();
+            aggregator.process_trades_batch(black_box(&test_data)).unwrap();
+        });
+    });
+}
+
 criterion_group!(
     benches,
     benchmark_kline_aggregator,
     benchmark_simd_kline_aggregator,
     benchmark_single_thread_simd_kline_aggregator,
+    benchmark_m100_simd_kline_aggregator,
     benchmark_kline_aggregator_high_freq,
     benchmark_simd_kline_aggregator_high_freq,
     benchmark_single_thread_simd_kline_aggregator_high_freq,
+    benchmark_m100_simd_kline_aggregator_high_freq,
 );
 criterion_main!(benches);

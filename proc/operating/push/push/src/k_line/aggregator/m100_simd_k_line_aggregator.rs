@@ -120,7 +120,7 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn update_window(&self, window_idx: usize, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+    fn update_window(&mut self, window_idx: usize, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
         let window_size = self.window_sizes[window_idx];
         let window_start = (timestamp / window_size) * window_size;
         let window = match window_idx {
@@ -131,26 +131,25 @@ impl M100SimdKLineAggregator {
             _ => return Err("Invalid window index".to_string()),
         };
 
-        let mut current_windows = self.current_windows.borrow_mut();
-        let need_update_sliding = match &mut current_windows[window_idx] {
+        let need_update_sliding = match &mut self.current_windows[window_idx] {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
                 current_ohlc.update(price, volume);
                 true
             }
             _ => {
-                if let Some(old) = current_windows[window_idx].take() {
+                if let Some(old) = self.current_windows[window_idx].take() {
                     self.save_to_history(window_idx, old.clone());
                     self.send_event(window, old, true);
                 }
 
                 let new_ohlc = OHLC::new(window_start, price, volume);
-                current_windows[window_idx] = Some(new_ohlc);
+                self.current_windows[window_idx] = Some(new_ohlc);
                 true
             }
         };
 
         if need_update_sliding {
-            let current_ohlc = current_windows[window_idx].unwrap();
+            let current_ohlc = self.current_windows[window_idx].unwrap();
             self.update_sliding_window(window_idx, current_ohlc);
         }
 
@@ -158,40 +157,40 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn update_sliding_window(&self, window_idx: usize, ohlc: OHLC) {
+    fn update_sliding_window(&mut self, window_idx: usize, ohlc: OHLC) {
         match window_idx {
             0 => {
-                self.update_sliding_window_impl(
-                    &self.sliding_1s,
-                    &self.sliding_1s_head,
-                    &self.sliding_1s_tail,
+                Self::update_sliding_window_impl(
+                    &mut self.sliding_1s,
+                    &mut self.sliding_1s_head,
+                    &mut self.sliding_1s_tail,
                     60,
                     ohlc
                 );
             }
             1 => {
-                self.update_sliding_window_impl(
-                    &self.sliding_1m,
-                    &self.sliding_1m_head,
-                    &self.sliding_1m_tail,
+                Self::update_sliding_window_impl(
+                    &mut self.sliding_1m,
+                    &mut self.sliding_1m_head,
+                    &mut self.sliding_1m_tail,
                     60,
                     ohlc
                 );
             }
             2 => {
-                self.update_sliding_window_impl(
-                    &self.sliding_15m,
-                    &self.sliding_15m_head,
-                    &self.sliding_15m_tail,
+                Self::update_sliding_window_impl(
+                    &mut self.sliding_15m,
+                    &mut self.sliding_15m_head,
+                    &mut self.sliding_15m_tail,
                     96,
                     ohlc
                 );
             }
             3 => {
-                self.update_sliding_window_impl(
-                    &self.sliding_1h,
-                    &self.sliding_1h_head,
-                    &self.sliding_1h_tail,
+                Self::update_sliding_window_impl(
+                    &mut self.sliding_1h,
+                    &mut self.sliding_1h_head,
+                    &mut self.sliding_1h_tail,
                     168,
                     ohlc
                 );
@@ -202,17 +201,12 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn update_sliding_window_impl(
-        &self,
-        sliding_window: &RefCell<[OHLC; 60]>,
-        head: &RefCell<usize>,
-        tail: &RefCell<usize>,
+        sliding_window: &mut [OHLC],
+        head: &mut usize,
+        tail: &mut usize,
         capacity: usize,
         ohlc: OHLC,
     ) {
-        let mut head = head.borrow_mut();
-        let mut tail = tail.borrow_mut();
-        let mut sliding_window = sliding_window.borrow_mut();
-
         if *head != *tail {
             let last_idx = (*head - 1) % capacity;
             if sliding_window[last_idx].timestamp == ohlc.timestamp {
@@ -229,40 +223,40 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn save_to_history(&self, window_idx: usize, ohlc: OHLC) {
+    fn save_to_history(&mut self, window_idx: usize, ohlc: OHLC) {
         match window_idx {
             0 => {
-                self.save_to_history_impl(
-                    &self.history_1s,
-                    &self.history_1s_head,
-                    &self.history_1s_tail,
+                Self::save_to_history_impl(
+                    &mut self.history_1s,
+                    &mut self.history_1s_head,
+                    &mut self.history_1s_tail,
                     3600,
                     ohlc
                 );
             }
             1 => {
-                self.save_to_history_impl(
-                    &self.history_1m,
-                    &self.history_1m_head,
-                    &self.history_1m_tail,
+                Self::save_to_history_impl(
+                    &mut self.history_1m,
+                    &mut self.history_1m_head,
+                    &mut self.history_1m_tail,
                     1440,
                     ohlc
                 );
             }
             2 => {
-                self.save_to_history_impl(
-                    &self.history_15m,
-                    &self.history_15m_head,
-                    &self.history_15m_tail,
+                Self::save_to_history_impl(
+                    &mut self.history_15m,
+                    &mut self.history_15m_head,
+                    &mut self.history_15m_tail,
                     672,
                     ohlc
                 );
             }
             3 => {
-                self.save_to_history_impl(
-                    &self.history_1h,
-                    &self.history_1h_head,
-                    &self.history_1h_tail,
+                Self::save_to_history_impl(
+                    &mut self.history_1h,
+                    &mut self.history_1h_head,
+                    &mut self.history_1h_tail,
                     720,
                     ohlc
                 );
@@ -273,17 +267,12 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn save_to_history_impl(
-        &self,
-        history: &RefCell<[OHLC; 3600]>,
-        head: &RefCell<usize>,
-        tail: &RefCell<usize>,
+        history: &mut [OHLC],
+        head: &mut usize,
+        tail: &mut usize,
         capacity: usize,
         ohlc: OHLC,
     ) {
-        let mut head = head.borrow_mut();
-        let mut tail = tail.borrow_mut();
-        let mut history = history.borrow_mut();
-
         history[*head % capacity] = ohlc;
         *head += 1;
 
@@ -299,7 +288,7 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn process_with_simd(&self, timestamps: &[u64], prices: &[f64], volumes: &[f64]) -> Result<(), String> {
+    fn process_with_simd(&mut self, timestamps: &[u64], prices: &[f64], volumes: &[f64]) -> Result<(), String> {
         let len = timestamps.len();
         let chunks = len / 8;
         let remainder = len % 8;
@@ -368,7 +357,7 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn update_window_with_stats(
-        &self,
+        &mut self,
         window_idx: usize,
         window_start: u64,
         open: f64,
@@ -385,8 +374,7 @@ impl M100SimdKLineAggregator {
             _ => return Err("Invalid window index".to_string()),
         };
 
-        let mut current_windows = self.current_windows.borrow_mut();
-        let need_update_sliding = match &mut current_windows[window_idx] {
+        let need_update_sliding = match &mut self.current_windows[window_idx] {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
                 current_ohlc.high = current_ohlc.high.max(high);
                 current_ohlc.low = current_ohlc.low.min(low);
@@ -396,7 +384,7 @@ impl M100SimdKLineAggregator {
                 true
             }
             _ => {
-                if let Some(old) = current_windows[window_idx].take() {
+                if let Some(old) = self.current_windows[window_idx].take() {
                     self.save_to_history(window_idx, old.clone());
                     self.send_event(window, old, true);
                 }
@@ -406,13 +394,13 @@ impl M100SimdKLineAggregator {
                 new_ohlc.low = low;
                 new_ohlc.close = close;
                 new_ohlc.count = 8;
-                current_windows[window_idx] = Some(new_ohlc);
+                self.current_windows[window_idx] = Some(new_ohlc);
                 true
             }
         };
 
         if need_update_sliding {
-            let current_ohlc = current_windows[window_idx].unwrap();
+            let current_ohlc = self.current_windows[window_idx].unwrap();
             self.update_sliding_window(window_idx, current_ohlc);
         }
 
@@ -427,26 +415,23 @@ impl KLineAggMut for M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn subscribe<F>(&self, handler: F)
+    fn subscribe<F>(&mut self, handler: F)
     where
         F: Fn(KLineUpdateEvent) + 'static,
     {
-        let mut handler_count = self.event_handler_count.borrow_mut();
-        let mut handlers = self.event_handlers.borrow_mut();
+        let handler_count = self.event_handler_count;
+        let handlers = &mut self.event_handlers;
 
-        if *handler_count < 8 {
-            handlers[*handler_count] = Some(Box::new(handler));
-            *handler_count += 1;
+        if handler_count < 8 {
+            handlers[handler_count] = Some(Box::new(handler));
+            self.event_handler_count += 1;
         }
     }
 
     #[inline(always)]
-    fn process_trade(&self, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
-        let mut total_trades = self.total_trades.borrow_mut();
-        *total_trades += 1;
-
-        let mut total_volume = self.total_volume.borrow_mut();
-        *total_volume += volume as u64;
+    fn process_trade(&mut self, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+        self.total_trades += 1;
+        self.total_volume += volume as u64;
 
         self.update_window(0, timestamp, price, volume)?;
         self.update_window(1, timestamp, price, volume)?;
@@ -457,7 +442,7 @@ impl KLineAggMut for M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn process_trades_batch(&self, trades: &[(u64, f64, f64)]) -> Result<(), String> {
+    fn process_trades_batch(&mut self, trades: &[(u64, f64, f64)]) -> Result<(), String> {
         const STACK_BUFFER_SIZE: usize = 256;
         let mut ts_stack = [0u64; STACK_BUFFER_SIZE];
         let mut p_stack = [0.0f64; STACK_BUFFER_SIZE];
@@ -494,37 +479,37 @@ impl KLineAggMut for M100SimdKLineAggregator {
     #[inline(always)]
     fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
         let idx = window.index();
-        self.current_windows.borrow()[idx]
+        self.current_windows[idx]
     }
 
     #[inline(always)]
     fn get_history_ohlc(&self, window: TimeWindow, limit: usize) -> Vec<OHLC> {
         match window {
-            TimeWindow::Second => self.get_history_ohlc_impl(
+            TimeWindow::Second => Self::get_history_ohlc_impl(
                 &self.history_1s,
-                self.history_1s_head.borrow().clone(),
-                self.history_1s_tail.borrow().clone(),
+                self.history_1s_head,
+                self.history_1s_tail,
                 3600,
                 limit,
             ),
-            TimeWindow::Minute => self.get_history_ohlc_impl(
+            TimeWindow::Minute => Self::get_history_ohlc_impl(
                 &self.history_1m,
-                self.history_1m_head.borrow().clone(),
-                self.history_1m_tail.borrow().clone(),
+                self.history_1m_head,
+                self.history_1m_tail,
                 1440,
                 limit,
             ),
-            TimeWindow::FifteenMin => self.get_history_ohlc_impl(
+            TimeWindow::FifteenMin => Self::get_history_ohlc_impl(
                 &self.history_15m,
-                self.history_15m_head.borrow().clone(),
-                self.history_15m_tail.borrow().clone(),
+                self.history_15m_head,
+                self.history_15m_tail,
                 672,
                 limit,
             ),
-            TimeWindow::Hour => self.get_history_ohlc_impl(
+            TimeWindow::Hour => Self::get_history_ohlc_impl(
                 &self.history_1h,
-                self.history_1h_head.borrow().clone(),
-                self.history_1h_tail.borrow().clone(),
+                self.history_1h_head,
+                self.history_1h_tail,
                 720,
                 limit,
             ),
@@ -532,9 +517,49 @@ impl KLineAggMut for M100SimdKLineAggregator {
     }
 
     #[inline(always)]
+    fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64) {
+        match window {
+            TimeWindow::Second => Self::get_sliding_stats_impl(
+                &self.sliding_1s,
+                self.sliding_1s_head,
+                self.sliding_1s_tail,
+                60,
+                period,
+            ),
+            TimeWindow::Minute => Self::get_sliding_stats_impl(
+                &self.sliding_1m,
+                self.sliding_1m_head,
+                self.sliding_1m_tail,
+                60,
+                period,
+            ),
+            TimeWindow::FifteenMin => Self::get_sliding_stats_impl(
+                &self.sliding_15m,
+                self.sliding_15m_head,
+                self.sliding_15m_tail,
+                96,
+                period,
+            ),
+            TimeWindow::Hour => Self::get_sliding_stats_impl(
+                &self.sliding_1h,
+                self.sliding_1h_head,
+                self.sliding_1h_tail,
+                168,
+                period,
+            ),
+        }
+    }
+
+    #[inline(always)]
+    fn get_total_stats(&self) -> (u64, u64) {
+        (self.total_trades, self.total_volume)
+    }
+}
+
+impl M100SimdKLineAggregator {
+    #[inline(always)]
     fn get_history_ohlc_impl(
-        &self,
-        history: &RefCell<[OHLC; 3600]>,
+        history: &[OHLC],
         head: usize,
         tail: usize,
         capacity: usize,
@@ -544,7 +569,6 @@ impl KLineAggMut for M100SimdKLineAggregator {
         let len = head - tail;
         let start = if len > limit { len - limit } else { 0 };
 
-        let history = history.borrow();
         for i in start..len {
             let idx = (tail + i) % capacity;
             result.push(history[idx]);
@@ -554,43 +578,8 @@ impl KLineAggMut for M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64) {
-        match window {
-            TimeWindow::Second => self.get_sliding_stats_impl(
-                &self.sliding_1s,
-                self.sliding_1s_head.borrow().clone(),
-                self.sliding_1s_tail.borrow().clone(),
-                60,
-                period,
-            ),
-            TimeWindow::Minute => self.get_sliding_stats_impl(
-                &self.sliding_1m,
-                self.sliding_1m_head.borrow().clone(),
-                self.sliding_1m_tail.borrow().clone(),
-                60,
-                period,
-            ),
-            TimeWindow::FifteenMin => self.get_sliding_stats_impl(
-                &self.sliding_15m,
-                self.sliding_15m_head.borrow().clone(),
-                self.sliding_15m_tail.borrow().clone(),
-                96,
-                period,
-            ),
-            TimeWindow::Hour => self.get_sliding_stats_impl(
-                &self.sliding_1h,
-                self.sliding_1h_head.borrow().clone(),
-                self.sliding_1h_tail.borrow().clone(),
-                168,
-                period,
-            ),
-        }
-    }
-
-    #[inline(always)]
     fn get_sliding_stats_impl(
-        &self,
-        sliding: &RefCell<[OHLC; 60]>,
+        sliding: &[OHLC],
         head: usize,
         tail: usize,
         capacity: usize,
@@ -606,7 +595,6 @@ impl KLineAggMut for M100SimdKLineAggregator {
         let start = tail + (len - actual_period);
         let first_idx = (head - 1) % capacity;
 
-        let sliding = sliding.borrow();
         let open = sliding[first_idx].open;
 
         let mut highs = Vec::with_capacity(actual_period);
@@ -654,10 +642,5 @@ impl KLineAggMut for M100SimdKLineAggregator {
         let close = sliding[close_idx].close;
 
         (open, max_high, min_low, close, total_volume)
-    }
-
-    #[inline(always)]
-    fn get_total_stats(&self) -> (u64, u64) {
-        (*self.total_trades.borrow(), *self.total_volume.borrow())
     }
 }
