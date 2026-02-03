@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use diff::{Entity, FromCreatedEvent};
 use entity_derive::Entity;
+use serde::{Deserialize, Serialize};
 
 // 缓存行对齐类型，用于高性能无锁编程
 #[repr(align(64))]
@@ -19,7 +20,7 @@ impl<T> CacheAligned<T> {
 }
 
 // K 线数据结构
-#[derive(Debug, Clone, Copy, Entity, Default)]
+#[derive(Debug, Clone, Copy, Entity, Default, Serialize, Deserialize)]
 #[entity(id = "timestamp", type_name = "OHLC")]
 pub struct OHLC {
     pub open: f64,      // 开盘价
@@ -62,7 +63,7 @@ impl OHLC {
 }
 
 // 时间窗口定义
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TimeWindow {
     Second,     // 1秒
     Minute,     // 1分钟
@@ -233,7 +234,7 @@ impl<T: Copy + Default> LockFreeRingBuffer<T> {
 
 
 // K线更新事件（用于内部通知）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KLineUpdateEvent {
     pub window: TimeWindow,
     pub ohlc: OHLC,
