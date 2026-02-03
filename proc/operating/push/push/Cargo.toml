@@ -42,3 +42,5 @@ harness = false
 [[bench]]
 name = "single_thread_kline_benchmark"
 harness = false
+
+

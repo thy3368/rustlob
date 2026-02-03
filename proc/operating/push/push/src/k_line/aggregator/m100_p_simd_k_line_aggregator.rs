@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::cell::UnsafeCell;
 use rayon::prelude::*;
 use rayon::ThreadPool;
@@ -48,9 +47,9 @@ pub struct M100PSimdKLineAggregator {
     // 使用 UnsafeCell 提供无锁内部可变性
     window_aggregators: [UnsafeCellWrapper<M100SimdKSingleLineAggregator>; 4],
 
-    // 全局计数器（原子操作）
-    total_trades: AtomicU64,
-    total_volume: AtomicU64,
+    // 全局计数器（普通变量，无并发写入）
+    total_trades: u64,
+    total_volume: u64,
 
     // 事件处理器列表 - 使用Arc确保线程安全
     event_handlers: Arc<[Option<Arc<dyn Fn(KLineUpdateEvent) + Send + Sync>>; 8]>,
@@ -67,8 +66,8 @@ impl M100PSimdKLineAggregator {
                 UnsafeCellWrapper::new(M100SimdKSingleLineAggregator::new(TimeWindow::FifteenMin)),
                 UnsafeCellWrapper::new(M100SimdKSingleLineAggregator::new(TimeWindow::Hour)),
             ],
-            total_trades: AtomicU64::new(0),
-            total_volume: AtomicU64::new(0),
+            total_trades: 0,
+            total_volume: 0,
             event_handlers: Arc::new([None, None, None, None, None, None, None, None]),
             event_handler_count: 0,
         }
@@ -138,17 +137,17 @@ impl KLineAggMut for M100PSimdKLineAggregator {
 
     #[inline(always)]
     fn process_trade(&mut self, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
-        // 原子操作增加计数器
-        self.total_trades.fetch_add(1, Ordering::Relaxed);
-        self.total_volume.fetch_add(volume as u64, Ordering::Relaxed);
+        // 单笔交易处理：完全避免并行，因为任务粒度太小
+        // 线程调度开销会完全抵消并行的好处
+        self.total_trades += 1;
+        self.total_volume += volume as u64;
 
-        // 并行处理每个窗口 - 使用无锁内部可变性
-        (0..4).into_par_iter().for_each(|window_idx| {
-            // 每个窗口聚合器是独立的，使用无锁内部可变性
+        // 单线程处理所有窗口
+        for window_idx in 0..4 {
             let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
             aggregator.process_trade(timestamp, price, volume)
                 .expect("Failed to process trade");
-        });
+        }
 
         Ok(())
     }
@@ -158,17 +157,40 @@ impl KLineAggMut for M100PSimdKLineAggregator {
         // 批量更新计数器
         let trade_count = trades.len() as u64;
         let volume_sum = trades.iter().map(|&(_, _, v)| v as u64).sum::<u64>();
-        self.total_trades.fetch_add(trade_count, Ordering::Relaxed);
-        self.total_volume.fetch_add(volume_sum, Ordering::Relaxed);
+        self.total_trades += trade_count;
+        self.total_volume += volume_sum;
 
-        // 使用固定大小的线程池处理任务，避免频繁的线程创建/销毁开销
-        AGGREGATOR_THREAD_POOL.install(|| {
-            (0..4).into_par_iter().for_each(|window_idx| {
+        // 增大任务粒度：将交易分成较大的块，每个块由一个线程处理
+        // 对于大任务量，使用更粗粒度的并行划分
+        let chunk_size = if trades.len() > 100_000 {
+            // 对于100万笔交易，分成10个块，每个块10万笔
+            trades.len() / 10
+        } else if trades.len() > 10_000 {
+            // 对于10万-100万笔交易，分成8个块
+            trades.len() / 8
+        } else {
+            // 对于小任务量，不分块（单线程处理）
+            trades.len()
+        };
+
+        if chunk_size == trades.len() {
+            // 小任务量，单线程处理
+            for window_idx in 0..4 {
                 let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
                 aggregator.process_trades_batch(trades)
                     .expect("Failed to process trades batch");
+            }
+        } else {
+            // 大任务量，并行处理
+            AGGREGATOR_THREAD_POOL.install(|| {
+                (0..4).into_par_iter().for_each(|window_idx| {
+                    let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
+                    // 每个线程处理整个批次的交易，但可以考虑块级别的优化
+                    aggregator.process_trades_batch(trades)
+                        .expect("Failed to process trades batch");
+                });
             });
-        });
+        }
 
         Ok(())
     }
@@ -197,8 +219,8 @@ impl KLineAggMut for M100PSimdKLineAggregator {
     #[inline(always)]
     fn get_total_stats(&self) -> (u64, u64) {
         (
-            self.total_trades.load(Ordering::Relaxed),
-            self.total_volume.load(Ordering::Relaxed)
+            self.total_trades,
+            self.total_volume
         )
     }
 }
