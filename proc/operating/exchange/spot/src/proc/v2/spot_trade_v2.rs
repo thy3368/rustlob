@@ -51,8 +51,8 @@ impl From<NewOrderCmd> for SpotOrder {
                     account_id,
                     trading_pair,
                     *cmd.side(),
-                    cmd.price().cloned().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.price().unwrap_or(Price::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone()
                 )
@@ -66,7 +66,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     trading_pair,
                     *cmd.side(),
                     Price::from_f64(0.0), // 市价单价格为0
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC, // 市价单默认IOC
                     cmd.new_client_order_id().clone()
                 );
@@ -83,12 +83,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     trading_pair,
                     *cmd.side(),
                     Price::from_f64(0.0), // 市价止损
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::StopLoss;
-                order.stop_price = cmd.stop_price().cloned();
+                order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None;
                 order
@@ -101,13 +101,13 @@ impl From<NewOrderCmd> for SpotOrder {
                     account_id,
                     trading_pair,
                     *cmd.side(),
-                    cmd.price().cloned().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.price().unwrap_or(Price::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::StopLoss;
-                order.stop_price = cmd.stop_price().cloned();
+                order.stop_price = *cmd.stop_price();
                 order
             }
             OrderType::TakeProfit => {
@@ -119,12 +119,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     trading_pair,
                     *cmd.side(),
                     Price::from_f64(0.0), // 市价止盈
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
-                order.stop_price = cmd.stop_price().cloned();
+                order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None;
                 order
@@ -137,13 +137,13 @@ impl From<NewOrderCmd> for SpotOrder {
                     account_id,
                     trading_pair,
                     *cmd.side(),
-                    cmd.price().cloned().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.price().unwrap_or(Price::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
-                order.stop_price = cmd.stop_price().cloned();
+                order.stop_price = *cmd.stop_price();
                 order
             }
             OrderType::LimitMaker => {
@@ -154,8 +154,8 @@ impl From<NewOrderCmd> for SpotOrder {
                     account_id,
                     trading_pair,
                     *cmd.side(),
-                    cmd.price().cloned().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().cloned().unwrap_or(Quantity::from_f64(0.0)),
+                    cmd.price().unwrap_or(Price::from_f64(0.0)),
+                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::GTX, // GTX = PostOnly
                     cmd.new_client_order_id().clone()
                 );
