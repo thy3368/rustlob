@@ -14,6 +14,7 @@ immutable_derive = { path = "../../../../lib/common/immutable_derive" }
 chrono = "0.4.43"
 # Database repository
 db_repo = { path = "../../../../lib/common/db_repo" }
+rust_queue = { path = "../../../../lib/common/rust_queue" }
 serde_json = "1.0.149"
 rand = "0.9.2"
 entity_derive = { path = "../../../../lib/common/entity_derive" }

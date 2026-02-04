@@ -9,3 +9,5 @@ pub mod spot_user_data_key;
 pub mod id_repo;
 
 pub mod spot_topic;
+
+pub mod test;

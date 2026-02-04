@@ -12,6 +12,5 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["sync", "time"] }
 rdkafka = { version = "0.36.2", features = ["cmake-build", "tokio"] }
 tracing = "0.1"
-push = { path = "../../../proc/operating/push/push" }
 diff = { path = "../diff" }
 entity_derive = { path = "../entity_derive" }

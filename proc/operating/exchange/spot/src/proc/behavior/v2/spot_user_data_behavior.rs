@@ -70,7 +70,7 @@ pub struct AccountCmd {
     /// 仅返回非零余额，默认 false
     omit_zero_balances: Option<bool>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -90,7 +90,7 @@ pub struct QueryOrderCmd {
     /// 客户端订单ID（与 order_id 二选一）
     orig_client_order_id: Option<String>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -106,7 +106,7 @@ pub struct CurrentOpenOrdersCmd {
     /// 交易对（可选，不传则返回所有交易对）
     symbol: Option<String>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -130,7 +130,7 @@ pub struct AllOrdersCmd {
     /// 限制数量，默认 500，最大 1000
     limit: Option<i32>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -148,7 +148,7 @@ pub struct QueryOrderListCmd {
     /// 客户端订单列表ID（与 order_list_id 二选一）
     orig_client_order_id: Option<String>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -170,7 +170,7 @@ pub struct QueryAllOrderListCmd {
     /// 限制数量，默认 500，最大 1000
     limit: Option<i32>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -184,7 +184,7 @@ pub struct QueryAllOrderListCmd {
 pub struct QueryOpenOrderListCmd {
     metadata: CMetadata,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -210,7 +210,7 @@ pub struct MyTradesCmd {
     /// 限制数量，默认 500，最大 1000
     limit: Option<i32>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -224,7 +224,7 @@ pub struct MyTradesCmd {
 pub struct QueryUnfilledOrderCountCmd {
     metadata: CMetadata,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -254,7 +254,7 @@ pub struct QueryPreventedMatchesCmd {
     /// 限制数量，默认 500，最大 1000
     limit: Option<i32>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -289,7 +289,7 @@ pub struct QueryAllocationsCmd {
     /// 订单ID
     order_id: Option<i64>,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -304,7 +304,7 @@ pub struct QueryCommissionRatesCmd {
     /// 交易对（必填）
     symbol: String,
     /// 接收窗口
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }

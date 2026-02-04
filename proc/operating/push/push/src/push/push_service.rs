@@ -1,6 +1,5 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo};
 use immutable_derive::immutable;
 use serde_json::json;
 
@@ -16,7 +15,11 @@ pub struct PushService {
     /// 连接管理仓储（不可变引用）
     connection_repo: Arc<ConnectionRepo>,
     /// 变更日志仓储（不可变引用）
-    change_log_repo: Arc<ChangeLogChannelQueueRepo>
+    change_log_repo: Arc<MPMCQueue>
+
+    // change_log_repo: Arc<ChangeLogChannelQueueRepo>
+
+
 }
 
 

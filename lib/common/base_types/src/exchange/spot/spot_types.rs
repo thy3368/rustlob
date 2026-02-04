@@ -612,7 +612,7 @@ impl SpotOrder {
     pub fn frozen_asset_balance_id(&self) -> String { format!("{}:{}", self.account_id.0, self.frozen_asset.as_u32()) }
 
     #[inline]
-    pub fn create_limit(
+    pub fn create_order(
         order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: OrderSide,
         price: Price, quantity: Quantity, time_in_force: TimeInForce, client_order_id: Option<String>
     ) -> Self {
@@ -818,7 +818,7 @@ mod tests {
     #[test]
     fn test_spot_order_fee_calculation_with_cex_fee_entity() {
         // 创建限价买单
-        let mut order = SpotOrder::create_limit(
+        let mut order = SpotOrder::create_order(
             OrderId::from(1u64),
             TraderId::default(),
             AccountId(1),

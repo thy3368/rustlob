@@ -2,14 +2,13 @@
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
 
-use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
-use base_types::handler::handler::Handler;
-use base_types::OrderSide;
-use base_types::TradingPair;
-use base_types::Price;
-use base_types::Quantity;
-use base_types::AssetId;
+use base_types::{
+    exchange::spot::spot_types::{OrderType, TimeInForce},
+    handler::handler::Handler,
+    AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair
+};
 use immutable_derive::immutable;
+
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
 /// Spot Trading 命令枚举 - 包含所有交易端点
@@ -106,7 +105,6 @@ pub enum SpotTradeCmdAny {
     /// Weight: 20
     QueryCommissionRates(QueryCommissionRatesCmd)
 }
-
 
 
 /// 订单响应类型
@@ -260,7 +258,7 @@ pub enum ContingencyType {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
-//todo String 应该变成 str?
+// todo String 应该变成 str?
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对
@@ -302,7 +300,7 @@ pub struct NewOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 测试下单命令
@@ -343,7 +341,7 @@ pub struct CancelOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 取消某交易对的所有挂单命令
@@ -361,7 +359,7 @@ pub struct CancelAllOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 撤销订单并创建新订单命令
@@ -426,7 +424,7 @@ pub struct CancelReplaceOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询订单命令
@@ -448,7 +446,7 @@ pub struct QueryOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 当前挂单查询命令
@@ -466,7 +464,7 @@ pub struct CurrentOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询所有订单命令
@@ -492,7 +490,7 @@ pub struct AllOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 // ==================== OCO 订单命令定义 ====================
@@ -549,7 +547,7 @@ pub struct NewOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 创建 OTO 订单命令（One-Triggers-the-Other）
@@ -623,7 +621,7 @@ pub struct NewOtoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 创建 OTOCO 订单命令（One-Triggers-OCO）
@@ -723,7 +721,7 @@ pub struct NewOtocoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 取消 OCO 订单命令
@@ -747,7 +745,7 @@ pub struct CancelOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询 OCO 订单命令
@@ -765,9 +763,9 @@ pub struct QueryOcoOrderCmd {
     /// 用户自定义订单列表 ID
     orig_client_order_id: Option<String>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询所有 OCO 订单命令
@@ -789,9 +787,9 @@ pub struct AllOcoOrdersCmd {
     /// 返回数量限制（默认 500，最大 1000）
     limit: Option<i32>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询挂起的 OCO 订单命令
@@ -805,9 +803,9 @@ pub struct AllOcoOrdersCmd {
 pub struct OpenOcoOrdersCmd {
     metadata: CMetadata,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 // ==================== 账户查询命令定义 ====================
@@ -825,9 +823,9 @@ pub struct AccountCmd {
     /// 仅返回非零余额，默认 false
     omit_zero_balances: Option<bool>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 账户成交历史查询命令
@@ -855,7 +853,7 @@ pub struct MyTradesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询目前下单数命令
@@ -869,9 +867,9 @@ pub struct MyTradesCmd {
 pub struct QueryUnfilledOrderCountCmd {
     metadata: CMetadata,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询已阻止的匹配命令
@@ -897,7 +895,7 @@ pub struct QueryPreventedMatchesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询分配结果命令
@@ -925,7 +923,7 @@ pub struct QueryAllocationsCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 /// 查询佣金费率命令
@@ -943,7 +941,7 @@ pub struct QueryCommissionRatesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: Timestamp
 }
 
 // ==================== 响应类型定义 ====================
@@ -1017,9 +1015,9 @@ pub struct NewOrderAck {
     /// 订单列表 ID（-1 表示不属于订单列表）
     order_list_id: i64,
     /// 用户自定义订单 ID
-    client_order_id: String,
+    client_order_id: Option<String>,
     /// 交易时间戳
-    transact_time: i64
+    transact_time: Timestamp
 }
 
 /// 新订单 RESULT 响应
@@ -1037,7 +1035,7 @@ pub struct NewOrderResult {
     /// 用户自定义订单 ID
     client_order_id: String,
     /// 交易时间戳
-    transact_time: i64,
+    transact_time: Timestamp,
     /// 价格
     price: Price,
     /// 原始数量
@@ -1057,7 +1055,7 @@ pub struct NewOrderResult {
     /// 订单方向
     side: OrderSide,
     /// 订单开始时间
-    working_time: i64,
+    working_time: Timestamp,
     /// 自成交保护模式
     self_trade_prevention_mode: SelfTradePreventionMode,
 
@@ -1157,15 +1155,15 @@ pub struct OrderInfo {
     /// 冰山订单数量（可选）
     iceberg_qty: Option<Quantity>,
     /// 订单创建时间
-    time: i64,
+    time: Timestamp,
     /// 订单更新时间
-    update_time: i64,
+    update_time: Timestamp,
     /// 是否只挂单
     is_working: bool,
     /// 原始报价数量
     orig_quote_order_qty: Quantity,
     /// 订单开始时间
-    working_time: i64,
+    working_time: Timestamp,
     /// 自成交保护模式
     self_trade_prevention_mode: SelfTradePreventionMode
 }
@@ -1226,7 +1224,7 @@ pub struct OcoOrderResult {
     /// 用户自定义订单列表 ID
     list_client_order_id: String,
     /// 交易时间戳
-    transaction_time: i64,
+    transaction_time: Timestamp,
     /// 交易对
     symbol: TradingPair,
     /// 订单列表
@@ -1252,7 +1250,7 @@ pub struct OtoOrderResult {
     /// 用户自定义订单列表 ID
     list_client_order_id: String,
     /// 交易时间戳
-    transaction_time: i64,
+    transaction_time: Timestamp,
     /// 交易对
     symbol: TradingPair,
     /// 订单列表
@@ -1278,7 +1276,7 @@ pub struct OtocoOrderResult {
     /// 用户自定义订单列表 ID
     list_client_order_id: String,
     /// 交易时间戳
-    transaction_time: i64,
+    transaction_time: Timestamp,
     /// 交易对
     symbol: TradingPair,
     /// 订单列表
@@ -1318,7 +1316,7 @@ pub struct OcoOrderInfo {
     /// 用户自定义订单列表 ID
     list_client_order_id: String,
     /// 交易时间戳
-    transaction_time: i64,
+    transaction_time: Timestamp,
     /// 交易对
     symbol: TradingPair,
     /// 订单列表
@@ -1421,7 +1419,7 @@ pub struct TradeInfo {
     /// 佣金资产
     commission_asset: AssetId,
     /// 成交时间
-    time: i64,
+    time: Timestamp,
     /// 是否是买方
     is_buyer: bool,
     /// 是否是挂单方
@@ -1471,7 +1469,7 @@ pub struct PreventedMatch {
     /// Maker 阻止数量
     maker_prevented_quantity: Quantity,
     /// 交易时间戳
-    transact_time: i64
+    transact_time: Timestamp
 }
 
 /// 分配信息
@@ -1501,7 +1499,7 @@ pub struct Allocation {
     /// 佣金资产
     commission_asset: AssetId,
     /// 时间戳
-    time: i64,
+    time: Timestamp,
     /// 是否是买方
     is_buyer: bool,
     /// 是否是挂单方

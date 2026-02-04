@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use base_types::{
     account::balance::Balance,
     base_types::TraderId,
@@ -45,12 +47,12 @@ impl From<NewOrderCmd> for SpotOrder {
         match cmd.order_type() {
             OrderType::Limit => {
                 // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
-                SpotOrder::create_limit(
+                SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
@@ -59,12 +61,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::Market => {
                 // 市价单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     Price::from_f64(0.0), // 市价单价格为0
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC, // 市价单默认IOC
@@ -76,12 +78,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::StopLoss => {
                 // 止损单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     Price::from_f64(0.0), // 市价止损
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
@@ -95,12 +97,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::StopLossLimit => {
                 // 止损限价单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
@@ -112,12 +114,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::TakeProfit => {
                 // 止盈单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     Price::from_f64(0.0), // 市价止盈
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
@@ -131,12 +133,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::TakeProfitLimit => {
                 // 止盈限价单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
@@ -148,12 +150,12 @@ impl From<NewOrderCmd> for SpotOrder {
             }
             OrderType::LimitMaker => {
                 // 限价只挂单
-                let mut order = SpotOrder::create_limit(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     account_id,
                     trading_pair,
-                    *cmd.side(),
+                    cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::GTX, // GTX = PostOnly
@@ -170,23 +172,23 @@ impl From<NewOrderCmd> for SpotOrder {
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
     // uid路由
-    balance_repo: MySqlDbRepo<Balance>,
+    balance_repo: Arc<MySqlDbRepo<Balance>>,
     // uid路由
-    trade_repo: MySqlDbRepo<SpotTrade>,
+    trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
     // uid路由
-    order_repo: MySqlDbRepo<SpotOrder>,
+    order_repo: Arc<MySqlDbRepo<SpotOrder>>,
 
     // uid路由
-    user_data_repo: MySqlDbRepo<SpotOrder>,
+    user_data_repo: Arc<MySqlDbRepo<SpotOrder>>,
 
     // 交易对路由
-    market_data_repo: MySqlDbRepo<SpotOrder>,
+    market_data_repo: Arc<MySqlDbRepo<SpotOrder>>,
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
     lob_repo: L,
 
-    queue: MPMCQueue
+    queue: Arc<MPMCQueue>
 }
 
 
@@ -196,14 +198,14 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
 
         // 根据 NewOrderCmd 创建 SpotOrder
-        let mut internal_order = SpotOrder::from(cmd.clone());
+        // todo cmd.clone() 太贵了
+        let mut internal_order = SpotOrder::from(cmd);
 
         match internal_order.side {
             OrderSide::Buy => {}
             OrderSide::Sell => {}
         }
         // 根据买卖方向冻结相应的余额
-        let now = *cmd.timestamp() as u64;
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
         let mut frozen_asset_balance =
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
@@ -228,14 +230,14 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         let order_id = order_next_id as u64;
 
         let ack = NewOrderAck::new(
-            cmd.symbol().clone(),
+            internal_order.trading_pair,
             order_id,
             -1, // 不属于任何订单列表
-            cmd.new_client_order_id().as_ref().unwrap().parse().unwrap(),
-            *cmd.timestamp()
+            internal_order.client_order_id,
+            internal_order.timestamp
         );
 
-        Ok(CmdResp::new(ResMetadata::new(0, false, *cmd.timestamp() as u64), SpotTradeResAny::NewOrderAck(ack)))
+        Ok(CmdResp::new(ResMetadata::new(0, false, internal_order.timestamp), SpotTradeResAny::NewOrderAck(ack)))
     }
 
     /// 处理新订单命令的主方法
@@ -298,7 +300,10 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
                 self.handle(new_order)
             }
 
-            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SpotTradeResAny::TestNewOrderEmpty)),
+            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(
+                ResMetadata::new(nonce, false, Timestamp::default()),
+                SpotTradeResAny::TestNewOrderEmpty
+            )),
             SpotTradeCmdAny::CancelOrder(_) => {
                 todo!()
             }

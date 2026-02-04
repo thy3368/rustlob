@@ -1,6 +1,6 @@
 use immutable_derive::immutable;
 
-use crate::UserId;
+use crate::{Timestamp, UserId};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -11,7 +11,7 @@ pub struct CMetadata {
     command_id: String,
     /// 命令创建时间戳（Unix 毫秒）
     #[cfg_attr(feature = "serde", serde(default))]
-    timestamp: u64,
+    timestamp: Timestamp ,
     /// 关联ID（用于分布式追踪）
     #[cfg_attr(feature = "serde", serde(default))]
     correlation_id: Option<String>,
@@ -68,17 +68,10 @@ pub struct ResMetadata {
     /// 是否为重复命令（幂等命中）
     is_duplicate: bool,
     /// 命令接收时间戳
-    received_at: u64
+    received_at: Timestamp
 }
 
-impl ResMetadata {
-    /// 标记为重复命令
-    #[inline]
-    pub fn mark_duplicate(mut self) -> Self {
-        self.is_duplicate = true;
-        self
-    }
-}
+
 
 /// Nonce 类型 - 客户端生成的唯一标识
 pub type Nonce = u64;

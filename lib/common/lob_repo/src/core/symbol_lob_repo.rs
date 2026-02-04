@@ -267,3 +267,45 @@ pub trait MultiSymbolLobRepo: Send + Sync {
 
     fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order>;
 }
+
+/// 为 Arc<L> 实现 MultiSymbolLobRepo trait
+impl<L> MultiSymbolLobRepo for std::sync::Arc<L>
+where
+    L: MultiSymbolLobRepo + ?Sized,
+{
+    type Order = L::Order;
+
+    fn match_orders(
+        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity
+    ) -> Option<Vec<&Self::Order>> {
+        (**self).match_orders(symbol, side, price, quantity)
+    }
+
+    fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
+        (**self).best_bid(symbol)
+    }
+
+    fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
+        (**self).best_ask(symbol)
+    }
+
+    fn contains_symbol(&self, symbol: &TradingPair) -> bool {
+        (**self).contains_symbol(symbol)
+    }
+
+    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), RepoError> {
+        (**self).add_order(symbol, order)
+    }
+
+    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
+        (**self).remove_order(symbol, order_id)
+    }
+
+    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
+        (**self).find_order(p0, p1)
+    }
+
+    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
+        (**self).find_order_mut(p0, order_id)
+    }
+}

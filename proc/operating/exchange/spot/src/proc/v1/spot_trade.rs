@@ -67,7 +67,7 @@ impl SpotTradeBehaviorImpl {
         let order_id = self.generate_order_id();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
-        let mut internal_order = SpotOrder::create_limit(
+        let mut internal_order = SpotOrder::create_order(
             order_id,
             limit_order.trader,
             limit_order.account_id,
@@ -232,7 +232,7 @@ mod tests {
         let quantity = Quantity::from_raw(100_000_000); // 1.00 BTC
 
         // 2. 创建限价单
-        let order = SpotOrder::create_limit(
+        let order = SpotOrder::create_order(
             12345,                          // order_id
             trader_id,                      // trader
             account_id,                     // account_id

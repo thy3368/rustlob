@@ -1,11 +1,9 @@
 use spot_behavior::proc::behavior::{
-    spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny},
+    spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
     v2::spot_market_data_sse_behavior::{
-        MarketDataSubscriptionCmdAny, SpotMarketDataSubscriptionBehavior, SubscriptionResponse,
-        SubscriptionResult
+        MarketDataSubscriptionCmdAny, SpotMarketDataSubscriptionBehavior, SubscriptionResponse
     }
 };
-use base_types::cqrs::cqrs_types::ResMetadata;
 
 /// Spot 市场数据 SSE 实现
 #[derive(Clone)]
@@ -34,83 +32,29 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
 
         match cmd {
             MarketDataSubscriptionCmdAny::Subscribe {
-                metadata,
-                streams
+                ..
             } => {
-                // 添加新的订阅流
-                for stream in streams {
-                    if !self.subscriptions.contains(&stream) {
-                        self.subscriptions.push(stream);
-                    }
-                }
-                // 返回成功响应
-                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
-                    result: Some(SubscriptionResult::Success),
-                    id: None
-                }))
+                todo!()
             }
-
             MarketDataSubscriptionCmdAny::Unsubscribe {
-                metadata,
-                streams
+                ..
             } => {
-                // 移除订阅流
-                for stream in streams {
-                    self.subscriptions.retain(|s| s != &stream);
-                }
-                // 返回成功响应
-                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
-                    result: Some(SubscriptionResult::Success),
-                    id: None
-                }))
+                todo!()
             }
-
             MarketDataSubscriptionCmdAny::ListSubscriptions {
-                metadata
+                ..
             } => {
-                // 返回当前订阅列表
-                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
-                    result: Some(SubscriptionResult::Subscriptions(self.subscriptions.clone())),
-                    id: None
-                }))
+                todo!()
             }
-
             MarketDataSubscriptionCmdAny::SetProperty {
-                metadata,
-                property,
-                value
+                ..
             } => {
-                // 设置属性（目前仅支持 combined 属性）
-                if property == "combined" {
-                    self.combined_stream_enabled = value;
-                    Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
-                        result: Some(SubscriptionResult::Property(value)),
-                        id: None
-                    }))
-                } else {
-                    Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                        field: "property",
-                        reason: "Unknown property"
-                    }))
-                }
+                todo!()
             }
-
             MarketDataSubscriptionCmdAny::GetProperty {
-                metadata,
-                property
+                ..
             } => {
-                // 获取属性值
-                if property == "combined" {
-                    Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
-                        result: Some(SubscriptionResult::Property(self.combined_stream_enabled)),
-                        id: None
-                    }))
-                } else {
-                    Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                        field: "property",
-                        reason: "Unknown property"
-                    }))
-                }
+                todo!()
             }
         }
     }

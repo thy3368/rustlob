@@ -648,7 +648,7 @@ pub struct AccountCmd {
     /// 仅返回非零余额，默认 false
     omit_zero_balances: Option<bool>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }

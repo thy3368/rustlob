@@ -116,8 +116,10 @@ impl Default for SpotHttpClient {
 #[cfg(test)]
 mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
+    use base_types::{OrderSide, Timestamp, TradingPair};
+    use base_types::exchange::spot::spot_types::OrderType;
     use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-        NewOrderCmd, OrderSide, OrderType, SpotTradeCmdAny, TestNewOrderCmd
+        NewOrderCmd, SpotTradeCmdAny, TestNewOrderCmd
     };
 
     use super::*;
@@ -131,32 +133,32 @@ mod tests {
         let client = SpotHttpClient::default();
 
         // 创建测试命令 - 使用 TestNewOrder 命令进行连接测试
-        let test_cmd = SpotTradeCmdAny::TestNewOrder(TestNewOrderCmd {
-            new_order: NewOrderCmd {
-                metadata: CMetadata::default(),
-                symbol: "BTCUSDT".to_string(),
-                side: OrderSide::Buy,
-                order_type: OrderType::Limit,
-                time_in_force: None,
-                quantity: Some(0.001),
-                quote_order_qty: None,
-                price: Some(50000.0),
-                new_client_order_id: Some("test_order_123".to_string()),
-                strategy_id: None,
-                strategy_type: None,
-                stop_price: None,
-                trailing_delta: None,
-                iceberg_qty: None,
-                new_order_resp_type: None,
-                self_trade_prevention_mode: None,
-                peg_price_type: None,
-                peg_offset_value: None,
-                peg_offset_type: None,
-                recv_window: None,
-                timestamp: chrono::Utc::now().timestamp_millis()
-            },
-            compute_commission_rates: Some(false)
-        });
+        let test_cmd = SpotTradeCmdAny::TestNewOrder(TestNewOrderCmd::new(
+            NewOrderCmd::new(
+                CMetadata::default(),
+                TradingPair::BtcUsdt,
+                OrderSide::Buy,
+                OrderType::Limit,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Timestamp::default()
+            ),
+            None
+        ));
 
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");
 

@@ -26,108 +26,91 @@ use crate::interfaces::spot::websocket::{
 // todo service/adapter/repo的实例化都可以在这，他们都是单例的
 
 
-// 数据库仓储单例（mock版本）
-static BALANCE_REPO: Lazy<MySqlDbRepo<Balance>> = Lazy::new(MySqlDbRepo::new_mock);
-static TRADE_REPO: Lazy<MySqlDbRepo<SpotTrade>> = Lazy::new(MySqlDbRepo::new_mock);
-static ORDER_REPO: Lazy<MySqlDbRepo<SpotOrder>> = Lazy::new(MySqlDbRepo::new_mock);
-static USER_DATA_REPO: Lazy<MySqlDbRepo<SpotOrder>> = Lazy::new(MySqlDbRepo::new_mock);
-static MARKET_DATA_REPO: Lazy<MySqlDbRepo<SpotOrder>> = Lazy::new(MySqlDbRepo::new_mock);
 
-// LOB Repo 单例
-static EMBEDDED_LOB_REPO: Lazy<EmbeddedLobRepo<SpotOrder>> = Lazy::new(|| EmbeddedLobRepo::new(vec![]));
-static DISTRIBUTED_LOB_REPO: Lazy<DistributedLobRepo<SpotOrder>> = Lazy::new(|| DistributedLobRepo::new(vec![]));
+//todo  Lazy<MySqlDbRepo<Balance>> 变成 Lazy<Arc<MySqlDbRepo<Balance>>>
+static BALANCE_REPO: Lazy<Arc<MySqlDbRepo<Balance>>> = Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
+static TRADE_REPO: Lazy<Arc<MySqlDbRepo<SpotTrade>>> = Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
+static ORDER_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> = Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
+static USER_DATA_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> = Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
+static MARKET_DATA_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> = Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
 
-// 核心服务单例
-static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>> = Lazy::new(|| {
-    SpotTradeBehaviorV2Impl::new(
+// LOB Repo 单例（包装在 Arc 中）
+static EMBEDDED_LOB_REPO: Lazy<Arc<EmbeddedLobRepo<SpotOrder>>> = Lazy::new(|| Arc::new(EmbeddedLobRepo::new(vec![])));
+static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> = Lazy::new(|| Arc::new(DistributedLobRepo::new(vec![])));
+
+// 队列服务单例（包装在 Arc 中）
+static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
+    let queue = MPMCQueue::new();
+    queue.get_or_create_channel(SpotTopic::KLine.name());
+    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
+    Arc::new(queue)
+});
+
+static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
+    let queue = KafkaQueue::new();
+    queue.get_or_create_channel(SpotTopic::KLine.name());
+    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
+    Arc::new(queue)
+});
+
+// 核心服务单例（直接包装在 Arc 中）
+static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>>> = Lazy::new(|| {
+    Arc::new(SpotTradeBehaviorV2Impl::new(
         BALANCE_REPO.clone(),
         TRADE_REPO.clone(),
         ORDER_REPO.clone(),
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
         EMBEDDED_LOB_REPO.clone(),
-        MPMC_QUEUE
-    )
+        MPMC_QUEUE.clone()
+    ))
 });
 
-static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<SpotTradeBehaviorV2Impl<DistributedLobRepo<SpotOrder>>> =
+static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>>> =
     Lazy::new(|| {
-        SpotTradeBehaviorV2Impl::new(
+        Arc::new(SpotTradeBehaviorV2Impl::new(
             BALANCE_REPO.clone(),
             TRADE_REPO.clone(),
             ORDER_REPO.clone(),
             USER_DATA_REPO.clone(),
             MARKET_DATA_REPO.clone(),
             DISTRIBUTED_LOB_REPO.clone(),
-            KAFKA_QUEUE
-        )
+            MPMC_QUEUE.clone() // 使用 MPMC 队列而不是 Kafka 队列
+        ))
     });
 
-static SPOT_MARKET_DATA_SERVICE: Lazy<SpotMarketDataImpl> = Lazy::new(SpotMarketDataImpl::new);
-static SPOT_USER_DATA_SERVICE: Lazy<SpotUserDataImpl> = Lazy::new(SpotUserDataImpl::new);
-static SPOT_USER_DATA_LISTEN_KEY_SERVICE: Lazy<SpotUserDataListenKeyImpl> = Lazy::new(SpotUserDataListenKeyImpl::new);
+static SPOT_MARKET_DATA_SERVICE: Lazy<Arc<SpotMarketDataImpl>> =
+    Lazy::new(|| Arc::new(SpotMarketDataImpl::new()));
+static SPOT_USER_DATA_SERVICE: Lazy<Arc<SpotUserDataImpl>> = Lazy::new(|| Arc::new(SpotUserDataImpl::new()));
+static SPOT_USER_DATA_LISTEN_KEY_SERVICE: Lazy<Arc<SpotUserDataListenKeyImpl>> = Lazy::new(|| Arc::new(SpotUserDataListenKeyImpl::new()));
 
 // WebSocket 相关服务单例
 static CONNECTION_REPO: Lazy<Arc<ConnectionRepo>> = Lazy::new(|| Arc::new(ConnectionRepo::default()));
-static CHANGE_LOG_REPO: Lazy<Arc<ChangeLogChannelQueueRepo>> = Lazy::new(|| Arc::new(ChangeLogChannelQueueRepo::new()));
 static PUSH_SERVICE: Lazy<Arc<PushService>> =
-    Lazy::new(|| Arc::new(PushService::new(CONNECTION_REPO.clone(), CHANGE_LOG_REPO.clone())));
+    Lazy::new(|| Arc::new(PushService::new(CONNECTION_REPO.clone(), MPMC_QUEUE.clone())));
 static SUBSCRIPTION_SERVICE: Lazy<Arc<SubscriptionService>> =
     Lazy::new(|| Arc::new(SubscriptionService::new(CONNECTION_REPO.clone())));
 static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotMarketDataSSEImpl::new()));
 static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> = Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
-// Arc 包装的单例
-static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED_ARC: Lazy<Arc<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>>> =
-    Lazy::new(|| Arc::new(SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()));
-static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED_ARC: Lazy<Arc<SpotTradeBehaviorV2Impl<DistributedLobRepo<SpotOrder>>>> =
-    Lazy::new(|| Arc::new(SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED.clone()));
-static SPOT_MARKET_DATA_SERVICE_ARC: Lazy<Arc<SpotMarketDataImpl>> =
-    Lazy::new(|| Arc::new(SPOT_MARKET_DATA_SERVICE.clone()));
-static SPOT_USER_DATA_SERVICE_ARC: Lazy<Arc<SpotUserDataImpl>> = Lazy::new(|| Arc::new(SPOT_USER_DATA_SERVICE.clone()));
-static SPOT_USER_DATA_LISTEN_KEY_SERVICE_ARC: Lazy<Arc<SpotUserDataListenKeyImpl>> =
-    Lazy::new(|| Arc::new(SPOT_USER_DATA_LISTEN_KEY_SERVICE.clone()));
-
-// 创建两个 topic: "kline" 和 "entity_change_log"
-// 队列服务单例
-static MPMC_QUEUE: Lazy<MPMCQueue> = Lazy::new(|| {
-    let queue = MPMCQueue::new();
-    // 预创建 kline topic channel
-    queue.get_or_create_channel(SpotTopic::KLine.name());
-    // 预创建 entity_change_log topic channel
-    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
-    queue
-});
-
-static KAFKA_QUEUE: Lazy<KafkaQueue> = Lazy::new(|| {
-    let queue = KafkaQueue::new();
-    // 预创建 kline topic channel（Kafka 会在首次使用时自动创建 topic）
-    queue.get_or_create_channel(SpotTopic::KLine.name());
-    // 预创建 entity_change_log topic channel
-    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
-    queue
-});
-
-// Arc 包装的队列单例
-static MPMC_QUEUE_ARC: Lazy<Arc<MPMCQueue>> = Lazy::new(|| Arc::new(MPMC_QUEUE.clone()));
-static KAFKA_QUEUE_ARC: Lazy<Arc<KafkaQueue>> = Lazy::new(|| Arc::new(KAFKA_QUEUE.clone()));
 
 
-pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>> {
-    SPOT_TRADE_BEHAVIOR_V2_EMBEDDED_ARC.clone()
+
+pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>> {
+    SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()
 }
 
-pub fn get_spot_trade_behavior_v2_distributed() -> Arc<SpotTradeBehaviorV2Impl<DistributedLobRepo<SpotOrder>>> {
-    SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED_ARC.clone()
+pub fn get_spot_trade_behavior_v2_distributed() -> Arc<SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>> {
+    SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED.clone()
 }
 
-pub fn get_spot_market_data_service() -> Arc<SpotMarketDataImpl> { SPOT_MARKET_DATA_SERVICE_ARC.clone() }
+pub fn get_spot_market_data_service() -> Arc<SpotMarketDataImpl> { SPOT_MARKET_DATA_SERVICE.clone() }
 
-pub fn get_spot_user_data_service() -> Arc<SpotUserDataImpl> { SPOT_USER_DATA_SERVICE_ARC.clone() }
+pub fn get_spot_user_data_service() -> Arc<SpotUserDataImpl> { SPOT_USER_DATA_SERVICE.clone() }
 
 pub fn get_spot_user_data_listen_key_service() -> Arc<SpotUserDataListenKeyImpl> {
-    SPOT_USER_DATA_LISTEN_KEY_SERVICE_ARC.clone()
+    SPOT_USER_DATA_LISTEN_KEY_SERVICE.clone()
 }
 
 // WebSocket 相关服务访问方法
@@ -144,12 +127,17 @@ pub fn get_spot_market_data_sse_impl() -> Arc<SpotMarketDataSSEImpl> { SPOT_MARK
 pub fn get_spot_user_data_sse_impl() -> Arc<SpotUserDataSSEImpl> { SPOT_USER_DATA_SSE_IMPL.clone() }
 
 // 队列服务访问方法
-pub fn get_mpmc_queue() -> Arc<MPMCQueue> { MPMC_QUEUE_ARC.clone() }
+pub fn get_mpmc_queue() -> Arc<MPMCQueue> { MPMC_QUEUE.clone() }
 
-pub fn get_kafka_queue() -> Arc<KafkaQueue> { KAFKA_QUEUE_ARC.clone() }
+pub fn get_kafka_queue() -> Arc<KafkaQueue> { KAFKA_QUEUE.clone() }
 
+// MySqlDbRepo 访问方法
+pub fn get_balance_repo() -> Arc<MySqlDbRepo<Balance>> { BALANCE_REPO.clone() }
 
-#[test]
-fn abc() {
-    println!("✅ unique IDs");
-}
+pub fn get_trade_repo() -> Arc<MySqlDbRepo<SpotTrade>> { TRADE_REPO.clone() }
+
+pub fn get_order_repo() -> Arc<MySqlDbRepo<SpotOrder>> { ORDER_REPO.clone() }
+
+pub fn get_user_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> { USER_DATA_REPO.clone() }
+
+pub fn get_market_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> { MARKET_DATA_REPO.clone() }

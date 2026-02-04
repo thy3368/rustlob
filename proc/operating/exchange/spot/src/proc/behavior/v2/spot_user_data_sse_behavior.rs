@@ -3,6 +3,7 @@
 
 use base_types::handler::handler::Handler;
 use base_types::OrderSide;
+use immutable_derive::immutable;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 // ==================== User Data Stream 事件枚举 ====================
 
@@ -54,7 +55,7 @@ pub enum UserDataStreamEventAny {
 /// outboundAccountPosition
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct OutboundAccountPositionEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -71,7 +72,7 @@ pub struct OutboundAccountPositionEvent {
 /// 余额项
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct BalanceItem {
     /// 资产名称
     asset: String,
@@ -87,7 +88,7 @@ pub struct BalanceItem {
 /// balanceUpdate
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct BalanceUpdateEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -109,7 +110,7 @@ pub struct BalanceUpdateEvent {
 /// executionReport
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct ExecutionReportEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -240,7 +241,7 @@ pub struct ExecutionReportEvent {
 /// listStatus
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct ListStatusEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -271,7 +272,7 @@ pub struct ListStatusEvent {
 /// 订单列表中的订单项
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct ListOrderItem {
     /// 交易对
     symbol: String,
@@ -287,7 +288,7 @@ pub struct ListOrderItem {
 /// eventStreamTerminated
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct EventStreamTerminatedEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -303,7 +304,7 @@ pub struct EventStreamTerminatedEvent {
 /// externalLockUpdate
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
+#[immutable]
 pub struct ExternalLockUpdateEvent {
     /// 订阅 ID
     subscription_id: i32,
@@ -319,18 +320,7 @@ pub struct ExternalLockUpdateEvent {
     transaction_time: i64
 }
 
-// ==================== 枚举类型定义 ====================
 
-// /// 订单方向
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-//
-// pub enum OrderSide {
-//     /// 买入
-//     BUY,
-//     /// 卖出
-//     SELL
-// }
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

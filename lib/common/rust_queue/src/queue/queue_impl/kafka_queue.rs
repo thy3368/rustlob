@@ -9,7 +9,6 @@ use rdkafka::consumer::{StreamConsumer, Consumer};
 use rdkafka::message::Message;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use push::k_line::k_line_types::KLineUpdateEvent;
 use crate::queue::queue::{Queue, SendOptions, SubscribeOptions, DefaultQueueConfig, ToBytes, FromBytes};
 
 /// Kafka 配置（兼容 Queue trait 的 Config 关联类型）

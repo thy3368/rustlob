@@ -61,7 +61,7 @@ impl HttpServer {
                 "/api/spot/v2/",
                 post(
                     handle_generic::<
-                        SpotTradeBehaviorV2Impl<DistributedLobRepo<SpotOrder>>,
+                        SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>,
                         SpotTradeCmdAny,
                         SpotTradeResAny
                     >
@@ -145,7 +145,7 @@ impl HttpServer {
                 "/api/spot/v2/",
                 post(
                     handle_generic::<
-                        SpotTradeBehaviorV2Impl<EmbeddedLobRepo<SpotOrder>>,
+                        SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>,
                         SpotTradeCmdAny,
                         SpotTradeResAny
                     >

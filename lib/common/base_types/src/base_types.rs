@@ -2,7 +2,7 @@
 //!
 //! 包含价格、数量等核心数值类型
 
-use std::fmt;
+use std::{default, fmt};
 
 use decimal::Decimal;
 // ============================================================================
@@ -18,7 +18,7 @@ pub type Price = Decimal;
 pub type Quantity = Decimal;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // #[immutable]
 pub struct Timestamp(pub u64);
@@ -34,6 +34,9 @@ impl Timestamp {
     }
 }
 
+impl default::Default for Timestamp {
+    fn default() -> Self { Self(0) }
+}
 
 /// 订单ID
 /// todo 要改
