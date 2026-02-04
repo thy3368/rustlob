@@ -5,7 +5,8 @@ use entity_derive::Entity;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data Stream 消息枚举
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 
 // #[entity(id = "order_id")]
 
@@ -41,7 +42,8 @@ pub enum SpotMarketDataStreamAny {
 /// 归集交易流数据
 /// Stream: <symbol>@aggTrade
 /// Update Speed: Real-time
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct AggregateTradeStream {
     /// 事件类型 "aggTrade"
     event_type: String,
@@ -70,7 +72,8 @@ pub struct AggregateTradeStream {
 /// 逐笔交易流数据
 /// Stream: <symbol>@v1
 /// Update Speed: Real-time
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TradeStream {
     /// 事件类型 "v1"
     event_type: String,
@@ -154,7 +157,8 @@ impl KlineInterval {
 }
 
 /// K线数据
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct KlineData {
     /// K线开始时间 (毫秒)
     start_time: i64,
@@ -195,7 +199,8 @@ pub struct KlineData {
 /// K线流数据
 /// Stream: <symbol>@kline_<interval> or <symbol>@kline_<interval>@+08:00
 /// Update Speed: 1000ms for 1s, 2000ms for others
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct KlineStream {
     /// 事件类型 "kline"
     event_type: String,
@@ -210,7 +215,8 @@ pub struct KlineStream {
 /// Mini Ticker 流数据
 /// Stream: <symbol>@miniTicker
 /// Update Speed: 1000ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct MiniTickerStream {
     /// 事件类型 "24hrMiniTicker"
     event_type: String,
@@ -235,7 +241,8 @@ pub struct MiniTickerStream {
 /// 24小时 Ticker 流数据
 /// Stream: <symbol>@ticker
 /// Update Speed: 1000ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TickerStream {
     /// 事件类型 "24hrTicker"
     event_type: String,
@@ -289,7 +296,8 @@ pub struct TickerStream {
 /// Stream: <symbol>@ticker_<window_size>
 /// Window Sizes: 1h, 4h, 1d
 /// Update Speed: 1000ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct RollingWindowStatsStream {
     /// 事件类型 "1hTicker", "4hTicker", "1dTicker"
     event_type: String,
@@ -352,7 +360,8 @@ impl WindowSize {
 /// 最优挂单流数据
 /// Stream: <symbol>@bookTicker
 /// Update Speed: Real-time
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct BookTickerStream {
     /// 订单簿更新ID
     update_id: i64,
@@ -371,7 +380,8 @@ pub struct BookTickerStream {
 /// 平均价格流数据
 /// Stream: <symbol>@avgPrice
 /// Update Speed: 1000ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct AveragePriceStream {
     /// 事件类型 "avgPrice"
     event_type: String,
@@ -388,7 +398,8 @@ pub struct AveragePriceStream {
 }
 
 /// 价格档位
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PriceLevel {
     /// 价格
     price: String,
@@ -400,7 +411,8 @@ pub struct PriceLevel {
 /// Stream: <symbol>@depth<levels> or <symbol>@depth<levels>@100ms
 /// Levels: 5, 10, 20
 /// Update Speed: 1000ms or 100ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PartialDepthStream {
     /// 最后更新ID
     last_update_id: i64,
@@ -413,7 +425,8 @@ pub struct PartialDepthStream {
 /// 增量深度流数据
 /// Stream: <symbol>@depth or <symbol>@depth@100ms
 /// Update Speed: 1000ms or 100ms
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct DiffDepthStream {
     /// 事件类型 "depthUpdate"
     event_type: String,
@@ -487,7 +500,7 @@ pub struct SubscriptionRequest {
 
 /// 订阅ID类型
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SubscriptionId {
     /// 整数ID
     Integer(i64),
@@ -499,7 +512,7 @@ pub enum SubscriptionId {
 
 /// WebSocket 订阅响应
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SubscriptionResponse {
     /// 结果 (null表示成功)
     result: Option<SubscriptionResult>,
@@ -509,7 +522,7 @@ pub struct SubscriptionResponse {
 
 /// 订阅结果类型
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SubscriptionResult {
     /// 成功 (null)
     Success,
@@ -523,7 +536,8 @@ pub enum SubscriptionResult {
 
 /// 订阅错误
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+
 pub struct SubscriptionError {
     /// 错误码
     code: i32,
@@ -535,7 +549,7 @@ pub struct SubscriptionError {
 
 /// Market Data Stream 订阅命令
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum MarketDataSubscriptionCmdAny {
     /// 订阅流
     Subscribe {
@@ -575,7 +589,8 @@ pub enum MarketDataSubscriptionCmdAny {
 }
 
 /// 组合流包装
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct CombinedStreamWrapper {
     /// 流名称
     stream: String,
@@ -588,7 +603,8 @@ pub struct CombinedStreamWrapper {
 // ============================================================================
 
 /// 佣金费率
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct CommissionRates {
     /// Maker 佣金费率
     maker: String,
@@ -601,7 +617,8 @@ pub struct CommissionRates {
 }
 
 /// 余额信息
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Balance {
     /// 资产名称
     asset: String,
@@ -612,7 +629,8 @@ pub struct Balance {
 }
 
 /// User Data 命令枚举
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SpotUserDataCmdAny {
     /// 账户信息查询 GET /api/v3/account
     /// Weight: 20
@@ -623,7 +641,8 @@ pub enum SpotUserDataCmdAny {
 /// GET /api/v3/account
 /// Weight: 20
 /// Data Source: Memory => Database
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct AccountCmd {
     metadata: CMetadata,
     /// 仅返回非零余额，默认 false
@@ -635,14 +654,16 @@ pub struct AccountCmd {
 }
 
 /// User Data 响应枚举
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SpotUserDataRes {
     /// 账户信息响应
     Account(AccountInfo)
 }
 
 /// 账户信息
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct AccountInfo {
     /// Maker 佣金
     maker_commission: i32,

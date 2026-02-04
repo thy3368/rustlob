@@ -5,6 +5,7 @@ use spot_behavior::proc::behavior::{
         SubscriptionResult
     }
 };
+use base_types::cqrs::cqrs_types::ResMetadata;
 
 /// Spot 市场数据 SSE 实现
 #[derive(Clone)]

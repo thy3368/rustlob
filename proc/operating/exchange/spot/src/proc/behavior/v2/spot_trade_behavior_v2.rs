@@ -256,6 +256,7 @@ pub enum ContingencyType {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
+//todo 结构体本身都是不可变对象，优化成员变量的类型，降低clone成本
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对

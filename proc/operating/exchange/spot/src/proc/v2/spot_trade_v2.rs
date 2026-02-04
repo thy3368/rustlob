@@ -1,6 +1,7 @@
 use base_types::{
     account::balance::Balance,
     base_types::TraderId,
+    cqrs::cqrs_types::ResMetadata,
     exchange::spot::spot_types::{
         ConditionalType, ExecutionMethod, MakerConstraint, OrderType, SpotOrder, SpotTrade, TimeInForce
     },
@@ -53,7 +54,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(cmd.price().unwrap_or(0.0)),
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 )
             }
             OrderType::Market => {
@@ -67,7 +68,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(0.0), // 市价单价格为0
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     TimeInForce::IOC, // 市价单默认IOC
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None; // 市价单价格为None
@@ -84,7 +85,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(0.0), // 市价止损
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     TimeInForce::IOC,
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::StopLoss;
                 order.stop_price = cmd.stop_price().map(Price::from_f64);
@@ -103,7 +104,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(cmd.price().unwrap_or(0.0)),
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::StopLoss;
                 order.stop_price = cmd.stop_price().map(Price::from_f64);
@@ -120,7 +121,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(0.0), // 市价止盈
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     TimeInForce::IOC,
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.stop_price = cmd.stop_price().map(Price::from_f64);
@@ -139,7 +140,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(cmd.price().unwrap_or(0.0)),
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.stop_price = cmd.stop_price().map(Price::from_f64);
@@ -156,7 +157,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     Price::from_f64(cmd.price().unwrap_or(0.0)),
                     Quantity::from_f64(cmd.quantity().unwrap_or(0.0)),
                     TimeInForce::GTX, // GTX = PostOnly
-                    *cmd.new_client_order_id()
+                    cmd.new_client_order_id().clone()
                 );
                 order.maker_constraint = MakerConstraint::PostOnly;
                 order
@@ -195,7 +196,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
 
         // 根据 NewOrderCmd 创建 SpotOrder
-        let mut internal_order = SpotOrder::from(cmd);
+        let mut internal_order = SpotOrder::from(cmd.clone());
 
         match internal_order.side {
             OrderSide::Buy => {}
@@ -224,15 +225,17 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         }
 
         // 生成 NewOrderAck 响应
+        let order_id = order_next_id as u64;
+
         let ack = NewOrderAck::new(
-            *cmd.symbol(),
+            cmd.symbol().clone(),
             order_id as i64,
             -1, // 不属于任何订单列表
-            (*cmd.new_client_order_id().unwrap()).parse().unwrap(),
+            cmd.new_client_order_id().as_ref().unwrap().parse().unwrap(),
             *cmd.timestamp()
         );
 
-        Ok(CmdResp::new(0, SpotTradeResAny::NewOrderAck(ack)))
+        Ok(CmdResp::new(ResMetadata::new(0, false, *cmd.timestamp() as u64), SpotTradeResAny::NewOrderAck(ack)))
     }
 
     /// 处理新订单命令的主方法
@@ -295,7 +298,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> Handler<SpotTradeCmdAny, SpotTrad
                 self.handle(new_order)
             }
 
-            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(nonce, SpotTradeResAny::TestNewOrderEmpty)),
+            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SpotTradeResAny::TestNewOrderEmpty)),
             SpotTradeCmdAny::CancelOrder(_) => {
                 todo!()
             }
