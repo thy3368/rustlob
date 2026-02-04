@@ -7,21 +7,16 @@ use base_types::{
 use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, MySqlDbRepo};
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use once_cell::sync::Lazy;
-use push::{
-    push::{
-        connection_types::ConnectionRepo,
-        push_service::PushService,
-
-        subscription_service::SubscriptionService
-    },
-
+use push::push::{
+    connection_types::ConnectionRepo, push_service::PushService, subscription_service::SubscriptionService
 };
-use rust_queue::queue::queue::Queue;
-use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+use rust_queue::queue::{
+    queue::Queue,
+    queue_impl::{kafka_queue::KafkaQueue, mpmc_queue::MPMCQueue}
+};
 use spot_behavior::proc::v2::{
-    spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl,
-    spot_user_data_key::SpotUserDataListenKeyImpl
+    spot_market_data::SpotMarketDataImpl, spot_topic::SpotTopic, spot_trade_v2::SpotTradeBehaviorV2Impl,
+    spot_user_data::SpotUserDataImpl, spot_user_data_key::SpotUserDataListenKeyImpl
 };
 
 use crate::interfaces::spot::websocket::{
@@ -50,7 +45,8 @@ static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<SpotTradeBehaviorV2Impl<EmbeddedLob
         ORDER_REPO.clone(),
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
-        EMBEDDED_LOB_REPO.clone()
+        EMBEDDED_LOB_REPO.clone(),
+        MPMC_QUEUE
     )
 });
 
@@ -62,7 +58,8 @@ static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<SpotTradeBehaviorV2Impl<Distribu
             ORDER_REPO.clone(),
             USER_DATA_REPO.clone(),
             MARKET_DATA_REPO.clone(),
-            DISTRIBUTED_LOB_REPO.clone()
+            DISTRIBUTED_LOB_REPO.clone(),
+            KAFKA_QUEUE
         )
     });
 
@@ -97,18 +94,18 @@ static SPOT_USER_DATA_LISTEN_KEY_SERVICE_ARC: Lazy<Arc<SpotUserDataListenKeyImpl
 static MPMC_QUEUE: Lazy<MPMCQueue> = Lazy::new(|| {
     let queue = MPMCQueue::new();
     // 预创建 kline topic channel
-    queue.get_or_create_channel("kline");
+    queue.get_or_create_channel(SpotTopic::KLine.name());
     // 预创建 entity_change_log topic channel
-    queue.get_or_create_channel("entity_change_log");
+    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
     queue
 });
 
 static KAFKA_QUEUE: Lazy<KafkaQueue> = Lazy::new(|| {
     let queue = KafkaQueue::new();
     // 预创建 kline topic channel（Kafka 会在首次使用时自动创建 topic）
-    queue.get_or_create_channel("kline");
+    queue.get_or_create_channel(SpotTopic::KLine.name());
     // 预创建 entity_change_log topic channel
-    queue.get_or_create_channel("entity_change_log");
+    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
     queue
 });
 

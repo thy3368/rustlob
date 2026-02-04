@@ -15,6 +15,8 @@ serde = ["base_types/serde", "dep:serde", "dep:uuid"]
 
 # LOB 仓储依赖
 lob_repo = { path = "../../../../lib/common/lob_repo" }
+rust_queue = { path = "../../../../lib/common/rust_queue" }
+
 cqrs = { path = "../../../../lib/common/cqrs" }
 
 base_types = { path = "../../../../lib/common/base_types" }

@@ -15,15 +15,19 @@ use diff::ChangeLogEntry;
 use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
-use crate::proc::behavior::{
-    spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
-    v2::{
-        spot_market_data_sse_behavior::SpotMarketDataStreamAny,
-        spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
-        spot_user_data_sse_behavior::UserDataStreamEventAny
-    }
+use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+
+use crate::proc::{
+    behavior::{
+        spot_trade_behavior::{CmdResp, SpotCmdErrorAny},
+        v2::{
+            spot_market_data_sse_behavior::SpotMarketDataStreamAny,
+            spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny},
+            spot_user_data_sse_behavior::UserDataStreamEventAny
+        }
+    },
+    v2::id_repo::order_next_id
 };
-use crate::proc::v2::id_repo::order_next_id;
 
 // 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
 impl From<NewOrderCmd> for SpotOrder {
@@ -179,7 +183,9 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
-    lob_repo: L
+    lob_repo: L,
+
+    queue: MPMCQueue
 }
 
 
