@@ -2,6 +2,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use serde::de::DeserializeOwned;
 use immutable_derive::immutable;
 use serde_json::json;
+use base_types::spot_topic::SpotTopic;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 use diff::ChangeLogEntry;
@@ -37,7 +38,7 @@ impl PushService {
     async fn run(&self) {
         // 订阅变更日志事件
         let mut receiver = self.change_log_repo.subscribe::<ChangeLogEntry>(
-            "entity_change_log",
+            SpotTopic::EntityChangeLog.name(),
             None
         );
 

@@ -39,6 +39,7 @@ impl KLineService {
         let mut receiver = self.queue.subscribe::<Vec<u8>>(SpotTopic::EntityChangeLog.name(), None);
         let aggregator = self.aggregator.clone();
 
+        // todo 优化性能， lock导致的
         tokio::spawn(async move {
             while let Ok(msg) = receiver.recv().await {
                 // 解析entity_change_log消息，判断是否是trade/create事件

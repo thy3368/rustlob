@@ -187,6 +187,16 @@ impl HttpServer {
             axum::serve(http_listener, http_app.into_make_service()).await.expect("Spot HTTP server failed to start");
         });
 
+        // 启动 K 线服务
+        let kline_service = ins_repo::get_k_line_service();
+        kline_service.start_listening().await;
+        tracing::info!("✅ K-Line service started");
+
+        // 启动 Push 服务
+        let push_service = ins_repo::get_push_service();
+        push_service.start();
+        tracing::info!("✅ Push service started");
+
         Ok(())
     }
 
