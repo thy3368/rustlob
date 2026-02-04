@@ -37,7 +37,8 @@ impl WebSocketServer {
 
 
         // 使用 100ms 轮询间隔启动后台任务
-        push_service.start(Duration::from_millis(100));
+        //todo fix this
+        push_service.start();
 
         tracing::info!("SubscriptionService started successfully");
 

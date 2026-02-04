@@ -52,7 +52,7 @@ pub struct M100SimdKLineAggregator {
     sliding_capacities: [usize; 4],
 
     // 事件处理器列表 - 使用静态数组避免堆分配
-    event_handlers: [Option<Box<dyn Fn(KLineUpdateEvent)>>; 8],
+    event_handlers: [Option<Box<dyn Fn(KLineUpdateEvent) + Send + Sync>>; 8],
     event_handler_count: usize,
 
     // 批处理缓冲区 - 完全在栈上分配
@@ -417,7 +417,7 @@ impl KLineAggMut for M100SimdKLineAggregator {
     #[inline(always)]
     fn subscribe<F>(&mut self, handler: F)
     where
-        F: Fn(KLineUpdateEvent) + 'static,
+        F: Fn(KLineUpdateEvent) + Send + Sync + 'static,
     {
         let handler_count = self.event_handler_count;
         let handlers = &mut self.event_handlers;
@@ -644,3 +644,7 @@ impl M100SimdKLineAggregator {
         (open, max_high, min_low, close, total_volume)
     }
 }
+
+// 为 M100SimdKLineAggregator 实现 Send 和 Sync trait
+unsafe impl Send for M100SimdKLineAggregator {}
+unsafe impl Sync for M100SimdKLineAggregator {}

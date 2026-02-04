@@ -9,7 +9,7 @@ license.workspace = true
 bytes = "1.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["sync", "time"] }
+tokio = { version = "1.0", features = ["sync", "time", "rt", "macros"] }
 rdkafka = { version = "0.36.2", features = ["cmake-build", "tokio"] }
 tracing = "0.1"
 diff = { path = "../diff" }

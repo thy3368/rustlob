@@ -4,9 +4,10 @@ use base_types::{
     account::balance::Balance,
     exchange::spot::spot_types::{SpotOrder, SpotTrade}
 };
-use db_repo::{ MySqlDbRepo};
+use db_repo::MySqlDbRepo;
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use once_cell::sync::Lazy;
+use base_types::spot_topic::SpotTopic;
 use push::push::{
     connection_types::ConnectionRepo, push_service::PushService, subscription_service::SubscriptionService
 };
@@ -15,7 +16,7 @@ use rust_queue::queue::{
     queue_impl::{kafka_queue::KafkaQueue, mpmc_queue::MPMCQueue}
 };
 use spot_behavior::proc::v2::{
-    spot_market_data::SpotMarketDataImpl, spot_topic::SpotTopic, spot_trade_v2::SpotTradeBehaviorV2Impl,
+    spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl,
     spot_user_data::SpotUserDataImpl, spot_user_data_key::SpotUserDataListenKeyImpl
 };
 
@@ -25,10 +26,12 @@ use crate::interfaces::spot::websocket::{
 
 // KLine 相关服务单例
 use push::k_line::{
-    k_line_service::KLineService,
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
+    k_line_service::KLineService,
 };
 
+
+//todo add  mutex
 static M100_SIMD_K_LINE_AGGREGATOR: Lazy<Arc<M100SimdKLineAggregator>> = Lazy::new(|| {
     Arc::new(M100SimdKLineAggregator::new())
 });

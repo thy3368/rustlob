@@ -129,6 +129,19 @@ pub trait Queue {
         &self, topic: &str, event: T, options: Option<SendOptions>
     ) -> Result<usize, broadcast::error::SendError<T>>;
 
+    /// 批量发送事件到指定 topic（高性能优化）
+    ///
+    /// # 参数
+    /// - `topic`: 目标 topic 名称
+    /// - `events`: 要发送的事件列表
+    /// - `options`: 发送选项
+    ///
+    /// # 返回
+    /// 返回成功发送的事件数量和每个事件的接收者数量
+    fn send_batch<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
+        &self, topic: &str, events: Vec<T>, options: Option<SendOptions>
+    ) -> Result<Vec<Result<usize, broadcast::error::SendError<T>>>, ()>;
+
 
     /// 订阅指定 topic 的事件
     ///

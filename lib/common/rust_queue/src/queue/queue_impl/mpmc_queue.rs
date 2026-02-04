@@ -97,6 +97,43 @@ impl Queue for MPMCQueue {
         channel.send(bytes).map_err(|_| broadcast::error::SendError(event))
     }
 
+    /// 批量发送事件到指定 topic（高性能优化）
+    /// 支持序列化的事件类型
+    fn send_batch<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
+        &self, topic: &str, events: Vec<T>, options: Option<SendOptions>
+    ) -> Result<Vec<Result<usize, broadcast::error::SendError<T>>>, ()> {
+        let channel = self.get_or_create_channel(topic);
+        let mut results = Vec::with_capacity(events.len());
+
+        // 背压控制
+        let apply_backpressure = self.should_apply_backpressure(&options);
+        let has_subscribers = channel.receiver_count() > 0;
+        let channel_capacity = 1024;
+
+        for event in events {
+            if apply_backpressure && !has_subscribers && channel_capacity > 0 {
+                tracing::warn!("No subscribers for topic {}, discarding event to prevent buffer overflow", topic);
+                results.push(Ok(0));
+                continue;
+            }
+
+            // 序列化事件
+            match event.to_bytes() {
+                Ok(bytes) => {
+                    match channel.send(bytes) {
+                        Ok(count) => results.push(Ok(count)),
+                        Err(_) => results.push(Err(broadcast::error::SendError(event))),
+                    }
+                }
+                Err(_) => {
+                    results.push(Err(broadcast::error::SendError(event)));
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
     /// 订阅指定 topic 的事件
     /// 支持反序列化的事件类型
     fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(

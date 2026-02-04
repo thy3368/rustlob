@@ -15,10 +15,11 @@ pub mod instrument;
 pub mod cqrs;
 
 pub mod handler;
+pub mod spot_topic;
 
 // Re-export all types
 pub use base_types::{
-    AccountId, AssetId, OrderId, PositionId, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair, UserId
+    AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId, TradingPair, UserId
 };
 pub use decimal::Decimal;
 pub use instrument::instrument_types::InstrumentType;

@@ -10,14 +10,15 @@ use base_types::{
     handler::handler::Handler,
     AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair
 };
-use db_repo::{
-    adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, core::queue_repo::ChangeLogQueueRepo, CmdRepo,
+use db_repo::{CmdRepo,
     MySqlDbRepo
 };
 use diff::ChangeLogEntry;
 use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
+use base_types::spot_topic::SpotTopic;
+use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 use crate::proc::{
@@ -252,9 +253,32 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
 
         // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
+        
+        // self.
 
-        let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
-        change_log_queue_repo.send_batch(&all_events);
+        // let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
+        // change_log_queue_repo.send_batch(&all_events);
+
+        // 批量发送事件
+        let results = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), all_events.clone(), None);
+
+        // 检查发送结果
+        if let Ok(send_results) = results {
+            for (index, result) in send_results.iter().enumerate() {
+                match result {
+                    Ok(count) => {
+                        if *count == 0 {
+                            log::warn!("Event {} sent but no subscribers received it", index);
+                        } else {
+                            log::debug!("Event {} received by {} subscribers", index, count);
+                        }
+                    },
+                    Err(e) => log::error!("Failed to send event {}: {:?}", index, e),
+                }
+            }
+        } else {
+            log::error!("Failed to send batch events");
+        }
 
         if !all_events.is_empty() {
             // 回放 matched_order 更新和订单创建事件到各自的 repo

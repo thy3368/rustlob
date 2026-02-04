@@ -243,6 +243,66 @@ impl Queue for KafkaQueue {
         tx.send(payload).map_err(|_| SendError(event))
     }
 
+    fn send_batch<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
+        &self,
+        topic: &str,
+        events: Vec<T>,
+        options: Option<SendOptions>,
+    ) -> Result<Vec<Result<usize, broadcast::error::SendError<T>>>, ()> {
+        let mut results = Vec::with_capacity(events.len());
+        let tx = self.get_or_create_channel(topic);
+
+        // 背压控制
+        let apply_backpressure = self.should_apply_backpressure(&options);
+        let has_subscribers = tx.receiver_count() > 0;
+        let channel_capacity = self.config.buffer_size.max(1024);
+
+        // 克隆事件向量以便在异步任务中使用
+        let events_clone = events.clone();
+
+        // 先处理本地发送，同步执行
+        for event in events {
+            if apply_backpressure && !has_subscribers && channel_capacity > 0 {
+                tracing::warn!("No subscribers for topic {}, discarding event to prevent buffer overflow", topic);
+                results.push(Ok(0));
+                continue;
+            }
+
+            // 同步发送到本地订阅者
+            match event.to_bytes() {
+                Ok(payload) => {
+                    match tx.send(payload) {
+                        Ok(count) => results.push(Ok(count)),
+                        Err(_) => results.push(Err(broadcast::error::SendError(event))),
+                        // 继续处理其他事件，不中断整个批量操作
+                    }
+                }
+                Err(_) => {
+                    results.push(Err(broadcast::error::SendError(event)));
+                }
+            }
+        }
+
+        // 异步发送到 Kafka，整个批量只创建一个任务
+        let queue = self.clone();
+        let topic_clone = topic.to_string();
+        let options_clone = options.clone();
+
+        tokio::spawn(async move {
+            for event in events_clone {
+                let event_clone = event.clone();
+                let topic_clone = topic_clone.clone();
+                let options_clone = options_clone.clone();
+
+                if let Err(e) = queue.send_async(&topic_clone, event_clone, options_clone).await {
+                    tracing::error!("Failed to send event to Kafka: {}", e);
+                }
+            }
+        });
+
+        Ok(results)
+    }
+
     fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
         &self,
         topic: &str,
