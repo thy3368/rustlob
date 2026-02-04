@@ -5,6 +5,9 @@
 use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
 use base_types::handler::handler::Handler;
 use base_types::OrderSide;
+use base_types::TradingPair;
+use base_types::Price;
+use base_types::Quantity;
 use immutable_derive::immutable;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
@@ -256,11 +259,10 @@ pub enum ContingencyType {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
-//todo 结构体本身都是不可变对象，优化成员变量的类型，降低clone成本
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单方向
     side: OrderSide,
     /// 订单类型
@@ -268,11 +270,11 @@ pub struct NewOrderCmd {
     /// 有效方式
     time_in_force: Option<TimeInForce>,
     /// 数量
-    quantity: Option<f64>,
+    quantity: Option<Quantity>,
     /// 报价数量（市价单使用）
-    quote_order_qty: Option<f64>,
+    quote_order_qty: Option<Quantity>,
     /// 价格
-    price: Option<f64>,
+    price: Option<Price>,
     /// 用户自定义订单 ID
     new_client_order_id: Option<String>,
     /// 策略 ID
@@ -280,11 +282,11 @@ pub struct NewOrderCmd {
     /// 策略类型（不能小于 1000000）
     strategy_type: Option<i32>,
     /// 止损价格
-    stop_price: Option<f64>,
+    stop_price: Option<Price>,
     /// 跟踪止损回调幅度
     trailing_delta: Option<i64>,
     /// 冰山订单数量
-    iceberg_qty: Option<f64>,
+    iceberg_qty: Option<Quantity>,
     /// 订单响应类型
     new_order_resp_type: Option<NewOrderRespType>,
     /// 自成交保护模式
@@ -296,7 +298,7 @@ pub struct NewOrderCmd {
     /// 价格偏移类型
     peg_offset_type: Option<PegOffsetType>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -327,9 +329,9 @@ pub struct TestNewOrderCmd {
 pub struct CancelOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 用户自定义订单 ID
     orig_client_order_id: Option<String>,
     /// 用于唯一标识此取消操作的 ID
@@ -337,7 +339,7 @@ pub struct CancelOrderCmd {
     /// 取消限制
     cancel_restrictions: Option<CancelRestrictions>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -353,9 +355,9 @@ pub struct CancelOrderCmd {
 pub struct CancelAllOpenOrdersCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -372,7 +374,7 @@ pub struct CancelAllOpenOrdersCmd {
 pub struct CancelReplaceOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单方向
     side: OrderSide,
     /// 订单类型
@@ -382,17 +384,17 @@ pub struct CancelReplaceOrderCmd {
     /// 有效方式
     time_in_force: Option<TimeInForce>,
     /// 数量
-    quantity: Option<f64>,
+    quantity: Option<Quantity>,
     /// 报价数量
-    quote_order_qty: Option<f64>,
+    quote_order_qty: Option<Quantity>,
     /// 价格
-    price: Option<f64>,
+    price: Option<Price>,
     /// 用于唯一标识取消操作的 ID
     cancel_new_client_order_id: Option<String>,
     /// 原始用户自定义订单 ID
     cancel_orig_client_order_id: Option<String>,
     /// 要取消的订单 ID
-    cancel_order_id: Option<i64>,
+    cancel_order_id: Option<u64>,
     /// 新订单的用户自定义 ID
     new_client_order_id: Option<String>,
     /// 策略 ID
@@ -400,11 +402,11 @@ pub struct CancelReplaceOrderCmd {
     /// 策略类型
     strategy_type: Option<i32>,
     /// 止损价格
-    stop_price: Option<f64>,
+    stop_price: Option<Price>,
     /// 跟踪止损回调幅度
     trailing_delta: Option<i64>,
     /// 冰山订单数量
-    iceberg_qty: Option<f64>,
+    iceberg_qty: Option<Quantity>,
     /// 订单响应类型
     new_order_resp_type: Option<NewOrderRespType>,
     /// 自成交保护模式
@@ -420,7 +422,7 @@ pub struct CancelReplaceOrderCmd {
     /// 价格偏移类型
     peg_offset_type: Option<PegOffsetType>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -436,13 +438,13 @@ pub struct CancelReplaceOrderCmd {
 pub struct QueryOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 用户自定义订单 ID
     orig_client_order_id: Option<String>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -458,9 +460,9 @@ pub struct QueryOrderCmd {
 pub struct CurrentOpenOrdersCmd {
     metadata: CMetadata,
     /// 交易对（可选，不传则查询所有交易对）
-    symbol: Option<String>,
+    symbol: Option<TradingPair>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -476,9 +478,9 @@ pub struct CurrentOpenOrdersCmd {
 pub struct AllOrdersCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID（返回订单 ID >= orderId 的订单）
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 起始时间
     start_time: Option<i64>,
     /// 结束时间
@@ -486,7 +488,7 @@ pub struct AllOrdersCmd {
     /// 返回数量限制（默认 500，最大 1000）
     limit: Option<i32>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -505,19 +507,19 @@ pub struct AllOrdersCmd {
 pub struct NewOcoOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表的用户自定义 ID
     list_client_order_id: Option<String>,
     /// 订单方向
     side: OrderSide,
     /// 数量
-    quantity: f64,
+    quantity: Quantity,
     /// 限价单价格
-    price: f64,
+    price: Price,
     /// 止损/止盈价格
-    stop_price: f64,
+    stop_price: Price,
     /// 止损/止盈限价单价格（可选）
-    stop_limit_price: Option<f64>,
+    stop_limit_price: Option<Price>,
     /// 止损/止盈限价单的有效方式
     stop_limit_time_in_force: Option<TimeInForce>,
     /// 限价单的用户自定义 ID
@@ -525,9 +527,9 @@ pub struct NewOcoOrderCmd {
     /// 止损/止盈单的用户自定义 ID
     stop_client_order_id: Option<String>,
     /// 限价单冰山数量
-    limit_iceberg_qty: Option<f64>,
+    limit_iceberg_qty: Option<Quantity>,
     /// 止损/止盈单冰山数量
-    stop_iceberg_qty: Option<f64>,
+    stop_iceberg_qty: Option<Quantity>,
     /// 跟踪止损回调幅度
     trailing_delta: Option<i64>,
     /// 限价单策略 ID
@@ -543,7 +545,7 @@ pub struct NewOcoOrderCmd {
     /// 自成交保护模式
     self_trade_prevention_mode: Option<SelfTradePreventionMode>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -560,7 +562,7 @@ pub struct NewOcoOrderCmd {
 pub struct NewOtoOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表的用户自定义 ID
     list_client_order_id: Option<String>,
     /// 订单响应类型
@@ -576,15 +578,15 @@ pub struct NewOtoOrderCmd {
     /// 触发订单有效方式
     working_time_in_force: Option<TimeInForce>,
     /// 触发订单数量
-    working_quantity: Option<f64>,
+    working_quantity: Option<Quantity>,
     /// 触发订单报价数量
-    working_quote_order_qty: Option<f64>,
+    working_quote_order_qty: Option<Quantity>,
     /// 触发订单价格
-    working_price: Option<f64>,
+    working_price: Option<Price>,
     /// 触发订单用户自定义 ID
     working_client_order_id: Option<String>,
     /// 触发订单冰山数量
-    working_iceberg_qty: Option<f64>,
+    working_iceberg_qty: Option<Quantity>,
     /// 触发订单策略 ID
     working_strategy_id: Option<i64>,
     /// 触发订单策略类型
@@ -598,26 +600,26 @@ pub struct NewOtoOrderCmd {
     /// 待触发订单有效方式
     pending_time_in_force: Option<TimeInForce>,
     /// 待触发订单数量
-    pending_quantity: Option<f64>,
+    pending_quantity: Option<Quantity>,
     /// 待触发订单报价数量
-    pending_quote_order_qty: Option<f64>,
+    pending_quote_order_qty: Option<Quantity>,
     /// 待触发订单价格
-    pending_price: Option<f64>,
+    pending_price: Option<Price>,
     /// 待触发订单用户自定义 ID
     pending_client_order_id: Option<String>,
     /// 待触发订单止损价格
-    pending_stop_price: Option<f64>,
+    pending_stop_price: Option<Price>,
     /// 待触发订单跟踪止损回调幅度
     pending_trailing_delta: Option<i64>,
     /// 待触发订单冰山数量
-    pending_iceberg_qty: Option<f64>,
+    pending_iceberg_qty: Option<Quantity>,
     /// 待触发订单策略 ID
     pending_strategy_id: Option<i64>,
     /// 待触发订单策略类型
     pending_strategy_type: Option<i32>,
 
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -634,7 +636,7 @@ pub struct NewOtoOrderCmd {
 pub struct NewOtocoOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表的用户自定义 ID
     list_client_order_id: Option<String>,
     /// 订单响应类型
@@ -650,15 +652,15 @@ pub struct NewOtocoOrderCmd {
     /// 触发订单有效方式
     working_time_in_force: Option<TimeInForce>,
     /// 触发订单数量
-    working_quantity: Option<f64>,
+    working_quantity: Option<Quantity>,
     /// 触发订单报价数量
-    working_quote_order_qty: Option<f64>,
+    working_quote_order_qty: Option<Quantity>,
     /// 触发订单价格
-    working_price: Option<f64>,
+    working_price: Option<Price>,
     /// 触发订单用户自定义 ID
     working_client_order_id: Option<String>,
     /// 触发订单冰山数量
-    working_iceberg_qty: Option<f64>,
+    working_iceberg_qty: Option<Quantity>,
     /// 触发订单策略 ID
     working_strategy_id: Option<i64>,
     /// 触发订单策略类型
@@ -672,19 +674,19 @@ pub struct NewOtocoOrderCmd {
     /// OCO 下方订单有效方式
     pending_below_time_in_force: Option<TimeInForce>,
     /// OCO 下方订单数量
-    pending_below_quantity: Option<f64>,
+    pending_below_quantity: Option<Quantity>,
     /// OCO 下方订单报价数量
-    pending_below_quote_order_qty: Option<f64>,
+    pending_below_quote_order_qty: Option<Quantity>,
     /// OCO 下方订单价格
-    pending_below_price: Option<f64>,
+    pending_below_price: Option<Price>,
     /// OCO 下方订单用户自定义 ID
     pending_below_client_order_id: Option<String>,
     /// OCO 下方订单止损价格
-    pending_below_stop_price: Option<f64>,
+    pending_below_stop_price: Option<Price>,
     /// OCO 下方订单跟踪止损回调幅度
     pending_below_trailing_delta: Option<i64>,
     /// OCO 下方订单冰山数量
-    pending_below_iceberg_qty: Option<f64>,
+    pending_below_iceberg_qty: Option<Quantity>,
     /// OCO 下方订单策略 ID
     pending_below_strategy_id: Option<i64>,
     /// OCO 下方订单策略类型
@@ -698,26 +700,26 @@ pub struct NewOtocoOrderCmd {
     /// OCO 上方订单有效方式
     pending_above_time_in_force: Option<TimeInForce>,
     /// OCO 上方订单数量
-    pending_above_quantity: Option<f64>,
+    pending_above_quantity: Option<Quantity>,
     /// OCO 上方订单报价数量
-    pending_above_quote_order_qty: Option<f64>,
+    pending_above_quote_order_qty: Option<Quantity>,
     /// OCO 上方订单价格
-    pending_above_price: Option<f64>,
+    pending_above_price: Option<Price>,
     /// OCO 上方订单用户自定义 ID
     pending_above_client_order_id: Option<String>,
     /// OCO 上方订单止损价格
-    pending_above_stop_price: Option<f64>,
+    pending_above_stop_price: Option<Price>,
     /// OCO 上方订单跟踪止损回调幅度
     pending_above_trailing_delta: Option<i64>,
     /// OCO 上方订单冰山数量
-    pending_above_iceberg_qty: Option<f64>,
+    pending_above_iceberg_qty: Option<Quantity>,
     /// OCO 上方订单策略 ID
     pending_above_strategy_id: Option<i64>,
     /// OCO 上方订单策略类型
     pending_above_strategy_type: Option<i32>,
 
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -733,15 +735,15 @@ pub struct NewOtocoOrderCmd {
 pub struct CancelOcoOrderCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表 ID
-    order_list_id: Option<i64>,
+    order_list_id: Option<u64>,
     /// 用户自定义订单列表 ID
     list_client_order_id: Option<String>,
     /// 用于唯一标识此取消操作的 ID
     new_client_order_id: Option<String>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -837,19 +839,19 @@ pub struct AccountCmd {
 pub struct MyTradesCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID（返回该订单的成交）
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 起始交易 ID（返回交易 ID >= startTime 的成交）
     start_time: Option<i64>,
     /// 结束时间
     end_time: Option<i64>,
     /// 起始交易 ID（返回交易 ID >= fromId 的成交）
-    from_id: Option<i64>,
+    from_id: Option<u64>,
     /// 返回数量限制（默认 500，最大 1000）
     limit: Option<i32>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -881,17 +883,17 @@ pub struct QueryUnfilledOrderCountCmd {
 pub struct QueryPreventedMatchesCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 阻止匹配 ID（与 symbol 一起使用可查询特定的阻止匹配）
-    prevented_match_id: Option<i64>,
+    prevented_match_id: Option<u64>,
     /// 订单 ID（返回该订单的阻止匹配）
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 起始阻止匹配 ID
-    from_prevented_match_id: Option<i64>,
+    from_prevented_match_id: Option<u64>,
     /// 返回数量限制（默认 500，最大 1000）
     limit: Option<i32>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -907,19 +909,19 @@ pub struct QueryPreventedMatchesCmd {
 pub struct QueryAllocationsCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 起始时间
     start_time: Option<i64>,
     /// 结束时间
     end_time: Option<i64>,
     /// 起始分配 ID
-    from_allocation_id: Option<i64>,
+    from_allocation_id: Option<u64>,
     /// 返回数量限制（默认 500，最大 1000）
     limit: Option<i32>,
     /// 订单 ID
-    order_id: Option<i64>,
+    order_id: Option<u64>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }
@@ -935,9 +937,9 @@ pub struct QueryAllocationsCmd {
 pub struct QueryCommissionRatesCmd {
     metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<f64>,
+    recv_window: Option<u64>,
     /// 时间戳
     timestamp: i64
 }

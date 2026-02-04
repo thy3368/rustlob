@@ -44,7 +44,7 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
                     }
                 }
                 // 返回成功响应
-                Ok(CmdResp::new(nonce, SubscriptionResponse {
+                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
                     result: Some(SubscriptionResult::Success),
                     id: None
                 }))
@@ -59,7 +59,7 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
                     self.subscriptions.retain(|s| s != &stream);
                 }
                 // 返回成功响应
-                Ok(CmdResp::new(nonce, SubscriptionResponse {
+                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
                     result: Some(SubscriptionResult::Success),
                     id: None
                 }))
@@ -69,7 +69,7 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
                 metadata
             } => {
                 // 返回当前订阅列表
-                Ok(CmdResp::new(nonce, SubscriptionResponse {
+                Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
                     result: Some(SubscriptionResult::Subscriptions(self.subscriptions.clone())),
                     id: None
                 }))
@@ -83,7 +83,7 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
                 // 设置属性（目前仅支持 combined 属性）
                 if property == "combined" {
                     self.combined_stream_enabled = value;
-                    Ok(CmdResp::new(nonce, SubscriptionResponse {
+                    Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
                         result: Some(SubscriptionResult::Property(value)),
                         id: None
                     }))
@@ -101,7 +101,7 @@ impl SpotMarketDataSubscriptionBehavior for SpotMarketDataSSEImpl {
             } => {
                 // 获取属性值
                 if property == "combined" {
-                    Ok(CmdResp::new(nonce, SubscriptionResponse {
+                    Ok(CmdResp::new(ResMetadata::new(nonce, false, 0), SubscriptionResponse {
                         result: Some(SubscriptionResult::Property(self.combined_stream_enabled)),
                         id: None
                     }))
