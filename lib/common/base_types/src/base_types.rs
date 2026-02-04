@@ -5,11 +5,11 @@
 use std::fmt;
 
 use decimal::Decimal;
-
 // ============================================================================
 // 类型别名：为了语义清晰，保留 Price 和 Quantity 作为类型别名
 // ============================================================================
 
+// todo 这里定义的类型 都是  #[immutable] 都不应该可变
 /// 价格（语义别名，实际使用 Decimal）
 
 pub type Price = Decimal;
@@ -20,6 +20,7 @@ pub type Quantity = Decimal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// #[immutable]
 pub struct Timestamp(pub u64);
 
 impl Timestamp {
@@ -92,6 +93,8 @@ impl Default for PositionId {
 #[repr(align(8))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // todo 币安是怎么定义
+
+
 pub struct TraderId([u8; 8]);
 
 impl Default for TraderId {
@@ -207,6 +210,7 @@ impl TryFrom<u32> for AssetId {
 #[repr(u32)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "UPPERCASE"))]
+
 pub enum TradingPair {
     /// BTC/USDT 交易对
     BtcUsdt = 1,

@@ -8,6 +8,7 @@ use base_types::OrderSide;
 use base_types::TradingPair;
 use base_types::Price;
 use base_types::Quantity;
+use base_types::AssetId;
 use immutable_derive::immutable;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
@@ -259,6 +260,7 @@ pub enum ContingencyType {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
+//todo String 应该变成 str?
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对
@@ -1009,9 +1011,9 @@ pub enum SpotTradeResAny {
 
 pub struct NewOrderAck {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 订单列表 ID（-1 表示不属于订单列表）
     order_list_id: i64,
     /// 用户自定义订单 ID
@@ -1027,25 +1029,25 @@ pub struct NewOrderAck {
 
 pub struct NewOrderResult {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 订单列表 ID
-    order_list_id: i64,
+    order_list_id: u64,
     /// 用户自定义订单 ID
     client_order_id: String,
     /// 交易时间戳
     transact_time: i64,
     /// 价格
-    price: String,
+    price: Price,
     /// 原始数量
-    orig_qty: String,
+    orig_qty: Quantity,
     /// 已成交数量
-    executed_qty: String,
+    executed_qty: Quantity,
     /// 原始报价数量
-    orig_quote_order_qty: String,
+    orig_quote_order_qty: Quantity,
     /// 累计成交金额
-    cummulative_quote_qty: String,
+    cummulative_quote_qty: Quantity,
     /// 订单状态
     status: OrderStatus,
     /// 有效方式
@@ -1061,13 +1063,13 @@ pub struct NewOrderResult {
 
     // 条件字段
     /// 冰山订单数量
-    iceberg_qty: Option<String>,
+    iceberg_qty: Option<Quantity>,
     /// 阻止匹配 ID
-    prevented_match_id: Option<i64>,
+    prevented_match_id: Option<u64>,
     /// 阻止数量
-    prevented_quantity: Option<String>,
+    prevented_quantity: Option<Quantity>,
     /// 止损价格
-    stop_price: Option<String>,
+    stop_price: Option<Price>,
     /// 策略 ID
     strategy_id: Option<i64>,
     /// 策略类型
@@ -1079,7 +1081,7 @@ pub struct NewOrderResult {
     /// 是否使用 SOR
     used_sor: Option<bool>,
     /// SOR 工作层
-    working_floor: Option<String>,
+    working_floor: Option<Price>,
     /// 价格钉住类型
     peg_price_type: Option<PegPriceType>,
     /// 价格偏移类型
@@ -1087,7 +1089,7 @@ pub struct NewOrderResult {
     /// 价格偏移值
     peg_offset_value: Option<i32>,
     /// 当前钉住价格
-    pegged_price: Option<String>
+    pegged_price: Option<Price>
 }
 
 /// 新订单 FULL 响应
@@ -1109,15 +1111,15 @@ pub struct NewOrderFull {
 
 pub struct Fill {
     /// 成交价格
-    price: String,
+    price: Price,
     /// 成交数量
-    qty: String,
+    qty: Quantity,
     /// 佣金
-    commission: String,
+    commission: Quantity,
     /// 佣金资产
-    commission_asset: String,
+    commission_asset: AssetId,
     /// 成交 ID
-    trade_id: i64
+    trade_id: u64
 }
 
 /// 订单信息（通用）
@@ -1127,21 +1129,21 @@ pub struct Fill {
 
 pub struct OrderInfo {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 订单列表 ID
     order_list_id: i64,
     /// 用户自定义订单 ID
     client_order_id: String,
     /// 价格
-    price: String,
+    price: Price,
     /// 原始数量
-    orig_qty: String,
+    orig_qty: Quantity,
     /// 已成交数量
-    executed_qty: String,
+    executed_qty: Quantity,
     /// 累计成交金额
-    cummulative_quote_qty: String,
+    cummulative_quote_qty: Quantity,
     /// 订单状态
     status: OrderStatus,
     /// 有效方式
@@ -1151,9 +1153,9 @@ pub struct OrderInfo {
     /// 订单方向
     side: OrderSide,
     /// 止损价格（可选）
-    stop_price: Option<String>,
+    stop_price: Option<Price>,
     /// 冰山订单数量（可选）
-    iceberg_qty: Option<String>,
+    iceberg_qty: Option<Quantity>,
     /// 订单创建时间
     time: i64,
     /// 订单更新时间
@@ -1161,7 +1163,7 @@ pub struct OrderInfo {
     /// 是否只挂单
     is_working: bool,
     /// 原始报价数量
-    orig_quote_order_qty: String,
+    orig_quote_order_qty: Quantity,
     /// 订单开始时间
     working_time: i64,
     /// 自成交保护模式
@@ -1214,7 +1216,7 @@ pub enum NewOrderResponse {
 
 pub struct OcoOrderResult {
     /// 订单列表 ID
-    order_list_id: i64,
+    order_list_id: u64,
     /// 条件类型
     contingency_type: ContingencyType,
     /// 状态类型
@@ -1226,7 +1228,7 @@ pub struct OcoOrderResult {
     /// 交易时间戳
     transaction_time: i64,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
@@ -1240,7 +1242,7 @@ pub struct OcoOrderResult {
 
 pub struct OtoOrderResult {
     /// 订单列表 ID
-    order_list_id: i64,
+    order_list_id: u64,
     /// 条件类型
     contingency_type: ContingencyType,
     /// 状态类型
@@ -1252,7 +1254,7 @@ pub struct OtoOrderResult {
     /// 交易时间戳
     transaction_time: i64,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
@@ -1266,7 +1268,7 @@ pub struct OtoOrderResult {
 
 pub struct OtocoOrderResult {
     /// 订单列表 ID
-    order_list_id: i64,
+    order_list_id: u64,
     /// 条件类型
     contingency_type: ContingencyType,
     /// 状态类型
@@ -1278,7 +1280,7 @@ pub struct OtocoOrderResult {
     /// 交易时间戳
     transaction_time: i64,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
@@ -1292,9 +1294,9 @@ pub struct OtocoOrderResult {
 
 pub struct OcoOrderEntry {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 用户自定义订单 ID
     client_order_id: String
 }
@@ -1306,7 +1308,7 @@ pub struct OcoOrderEntry {
 
 pub struct OcoOrderInfo {
     /// 订单列表 ID
-    order_list_id: i64,
+    order_list_id: u64,
     /// 条件类型
     contingency_type: ContingencyType,
     /// 状态类型
@@ -1318,7 +1320,7 @@ pub struct OcoOrderInfo {
     /// 交易时间戳
     transaction_time: i64,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 订单列表
     orders: Vec<OrderInfo>
 }
@@ -1372,11 +1374,11 @@ pub struct AccountInfo {
 
 pub struct Balance {
     /// 资产名称
-    asset: String,
+    asset: AssetId,
     /// 可用余额
-    free: String,
+    free: Quantity,
     /// 冻结余额
-    locked: String
+    locked: Quantity
 }
 
 /// 佣金费率
@@ -1385,13 +1387,13 @@ pub struct Balance {
 #[immutable]
 pub struct CommissionRates {
     /// Maker 标准佣金率
-    maker: String,
+    maker: Quantity,
     /// Taker 标准佣金率
-    taker: String,
+    taker: Quantity,
     /// Buyer 佣金率（保留字段）
-    buyer: Option<String>,
+    buyer: Option<Quantity>,
     /// Seller 佣金率（保留字段）
-    seller: Option<String>
+    seller: Option<Quantity>
 }
 
 /// 成交信息
@@ -1401,23 +1403,23 @@ pub struct CommissionRates {
 
 pub struct TradeInfo {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 成交 ID
-    id: i64,
+    id: u64,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 订单列表 ID
     order_list_id: i64,
     /// 价格
-    price: String,
+    price: Price,
     /// 数量
-    qty: String,
+    qty: Quantity,
     /// 成交金额
-    quote_qty: String,
+    quote_qty: Quantity,
     /// 佣金
-    commission: String,
+    commission: Quantity,
     /// 佣金资产
-    commission_asset: String,
+    commission_asset: AssetId,
     /// 成交时间
     time: i64,
     /// 是否是买方
@@ -1453,21 +1455,21 @@ pub struct UnfilledOrderCount {
 
 pub struct PreventedMatch {
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 阻止匹配 ID
-    prevented_match_id: i64,
+    prevented_match_id: u64,
     /// Taker 订单 ID
-    taker_order_id: i64,
+    taker_order_id: u64,
     /// Maker 订单 ID
-    maker_order_id: i64,
+    maker_order_id: u64,
     /// 成交 ID
-    trade_group_id: i64,
+    trade_group_id: u64,
     /// 自成交保护模式
     self_trade_prevention_mode: SelfTradePreventionMode,
     /// 价格
-    price: String,
+    price: Price,
     /// Maker 阻止数量
-    maker_prevented_quantity: String,
+    maker_prevented_quantity: Quantity,
     /// 交易时间戳
     transact_time: i64
 }
@@ -1479,25 +1481,25 @@ pub struct PreventedMatch {
 
 pub struct Allocation {
     /// 分配 ID
-    id: i64,
+    id: u64,
     /// 交易对
-    symbol: String,
+    symbol: TradingPair,
     /// 分配类型
     allocation_type: String,
     /// 订单 ID
-    order_id: i64,
+    order_id: u64,
     /// 订单列表 ID
     order_list_id: i64,
     /// 价格
-    price: String,
+    price: Price,
     /// 数量
-    qty: String,
+    qty: Quantity,
     /// 成交金额
-    quote_qty: String,
+    quote_qty: Quantity,
     /// 佣金
-    commission: String,
+    commission: Quantity,
     /// 佣金资产
-    commission_asset: String,
+    commission_asset: AssetId,
     /// 时间戳
     time: i64,
     /// 是否是买方
