@@ -4,7 +4,7 @@ use base_types::{
     account::balance::Balance,
     exchange::spot::spot_types::{SpotOrder, SpotTrade}
 };
-use db_repo::{adapter::change_log_queue_repo::ChangeLogChannelQueueRepo, MySqlDbRepo};
+use db_repo::{ MySqlDbRepo};
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
 use once_cell::sync::Lazy;
 use push::push::{
@@ -23,7 +23,28 @@ use crate::interfaces::spot::websocket::{
     md_sse_controller::SpotMarketDataSSEImpl, ud_sse_controller::SpotUserDataSSEImpl
 };
 
-// todo service/adapter/repo的实例化都可以在这，他们都是单例的
+// KLine 相关服务单例
+use push::k_line::{
+    k_line_service::KLineService,
+    aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
+};
+
+static M100_SIMD_K_LINE_AGGREGATOR: Lazy<Arc<M100SimdKLineAggregator>> = Lazy::new(|| {
+    Arc::new(M100SimdKLineAggregator::new())
+});
+
+static K_LINE_SERVICE: Lazy<Arc<KLineService>> = Lazy::new(|| {
+    Arc::new(KLineService::new(MPMC_QUEUE.clone()))
+});
+
+// KLine 相关服务访问方法
+pub fn get_m100_simd_k_line_aggregator() -> Arc<M100SimdKLineAggregator> {
+    M100_SIMD_K_LINE_AGGREGATOR.clone()
+}
+
+pub fn get_k_line_service() -> Arc<KLineService> {
+    K_LINE_SERVICE.clone()
+}
 
 
 
@@ -116,7 +137,6 @@ pub fn get_spot_user_data_listen_key_service() -> Arc<SpotUserDataListenKeyImpl>
 // WebSocket 相关服务访问方法
 pub fn get_connection_repo() -> Arc<ConnectionRepo> { CONNECTION_REPO.clone() }
 
-pub fn get_change_log_repo() -> Arc<ChangeLogChannelQueueRepo> { CHANGE_LOG_REPO.clone() }
 
 pub fn get_push_service() -> Arc<PushService> { PUSH_SERVICE.clone() }
 

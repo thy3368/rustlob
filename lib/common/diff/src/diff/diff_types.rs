@@ -72,7 +72,7 @@ impl From<&str> for EntityError {
 // ============================================================================
 
 /// 变更类型
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ChangeType {
     /// 实体创建（包含初始字段）
     Created { fields: Vec<FieldChange> },
@@ -83,7 +83,7 @@ pub enum ChangeType {
 }
 
 /// 字段变更记录（零拷贝优化）
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FieldChange {
     /// 字段名称（通常为静态字符串）
     pub field_name: Cow<'static, str>,
@@ -250,7 +250,7 @@ impl std::fmt::Display for TableSchema {
 
 
 /// 变更日志条目
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[immutable]
 pub struct ChangeLogEntry {
     /// 实体唯一标识符

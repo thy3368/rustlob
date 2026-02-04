@@ -7,3 +7,4 @@ license.workspace = true
 
 [dependencies]
 immutable_derive = { path = "../immutable_derive" }
+serde = { version = "1.0.203", features = ["derive"] }

@@ -13,7 +13,6 @@ use tokio::{
     time::Duration
 };
 
-use push::k_line::k_line_types::{KLineUpdateEvent, TimeWindow, OHLC};
 use crate::queue::queue::{DefaultQueueConfig, FromBytes, Queue, SendOptions, SubscribeOptions, ToBytes};
 
 /// 高性能异步广播队列，用于分发 K 线更新事件
@@ -149,6 +148,8 @@ impl Default for MPMCQueue {
     fn default() -> Self { Self::new() }
 }
 
+//todo 新建一个简单的event 代替 KLineUpdateEvent
+/*
 #[tokio::test]
 async fn broadcast_example() {
     let config = DefaultQueueConfig::new().with_send_timeout(5000).with_recv_timeout(3000);
@@ -257,3 +258,4 @@ fn create_test_event(window: usize) -> KLineUpdateEvent {
         is_new_window: true
     }
 }
+*/
