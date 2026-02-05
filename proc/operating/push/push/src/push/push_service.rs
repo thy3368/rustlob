@@ -26,7 +26,7 @@ impl PushService {
     /// 后台运行事件监听循环
     async fn run(&self) {
         // 订阅变更日志事件
-        let mut receiver = self.change_log_repo.subscribe::<ChangeLogEntry>(
+        let mut receiver = self.change_log_repo.subscribe(
             SpotTopic::EntityChangeLog.name(),
             None
         );
@@ -38,23 +38,32 @@ impl PushService {
     }
 
     /// 处理单个变更日志事件
-    async fn process_event(&self, event: ChangeLogEntry) {
+    async fn process_event(&self, event: bytes::Bytes) {
+        // 将字节转换为 entity_change_log
+        let entity_change_log = match serde_json::from_slice::<ChangeLogEntry>(&event) {
+            Ok(log) => log,
+            Err(e) => {
+                tracing::error!("Failed to deserialize event to ChangeLogEntry: {:?}", e);
+                return;
+            }
+        };
+
         tracing::debug!(
             "Processing event: entity_type={}, entity_id={}, change_type={:?}",
-            event.entity_type(),
-            event.entity_id(),
-            event.change_type()
+            entity_change_log.entity_type(),
+            entity_change_log.entity_id(),
+            entity_change_log.change_type()
         );
 
-        // 通过 ConnectionRepo 找到对该 event 感兴趣的发送器列表
+        // 通过 ConnectionRepo 找到对该事件感兴趣的发送器列表
         let interested_senders: Vec<tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>> =
-            self.connection_repo.get_senders_by_entity(&event.entity_type(), &event.entity_id()).await;
+            self.connection_repo.get_senders_by_entity(&entity_change_log.entity_type(), &entity_change_log.entity_id()).await;
 
         if interested_senders.is_empty() {
             tracing::trace!(
                 "No connections interested in event: entity_type={}, entity_id={}",
-                event.entity_type(),
-                event.entity_id()
+                entity_change_log.entity_type(),
+                entity_change_log.entity_id()
             );
             return; // 没有感兴趣的连接，直接返回
         }
@@ -63,11 +72,11 @@ impl PushService {
         let msg_text = match serde_json::to_string(&json!({
             "stream_type": "user_data",
             "data": {
-                "entity_id": event.entity_id(),
-                "entity_type": event.entity_type(),
-                "change_type": format!("{:?}", event.change_type()),
-                "timestamp": event.timestamp(),
-                "sequence": event.sequence()
+                "entity_id": entity_change_log.entity_id(),
+                "entity_type": entity_change_log.entity_type(),
+                "change_type": format!("{:?}", entity_change_log.change_type()),
+                "timestamp": entity_change_log.timestamp(),
+                "sequence": entity_change_log.sequence()
             }
         })) {
             Ok(text) => text,
@@ -95,8 +104,8 @@ impl PushService {
             "Sent event to {}/{} connections: entity_type={}, entity_id={}",
             success_count,
             sender_count,
-            event.entity_type(),
-            event.entity_id()
+            entity_change_log.entity_type(),
+            entity_change_log.entity_id()
         );
     }
 

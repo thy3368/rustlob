@@ -22,7 +22,7 @@ uuid = { version = "1.0", features = ["v4"] }
 # Spot 订单处理依赖
 spot_behavior = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
 
-push = { path = "../../proc/operating/push/push" }
+ push = { path = "../../proc/operating/push/push" }
 
 derivatives_behavior = { path = "../../proc/operating/exchange/derivatives", features = ["serde"] }
 

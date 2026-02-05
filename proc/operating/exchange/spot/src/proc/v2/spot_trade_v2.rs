@@ -259,8 +259,15 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         // let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
         // change_log_queue_repo.send_batch(&all_events);
 
-        // 批量发送事件
-        let results = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), all_events.clone(), None);
+        // 批量发送事件 - 将 ChangeLogEntry 转换为 Bytes
+        let bytes_events: Vec<bytes::Bytes> = all_events
+            .iter()
+            .filter_map(|event| {
+                serde_json::to_vec(event).ok().map(bytes::Bytes::from)
+            })
+            .collect();
+
+        let results = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
 
         // 检查发送结果
         if let Ok(send_results) = results {

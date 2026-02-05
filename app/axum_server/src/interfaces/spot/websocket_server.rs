@@ -8,7 +8,7 @@ use base_types::actor_x::ActorX;
 use crate::interfaces::{
     common::ins_repo,
     spot::websocket::{
-        md_sse_controller::SpotMarketDataSSEImpl, spot_user_data_pusher, ud_sse_controller::SpotUserDataSSEImpl,
+        md_sse_controller::SpotMarketDataSSEImpl, ud_sse_controller::SpotUserDataSSEImpl,
         user_data_ws_handler::user_data_websocket_handler
     }
 };

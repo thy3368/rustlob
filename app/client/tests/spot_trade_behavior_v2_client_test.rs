@@ -1,14 +1,18 @@
 use std::error::Error;
 
-use base_types::{cqrs::cqrs_types::CMetadata, handler::handler::Handler};
+use base_types::{
+    cqrs::cqrs_types::CMetadata,
+    exchange::spot::spot_types::{OrderType, TimeInForce},
+    handler::handler::Handler,
+    OrderSide
+};
 use sapp::client::spot::{
     spot_http_client::SpotHttpClient, spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient
 };
-use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-    NewOrderCmd, NewOrderRespType, OrderSide, OrderType, SpotTradeCmdAny, TestNewOrderCmd,
-    TimeInForce
+use spot_behavior::proc::behavior::v2::{
+    spot_trade_behavior_v2::{NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd},
+    spot_user_data_sse_behavior::TimeInForce
 };
-
 
 #[tokio::test]
 async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {

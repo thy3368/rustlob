@@ -4,7 +4,7 @@ use actix::Actor;
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use rust_queue::queue::{queue::Queue, queue_impl::mpmc_queue::MPMCQueue};
-
+use rust_queue::queue::queue::ToBytes;
 use crate::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
     k_line_types::{KLineAggMut, KLineUpdateEvent}
@@ -23,7 +23,7 @@ impl KLineService {
         let queue_clone = queue.clone();
         aggregator.subscribe(move |event: KLineUpdateEvent| {
             // 将K线更新事件发送到队列，供push服务推送
-            if let Err(e) = queue_clone.send(SpotTopic::KLine.name(), event, None) {
+            if let Err(e) = queue_clone.send(SpotTopic::KLine.name(), event.to_bytes().unwrap(), None) {
                 tracing::error!("Failed to publish KLineUpdateEvent: {:?}", e);
             }
         });
@@ -48,7 +48,7 @@ impl KLineService {
 
 impl ActorX for KLineService {
     fn start(self: &Arc<Self>) {
-        let mut receiver = self.queue.subscribe::<Vec<u8>>(SpotTopic::EntityChangeLog.name(), None);
+        let mut receiver = self.queue.subscribe(SpotTopic::EntityChangeLog.name(), None);
         let aggregator = self.aggregator.clone();
 
         // todo 优化性能， lock导致的

@@ -1,19 +1,11 @@
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Instant
 };
 
-use serde::{de::DeserializeOwned, Serialize};
-use tokio::{
-    sync::{
-        broadcast,
-        broadcast::{error::SendError, Receiver}
-    },
-    time::Duration
-};
+use tokio::sync::broadcast;
 
-use crate::queue::queue::{DefaultQueueConfig, FromBytes, Queue, SendOptions, SubscribeOptions, ToBytes};
+use crate::queue::queue::{DefaultQueueConfig, Queue, SendOptions, SubscribeOptions};
 
 /// 高性能异步广播队列，用于分发 K 线更新事件
 /// 基于 Tokio 的 broadcast channel 实现，支持多生产者多消费者模式
@@ -74,10 +66,9 @@ impl Queue for MPMCQueue {
     fn new_with_config(config: impl Into<Self::Config>) -> Self { Self::new_with_config(config.into()) }
 
     /// 发送事件到指定 topic
-    /// 支持序列化的事件类型
     fn send(
-        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>
-    ) -> Result<usize, SendError<bytes::Bytes>> {
+        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>,
+    ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>> {
         let sender = self.get_or_create_channel(topic);
 
         // 背压控制
@@ -85,25 +76,26 @@ impl Queue for MPMCQueue {
             let current_subscribers = sender.receiver_count();
             let channel_capacity = 1024; // 目前 hardcode，后续可配置
             if current_subscribers == 0 && channel_capacity > 0 {
-                tracing::warn!("No subscribers for topic {}, discarding event to prevent buffer overflow", topic);
+                tracing::warn!(
+                    "No subscribers for topic {}, discarding event to prevent buffer overflow",
+                    topic
+                );
                 return Ok(0);
             }
         }
 
-        // 序列化事件
-
-        // 发送字节数据
-        sender.send(event).map_err(|_| broadcast::error::SendError(event))
+        sender.send(event)
     }
 
     /// 订阅指定 topic 的事件
     /// 支持反序列化的事件类型
-    fn subscribe(&self, topic: &str, _options: Option<SubscribeOptions>) -> broadcast::Receiver<bytes::Bytes> {
+    fn subscribe(
+        &self,
+        topic: &str,
+        _options: Option<SubscribeOptions>,
+    ) -> broadcast::Receiver<bytes::Bytes> {
         let channel = self.get_or_create_channel(topic);
-        let mut rx = channel.subscribe();
-
-
-        rx
+        channel.subscribe()
     }
 
     /// 批量发送事件到指定 topic（高性能优化）
@@ -130,7 +122,7 @@ impl Queue for MPMCQueue {
             // todo channel支持batch不？
             match channel.send(event) {
                 Ok(count) => results.push(Ok(count)),
-                Err(_) => results.push(Err(broadcast::error::SendError(event)))
+                Err(e) => results.push(Err(e)),
             }
         }
 

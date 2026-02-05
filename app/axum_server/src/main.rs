@@ -14,7 +14,6 @@ pub mod interfaces {
 
         pub mod websocket {
             pub mod md_sse_controller;
-            pub mod spot_user_data_pusher;
             pub mod ud_sse_controller;
             pub mod user_data_ws_handler;
         }

@@ -4813,6 +4813,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base_types",
+ "bytes",
  "cqrs",
  "db_repo",
  "diff",
@@ -4825,6 +4826,7 @@ dependencies = [
  "rand 0.9.2",
  "rust_queue",
  "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]

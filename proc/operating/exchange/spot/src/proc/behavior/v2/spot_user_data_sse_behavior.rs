@@ -1,6 +1,7 @@
 // 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/
 // user-data-stream.md 定义所有 user data 接口
 
+use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
 use base_types::OrderSide;
 use immutable_derive::immutable;
@@ -343,18 +344,18 @@ pub enum OrderType {
     LIMIT_MAKER
 }
 
-/// 有效方式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
-pub enum TimeInForce {
-    /// 成交为止（一直有效）
-    GTC,
-    /// 无法立即成交的部分就撤销
-    IOC,
-    /// 无法全部立即成交就撤销
-    FOK
-}
+// /// 有效方式
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//
+// pub enum TimeInForce {
+//     /// 成交为止（一直有效）
+//     GTC,
+//     /// 无法立即成交的部分就撤销
+//     IOC,
+//     /// 无法全部立即成交就撤销
+//     FOK
+// }
 
 /// 执行类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
