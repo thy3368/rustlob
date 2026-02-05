@@ -11,6 +11,7 @@ use base_types::{
 use db_repo::MySqlDbRepo;
 use immutable_derive::immutable;
 use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
+use base_types::actor_x::ActorX;
 use spot_behavior::proc::{
     behavior::v2::{
         spot_market_data_behavior::{SpotMarketDataCmdAny, SpotMarketDataResAny},
@@ -189,7 +190,7 @@ impl HttpServer {
 
         // 启动 K 线服务
         let kline_service = ins_repo::get_k_line_service();
-        kline_service.start_listening().await;
+        kline_service.start();
         tracing::info!("✅ K-Line service started");
 
         // 启动 Push 服务

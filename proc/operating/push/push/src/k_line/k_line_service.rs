@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use actix::Actor;
+use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use rust_queue::queue::{queue::Queue, queue_impl::mpmc_queue::MPMCQueue};
 
@@ -7,7 +9,6 @@ use crate::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
     k_line_types::{KLineAggMut, KLineUpdateEvent}
 };
-
 
 pub struct KLineService {
     aggregator: Arc<tokio::sync::Mutex<M100SimdKLineAggregator>>,
@@ -33,9 +34,20 @@ impl KLineService {
         }
     }
 
-    // 从queue订阅entity_change_log，如果是trade/create事件，
-    // 则调用aggregator进行聚合
-    pub async fn start_listening(&self) {
+
+    // 解析交易事件的辅助方法（需要根据实际消息格式实现）
+    fn parse_trade_event(msg: &[u8]) -> Result<TradeEvent, String> {
+        // 这里只是示例，需要根据实际的消息格式进行解析
+        // 假设消息是JSON格式
+        let msg_str = String::from_utf8(msg.to_vec()).map_err(|e| format!("Invalid UTF-8: {:?}", e))?;
+        let trade_event: TradeEvent =
+            serde_json::from_str(&msg_str).map_err(|e| format!("Failed to parse trade event: {:?}", e))?;
+        Ok(trade_event)
+    }
+}
+
+impl ActorX for KLineService {
+    fn start(self: &Arc<Self>) {
         let mut receiver = self.queue.subscribe::<Vec<u8>>(SpotTopic::EntityChangeLog.name(), None);
         let aggregator = self.aggregator.clone();
 
@@ -52,16 +64,6 @@ impl KLineService {
                 }
             }
         });
-    }
-
-    // 解析交易事件的辅助方法（需要根据实际消息格式实现）
-    fn parse_trade_event(msg: &[u8]) -> Result<TradeEvent, String> {
-        // 这里只是示例，需要根据实际的消息格式进行解析
-        // 假设消息是JSON格式
-        let msg_str = String::from_utf8(msg.to_vec()).map_err(|e| format!("Invalid UTF-8: {:?}", e))?;
-        let trade_event: TradeEvent =
-            serde_json::from_str(&msg_str).map_err(|e| format!("Failed to parse trade event: {:?}", e))?;
-        Ok(trade_event)
     }
 }
 

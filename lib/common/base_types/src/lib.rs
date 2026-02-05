@@ -16,6 +16,7 @@ pub mod cqrs;
 
 pub mod handler;
 pub mod spot_topic;
+pub mod actor_x;
 
 // Re-export all types
 pub use base_types::{

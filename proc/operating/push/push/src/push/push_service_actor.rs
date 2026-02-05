@@ -1,14 +1,16 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use serde::de::DeserializeOwned;
-use immutable_derive::immutable;
-use serde_json::json;
-use base_types::spot_topic::SpotTopic;
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
-use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
-use diff::ChangeLogEntry;
-use rust_queue::queue::queue::Queue;
-use base_types::actor_x::ActorX;
 
+use actix::prelude::*;
+use actix_rt;
+use base_types::spot_topic::SpotTopic;
+use diff::ChangeLogEntry;
+use immutable_derive::immutable;
+use rust_queue::queue::{queue::Queue, queue_impl::mpmc_queue::MPMCQueue};
+use serde::de::DeserializeOwned;
+use serde_json::json;
+
+use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
+// use futures_util::stream::once;
 /// 推送服务 - 无状态设计，可安全地在多线程间共享
 ///
 /// 该服务只包含不可变的依赖引用，不包含任何运行时状态，
@@ -23,13 +25,22 @@ pub struct PushService {
 
 
 impl PushService {
+    /// 启动后台事件监听任务
+    ///
+    /// 该方法不获取 self 所有权，而是克隆 Arc 引用在后台任务中使用。
+    /// 这样可以在启动后台任务后，继续使用当前的服务实例。
+    pub fn start(self: &Arc<Self>) {
+        let service = Arc::clone(self);
+
+        tokio::spawn(async move {
+            service.run().await;
+        });
+    }
+
     /// 后台运行事件监听循环
     async fn run(&self) {
         // 订阅变更日志事件
-        let mut receiver = self.change_log_repo.subscribe::<ChangeLogEntry>(
-            SpotTopic::EntityChangeLog.name(),
-            None
-        );
+        let mut receiver = self.change_log_repo.subscribe::<ChangeLogEntry>(SpotTopic::EntityChangeLog.name(), None);
 
         // 持续监听事件
         while let Ok(event) = receiver.recv().await {
@@ -107,17 +118,60 @@ impl PushService {
     }
 }
 
-impl ActorX for PushService {
-    /// 启动后台事件监听任务
-    ///
-    /// 该方法不获取 self 所有权，而是克隆 Arc 引用在后台任务中使用。
-    /// 这样可以在启动后台任务后，继续使用当前的服务实例。
-    fn start(self: &Arc<Self>) {
-        let service = Arc::clone(self);
 
-        tokio::spawn(async move {
-            service.run().await;
+impl Actor for PushService {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Context<Self>) {
+
+
+        
+        // 在 Actor 启动时，启动事件监听任务
+        let connection_repo = Arc::clone(&self.connection_repo);
+        let mut receiver = self.change_log_repo.subscribe::<ChangeLogEntry>(
+            SpotTopic::EntityChangeLog.name(),
+            None
+        );
+
+        actix_rt::spawn(async move {
+            while let Ok(event) = receiver.recv().await {
+                // 我们需要再次创建一个服务实例，因为不能直接引用外部的 self
+                let temp_service = PushService {
+                    connection_repo: Arc::clone(&connection_repo),
+                    change_log_repo: Arc::new(MPMCQueue::new()), // 这里我们只需要一个空的队列，因为我们不需要发送消息
+                };
+                temp_service.process_event(event).await;
+            }
         });
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use actix::Actor;
+    use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+
+    use super::*;
+
+
+    #[actix::test]
+    async fn test_push_service_actor_start() {
+        // 创建测试所需的依赖
+        let connection_repo = Arc::new(ConnectionRepo::default());
+        let change_log_repo = Arc::new(MPMCQueue::new());
+
+        // 创建 PushService 实例
+        let push_service = PushService {
+            connection_repo,
+            change_log_repo
+        };
+
+        // 测试作为 Actor 启动
+        let addr = push_service.start();
+
+        // 验证 Actor 是否连接
+        assert!(addr.connected());
+    }
+
+
+}
