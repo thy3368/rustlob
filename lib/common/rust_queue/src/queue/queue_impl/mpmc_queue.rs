@@ -75,9 +75,9 @@ impl Queue for MPMCQueue {
 
     /// 发送事件到指定 topic
     /// 支持序列化的事件类型
-    fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
-        &self, topic: &str, event: T, options: Option<SendOptions>
-    ) -> Result<usize, SendError<T>> {
+    fn send(
+        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>
+    ) -> Result<usize, SendError<bytes::Bytes>> {
         let sender = self.get_or_create_channel(topic);
 
         // 背压控制
@@ -91,45 +91,26 @@ impl Queue for MPMCQueue {
         }
 
         // 序列化事件
-        let bytes = event.to_bytes().map_err(|_| broadcast::error::SendError(event.clone()))?;
 
         // 发送字节数据
-        sender.send(bytes).map_err(|_| broadcast::error::SendError(event))
+        sender.send(event).map_err(|_| broadcast::error::SendError(event))
     }
 
     /// 订阅指定 topic 的事件
     /// 支持反序列化的事件类型
-    fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
-        &self, topic: &str, _options: Option<SubscribeOptions>
-    ) -> broadcast::Receiver<T> {
+    fn subscribe(&self, topic: &str, _options: Option<SubscribeOptions>) -> broadcast::Receiver<bytes::Bytes> {
         let channel = self.get_or_create_channel(topic);
         let mut rx = channel.subscribe();
 
-        //todo 为啥要创新新的？逻辑是不是有问题？
-        // 创建新的 receiver，内部进行反序列化
-        let (tx, rx_out) = broadcast::channel(1024);
 
-        tokio::spawn(async move {
-            while let Ok(bytes) = rx.recv().await {
-                match T::from_bytes(&bytes) {
-                    Ok(event) => {
-                        let _ = tx.send(event);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to deserialize event: {}", e);
-                    }
-                }
-            }
-        });
-
-        rx_out
+        rx
     }
 
     /// 批量发送事件到指定 topic（高性能优化）
     /// 支持序列化的事件类型
-    fn send_batch<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
-        &self, topic: &str, events: Vec<T>, options: Option<SendOptions>
-    ) -> Result<Vec<Result<usize, broadcast::error::SendError<T>>>, ()> {
+    fn send_batch(
+        &self, topic: &str, events: Vec<bytes::Bytes>, options: Option<SendOptions>
+    ) -> Result<Vec<Result<usize, broadcast::error::SendError<bytes::Bytes>>>, ()> {
         let channel = self.get_or_create_channel(topic);
         let mut results = Vec::with_capacity(events.len());
 
@@ -145,24 +126,16 @@ impl Queue for MPMCQueue {
                 continue;
             }
 
-            // 序列化事件
-            match event.to_bytes() {
-                Ok(bytes) => {
-                    //todo channel支持batch不？
-                    match channel.send(bytes) {
-                        Ok(count) => results.push(Ok(count)),
-                        Err(_) => results.push(Err(broadcast::error::SendError(event))),
-                    }
-                }
-                Err(_) => {
-                    results.push(Err(broadcast::error::SendError(event)));
-                }
+
+            // todo channel支持batch不？
+            match channel.send(event) {
+                Ok(count) => results.push(Ok(count)),
+                Err(_) => results.push(Err(broadcast::error::SendError(event)))
             }
         }
 
         Ok(results)
     }
-
 
 
     /// 获取指定 topic 的当前订阅者数量
@@ -189,114 +162,113 @@ impl Default for MPMCQueue {
     fn default() -> Self { Self::new() }
 }
 
-//todo 新建一个简单的event 代替 KLineUpdateEvent
-/*
-#[tokio::test]
-async fn broadcast_example() {
-    let config = DefaultQueueConfig::new().with_send_timeout(5000).with_recv_timeout(3000);
-
-    let queue = MPMCQueue::new_with_config(config);
-
-    println!("初始订阅者数量: {}", queue.subscriber_count("test-topic"));
-
-    // 创建 3 个订阅者
-    let mut subscribers = vec![];
-    for i in 0..3 {
-        let mut rx = queue.subscribe::<KLineUpdateEvent>("test-topic", None);
-        subscribers.push(tokio::spawn(async move {
-            let mut received = 0;
-            while let Ok(event) = rx.recv().await {
-                println!(
-                    "[Subscriber {}] Received: Window={:?}, OHLC={:?}, New={}",
-                    i, event.window, event.ohlc, event.is_new_window
-                );
-                received += 1;
-                if received >= 5 {
-                    break;
-                }
-            }
-        }));
-    }
-
-    println!("订阅后数量: {}", queue.subscriber_count("test-topic"));
-
-    // 模拟发送 K 线更新事件
-    let base_timestamp = Instant::now().elapsed().as_secs();
-    for i in 0..5 {
-        let event = KLineUpdateEvent {
-            window: TimeWindow::Second,
-            ohlc: OHLC::new(base_timestamp + i, 50000.0 + (i as f64) * 10.0, 1.0 + (i as f64) * 0.1),
-            is_new_window: i % 2 == 0
-        };
-
-        match queue.send("test-topic", event, None) {
-            Ok(count) => println!("[Broadcaster] Sent: Message {}, Received by {} subscribers", i, count),
-            Err(e) => println!("[Broadcaster] Error: {}", e)
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-
-    // 等待所有订阅者完成
-    for subscriber in subscribers {
-        subscriber.await.unwrap();
-    }
-
-    println!("\n在广播模式中:");
-    println!("每条消息被所有订阅者接收");
-    println!("这是真正的'多消费者接收同一条消息'");
-}
-
-#[tokio::test]
-async fn test_multiple_topics_with_different_events() {
-    let queue = MPMCQueue::new();
-
-    // 测试创建和订阅多个 topic，每个 topic 有不同类型的事件
-    let mut rx1 = queue.subscribe::<KLineUpdateEvent>("topic1", None);
-    let mut rx2 = queue.subscribe::<String>("topic2", None);
-
-    // 发送不同类型的事件到不同 topic
-    queue.send("topic1", create_test_event(1), None).unwrap();
-    queue.send("topic2", "Hello, World!".to_string(), None).unwrap();
-
-    // 接收验证
-    let handle1 = tokio::spawn(async move {
-        if let Ok(event) = rx1.recv().await {
-            println!("Topic1 received: {:?}", event.window);
-            assert_eq!(event.window, TimeWindow::Minute);
-        }
-    });
-
-    let handle2 = tokio::spawn(async move {
-        if let Ok(event) = rx2.recv().await {
-            println!("Topic2 received: {}", event);
-            assert_eq!(event, "Hello, World!");
-        }
-    });
-
-    handle1.await.unwrap();
-    handle2.await.unwrap();
-
-    // 验证 topic 列表
-    let topics = queue.topics();
-    assert!(topics.contains(&"topic1".to_string()));
-    assert!(topics.contains(&"topic2".to_string()));
-    println!("All topics: {:?}", topics);
-}
-
-
-fn create_test_event(window: usize) -> KLineUpdateEvent {
-    let time_window = match window {
-        0 => TimeWindow::Second,
-        1 => TimeWindow::Minute,
-        2 => TimeWindow::FifteenMin,
-        _ => TimeWindow::Hour
-    };
-
-    KLineUpdateEvent {
-        window: time_window,
-        ohlc: OHLC::new(1600000000, 100.0, 1.0),
-        is_new_window: true
-    }
-}
-*/
+// todo 新建一个简单的event 代替 KLineUpdateEvent
+// #[tokio::test]
+// async fn broadcast_example() {
+// let config =
+// DefaultQueueConfig::new().with_send_timeout(5000).with_recv_timeout(3000);
+//
+// let queue = MPMCQueue::new_with_config(config);
+//
+// println!("初始订阅者数量: {}", queue.subscriber_count("test-topic"));
+//
+// 创建 3 个订阅者
+// let mut subscribers = vec![];
+// for i in 0..3 {
+// let mut rx = queue.subscribe::<KLineUpdateEvent>("test-topic", None);
+// subscribers.push(tokio::spawn(async move {
+// let mut received = 0;
+// while let Ok(event) = rx.recv().await {
+// println!(
+// "[Subscriber {}] Received: Window={:?}, OHLC={:?}, New={}",
+// i, event.window, event.ohlc, event.is_new_window
+// );
+// received += 1;
+// if received >= 5 {
+// break;
+// }
+// }
+// }));
+// }
+//
+// println!("订阅后数量: {}", queue.subscriber_count("test-topic"));
+//
+// 模拟发送 K 线更新事件
+// let base_timestamp = Instant::now().elapsed().as_secs();
+// for i in 0..5 {
+// let event = KLineUpdateEvent {
+// window: TimeWindow::Second,
+// ohlc: OHLC::new(base_timestamp + i, 50000.0 + (i as f64) * 10.0, 1.0 + (i as
+// f64) * 0.1), is_new_window: i % 2 == 0
+// };
+//
+// match queue.send("test-topic", event, None) {
+// Ok(count) => println!("[Broadcaster] Sent: Message {}, Received by {}
+// subscribers", i, count), Err(e) => println!("[Broadcaster] Error: {}", e)
+// }
+//
+// tokio::time::sleep(Duration::from_millis(100)).await;
+// }
+//
+// 等待所有订阅者完成
+// for subscriber in subscribers {
+// subscriber.await.unwrap();
+// }
+//
+// println!("\n在广播模式中:");
+// println!("每条消息被所有订阅者接收");
+// println!("这是真正的'多消费者接收同一条消息'");
+// }
+//
+// #[tokio::test]
+// async fn test_multiple_topics_with_different_events() {
+// let queue = MPMCQueue::new();
+//
+// 测试创建和订阅多个 topic，每个 topic 有不同类型的事件
+// let mut rx1 = queue.subscribe::<KLineUpdateEvent>("topic1", None);
+// let mut rx2 = queue.subscribe::<String>("topic2", None);
+//
+// 发送不同类型的事件到不同 topic
+// queue.send("topic1", create_test_event(1), None).unwrap();
+// queue.send("topic2", "Hello, World!".to_string(), None).unwrap();
+//
+// 接收验证
+// let handle1 = tokio::spawn(async move {
+// if let Ok(event) = rx1.recv().await {
+// println!("Topic1 received: {:?}", event.window);
+// assert_eq!(event.window, TimeWindow::Minute);
+// }
+// });
+//
+// let handle2 = tokio::spawn(async move {
+// if let Ok(event) = rx2.recv().await {
+// println!("Topic2 received: {}", event);
+// assert_eq!(event, "Hello, World!");
+// }
+// });
+//
+// handle1.await.unwrap();
+// handle2.await.unwrap();
+//
+// 验证 topic 列表
+// let topics = queue.topics();
+// assert!(topics.contains(&"topic1".to_string()));
+// assert!(topics.contains(&"topic2".to_string()));
+// println!("All topics: {:?}", topics);
+// }
+//
+//
+// fn create_test_event(window: usize) -> KLineUpdateEvent {
+// let time_window = match window {
+// 0 => TimeWindow::Second,
+// 1 => TimeWindow::Minute,
+// 2 => TimeWindow::FifteenMin,
+// _ => TimeWindow::Hour
+// };
+//
+// KLineUpdateEvent {
+// window: time_window,
+// ohlc: OHLC::new(1600000000, 100.0, 1.0),
+// is_new_window: true
+// }
+// }

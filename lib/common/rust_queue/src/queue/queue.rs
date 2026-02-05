@@ -116,6 +116,7 @@ pub trait Queue {
     where
         Self: Sized;
 
+
     /// 发送事件到指定 topic
     ///
     /// # 参数
@@ -125,9 +126,9 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回成功发送到的本地订阅者数量
-    fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
-        &self, topic: &str, event: T, options: Option<SendOptions>
-    ) -> Result<usize, broadcast::error::SendError<T>>;
+    fn send(
+        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>
+    ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>>;
 
     /// 批量发送事件到指定 topic（高性能优化）
     ///
@@ -138,9 +139,9 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回成功发送的事件数量和每个事件的接收者数量
-    fn send_batch<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
-        &self, topic: &str, events: Vec<T>, options: Option<SendOptions>
-    ) -> Result<Vec<Result<usize, broadcast::error::SendError<T>>>, ()>;
+    fn send_batch(
+        &self, topic: &str, events: Vec<bytes::Bytes>, options: Option<SendOptions>
+    ) -> Result<Vec<Result<usize, broadcast::error::SendError<bytes::Bytes>>>, ()>;
 
 
     /// 订阅指定 topic 的事件
@@ -151,16 +152,14 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回一个接收器，用于异步接收事件
-    fn subscribe<T: serde::de::DeserializeOwned + Send + Sync + 'static + Clone>(
-        &self, topic: &str, options: Option<SubscribeOptions>
-    ) -> broadcast::Receiver<T>;
+    fn subscribe(&self, topic: &str, options: Option<SubscribeOptions>) -> broadcast::Receiver<bytes::Bytes>;
 
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize;
 
     fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes>;
-    
+
     /// 获取所有支持的 topic 列表
     fn topics(&self) -> Vec<String>;
 
@@ -196,7 +195,7 @@ impl Default for DefaultQueueConfig {
             send_timeout_ms: 5000,
             recv_timeout_ms: 3000,
             buffer_size: 1024,
-            enable_backpressure: false,
+            enable_backpressure: false
         }
     }
 }
