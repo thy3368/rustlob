@@ -78,11 +78,11 @@ impl Queue for MPMCQueue {
     fn send<T: Serialize + ToBytes + Send + Sync + 'static + Clone>(
         &self, topic: &str, event: T, options: Option<SendOptions>
     ) -> Result<usize, SendError<T>> {
-        let channel = self.get_or_create_channel(topic);
+        let sender = self.get_or_create_channel(topic);
 
         // 背压控制
         if self.should_apply_backpressure(&options) {
-            let current_subscribers = channel.receiver_count();
+            let current_subscribers = sender.receiver_count();
             let channel_capacity = 1024; // 目前 hardcode，后续可配置
             if current_subscribers == 0 && channel_capacity > 0 {
                 tracing::warn!("No subscribers for topic {}, discarding event to prevent buffer overflow", topic);
@@ -94,7 +94,35 @@ impl Queue for MPMCQueue {
         let bytes = event.to_bytes().map_err(|_| broadcast::error::SendError(event.clone()))?;
 
         // 发送字节数据
-        channel.send(bytes).map_err(|_| broadcast::error::SendError(event))
+        sender.send(bytes).map_err(|_| broadcast::error::SendError(event))
+    }
+
+    /// 订阅指定 topic 的事件
+    /// 支持反序列化的事件类型
+    fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
+        &self, topic: &str, _options: Option<SubscribeOptions>
+    ) -> broadcast::Receiver<T> {
+        let channel = self.get_or_create_channel(topic);
+        let mut rx = channel.subscribe();
+
+        //todo 为啥要创新新的？逻辑是不是有问题？
+        // 创建新的 receiver，内部进行反序列化
+        let (tx, rx_out) = broadcast::channel(1024);
+
+        tokio::spawn(async move {
+            while let Ok(bytes) = rx.recv().await {
+                match T::from_bytes(&bytes) {
+                    Ok(event) => {
+                        let _ = tx.send(event);
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to deserialize event: {}", e);
+                    }
+                }
+            }
+        });
+
+        rx_out
     }
 
     /// 批量发送事件到指定 topic（高性能优化）
@@ -120,6 +148,7 @@ impl Queue for MPMCQueue {
             // 序列化事件
             match event.to_bytes() {
                 Ok(bytes) => {
+                    //todo channel支持batch不？
                     match channel.send(bytes) {
                         Ok(count) => results.push(Ok(count)),
                         Err(_) => results.push(Err(broadcast::error::SendError(event))),
@@ -134,32 +163,7 @@ impl Queue for MPMCQueue {
         Ok(results)
     }
 
-    /// 订阅指定 topic 的事件
-    /// 支持反序列化的事件类型
-    fn subscribe<T: DeserializeOwned + Send + Sync + 'static + Clone>(
-        &self, topic: &str, _options: Option<SubscribeOptions>
-    ) -> broadcast::Receiver<T> {
-        let channel = self.get_or_create_channel(topic);
-        let mut rx = channel.subscribe();
 
-        // 创建新的 receiver，内部进行反序列化
-        let (tx, rx_out) = broadcast::channel(1024);
-
-        tokio::spawn(async move {
-            while let Ok(bytes) = rx.recv().await {
-                match T::from_bytes(&bytes) {
-                    Ok(event) => {
-                        let _ = tx.send(event);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to deserialize event: {}", e);
-                    }
-                }
-            }
-        });
-
-        rx_out
-    }
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize {

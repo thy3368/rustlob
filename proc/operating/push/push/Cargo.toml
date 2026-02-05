@@ -31,6 +31,9 @@ serde = { version = "1.0.203", features = ["derive"] }
 bytes = "1.5.0"
 actix = "0.13.5"
 actix-rt = "2.8.0"
+core_affinity = "0.8.1"
+num_cpus = "1.16.0"
+thiserror = "1.0.60"
 # 移除spot_behavior依赖，因为用户不想依赖它
 
 [dev-dependencies]
