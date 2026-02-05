@@ -10,8 +10,7 @@ use sapp::client::spot::{
     spot_http_client::SpotHttpClient, spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient
 };
 use spot_behavior::proc::behavior::v2::{
-    spot_trade_behavior_v2::{NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd},
-    spot_user_data_sse_behavior::TimeInForce
+    spot_trade_behavior_v2::{NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd}
 };
 
 #[tokio::test]
