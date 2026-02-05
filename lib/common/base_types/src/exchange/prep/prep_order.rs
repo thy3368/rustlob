@@ -1,6 +1,7 @@
-use crate::account::balance::Balance;
-use crate::{AccountId, AssetId, OrderId, PrepPosition, PrepTrade, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair};
-use crate::lob::lob::LobOrder;
+use crate::{
+    account::balance::Balance, lob::lob::LobOrder, AccountId, AssetId, OrderId, OrderSide, PrepPosition, PrepTrade,
+    Price, Quantity, Timestamp, TradeId, TradingPair
+};
 
 /// 订单类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,7 +27,6 @@ impl OrderType {
 impl Default for OrderType {
     fn default() -> Self { OrderType::Limit }
 }
-
 
 
 /// 订单状态
@@ -108,7 +108,7 @@ impl PrepOrder {
         order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: OrderSide, order_type: OrderType,
         quantity: Quantity, price: Option<Price>, leverage: u8
     ) -> PrepOrder {
-        let mut internal_order = PrepOrder {
+        let internal_order = PrepOrder {
             order_id,
             account_id,
             trading_pair,
@@ -181,13 +181,7 @@ impl PrepOrder {
         let fill_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
 
         // 直接调用 position.update() 更新持仓
-        match_p.add(
-            fill_qty,
-            fill_price,
-            self.leverage,
-            self.side,
-            crate::PositionSide::Long
-        );
+        match_p.add(fill_qty, fill_price, self.leverage, self.side, crate::PositionSide::Long);
 
         if self.remaining_qty() == 0 {
             self.status = OrderStatus::Filled
