@@ -98,6 +98,8 @@
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/push/push/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_queue/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_thread_overhead/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
@@ -107,6 +109,7 @@
       <excludeFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/websocket_sockudo/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/app/promptline-rust/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

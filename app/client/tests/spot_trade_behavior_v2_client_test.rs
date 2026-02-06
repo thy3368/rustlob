@@ -4,8 +4,8 @@ use base_types::OrderSide;
 use base_types::cqrs::cqrs_types::CMetadata;
 use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
 use base_types::handler::handler::Handler;
-use sapp::client::spot::spot_http_client::SpotHttpClient;
-use sapp::client::spot::spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient;
+use client::client::spot::spot_http_client::SpotHttpClient;
+use client::client::spot::spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd,
 };
