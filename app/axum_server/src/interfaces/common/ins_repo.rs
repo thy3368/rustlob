@@ -7,6 +7,9 @@ use db_repo::MySqlDbRepo;
 use lob_repo::adapter::distributed_lob_repo::DistributedLobRepo;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use once_cell::sync::Lazy;
+use base_types::TradingPair;
+use lob_repo::adapter::local_lob_impl::LocalLob;
+use lob_repo::adapter::remote_lob_impl::RemoteLob;
 // KLine 相关服务单例
 use push::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator, k_line_service::KLineService,
@@ -41,7 +44,6 @@ pub fn get_k_line_service() -> Arc<KLineService> {
     K_LINE_SERVICE.clone()
 }
 
-//todo  Lazy<MySqlDbRepo<Balance>> 变成 Lazy<Arc<MySqlDbRepo<Balance>>>
 static BALANCE_REPO: Lazy<Arc<MySqlDbRepo<Balance>>> =
     Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
 static TRADE_REPO: Lazy<Arc<MySqlDbRepo<SpotTrade>>> =
@@ -54,10 +56,25 @@ static MARKET_DATA_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> =
     Lazy::new(|| Arc::new(MySqlDbRepo::new_mock()));
 
 // LOB Repo 单例（包装在 Arc 中）
+
+// 为每个 TradingPair 枚举对应一个 LocalLob
 static EMBEDDED_LOB_REPO: Lazy<Arc<EmbeddedLobRepo<SpotOrder>>> =
-    Lazy::new(|| Arc::new(EmbeddedLobRepo::new(vec![])));
+    Lazy::new(|| {
+        let lobs = TradingPair::all()
+            .iter()
+            .map(|&symbol| LocalLob::new(symbol))
+            .collect::<Vec<_>>();
+        Arc::new(EmbeddedLobRepo::new(lobs))
+    });
+
 static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> =
-    Lazy::new(|| Arc::new(DistributedLobRepo::new(vec![])));
+    Lazy::new(|| {
+        let lobs = TradingPair::all()
+            .iter()
+            .map(|&symbol| RemoteLob::new(symbol))
+            .collect::<Vec<_>>();
+        Arc::new(DistributedLobRepo::new(lobs))
+    });
 
 // 队列服务单例（包装在 Arc 中）
 static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {

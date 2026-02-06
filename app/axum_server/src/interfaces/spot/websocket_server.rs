@@ -2,8 +2,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::Router;
 use axum::routing::get;
+use axum::Router;
 use base_types::actor_x::ActorX;
 use spot_behavior::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use tokio::sync::broadcast;
@@ -22,9 +22,7 @@ impl WebSocketServer {
     /// 启动 Spot WebSocket 服务器
     ///
     /// todo 用tracing打日志
-    pub async fn start(
-        md_tx: broadcast::Sender<SpotMarketDataStreamAny>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
         // 使用 id_repo 中的单例服务
         let connection_repo = ins_repo::get_connection_repo();
         let push_service = ins_repo::get_push_service();

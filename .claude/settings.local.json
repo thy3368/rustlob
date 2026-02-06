@@ -91,7 +91,12 @@
       "Bash(cargo version:*)",
       "Bash(cargo clean:*)",
       "Bash(./test_thread_overhead:*)",
-      "Bash(cargo add:*)"
+      "Bash(cargo add:*)",
+      "Bash(claude:*)",
+      "Bash(npm -g uninstall:*)",
+      "Bash(npm -g install @anthropic-ai/claude-code)",
+      "Bash(sudo npm -g uninstall @anthropic-ai/claude-code:*)",
+      "Bash(sudo npm:*)"
     ],
     "deny": [],
     "ask": []

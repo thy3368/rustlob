@@ -271,6 +271,16 @@ impl TradingPair {
         }
     }
 
+    /// 获取所有 TradingPair 变体的数组
+    pub const fn all() -> &'static [TradingPair] {
+        &[
+            TradingPair::BtcUsdt,
+            TradingPair::EthUsdt,
+            TradingPair::BtcEth,
+            TradingPair::UsdtUsdt,
+        ]
+    }
+
     /// 从交易对符号字符串创建 TradingPair
     ///
     /// # 说明

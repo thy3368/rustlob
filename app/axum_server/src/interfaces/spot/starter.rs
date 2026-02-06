@@ -32,11 +32,9 @@ impl SpotStarter {
         // ==================== WebSocket 服务器启动 ====================
         tracing::info!("🔌 Starting Spot WebSocket server...");
 
-        // 创建事件广播通道（仅用于市场数据，用户数据使用定向推送）
-        let (md_tx, _) = broadcast::channel(1024);
 
         // 启动 WebSocket 服务器
-        WebSocketServer::start(md_tx.clone()).await?;
+        WebSocketServer::start().await?;
 
         tracing::info!("✅ Spot module started successfully");
 

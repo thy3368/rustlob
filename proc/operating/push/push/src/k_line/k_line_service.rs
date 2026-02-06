@@ -10,6 +10,7 @@ use crate::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggrega
 use crate::k_line::k_line_types::{KLineAggMut, KLineUpdateEvent};
 
 pub struct KLineService {
+    //todo 每个交易对 分配一个aggregator
     aggregator: Arc<tokio::sync::Mutex<M100SimdKLineAggregator>>,
     queue: Arc<MPMCQueue>, // 使用具体类型而不是trait对象，因为Queue trait有泛型方法
 }
@@ -55,6 +56,7 @@ impl ActorX for KLineService {
                 // 解析entity_change_log消息，判断是否是trade/create事件
                 if let Ok(trade_event) = Self::parse_trade_event(&msg) {
                     // 调用聚合器处理交易
+                    //todo 根据交易对 查找aggregator
                     let mut agg = aggregator.lock().await;
                     if let Err(e) = agg.process_trade(
                         trade_event.timestamp,
