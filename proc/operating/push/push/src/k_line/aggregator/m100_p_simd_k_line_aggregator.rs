@@ -1,11 +1,12 @@
-use std::sync::Arc;
 use std::cell::UnsafeCell;
-use rayon::prelude::*;
-use rayon::ThreadPool;
-use once_cell::sync::Lazy;
+use std::sync::Arc;
 
-use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, TimeWindow, OHLC};
+use once_cell::sync::Lazy;
+use rayon::ThreadPool;
+use rayon::prelude::*;
+
 use crate::k_line::aggregator::m100_simd_k_single_line_aggregator::M100SimdKSingleLineAggregator;
+use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, OHLC, TimeWindow};
 
 // 创建固定大小的线程池（4个线程，对应4个时间窗口）
 static AGGREGATOR_THREAD_POOL: Lazy<ThreadPool> = Lazy::new(|| {
@@ -24,9 +25,7 @@ struct UnsafeCellWrapper<T> {
 impl<T> UnsafeCellWrapper<T> {
     #[inline(always)]
     pub fn new(value: T) -> Self {
-        UnsafeCellWrapper {
-            inner: UnsafeCell::new(value),
-        }
+        UnsafeCellWrapper { inner: UnsafeCell::new(value) }
     }
 
     #[inline(always)]
@@ -75,11 +74,7 @@ impl M100PSimdKLineAggregator {
 
     #[inline(always)]
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window,
-            ohlc,
-            is_new_window,
-        };
+        let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
         let handler_count = self.event_handler_count;
         let handlers = &self.event_handlers;
@@ -145,8 +140,7 @@ impl KLineAggMut for M100PSimdKLineAggregator {
         // 单线程处理所有窗口
         for window_idx in 0..4 {
             let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
-            aggregator.process_trade(timestamp, price, volume)
-                .expect("Failed to process trade");
+            aggregator.process_trade(timestamp, price, volume).expect("Failed to process trade");
         }
 
         Ok(())
@@ -177,8 +171,7 @@ impl KLineAggMut for M100PSimdKLineAggregator {
             // 小任务量，单线程处理
             for window_idx in 0..4 {
                 let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
-                aggregator.process_trades_batch(trades)
-                    .expect("Failed to process trades batch");
+                aggregator.process_trades_batch(trades).expect("Failed to process trades batch");
             }
         } else {
             // 大任务量，并行处理
@@ -186,7 +179,8 @@ impl KLineAggMut for M100PSimdKLineAggregator {
                 (0..4).into_par_iter().for_each(|window_idx| {
                     let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
                     // 每个线程处理整个批次的交易，但可以考虑块级别的优化
-                    aggregator.process_trades_batch(trades)
+                    aggregator
+                        .process_trades_batch(trades)
                         .expect("Failed to process trades batch");
                 });
             });
@@ -218,10 +212,7 @@ impl KLineAggMut for M100PSimdKLineAggregator {
 
     #[inline(always)]
     fn get_total_stats(&self) -> (u64, u64) {
-        (
-            self.total_trades,
-            self.total_volume
-        )
+        (self.total_trades, self.total_volume)
     }
 }
 

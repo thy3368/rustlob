@@ -1,5 +1,6 @@
-use diff::{Entity, ChangeLogEntry};
 use std::fmt;
+
+use diff::{ChangeLogEntry, Entity};
 
 /// 分页参数
 ///
@@ -64,20 +65,14 @@ impl PageRequest {
     /// 获取下一页的分页请求
     #[inline]
     pub fn next_page(&self) -> Self {
-        Self {
-            page: self.page + 1,
-            page_size: self.page_size,
-        }
+        Self { page: self.page + 1, page_size: self.page_size }
     }
 
     /// 获取上一页的分页请求
     #[inline]
     pub fn prev_page(&self) -> Option<Self> {
         if self.page > 0 {
-            Some(Self {
-                page: self.page - 1,
-                page_size: self.page_size,
-            })
+            Some(Self { page: self.page - 1, page_size: self.page_size })
         } else {
             None
         }
@@ -128,12 +123,7 @@ pub struct PageResult<T> {
 impl<T> PageResult<T> {
     /// 创建新的分页结果
     pub fn new(content: Vec<T>, total_elements: u64, page: u64, page_size: u64) -> Self {
-        Self {
-            content,
-            total_elements,
-            page,
-            page_size,
-        }
+        Self { content, total_elements, page, page_size }
     }
 
     /// 获取总分页数
@@ -386,7 +376,7 @@ pub trait CmdRepo: Send + Sync {
 /// - 接口隐藏实现细节：调用方无需关心数据存储位置
 /// - 可测试性优先：支持 mock 实现用于单元测试
 /// - 单一职责：分离返回单条和多条数据的方法
-pub trait QueryRepo:Send + Sync {
+pub trait QueryRepo: Send + Sync {
     /// 仓储中存储的实体类型
     type E: Entity;
 
@@ -780,10 +770,7 @@ pub enum RepoError {
     /// 反序列化失败
     DeserializationFailed(String),
     /// 交易对不匹配
-    SymbolMismatch {
-        expected: String,
-        actual: String,
-    },
+    SymbolMismatch { expected: String, actual: String },
     /// 序列化失败
     SerializationFailed(String),
 }
@@ -806,4 +793,3 @@ impl std::fmt::Display for RepoError {
 }
 
 impl std::error::Error for RepoError {}
-

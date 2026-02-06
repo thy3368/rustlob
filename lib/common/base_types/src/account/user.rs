@@ -12,5 +12,5 @@ pub struct User {
     /// 创建时间
     pub created_at: Timestamp,
     /// 更新时间
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }

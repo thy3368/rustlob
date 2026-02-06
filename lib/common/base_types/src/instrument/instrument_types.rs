@@ -43,7 +43,10 @@ impl InstrumentType {
     /// 判断是否为衍生品
     #[inline]
     pub fn is_derivative(&self) -> bool {
-        matches!(self, InstrumentType::Perpetual | InstrumentType::Futures | InstrumentType::Options)
+        matches!(
+            self,
+            InstrumentType::Perpetual | InstrumentType::Futures | InstrumentType::Options
+        )
     }
 
     /// 判断是否支持杠杆

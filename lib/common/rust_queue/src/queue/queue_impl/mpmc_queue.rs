@@ -1,7 +1,5 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use tokio::sync::broadcast;
 
@@ -15,7 +13,7 @@ pub struct MPMCQueue {
     /// 每个 topic 对应一个 broadcast channel，存储字节形式的事件
     topic_channels: Arc<RwLock<HashMap<String, broadcast::Sender<bytes::Bytes>>>>,
     /// 配置信息
-    config: DefaultQueueConfig
+    config: DefaultQueueConfig,
 }
 
 impl MPMCQueue {
@@ -23,11 +21,7 @@ impl MPMCQueue {
     /// 容量设置为 1024，足以应对高频 K 线更新场景
     pub fn new_with_config(config: DefaultQueueConfig) -> Self {
         let topic_channels = Arc::new(RwLock::new(HashMap::new()));
-        let queue = MPMCQueue {
-            topic_channels,
-            config
-        };
-
+        let queue = MPMCQueue { topic_channels, config };
 
         queue
     }
@@ -36,11 +30,10 @@ impl MPMCQueue {
     fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
         match options {
             Some(opts) => opts.enable_backpressure,
-            None => self.config.enable_backpressure
+            None => self.config.enable_backpressure,
         }
     }
 }
-
 
 impl Queue for MPMCQueue {
     /// 为指定 topic 创建或获取 channel
@@ -60,14 +53,21 @@ impl Queue for MPMCQueue {
 
     /// 创建新的广播队列
     /// 使用默认配置
-    fn new() -> Self { Self::new_with_config(DefaultQueueConfig::default()) }
+    fn new() -> Self {
+        Self::new_with_config(DefaultQueueConfig::default())
+    }
 
     /// 创建带有自定义配置的广播队列
-    fn new_with_config(config: impl Into<Self::Config>) -> Self { Self::new_with_config(config.into()) }
+    fn new_with_config(config: impl Into<Self::Config>) -> Self {
+        Self::new_with_config(config.into())
+    }
 
     /// 发送事件到指定 topic
     fn send(
-        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>,
+        &self,
+        topic: &str,
+        event: bytes::Bytes,
+        options: Option<SendOptions>,
     ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>> {
         let sender = self.get_or_create_channel(topic);
 
@@ -101,7 +101,10 @@ impl Queue for MPMCQueue {
     /// 批量发送事件到指定 topic（高性能优化）
     /// 支持序列化的事件类型
     fn send_batch(
-        &self, topic: &str, events: Vec<bytes::Bytes>, options: Option<SendOptions>
+        &self,
+        topic: &str,
+        events: Vec<bytes::Bytes>,
+        options: Option<SendOptions>,
     ) -> Result<Vec<Result<usize, broadcast::error::SendError<bytes::Bytes>>>, ()> {
         let channel = self.get_or_create_channel(topic);
         let mut results = Vec::with_capacity(events.len());
@@ -113,11 +116,13 @@ impl Queue for MPMCQueue {
 
         for event in events {
             if apply_backpressure && !has_subscribers && channel_capacity > 0 {
-                tracing::warn!("No subscribers for topic {}, discarding event to prevent buffer overflow", topic);
+                tracing::warn!(
+                    "No subscribers for topic {}, discarding event to prevent buffer overflow",
+                    topic
+                );
                 results.push(Ok(0));
                 continue;
             }
-
 
             // todo channel支持batch不？
             match channel.send(event) {
@@ -128,7 +133,6 @@ impl Queue for MPMCQueue {
 
         Ok(results)
     }
-
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize {
@@ -151,7 +155,9 @@ impl Queue for MPMCQueue {
 }
 
 impl Default for MPMCQueue {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // todo 新建一个简单的event 代替 KLineUpdateEvent

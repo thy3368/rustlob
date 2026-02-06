@@ -20,50 +20,36 @@ pub enum BalanceError {
     /// 账户已注销
     AccountClosed { account_id: AccountId },
     /// 版本冲突（乐观锁）
-    VersionConflict { expected: u64, actual: u64 }
+    VersionConflict { expected: u64, actual: u64 },
 }
 
 impl std::fmt::Display for BalanceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BalanceError::InsufficientAvailable {
-                required,
-                available
-            } => {
-                write!(f, "Insufficient available balance: required {}, available {}", required, available)
+            BalanceError::InsufficientAvailable { required, available } => {
+                write!(
+                    f,
+                    "Insufficient available balance: required {}, available {}",
+                    required, available
+                )
             }
-            BalanceError::InsufficientFrozen {
-                required,
-                frozen
-            } => {
+            BalanceError::InsufficientFrozen { required, frozen } => {
                 write!(f, "Insufficient frozen balance: required {}, frozen {}", required, frozen)
             }
             BalanceError::Overflow => write!(f, "Balance overflow"),
-            BalanceError::AccountNotFound {
-                account_id
-            } => {
+            BalanceError::AccountNotFound { account_id } => {
                 write!(f, "Account not found: {:?}", account_id)
             }
-            BalanceError::BalanceNotFound {
-                account_id,
-                asset_id
-            } => {
+            BalanceError::BalanceNotFound { account_id, asset_id } => {
                 write!(f, "Balance not found: account {:?}, asset {:?}", account_id, asset_id)
             }
-            BalanceError::AccountFrozen {
-                account_id
-            } => {
+            BalanceError::AccountFrozen { account_id } => {
                 write!(f, "Account frozen: {:?}", account_id)
             }
-            BalanceError::AccountClosed {
-                account_id
-            } => {
+            BalanceError::AccountClosed { account_id } => {
                 write!(f, "Account closed: {:?}", account_id)
             }
-            BalanceError::VersionConflict {
-                expected,
-                actual
-            } => {
+            BalanceError::VersionConflict { expected, actual } => {
                 write!(f, "Version conflict: expected {}, actual {}", expected, actual)
             }
         }

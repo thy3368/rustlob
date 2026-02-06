@@ -1,9 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    RwLock
-};
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, LockFreeRingBuffer};
+use crate::k_line::k_line_types::{
+    KLineAgg, KLineUpdateEvent, LockFreeRingBuffer, OHLC, TimeWindow,
+};
 
 pub struct KLineAggregator {
     // 当前活跃窗口 [1s, 1m, 15m, 1h]
@@ -33,17 +33,13 @@ pub struct KLineAggregator {
     sliding_capacities: [usize; 4],
 
     // 事件处理器列表
-    event_handlers: RwLock<Vec<Box<dyn Fn(KLineUpdateEvent) + Send + Sync>>>
+    event_handlers: RwLock<Vec<Box<dyn Fn(KLineUpdateEvent) + Send + Sync>>>,
 }
 
 impl KLineAggregator {
     // 发送K线更新事件
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window,
-            ohlc,
-            is_new_window
-        };
+        let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
         let handlers = self.event_handlers.read().unwrap();
         for handler in handlers.iter() {
@@ -52,7 +48,13 @@ impl KLineAggregator {
     }
 
     // 核心更新逻辑
-    fn update_window(&self, window_idx: usize, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+    fn update_window(
+        &self,
+        window_idx: usize,
+        timestamp: u64,
+        price: f64,
+        volume: f64,
+    ) -> Result<(), String> {
         let window_size = self.window_sizes[window_idx];
         let window_start = (timestamp / window_size) * window_size;
         let window = match window_idx {
@@ -60,7 +62,7 @@ impl KLineAggregator {
             1 => TimeWindow::Minute,
             2 => TimeWindow::FifteenMin,
             3 => TimeWindow::Hour,
-            _ => return Err("Invalid window index".to_string())
+            _ => return Err("Invalid window index".to_string()),
         };
 
         let mut current_lock = self.current_windows[window_idx].write().unwrap();
@@ -99,7 +101,7 @@ impl KLineAggregator {
             1 => &self.sliding_1m,
             2 => &self.sliding_15m,
             3 => &self.sliding_1h,
-            _ => return
+            _ => return,
         };
 
         let capacity = self.sliding_capacities[window_idx];
@@ -130,7 +132,7 @@ impl KLineAggregator {
             1 => &self.history_1m,
             2 => &self.history_15m,
             3 => &self.history_1h,
-            _ => return
+            _ => return,
         };
 
         let capacity = self.history_capacities[window_idx];
@@ -149,7 +151,7 @@ impl KLineAgg for KLineAggregator {
                 RwLock::new(None), // 1s
                 RwLock::new(None), // 1m
                 RwLock::new(None), // 15m
-                RwLock::new(None)  // 1h
+                RwLock::new(None), // 1h
             ],
 
             history_1s: LockFreeRingBuffer::new(3600),
@@ -169,13 +171,13 @@ impl KLineAgg for KLineAggregator {
             history_capacities: [3600, 1440, 672, 720],
             sliding_capacities: [60, 60, 96, 168],
 
-            event_handlers: RwLock::new(Vec::new())
+            event_handlers: RwLock::new(Vec::new()),
         }
     }
     // 订阅K线更新事件
     fn subscribe<F>(&self, handler: F)
     where
-        F: Fn(KLineUpdateEvent) + Send + Sync + 'static
+        F: Fn(KLineUpdateEvent) + Send + Sync + 'static,
     {
         let mut handlers = self.event_handlers.write().unwrap();
         handlers.push(Box::new(handler));
@@ -216,7 +218,7 @@ impl KLineAgg for KLineAggregator {
             TimeWindow::Second => &self.history_1s,
             TimeWindow::Minute => &self.history_1m,
             TimeWindow::FifteenMin => &self.history_15m,
-            TimeWindow::Hour => &self.history_1h
+            TimeWindow::Hour => &self.history_1h,
         };
 
         let len = history.len();
@@ -230,7 +232,7 @@ impl KLineAgg for KLineAggregator {
             TimeWindow::Second => &self.sliding_1s,
             TimeWindow::Minute => &self.sliding_1m,
             TimeWindow::FifteenMin => &self.sliding_15m,
-            TimeWindow::Hour => &self.sliding_1h
+            TimeWindow::Hour => &self.sliding_1h,
         };
 
         let len = sliding.len().min(period);

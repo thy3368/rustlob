@@ -7,15 +7,13 @@ use serde::{Deserialize, Serialize};
 // 缓存行对齐类型，用于高性能无锁编程
 #[repr(align(64))]
 pub struct CacheAligned<T> {
-    pub value: T
+    pub value: T,
 }
 
 impl<T> CacheAligned<T> {
     #[inline(always)]
     pub fn new(value: T) -> Self {
-        CacheAligned {
-            value
-        }
+        CacheAligned { value }
     }
 }
 
@@ -29,20 +27,12 @@ pub struct OHLC {
     pub close: f64,     // 收盘价
     pub volume: f64,    // 成交量
     pub timestamp: u64, // 窗口开始时间（秒）
-    pub count: u32      // 成交笔数
+    pub count: u32,     // 成交笔数
 }
 
 impl OHLC {
     pub fn new(timestamp: u64, price: f64, volume: f64) -> Self {
-        Self {
-            open: price,
-            high: price,
-            low: price,
-            close: price,
-            volume,
-            timestamp,
-            count: 1
-        }
+        Self { open: price, high: price, low: price, close: price, volume, timestamp, count: 1 }
     }
 
     pub fn update(&mut self, price: f64, volume: f64) {
@@ -68,7 +58,7 @@ pub enum TimeWindow {
     Second,     // 1秒
     Minute,     // 1分钟
     FifteenMin, // 15分钟
-    Hour        // 1小时
+    Hour,       // 1小时
 }
 
 // SoA 数据布局（Structure of Arrays）用于 SIMD 优化
@@ -91,11 +81,7 @@ impl TradeDataSoA {
             volumes.push(v);
         }
 
-        Self {
-            timestamps,
-            prices,
-            volumes,
-        }
+        Self { timestamps, prices, volumes }
     }
 }
 
@@ -105,7 +91,7 @@ impl TimeWindow {
             TimeWindow::Second => 1,
             TimeWindow::Minute => 60,
             TimeWindow::FifteenMin => 900,
-            TimeWindow::Hour => 3600
+            TimeWindow::Hour => 3600,
         }
     }
 
@@ -114,7 +100,7 @@ impl TimeWindow {
             TimeWindow::Second => 0,
             TimeWindow::Minute => 1,
             TimeWindow::FifteenMin => 2,
-            TimeWindow::Hour => 3
+            TimeWindow::Hour => 3,
         }
     }
 }
@@ -125,7 +111,7 @@ pub struct LockFreeRingBuffer<T: Copy> {
     capacity: usize,
     head: AtomicUsize, // 写位置
     tail: AtomicUsize, // 读位置
-    mask: usize
+    mask: usize,
 }
 
 impl<T: Copy + Default> LockFreeRingBuffer<T> {
@@ -141,7 +127,7 @@ impl<T: Copy + Default> LockFreeRingBuffer<T> {
             capacity: cap,
             head: AtomicUsize::new(0),
             tail: AtomicUsize::new(0),
-            mask: cap - 1
+            mask: cap - 1,
         }
     }
 
@@ -219,11 +205,7 @@ impl<T: Copy + Default> LockFreeRingBuffer<T> {
     #[inline(always)]
     pub fn back(&self) -> Option<T> {
         let len = self.len();
-        if len == 0 {
-            None
-        } else {
-            self.get(len - 1)
-        }
+        if len == 0 { None } else { self.get(len - 1) }
     }
 
     #[inline(always)]
@@ -232,13 +214,12 @@ impl<T: Copy + Default> LockFreeRingBuffer<T> {
     }
 }
 
-
 // K线更新事件（用于内部通知）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KLineUpdateEvent {
     pub window: TimeWindow,
     pub ohlc: OHLC,
-    pub is_new_window: bool
+    pub is_new_window: bool,
 }
 
 pub trait KLineAgg {
@@ -267,7 +248,7 @@ pub trait KLineAggMut {
     where
         F: Fn(KLineUpdateEvent) + Send + Sync + 'static;
     // O(1) 复杂度处理单笔成交
-    fn process_trade(&mut  self, timestamp: u64, price: f64, volume: f64) -> Result<(), String>;
+    fn process_trade(&mut self, timestamp: u64, price: f64, volume: f64) -> Result<(), String>;
     // 批量处理成交（优化版）
     fn process_trades_batch(&mut self, trades: &[(u64, f64, f64)]) -> Result<(), String>;
     // 获取当前K线

@@ -11,8 +11,8 @@
 //! - P3: 扩展功能 (FlashClose, ReversePosition, BatchCancelOrders)
 
 use crate::domain::entity::{
-    Leverage, Margin, MarginMode, OrderId, OrderStatus, PositionId, PositionMode, PositionSide, Price, Quantity, Side,
-    TimeInForce, Trade, TraderId
+    Leverage, Margin, MarginMode, OrderId, OrderStatus, PositionId, PositionMode, PositionSide,
+    Price, Quantity, Side, TimeInForce, Trade, TraderId,
 };
 
 // ============================================================================
@@ -44,7 +44,7 @@ pub enum Command {
         /// 只减仓
         reduce_only: bool,
         /// 有效期
-        time_in_force: TimeInForce
+        time_in_force: TimeInForce,
     },
 
     /// 市价委托
@@ -58,13 +58,13 @@ pub enum Command {
         /// 持仓方向
         position_side: PositionSide,
         /// 只减仓
-        reduce_only: bool
+        reduce_only: bool,
     },
 
     /// 取消委托
     CancelOrder {
         /// 订单ID
-        order_id: OrderId
+        order_id: OrderId,
     },
 
     // ==================== P1: 风险控制 ====================
@@ -75,7 +75,7 @@ pub enum Command {
         /// 杠杆倍数
         leverage: Leverage,
         /// 持仓方向（None=双边）
-        position_side: Option<PositionSide>
+        position_side: Option<PositionSide>,
     },
 
     /// 调整保证金（仅逐仓）
@@ -85,7 +85,7 @@ pub enum Command {
         /// 仓位ID
         position_id: PositionId,
         /// 金额（正=追加，负=减少）
-        amount: i64
+        amount: i64,
     },
 
     /// 强制平仓（系统触发）
@@ -95,7 +95,7 @@ pub enum Command {
         /// 标记价格
         mark_price: Price,
         /// 破产价格
-        bankruptcy_price: Price
+        bankruptcy_price: Price,
     },
 
     /// 设置止损
@@ -107,7 +107,7 @@ pub enum Command {
         /// 触发价格
         trigger_price: Price,
         /// 平仓价格（None=市价）
-        close_price: Option<Price>
+        close_price: Option<Price>,
     },
 
     /// 设置止盈
@@ -119,7 +119,7 @@ pub enum Command {
         /// 触发价格
         trigger_price: Price,
         /// 平仓价格（None=市价）
-        close_price: Option<Price>
+        close_price: Option<Price>,
     },
 
     // ==================== P2: 高级功能 ====================
@@ -128,7 +128,7 @@ pub enum Command {
         /// 交易者ID
         trader: TraderId,
         /// 目标模式
-        mode: MarginMode
+        mode: MarginMode,
     },
 
     /// 切换持仓模式
@@ -136,7 +136,7 @@ pub enum Command {
         /// 交易者ID
         trader: TraderId,
         /// 目标模式
-        mode: PositionMode
+        mode: PositionMode,
     },
 
     /// 资金费率结算（系统触发）
@@ -146,7 +146,7 @@ pub enum Command {
         /// 费率（正=多付空）
         funding_rate: i64,
         /// 标记价格
-        mark_price: Price
+        mark_price: Price,
     },
 
     /// 自动减仓（系统触发）
@@ -158,7 +158,7 @@ pub enum Command {
         /// 减仓数量
         quantity: Quantity,
         /// 成交价格
-        price: Price
+        price: Price,
     },
 
     /// 追踪止损
@@ -170,7 +170,7 @@ pub enum Command {
         /// 回调比例（基点 1/10000）
         callback_rate: u32,
         /// 激活价格
-        activation_price: Option<Price>
+        activation_price: Option<Price>,
     },
 
     // ==================== P3: 扩展功能 ====================
@@ -179,7 +179,7 @@ pub enum Command {
         /// 交易者ID
         trader: TraderId,
         /// 仓位ID
-        position_id: PositionId
+        position_id: PositionId,
     },
 
     /// 反向开仓
@@ -191,7 +191,7 @@ pub enum Command {
         /// 新仓数量
         new_quantity: Quantity,
         /// 价格（None=市价）
-        price: Option<Price>
+        price: Option<Price>,
     },
 
     /// 批量取消
@@ -199,7 +199,7 @@ pub enum Command {
         /// 交易者ID
         trader: TraderId,
         /// 订单ID列表
-        order_ids: Vec<OrderId>
+        order_ids: Vec<OrderId>,
     },
 
     /// 全部取消
@@ -207,8 +207,8 @@ pub enum Command {
         /// 交易者ID
         trader: TraderId,
         /// 持仓方向筛选
-        position_side: Option<PositionSide>
-    }
+        position_side: Option<PositionSide>,
+    },
 }
 
 // ============================================================================
@@ -243,9 +243,8 @@ pub enum ErrorCode {
     /// 会触发强平
     WouldTriggerLiquidation = 1012,
     /// 系统错误
-    SystemError = 9999
+    SystemError = 9999,
 }
-
 
 /// 命令结果
 #[derive(Debug, Clone)]
@@ -260,7 +259,7 @@ pub enum CommandResult {
         /// 剩余数量
         remaining_quantity: Quantity,
         /// 状态
-        status: OrderStatus
+        status: OrderStatus,
     },
 
     /// 市价委托结果
@@ -272,7 +271,7 @@ pub enum CommandResult {
         /// 均价
         avg_price: Price,
         /// 成交数量
-        filled_quantity: Quantity
+        filled_quantity: Quantity,
     },
 
     /// 取消结果
@@ -282,7 +281,7 @@ pub enum CommandResult {
         /// 是否成功
         success: bool,
         /// 取消数量
-        cancelled_quantity: Quantity
+        cancelled_quantity: Quantity,
     },
 
     // ==================== P1: 风险控制结果 ====================
@@ -295,7 +294,7 @@ pub enum CommandResult {
         /// 新杠杆
         new_leverage: Leverage,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     /// 调整保证金结果
@@ -307,7 +306,7 @@ pub enum CommandResult {
         /// 新保证金
         new_margin: Margin,
         /// 新强平价
-        new_liquidation_price: Price
+        new_liquidation_price: Price,
     },
 
     /// 强平结果
@@ -319,7 +318,7 @@ pub enum CommandResult {
         /// 亏损
         loss: u64,
         /// 保险基金贡献
-        insurance_fund_contribution: u64
+        insurance_fund_contribution: u64,
     },
 
     /// 止损结果
@@ -329,7 +328,7 @@ pub enum CommandResult {
         /// 触发价
         trigger_price: Price,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     /// 止盈结果
@@ -339,7 +338,7 @@ pub enum CommandResult {
         /// 触发价
         trigger_price: Price,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     // ==================== P2: 高级功能结果 ====================
@@ -352,7 +351,7 @@ pub enum CommandResult {
         /// 新模式
         new_mode: MarginMode,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     /// 切换持仓模式结果
@@ -364,7 +363,7 @@ pub enum CommandResult {
         /// 新模式
         new_mode: PositionMode,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     /// 资金费率结算结果
@@ -374,7 +373,7 @@ pub enum CommandResult {
         /// 资金费（正=支付，负=收取）
         funding_fee: i64,
         /// 新保证金
-        new_margin: Margin
+        new_margin: Margin,
     },
 
     /// 自动减仓结果
@@ -388,7 +387,7 @@ pub enum CommandResult {
         /// 价格
         price: Price,
         /// 已实现盈亏
-        realized_pnl: i64
+        realized_pnl: i64,
     },
 
     /// 追踪止损结果
@@ -398,7 +397,7 @@ pub enum CommandResult {
         /// 当前触发价
         current_trigger_price: Price,
         /// 是否成功
-        success: bool
+        success: bool,
     },
 
     // ==================== P3: 扩展功能结果 ====================
@@ -409,7 +408,7 @@ pub enum CommandResult {
         /// 成交列表
         trades: Vec<Trade>,
         /// 已实现盈亏
-        realized_pnl: i64
+        realized_pnl: i64,
     },
 
     /// 反向开仓结果
@@ -423,7 +422,7 @@ pub enum CommandResult {
         /// 开仓成交
         open_trades: Vec<Trade>,
         /// 已实现盈亏
-        realized_pnl: i64
+        realized_pnl: i64,
     },
 
     /// 批量取消结果
@@ -431,7 +430,7 @@ pub enum CommandResult {
         /// 成功
         cancelled: Vec<OrderId>,
         /// 失败
-        failed: Vec<OrderId>
+        failed: Vec<OrderId>,
     },
 
     /// 全部取消结果
@@ -439,7 +438,7 @@ pub enum CommandResult {
         /// 取消数量
         cancelled_count: usize,
         /// 订单列表
-        order_ids: Vec<OrderId>
+        order_ids: Vec<OrderId>,
     },
 
     /// 错误
@@ -447,8 +446,8 @@ pub enum CommandResult {
         /// 错误码
         code: ErrorCode,
         /// 错误信息
-        message: String
-    }
+        message: String,
+    },
 }
 
 // ============================================================================
@@ -485,21 +484,16 @@ mod tests {
             quantity: 100,
             position_side: PositionSide::Long,
             reduce_only: false,
-            time_in_force: TimeInForce::GTC
+            time_in_force: TimeInForce::GTC,
         };
 
         match cmd {
-            Command::LimitOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::LimitOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Buy);
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(!reduce_only);
             }
-            _ => panic!("Expected LimitOrder")
+            _ => panic!("Expected LimitOrder"),
         }
     }
 
@@ -513,21 +507,16 @@ mod tests {
             quantity: 100,
             position_side: PositionSide::Long,
             reduce_only: true,
-            time_in_force: TimeInForce::GTC
+            time_in_force: TimeInForce::GTC,
         };
 
         match cmd {
-            Command::LimitOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::LimitOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Sell);
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(reduce_only);
             }
-            _ => panic!("Expected LimitOrder")
+            _ => panic!("Expected LimitOrder"),
         }
     }
 
@@ -539,21 +528,16 @@ mod tests {
             side: Side::Sell,
             quantity: 50,
             position_side: PositionSide::Short,
-            reduce_only: false
+            reduce_only: false,
         };
 
         match cmd {
-            Command::MarketOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::MarketOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Sell);
                 assert_eq!(position_side, PositionSide::Short);
                 assert!(!reduce_only);
             }
-            _ => panic!("Expected MarketOrder")
+            _ => panic!("Expected MarketOrder"),
         }
     }
 
@@ -567,16 +551,14 @@ mod tests {
             quantity: 100,
             position_side: PositionSide::Both,
             reduce_only: false,
-            time_in_force: TimeInForce::GTC
+            time_in_force: TimeInForce::GTC,
         };
 
         match cmd {
-            Command::LimitOrder {
-                position_side, ..
-            } => {
+            Command::LimitOrder { position_side, .. } => {
                 assert_eq!(position_side, PositionSide::Both);
             }
-            _ => panic!("Expected LimitOrder")
+            _ => panic!("Expected LimitOrder"),
         }
     }
 

@@ -1,5 +1,5 @@
-use crate::{OrderId, Price, Quantity, OrderSide, Decimal};
 use crate::base_types::TraderId;
+use crate::{Decimal, OrderId, OrderSide, Price, Quantity};
 
 /// 市场数据等级定义（Level 1-3）
 ///
@@ -7,7 +7,6 @@ use crate::base_types::TraderId;
 /// - Level 1: 最佳买卖价（BBO）和最新成交
 /// - Level 2: 市场深度（多档价格，不含订单详情）
 /// - Level 3: 完整订单簿（包含所有订单详情）
-
 
 // ============================================================================
 // 类型别名
@@ -22,7 +21,6 @@ pub type SymbolId = u32;
 ///
 /// 用于标识事件的顺序，确保数据一致性
 pub type SequenceNumber = u64;
-
 
 /// Level 1 市场数据 - 顶层报价（Top of Book）
 ///
@@ -53,7 +51,7 @@ pub struct Level1 {
     /// 买卖价差（Spread）
     pub spread: Option<Price>,
     /// 中间价（Mid Price）
-    pub mid_price: Option<Price>
+    pub mid_price: Option<Price>,
 }
 
 impl Default for Level1 {
@@ -69,7 +67,7 @@ impl Default for Level1 {
             last_trade_price: None,
             last_trade_quantity: Quantity::default(),
             spread: None,
-            mid_price: None
+            mid_price: None,
         }
     }
 }
@@ -78,17 +76,22 @@ impl Level1 {
     /// 创建新的 Level 1 数据快照
     #[inline]
     pub fn new(
-        symbol_id: u32, timestamp: u64, sequence: u64, best_bid: Option<Price>, best_bid_quantity: Quantity,
-        best_ask: Option<Price>, best_ask_quantity: Quantity
+        symbol_id: u32,
+        timestamp: u64,
+        sequence: u64,
+        best_bid: Option<Price>,
+        best_bid_quantity: Quantity,
+        best_ask: Option<Price>,
+        best_ask_quantity: Quantity,
     ) -> Self {
         let spread = match (best_ask, best_bid) {
             (Some(ask), Some(bid)) if ask > bid => Some(ask - bid),
-            _ => None
+            _ => None,
         };
 
         let mid_price = match (best_ask, best_bid) {
             (Some(ask), Some(bid)) => Some((ask + bid) / Decimal::from_raw(200000000)),
-            _ => None
+            _ => None,
         };
 
         Self {
@@ -102,7 +105,7 @@ impl Level1 {
             last_trade_price: None,
             last_trade_quantity: Quantity::default(),
             spread,
-            mid_price
+            mid_price,
         }
     }
 
@@ -115,7 +118,9 @@ impl Level1 {
 
     /// 检查是否有有效的买卖价
     #[inline]
-    pub fn has_valid_market(&self) -> bool { self.best_bid.is_some() && self.best_ask.is_some() }
+    pub fn has_valid_market(&self) -> bool {
+        self.best_bid.is_some() && self.best_ask.is_some()
+    }
 }
 
 /// Level 2 价格档位
@@ -128,18 +133,14 @@ pub struct PriceLevel {
     /// 该价格的总数量
     pub quantity: Quantity,
     /// 该价格的订单数量
-    pub order_count: u32
+    pub order_count: u32,
 }
 
 impl PriceLevel {
     /// 创建新的价格档位
     #[inline]
     pub fn new(price: Price, quantity: Quantity, order_count: u32) -> Self {
-        Self {
-            price,
-            quantity,
-            order_count
-        }
+        Self { price, quantity, order_count }
     }
 }
 
@@ -160,7 +161,7 @@ pub struct Level2<const MAX_LEVELS: usize = 10> {
     /// 卖方有效档位数
     pub ask_count: usize,
     /// 包含 Level 1 数据
-    pub level1: Level1
+    pub level1: Level1,
 }
 
 impl<const MAX_LEVELS: usize> Default for Level2<MAX_LEVELS> {
@@ -170,7 +171,7 @@ impl<const MAX_LEVELS: usize> Default for Level2<MAX_LEVELS> {
             bid_count: 0,
             asks: [None; MAX_LEVELS],
             ask_count: 0,
-            level1: Level1::default()
+            level1: Level1::default(),
         }
     }
 }
@@ -178,7 +179,9 @@ impl<const MAX_LEVELS: usize> Default for Level2<MAX_LEVELS> {
 impl<const MAX_LEVELS: usize> Level2<MAX_LEVELS> {
     /// 创建新的 Level 2 数据
     #[inline]
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// 添加买方价格档位
     #[inline]
@@ -237,27 +240,27 @@ pub struct Level3Order {
     /// 数量
     pub quantity: Quantity,
     /// 未成交数量
-    pub unfilled_quantity: Quantity
+    pub unfilled_quantity: Quantity,
 }
 
 impl Level3Order {
     /// 创建新的 Level 3 订单
     #[inline]
     pub fn new(
-        order_id: OrderId, trader_id: TraderId, price: Price, quantity: Quantity, unfilled_quantity: Quantity
+        order_id: OrderId,
+        trader_id: TraderId,
+        price: Price,
+        quantity: Quantity,
+        unfilled_quantity: Quantity,
     ) -> Self {
-        Self {
-            order_id,
-            trader_id,
-            price,
-            quantity,
-            unfilled_quantity
-        }
+        Self { order_id, trader_id, price, quantity, unfilled_quantity }
     }
 
     /// 检查订单是否仍然活跃
     #[inline]
-    pub fn is_active(&self) -> bool { self.unfilled_quantity > Quantity::default() }
+    pub fn is_active(&self) -> bool {
+        self.unfilled_quantity > Quantity::default()
+    }
 }
 
 /// Level 3 市场数据 - 完整订单簿（Full Order Book）
@@ -273,23 +276,21 @@ pub struct Level3 {
     /// 所有卖单（按价格-时间优先排序）
     pub asks: Vec<Level3Order>,
     /// 包含 Level 2 数据（可聚合生成）
-    pub level2: Level2<10>
+    pub level2: Level2<10>,
 }
 
 impl Default for Level3 {
     fn default() -> Self {
-        Self {
-            bids: Vec::new(),
-            asks: Vec::new(),
-            level2: Level2::default()
-        }
+        Self { bids: Vec::new(), asks: Vec::new(), level2: Level2::default() }
     }
 }
 
 impl Level3 {
     /// 创建新的 Level 3 数据
     #[inline]
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// 预分配容量（避免运行时扩容）
     #[inline]
@@ -297,17 +298,21 @@ impl Level3 {
         Self {
             bids: Vec::with_capacity(capacity),
             asks: Vec::with_capacity(capacity),
-            level2: Level2::default()
+            level2: Level2::default(),
         }
     }
 
     /// 添加买单
     #[inline]
-    pub fn add_bid(&mut self, order: Level3Order) { self.bids.push(order); }
+    pub fn add_bid(&mut self, order: Level3Order) {
+        self.bids.push(order);
+    }
 
     /// 添加卖单
     #[inline]
-    pub fn add_ask(&mut self, order: Level3Order) { self.asks.push(order); }
+    pub fn add_ask(&mut self, order: Level3Order) {
+        self.asks.push(order);
+    }
 
     /// 获取指定订单ID的订单
     #[inline]
@@ -340,10 +345,10 @@ impl Level3 {
     /// 统计活跃订单数
     #[inline]
     pub fn active_order_count(&self) -> usize {
-        self.bids.iter().filter(|o| o.is_active()).count() + self.asks.iter().filter(|o| o.is_active()).count()
+        self.bids.iter().filter(|o| o.is_active()).count()
+            + self.asks.iter().filter(|o| o.is_active()).count()
     }
 }
-
 
 // ============================================================================
 // 增量数据事件定义
@@ -357,7 +362,7 @@ pub enum OrderChangeType {
     /// 修改订单（数量变化）
     Modify,
     /// 删除订单
-    Delete
+    Delete,
 }
 
 /// 订单簿增量变更事件
@@ -380,7 +385,7 @@ pub struct OrderDelta {
     /// 数量（新数量或变化量）
     pub quantity: Quantity,
     /// 交易者ID（可选）
-    pub trader_id: Option<TraderId>
+    pub trader_id: Option<TraderId>,
 }
 
 /// 成交事件
@@ -403,7 +408,7 @@ pub struct TradeEvent {
     /// 成交数量
     pub quantity: Quantity,
     /// 主动方（买方或卖方）
-    pub aggressor_side: OrderSide
+    pub aggressor_side: OrderSide,
 }
 
 /// 最优买卖价变更事件
@@ -422,7 +427,7 @@ pub struct BboChangeEvent {
     /// 最优卖价
     pub best_ask: Option<Price>,
     /// 最优卖价数量
-    pub best_ask_quantity: Quantity
+    pub best_ask_quantity: Quantity,
 }
 
 /// 市场数据增量事件（统一枚举）
@@ -433,7 +438,7 @@ pub enum MarketDataDelta {
     /// 成交事件
     Trade(TradeEvent),
     /// 最优买卖价变更
-    BboChange(BboChangeEvent)
+    BboChange(BboChangeEvent),
 }
 
 #[cfg(test)]
@@ -443,13 +448,13 @@ mod tests {
     #[test]
     fn test_level1_creation() {
         let level1 = Level1::new(
-            1,                                    // symbol_id
-            1000,                                 // timestamp
-            1,                                    // sequence
-            Some(Price::from_raw(50000)),         // best_bid
-            Quantity::from_raw(100),              // best_bid_quantity
-            Some(Price::from_raw(50100)),         // best_ask
-            Quantity::from_raw(200)               // best_ask_quantity
+            1,                            // symbol_id
+            1000,                         // timestamp
+            1,                            // sequence
+            Some(Price::from_raw(50000)), // best_bid
+            Quantity::from_raw(100),      // best_bid_quantity
+            Some(Price::from_raw(50100)), // best_ask
+            Quantity::from_raw(200),      // best_ask_quantity
         );
 
         assert_eq!(level1.symbol_id, 1);

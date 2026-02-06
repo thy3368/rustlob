@@ -1,5 +1,6 @@
 use std::sync::atomic::Ordering;
 use std::thread;
+
 use actix_rt::{Arbiter, ArbiterHandle, System};
 use tokio::sync::mpsc;
 
@@ -27,9 +28,7 @@ pub fn new() -> Arbiter {
                 HANDLE.with(|cell| *cell.borrow_mut() = Some(hnd.clone()));
 
                 // register arbiter
-                let _ = System::current()
-                    .tx()
-                    .send(SystemCommand::RegisterArbiter(arb_id, hnd));
+                let _ = System::current().tx().send(SystemCommand::RegisterArbiter(arb_id, hnd));
 
                 ready_tx.send(()).unwrap();
 
@@ -37,9 +36,7 @@ pub fn new() -> Arbiter {
                 tokio_uring::start(ArbiterRunner { rx });
 
                 // deregister arbiter
-                let _ = System::current()
-                    .tx()
-                    .send(SystemCommand::DeregisterArbiter(arb_id));
+                let _ = System::current().tx().send(SystemCommand::DeregisterArbiter(arb_id));
             }
         })
         .unwrap_or_else(|err| panic!("Cannot spawn Arbiter's thread: {name:?}: {err:?}"));

@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLVMAnalysisResult {
@@ -84,11 +85,7 @@ impl LLVMAnalyzer {
         // 查找生成的.ll文件
         let ll_files: Vec<_> = fs::read_dir(output_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .map_or(false, |ext| ext == "ll")
-            })
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "ll"))
             .collect();
 
         if ll_files.is_empty() {
@@ -96,8 +93,7 @@ impl LLVMAnalyzer {
         }
 
         let ll_file = ll_files[0].path();
-        let content = fs::read_to_string(&ll_file)
-            .context("读取LLVM IR文件失败")?;
+        let content = fs::read_to_string(&ll_file).context("读取LLVM IR文件失败")?;
 
         // 分析IR内容
         let vectorization = self.analyze_vectorization(&content);
@@ -105,25 +101,16 @@ impl LLVMAnalyzer {
         let loop_optimizations = self.analyze_loops(&content);
         let optimization_remarks = self.extract_remarks(&content);
 
-        Ok(LLVMAnalysisResult {
-            vectorization,
-            inlining,
-            loop_optimizations,
-            optimization_remarks,
-        })
+        Ok(LLVMAnalysisResult { vectorization, inlining, loop_optimizations, optimization_remarks })
     }
 
     fn analyze_vectorization(&self, ir_content: &str) -> VectorizationAnalysis {
         let vectorized = ir_content.matches("vector.body").count();
-        let total_loops = ir_content.matches("for.body").count()
-            + ir_content.matches("while.body").count();
+        let total_loops =
+            ir_content.matches("for.body").count() + ir_content.matches("while.body").count();
 
         let missed = total_loops.saturating_sub(vectorized);
-        let rate = if total_loops > 0 {
-            vectorized as f32 / total_loops as f32
-        } else {
-            0.0
-        };
+        let rate = if total_loops > 0 { vectorized as f32 / total_loops as f32 } else { 0.0 };
 
         let mut barriers = Vec::new();
         if ir_content.contains("store volatile") || ir_content.contains("load volatile") {
@@ -150,17 +137,9 @@ impl LLVMAnalyzer {
         let inlined = total_defines.saturating_sub(external_calls / 2);
         let not_inlined = external_calls;
 
-        let rate = if total_defines > 0 {
-            inlined as f32 / total_defines as f32
-        } else {
-            0.0
-        };
+        let rate = if total_defines > 0 { inlined as f32 / total_defines as f32 } else { 0.0 };
 
-        InliningAnalysis {
-            inlined_functions: inlined,
-            not_inlined,
-            inlining_rate: rate,
-        }
+        InliningAnalysis { inlined_functions: inlined, not_inlined, inlining_rate: rate }
     }
 
     fn analyze_loops(&self, ir_content: &str) -> LoopOptimizations {

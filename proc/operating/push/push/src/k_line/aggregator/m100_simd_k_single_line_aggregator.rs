@@ -1,6 +1,7 @@
-use std::simd::{f64x8, num::SimdFloat};
+use std::simd::f64x8;
+use std::simd::num::SimdFloat;
 
-use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, TimeWindow, OHLC};
+use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, OHLC, TimeWindow};
 
 // M100SimdKSingleLineAggregator - 单时间窗口的 SIMD 优化 K 线聚合器
 // 设计用于处理单个特定时间窗口的 K 线聚合
@@ -42,10 +43,10 @@ impl M100SimdKSingleLineAggregator {
     #[inline(always)]
     pub fn new(window: TimeWindow) -> Self {
         let (window_size, history_capacity, sliding_capacity) = match window {
-            TimeWindow::Second => (1, 3600, 60),       // 1秒窗口，保留1小时历史
-            TimeWindow::Minute => (60, 1440, 60),     // 1分钟窗口，保留24小时历史
-            TimeWindow::FifteenMin => (900, 672, 96),  // 15分钟窗口，保留7天历史
-            TimeWindow::Hour => (3600, 720, 168),     // 1小时窗口，保留30天历史
+            TimeWindow::Second => (1, 3600, 60),  // 1秒窗口，保留1小时历史
+            TimeWindow::Minute => (60, 1440, 60), // 1分钟窗口，保留24小时历史
+            TimeWindow::FifteenMin => (900, 672, 96), // 15分钟窗口，保留7天历史
+            TimeWindow::Hour => (3600, 720, 168), // 1小时窗口，保留30天历史
         };
 
         Self {
@@ -67,11 +68,7 @@ impl M100SimdKSingleLineAggregator {
 
     #[inline(always)]
     fn send_event(&self, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window: self.window_type,
-            ohlc,
-            is_new_window,
-        };
+        let event = KLineUpdateEvent { window: self.window_type, ohlc, is_new_window };
 
         let handler_count = self.event_handler_count;
         let handlers = &self.event_handlers;
@@ -146,7 +143,12 @@ impl M100SimdKSingleLineAggregator {
     }
 
     #[inline(always)]
-    pub fn process_with_simd(&mut self, timestamps: &[u64], prices: &[f64], volumes: &[f64]) -> Result<(), String> {
+    pub fn process_with_simd(
+        &mut self,
+        timestamps: &[u64],
+        prices: &[f64],
+        volumes: &[f64],
+    ) -> Result<(), String> {
         let len = timestamps.len();
         let chunks = len / 8;
         let remainder = len % 8;
@@ -403,11 +405,7 @@ impl KLineAggMut for M100SimdKSingleLineAggregator {
 
     #[inline(always)]
     fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
-        if window == self.window_type {
-            self.current_window
-        } else {
-            None
-        }
+        if window == self.window_type { self.current_window } else { None }
     }
 
     #[inline(always)]

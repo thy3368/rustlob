@@ -11,10 +11,10 @@ pub struct OrderBook {
 
 // ❌ 问题2: 热路径中的堆分配
 pub fn process_orders(orders: &[Order]) -> Vec<Order> {
-    let mut results = Vec::new();  // 每次调用都分配
+    let mut results = Vec::new(); // 每次调用都分配
 
     for order in orders {
-        let processed = order.clone();  // ❌ 不必要的克隆
+        let processed = order.clone(); // ❌ 不必要的克隆
         results.push(processed);
     }
 
@@ -26,7 +26,7 @@ pub fn generate_report(items: &[String]) -> String {
     let mut report = String::new();
 
     for item in items {
-        report = report + item + "\n";  // ❌ 每次都重新分配
+        report = report + item + "\n"; // ❌ 每次都重新分配
     }
 
     report
@@ -55,7 +55,7 @@ pub fn multiply_arrays(a: &[f64], b: &[f64]) -> Vec<f64> {
     let mut result = Vec::with_capacity(a.len());
 
     for i in 0..a.len() {
-        result.push(a[i] * b[i]);  // 可以向量化
+        result.push(a[i] * b[i]); // 可以向量化
     }
 
     result
@@ -135,10 +135,7 @@ pub fn get_price_optimized(prices: &HashMap<String, f64>, symbol: &str) -> Optio
 pub fn multiply_arrays_optimized(a: &[f64], b: &[f64]) -> Vec<f64> {
     assert_eq!(a.len(), b.len());
 
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| x * y)
-        .collect()
+    a.iter().zip(b.iter()).map(|(x, y)| x * y).collect()
 }
 
 fn main() {}

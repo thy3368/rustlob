@@ -1,10 +1,16 @@
 use base_types::cqrs::cqrs_types::CmdResp;
-use crate::proc::usds_m_future::behavior::market_data_behavior::{UsdsMFutureMarketDataBehavior, UsdsMFutureMarketDataCmdAny, UsdsMFutureMarketDataCmdError, UsdsMFutureMarketDataRes};
 
-pub struct UsdsMFutureMarketDataBehaviorImpl{}
-impl UsdsMFutureMarketDataBehavior for UsdsMFutureMarketDataBehaviorImpl{
-    fn handle(&mut self, cmd: UsdsMFutureMarketDataCmdAny) -> Result<CmdResp<UsdsMFutureMarketDataRes>, UsdsMFutureMarketDataCmdError> {
-       
+use crate::proc::usds_m_future::behavior::market_data_behavior::{
+    UsdsMFutureMarketDataBehavior, UsdsMFutureMarketDataCmdAny, UsdsMFutureMarketDataCmdError,
+    UsdsMFutureMarketDataRes,
+};
+
+pub struct UsdsMFutureMarketDataBehaviorImpl {}
+impl UsdsMFutureMarketDataBehavior for UsdsMFutureMarketDataBehaviorImpl {
+    fn handle(
+        &mut self,
+        cmd: UsdsMFutureMarketDataCmdAny,
+    ) -> Result<CmdResp<UsdsMFutureMarketDataRes>, UsdsMFutureMarketDataCmdError> {
         match cmd {
             UsdsMFutureMarketDataCmdAny::TestConnectivity(_) => {}
             UsdsMFutureMarketDataCmdAny::CheckServerTime(_) => {}

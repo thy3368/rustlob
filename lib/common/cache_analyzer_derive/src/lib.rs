@@ -1,8 +1,7 @@
+use cache_analyzer_types::validation::{CompileTimeValidation, validate_cache_friendly};
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
-
-use cache_analyzer_types::validation::{validate_cache_friendly, CompileTimeValidation};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 /// CacheAnalyzer 派生宏 - 分析结构体缓存友好性
 ///
@@ -128,23 +127,27 @@ fn impl_cache_analyzer(ast: &DeriveInput) -> proc_macro2::TokenStream {
     }
 
     // 生成字段分析代码
-    let field_analyses: Vec<_> = fields_info.iter().enumerate().map(|(_field_idx, (_idx, field_name, field_type, is_hot))| {
-        let field_name_str = field_name.to_string();
+    let field_analyses: Vec<_> = fields_info
+        .iter()
+        .enumerate()
+        .map(|(_field_idx, (_idx, field_name, field_type, is_hot))| {
+            let field_name_str = field_name.to_string();
 
-        quote! {
-            cache_analyzer_types::FieldAnalysis {
-                name: #field_name_str.to_string(),
-                offset: unsafe {
-                    let base = core::ptr::null::<#name>();
-                    let field = core::ptr::addr_of!((*base).#field_name);
-                    (field as usize).wrapping_sub(base as usize)
-                },
-                size: core::mem::size_of::<#field_type>(),
-                alignment: core::mem::align_of::<#field_type>(),
-                is_hot: #is_hot,
+            quote! {
+                cache_analyzer_types::FieldAnalysis {
+                    name: #field_name_str.to_string(),
+                    offset: unsafe {
+                        let base = core::ptr::null::<#name>();
+                        let field = core::ptr::addr_of!((*base).#field_name);
+                        (field as usize).wrapping_sub(base as usize)
+                    },
+                    size: core::mem::size_of::<#field_type>(),
+                    alignment: core::mem::align_of::<#field_type>(),
+                    is_hot: #is_hot,
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     let field_count_lit = syn::Index::from(fields_info.len());
 

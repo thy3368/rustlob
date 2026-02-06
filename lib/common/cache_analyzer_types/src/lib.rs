@@ -87,18 +87,18 @@ impl CacheAnalysisReport {
     }
 
     /// 检查当前顺序是否最优
-    pub fn is_order_optimal(current: &[usize], optimal: &[usize], fields: &[FieldAnalysis]) -> bool {
+    pub fn is_order_optimal(
+        current: &[usize],
+        optimal: &[usize],
+        fields: &[FieldAnalysis],
+    ) -> bool {
         if current.len() != optimal.len() {
             return false;
         }
 
         // 比较排序后的字段大小序列
-        let mut current_sizes: Vec<usize> = current.iter()
-            .map(|&idx| fields[idx].size)
-            .collect();
-        let mut optimal_sizes: Vec<usize> = optimal.iter()
-            .map(|&idx| fields[idx].size)
-            .collect();
+        let mut current_sizes: Vec<usize> = current.iter().map(|&idx| fields[idx].size).collect();
+        let mut optimal_sizes: Vec<usize> = optimal.iter().map(|&idx| fields[idx].size).collect();
 
         current_sizes.sort_by(|a, b| b.cmp(a));
         optimal_sizes.sort_by(|a, b| b.cmp(a));

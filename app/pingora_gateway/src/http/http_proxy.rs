@@ -1,25 +1,21 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pingora::{
-    apps::ServerApp,
-    connectors::TransportConnector,
-    protocols::Stream,
-    server::ShutdownWatch,
-    upstreams::peer::{HttpPeer, Peer}
-};
+use pingora::apps::ServerApp;
+use pingora::connectors::TransportConnector;
+use pingora::protocols::Stream;
+use pingora::server::ShutdownWatch;
+use pingora::upstreams::peer::{HttpPeer, Peer};
 use pingora_proxy::http_proxy_service;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    select
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::select;
 use tracing::{debug, info, warn};
 
 use super::router::{UserIdExtractor, UserRouteConfig, UserRouter};
 
 enum DuplexEvent {
     DownstreamRead(usize),
-    UpstreamRead(usize)
+    UpstreamRead(usize),
 }
 
 /// Pingora HTTP 代理服务器应用
@@ -27,7 +23,7 @@ pub struct HttpProxyApp {
     client_connector: TransportConnector,
     proxy_to: HttpPeer,
     /// 用户路由器（用于 /api/spot/v2/ 和 /api/spot/user/data）
-    user_router: Arc<UserRouter>
+    user_router: Arc<UserRouter>,
 }
 
 // todo 打印转发数据
@@ -37,28 +33,23 @@ impl HttpProxyApp {
         let user_route_config = UserRouteConfig::default();
         let user_router = Arc::new(UserRouter::new(user_route_config));
 
-        HttpProxyApp {
-            client_connector: TransportConnector::new(None),
-            proxy_to,
-            user_router
-        }
+        HttpProxyApp { client_connector: TransportConnector::new(None), proxy_to, user_router }
     }
 
     /// 创建带自定义路由配置的代理服务器应用实例
     pub fn with_router(proxy_to: HttpPeer, user_route_config: UserRouteConfig) -> Self {
         let user_router = Arc::new(UserRouter::new(user_route_config));
 
-        HttpProxyApp {
-            client_connector: TransportConnector::new(None),
-            proxy_to,
-            user_router
-        }
+        HttpProxyApp { client_connector: TransportConnector::new(None), proxy_to, user_router }
     }
 
     /// 解析 HTTP 请求并提取路径和用户ID
     ///
     /// 返回：(请求路径, 用户ID, 完整请求数据)
-    async fn parse_http_request(&self, server_session: &mut Stream) -> Option<(String, Option<String>, Vec<u8>)> {
+    async fn parse_http_request(
+        &self,
+        server_session: &mut Stream,
+    ) -> Option<(String, Option<String>, Vec<u8>)> {
         let mut buffer = Vec::with_capacity(8192);
         let mut temp_buf = [0u8; 1024];
 
@@ -70,7 +61,9 @@ impl HttpProxyApp {
                     buffer.extend_from_slice(&temp_buf[..n]);
 
                     // 检查是否读取到完整的请求头（\r\n\r\n）
-                    if let Some(header_end) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
+                    if let Some(header_end) =
+                        buffer.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
                         // 解析请求行
                         let header_str = String::from_utf8_lossy(&buffer[..header_end]);
                         let first_line = header_str.lines().next()?;
@@ -93,7 +86,8 @@ impl HttpProxyApp {
                         // 如果是 POST 请求，尝试从请求体提取用户ID
                         if user_id.is_none() && parts[0] == "POST" {
                             // 检查 Content-Length
-                            if let Some(content_length) = Self::extract_content_length(&header_str) {
+                            if let Some(content_length) = Self::extract_content_length(&header_str)
+                            {
                                 let header_size = header_end + 4;
                                 let body_in_buffer = buffer.len() - header_size;
 
@@ -183,7 +177,11 @@ impl HttpProxyApp {
 
 #[async_trait]
 impl ServerApp for HttpProxyApp {
-    async fn process_new(self: &Arc<Self>, mut io: Stream, _shutdown: &ShutdownWatch) -> Option<Stream> {
+    async fn process_new(
+        self: &Arc<Self>,
+        mut io: Stream,
+        _shutdown: &ShutdownWatch,
+    ) -> Option<Stream> {
         // 解析 HTTP 请求，提取路径和用户ID
         let (path, user_id_opt, request_data) = match self.parse_http_request(&mut io).await {
             Some(data) => data,
@@ -245,11 +243,15 @@ impl HttpProxyServer {
     /// 启动代理服务器
 
     pub fn start() -> ! {
-        use pingora::server::{configuration::Opt, Server};
-        use pingora_core::{listeners::Listeners, services::listening::Service};
+        use pingora::server::Server;
+        use pingora::server::configuration::Opt;
+        use pingora_core::listeners::Listeners;
+        use pingora_core::services::listening::Service;
 
         // 初始化日志系统
-        let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::INFO).finish();
+        let subscriber = tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::Level::INFO)
+            .finish();
         tracing::subscriber::set_global_default(subscriber).unwrap();
 
         let opt = Some(Opt::parse_args());
@@ -265,8 +267,8 @@ impl HttpProxyServer {
             Listeners::tcp("0.0.0.0:8080"),
             HttpProxyApp::with_router(
                 HttpPeer::new("127.0.0.1:3001", false, "localhost".to_string()),
-                user_route_config.clone()
-            )
+                user_route_config.clone(),
+            ),
         );
 
         info!("🚀 Pingora HTTP proxy started at http://localhost:8080");
@@ -303,7 +305,8 @@ mod tests {
 
     #[test]
     fn test_proxy_app_creation() {
-        let proxy_app = HttpProxyApp::new(HttpPeer::new("127.0.0.1:3001", false, "localhost".to_string()));
+        let proxy_app =
+            HttpProxyApp::new(HttpPeer::new("127.0.0.1:3001", false, "localhost".to_string()));
         assert!(true, "Proxy app created successfully");
     }
 }

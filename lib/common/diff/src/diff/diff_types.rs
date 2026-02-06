@@ -1,4 +1,5 @@
-use std::{borrow::Cow, fmt::Debug};
+use std::borrow::Cow;
+use std::fmt::Debug;
 
 use immutable_derive::immutable;
 // ============================================================================
@@ -23,7 +24,7 @@ pub enum EntityError {
     /// 无法在已删除的实体上回放
     CannotReplayOnDeleted,
     /// 自定义错误
-    Custom(String)
+    Custom(String),
 }
 
 impl std::fmt::Display for EntityError {
@@ -31,27 +32,18 @@ impl std::fmt::Display for EntityError {
         match self {
             EntityError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
             EntityError::DeserializationError(msg) => write!(f, "Deserialization error: {}", msg),
-            EntityError::EntityIdMismatch {
-                expected,
-                actual
-            } => {
+            EntityError::EntityIdMismatch { expected, actual } => {
                 write!(f, "Entity ID mismatch: expected {}, got {}", expected, actual)
             }
-            EntityError::EntityTypeMismatch {
-                expected,
-                actual
-            } => {
+            EntityError::EntityTypeMismatch { expected, actual } => {
                 write!(f, "Entity type mismatch: expected {}, got {}", expected, actual)
             }
-            EntityError::FieldParseError {
-                field,
-                reason
-            } => {
+            EntityError::FieldParseError { field, reason } => {
                 write!(f, "Failed to parse field '{}': {}", field, reason)
             }
             EntityError::NoChangesDetected => write!(f, "No changes detected"),
             EntityError::CannotReplayOnDeleted => write!(f, "Cannot replay on deleted entity"),
-            EntityError::Custom(msg) => write!(f, "{}", msg)
+            EntityError::Custom(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -60,11 +52,15 @@ impl std::error::Error for EntityError {}
 
 // 便于从 String 转换为 EntityError
 impl From<String> for EntityError {
-    fn from(s: String) -> Self { EntityError::Custom(s) }
+    fn from(s: String) -> Self {
+        EntityError::Custom(s)
+    }
 }
 
 impl From<&str> for EntityError {
-    fn from(s: &str) -> Self { EntityError::Custom(s.to_string()) }
+    fn from(s: &str) -> Self {
+        EntityError::Custom(s.to_string())
+    }
 }
 
 // ============================================================================
@@ -79,7 +75,7 @@ pub enum ChangeType {
     /// 实体更新（包含变更字段）
     Updated { changed_fields: Vec<FieldChange> },
     /// 实体删除
-    Deleted
+    Deleted,
 }
 
 /// 字段变更记录（零拷贝优化）
@@ -90,30 +86,32 @@ pub struct FieldChange {
     /// 旧值（序列化为字符串）
     pub old_value: String,
     /// 新值（序列化为字符串）
-    pub new_value: String
+    pub new_value: String,
 }
 
 impl FieldChange {
     /// 创建字段变更记录
     #[inline]
     pub fn new(
-        field_name: impl Into<Cow<'static, str>>, old_value: impl Into<String>, new_value: impl Into<String>
+        field_name: impl Into<Cow<'static, str>>,
+        old_value: impl Into<String>,
+        new_value: impl Into<String>,
     ) -> Self {
         Self {
             field_name: field_name.into(),
             old_value: old_value.into(),
-            new_value: new_value.into()
+            new_value: new_value.into(),
         }
     }
 
     /// 创建字段变更记录（静态字段名，零分配）
     #[inline]
-    pub const fn new_static(field_name: &'static str, old_value: String, new_value: String) -> Self {
-        Self {
-            field_name: Cow::Borrowed(field_name),
-            old_value,
-            new_value
-        }
+    pub const fn new_static(
+        field_name: &'static str,
+        old_value: String,
+        new_value: String,
+    ) -> Self {
+        Self { field_name: Cow::Borrowed(field_name), old_value, new_value }
     }
 }
 
@@ -124,30 +122,28 @@ pub struct FieldSchema {
     /// 实体类型名称
     pub field_type: String,
     /// 变更类型
-    pub default_value: String
+    pub default_value: String,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TableSchema {
     /// 实体唯一标识符
     pub table_name: String,
-    pub fields: Vec<FieldSchema>
+    pub fields: Vec<FieldSchema>,
 }
 
 impl TableSchema {
     /// 创建新的表结构定义
     #[inline]
     pub fn new(table_name: impl Into<String>) -> Self {
-        Self {
-            table_name: table_name.into(),
-            fields: Vec::new()
-        }
+        Self { table_name: table_name.into(), fields: Vec::new() }
     }
 
     /// 查找指定名称的字段
     #[inline]
-    pub fn find_field(&self, name: &str) -> Option<&FieldSchema> { self.fields.iter().find(|f| f.field_name == name) }
+    pub fn find_field(&self, name: &str) -> Option<&FieldSchema> {
+        self.fields.iter().find(|f| f.field_name == name)
+    }
 
     /// 查找并修改指定名称的字段（可变引用）
     #[inline]
@@ -181,15 +177,21 @@ impl TableSchema {
 
     /// 获取字段数量
     #[inline]
-    pub fn field_count(&self) -> usize { self.fields.len() }
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
 
     /// 检查是否包含指定字段
     #[inline]
-    pub fn has_field(&self, name: &str) -> bool { self.fields.iter().any(|f| f.field_name == name) }
+    pub fn has_field(&self, name: &str) -> bool {
+        self.fields.iter().any(|f| f.field_name == name)
+    }
 
     /// 获取所有字段名称
     #[inline]
-    pub fn field_names(&self) -> Vec<&str> { self.fields.iter().map(|f| f.field_name.as_str()).collect() }
+    pub fn field_names(&self) -> Vec<&str> {
+        self.fields.iter().map(|f| f.field_name.as_str()).collect()
+    }
 
     /// 验证表结构的完整性
     ///
@@ -224,30 +226,34 @@ impl TableSchema {
 
     /// 清空所有字段
     #[inline]
-    pub fn clear(&mut self) { self.fields.clear(); }
+    pub fn clear(&mut self) {
+        self.fields.clear();
+    }
 
     /// 获取表结构的摘要信息
     #[inline]
     pub fn summary(&self) -> String {
-        let field_list =
-            self.fields.iter().map(|f| format!("{}({})", f.field_name, f.field_type)).collect::<Vec<_>>().join(", ");
+        let field_list = self
+            .fields
+            .iter()
+            .map(|f| format!("{}({})", f.field_name, f.field_type))
+            .collect::<Vec<_>>()
+            .join(", ");
         format!("Table '{}' with {} fields: [{}]", self.table_name, self.fields.len(), field_list)
     }
 }
 
 impl Default for TableSchema {
     fn default() -> Self {
-        Self {
-            table_name: String::new(),
-            fields: Vec::new()
-        }
+        Self { table_name: String::new(), fields: Vec::new() }
     }
 }
 
 impl std::fmt::Display for TableSchema {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.summary()) }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.summary())
+    }
 }
-
 
 /// 变更日志条目
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -262,25 +268,30 @@ pub struct ChangeLogEntry {
     /// 变更时间戳（纳秒）
     timestamp: u64,
     /// 变更序列号（用于排序）
-    sequence: u64
+    sequence: u64,
 }
-
 
 impl Entity for ChangeLogEntry {
     type Id = String;
 
-    fn entity_id(&self) -> Self::Id { todo!() }
+    fn entity_id(&self) -> Self::Id {
+        todo!()
+    }
 
     fn entity_type() -> &'static str
     where
-        Self: Sized
+        Self: Sized,
     {
         todo!()
     }
 
-    fn diff(&self, other: &Self) -> Vec<FieldChange> { todo!() }
+    fn diff(&self, other: &Self) -> Vec<FieldChange> {
+        todo!()
+    }
 
-    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> { todo!() }
+    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> {
+        todo!()
+    }
 }
 
 // ============================================================================
@@ -301,20 +312,24 @@ pub struct EntitySnapshot {
     /// 快照序列号
     pub sequence: u64,
     /// 序列化后的实体数据
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl EntitySnapshot {
     /// 创建实体快照
     pub fn new(
-        entity_id: impl Into<String>, entity_type: impl Into<String>, timestamp: u64, sequence: u64, data: Vec<u8>
+        entity_id: impl Into<String>,
+        entity_type: impl Into<String>,
+        timestamp: u64,
+        sequence: u64,
+        data: Vec<u8>,
     ) -> Self {
         Self {
             entity_id: entity_id.into(),
             entity_type: entity_type.into(),
             timestamp,
             sequence,
-            data
+            data,
         }
     }
 }
@@ -336,7 +351,8 @@ pub struct SystemTimestampProvider;
 impl TimestampProvider for SystemTimestampProvider {
     #[inline]
     fn now(&self) -> u64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            as u64
     }
 }
 
@@ -346,7 +362,7 @@ impl TimestampProvider for SystemTimestampProvider {
 #[derive(Debug, Default)]
 pub struct CachedTimestampProvider {
     cache_nanos: std::sync::atomic::AtomicU64,
-    last_update: std::sync::atomic::AtomicU64
+    last_update: std::sync::atomic::AtomicU64,
 }
 
 impl CachedTimestampProvider {
@@ -354,7 +370,7 @@ impl CachedTimestampProvider {
     pub fn new() -> Self {
         Self {
             cache_nanos: std::sync::atomic::AtomicU64::new(0),
-            last_update: std::sync::atomic::AtomicU64::new(0)
+            last_update: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -365,7 +381,9 @@ impl CachedTimestampProvider {
 impl TimestampProvider for CachedTimestampProvider {
     #[inline]
     fn now(&self) -> u64 {
-        let current = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64;
+        let current =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+                as u64;
 
         let last_update = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
 
@@ -401,34 +419,34 @@ impl SequenceGenerator for DefaultSequenceGenerator {
 /// 原子递增序列号生成器（线程安全）
 #[derive(Debug, Default)]
 pub struct AtomicSequenceGenerator {
-    counter: std::sync::atomic::AtomicU64
+    counter: std::sync::atomic::AtomicU64,
 }
 
 impl AtomicSequenceGenerator {
     /// 创建新的原子序列号生成器
     #[inline]
     pub fn new() -> Self {
-        Self {
-            counter: std::sync::atomic::AtomicU64::new(0)
-        }
+        Self { counter: std::sync::atomic::AtomicU64::new(0) }
     }
 
     /// 从指定值开始
     #[inline]
     pub fn with_start(start: u64) -> Self {
-        Self {
-            counter: std::sync::atomic::AtomicU64::new(start)
-        }
+        Self { counter: std::sync::atomic::AtomicU64::new(start) }
     }
 
     /// 批量生成序列号（低延迟优化）
     #[inline]
-    pub fn next_batch(&self, count: u64) -> u64 { self.counter.fetch_add(count, std::sync::atomic::Ordering::Relaxed) }
+    pub fn next_batch(&self, count: u64) -> u64 {
+        self.counter.fetch_add(count, std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 impl SequenceGenerator for AtomicSequenceGenerator {
     #[inline]
-    fn next(&self) -> u64 { self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) }
+    fn next(&self) -> u64 {
+        self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 // ============================================================================
@@ -487,7 +505,6 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     where
         Self: Sized;
 
-
     // ============================================================================
     // Auto Tracking Methods
     // ============================================================================
@@ -501,7 +518,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// ```
     fn track_create(&self) -> Result<ChangeLogEntry, EntityError>
     where
-        Self: Sized
+        Self: Sized,
     {
         track(self, Operation::Create)
     }
@@ -514,7 +531,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// ```
     fn track_delete(&self) -> Result<ChangeLogEntry, EntityError>
     where
-        Self: Sized
+        Self: Sized,
     {
         track(self, Operation::Delete)
     }
@@ -532,7 +549,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     fn track_update<F>(&mut self, updater: F) -> Result<ChangeLogEntry, EntityError>
     where
         Self: Sized,
-        F: FnOnce(&mut Self)
+        F: FnOnce(&mut Self),
     {
         track_update(self, updater)
     }
@@ -547,7 +564,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// ```
     fn track_update_from(&self, old_state: &Self) -> Result<ChangeLogEntry, EntityError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let field_changes = old_state.diff(self);
 
@@ -558,11 +575,9 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Ok(ChangeLogEntry::new(
             self.entity_id().to_string(),
             Self::entity_type().parse().unwrap(),
-            ChangeType::Updated {
-                changed_fields: field_changes
-            },
+            ChangeType::Updated { changed_fields: field_changes },
             current_timestamp(),
-            0
+            0,
         ))
     }
 
@@ -575,31 +590,38 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// let entry = order.track_create_with(&ts_provider, &seq_gen).unwrap();
     /// ```
     fn track_create_with(
-        &self, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+        &self,
+        ts_provider: &impl TimestampProvider,
+        seq_gen: &impl SequenceGenerator,
     ) -> Result<ChangeLogEntry, EntityError>
     where
-        Self: Sized
+        Self: Sized,
     {
         track_with(self, Operation::Create, ts_provider, seq_gen)
     }
 
     /// 自动追踪删除操作（带自定义提供者）
     fn track_delete_with(
-        &self, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+        &self,
+        ts_provider: &impl TimestampProvider,
+        seq_gen: &impl SequenceGenerator,
     ) -> Result<ChangeLogEntry, EntityError>
     where
-        Self: Sized
+        Self: Sized,
     {
         track_with(self, Operation::Delete, ts_provider, seq_gen)
     }
 
     /// 自动追踪更新操作（带自定义提供者）
     fn track_update_with<F>(
-        &mut self, updater: F, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+        &mut self,
+        updater: F,
+        ts_provider: &impl TimestampProvider,
+        seq_gen: &impl SequenceGenerator,
     ) -> Result<ChangeLogEntry, EntityError>
     where
         Self: Sized,
-        F: FnOnce(&mut Self)
+        F: FnOnce(&mut Self),
     {
         track_update_with(self, updater, ts_provider, seq_gen)
     }
@@ -618,7 +640,9 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     fn diff(&self, other: &Self) -> Vec<FieldChange>;
 
     /// 检查是否有变更
-    fn has_changes(&self, other: &Self) -> bool { !self.diff(other).is_empty() }
+    fn has_changes(&self, other: &Self) -> bool {
+        !self.diff(other).is_empty()
+    }
 
     // ============================================================================
     // Replay Methods
@@ -642,10 +666,13 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
 
     /// 检查是否可以应用此变更日志
     fn can_replay(&self, entry: &ChangeLogEntry) -> bool {
-        self.entity_id().to_string() == *entry.entity_id() && Self::entity_type() == entry.entity_type()
+        self.entity_id().to_string() == *entry.entity_id()
+            && Self::entity_type() == entry.entity_type()
     }
 
-    fn table_schema() -> TableSchema { todo!() }
+    fn table_schema() -> TableSchema {
+        todo!()
+    }
 }
 
 // ============================================================================
@@ -695,7 +722,9 @@ pub trait FromCreatedEvent: Sized {
     ///
     /// 默认实现：返回错误，提示需要自定义实现
     /// 子类可重写此方法简化构造逻辑
-    fn from_field_map(fields: &std::collections::HashMap<String, String>) -> Result<Self, EntityError> {
+    fn from_field_map(
+        fields: &std::collections::HashMap<String, String>,
+    ) -> Result<Self, EntityError> {
         Err(EntityError::Custom("from_field_map not implemented for this type".to_string()))
     }
 }
@@ -714,20 +743,22 @@ pub enum TrackingResult {
     /// 实体创建
     Created(ChangeLogEntry),
     /// 实体删除
-    Deleted(ChangeLogEntry)
+    Deleted(ChangeLogEntry),
 }
 
 impl TrackingResult {
     /// 检查是否有变更
-    pub fn has_change(&self) -> bool { !matches!(self, TrackingResult::NoChange) }
+    pub fn has_change(&self) -> bool {
+        !matches!(self, TrackingResult::NoChange)
+    }
 
     /// 获取变更日志条目
     pub fn entry(&self) -> Option<&ChangeLogEntry> {
         match self {
             TrackingResult::NoChange => None,
-            TrackingResult::Changed(entry) | TrackingResult::Created(entry) | TrackingResult::Deleted(entry) => {
-                Some(entry)
-            }
+            TrackingResult::Changed(entry)
+            | TrackingResult::Created(entry)
+            | TrackingResult::Deleted(entry) => Some(entry),
         }
     }
 }
@@ -742,7 +773,7 @@ pub enum Operation {
     /// 创建操作
     Create,
     /// 删除操作
-    Delete
+    Delete,
 }
 
 /// 统一的变更追踪接口
@@ -761,7 +792,7 @@ pub enum Operation {
 #[inline]
 pub fn track<T>(entity: &T, operation: Operation) -> Result<ChangeLogEntry, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     track_with(entity, operation, &SystemTimestampProvider, &DefaultSequenceGenerator)
 }
@@ -769,19 +800,20 @@ where
 /// 统一的变更追踪接口（带自定义提供者）
 #[inline]
 pub fn track_with<T>(
-    entity: &T, operation: Operation, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+    entity: &T,
+    operation: Operation,
+    ts_provider: &impl TimestampProvider,
+    seq_gen: &impl SequenceGenerator,
 ) -> Result<ChangeLogEntry, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     let change_type = match operation {
         Operation::Create => {
             // Created 事件包含空字段列表（实际字段需要通过 to_bytes 序列化）
-            ChangeType::Created {
-                fields: Vec::new()
-            }
+            ChangeType::Created { fields: Vec::new() }
         }
-        Operation::Delete => ChangeType::Deleted
+        Operation::Delete => ChangeType::Deleted,
     };
 
     let entry = ChangeLogEntry::new(
@@ -789,7 +821,7 @@ where
         T::entity_type().parse().unwrap(),
         change_type,
         ts_provider.now(),
-        seq_gen.next()
+        seq_gen.next(),
     );
 
     Ok(entry)
@@ -803,25 +835,29 @@ where
 /// let entries = track_batch(&orders, Operation::Create).unwrap();
 /// ```
 #[inline]
-pub fn track_batch<T>(entities: &[T], operation: Operation) -> Result<Vec<ChangeLogEntry>, EntityError>
+pub fn track_batch<T>(
+    entities: &[T],
+    operation: Operation,
+) -> Result<Vec<ChangeLogEntry>, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     track_batch_with(entities, operation, &SystemTimestampProvider, &AtomicSequenceGenerator::new())
 }
 
 /// 批量追踪实体操作（带自定义提供者）
 pub fn track_batch_with<T>(
-    entities: &[T], operation: Operation, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+    entities: &[T],
+    operation: Operation,
+    ts_provider: &impl TimestampProvider,
+    seq_gen: &impl SequenceGenerator,
 ) -> Result<Vec<ChangeLogEntry>, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     let change_type = match operation {
-        Operation::Create => ChangeType::Created {
-            fields: Vec::new()
-        },
-        Operation::Delete => ChangeType::Deleted
+        Operation::Create => ChangeType::Created { fields: Vec::new() },
+        Operation::Delete => ChangeType::Deleted,
     };
 
     let timestamp = ts_provider.now();
@@ -833,7 +869,7 @@ where
             T::entity_type().parse().unwrap(),
             change_type.clone(),
             timestamp,
-            seq_gen.next()
+            seq_gen.next(),
         ));
     }
 
@@ -853,7 +889,7 @@ where
 pub fn track_update<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, EntityError>
 where
     T: Entity + Clone + 'static,
-    F: FnOnce(&mut T)
+    F: FnOnce(&mut T),
 {
     track_update_with(entity, updater, &SystemTimestampProvider, &DefaultSequenceGenerator)
 }
@@ -861,11 +897,14 @@ where
 /// 追踪实体更新操作（带自定义提供者）
 #[inline]
 pub fn track_update_with<T, F>(
-    entity: &mut T, updater: F, ts_provider: &impl TimestampProvider, seq_gen: &impl SequenceGenerator
+    entity: &mut T,
+    updater: F,
+    ts_provider: &impl TimestampProvider,
+    seq_gen: &impl SequenceGenerator,
 ) -> Result<ChangeLogEntry, EntityError>
 where
     T: Entity + Clone + 'static,
-    F: FnOnce(&mut T)
+    F: FnOnce(&mut T),
 {
     // 1. 克隆旧状态
     let old_entity = entity.clone();
@@ -883,11 +922,9 @@ where
     let entry = ChangeLogEntry::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
-        ChangeType::Updated {
-            changed_fields: field_changes
-        },
+        ChangeType::Updated { changed_fields: field_changes },
         ts_provider.now(),
-        seq_gen.next()
+        seq_gen.next(),
     );
 
     Ok(entry)
@@ -908,12 +945,10 @@ where
 /// # 错误
 /// - 如果事件不是 Created 类型，返回错误
 pub fn extract_fields_from_created_event(
-    entry: &ChangeLogEntry
+    entry: &ChangeLogEntry,
 ) -> Result<std::collections::HashMap<String, String>, EntityError> {
     match entry.change_type() {
-        ChangeType::Created {
-            fields
-        } => {
+        ChangeType::Created { fields } => {
             let mut field_map = std::collections::HashMap::new();
             for field in fields {
                 // Created 事件中，new_value 包含初始值
@@ -921,7 +956,7 @@ pub fn extract_fields_from_created_event(
             }
             Ok(field_map)
         }
-        _ => Err(EntityError::Custom("Event is not a Created type event".to_string()))
+        _ => Err(EntityError::Custom("Event is not a Created type event".to_string())),
     }
 }
 
@@ -941,25 +976,25 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
                 "u64" => {
                     value.parse::<u64>().map_err(|_| EntityError::FieldParseError {
                         field: "value".to_string(),
-                        reason: format!("Cannot parse '{}' as u64", value)
+                        reason: format!("Cannot parse '{}' as u64", value),
                     })?;
                 }
                 "i64" => {
                     value.parse::<i64>().map_err(|_| EntityError::FieldParseError {
                         field: "value".to_string(),
-                        reason: format!("Cannot parse '{}' as i64", value)
+                        reason: format!("Cannot parse '{}' as i64", value),
                     })?;
                 }
                 "f64" => {
                     value.parse::<f64>().map_err(|_| EntityError::FieldParseError {
                         field: "value".to_string(),
-                        reason: format!("Cannot parse '{}' as f64", value)
+                        reason: format!("Cannot parse '{}' as f64", value),
                     })?;
                 }
                 "bool" => {
                     value.parse::<bool>().map_err(|_| EntityError::FieldParseError {
                         field: "value".to_string(),
-                        reason: format!("Cannot parse '{}' as bool", value)
+                        reason: format!("Cannot parse '{}' as bool", value),
                     })?;
                 }
                 _ => {}
@@ -974,7 +1009,7 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
                 Ok(value.to_string())
             }
         }
-        _ => Ok(value.to_string())
+        _ => Ok(value.to_string()),
     }
 }
 
@@ -995,9 +1030,12 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
 ///     Ok(Order { id, symbol })
 /// })?;
 /// ```
-pub fn reconstruct_from_created<T, F>(entry: &ChangeLogEntry, constructor: F) -> Result<T, EntityError>
+pub fn reconstruct_from_created<T, F>(
+    entry: &ChangeLogEntry,
+    constructor: F,
+) -> Result<T, EntityError>
 where
-    F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>
+    F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>,
 {
     let field_map = extract_fields_from_created_event(entry)?;
     constructor(&field_map)
@@ -1017,7 +1055,7 @@ where
 #[inline]
 pub fn track_create<T>(entity: &T) -> Result<ChangeLogEntry, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     track(entity, Operation::Create)
 }
@@ -1032,7 +1070,7 @@ where
 #[inline]
 pub fn track_delete<T>(entity: &T) -> Result<ChangeLogEntry, EntityError>
 where
-    T: Entity + 'static
+    T: Entity + 'static,
 {
     track(entity, Operation::Delete)
 }
@@ -1057,16 +1095,19 @@ mod tests {
     #[derive(Debug, Clone, PartialEq)]
     struct TestEntity {
         id: u64,
-        value: String
+        value: String,
     }
 
     impl Entity for TestEntity {
         type Id = u64;
 
-        fn entity_id(&self) -> Self::Id { self.id }
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
 
-        fn entity_type() -> &'static str { "TestEntity" }
-
+        fn entity_type() -> &'static str {
+            "TestEntity"
+        }
 
         fn diff(&self, other: &Self) -> Vec<FieldChange> {
             let mut changes = Vec::new();
@@ -1080,14 +1121,12 @@ mod tests {
             if !self.can_replay(entry) {
                 return Err(EntityError::EntityIdMismatch {
                     expected: self.entity_id().to_string(),
-                    actual: entry.entity_id().to_string()
+                    actual: entry.entity_id().to_string(),
                 });
             }
 
             match entry.change_type() {
-                ChangeType::Updated {
-                    changed_fields
-                } => {
+                ChangeType::Updated { changed_fields } => {
                     for field in changed_fields {
                         if field.field_name == "value" {
                             self.value = field.new_value.clone();
@@ -1096,43 +1135,29 @@ mod tests {
                     Ok(())
                 }
                 ChangeType::Deleted => Err(EntityError::CannotReplayOnDeleted),
-                ChangeType::Created {
-                    fields: _
-                } => Ok(())
+                ChangeType::Created { fields: _ } => Ok(()),
             }
         }
     }
 
-
-
-
     #[test]
     fn test_auto_track_create() {
-        let entity = TestEntity {
-            id: 1,
-            value: "test".to_string()
-        };
+        let entity = TestEntity { id: 1, value: "test".to_string() };
 
         let entry = entity.track_create().unwrap();
         assert_eq!(entry.entity_id(), "1");
         assert_eq!(entry.entity_type(), "TestEntity");
         match entry.change_type() {
-            ChangeType::Created {
-                fields
-            } => {
+            ChangeType::Created { fields } => {
                 assert_eq!(fields.len(), 0);
             }
-            _ => panic!("Expected Created change type")
+            _ => panic!("Expected Created change type"),
         }
     }
 
-
     #[test]
     fn test_auto_track_update() {
-        let mut entity = TestEntity {
-            id: 1,
-            value: "old".to_string()
-        };
+        let mut entity = TestEntity { id: 1, value: "old".to_string() };
 
         let entry = entity
             .track_update(|e| {
@@ -1144,16 +1169,14 @@ mod tests {
         assert_eq!(entry.entity_type(), "TestEntity");
 
         match &entry.change_type() {
-            ChangeType::Updated {
-                changed_fields
-            } => {
+            ChangeType::Updated { changed_fields } => {
                 assert_eq!(changed_fields.len(), 1);
                 assert_eq!(changed_fields[0].field_name, "value");
                 // Debug formatting adds quotes for String types
                 assert!(changed_fields[0].old_value.contains("old"));
                 assert!(changed_fields[0].new_value.contains("new"));
             }
-            _ => panic!("Expected Updated change type")
+            _ => panic!("Expected Updated change type"),
         }
 
         // 确认实体已更新
@@ -1162,41 +1185,27 @@ mod tests {
 
     #[test]
     fn test_auto_track_update_from() {
-        let old_entity = TestEntity {
-            id: 1,
-            value: "old".to_string()
-        };
+        let old_entity = TestEntity { id: 1, value: "old".to_string() };
 
-        let new_entity = TestEntity {
-            id: 1,
-            value: "new".to_string()
-        };
+        let new_entity = TestEntity { id: 1, value: "new".to_string() };
 
         let entry = new_entity.track_update_from(&old_entity).unwrap();
 
         assert_eq!(entry.entity_id(), "1");
         match &entry.change_type() {
-            ChangeType::Updated {
-                changed_fields
-            } => {
+            ChangeType::Updated { changed_fields } => {
                 assert_eq!(changed_fields.len(), 1);
                 assert_eq!(changed_fields[0].field_name, "value");
             }
-            _ => panic!("Expected Updated change type")
+            _ => panic!("Expected Updated change type"),
         }
     }
 
     #[test]
     fn test_auto_track_no_changes() {
-        let old_entity = TestEntity {
-            id: 1,
-            value: "same".to_string()
-        };
+        let old_entity = TestEntity { id: 1, value: "same".to_string() };
 
-        let new_entity = TestEntity {
-            id: 1,
-            value: "same".to_string()
-        };
+        let new_entity = TestEntity { id: 1, value: "same".to_string() };
 
         let result = new_entity.track_update_from(&old_entity);
         assert!(result.is_err());
@@ -1204,7 +1213,6 @@ mod tests {
     }
 
     // ==================== 从 Created 事件重构实体的测试 ====================
-
 
     #[test]
     fn test_parse_field_value_numeric() {
@@ -1232,6 +1240,4 @@ mod tests {
         let result = parse_field_value("unquoted", "string").unwrap();
         assert_eq!(result, "unquoted");
     }
-
-
 }

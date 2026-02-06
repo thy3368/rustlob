@@ -19,7 +19,7 @@ pub struct ConsensusState {
     /// 区块存储
     blocks: HashMap<Hash, Block>,
     /// 待处理的投票（按阶段和区块哈希分组）
-    pending_votes: HashMap<(Phase, Hash, ViewNumber), HashMap<PublicKey, Vote>>
+    pending_votes: HashMap<(Phase, Hash, ViewNumber), HashMap<PublicKey, Vote>>,
 }
 
 impl ConsensusState {
@@ -39,19 +39,29 @@ impl ConsensusState {
             locked_qc: None,
             committed_height: Height::new(0),
             blocks,
-            pending_votes: HashMap::new()
+            pending_votes: HashMap::new(),
         }
     }
 
-    pub fn current_view(&self) -> ViewNumber { self.current_view }
+    pub fn current_view(&self) -> ViewNumber {
+        self.current_view
+    }
 
-    pub fn high_qc(&self) -> &QuorumCertificate { &self.high_qc }
+    pub fn high_qc(&self) -> &QuorumCertificate {
+        &self.high_qc
+    }
 
-    pub fn locked_qc(&self) -> Option<&QuorumCertificate> { self.locked_qc.as_ref() }
+    pub fn locked_qc(&self) -> Option<&QuorumCertificate> {
+        self.locked_qc.as_ref()
+    }
 
-    pub fn committed_height(&self) -> Height { self.committed_height }
+    pub fn committed_height(&self) -> Height {
+        self.committed_height
+    }
 
-    pub fn get_block(&self, hash: &Hash) -> Option<&Block> { self.blocks.get(hash) }
+    pub fn get_block(&self, hash: &Hash) -> Option<&Block> {
+        self.blocks.get(hash)
+    }
 
     pub fn store_block(&mut self, block: Block) {
         let hash = block.hash();
@@ -73,7 +83,9 @@ impl ConsensusState {
     }
 
     /// 设置 locked_qc
-    pub fn set_locked_qc(&mut self, qc: QuorumCertificate) { self.locked_qc = Some(qc); }
+    pub fn set_locked_qc(&mut self, qc: QuorumCertificate) {
+        self.locked_qc = Some(qc);
+    }
 
     /// 更新已提交高度
     pub fn update_committed_height(&mut self, height: Height) {
@@ -111,7 +123,9 @@ impl ConsensusState {
 }
 
 impl Default for ConsensusState {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// HotStuff 共识引擎
@@ -123,33 +137,40 @@ pub struct HotStuffConsensus {
     /// 共识状态
     state: ConsensusState,
     /// 节点总数
-    total_nodes: usize
+    total_nodes: usize,
 }
 
 impl HotStuffConsensus {
     /// 创建新的共识引擎
     pub fn new(private_key: PrivateKey, total_nodes: usize) -> Self {
         let public_key = private_key.public_key();
-        Self {
-            private_key,
-            public_key,
-            state: ConsensusState::new(),
-            total_nodes
-        }
+        Self { private_key, public_key, state: ConsensusState::new(), total_nodes }
     }
 
-    pub fn public_key(&self) -> PublicKey { self.public_key }
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key
+    }
 
-    pub fn state(&self) -> &ConsensusState { &self.state }
+    pub fn state(&self) -> &ConsensusState {
+        &self.state
+    }
 
-    pub fn state_mut(&mut self) -> &mut ConsensusState { &mut self.state }
+    pub fn state_mut(&mut self) -> &mut ConsensusState {
+        &mut self.state
+    }
 
     /// 创建新区块提案
     pub fn create_proposal(&mut self, commands: Vec<Vec<u8>>) -> Proposal {
         let parent_hash = self.state.high_qc.block_hash();
         let parent = self.state.get_block(&parent_hash).expect("Parent block must exist");
 
-        let block = Block::new(parent, self.state.current_view, self.public_key, self.state.high_qc.clone(), commands);
+        let block = Block::new(
+            parent,
+            self.state.current_view,
+            self.public_key,
+            self.state.high_qc.clone(),
+            commands,
+        );
 
         self.state.store_block(block.clone());
 
@@ -267,26 +288,26 @@ impl HotStuffConsensus {
         let commit_block_hash = commit_qc.block_hash();
         let commit_block = match self.state.get_block(&commit_block_hash) {
             Some(b) => b,
-            None => return
+            None => return,
         };
 
         // 获取 Pre-commit QC（commit_block 的 justify）
         let precommit_qc_hash = commit_block.justify().block_hash();
         let precommit_block = match self.state.get_block(&precommit_qc_hash) {
             Some(b) => b,
-            None => return
+            None => return,
         };
 
         // 获取 Prepare QC（precommit_block 的 justify）
         let prepare_qc_hash = precommit_block.justify().block_hash();
         let prepare_block = match self.state.get_block(&prepare_qc_hash) {
             Some(b) => b,
-            None => return
+            None => return,
         };
 
         // 检查是否是三个连续的区块
-        let is_chain =
-            commit_block.parent_hash() == precommit_qc_hash && precommit_block.parent_hash() == prepare_qc_hash;
+        let is_chain = commit_block.parent_hash() == precommit_qc_hash
+            && precommit_block.parent_hash() == prepare_qc_hash;
 
         if is_chain {
             // 提交 prepare_block
@@ -312,7 +333,7 @@ pub enum ConsensusError {
     MissingParent,
     InvalidQC,
     ConflictWithLockedQC,
-    InvalidSignature
+    InvalidSignature,
 }
 
 impl std::fmt::Display for ConsensusError {
@@ -322,7 +343,7 @@ impl std::fmt::Display for ConsensusError {
             ConsensusError::MissingParent => write!(f, "Parent block not found"),
             ConsensusError::InvalidQC => write!(f, "Invalid quorum certificate"),
             ConsensusError::ConflictWithLockedQC => write!(f, "Conflicts with locked QC"),
-            ConsensusError::InvalidSignature => write!(f, "Invalid signature")
+            ConsensusError::InvalidSignature => write!(f, "Invalid signature"),
         }
     }
 }
@@ -365,7 +386,13 @@ mod tests {
         // 模拟 3 个节点投票（2f+1 = 3，f=1）
         for i in 0..3 {
             let voter = PublicKey::from_u64(i);
-            let vote = Vote::new(block_hash, view, Phase::Prepare, voter, crate::crypto::Signature::zero());
+            let vote = Vote::new(
+                block_hash,
+                view,
+                Phase::Prepare,
+                voter,
+                crate::crypto::Signature::zero(),
+            );
 
             let qc = consensus.on_receive_vote(vote);
             if i == 2 {

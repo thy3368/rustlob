@@ -1,14 +1,15 @@
 use base_types::cqrs::cqrs_types::CmdResp;
 
 use crate::proc::usds_m_future::behavior::trade_behavior::{
-    UsdsMFutureTradeBehavior, UsdsMFutureTradeCmdAny, UsdsMFutureTradeCmdError, UsdsMFutureTradeRes
+    UsdsMFutureTradeBehavior, UsdsMFutureTradeCmdAny, UsdsMFutureTradeCmdError, UsdsMFutureTradeRes,
 };
 
 pub struct UsdsMFutureTradeBehaviorImpl {}
 
 impl UsdsMFutureTradeBehavior for UsdsMFutureTradeBehaviorImpl {
     fn handle(
-        &mut self, cmd: UsdsMFutureTradeCmdAny
+        &mut self,
+        cmd: UsdsMFutureTradeCmdAny,
     ) -> Result<CmdResp<UsdsMFutureTradeRes>, UsdsMFutureTradeCmdError> {
         match cmd {
             UsdsMFutureTradeCmdAny::NewOrder(_) => {}

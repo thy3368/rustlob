@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 // mod test; // 移除 test 模块，在过程宏 crate 中不能直接使用自身定义的宏
 /// Immutable 属性宏 - 将结构体标记为不可变
@@ -113,4 +113,3 @@ pub fn immutable(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-

@@ -1,6 +1,7 @@
+use std::path::Path;
+
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::path::Path;
 
 use crate::analyzer::{IssueCategory, OptimizationIssue, Severity};
 
@@ -101,7 +102,9 @@ impl PatternDetector {
                         category: IssueCategory::CacheAlignment,
                         severity: Severity::Medium,
                         message: "结构体未指定对齐方式".to_string(),
-                        suggestion: "考虑添加 #[repr(align(64))] 或 #[repr(align(128))] 以优化缓存性能".to_string(),
+                        suggestion:
+                            "考虑添加 #[repr(align(64))] 或 #[repr(align(128))] 以优化缓存性能"
+                                .to_string(),
                         estimated_impact: 0.5,
                     });
                 }

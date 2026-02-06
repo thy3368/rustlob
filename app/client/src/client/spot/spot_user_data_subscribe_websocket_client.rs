@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use futures::{SinkExt, StreamExt};
 use tokio::sync::{Mutex, mpsc};
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::protocol::Message,
-};
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::info;
 
 /// Spot 用户数据 WebSocket 流客户端
@@ -35,10 +33,7 @@ impl SpotUserDataWebSocketStreamClient {
     /// let client = SpotUserDataWebSocketStreamClient::new("ws://localhost:8084");
     /// ```
     pub fn new(server_addr: impl Into<String>) -> Self {
-        Self {
-            server_addr: server_addr.into(),
-            connection: Arc::new(Mutex::new(None)),
-        }
+        Self { server_addr: server_addr.into(), connection: Arc::new(Mutex::new(None)) }
     }
 
     /// 连接到用户数据 WebSocket 服务器
@@ -109,10 +104,16 @@ impl SpotUserDataWebSocketStreamClient {
     }
 
     /// 发送文本消息到服务器
-    pub async fn send_text(&self, text: impl Into<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_text(
+        &self,
+        text: impl Into<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut guard = self.connection.lock().await;
         if let Some(state) = &mut *guard {
-            state.sender.send(Message::Text(text.into().into())).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            state
+                .sender
+                .send(Message::Text(text.into().into()))
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             Ok(())
         } else {
             Err("WebSocket connection not established".into())
@@ -123,7 +124,10 @@ impl SpotUserDataWebSocketStreamClient {
     pub async fn send_binary(&self, data: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
         let mut guard = self.connection.lock().await;
         if let Some(state) = &mut *guard {
-            state.sender.send(Message::Binary(data.into())).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            state
+                .sender
+                .send(Message::Binary(data.into()))
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             Ok(())
         } else {
             Err("WebSocket connection not established".into())

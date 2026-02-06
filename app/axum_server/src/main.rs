@@ -21,7 +21,6 @@ pub mod interfaces {
         pub mod http_server;
         pub mod starter;
         pub mod websocket_server;
-
     }
 
     pub mod usds_m_future {
@@ -40,14 +39,12 @@ pub mod interfaces {
         pub mod starter;
     }
 
-
     pub mod coin_m_future {
 
         pub mod http {}
 
         pub mod websocket {}
     }
-
 
     pub mod option {
 
@@ -69,7 +66,6 @@ async fn main() {
     if let Err(e) = spot::starter::start_spot_module(false).await {
         eprintln!("❌ Failed to start Spot module: {}", e);
     }
-
 
     // 启动 USDS-M Future 模块
     // if let Err(e) = usds_m_future::starter::start_usds_m_future_module().await {

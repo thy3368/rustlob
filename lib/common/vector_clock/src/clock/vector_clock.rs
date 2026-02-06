@@ -40,12 +40,14 @@ impl VectorClock {
 
     /// 比较两个向量时钟的关系
     pub fn compare(&self, other: &VectorClock) -> ClockRelation {
-        let self_gt_other = self.counters.iter().all(|(node, &self_ctr)| {
-            self_ctr >= other.counters.get(node).copied().unwrap_or(0)
-        });
-        let other_gt_self = other.counters.iter().all(|(node, &other_ctr)| {
-            other_ctr >= self.counters.get(node).copied().unwrap_or(0)
-        });
+        let self_gt_other = self
+            .counters
+            .iter()
+            .all(|(node, &self_ctr)| self_ctr >= other.counters.get(node).copied().unwrap_or(0));
+        let other_gt_self = other
+            .counters
+            .iter()
+            .all(|(node, &other_ctr)| other_ctr >= self.counters.get(node).copied().unwrap_or(0));
 
         if self_gt_other && other_gt_self {
             ClockRelation::Equal

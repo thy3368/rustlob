@@ -56,7 +56,7 @@ const POWER_RANGE: usize = (MAX_TICK_POWER - MIN_TICK_POWER + 1) as usize; // 16
 struct UnifiedLookupTable {
     // 格式: [tick_size, inverse_tick_size] 交错存储
     // 总共16*2*8 = 256字节，占用4个缓存行
-    values: [f64; POWER_RANGE * 2]
+    values: [f64; POWER_RANGE * 2],
 }
 
 impl UnifiedLookupTable {
@@ -79,8 +79,8 @@ impl UnifiedLookupTable {
                 1e4, 1e-4, // tick_power = 4
                 1e5, 1e-5, // tick_power = 5
                 1e6, 1e-6, // tick_power = 6
-                1e7, 1e-7 // tick_power = 7
-            ]
+                1e7, 1e-7, // tick_power = 7
+            ],
         }
     }
 
@@ -134,7 +134,7 @@ pub enum FixedPointError {
     ValueOverflow,
     InvalidTickPower,
     PrecisionMismatch,
-    DivisionByZero
+    DivisionByZero,
 }
 
 impl fmt::Display for FixedPointError {
@@ -145,7 +145,7 @@ impl fmt::Display for FixedPointError {
             FixedPointError::PrecisionMismatch => {
                 write!(f, "Cannot operate on values with different tick_power")
             }
-            FixedPointError::DivisionByZero => write!(f, "Division by zero")
+            FixedPointError::DivisionByZero => write!(f, "Division by zero"),
         }
     }
 }
@@ -174,7 +174,7 @@ impl std::error::Error for FixedPointError {}
 #[repr(transparent)]
 pub struct FixedPoint {
     /// 紧凑存储: 高4位=tick_power(映射0-15), 低28位=value
-    packed: u32
+    packed: u32,
 }
 
 // ============================================================================
@@ -225,9 +225,7 @@ impl FixedPoint {
     pub const fn from_raw_parts_unchecked(value: u32, tick_power: i8) -> Self {
         let power_unsigned = ((tick_power - MIN_TICK_POWER) as u32) & 0xF;
         let packed = (power_unsigned << VALUE_BITS) | (value & VALUE_MASK);
-        Self {
-            packed
-        }
+        Self { packed }
     }
 
     /// 带检查的创建
@@ -247,22 +245,24 @@ impl FixedPoint {
     /// 性能: < 1ns (零操作，仅类型转换)
     #[inline(always)]
     pub const fn from_u32(packed: u32) -> Self {
-        Self {
-            packed
-        }
+        Self { packed }
     }
 
     /// 转换为32位整数 - 零开销
     ///
     /// 性能: < 1ns (直接返回)
     #[inline(always)]
-    pub const fn to_u32(self) -> u32 { self.packed }
+    pub const fn to_u32(self) -> u32 {
+        self.packed
+    }
 
     /// 提取28位value - 单条AND指令
     ///
     /// 性能: < 1ns
     #[inline(always)]
-    pub const fn value(self) -> u32 { self.packed & VALUE_MASK }
+    pub const fn value(self) -> u32 {
+        self.packed & VALUE_MASK
+    }
 
     /// 提取tick_power - 位移+算术运算
     ///
@@ -277,13 +277,17 @@ impl FixedPoint {
     ///
     /// 性能: ~2ns (缓存命中时)
     #[inline(always)]
-    pub fn tick_size(self) -> f64 { LOOKUP_TABLE.get_tick_size(self.tick_power()) }
+    pub fn tick_size(self) -> f64 {
+        LOOKUP_TABLE.get_tick_size(self.tick_power())
+    }
 
     /// 转换为f64 - 查表+单次浮点乘法
     ///
     /// 性能: ~5ns
     #[inline]
-    pub fn to_f64(self) -> f64 { (self.value() as f64) * self.tick_size() }
+    pub fn to_f64(self) -> f64 {
+        (self.value() as f64) * self.tick_size()
+    }
 
     /// 优化的to_f64 - 减少一次查表
     ///
@@ -299,24 +303,22 @@ impl FixedPoint {
     ///
     /// 性能: < 1ns (单条MOV)
     #[inline(always)]
-    pub const fn to_bytes(self) -> [u8; 4] { self.packed.to_le_bytes() }
+    pub const fn to_bytes(self) -> [u8; 4] {
+        self.packed.to_le_bytes()
+    }
 
     /// 反序列化 - 直接内存拷贝
     ///
     /// 性能: < 1ns
     #[inline(always)]
     pub const fn from_bytes(bytes: [u8; 4]) -> Self {
-        Self {
-            packed: u32::from_le_bytes(bytes)
-        }
+        Self { packed: u32::from_le_bytes(bytes) }
     }
 
     /// 从网络字节序反序列化
     #[inline(always)]
     pub const fn from_be_bytes(bytes: [u8; 4]) -> Self {
-        Self {
-            packed: u32::from_be_bytes(bytes)
-        }
+        Self { packed: u32::from_be_bytes(bytes) }
     }
 
     /// 零拷贝：从内存指针直接读取
@@ -327,22 +329,24 @@ impl FixedPoint {
     /// ptr必须对齐到4字节且有效
     #[inline(always)]
     pub unsafe fn from_ptr(ptr: *const u8) -> Self {
-        Self {
-            packed: *(ptr as *const u32)
-        }
+        Self { packed: *(ptr as *const u32) }
     }
 
     /// 批量从字节数组转换（SIMD优化友好）
     ///
     /// 性能: ~8ns for 4 conversions (2ns each)
     #[inline]
-    pub fn from_bytes_batch(bytes: &[[u8; 4]]) -> Vec<Self> { bytes.iter().map(|b| Self::from_bytes(*b)).collect() }
+    pub fn from_bytes_batch(bytes: &[[u8; 4]]) -> Vec<Self> {
+        bytes.iter().map(|b| Self::from_bytes(*b)).collect()
+    }
 
     /// 精度检查 - 单条XOR+TEST
     ///
     /// 性能: < 1ns
     #[inline(always)]
-    fn has_same_precision(self, other: Self) -> bool { (self.packed ^ other.packed) & POWER_MASK == 0 }
+    fn has_same_precision(self, other: Self) -> bool {
+        (self.packed ^ other.packed) & POWER_MASK == 0
+    }
 
     /// 加法 - 无分支优化版本
     ///
@@ -366,9 +370,7 @@ impl FixedPoint {
             return Err(FixedPointError::ValueOverflow);
         }
 
-        Ok(Self {
-            packed: (self.packed & POWER_MASK) | sum_value
-        })
+        Ok(Self { packed: (self.packed & POWER_MASK) | sum_value })
     }
 
     /// unsafe极速加法 - 零检查
@@ -380,9 +382,7 @@ impl FixedPoint {
     #[inline(always)]
     pub unsafe fn add_unchecked(self, other: Self) -> Self {
         let sum_value = self.value() + other.value();
-        Self {
-            packed: (self.packed & POWER_MASK) | sum_value
-        }
+        Self { packed: (self.packed & POWER_MASK) | sum_value }
     }
 
     /// 减法 - 优化版本
@@ -403,9 +403,7 @@ impl FixedPoint {
 
         let diff_value = self_value - other_value;
 
-        Ok(Self {
-            packed: (self.packed & POWER_MASK) | diff_value
-        })
+        Ok(Self { packed: (self.packed & POWER_MASK) | diff_value })
     }
 
     /// unsafe极速减法
@@ -417,9 +415,7 @@ impl FixedPoint {
     #[inline(always)]
     pub unsafe fn sub_unchecked(self, other: Self) -> Self {
         let diff_value = self.value() - other.value();
-        Self {
-            packed: (self.packed & POWER_MASK) | diff_value
-        }
+        Self { packed: (self.packed & POWER_MASK) | diff_value }
     }
 
     /// 快速整数除法（使用魔数乘法）
@@ -434,17 +430,23 @@ impl FixedPoint {
     }
 
     #[inline(always)]
-    fn fast_div100(value: u64) -> u64 { value / 100 }
+    fn fast_div100(value: u64) -> u64 {
+        value / 100
+    }
 
     #[inline(always)]
-    fn fast_div1000(value: u64) -> u64 { value / 1000 }
+    fn fast_div1000(value: u64) -> u64 {
+        value / 1000
+    }
 
     /// 乘法 - 精度保留版本（优化整数除法）
     ///
     /// 性能: ~12ns (优化魔数除法)
     #[inline]
     pub fn checked_mul(self, other: Self) -> Result<Self, FixedPointError> {
-        let product = (self.value() as u64).checked_mul(other.value() as u64).ok_or(FixedPointError::ValueOverflow)?;
+        let product = (self.value() as u64)
+            .checked_mul(other.value() as u64)
+            .ok_or(FixedPointError::ValueOverflow)?;
 
         let other_power = other.tick_power();
 
@@ -455,7 +457,7 @@ impl FixedPoint {
                 1 => Self::fast_div10(product),
                 2 => Self::fast_div100(product),
                 3 => Self::fast_div1000(product),
-                _ => product / (10u64.pow(abs_power))
+                _ => product / (10u64.pow(abs_power)),
             }
         } else {
             let multiplier = 10u64.pow(other_power as u32);
@@ -480,7 +482,9 @@ impl FixedPoint {
 
         let other_power = other.tick_power();
         let adjusted_dividend = if other_power < 0 {
-            (self.value() as u64).checked_mul(10u64.pow((-other_power) as u32)).ok_or(FixedPointError::ValueOverflow)?
+            (self.value() as u64)
+                .checked_mul(10u64.pow((-other_power) as u32))
+                .ok_or(FixedPointError::ValueOverflow)?
         } else {
             (self.value() as u64) / (10u64.pow(other_power as u32))
         };
@@ -496,34 +500,40 @@ impl FixedPoint {
 
     /// 零值 - 编译时常量
     #[inline(always)]
-    pub const fn zero(tick_power: i8) -> Self { Self::from_raw_parts_unchecked(0, tick_power) }
+    pub const fn zero(tick_power: i8) -> Self {
+        Self::from_raw_parts_unchecked(0, tick_power)
+    }
 
     /// 判断是否为零 - 单条TEST指令
     #[inline(always)]
-    pub const fn is_zero(self) -> bool { (self.packed & VALUE_MASK) == 0 }
+    pub const fn is_zero(self) -> bool {
+        (self.packed & VALUE_MASK) == 0
+    }
 
     /// 最大值
     #[inline(always)]
-    pub const fn max_value(tick_power: i8) -> Self { Self::from_raw_parts_unchecked(MAX_VALUE, tick_power) }
+    pub const fn max_value(tick_power: i8) -> Self {
+        Self::from_raw_parts_unchecked(MAX_VALUE, tick_power)
+    }
 
     /// 比较 - 仅比较value部分（要求相同精度）
     ///
     /// 性能: ~2ns
     #[inline(always)]
     pub fn cmp_same_precision(self, other: Self) -> Option<std::cmp::Ordering> {
-        if self.has_same_precision(other) {
-            Some(self.value().cmp(&other.value()))
-        } else {
-            None
-        }
+        if self.has_same_precision(other) { Some(self.value().cmp(&other.value())) } else { None }
     }
 
     /// 获取原始packed值的引用（零拷贝）
     #[inline(always)]
-    pub const fn as_raw(&self) -> &u32 { &self.packed }
+    pub const fn as_raw(&self) -> &u32 {
+        &self.packed
+    }
 
     /// 批量转换为f64（优化缓存访问）
-    pub fn batch_to_f64(prices: &[Self]) -> Vec<f64> { prices.iter().map(|p| p.to_f64_fast()).collect() }
+    pub fn batch_to_f64(prices: &[Self]) -> Vec<f64> {
+        prices.iter().map(|p| p.to_f64_fast()).collect()
+    }
 }
 
 // ============================================================================
@@ -534,33 +544,43 @@ impl Add for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
-    fn add(self, other: Self) -> Self::Output { self.checked_add(other) }
+    fn add(self, other: Self) -> Self::Output {
+        self.checked_add(other)
+    }
 }
 
 impl Sub for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
-    fn sub(self, other: Self) -> Self::Output { self.checked_sub(other) }
+    fn sub(self, other: Self) -> Self::Output {
+        self.checked_sub(other)
+    }
 }
 
 impl Mul for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
-    fn mul(self, other: Self) -> Self::Output { self.checked_mul(other) }
+    fn mul(self, other: Self) -> Self::Output {
+        self.checked_mul(other)
+    }
 }
 
 impl Div for FixedPoint {
     type Output = Result<Self, FixedPointError>;
 
     #[inline]
-    fn div(self, other: Self) -> Self::Output { self.checked_div(other) }
+    fn div(self, other: Self) -> Self::Output {
+        self.checked_div(other)
+    }
 }
 
 impl PartialOrd for FixedPoint {
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> { self.cmp_same_precision(*other) }
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.cmp_same_precision(*other)
+    }
 }
 
 impl fmt::Debug for FixedPoint {
@@ -594,7 +614,12 @@ impl FixedPoint {
     /// 注意：实际SIMD实现需要unsafe和target_feature
     #[inline]
     pub fn batch_to_f64_x4(prices: &[Self; 4]) -> [f64; 4] {
-        [prices[0].to_f64_fast(), prices[1].to_f64_fast(), prices[2].to_f64_fast(), prices[3].to_f64_fast()]
+        [
+            prices[0].to_f64_fast(),
+            prices[1].to_f64_fast(),
+            prices[2].to_f64_fast(),
+            prices[3].to_f64_fast(),
+        ]
     }
 }
 
@@ -768,7 +793,7 @@ mod tests {
             FixedPoint::from_f64(100.0, -2).unwrap(),
             FixedPoint::from_f64(200.0, -2).unwrap(),
             FixedPoint::from_f64(300.0, -2).unwrap(),
-            FixedPoint::from_f64(400.0, -2).unwrap()
+            FixedPoint::from_f64(400.0, -2).unwrap(),
         ];
 
         let result = FixedPoint::batch_to_f64_x4(&prices);

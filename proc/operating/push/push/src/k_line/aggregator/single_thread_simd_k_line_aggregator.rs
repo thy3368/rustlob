@@ -1,10 +1,9 @@
-use std::simd::{f64x8, num::SimdFloat};
-use std::collections::VecDeque;
 use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::simd::f64x8;
+use std::simd::num::SimdFloat;
 
-use crate::k_line::k_line_types::{
-    KLineAgg, KLineUpdateEvent, TimeWindow, OHLC, TradeDataSoA
-};
+use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, OHLC, TimeWindow, TradeDataSoA};
 
 //todo 优化目标： 100万笔/1毫秒
 // 单线程 SIMD 优化的 K 线聚合器
@@ -49,7 +48,7 @@ pub struct SingleThreadSimdKLineAggregator {
 
     // 批处理缓冲区
     batch_buffer: RefCell<Vec<(u64, f64, f64)>>,
-    batch_size: usize
+    batch_size: usize,
 }
 
 impl SingleThreadSimdKLineAggregator {
@@ -71,17 +70,13 @@ impl SingleThreadSimdKLineAggregator {
             sliding_capacities: [60, 60, 96, 168],
             event_handlers: RefCell::new(Vec::new()),
             batch_buffer: RefCell::new(Vec::with_capacity(batch_size)),
-            batch_size
+            batch_size,
         }
     }
 
     // 发送K线更新事件
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window,
-            ohlc,
-            is_new_window
-        };
+        let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
         let handlers = self.event_handlers.borrow();
         for handler in handlers.iter() {
@@ -90,7 +85,13 @@ impl SingleThreadSimdKLineAggregator {
     }
 
     // 核心更新逻辑
-    fn update_window(&self, window_idx: usize, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+    fn update_window(
+        &self,
+        window_idx: usize,
+        timestamp: u64,
+        price: f64,
+        volume: f64,
+    ) -> Result<(), String> {
         let window_size = self.window_sizes[window_idx];
         let window_start = (timestamp / window_size) * window_size;
         let window = match window_idx {
@@ -98,7 +99,7 @@ impl SingleThreadSimdKLineAggregator {
             1 => TimeWindow::Minute,
             2 => TimeWindow::FifteenMin,
             3 => TimeWindow::Hour,
-            _ => return Err("Invalid window index".to_string())
+            _ => return Err("Invalid window index".to_string()),
         };
 
         let mut current_windows = self.current_windows.borrow_mut();
@@ -136,7 +137,7 @@ impl SingleThreadSimdKLineAggregator {
             1 => &self.sliding_1m,
             2 => &self.sliding_15m,
             3 => &self.sliding_1h,
-            _ => return
+            _ => return,
         };
 
         let mut sliding_window = sliding_window.borrow_mut();
@@ -164,7 +165,7 @@ impl SingleThreadSimdKLineAggregator {
             1 => &self.history_1m,
             2 => &self.history_15m,
             3 => &self.history_1h,
-            _ => return
+            _ => return,
         };
 
         let mut history = history.borrow_mut();
@@ -202,7 +203,7 @@ impl SingleThreadSimdKLineAggregator {
             self.process_with_simd(
                 &ts_stack[..trades.len()],
                 &p_stack[..trades.len()],
-                &v_stack[..trades.len()]
+                &v_stack[..trades.len()],
             )?;
         } else {
             // 大容量使用 SoA 布局
@@ -220,7 +221,12 @@ impl SingleThreadSimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn process_with_simd(&self, timestamps: &[u64], prices: &[f64], volumes: &[f64]) -> Result<(), String> {
+    fn process_with_simd(
+        &self,
+        timestamps: &[u64],
+        prices: &[f64],
+        volumes: &[f64],
+    ) -> Result<(), String> {
         let len = timestamps.len();
         let chunks = len / 8;
         let remainder = len % 8;
@@ -275,7 +281,7 @@ impl SingleThreadSimdKLineAggregator {
                         max_price,
                         min_price,
                         last_price,
-                        chunk_volume
+                        chunk_volume,
                     )?;
                 } else {
                     // 块跨越窗口边界，逐个处理
@@ -299,7 +305,12 @@ impl SingleThreadSimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn calculate_sliding_stats_with_simd(&self, highs: &[f64], lows: &[f64], volumes: &[f64]) -> (f64, f64, f64) {
+    fn calculate_sliding_stats_with_simd(
+        &self,
+        highs: &[f64],
+        lows: &[f64],
+        volumes: &[f64],
+    ) -> (f64, f64, f64) {
         let len = highs.len();
         let chunks = len / 8;
         let remainder = len % 8;
@@ -335,17 +346,23 @@ impl SingleThreadSimdKLineAggregator {
         (max_high, min_low, total_volume)
     }
 
-
     #[inline(always)]
     fn update_window_with_stats(
-        &self, window_idx: usize, window_start: u64, open: f64, high: f64, low: f64, close: f64, volume: f64
+        &self,
+        window_idx: usize,
+        window_start: u64,
+        open: f64,
+        high: f64,
+        low: f64,
+        close: f64,
+        volume: f64,
     ) -> Result<(), String> {
         let window = match window_idx {
             0 => TimeWindow::Second,
             1 => TimeWindow::Minute,
             2 => TimeWindow::FifteenMin,
             3 => TimeWindow::Hour,
-            _ => return Err("Invalid window index".to_string())
+            _ => return Err("Invalid window index".to_string()),
         };
 
         let mut current_windows = self.current_windows.borrow_mut();
@@ -387,11 +404,13 @@ impl SingleThreadSimdKLineAggregator {
 }
 
 impl KLineAgg for SingleThreadSimdKLineAggregator {
-    fn new() -> Self { Self::new_with_batch_size(1000) }
+    fn new() -> Self {
+        Self::new_with_batch_size(1000)
+    }
 
     fn subscribe<F>(&self, handler: F)
     where
-        F: Fn(KLineUpdateEvent) + 'static
+        F: Fn(KLineUpdateEvent) + 'static,
     {
         let mut handlers = self.event_handlers.borrow_mut();
         handlers.push(Box::new(handler));
@@ -426,7 +445,7 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
             TimeWindow::Second => &self.history_1s,
             TimeWindow::Minute => &self.history_1m,
             TimeWindow::FifteenMin => &self.history_15m,
-            TimeWindow::Hour => &self.history_1h
+            TimeWindow::Hour => &self.history_1h,
         };
 
         let history = history.borrow();
@@ -441,7 +460,7 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
             TimeWindow::Second => &self.sliding_1s,
             TimeWindow::Minute => &self.sliding_1m,
             TimeWindow::FifteenMin => &self.sliding_15m,
-            TimeWindow::Hour => &self.sliding_1h
+            TimeWindow::Hour => &self.sliding_1h,
         };
 
         let sliding = sliding.borrow();
@@ -474,7 +493,8 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
         }
 
         // 使用 SIMD 优化计算统计信息
-        let (high, low, total_volume) = self.calculate_sliding_stats_with_simd(&highs, &lows, &volumes);
+        let (high, low, total_volume) =
+            self.calculate_sliding_stats_with_simd(&highs, &lows, &volumes);
 
         // 最后一个元素是最远的K线（用于收盘价）
         let close = sliding.get(sliding.len() - len).unwrap().close;

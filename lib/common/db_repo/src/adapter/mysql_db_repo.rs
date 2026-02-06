@@ -1,8 +1,10 @@
-use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
-use mysql::prelude::*;
 use std::sync::Mutex;
+
+use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
 use immutable_derive::immutable;
-use crate::core::db_repo::{CmdRepo, QueryRepo, RepoError, PageRequest, PageResult};
+use mysql::prelude::*;
+
+use crate::core::db_repo::{CmdRepo, PageRequest, PageResult, QueryRepo, RepoError};
 
 /// MySQL 数据库适配器
 ///
@@ -28,7 +30,7 @@ use crate::core::db_repo::{CmdRepo, QueryRepo, RepoError, PageRequest, PageResul
 #[immutable]
 pub struct MySqlDbRepo<E: Entity> {
     connection: Mutex<Option<mysql::PooledConn>>,
-    _entity: std::marker::PhantomData<E>
+    _entity: std::marker::PhantomData<E>,
 }
 
 impl<E: Entity> MySqlDbRepo<E> {
@@ -44,25 +46,20 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// - `url`: MySQL 连接字符串，例如
     ///   "mysql://user:password@localhost:3306/database"
     pub fn new2(url: &str) -> Result<Self, RepoError> {
-        let pool = mysql::Pool::new(url)
-            .map_err(|e| RepoError::DeserializationFailed(format!("Failed to create connection pool: {}", e)))?;
+        let pool = mysql::Pool::new(url).map_err(|e| {
+            RepoError::DeserializationFailed(format!("Failed to create connection pool: {}", e))
+        })?;
 
-        let conn = pool
-            .get_conn()
-            .map_err(|e| RepoError::DeserializationFailed(format!("Failed to get connection: {}", e)))?;
+        let conn = pool.get_conn().map_err(|e| {
+            RepoError::DeserializationFailed(format!("Failed to get connection: {}", e))
+        })?;
 
-        Ok(MySqlDbRepo {
-            connection: Mutex::new(Some(conn)),
-            _entity: std::marker::PhantomData
-        })
+        Ok(MySqlDbRepo { connection: Mutex::new(Some(conn)), _entity: std::marker::PhantomData })
     }
 
     /// 创建一个无连接的实例（用于测试）
     pub fn new_mock() -> Self {
-        MySqlDbRepo {
-            connection: Mutex::new(None),
-            _entity: std::marker::PhantomData
-        }
+        MySqlDbRepo { connection: Mutex::new(None), _entity: std::marker::PhantomData }
     }
 
     /// 按实体ID查询单个实体
@@ -105,7 +102,9 @@ impl<E: Entity> MySqlDbRepo<E> {
 }
 
 impl<E: Entity> Default for MySqlDbRepo<E> {
-    fn default() -> Self { Self::new_mock() }
+    fn default() -> Self {
+        Self::new_mock()
+    }
 }
 
 impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
@@ -123,9 +122,7 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
 
         match &event.change_type() {
             // ========== Created 事件：在数据库中创建新实体 ==========
-            ChangeType::Created {
-                ..
-            } => {
+            ChangeType::Created { .. } => {
                 // 1. 检查实体是否已存在（幂等性）
                 if self.entity_exists(&event.entity_id(), E::entity_type())? {
                     // 实体已存在，幂等处理：不报错直接返回
@@ -133,8 +130,8 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
                 }
 
                 // 2. 从 Created 事件的字段信息重构实体对象
-                let entity =
-                    E::from_created_event(event).map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+                let entity = E::from_created_event(event)
+                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
 
                 // 3. 序列化实体并保存到数据库
                 self.insert_entity(event)?;
@@ -143,9 +140,7 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
             }
 
             // ========== Updated 事件：在数据库中更新实体 ==========
-            ChangeType::Updated {
-                changed_fields
-            } => {
+            ChangeType::Updated { changed_fields } => {
                 // 1. 检查实体是否存在
                 if !self.entity_exists(&event.entity_id(), E::entity_type())? {
                     return Err(RepoError::OrderNotFound);
@@ -155,10 +150,18 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
                 let mut entity = self.load_entity(&event.entity_id())?;
 
                 // 3. 应用变更到实体对象（通过 Entity::replay 方法）
-                entity.replay(event).map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+                entity
+                    .replay(event)
+                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
 
                 // 4. 更新数据库中的实体
-                self.update_entity(&event.entity_id(), E::entity_type(), &entity, event, changed_fields)?;
+                self.update_entity(
+                    &event.entity_id(),
+                    E::entity_type(),
+                    &entity,
+                    event,
+                    changed_fields,
+                )?;
 
                 Ok(())
             }
@@ -263,10 +266,7 @@ impl<E: Entity> MySqlDbRepo<E> {
         ];
 
         // 从 Created 事件中提取字段
-        if let ChangeType::Created {
-            fields
-        } = &event.change_type()
-        {
+        if let ChangeType::Created { fields } = &event.change_type() {
             // 添加来自字段变更的列
             for field in fields {
                 column_names.push(field.field_name.to_string());
@@ -297,12 +297,12 @@ impl<E: Entity> MySqlDbRepo<E> {
         let mut conn = self.connection.lock().unwrap();
         if let Some(ref mut c) = conn.as_mut() {
             // 使用 mysql crate 执行 SQL
-            c.query_drop(sql)
-                .map_err(|e| RepoError::DeserializationFailed(format!(
+            c.query_drop(sql).map_err(|e| {
+                RepoError::DeserializationFailed(format!(
                     "SQL execution failed: {}. SQL: {}",
-                    e,
-                    sql
-                )))?;
+                    e, sql
+                ))
+            })?;
         }
         // Mock 实例（connection: None）直接返回成功
         Ok(())
@@ -361,8 +361,12 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// WHERE entity_id = ? AND entity_type = ?
     /// ```
     fn update_entity(
-        &self, entity_id: &str, entity_type: &str, _entity: &E, event: &ChangeLogEntry,
-        changed_fields: &[diff::FieldChange]
+        &self,
+        entity_id: &str,
+        entity_type: &str,
+        _entity: &E,
+        event: &ChangeLogEntry,
+        changed_fields: &[diff::FieldChange],
     ) -> Result<(), RepoError> {
         // For mock instance, return immediately
         if self.connection.lock().unwrap().is_none() {
@@ -370,7 +374,7 @@ impl<E: Entity> MySqlDbRepo<E> {
         }
 
         // 根据变更的字段生成 UPDATE SQL
-        let sql = self.generate_update_sql( event)?;
+        let sql = self.generate_update_sql(event)?;
 
         // 执行 SQL 语句
         self.execute_sql(&sql)?;
@@ -379,10 +383,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     }
 
     /// 根据变更的字段生成 UPDATE SQL
-    fn generate_update_sql(
-        &self,
-        event: &ChangeLogEntry,
-    ) -> Result<String, RepoError> {
+    fn generate_update_sql(&self, event: &ChangeLogEntry) -> Result<String, RepoError> {
         let table_name = event.entity_type().clone();
 
         // 构建 SET 子句
@@ -425,7 +426,10 @@ impl<E: Entity> MySqlDbRepo<E> {
         }
 
         // 生成 DELETE SQL
-        let sql = format!("DELETE FROM entities WHERE entity_id = '{}' AND entity_type = '{}'", entity_id, entity_type);
+        let sql = format!(
+            "DELETE FROM entities WHERE entity_id = '{}' AND entity_type = '{}'",
+            entity_id, entity_type
+        );
 
         // 执行 SQL 语句
         self.execute_sql(&sql)?;
@@ -483,12 +487,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
         if self.connection.lock().unwrap().is_none() {
-            return Ok(PageResult::new(
-                Vec::new(),
-                0,
-                page_req.page,
-                page_req.page_size,
-            ));
+            return Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size));
         }
 
         // SQL: SELECT * FROM [entity_type]
@@ -499,12 +498,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
         // SELECT COUNT(*) FROM [entity_type] WHERE [condition_fields]
         //
         // TODO: 实现分页查询和 COUNT 查询
-        Ok(PageResult::new(
-            Vec::new(),
-            0,
-            page_req.page,
-            page_req.page_size,
-        ))
+        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
 
     /// 按序列号范围分页查询
@@ -516,12 +510,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
         if self.connection.lock().unwrap().is_none() {
-            return Ok(PageResult::new(
-                Vec::new(),
-                0,
-                page_req.page,
-                page_req.page_size,
-            ));
+            return Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size));
         }
 
         // SQL: SELECT * FROM [entity_type]
@@ -529,12 +518,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
         //      LIMIT ? OFFSET ?
         //
         // TODO: 实现范围分页查询
-        Ok(PageResult::new(
-            Vec::new(),
-            0,
-            page_req.page,
-            page_req.page_size,
-        ))
+        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
 
     /// 按实体ID查询
@@ -594,10 +578,7 @@ impl<E: Entity> MySqlDbRepo<E> {
         if where_clause.is_empty() {
             format!("SELECT COUNT(*) as cnt FROM {}", entity_type)
         } else {
-            format!(
-                "SELECT COUNT(*) as cnt FROM {} WHERE {}",
-                entity_type, where_clause
-            )
+            format!("SELECT COUNT(*) as cnt FROM {} WHERE {}", entity_type, where_clause)
         }
     }
 
@@ -657,7 +638,7 @@ impl<E: Entity> MySqlDbRepo<E> {
 
 #[cfg(test)]
 mod tests {
-    use base_types::{Price, Quantity, OrderSide, TradingPair};
+    use base_types::{OrderSide, Price, Quantity, TradingPair};
 
     use super::*;
 
@@ -675,13 +656,8 @@ mod tests {
         // #[replay(skip)]
         filled_quantity: Quantity,
         // #[replay(skip)]
-        side: OrderSide
+        side: OrderSide,
     }
-
-
-
-
-
 
     #[test]
     fn test_mock_repo_creation() {
@@ -754,9 +730,9 @@ mod tests {
         assert_eq!(where_clause, "entity_id < 'order_100'");
 
         // 附加条件
-        let where_clause = repo.generate_cursor_where_clause("order_100", true, "symbol = 'BTCUSDT'");
+        let where_clause =
+            repo.generate_cursor_where_clause("order_100", true, "symbol = 'BTCUSDT'");
         assert!(where_clause.contains("entity_id > 'order_100'"));
         assert!(where_clause.contains("symbol = 'BTCUSDT'"));
     }
-
 }

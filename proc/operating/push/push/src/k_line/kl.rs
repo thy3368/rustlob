@@ -1,8 +1,9 @@
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use rand::Rng;
-use crate::k_line::aggregator::k_line_aggregator::{KLineAggregator};
-use crate::k_line::k_line_types::{KLineAgg, TimeWindow};
 
+use rand::Rng;
+
+use crate::k_line::aggregator::k_line_aggregator::KLineAggregator;
+use crate::k_line::k_line_types::{KLineAgg, TimeWindow};
 
 #[test]
 fn main2() {
@@ -30,10 +31,7 @@ fn main2() {
     });
 
     // 模拟实时交易流
-    let mut timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let mut timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
     let mut price = 100.0;
     let mut rng = rand::thread_rng();
@@ -77,7 +75,9 @@ fn main2() {
     println!("总交易量: {:.2}", total_volume as f64);
 
     // 显示当前 K 线
-    for window in &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour] {
+    for window in
+        &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour]
+    {
         if let Some(ohlc) = aggregator.get_current_ohlc(*window) {
             let window_name = match window {
                 TimeWindow::Second => "1秒",
@@ -99,7 +99,9 @@ fn main2() {
 
     // 显示滑动窗口统计
     println!("\n滑动窗口统计:");
-    for window in &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour] {
+    for window in
+        &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour]
+    {
         let (open, high, low, close, volume) = aggregator.get_sliding_stats(*window, 10);
 
         let window_name = match window {

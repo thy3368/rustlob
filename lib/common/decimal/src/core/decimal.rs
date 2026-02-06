@@ -81,7 +81,7 @@ impl Decimal {
                     Err(_) => return Err("Invalid integer part"),
                 };
                 Ok(Decimal(integral * Self::DECIMALS))
-            },
+            }
             2 => {
                 // 有小数部分
                 let integral = match parts[0].parse::<i64>() {
@@ -108,7 +108,7 @@ impl Decimal {
                 }
 
                 Ok(Decimal(total))
-            },
+            }
             _ => Err("Invalid decimal format"),
         }
     }

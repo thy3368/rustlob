@@ -2,7 +2,8 @@
 //!
 //! 运行方式：cargo run
 
-use hotstuff::{crypto::PrivateKey, Node};
+use hotstuff::Node;
+use hotstuff::crypto::PrivateKey;
 
 fn main() {
     println!("\n╔═══════════════════════════════════════╗");

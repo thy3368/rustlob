@@ -1,9 +1,11 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 use axum::extract::ws::Message;
 use chrono;
 use immutable_derive::immutable;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 /// 连接信息结构体
 #[derive(Debug)]
@@ -24,7 +26,7 @@ pub struct ConnectionInfo {
     /// 最后活动时间戳（毫秒）
     pub last_active_at: i64,
     /// 消息发送器
-    pub sender: mpsc::UnboundedSender<Message>
+    pub sender: mpsc::UnboundedSender<Message>,
 }
 
 // 为 ConnectionInfo 手动实现 Clone trait
@@ -36,11 +38,10 @@ impl Clone for ConnectionInfo {
             subscription: self.subscription.clone(),
             connected_at: self.connected_at,
             last_active_at: self.last_active_at,
-            sender: self.sender.clone()
+            sender: self.sender.clone(),
         }
     }
 }
-
 
 /// 连接仓储 - 有状态服务
 ///
@@ -76,7 +77,7 @@ pub struct ConnectionRepo {
 
     /// 用户发送器映射：user_id -> Vec<Sender>
     /// 用于快速向某个用户的所有连接发送消息
-    user_senders: Arc<RwLock<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>
+    user_senders: Arc<RwLock<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>,
 }
 
 impl ConnectionRepo {
@@ -89,12 +90,19 @@ impl ConnectionRepo {
     ///
     /// # 性能优化
     /// 使用读锁，允许多个并发查询
-    pub async fn get_senders_by_event(&self, event_type: &str) -> Vec<mpsc::UnboundedSender<Message>> {
+    pub async fn get_senders_by_event(
+        &self,
+        event_type: &str,
+    ) -> Vec<mpsc::UnboundedSender<Message>> {
         let mut matched_senders = Vec::new();
         let all_conns = self.all_connections.read().await;
 
         for conn in all_conns.values() {
-            if conn.subscription.iter().any(|sub| sub == event_type || sub == "*" || sub.contains(event_type)) {
+            if conn
+                .subscription
+                .iter()
+                .any(|sub| sub == event_type || sub == "*" || sub.contains(event_type))
+            {
                 matched_senders.push(conn.sender.clone());
             }
         }
@@ -111,7 +119,9 @@ impl ConnectionRepo {
     /// # 性能优化
     /// 使用读锁，允许多个并发查询
     pub async fn get_senders_by_entity(
-        &self, entity_type: &str, entity_id: &str
+        &self,
+        entity_type: &str,
+        entity_id: &str,
     ) -> Vec<mpsc::UnboundedSender<Message>> {
         let mut matched_senders = Vec::new();
         let all_conns = self.all_connections.read().await;
@@ -119,11 +129,9 @@ impl ConnectionRepo {
         let specific_topic = format!("{}:{}", entity_type, entity_id);
 
         for conn in all_conns.values() {
-            if conn
-                .subscription
-                .iter()
-                .any(|sub| sub.as_str() == entity_type || sub == &specific_topic || sub.as_str() == "*")
-            {
+            if conn.subscription.iter().any(|sub| {
+                sub.as_str() == entity_type || sub == &specific_topic || sub.as_str() == "*"
+            }) {
                 matched_senders.push(conn.sender.clone());
             }
         }
@@ -162,7 +170,10 @@ impl ConnectionRepo {
 
             {
                 let mut user_senders = self.user_senders.write().await;
-                user_senders.entry(user_id.clone()).or_insert_with(Vec::new).push(conn_info.sender.clone());
+                user_senders
+                    .entry(user_id.clone())
+                    .or_insert_with(Vec::new)
+                    .push(conn_info.sender.clone());
             }
         }
 
@@ -237,7 +248,10 @@ impl ConnectionRepo {
     }
 
     /// 根据客户端地址获取发送器
-    pub async fn get_sender_by_addr(&self, client_addr: SocketAddr) -> Option<mpsc::UnboundedSender<Message>> {
+    pub async fn get_sender_by_addr(
+        &self,
+        client_addr: SocketAddr,
+    ) -> Option<mpsc::UnboundedSender<Message>> {
         let conn_senders = self.connection_senders.read().await;
         conn_senders.get(&client_addr).cloned()
     }
@@ -337,12 +351,18 @@ impl ConnectionRepo {
                 // 添加到新用户ID的映射
                 {
                     let mut user_conns = self.user_connections.write().await;
-                    user_conns.entry(new_user_id.clone()).or_insert_with(Vec::new).push(conn_clone.clone());
+                    user_conns
+                        .entry(new_user_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(conn_clone.clone());
                 }
 
                 {
                     let mut user_senders = self.user_senders.write().await;
-                    user_senders.entry(new_user_id.clone()).or_insert_with(Vec::new).push(conn_clone.sender.clone());
+                    user_senders
+                        .entry(new_user_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(conn_clone.sender.clone());
                 }
 
                 tracing::info!(

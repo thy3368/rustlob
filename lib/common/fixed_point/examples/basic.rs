@@ -38,8 +38,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // 7. 批量处理
-    let prices =
-        vec![FixedPoint::from_f64(100.0, -2)?, FixedPoint::from_f64(200.0, -2)?, FixedPoint::from_f64(300.0, -2)?];
+    let prices = vec![
+        FixedPoint::from_f64(100.0, -2)?,
+        FixedPoint::from_f64(200.0, -2)?,
+        FixedPoint::from_f64(300.0, -2)?,
+    ];
 
     let f64_prices = FixedPoint::batch_to_f64(&prices);
     println!("Batch conversion: {:?}", f64_prices);

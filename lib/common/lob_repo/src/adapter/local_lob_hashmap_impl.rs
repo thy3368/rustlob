@@ -1,6 +1,8 @@
 use std::collections::HashMap;
-use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
+
 use base_types::lob::lob::LobOrder;
+use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
+
 use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
 /// 价格点结构
@@ -36,10 +38,7 @@ struct OrderNode<O: LobOrder> {
 
 impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
-        Self {
-            order,
-            next_idx: None,
-        }
+        Self { order, next_idx: None }
     }
 }
 
@@ -229,7 +228,12 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
     /// # 算法
     /// - 买单：从最低卖价开始匹配（价格优先，时间优先）
     /// - 卖单：从最高买价开始匹配（价格优先，时间优先）
-    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
+    fn match_orders(
+        &self,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+    ) -> Option<Vec<&Self::Order>> {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
@@ -248,7 +252,9 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                     let ask_min_tick = self.price_to_tick(ask_min)?;
 
                     // 遍历所有存在的卖单价格点
-                    let mut ticks: Vec<i64> = self.asks.keys()
+                    let mut ticks: Vec<i64> = self
+                        .asks
+                        .keys()
                         .filter(|&&t| t >= ask_min_tick && t <= price_tick)
                         .copied()
                         .collect();
@@ -260,7 +266,9 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                         }
 
                         let current_price = self.tick_to_price(tick);
-                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
                             let mut current_idx = Some(first_idx);
 
                             while !remaining.is_zero() && current_idx.is_some() {
@@ -274,7 +282,8 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                                         } else {
                                             order_qty
                                         };
-                                        remaining = Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        remaining =
+                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
@@ -298,7 +307,9 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                     let bid_max_tick = self.price_to_tick(bid_max)?;
 
                     // 遍历所有存在的买单价格点
-                    let mut ticks: Vec<i64> = self.bids.keys()
+                    let mut ticks: Vec<i64> = self
+                        .bids
+                        .keys()
                         .filter(|&&t| t >= price_tick && t <= bid_max_tick)
                         .copied()
                         .collect();
@@ -311,7 +322,9 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                         }
 
                         let current_price = self.tick_to_price(tick);
-                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
                             let mut current_idx = Some(first_idx);
 
                             while !remaining.is_zero() && current_idx.is_some() {
@@ -325,7 +338,8 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                                         } else {
                                             order_qty
                                         };
-                                        remaining = Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        remaining =
+                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
@@ -339,11 +353,7 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
             }
         }
 
-        if matched_orders.is_empty() {
-            None
-        } else {
-            Some(matched_orders)
-        }
+        if matched_orders.is_empty() { None } else { Some(matched_orders) }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
@@ -427,7 +437,4 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
     fn update_last_price(&mut self, price: Price) {
         self.last_trade_price = Some(price);
     }
-
-
-
 }

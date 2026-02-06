@@ -1,20 +1,18 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::time::SystemTime;
+
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use push::k_line::aggregator::k_line_aggregator::KLineAggregator;
+use push::k_line::aggregator::m100_p_simd_k_line_aggregator::M100PSimdKLineAggregator;
+use push::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
 use push::k_line::aggregator::simd_k_line_aggregator::SimdKLineAggregator;
 use push::k_line::aggregator::single_thread_simd_k_line_aggregator::SingleThreadSimdKLineAggregator;
-use push::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
-use push::k_line::aggregator::m100_p_simd_k_line_aggregator::M100PSimdKLineAggregator;
-use rand::Rng;
-use std::time::SystemTime;
 use push::k_line::k_line_types::{KLineAgg, KLineAggMut};
+use rand::Rng;
 
 // 生成模拟交易数据
 fn generate_test_data(count: usize) -> Vec<(u64, f64, f64)> {
     let mut rng = rand::thread_rng();
-    let mut timestamp = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let mut timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     let mut price = 100.0;
     let mut data = Vec::with_capacity(count);
 
@@ -34,10 +32,7 @@ fn generate_test_data(count: usize) -> Vec<(u64, f64, f64)> {
 // 生成真实高频交易场景的测试数据
 fn generate_high_freq_test_data(count: usize) -> Vec<(u64, f64, f64)> {
     let mut rng = rand::thread_rng();
-    let timestamp = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     let mut price = 100.0;
     let mut data = Vec::with_capacity(count);
 

@@ -1,12 +1,13 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use std::path::PathBuf;
 
 mod analyzer;
 mod llvm_analyzer;
 mod optimizer;
-mod reporter;
 mod patterns;
+mod reporter;
 mod scorer;
 
 use analyzer::RustCodeAnalyzer;
@@ -69,12 +70,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Analyze {
-            path,
-            output,
-            output_file,
-            deep,
-        } => {
+        Commands::Analyze { path, output, output_file, deep } => {
             println!("{}", "🔍 开始分析Rust代码...".green().bold());
 
             let analyzer = RustCodeAnalyzer::new(path.clone())?;
@@ -95,11 +91,7 @@ fn main() -> anyhow::Result<()> {
             println!("{}", "✅ 分析完成!".green().bold());
         }
 
-        Commands::LlvmAnalyze {
-            path,
-            opt_level,
-            output_dir,
-        } => {
+        Commands::LlvmAnalyze { path, opt_level, output_dir } => {
             println!("{}", "🔬 生成LLVM IR并分析...".cyan().bold());
 
             let llvm_analyzer = LLVMAnalyzer::new(path)?;

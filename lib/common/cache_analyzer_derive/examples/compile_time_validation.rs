@@ -1,7 +1,6 @@
 /// 编译时缓存友好性验证示例
 ///
 /// 此文件展示如何使用 CacheAnalyzer 的编译时检查功能
-
 use cache_analyzer_derive::CacheAnalyzer;
 
 // ✅ 示例 1: 基础使用（无编译时检查）
@@ -45,7 +44,7 @@ pub struct StrictModeStruct {
     price: f64,
     #[hot]
     quantity: f64,
-    timestamp: u64,  // 非热点字段
+    timestamp: u64, // 非热点字段
 }
 
 // ❌ 示例 5: 严格模式 - 热点字段顺序错误
@@ -96,7 +95,7 @@ pub struct LowPaddingStruct {
     value2: u64,  // 8 字节
     counter: u32, // 4 字节
     flag: bool,   // 1 字节 + 3 字节填充
-    // 总共 24 字节，填充 3 字节 (12.5%)
+                  // 总共 24 字节，填充 3 字节 (12.5%)
 }
 
 // ✅ 示例 9: 组合多个检查

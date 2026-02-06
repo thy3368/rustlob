@@ -5,13 +5,13 @@
 use std::fmt;
 
 use crate::base_types::{
-    AccountId, AssetId, OrderId, PositionId, Price, Quantity, OrderSide, Timestamp, TradeId, TradingPair, UserId
+    AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
+    TradingPair, UserId,
 };
 
 // ============================================================================
 // 持仓相关类型定义
 // ============================================================================
-
 
 /// 持仓方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,7 +21,7 @@ pub enum PositionSide {
     /// 空头（做空）
     Short,
     /// 双向持仓模式
-    Both
+    Both,
 }
 
 impl fmt::Display for PositionSide {
@@ -29,15 +29,16 @@ impl fmt::Display for PositionSide {
         match self {
             PositionSide::Long => write!(f, "LONG"),
             PositionSide::Short => write!(f, "SHORT"),
-            PositionSide::Both => write!(f, "BOTH")
+            PositionSide::Both => write!(f, "BOTH"),
         }
     }
 }
 
 impl Default for PositionSide {
-    fn default() -> Self { PositionSide::Long }
+    fn default() -> Self {
+        PositionSide::Long
+    }
 }
-
 
 // ============================================================================
 // 持仓信息结构体
@@ -78,7 +79,7 @@ pub struct PrepPosition {
     /// 强平价格
     pub liquidation_price: Option<Price>,
     /// 更新时间戳（纳秒）
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }
 
 impl PrepPosition {
@@ -98,18 +99,24 @@ impl PrepPosition {
             leverage: 1,
             margin: Price::from_raw(0),
             liquidation_price: None,
-            updated_at: Timestamp::now_as_nanos(),  
+            updated_at: Timestamp::now_as_nanos(),
         }
     }
 
     /// 是否有持仓
-    pub fn has_position(&self) -> bool { self.quantity.is_positive() }
+    pub fn has_position(&self) -> bool {
+        self.quantity.is_positive()
+    }
 
     /// 是否为多头
-    pub fn is_long(&self) -> bool { self.position_side == PositionSide::Long && self.quantity.is_positive() }
+    pub fn is_long(&self) -> bool {
+        self.position_side == PositionSide::Long && self.quantity.is_positive()
+    }
 
     /// 是否为空头
-    pub fn is_short(&self) -> bool { self.position_side == PositionSide::Short && self.quantity.is_positive() }
+    pub fn is_short(&self) -> bool {
+        self.position_side == PositionSide::Short && self.quantity.is_positive()
+    }
 
     /// 计算下次资金费用
     pub fn calculate_next_funding_fee(&self, funding_rate: Price) -> Price {
@@ -152,7 +159,6 @@ impl PrepPosition {
         Some(Price::from_f64(liq_price.max(0.0)))
     }
 
-
     fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
         if !position.has_position() {
             return Price::from_raw(0);
@@ -183,8 +189,12 @@ impl PrepPosition {
     /// - `side`: 订单方向
     /// - `position_side`: 持仓方向
     pub fn add(
-        &mut self, new_quantity: Quantity, new_price: Price, leverage: u8, _side: crate::OrderSide,
-        _position_side: crate::PositionSide
+        &mut self,
+        new_quantity: Quantity,
+        new_price: Price,
+        leverage: u8,
+        _side: crate::OrderSide,
+        _position_side: crate::PositionSide,
     ) {
         // 计算新的持仓数量和均价（加权平均）
         let old_qty = self.quantity.to_f64();
@@ -197,7 +207,11 @@ impl PrepPosition {
 
         // 更新持仓数量和均价
         self.quantity = Quantity::from_f64(total_qty);
-        self.entry_price = if total_qty > 0.0 { Price::from_f64(total_cost / total_qty) } else { Price::from_raw(0) };
+        self.entry_price = if total_qty > 0.0 {
+            Price::from_f64(total_cost / total_qty)
+        } else {
+            Price::from_raw(0)
+        };
 
         // 更新标记价格
         self.mark_price = new_price;
@@ -273,15 +287,14 @@ impl PrepPosition {
     ///
     /// # 参数
     /// - `pnl`: 盈亏金额
-    pub fn update_realized_pnl(&mut self, pnl: Price) { self.realized_pnl = self.realized_pnl + pnl; }
+    pub fn update_realized_pnl(&mut self, pnl: Price) {
+        self.realized_pnl = self.realized_pnl + pnl;
+    }
 }
-
-
 
 // ============================================================================
 // 成交相关类型定义
 // ============================================================================
-
 
 /// 成交记录（单次撮合成交）
 #[derive(Debug, Clone, entity_derive::Entity)]
@@ -308,15 +321,22 @@ pub struct PrepTrade {
     /// 是否为Maker（流动性提供方）//todo 怎么判断？
     pub is_maker: bool,
     /// 成交时间戳（毫秒）
-    pub timestamp: Timestamp
+    pub timestamp: Timestamp,
 }
-
 
 impl PrepTrade {
     /// 创建新的成交记录
     pub fn new(
-        trade_id: TradeId, ask_order_id: OrderId, bid_order_id: OrderId, symbol: TradingPair, side: OrderSide, price: Price,
-        quantity: Quantity, fee: Price, fee_asset: AssetId, is_maker: bool
+        trade_id: TradeId,
+        ask_order_id: OrderId,
+        bid_order_id: OrderId,
+        symbol: TradingPair,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+        fee: Price,
+        fee_asset: AssetId,
+        is_maker: bool,
     ) -> Self {
         Self {
             trade_id,
@@ -329,7 +349,7 @@ impl PrepTrade {
             fee,
             fee_asset,
             is_maker,
-            timestamp: Timestamp::now_as_nanos()
+            timestamp: Timestamp::now_as_nanos(),
         }
     }
 

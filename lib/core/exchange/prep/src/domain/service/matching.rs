@@ -2,21 +2,19 @@
 //!
 //! 实现永续合约订单撮合逻辑
 
-use crate::domain::{
-    entity::{
-        Leverage, MarginMode, Order, OrderId, OrderStatus, Position, PositionSide, Price, Quantity, Side, TimeInForce,
-        Timestamp, Trade, TraderId
-    },
-    repository::{OrderRepository, PositionRepository},
-    service::command::{Command, CommandResult, PrepCommandHandler},
-    ErrorCode
+use crate::domain::ErrorCode;
+use crate::domain::entity::{
+    Leverage, MarginMode, Order, OrderId, OrderStatus, Position, PositionSide, Price, Quantity,
+    Side, TimeInForce, Timestamp, Trade, TraderId,
 };
+use crate::domain::repository::{OrderRepository, PositionRepository};
+use crate::domain::service::command::{Command, CommandResult, PrepCommandHandler};
 
 /// 撮合服务
 pub struct MatchingService<O, P>
 where
     O: OrderRepository,
-    P: PositionRepository
+    P: PositionRepository,
 {
     /// 订单仓储
     order_repo: O,
@@ -29,13 +27,13 @@ where
     /// 默认杠杆
     default_leverage: Leverage,
     /// 默认保证金模式
-    default_margin_mode: MarginMode
+    default_margin_mode: MarginMode,
 }
 
 impl<O, P> MatchingService<O, P>
 where
     O: OrderRepository,
-    P: PositionRepository
+    P: PositionRepository,
 {
     /// 创建撮合服务
     pub fn new(order_repo: O, position_repo: P) -> Self {
@@ -45,12 +43,14 @@ where
             trade_id_counter: 0,
             current_timestamp: 0,
             default_leverage: 10,
-            default_margin_mode: MarginMode::Cross
+            default_margin_mode: MarginMode::Cross,
         }
     }
 
     /// 设置当前时间戳
-    pub fn set_timestamp(&mut self, ts: Timestamp) { self.current_timestamp = ts; }
+    pub fn set_timestamp(&mut self, ts: Timestamp) {
+        self.current_timestamp = ts;
+    }
 
     /// 生成成交ID
     fn next_trade_id(&mut self) -> u64 {
@@ -60,20 +60,26 @@ where
 
     /// 处理限价单
     pub fn handle_limit_order(
-        &mut self, trader: TraderId, side: Side, price: Price, quantity: Quantity, position_side: PositionSide,
-        reduce_only: bool, time_in_force: TimeInForce
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+        position_side: PositionSide,
+        reduce_only: bool,
+        time_in_force: TimeInForce,
     ) -> CommandResult {
         // 验证参数
         if quantity == 0 {
             return CommandResult::Error {
                 code: ErrorCode::InvalidQuantity,
-                message: "数量不能为0".to_string()
+                message: "数量不能为0".to_string(),
             };
         }
         if price == 0 {
             return CommandResult::Error {
                 code: ErrorCode::InvalidPrice,
-                message: "价格不能为0".to_string()
+                message: "价格不能为0".to_string(),
             };
         }
 
@@ -84,13 +90,13 @@ where
                 None => {
                     return CommandResult::Error {
                         code: ErrorCode::ReduceOnlyRejected,
-                        message: "无持仓，只减仓订单被拒绝".to_string()
+                        message: "无持仓，只减仓订单被拒绝".to_string(),
                     };
                 }
                 Some(pos) if pos.quantity < quantity => {
                     return CommandResult::Error {
                         code: ErrorCode::ReduceOnlyRejected,
-                        message: "只减仓数量超过持仓".to_string()
+                        message: "只减仓数量超过持仓".to_string(),
                     };
                 }
                 _ => {}
@@ -108,7 +114,7 @@ where
             position_side,
             reduce_only,
             time_in_force,
-            self.current_timestamp
+            self.current_timestamp,
         );
 
         // 撮合
@@ -122,7 +128,7 @@ where
                         order_id,
                         trades: vec![],
                         remaining_quantity: quantity,
-                        status: OrderStatus::Cancelled
+                        status: OrderStatus::Cancelled,
                     };
                 }
                 OrderStatus::Filled
@@ -140,7 +146,7 @@ where
                 if !trades.is_empty() {
                     return CommandResult::Error {
                         code: ErrorCode::InvalidPrice,
-                        message: "PostOnly 订单会立即成交".to_string()
+                        message: "PostOnly 订单会立即成交".to_string(),
                     };
                 }
                 OrderStatus::New
@@ -157,7 +163,11 @@ where
         };
 
         // 剩余数量挂单
-        if remaining > 0 && matches!(time_in_force, TimeInForce::GTC | TimeInForce::GTD { .. } | TimeInForce::PostOnly)
+        if remaining > 0
+            && matches!(
+                time_in_force,
+                TimeInForce::GTC | TimeInForce::GTD { .. } | TimeInForce::PostOnly
+            )
         {
             let remaining_order = Order::new(
                 order_id,
@@ -168,17 +178,12 @@ where
                 position_side,
                 reduce_only,
                 time_in_force,
-                self.current_timestamp
+                self.current_timestamp,
             );
             let _ = self.order_repo.save_order(remaining_order);
         }
 
-        CommandResult::LimitOrder {
-            order_id,
-            trades,
-            remaining_quantity: remaining,
-            status
-        }
+        CommandResult::LimitOrder { order_id, trades, remaining_quantity: remaining, status }
     }
 
     /// 撮合订单
@@ -187,25 +192,37 @@ where
         let mut remaining = order.remaining_quantity;
 
         // 收集可匹配的对手方订单信息
-        let matches: Vec<(OrderId, TraderId, Price, Quantity, PositionSide, bool)> = match order.side {
+        let matches: Vec<(OrderId, TraderId, Price, Quantity, PositionSide, bool)> = match order
+            .side
+        {
             Side::Buy => self
                 .order_repo
                 .get_asks()
                 .iter()
                 .filter(|o| o.is_active() && order.can_match(o.price))
-                .map(|o| (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only))
+                .map(|o| {
+                    (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only)
+                })
                 .collect(),
             Side::Sell => self
                 .order_repo
                 .get_bids()
                 .iter()
                 .filter(|o| o.is_active() && o.can_match(order.price))
-                .map(|o| (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only))
-                .collect()
+                .map(|o| {
+                    (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only)
+                })
+                .collect(),
         };
 
-        for (opposite_id, opposite_trader, opposite_price, opposite_qty, opposite_pos_side, opposite_reduce_only) in
-            matches
+        for (
+            opposite_id,
+            opposite_trader,
+            opposite_price,
+            opposite_qty,
+            opposite_pos_side,
+            opposite_reduce_only,
+        ) in matches
         {
             if remaining == 0 {
                 break;
@@ -234,7 +251,7 @@ where
                 self.current_timestamp,
                 fee,
                 0,     // realized_pnl
-                false  // is_maker (taker)
+                false, // is_maker (taker)
             );
 
             // 更新仓位
@@ -247,7 +264,7 @@ where
                 match_qty,
                 match_price,
                 order.reduce_only,
-                opposite_reduce_only
+                opposite_reduce_only,
             );
 
             trades.push(trade);
@@ -264,35 +281,62 @@ where
 
     /// 更新仓位
     fn update_positions(
-        &mut self, taker_trader: TraderId, maker_trader: TraderId, taker_side: Side, taker_position_side: PositionSide,
-        maker_position_side: PositionSide, quantity: Quantity, price: Price, taker_reduce_only: bool,
-        maker_reduce_only: bool
+        &mut self,
+        taker_trader: TraderId,
+        maker_trader: TraderId,
+        taker_side: Side,
+        taker_position_side: PositionSide,
+        maker_position_side: PositionSide,
+        quantity: Quantity,
+        price: Price,
+        taker_reduce_only: bool,
+        maker_reduce_only: bool,
     ) {
         // 更新 Taker 仓位
-        self.update_single_position(taker_trader, taker_side, taker_position_side, quantity, price, taker_reduce_only);
+        self.update_single_position(
+            taker_trader,
+            taker_side,
+            taker_position_side,
+            quantity,
+            price,
+            taker_reduce_only,
+        );
 
         // 更新 Maker 仓位
         let maker_side = match taker_side {
             Side::Buy => Side::Sell,
-            Side::Sell => Side::Buy
+            Side::Sell => Side::Buy,
         };
-        self.update_single_position(maker_trader, maker_side, maker_position_side, quantity, price, maker_reduce_only);
+        self.update_single_position(
+            maker_trader,
+            maker_side,
+            maker_position_side,
+            quantity,
+            price,
+            maker_reduce_only,
+        );
     }
 
     /// 更新单个仓位
     fn update_single_position(
-        &mut self, trader: TraderId, side: Side, position_side: PositionSide, quantity: Quantity, price: Price,
-        reduce_only: bool
+        &mut self,
+        trader: TraderId,
+        side: Side,
+        position_side: PositionSide,
+        quantity: Quantity,
+        price: Price,
+        reduce_only: bool,
     ) {
         let is_opening = match (side, position_side) {
             (Side::Buy, PositionSide::Long) | (Side::Buy, PositionSide::Both) => !reduce_only,
             (Side::Sell, PositionSide::Short) => !reduce_only,
             (Side::Sell, PositionSide::Long) | (Side::Sell, PositionSide::Both) => false,
-            (Side::Buy, PositionSide::Short) => false
+            (Side::Buy, PositionSide::Short) => false,
         };
 
         // 先检查是否有仓位，获取ID
-        let position_id = self.position_repo.get_position_by_trader_side(trader, position_side).map(|p| p.id);
+        let position_id =
+            self.position_repo.get_position_by_trader_side(trader, position_side).map(|p| p.id);
 
         if let Some(pos_id) = position_id {
             if let Some(position) = self.position_repo.get_position_mut(pos_id) {
@@ -318,7 +362,7 @@ where
                 self.default_margin_mode,
                 self.default_leverage,
                 margin,
-                self.current_timestamp
+                self.current_timestamp,
             );
             let _ = self.position_repo.save_position(position);
         }
@@ -339,7 +383,7 @@ where
 impl<O, P> PrepCommandHandler for MatchingService<O, P>
 where
     O: OrderRepository,
-    P: PositionRepository
+    P: PositionRepository,
 {
     fn handle(&mut self, command: Command) -> CommandResult {
         match command {
@@ -350,12 +394,18 @@ where
                 quantity,
                 position_side,
                 reduce_only,
-                time_in_force
-            } => self.handle_limit_order(trader, side, price, quantity, position_side, reduce_only, time_in_force),
+                time_in_force,
+            } => self.handle_limit_order(
+                trader,
+                side,
+                price,
+                quantity,
+                position_side,
+                reduce_only,
+                time_in_force,
+            ),
 
-            Command::CancelOrder {
-                order_id
-            } => {
+            Command::CancelOrder { order_id } => {
                 if let Some(order) = self.order_repo.get_order_mut(order_id) {
                     let cancelled_qty = order.remaining_quantity;
                     order.cancel(self.current_timestamp);
@@ -363,22 +413,24 @@ where
                     CommandResult::CancelOrder {
                         order_id,
                         success: true,
-                        cancelled_quantity: cancelled_qty
+                        cancelled_quantity: cancelled_qty,
                     }
                 } else {
                     CommandResult::Error {
                         code: ErrorCode::OrderNotFound,
-                        message: "订单不存在".to_string()
+                        message: "订单不存在".to_string(),
                     }
                 }
             }
 
             _ => CommandResult::Error {
                 code: ErrorCode::SystemError,
-                message: "命令未实现".to_string()
-            }
+                message: "命令未实现".to_string(),
+            },
         }
     }
 
-    fn handler_name(&self) -> &'static str { "PrepMatchingService" }
+    fn handler_name(&self) -> &'static str {
+        "PrepMatchingService"
+    }
 }

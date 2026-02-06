@@ -1,8 +1,11 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, AtomicU64, Ordering};
-use crossbeam_channel::{bounded, Receiver, Sender, unbounded};
-use parking_lot::RwLock;
-use crate::k_line::k_line_types::{CacheAligned, OHLC, TimeWindow, KLineAgg, KLineUpdateEvent, LockFreeRingBuffer};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
+use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
+use parking_lot::RwLock;
+
+use crate::k_line::k_line_types::{
+    CacheAligned, KLineAgg, KLineUpdateEvent, LockFreeRingBuffer, OHLC, TimeWindow,
+};
 
 // 高性能无锁聚合器
 pub struct HighPerformanceKLineAggregator {
@@ -13,7 +16,7 @@ pub struct HighPerformanceKLineAggregator {
     history_buffers: [LockFreeRingBuffer<OHLC>; 4],
 
     // 统计信息
-    stats: CacheAligned<(AtomicU64, AtomicU64)>,  // (交易数, 交易量)
+    stats: CacheAligned<(AtomicU64, AtomicU64)>, // (交易数, 交易量)
 
     // 时间窗口配置
     config: CacheAligned<AggregatorConfig>,
@@ -51,10 +54,6 @@ impl HighPerformanceKLineAggregator {
             config: CacheAligned::new(config),
         }
     }
-
-
-
-
 }
 
 //todo 完全重新实现
@@ -65,7 +64,7 @@ impl KLineAgg for HighPerformanceKLineAggregator {
 
     fn subscribe<F>(&self, handler: F)
     where
-        F: Fn(KLineUpdateEvent) + Send + Sync + 'static
+        F: Fn(KLineUpdateEvent) + Send + Sync + 'static,
     {
         todo!()
     }

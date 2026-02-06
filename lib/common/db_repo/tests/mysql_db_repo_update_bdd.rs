@@ -4,8 +4,9 @@
 //! 事件通过 Entity 的 track 方法生成
 //! 场景：实体被创建后，通过 Updated 事件更新其字段
 
-use base_types::{Price, Quantity, OrderSide, TradingPair};
-use db_repo::{adapter::mysql_db_repo::MySqlDbRepo, core::db_repo::CmdRepo};
+use base_types::{OrderSide, Price, Quantity, TradingPair};
+use db_repo::adapter::mysql_db_repo::MySqlDbRepo;
+use db_repo::core::db_repo::CmdRepo;
 use diff::Entity;
 
 // ============================================================================
@@ -20,7 +21,7 @@ struct TestEntity {
     price: Price,
     quantity: Quantity,
     filled_quantity: Quantity,
-    side: OrderSide
+    side: OrderSide,
 }
 
 // ============================================================================
@@ -37,7 +38,7 @@ fn scenario_update_single_field_after_creation() {
         price: Price::from_raw(50000),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
-        side: OrderSide::Buy
+        side: OrderSide::Buy,
     };
 
     let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();

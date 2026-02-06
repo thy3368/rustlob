@@ -17,7 +17,7 @@ pub struct Account {
     /// 创建时间
     pub created_at: Timestamp,
     /// 更新时间
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }
 
 impl Account {
@@ -29,13 +29,15 @@ impl Account {
             account_type,
             status: AccountStatus::Active,
             created_at: now,
-            updated_at: now
+            updated_at: now,
         }
     }
 
     /// 检查账户是否可用于交易
     #[inline]
-    pub fn is_active(&self) -> bool { matches!(self.status, AccountStatus::Active) }
+    pub fn is_active(&self) -> bool {
+        matches!(self.status, AccountStatus::Active)
+    }
 
     /// 冻结账户
     pub fn freeze(&mut self, now: Timestamp) {
@@ -67,7 +69,7 @@ pub enum AccountType {
     /// 合约账户（全仓）
     PerpCross = 2,
     /// 资金账户
-    Funding = 3
+    Funding = 3,
 }
 
 /// 账户状态
@@ -79,5 +81,5 @@ pub enum AccountStatus {
     /// 冻结（禁止交易）
     Frozen = 1,
     /// 注销
-    Closed = 2
+    Closed = 2,
 }

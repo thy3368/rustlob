@@ -1,13 +1,17 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use serde::de::DeserializeOwned;
-use immutable_derive::immutable;
-use serde_json::json;
-use base_types::spot_topic::SpotTopic;
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
-use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
-use diff::ChangeLogEntry;
-use rust_queue::queue::queue::Queue;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
 use base_types::actor_x::ActorX;
+use base_types::spot_topic::SpotTopic;
+use diff::ChangeLogEntry;
+use immutable_derive::immutable;
+use rust_queue::queue::queue::Queue;
+use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+use serde::de::DeserializeOwned;
+use serde_json::json;
+
+use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 
 /// 推送服务 - 无状态设计，可安全地在多线程间共享
 ///
@@ -18,18 +22,14 @@ pub struct PushService {
     /// 连接管理仓储（不可变引用）
     connection_repo: Arc<ConnectionRepo>,
     /// 变更日志仓储（不可变引用）
-    change_log_repo: Arc<MPMCQueue>
+    change_log_repo: Arc<MPMCQueue>,
 }
-
 
 impl PushService {
     /// 后台运行事件监听循环
     async fn run(&self) {
         // 订阅变更日志事件
-        let mut receiver = self.change_log_repo.subscribe(
-            SpotTopic::EntityChangeLog.name(),
-            None
-        );
+        let mut receiver = self.change_log_repo.subscribe(SpotTopic::EntityChangeLog.name(), None);
 
         // 持续监听事件
         while let Ok(event) = receiver.recv().await {
@@ -56,8 +56,12 @@ impl PushService {
         );
 
         // 通过 ConnectionRepo 找到对该事件感兴趣的发送器列表
-        let interested_senders: Vec<tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>> =
-            self.connection_repo.get_senders_by_entity(&entity_change_log.entity_type(), &entity_change_log.entity_id()).await;
+        let interested_senders: Vec<
+            tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>,
+        > = self
+            .connection_repo
+            .get_senders_by_entity(&entity_change_log.entity_type(), &entity_change_log.entity_id())
+            .await;
 
         if interested_senders.is_empty() {
             tracing::trace!(
@@ -96,7 +100,9 @@ impl PushService {
             if sender.send(ws_msg.clone()).is_ok() {
                 success_count += 1;
             } else {
-                tracing::debug!("Failed to send message to WebSocket connection (connection may be closed)");
+                tracing::debug!(
+                    "Failed to send message to WebSocket connection (connection may be closed)"
+                );
             }
         }
 
@@ -129,4 +135,3 @@ impl ActorX for PushService {
         });
     }
 }
-

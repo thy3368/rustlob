@@ -1,23 +1,19 @@
+use std::mem::MaybeUninit;
 use std::os::fd::AsFd;
+
 use anyhow::{Context, Result};
 use clap::Parser;
+use libbpf_rs::skel::{OpenSkel, SkelBuilder};
 use nix::libc;
 use nix::net::if_::if_nametoindex;
 use tokio::sync::broadcast;
-use websocket_axum::{start_server, WebSocketEvent};
-use std::mem::MaybeUninit;
-use libbpf_rs::skel::SkelBuilder;
-use libbpf_rs::skel::OpenSkel;
+use websocket_axum::{WebSocketEvent, start_server};
 
 // 包含生成的 eBPF 骨架代码
 mod xdp_hello {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/bpf/xdp_hello.skel.rs"
-    ));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/bpf/xdp_hello.skel.rs"));
 }
 use xdp_hello::*;
-
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -72,10 +68,7 @@ impl XdpEvent {
 }
 
 fn bump_memlock_rlimit() -> Result<()> {
-    let rlimit = libc::rlimit {
-        rlim_cur: 128 << 20,
-        rlim_max: 128 << 20,
-    };
+    let rlimit = libc::rlimit { rlim_cur: 128 << 20, rlim_max: 128 << 20 };
 
     if unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlimit) } != 0 {
         anyhow::bail!("Failed to increase rlimit");
@@ -128,8 +121,7 @@ async fn run_xdp_program(
 ) -> Result<()> {
     use libbpf_rs::{Xdp, XdpFlags};
 
-    let if_index = if_nametoindex(iface.as_str())
-        .context("Failed to get interface index")?;
+    let if_index = if_nametoindex(iface.as_str()).context("Failed to get interface index")?;
 
     // 尝试使用默认模式附加 XDP 程序，失败时使用通用模式
     let xdp_prog = Xdp::new(skel.progs.xdp_hello.as_fd());
@@ -137,7 +129,8 @@ async fn run_xdp_program(
         Ok(_) => println!("XDP program attached to interface: {} (driver mode)", iface),
         Err(e) => {
             println!("Failed to attach in driver mode: {}, trying generic mode", e);
-            xdp_prog.attach(if_index as i32, XdpFlags::SKB_MODE)
+            xdp_prog
+                .attach(if_index as i32, XdpFlags::SKB_MODE)
                 .context("Failed to attach XDP program to interface (generic mode)")?;
             println!("XDP program attached to interface: {} (generic mode)", iface);
         }
@@ -152,10 +145,7 @@ async fn run_xdp_program(
             let json = event.to_json();
 
             // 发送 WebSocket 事件
-            let ws_event = WebSocketEvent {
-                r#type: "network_event".to_string(),
-                data: json,
-            };
+            let ws_event = WebSocketEvent { r#type: "network_event".to_string(), data: json };
             let _ = tx_ebpf.send(ws_event);
 
             0
@@ -168,7 +158,7 @@ async fn run_xdp_program(
         println!("eBPF ring buffer listener started");
         loop {
             match ringbuf.poll(std::time::Duration::from_millis(100)) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Ring buffer poll error: {}", e);
                     break;
@@ -193,8 +183,7 @@ async fn run_xdp_program(
     tokio::signal::ctrl_c().await?;
 
     println!("\nDetaching XDP program...");
-    xdp_prog.detach(if_index as i32, XdpFlags::empty())
-        .context("Failed to detach XDP program")?;
+    xdp_prog.detach(if_index as i32, XdpFlags::empty()).context("Failed to detach XDP program")?;
     println!("XDP program detached from interface: {}", iface);
 
     Ok(())

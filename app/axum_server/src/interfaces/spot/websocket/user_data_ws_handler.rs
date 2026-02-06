@@ -1,19 +1,17 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::{ConnectInfo, WebSocketUpgrade},
-    response::IntoResponse
-};
+use axum::extract::{ConnectInfo, WebSocketUpgrade};
+use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
-use push::push::{
-    connection_types::ConnectionInfo, subscription_service::SubscriptionService
-};
+use push::push::connection_types::ConnectionInfo;
+use push::push::subscription_service::SubscriptionService;
 use tokio::sync::mpsc;
 
 /// 用户数据 WebSocket 连接处理器
 pub async fn user_data_websocket_handler(
-    ws: WebSocketUpgrade, ConnectInfo(client_addr): ConnectInfo<std::net::SocketAddr>,
-    sub_service: Arc<SubscriptionService>
+    ws: WebSocketUpgrade,
+    ConnectInfo(client_addr): ConnectInfo<std::net::SocketAddr>,
+    sub_service: Arc<SubscriptionService>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| async move {
         println!("New Spot User Data WebSocket connection established from {}", client_addr);

@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use base_types::{lob::lob::LobOrder, OrderId, Price, Quantity, OrderSide, TradingPair};
+use base_types::lob::lob::LobOrder;
+use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLogEntry, FromCreatedEvent};
 
-use crate::core::{
-    repo_snapshot_support::{EventReplay, RepoSnapshot},
-    symbol_lob_repo::{RepoError, SymbolLob}
-};
+use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
+use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
 
 /// 价格点结构
 ///
@@ -16,7 +15,7 @@ struct PricePoint {
     /// 该价格级别的第一个订单在 orders 中的索引
     first_order_idx: Option<usize>,
     /// 该价格级别的最后一个订单在 orders 中的索引
-    last_order_idx: Option<usize>
+    last_order_idx: Option<usize>,
 }
 
 impl PricePoint {
@@ -38,15 +37,12 @@ impl PricePoint {
 struct OrderNode<O: LobOrder> {
     order: O,
     /// 指向同价格级别下一个订单的索引
-    next_idx: Option<usize>
+    next_idx: Option<usize>,
 }
 
 impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
-        Self {
-            order,
-            next_idx: None
-        }
+        Self { order, next_idx: None }
     }
 }
 
@@ -74,13 +70,17 @@ pub struct LocalLob<O: LobOrder> {
     /// 最后一笔成交价
     last_trade_price: Option<Price>,
     /// 下一个可用的订单槽位索引
-    next_slot: usize
+    next_slot: usize,
 }
 
 impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
     type Snapshot = LocalLob<O>;
 
-    fn create_snapshot(&self, _timestamp: u64, _sequence: u64) -> Result<Self::Snapshot, RepoError> {
+    fn create_snapshot(
+        &self,
+        _timestamp: u64,
+        _sequence: u64,
+    ) -> Result<Self::Snapshot, RepoError> {
         // 直接克隆当前 LocalLob 作为快照
         Ok(self.clone())
     }
@@ -109,9 +109,7 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
         use diff::ChangeType;
 
         match &event.change_type() {
-            ChangeType::Created {
-                ..
-            } => {
+            ChangeType::Created { .. } => {
                 // 订单创建事件
                 // 使用 from_created_event 从 Created 事件重构订单对象
 
@@ -135,16 +133,14 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
 
                 Ok(())
             }
-            ChangeType::Updated {
-                changed_fields: _
-            } => {
+            ChangeType::Updated { changed_fields: _ } => {
                 // 订单更新事件
                 // Updated 事件包含变更字段（old_value -> new_value）
 
                 // 提取订单 ID
                 let order_id: OrderId = match event.entity_id().parse::<u64>() {
                     Ok(id) => id,
-                    Err(_) => return Ok(()) // 无法解析 ID，忽略该事件
+                    Err(_) => return Ok(()), // 无法解析 ID，忽略该事件
                 };
 
                 // 获取订单的可变引用，使用 Entity trait 的 replay 方法应用变更
@@ -171,7 +167,6 @@ impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
     }
 }
 
-
 impl<O: LobOrder> LocalLob<O> {
     /// 创建新的本地 LOB（使用默认 tick size）
     ///
@@ -182,7 +177,9 @@ impl<O: LobOrder> LocalLob<O> {
     /// - tick_size: 0.01 USDT (适合 BTC/ETH 等主流币)
     /// - max_ticks: 30,000,000 (支持价格到 300,000.00 USDT)
     /// - max_orders: 10,000 个订单
-    pub fn new(symbol: TradingPair) -> Self { Self::new_with_tick(symbol, Price::from_f64(0.01)) }
+    pub fn new(symbol: TradingPair) -> Self {
+        Self::new_with_tick(symbol, Price::from_f64(0.01))
+    }
 
     /// 创建指定 tick size 的本地 LOB
     ///
@@ -206,7 +203,12 @@ impl<O: LobOrder> LocalLob<O> {
     }
 
     /// 创建指定容量的本地 LOB
-    pub fn with_capacity(symbol: TradingPair, tick_size: Price, max_ticks: usize, max_orders: usize) -> Self {
+    pub fn with_capacity(
+        symbol: TradingPair,
+        tick_size: Price,
+        max_ticks: usize,
+        max_orders: usize,
+    ) -> Self {
         Self {
             symbol,
             tick_size,
@@ -217,11 +219,13 @@ impl<O: LobOrder> LocalLob<O> {
             bid_max: None,
             ask_min: None,
             last_trade_price: None,
-            next_slot: 0
+            next_slot: 0,
         }
     }
 
-    pub fn symbol(&self) -> &TradingPair { &self.symbol }
+    pub fn symbol(&self) -> &TradingPair {
+        &self.symbol
+    }
 
     /// 将价格转换为 tick 索引
     #[inline]
@@ -230,11 +234,7 @@ impl<O: LobOrder> LocalLob<O> {
             return None;
         }
         let tick_idx = price.raw() / self.tick_size.raw();
-        if tick_idx < 0 {
-            None
-        } else {
-            Some(tick_idx as usize)
-        }
+        if tick_idx < 0 { None } else { Some(tick_idx as usize) }
     }
 
     /// 获取价格点的可变引用
@@ -242,7 +242,7 @@ impl<O: LobOrder> LocalLob<O> {
         let tick_idx = self.price_to_tick_idx(price)?;
         match side {
             OrderSide::Buy => self.bids.get_mut(tick_idx),
-            OrderSide::Sell => self.asks.get_mut(tick_idx)
+            OrderSide::Sell => self.asks.get_mut(tick_idx),
         }
     }
 
@@ -251,7 +251,7 @@ impl<O: LobOrder> LocalLob<O> {
         let tick_idx = self.price_to_tick_idx(price)?;
         match side {
             OrderSide::Buy => self.bids.get(tick_idx),
-            OrderSide::Sell => self.asks.get(tick_idx)
+            OrderSide::Sell => self.asks.get(tick_idx),
         }
     }
 
@@ -308,7 +308,12 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
     /// # 算法
     /// - 买单：从最低卖价开始匹配（价格优先，时间优先）
     /// - 卖单：从最高买价开始匹配（价格优先，时间优先）
-    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>> {
+    fn match_orders(
+        &self,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+    ) -> Option<Vec<&Self::Order>> {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
@@ -332,8 +337,11 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                         }
 
                         // 将 tick 转回价格
-                        let current_price = Price::from_raw(current_tick as i64 * self.tick_size.raw());
-                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
+                        let current_price =
+                            Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
                             let mut current_idx = Some(first_idx);
 
                             while !remaining.is_zero() && current_idx.is_some() {
@@ -342,8 +350,13 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                                 if let Some(Some(node)) = self.orders.get(idx) {
                                     let order_qty = node.order.quantity();
                                     if order_qty > Quantity::from_raw(0) {
-                                        let fill_qty = if remaining < order_qty { remaining } else { order_qty };
-                                        remaining = Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        let fill_qty = if remaining < order_qty {
+                                            remaining
+                                        } else {
+                                            order_qty
+                                        };
+                                        remaining =
+                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
@@ -372,8 +385,11 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                         }
 
                         // 将 tick 转回价格
-                        let current_price = Price::from_raw(current_tick as i64 * self.tick_size.raw());
-                        if let Some(first_idx) = self.get_first_order_at_price(current_price, opposite_side) {
+                        let current_price =
+                            Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        if let Some(first_idx) =
+                            self.get_first_order_at_price(current_price, opposite_side)
+                        {
                             let mut current_idx = Some(first_idx);
 
                             while !remaining.is_zero() && current_idx.is_some() {
@@ -382,8 +398,13 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                                 if let Some(Some(node)) = self.orders.get(idx) {
                                     let order_qty = node.order.quantity();
                                     if order_qty > Quantity::from_raw(0) {
-                                        let fill_qty = if remaining < order_qty { remaining } else { order_qty };
-                                        remaining = Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        let fill_qty = if remaining < order_qty {
+                                            remaining
+                                        } else {
+                                            order_qty
+                                        };
+                                        remaining =
+                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
@@ -397,11 +418,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
             }
         }
 
-        if matched_orders.is_empty() {
-            None
-        } else {
-            Some(matched_orders)
-        }
+        if matched_orders.is_empty() { None } else { Some(matched_orders) }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
@@ -470,11 +487,19 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
             .map(|node| &mut node.order)
     }
 
-    fn best_bid(&self) -> Option<Price> { self.bid_max }
+    fn best_bid(&self) -> Option<Price> {
+        self.bid_max
+    }
 
-    fn best_ask(&self) -> Option<Price> { self.ask_min }
+    fn best_ask(&self) -> Option<Price> {
+        self.ask_min
+    }
 
-    fn last_price(&self) -> Option<Price> { self.last_trade_price }
+    fn last_price(&self) -> Option<Price> {
+        self.last_trade_price
+    }
 
-    fn update_last_price(&mut self, price: Price) { self.last_trade_price = Some(price); }
+    fn update_last_price(&mut self, price: Price) {
+        self.last_trade_price = Some(price);
+    }
 }

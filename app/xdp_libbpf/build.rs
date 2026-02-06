@@ -19,10 +19,7 @@ fn main() {
 
     SkeletonBuilder::new()
         .source(SRC)
-        .clang_args([
-            OsStr::new("-I"),
-            vmlinux::include_path_root().join(arch).as_os_str(),
-        ])
+        .clang_args([OsStr::new("-I"), vmlinux::include_path_root().join(arch).as_os_str()])
         // .no_format() // 禁用 rustfmt，避免需要安装 rustfmt
         .build_and_generate(&out)
         .unwrap();

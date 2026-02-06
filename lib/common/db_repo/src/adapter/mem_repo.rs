@@ -1,7 +1,7 @@
-use diff::Entity;
-use crate::{CmdRepo, QueryRepo, PageRequest, PageResult, RepoError};
-use diff::ChangeLogEntry;
+use diff::{ChangeLogEntry, Entity};
 use immutable_derive::immutable;
+
+use crate::{CmdRepo, PageRequest, PageResult, QueryRepo, RepoError};
 
 /// 基于内存的仓储实现，支持所有实现了 Entity trait 的类型
 #[immutable]
@@ -21,7 +21,11 @@ impl<E: Entity> CmdRepo for MemRepo<E> {
         todo!()
     }
 
-    fn replay_from_sequence(&self, events: &[ChangeLogEntry], from_sequence: u64) -> Result<(), RepoError> {
+    fn replay_from_sequence(
+        &self,
+        events: &[ChangeLogEntry],
+        from_sequence: u64,
+    ) -> Result<(), RepoError> {
         todo!()
     }
 }
@@ -45,7 +49,11 @@ impl<E: Entity> QueryRepo for MemRepo<E> {
         todo!()
     }
 
-    fn find_range_by_sequence(&self, from_sequence: u64, to_sequence: u64) -> Result<Vec<Self::E>, RepoError> {
+    fn find_range_by_sequence(
+        &self,
+        from_sequence: u64,
+        to_sequence: u64,
+    ) -> Result<Vec<Self::E>, RepoError> {
         todo!()
     }
 
@@ -57,15 +65,30 @@ impl<E: Entity> QueryRepo for MemRepo<E> {
         todo!()
     }
 
-    fn find_all_by_condition_paginated(&self, condition: Self::E, page_req: PageRequest) -> Result<PageResult<Self::E>, RepoError> {
+    fn find_all_by_condition_paginated(
+        &self,
+        condition: Self::E,
+        page_req: PageRequest,
+    ) -> Result<PageResult<Self::E>, RepoError> {
         todo!()
     }
 
-    fn find_range_by_sequence_paginated(&self, from_sequence: u64, to_sequence: u64, page_req: PageRequest) -> Result<PageResult<Self::E>, RepoError> {
+    fn find_range_by_sequence_paginated(
+        &self,
+        from_sequence: u64,
+        to_sequence: u64,
+        page_req: PageRequest,
+    ) -> Result<PageResult<Self::E>, RepoError> {
         todo!()
     }
 
-    fn find_by_cursor(&self, condition: Self::E, cursor: Option<String>, limit: u64, forward: bool) -> Result<(Vec<Self::E>, Option<String>), RepoError> {
+    fn find_by_cursor(
+        &self,
+        condition: Self::E,
+        cursor: Option<String>,
+        limit: u64,
+        forward: bool,
+    ) -> Result<(Vec<Self::E>, Option<String>), RepoError> {
         todo!()
     }
 }

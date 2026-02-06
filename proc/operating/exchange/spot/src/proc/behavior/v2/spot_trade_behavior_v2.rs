@@ -2,11 +2,9 @@
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
 
-use base_types::{
-    exchange::spot::spot_types::{OrderType, TimeInForce},
-    handler::handler::Handler,
-    AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair
-};
+use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
+use base_types::handler::handler::Handler;
+use base_types::{AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use immutable_derive::immutable;
 
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
@@ -103,9 +101,8 @@ pub enum SpotTradeCmdAny {
 
     /// 查询佣金费率 GET /api/v3/account/commission
     /// Weight: 20
-    QueryCommissionRates(QueryCommissionRatesCmd)
+    QueryCommissionRates(QueryCommissionRatesCmd),
 }
-
 
 /// 订单响应类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,7 +114,7 @@ pub enum NewOrderRespType {
     /// 返回订单结果
     RESULT,
     /// 返回完整订单信息（包含成交明细）
-    FULL
+    FULL,
 }
 
 /// 自成交保护模式
@@ -132,7 +129,7 @@ pub enum SelfTradePreventionMode {
     /// 过期挂单方
     EXPIRE_MAKER,
     /// 过期双方
-    EXPIRE_BOTH
+    EXPIRE_BOTH,
 }
 
 /// 价格钉住类型
@@ -143,7 +140,7 @@ pub enum PegPriceType {
     /// 主要价格钉住（同侧最优价）
     PRIMARY_PEG,
     /// 市场价格钉住（对侧最优价）
-    MARKET_PEG
+    MARKET_PEG,
 }
 
 /// 价格偏移类型
@@ -152,7 +149,7 @@ pub enum PegPriceType {
 
 pub enum PegOffsetType {
     /// 价格级别
-    PRICE_LEVEL
+    PRICE_LEVEL,
 }
 
 /// 取消限制
@@ -163,7 +160,7 @@ pub enum CancelRestrictions {
     /// 仅当订单状态为 NEW 时取消
     ONLY_NEW,
     /// 仅当订单状态为 PARTIALLY_FILLED 时取消
-    ONLY_PARTIALLY_FILLED
+    ONLY_PARTIALLY_FILLED,
 }
 
 /// 撤销替换模式
@@ -174,7 +171,7 @@ pub enum CancelReplaceMode {
     /// 取消失败则不下新单
     STOP_ON_FAILURE,
     /// 即使取消失败也尝试下新单
-    ALLOW_FAILURE
+    ALLOW_FAILURE,
 }
 
 /// 订单限流超限模式
@@ -185,7 +182,7 @@ pub enum OrderRateLimitExceededMode {
     /// 不执行操作（默认）
     DO_NOTHING,
     /// 仅取消订单
-    CANCEL_ONLY
+    CANCEL_ONLY,
 }
 
 /// 订单状态
@@ -208,7 +205,7 @@ pub enum OrderStatus {
     /// 订单过期
     EXPIRED,
     /// 订单过期（在匹配引擎中）
-    EXPIRED_IN_MATCH
+    EXPIRED_IN_MATCH,
 }
 
 /// OCO 订单状态
@@ -221,7 +218,7 @@ pub enum OcoOrderStatus {
     /// 全部成交
     ALL_DONE,
     /// 订单被拒绝
-    REJECTED
+    REJECTED,
 }
 
 /// OCO 状态类型
@@ -234,7 +231,7 @@ pub enum OcoStatusType {
     /// 执行开始
     EXEC_STARTED,
     /// 全部成交
-    ALL_DONE
+    ALL_DONE,
 }
 
 /// 订单列表条件类型
@@ -245,7 +242,7 @@ pub enum ContingencyType {
     /// OCO 订单
     OCO,
     /// OTO 订单
-    OTO
+    OTO,
 }
 
 // ==================== 订单命令定义 ====================
@@ -300,7 +297,7 @@ pub struct NewOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 测试下单命令
@@ -315,7 +312,7 @@ pub struct TestNewOrderCmd {
     /// 继承 NewOrderCmd 的所有字段
     new_order: NewOrderCmd,
     /// 计算佣金费率（默认 false）
-    compute_commission_rates: Option<bool>
+    compute_commission_rates: Option<bool>,
 }
 
 /// 取消订单命令
@@ -341,7 +338,7 @@ pub struct CancelOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 取消某交易对的所有挂单命令
@@ -359,7 +356,7 @@ pub struct CancelAllOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 撤销订单并创建新订单命令
@@ -424,7 +421,7 @@ pub struct CancelReplaceOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询订单命令
@@ -446,7 +443,7 @@ pub struct QueryOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 当前挂单查询命令
@@ -464,7 +461,7 @@ pub struct CurrentOpenOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询所有订单命令
@@ -490,7 +487,7 @@ pub struct AllOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 // ==================== OCO 订单命令定义 ====================
@@ -547,7 +544,7 @@ pub struct NewOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 创建 OTO 订单命令（One-Triggers-the-Other）
@@ -621,7 +618,7 @@ pub struct NewOtoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 创建 OTOCO 订单命令（One-Triggers-OCO）
@@ -721,7 +718,7 @@ pub struct NewOtocoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 取消 OCO 订单命令
@@ -745,7 +742,7 @@ pub struct CancelOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询 OCO 订单命令
@@ -765,7 +762,7 @@ pub struct QueryOcoOrderCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询所有 OCO 订单命令
@@ -789,7 +786,7 @@ pub struct AllOcoOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询挂起的 OCO 订单命令
@@ -805,7 +802,7 @@ pub struct OpenOcoOrdersCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 // ==================== 账户查询命令定义 ====================
@@ -825,7 +822,7 @@ pub struct AccountCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 账户成交历史查询命令
@@ -853,7 +850,7 @@ pub struct MyTradesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询目前下单数命令
@@ -869,7 +866,7 @@ pub struct QueryUnfilledOrderCountCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询已阻止的匹配命令
@@ -895,7 +892,7 @@ pub struct QueryPreventedMatchesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询分配结果命令
@@ -923,7 +920,7 @@ pub struct QueryAllocationsCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 /// 查询佣金费率命令
@@ -941,7 +938,7 @@ pub struct QueryCommissionRatesCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp
+    timestamp: Timestamp,
 }
 
 // ==================== 响应类型定义 ====================
@@ -997,7 +994,7 @@ pub enum SpotTradeResAny {
     /// 分配结果查询响应
     Allocations(Vec<Allocation>),
     /// 佣金费率查询响应
-    CommissionRates(CommissionRates)
+    CommissionRates(CommissionRates),
 }
 
 // ==================== 订单响应结构 ====================
@@ -1017,7 +1014,7 @@ pub struct NewOrderAck {
     /// 用户自定义订单 ID
     client_order_id: Option<String>,
     /// 交易时间戳
-    transact_time: Timestamp
+    transact_time: Timestamp,
 }
 
 /// 新订单 RESULT 响应
@@ -1087,7 +1084,7 @@ pub struct NewOrderResult {
     /// 价格偏移值
     peg_offset_value: Option<i32>,
     /// 当前钉住价格
-    pegged_price: Option<Price>
+    pegged_price: Option<Price>,
 }
 
 /// 新订单 FULL 响应
@@ -1099,7 +1096,7 @@ pub struct NewOrderFull {
     /// 基础订单信息
     base: NewOrderResult,
     /// 成交明细
-    fills: Vec<Fill>
+    fills: Vec<Fill>,
 }
 
 /// 成交明细
@@ -1117,7 +1114,7 @@ pub struct Fill {
     /// 佣金资产
     commission_asset: AssetId,
     /// 成交 ID
-    trade_id: u64
+    trade_id: u64,
 }
 
 /// 订单信息（通用）
@@ -1165,7 +1162,7 @@ pub struct OrderInfo {
     /// 订单开始时间
     working_time: Timestamp,
     /// 自成交保护模式
-    self_trade_prevention_mode: SelfTradePreventionMode
+    self_trade_prevention_mode: SelfTradePreventionMode,
 }
 
 /// 取消订单结果（可能是单个订单或 OCO 订单列表）
@@ -1176,7 +1173,7 @@ pub enum CancelOrderResult {
     /// 单个订单
     Order(OrderInfo),
     /// OCO 订单列表
-    OcoOrder(OcoOrderInfo)
+    OcoOrder(OcoOrderInfo),
 }
 
 /// 撤销替换订单结果
@@ -1192,7 +1189,7 @@ pub struct CancelReplaceResult {
     /// 取消响应
     cancel_response: Option<OrderInfo>,
     /// 新订单响应（根据 newOrderRespType 返回不同类型）
-    new_order_response: Option<NewOrderResponse>
+    new_order_response: Option<NewOrderResponse>,
 }
 
 /// 新订单响应（用于撤销替换）
@@ -1202,7 +1199,7 @@ pub struct CancelReplaceResult {
 pub enum NewOrderResponse {
     Ack(NewOrderAck),
     Result(NewOrderResult),
-    Full(NewOrderFull)
+    Full(NewOrderFull),
 }
 
 // ==================== OCO 订单响应结构 ====================
@@ -1230,7 +1227,7 @@ pub struct OcoOrderResult {
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    order_reports: Vec<OrderInfo>
+    order_reports: Vec<OrderInfo>,
 }
 
 /// OTO 订单结果
@@ -1256,7 +1253,7 @@ pub struct OtoOrderResult {
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    order_reports: Vec<OrderInfo>
+    order_reports: Vec<OrderInfo>,
 }
 
 /// OTOCO 订单结果
@@ -1282,7 +1279,7 @@ pub struct OtocoOrderResult {
     /// 订单列表
     orders: Vec<OcoOrderEntry>,
     /// 订单报告
-    order_reports: Vec<OrderInfo>
+    order_reports: Vec<OrderInfo>,
 }
 
 /// OCO 订单条目
@@ -1296,7 +1293,7 @@ pub struct OcoOrderEntry {
     /// 订单 ID
     order_id: u64,
     /// 用户自定义订单 ID
-    client_order_id: String
+    client_order_id: String,
 }
 
 /// OCO 订单信息
@@ -1320,7 +1317,7 @@ pub struct OcoOrderInfo {
     /// 交易对
     symbol: TradingPair,
     /// 订单列表
-    orders: Vec<OrderInfo>
+    orders: Vec<OrderInfo>,
 }
 
 // ==================== 账户信息响应结构 ====================
@@ -1362,7 +1359,7 @@ pub struct AccountInfo {
     /// 权限列表
     permissions: Vec<String>,
     /// UID
-    uid: i64
+    uid: i64,
 }
 
 /// 余额信息
@@ -1376,7 +1373,7 @@ pub struct Balance {
     /// 可用余额
     free: Quantity,
     /// 冻结余额
-    locked: Quantity
+    locked: Quantity,
 }
 
 /// 佣金费率
@@ -1391,7 +1388,7 @@ pub struct CommissionRates {
     /// Buyer 佣金率（保留字段）
     buyer: Option<Quantity>,
     /// Seller 佣金率（保留字段）
-    seller: Option<Quantity>
+    seller: Option<Quantity>,
 }
 
 /// 成交信息
@@ -1425,7 +1422,7 @@ pub struct TradeInfo {
     /// 是否是挂单方
     is_maker: bool,
     /// 是否是最优成交
-    is_best_match: bool
+    is_best_match: bool,
 }
 
 /// 未成交订单计数
@@ -1443,7 +1440,7 @@ pub struct UnfilledOrderCount {
     /// 限制值
     limit: i32,
     /// 当前计数
-    count: i32
+    count: i32,
 }
 
 /// 阻止匹配信息
@@ -1469,7 +1466,7 @@ pub struct PreventedMatch {
     /// Maker 阻止数量
     maker_prevented_quantity: Quantity,
     /// 交易时间戳
-    transact_time: Timestamp
+    transact_time: Timestamp,
 }
 
 /// 分配信息
@@ -1505,7 +1502,7 @@ pub struct Allocation {
     /// 是否是挂单方
     is_maker: bool,
     /// 是否是分配方
-    is_allocator: bool
+    is_allocator: bool,
 }
 
 // ==================== 行为接口定义 ====================

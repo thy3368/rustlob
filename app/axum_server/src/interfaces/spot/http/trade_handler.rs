@@ -1,9 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use axum::{
-    extract::{Json, State},
-    response::IntoResponse
-};
+use axum::extract::{Json, State};
+use axum::response::IntoResponse;
 // 基础设施依赖
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
@@ -13,7 +11,7 @@ use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use serde::Serialize;
 // Spot 订单处理相关导入
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny
+    CmdResp, SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny,
 };
 use spot_behavior::proc::v1::spot_trade::SpotTradeBehaviorImpl;
 
@@ -24,7 +22,7 @@ use spot_behavior::proc::v1::spot_trade::SpotTradeBehaviorImpl;
 /// 应用服务 - 封装订单处理器
 pub struct TradeService {
     // todo SpotTradeBehaviorImpl是无状态的，是不是可以不用mutex
-    processor: Arc<Mutex<SpotTradeBehaviorImpl>>
+    processor: Arc<Mutex<SpotTradeBehaviorImpl>>,
 }
 
 impl TradeService {
@@ -42,15 +40,22 @@ impl TradeService {
         let id_generator = IdGenerator::new(0);
 
         // 4. 创建处理器实例
-        let processor = SpotTradeBehaviorImpl::new(balance_repo, trade_repo, order_repo, lob_repo, id_generator);
+        let processor = SpotTradeBehaviorImpl::new(
+            balance_repo,
+            trade_repo,
+            order_repo,
+            lob_repo,
+            id_generator,
+        );
 
-        Self {
-            processor: Arc::new(Mutex::new(processor))
-        }
+        Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
     /// 处理限价单 - 使用服务层
-    pub async fn handle_all(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, String> {
+    pub async fn handle_all(
+        &self,
+        cmd: SpotTradeCmdAny,
+    ) -> Result<CmdResp<SpotTradeResAny>, String> {
         println!("📋 收到限价单请求: {:?}", cmd);
 
         // 调用真实的处理器，直接返回领域层结果
@@ -74,21 +79,24 @@ pub struct OrderResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     order_id: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>
+    error: Option<String>,
 }
 
-pub async fn handle(State(service): State<Arc<TradeService>>, Json(cmd): Json<SpotTradeCmdAny>) -> impl IntoResponse {
+pub async fn handle(
+    State(service): State<Arc<TradeService>>,
+    Json(cmd): Json<SpotTradeCmdAny>,
+) -> impl IntoResponse {
     println!("📋 收到限价单请求: {:?}", cmd);
 
     match service.handle_all(cmd).await {
         Ok(response) => create_json_response(response),
-        Err(err) => create_error_response(&err)
+        Err(err) => create_error_response(&err),
     }
 }
 
 /// 创建 JSON 响应
 fn create_json_response(
-    response: CmdResp<SpotTradeResAny>
+    response: CmdResp<SpotTradeResAny>,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
     (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
@@ -96,14 +104,18 @@ fn create_json_response(
 
 /// 创建错误响应
 fn create_error_response(
-    error_msg: &str
+    error_msg: &str,
 ) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let response = OrderResponse {
         success: false,
         message: "Request failed".to_string(),
         order_id: None,
-        error: Some(error_msg.to_string())
+        error: Some(error_msg.to_string()),
     };
     let json = serde_json::to_string(&response).unwrap();
-    (axum::http::StatusCode::BAD_REQUEST, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
+    (
+        axum::http::StatusCode::BAD_REQUEST,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        json,
+    )
 }

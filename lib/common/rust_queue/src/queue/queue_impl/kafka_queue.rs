@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
-use rdkafka::{
-    config::ClientConfig,
-    consumer::{Consumer, StreamConsumer},
-    message::Message,
-    producer::{FutureProducer, FutureRecord},
-};
+use rdkafka::config::ClientConfig;
+use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::message::Message;
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -25,7 +23,7 @@ pub struct KafkaConfig {
     /// 全局缓冲区大小（用于背压控制）
     pub buffer_size: usize,
     /// 全局启用背压机制
-    pub enable_backpressure: bool
+    pub enable_backpressure: bool,
 }
 
 impl Default for KafkaConfig {
@@ -36,7 +34,7 @@ impl Default for KafkaConfig {
             send_timeout_ms: 5000,
             recv_timeout_ms: 3000,
             buffer_size: 1024,
-            enable_backpressure: false
+            enable_backpressure: false,
         }
     }
 }
@@ -49,7 +47,7 @@ impl From<DefaultQueueConfig> for KafkaConfig {
             send_timeout_ms: config.send_timeout_ms as i32,
             recv_timeout_ms: config.recv_timeout_ms as i32,
             buffer_size: config.buffer_size,
-            enable_backpressure: config.enable_backpressure
+            enable_backpressure: config.enable_backpressure,
         }
     }
 }
@@ -60,7 +58,8 @@ impl From<DefaultQueueConfig> for KafkaConfig {
 pub struct KafkaQueue {
     config: KafkaConfig,
     producer: Arc<FutureProducer>,
-    topic_channels: Arc<std::sync::Mutex<std::collections::HashMap<String, broadcast::Sender<bytes::Bytes>>>>
+    topic_channels:
+        Arc<std::sync::Mutex<std::collections::HashMap<String, broadcast::Sender<bytes::Bytes>>>>,
 }
 
 impl KafkaQueue {
@@ -78,25 +77,21 @@ impl KafkaQueue {
 
         let topic_channels = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
-        let queue = KafkaQueue {
-            config,
-            producer: Arc::new(producer),
-            topic_channels
-        };
-
+        let queue = KafkaQueue { config, producer: Arc::new(producer), topic_channels };
 
         queue
     }
 
     /// 使用默认配置创建新的 Kafka 队列
-    pub fn new() -> Self { Self::new_with_config(KafkaConfig::default()) }
-
+    pub fn new() -> Self {
+        Self::new_with_config(KafkaConfig::default())
+    }
 
     /// 检查是否需要背压控制
     fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
         match options {
             Some(opts) => opts.enable_backpressure,
-            None => self.config.enable_backpressure
+            None => self.config.enable_backpressure,
         }
     }
 
@@ -114,7 +109,9 @@ impl KafkaQueue {
 
     /// Kafka 消费者循环
     async fn consumer_loop(
-        config: KafkaConfig, topic: String, tx: broadcast::Sender<bytes::Bytes>
+        config: KafkaConfig,
+        topic: String,
+        tx: broadcast::Sender<bytes::Bytes>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("bootstrap.servers", &config.brokers)
@@ -147,11 +144,15 @@ impl KafkaQueue {
 
     /// 异步发送事件到 Kafka
     pub async fn send_async(
-        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>
+        &self,
+        topic: &str,
+        event: bytes::Bytes,
+        options: Option<SendOptions>,
     ) -> Result<usize, Box<dyn std::error::Error>> {
         let record = FutureRecord::to(topic).key("kline-update".as_bytes()).payload(&event[..]);
 
-        let timeout = options.map(|o| o.timeout_ms as u64).unwrap_or(self.config.send_timeout_ms as u64);
+        let timeout =
+            options.map(|o| o.timeout_ms as u64).unwrap_or(self.config.send_timeout_ms as u64);
 
         match self.producer.send(record, tokio::time::Duration::from_millis(timeout)).await {
             Ok((..)) => {
@@ -160,7 +161,7 @@ impl KafkaQueue {
                 let count = tx.send(event)?;
                 Ok(count)
             }
-            Err((e, _)) => Err(Box::new(e))
+            Err((e, _)) => Err(Box::new(e)),
         }
     }
 }
@@ -169,7 +170,9 @@ impl Queue for KafkaQueue {
     type Config = KafkaConfig;
 
     /// 创建新的 Kafka 队列
-    fn new() -> Self { Self::new() }
+    fn new() -> Self {
+        Self::new()
+    }
 
     /// 获取或创建 topic 对应的 broadcast channel
     fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes> {
@@ -177,7 +180,8 @@ impl Queue for KafkaQueue {
         channels
             .entry(topic.to_string())
             .or_insert_with(|| {
-                let buffer_size = if self.config.buffer_size > 0 { self.config.buffer_size } else { 1024 };
+                let buffer_size =
+                    if self.config.buffer_size > 0 { self.config.buffer_size } else { 1024 };
                 let (tx, _) = broadcast::channel(buffer_size);
                 // 启动 Kafka 消费者任务
                 self.spawn_consumer_task(topic, tx.clone());
@@ -186,16 +190,18 @@ impl Queue for KafkaQueue {
             .clone()
     }
 
-
     fn new_with_config(config: impl Into<Self::Config>) -> Self
     where
-        Self: Sized
+        Self: Sized,
     {
         Self::new_with_config(config.into())
     }
 
     fn send(
-        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>,
+        &self,
+        topic: &str,
+        event: bytes::Bytes,
+        options: Option<SendOptions>,
     ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>> {
         // 背压控制
         if self.should_apply_backpressure(&options) {
@@ -319,7 +325,7 @@ impl Clone for KafkaQueue {
         KafkaQueue {
             config: self.config.clone(),
             producer: self.producer.clone(),
-            topic_channels: self.topic_channels.clone()
+            topic_channels: self.topic_channels.clone(),
         }
     }
 }
@@ -363,7 +369,6 @@ impl KafkaConfig {
         self.brokers = brokers.into();
         self
     }
-
 
     pub fn with_send_timeout(mut self, ms: i32) -> Self {
         self.send_timeout_ms = ms;

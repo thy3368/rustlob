@@ -1,8 +1,6 @@
-use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
-use lob_repo::{
-    adapter::local_lob_impl::LocalLob,
-};
+use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
+use lob_repo::adapter::local_lob_impl::LocalLob;
 use lob_repo::core::symbol_lob_repo::SymbolLob;
 
 // 创建模拟订单用于测试
@@ -18,22 +16,33 @@ struct MockOrder {
     // #[replay(skip)]
     filled_quantity: Quantity,
     // #[replay(skip)]
-    side: OrderSide
+    side: OrderSide,
 }
 
-
 impl LobOrder for MockOrder {
-    fn order_id(&self) -> OrderId { self.id }
+    fn order_id(&self) -> OrderId {
+        self.id
+    }
 
-    fn price(&self) -> Price { self.price }
+    fn price(&self) -> Price {
+        self.price
+    }
 
-    fn quantity(&self) -> Quantity { self.quantity }
+    fn quantity(&self) -> Quantity {
+        self.quantity
+    }
 
-    fn filled_quantity(&self) -> Quantity { self.filled_quantity }
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
+    }
 
-    fn side(&self) -> OrderSide { self.side }
+    fn side(&self) -> OrderSide {
+        self.side
+    }
 
-    fn symbol(&self) -> TradingPair { self.symbol }
+    fn symbol(&self) -> TradingPair {
+        self.symbol
+    }
 }
 
 #[test]

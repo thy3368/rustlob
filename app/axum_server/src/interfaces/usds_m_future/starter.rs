@@ -1,22 +1,15 @@
-use axum::{
-    response::IntoResponse,
-    routing::{get, post},
-    Router,
-};
 use std::sync::Arc;
+
+use axum::Router;
+use axum::response::IntoResponse;
+use axum::routing::{get, post};
 use tokio::sync::broadcast;
 use tracing_subscriber;
 
-use crate::interfaces::usds_m_future::http::{
-    trade_controller::TradeService,
-    md_controller::MarketDataService,
-    ud_controller::UserDataService,
-};
-use crate::interfaces::usds_m_future::http::{
-    trade_controller,
-    md_controller,
-    ud_controller,
-};
+use crate::interfaces::usds_m_future::http::md_controller::MarketDataService;
+use crate::interfaces::usds_m_future::http::trade_controller::TradeService;
+use crate::interfaces::usds_m_future::http::ud_controller::UserDataService;
+use crate::interfaces::usds_m_future::http::{md_controller, trade_controller, ud_controller};
 use crate::interfaces::usds_m_future::websocket::md_sse_controller::UsdsMFutureMarketDataSSEImpl;
 use crate::interfaces::usds_m_future::websocket::ud_sse_controller::UsdsMFutureUserDataSSEImpl;
 
@@ -65,7 +58,9 @@ impl UsdsMFutureStarter {
         println!("👤 USDS-M Future user data: POST /api/usds-m-future/user/data (JSON)");
 
         tokio::spawn(async move {
-            axum::serve(http_listener, http_app).await.expect("USDS-M Future HTTP server failed to start");
+            axum::serve(http_listener, http_app)
+                .await
+                .expect("USDS-M Future HTTP server failed to start");
         });
 
         // ==================== WebSocket 服务器启动 ====================
@@ -90,7 +85,9 @@ impl UsdsMFutureStarter {
         println!("🚀 USDS-M Future WebSocket server started at ws://localhost:8085/ws");
 
         tokio::spawn(async move {
-            axum::serve(ws_listener, ws_app).await.expect("USDS-M Future WebSocket server failed to start");
+            axum::serve(ws_listener, ws_app)
+                .await
+                .expect("USDS-M Future WebSocket server failed to start");
         });
 
         println!("✅ USDS-M Future module started successfully");

@@ -11,13 +11,7 @@ pub struct OptimizationScore {
 
 impl OptimizationScore {
     pub fn new() -> Self {
-        Self {
-            overall: 0.0,
-            vectorization: 0.0,
-            memory: 0.0,
-            inlining: 0.0,
-            cache: 0.0,
-        }
+        Self { overall: 0.0, vectorization: 0.0, memory: 0.0, inlining: 0.0, cache: 0.0 }
     }
 
     pub fn grade(&self) -> &'static str {
@@ -59,12 +53,7 @@ pub struct CategoryScore {
 
 impl CategoryScore {
     pub fn new(name: impl Into<String>, score: f32, weight: f32) -> Self {
-        Self {
-            name: name.into(),
-            score,
-            weight,
-            details: Vec::new(),
-        }
+        Self { name: name.into(), score, weight, details: Vec::new() }
     }
 
     pub fn add_detail(&mut self, detail: impl Into<String>) {

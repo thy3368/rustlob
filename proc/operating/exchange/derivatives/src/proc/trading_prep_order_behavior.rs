@@ -9,17 +9,17 @@ use std::fmt;
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
 pub use base_types::exchange::prep::prep_order::{OrderStatus, OrderType};
+use base_types::exchange::spot::spot_types::TimeInForce;
 // ============================================================================
 // 从 account crate 导入领域实体
 // ============================================================================
 use base_types::{AssetId, PrepPosition};
-pub use base_types::{OrderId, PositionId, PositionSide, PrepTrade, Price, Quantity, OrderSide, TradeId, TradingPair};
-use base_types::exchange::spot::spot_types::TimeInForce;
+pub use base_types::{
+    OrderId, OrderSide, PositionId, PositionSide, PrepTrade, Price, Quantity, TradeId, TradingPair,
+};
 // ============================================================================
 // 核心枚举类型
 // ============================================================================
-
-
 
 pub enum PerpCmdAny {
     OpenPositionCmd(OpenPositionCmd),
@@ -277,7 +277,11 @@ impl ClosePositionCmd {
 
     /// 市价平仓（单向持仓模式）
     #[inline]
-    pub fn market_close_both(trading_pair: TradingPair, side: OrderSide, quantity: Option<Quantity>) -> Self {
+    pub fn market_close_both(
+        trading_pair: TradingPair,
+        side: OrderSide,
+        quantity: Option<Quantity>,
+    ) -> Self {
         Self {
             trading_pair,
             side,
@@ -473,8 +477,11 @@ impl OpenPositionResult {
             total_quantity += trade.quantity.to_f64();
         }
 
-        let avg_price =
-            if total_quantity > 0.0 { Price::from_f64(total_notional / total_quantity) } else { Price::from_raw(0) };
+        let avg_price = if total_quantity > 0.0 {
+            Price::from_f64(total_notional / total_quantity)
+        } else {
+            Price::from_raw(0)
+        };
 
         (avg_price, Quantity::from_f64(total_quantity))
     }
@@ -537,7 +544,12 @@ impl ClosePositionResult {
     }
 
     /// 创建已成交状态的响应
-    pub fn filled(order_id: OrderId, trades: Vec<PrepTrade>, realized_pnl: Price, match_seq: u64) -> Self {
+    pub fn filled(
+        order_id: OrderId,
+        trades: Vec<PrepTrade>,
+        realized_pnl: Price,
+        match_seq: u64,
+    ) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -557,7 +569,12 @@ impl ClosePositionResult {
     }
 
     /// 创建部分成交状态的响应
-    pub fn partially_filled(order_id: OrderId, trades: Vec<PrepTrade>, realized_pnl: Price, match_seq: u64) -> Self {
+    pub fn partially_filled(
+        order_id: OrderId,
+        trades: Vec<PrepTrade>,
+        realized_pnl: Price,
+        match_seq: u64,
+    ) -> Self {
         let now = current_timestamp_ms();
 
         // 计算成交均价和总量
@@ -591,8 +608,11 @@ impl ClosePositionResult {
             total_quantity += trade.quantity.to_f64();
         }
 
-        let avg_price =
-            if total_quantity > 0.0 { Price::from_f64(total_notional / total_quantity) } else { Price::from_raw(0) };
+        let avg_price = if total_quantity > 0.0 {
+            Price::from_f64(total_notional / total_quantity)
+        } else {
+            Price::from_raw(0)
+        };
 
         (avg_price, Quantity::from_f64(total_quantity))
     }
@@ -630,7 +650,12 @@ pub struct CancelOrderResult {
 impl CancelOrderResult {
     /// 创建成功取消的响应
     pub fn success(order_id: OrderId) -> Self {
-        Self { order_id, cancelled: true, status: OrderStatus::Cancelled, cancelled_at: current_timestamp_ms() }
+        Self {
+            order_id,
+            cancelled: true,
+            status: OrderStatus::Cancelled,
+            cancelled_at: current_timestamp_ms(),
+        }
     }
 
     /// 创建取消失败的响应（订单已成交等）
@@ -792,13 +817,29 @@ pub struct ModifyOrderResult {
 
 impl ModifyOrderResult {
     /// 创建成功修改的响应
-    pub fn success(order_id: OrderId, new_price: Option<Price>, new_quantity: Option<Quantity>) -> Self {
-        Self { order_id, modified: true, new_price, new_quantity, modified_at: current_timestamp_ms() }
+    pub fn success(
+        order_id: OrderId,
+        new_price: Option<Price>,
+        new_quantity: Option<Quantity>,
+    ) -> Self {
+        Self {
+            order_id,
+            modified: true,
+            new_price,
+            new_quantity,
+            modified_at: current_timestamp_ms(),
+        }
     }
 
     /// 创建修改失败的响应
     pub fn failed(order_id: OrderId) -> Self {
-        Self { order_id, modified: false, new_price: None, new_quantity: None, modified_at: current_timestamp_ms() }
+        Self {
+            order_id,
+            modified: false,
+            new_price: None,
+            new_quantity: None,
+            modified_at: current_timestamp_ms(),
+        }
     }
 }
 
@@ -850,7 +891,12 @@ impl CancelAllOrdersResult {
     /// 创建批量取消响应
     pub fn new(cancelled_order_ids: Vec<OrderId>, failed_count: usize) -> Self {
         let cancelled_count = cancelled_order_ids.len();
-        Self { cancelled_count, failed_count, cancelled_order_ids, cancelled_at: current_timestamp_ms() }
+        Self {
+            cancelled_count,
+            failed_count,
+            cancelled_order_ids,
+            cancelled_at: current_timestamp_ms(),
+        }
     }
 
     /// 创建空响应（没有订单可取消）
@@ -1156,7 +1202,11 @@ pub struct AccountBalance {
 impl AccountBalance {
     /// 创建账户余额
     pub fn new(
-        asset: AssetId, balance: Price, available_balance: Price, position_margin: Price, order_margin: Price,
+        asset: AssetId,
+        balance: Price,
+        available_balance: Price,
+        position_margin: Price,
+        order_margin: Price,
         unrealized_pnl: Price,
     ) -> Self {
         Self { asset, balance, available_balance, position_margin, order_margin, unrealized_pnl }
@@ -1230,8 +1280,12 @@ pub struct AccountInfo {
 impl AccountInfo {
     /// 创建账户信息
     pub fn new(
-        total_wallet_balance: Price, total_margin_balance: Price, total_unrealized_pnl: Price,
-        available_balance: Price, positions: Vec<PrepPosition>, assets: Vec<AccountBalance>,
+        total_wallet_balance: Price,
+        total_margin_balance: Price,
+        total_unrealized_pnl: Price,
+        available_balance: Price,
+        positions: Vec<PrepPosition>,
+        assets: Vec<AccountBalance>,
     ) -> Self {
         Self {
             total_wallet_balance,
@@ -1257,7 +1311,8 @@ impl AccountInfo {
         if self.total_margin_balance.raw() == 0 {
             return 0.0;
         }
-        let total_notional: f64 = self.positions.iter().map(|p| p.entry_price.to_f64() * p.quantity.to_f64()).sum();
+        let total_notional: f64 =
+            self.positions.iter().map(|p| p.entry_price.to_f64() * p.quantity.to_f64()).sum();
         total_notional / self.total_margin_balance.to_f64()
     }
 }
@@ -1337,7 +1392,11 @@ pub struct MarkPriceInfo {
 impl MarkPriceInfo {
     /// 创建标记价格信息
     pub fn new(
-        trading_pair: TradingPair, mark_price: Price, index_price: Price, funding_rate: Price, next_funding_time: u64,
+        trading_pair: TradingPair,
+        mark_price: Price,
+        index_price: Price,
+        funding_rate: Price,
+        next_funding_time: u64,
         estimated_settle_price: Price,
     ) -> Self {
         Self {
@@ -1601,7 +1660,13 @@ pub struct FundingFeeRecord {
 
 impl FundingFeeRecord {
     /// 创建资金费用记录
-    pub fn new(trading_pair: TradingPair, income: Price, asset: TradingPair, time: u64, tran_id: String) -> Self {
+    pub fn new(
+        trading_pair: TradingPair,
+        income: Price,
+        asset: TradingPair,
+        time: u64,
+        tran_id: String,
+    ) -> Self {
         Self { trading_pair, income, asset, time, tran_id }
     }
 
@@ -1644,17 +1709,35 @@ impl QueryTradesCmd {
 
     /// 按订单ID查询
     pub fn by_order_id(order_id: OrderId) -> Self {
-        Self { order_id: Some(order_id), trading_pair: None, start_time: None, end_time: None, limit: 100 }
+        Self {
+            order_id: Some(order_id),
+            trading_pair: None,
+            start_time: None,
+            end_time: None,
+            limit: 100,
+        }
     }
 
     /// 按交易对查询
     pub fn by_symbol(trading_pair: TradingPair) -> Self {
-        Self { order_id: None, trading_pair: Some(trading_pair), start_time: None, end_time: None, limit: 100 }
+        Self {
+            order_id: None,
+            trading_pair: Some(trading_pair),
+            start_time: None,
+            end_time: None,
+            limit: 100,
+        }
     }
 
     /// 按时间范围查询
     pub fn by_time_range(start_time: u64, end_time: u64) -> Self {
-        Self { order_id: None, trading_pair: None, start_time: Some(start_time), end_time: Some(end_time), limit: 100 }
+        Self {
+            order_id: None,
+            trading_pair: None,
+            start_time: Some(start_time),
+            end_time: Some(end_time),
+            limit: 100,
+        }
     }
 
     /// 设置返回数量限制
@@ -2028,7 +2111,10 @@ pub trait PerpOrderExchBehavior: Send + Sync {
     /// # 注意
     /// - 已成交的订单无法取消
     /// - 返回成功取消的订单数量和失败的订单数量
-    fn cancel_all_orders(&self, cmd: CancelAllOrdersCmd) -> Result<CancelAllOrdersResult, PrepCmdError>;
+    fn cancel_all_orders(
+        &self,
+        cmd: CancelAllOrdersCmd,
+    ) -> Result<CancelAllOrdersResult, PrepCmdError>;
 
     // ========================================================================
     // 第一优先级核心方法 - 账户配置和查询
@@ -2098,7 +2184,10 @@ pub trait PerpOrderExchBehavior: Send + Sync {
     /// - ⚠️ 全局设置，影响所有交易对
     /// - ⚠️ 必须在无持仓时设置
     /// - ⚠️ 切换后无法撤销
-    fn set_position_mode(&self, cmd: SetPositionModeCmd) -> Result<SetPositionModeResult, PrepCmdError>;
+    fn set_position_mode(
+        &self,
+        cmd: SetPositionModeCmd,
+    ) -> Result<SetPositionModeResult, PrepCmdError>;
 }
 
 pub trait PerpOrderExchQueryProc: Send + Sync {
@@ -2191,7 +2280,10 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
     /// # 注意
     /// - 可查询单个资产或所有资产
     /// - 包含可用余额、仓位保证金、挂单保证金
-    fn query_account_balance(&self, cmd: QueryAccountBalanceCmd) -> Result<Vec<AccountBalance>, PrepCmdError>;
+    fn query_account_balance(
+        &self,
+        cmd: QueryAccountBalanceCmd,
+    ) -> Result<Vec<AccountBalance>, PrepCmdError>;
 
     /// 查询账户完整信息
     ///
@@ -2255,7 +2347,8 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
     /// - 最多返回1000条记录
     /// - 可用于计算平均费率预估持仓成本
     fn query_funding_rate_history(
-        &self, cmd: QueryFundingRateHistoryCmd,
+        &self,
+        cmd: QueryFundingRateHistoryCmd,
     ) -> Result<Vec<FundingRateRecord>, PrepCmdError>;
 
     /// 查询资金费用收支记录
@@ -2277,7 +2370,10 @@ pub trait PerpOrderExchQueryProc: Send + Sync {
     /// - income为正表示收入，为负表示支出
     /// - 可查询单个交易对或所有交易对
     /// - 用于计算真实盈亏（未实现盈亏 + 资金费用）
-    fn query_funding_fee(&self, cmd: QueryFundingFeeCmd) -> Result<Vec<FundingFeeRecord>, PrepCmdError>;
+    fn query_funding_fee(
+        &self,
+        cmd: QueryFundingFeeCmd,
+    ) -> Result<Vec<FundingFeeRecord>, PrepCmdError>;
 }
 // ============================================================================
 // 测试

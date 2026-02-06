@@ -1,17 +1,15 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::time::SystemTime;
+
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use push::k_line::aggregator::k_line_aggregator::KLineAggregator;
 use push::k_line::aggregator::simd_k_line_aggregator::SimdKLineAggregator;
-use rand::Rng;
-use std::time::SystemTime;
 use push::k_line::k_line_types::KLineAgg;
+use rand::Rng;
 
 // 生成模拟交易数据
 fn generate_test_data(count: usize) -> Vec<(u64, f64, f64)> {
     let mut rng = rand::thread_rng();
-    let mut timestamp = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let mut timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     let mut price = 100.0;
     let mut data = Vec::with_capacity(count);
 
@@ -51,14 +49,5 @@ fn benchmark_kline_aggregator2(c: &mut Criterion) {
     });
 }
 
-
-
-
-
-criterion_group!(
-    benches,
-    benchmark_kline_aggregator,
-    benchmark_kline_aggregator2,
-
-);
+criterion_group!(benches, benchmark_kline_aggregator, benchmark_kline_aggregator2,);
 criterion_main!(benches);

@@ -1,6 +1,8 @@
 //! 仓位实体
 
-use super::types::{Leverage, Margin, MarginMode, PositionId, PositionSide, Price, Quantity, Timestamp, TraderId};
+use super::types::{
+    Leverage, Margin, MarginMode, PositionId, PositionSide, Price, Quantity, Timestamp, TraderId,
+};
 
 /// 仓位实体
 #[derive(Debug, Clone)]
@@ -30,16 +32,24 @@ pub struct Position {
     /// 创建时间
     pub created_at: Timestamp,
     /// 更新时间
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }
 
 impl Position {
     /// 创建新仓位
     pub fn new(
-        id: PositionId, trader: TraderId, position_side: PositionSide, quantity: Quantity, entry_price: Price,
-        margin_mode: MarginMode, leverage: Leverage, margin: Margin, timestamp: Timestamp
+        id: PositionId,
+        trader: TraderId,
+        position_side: PositionSide,
+        quantity: Quantity,
+        entry_price: Price,
+        margin_mode: MarginMode,
+        leverage: Leverage,
+        margin: Margin,
+        timestamp: Timestamp,
     ) -> Self {
-        let liquidation_price = Self::calc_liquidation_price(entry_price, position_side, leverage, margin_mode);
+        let liquidation_price =
+            Self::calc_liquidation_price(entry_price, position_side, leverage, margin_mode);
 
         Self {
             id,
@@ -54,7 +64,7 @@ impl Position {
             realized_pnl: 0,
             liquidation_price,
             created_at: timestamp,
-            updated_at: timestamp
+            updated_at: timestamp,
         }
     }
 
@@ -93,7 +103,7 @@ impl Position {
 
         match self.position_side {
             PositionSide::Long | PositionSide::Both => (exit - entry) * qty,
-            PositionSide::Short => (entry - exit) * qty
+            PositionSide::Short => (entry - exit) * qty,
         }
     }
 
@@ -104,7 +114,10 @@ impl Position {
 
     /// 计算强平价格
     fn calc_liquidation_price(
-        entry_price: Price, position_side: PositionSide, leverage: Leverage, _margin_mode: MarginMode
+        entry_price: Price,
+        position_side: PositionSide,
+        leverage: Leverage,
+        _margin_mode: MarginMode,
     ) -> Price {
         // 简化公式：强平价 = 开仓价 * (1 ± 1/杠杆 * 维持保证金率)
         // 维持保证金率假设为 0.5%
@@ -114,7 +127,9 @@ impl Position {
         match position_side {
             PositionSide::Long | PositionSide::Both => {
                 // 多头：价格下跌到强平价
-                entry_price.saturating_sub(entry_price * (leverage_factor - maintenance_margin_rate) / 10000)
+                entry_price.saturating_sub(
+                    entry_price * (leverage_factor - maintenance_margin_rate) / 10000,
+                )
             }
             PositionSide::Short => {
                 // 空头：价格上涨到强平价
@@ -125,13 +140,21 @@ impl Position {
 
     /// 更新强平价格
     fn update_liquidation_price(&mut self) {
-        self.liquidation_price =
-            Self::calc_liquidation_price(self.entry_price, self.position_side, self.leverage, self.margin_mode);
+        self.liquidation_price = Self::calc_liquidation_price(
+            self.entry_price,
+            self.position_side,
+            self.leverage,
+            self.margin_mode,
+        );
     }
 
     /// 是否空仓
-    pub fn is_empty(&self) -> bool { self.quantity == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.quantity == 0
+    }
 
     /// 是否多头
-    pub fn is_long(&self) -> bool { matches!(self.position_side, PositionSide::Long | PositionSide::Both) }
+    pub fn is_long(&self) -> bool {
+        matches!(self.position_side, PositionSide::Long | PositionSide::Both)
+    }
 }

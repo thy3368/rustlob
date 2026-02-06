@@ -1,16 +1,13 @@
 use std::error::Error;
 
-use base_types::{
-    cqrs::cqrs_types::CMetadata,
-    exchange::spot::spot_types::{OrderType, TimeInForce},
-    handler::handler::Handler,
-    OrderSide
-};
-use sapp::client::spot::{
-    spot_http_client::SpotHttpClient, spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient
-};
-use spot_behavior::proc::behavior::v2::{
-    spot_trade_behavior_v2::{NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd}
+use base_types::OrderSide;
+use base_types::cqrs::cqrs_types::CMetadata;
+use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
+use base_types::handler::handler::Handler;
+use sapp::client::spot::spot_http_client::SpotHttpClient;
+use sapp::client::spot::spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient;
+use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
+    NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd,
 };
 
 #[tokio::test]
@@ -36,7 +33,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
             correlation_id: None,
             causation_id: None,
             actor: Some("test_user".to_string()),
-            attributes: Vec::new()
+            attributes: Vec::new(),
         },
         symbol: "BTCUSDT".to_string(),
         side: OrderSide::Buy,
@@ -57,7 +54,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
         peg_offset_value: None,
         peg_offset_type: None,
         recv_window: None,
-        timestamp: chrono::Utc::now().timestamp_millis()
+        timestamp: chrono::Utc::now().timestamp_millis(),
     });
 
     // 发送命令
@@ -91,7 +88,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
                 correlation_id: None,
                 causation_id: None,
                 actor: Some("test_user".to_string()),
-                attributes: Vec::new()
+                attributes: Vec::new(),
             },
             symbol: "ETHUSDT".to_string(),
             side: OrderSide::Sell,
@@ -112,9 +109,9 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
             peg_offset_value: None,
             peg_offset_type: None,
             recv_window: None,
-            timestamp: chrono::Utc::now().timestamp_millis()
+            timestamp: chrono::Utc::now().timestamp_millis(),
         },
-        compute_commission_rates: Some(false)
+        compute_commission_rates: Some(false),
     });
 
     let test_result = http_client.handle(test_order_cmd).await;

@@ -1,7 +1,7 @@
 use reqwest::Client;
 use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdErrorAny, SpotTradeBehavior, SpotTradeCmdAny,
-    SpotTradeResAny
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdErrorAny, SpotTradeBehavior,
+    SpotTradeCmdAny, SpotTradeResAny,
 };
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
@@ -15,7 +15,7 @@ pub struct RestfulClient {
     /// 服务端基础 URL
     base_url: String,
     /// HTTP 客户端（内置连接池）
-    client: Client
+    client: Client,
 }
 
 impl RestfulClient {
@@ -35,13 +35,16 @@ impl RestfulClient {
                 .tcp_nodelay(true) // 禁用 Nagle 算法，降低延迟
                 .pool_max_idle_per_host(10) // 连接池优化
                 .build()
-                .expect("Failed to build HTTP client")
+                .expect("Failed to build HTTP client"),
         }
     }
 
     /// 发送限价单请求
     #[inline]
-    async fn post_cmd(&self, cmd: SpotTradeCmdAny) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    async fn post_cmd(
+        &self,
+        cmd: SpotTradeCmdAny,
+    ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
@@ -51,14 +54,14 @@ impl RestfulClient {
             .await
             .map_err(|e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
-                    message: format!("HTTP request failed: {}", e)
+                    message: format!("HTTP request failed: {}", e),
                 })
             })?
             .json::<CmdResp<SpotTradeResAny>>()
             .await
             .map_err(|e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
-                    message: format!("Failed to parse response: {}", e)
+                    message: format!("Failed to parse response: {}", e),
                 })
             })
     }
@@ -74,7 +77,7 @@ impl SpotTradeBehavior for RestfulClient {
         // 使用 tokio runtime 执行异步调用
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             SpotCmdErrorAny::Common(CommonError::Internal {
-                message: format!("Failed to create runtime: {}", e)
+                message: format!("Failed to create runtime: {}", e),
             })
         })?;
 
@@ -84,11 +87,9 @@ impl SpotTradeBehavior for RestfulClient {
 
 #[cfg(test)]
 mod tests {
-    use base_types::{
-        exchange::spot::spot_types::{TimeInForce},
-        AccountId, Decimal, OrderSide, TradingPair
-    };
     use base_types::base_types::TraderId;
+    use base_types::exchange::spot::spot_types::TimeInForce;
+    use base_types::{AccountId, Decimal, OrderSide, TradingPair};
     use spot_behavior::proc::behavior::spot_trade_behavior::CMetadata;
 
     use super::*;
@@ -108,7 +109,7 @@ mod tests {
             price: Decimal::from_f64(50000.0),
             quantity: Decimal::from_f64(1.0),
             time_in_force: TimeInForce::GTC,
-            client_order_id: None
+            client_order_id: None,
         };
 
         // 调用1000次

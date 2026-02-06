@@ -4,19 +4,19 @@ use cache_analyzer_types::CacheAnalysisReport;
 /// 未优化的结构体 - 字段顺序导致大量填充
 #[derive(CacheAnalyzer, Debug)]
 pub struct UnoptimizedStruct {
-    flag: bool,        // 1 字节
-    value: u64,        // 8 字节
-    counter: u32,      // 4 字节
-    small_flag: bool,  // 1 字节
+    flag: bool,       // 1 字节
+    value: u64,       // 8 字节
+    counter: u32,     // 4 字节
+    small_flag: bool, // 1 字节
 }
 
 /// 优化后的结构体 - 按大小降序排列
 #[derive(CacheAnalyzer, Debug)]
 pub struct OptimizedStruct {
-    value: u64,        // 8 字节
-    counter: u32,      // 4 字节
-    flag: bool,        // 1 字节
-    small_flag: bool,  // 1 字节
+    value: u64,       // 8 字节
+    counter: u32,     // 4 字节
+    flag: bool,       // 1 字节
+    small_flag: bool, // 1 字节
 }
 
 /// 带热点标记的交易订单
@@ -69,19 +69,15 @@ where
     println!("对齐要求: {} 字节", report.alignment);
     println!("缓存行大小: {} 字节", report.cache_line_size);
     println!("需要缓存行数: {}", report.cache_lines_needed);
-    println!("填充字节: {} 字节 ({:.1}%)",
-             report.padding_bytes,
-             report.padding_percentage);
-    println!("字段顺序是否最优: {}",
-             if report.is_current_order_optimal { "是" } else { "否" });
+    println!("填充字节: {} 字节 ({:.1}%)", report.padding_bytes, report.padding_percentage);
+    println!("字段顺序是否最优: {}", if report.is_current_order_optimal { "是" } else { "否" });
 
     println!("\n字段详情:");
     for field in &report.field_analyses {
-        println!("  - {}: offset={}, size={}, align={}",
-                 field.name,
-                 field.offset,
-                 field.size,
-                 field.alignment);
+        println!(
+            "  - {}: offset={}, size={}, align={}",
+            field.name, field.offset, field.size, field.alignment
+        );
     }
 
     if !report.suggestions.is_empty() {
@@ -98,19 +94,15 @@ fn analyze_trading_order() {
     println!("结构体名称: {}", report.struct_name);
     println!("总大小: {} 字节", report.total_size);
     println!("对齐要求: {} 字节", report.alignment);
-    println!("填充字节: {} 字节 ({:.1}%)",
-             report.padding_bytes,
-             report.padding_percentage);
+    println!("填充字节: {} 字节 ({:.1}%)", report.padding_bytes, report.padding_percentage);
 
     println!("\n字段分析（标记热点）:");
     for field in &report.field_analyses {
         let marker = if field.is_hot { "[HOT]" } else { "" };
-        println!("  - {} {}: offset={}, size={}, align={}",
-                 marker,
-                 field.name,
-                 field.offset,
-                 field.size,
-                 field.alignment);
+        println!(
+            "  - {} {}: offset={}, size={}, align={}",
+            marker, field.name, field.offset, field.size, field.alignment
+        );
     }
 
     if !report.suggestions.is_empty() {

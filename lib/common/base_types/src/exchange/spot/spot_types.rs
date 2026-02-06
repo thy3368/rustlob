@@ -2,12 +2,12 @@ use std::fmt;
 
 use entity_derive::Entity;
 
+use crate::account::balance::Balance;
+use crate::base_types::TraderId;
+use crate::fee::fee_types::{CexFeeEntity, FeeType};
+use crate::lob::lob::LobOrder;
 use crate::{
-    account::balance::Balance,
-    base_types::TraderId,
-    fee::fee_types::{CexFeeEntity, FeeType},
-    lob::lob::LobOrder,
-    AccountId, AssetId, InstrumentType, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair
+    AccountId, AssetId, InstrumentType, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair,
 };
 
 /// 订单来源标识 - Phase 3: 区分订单的来源
@@ -26,11 +26,13 @@ pub enum OrderSource {
     /// 条件单（StopLoss/TakeProfit）自动触发
     ConditionalTrigger = 5,
     /// 系统内部（清算、风险控制、强平）
-    System = 6
+    System = 6,
 }
 
 impl Default for OrderSource {
-    fn default() -> Self { Self::API }
+    fn default() -> Self {
+        Self::API
+    }
 }
 
 impl fmt::Display for OrderSource {
@@ -41,11 +43,10 @@ impl fmt::Display for OrderSource {
             OrderSource::MobileApp => write!(f, "Mobile App"),
             OrderSource::AlgorithmEngine => write!(f, "Algorithm"),
             OrderSource::ConditionalTrigger => write!(f, "Conditional Trigger"),
-            OrderSource::System => write!(f, "System")
+            OrderSource::System => write!(f, "System"),
         }
     }
 }
-
 
 /// 订单执行方式 - 定义订单如何与市场交互
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -55,11 +56,13 @@ pub enum ExecutionMethod {
     /// 限价单：按指定价格或更优价格执行
     Limit = 1,
     /// 市价单：以当前市场价格立即执行
-    Market = 2
+    Market = 2,
 }
 
 impl Default for ExecutionMethod {
-    fn default() -> Self { Self::Limit }
+    fn default() -> Self {
+        Self::Limit
+    }
 }
 
 /// 做市商约束 - 定义订单是否只做Maker
@@ -70,11 +73,13 @@ pub enum MakerConstraint {
     /// 无约束：可作为Taker或Maker
     None = 0,
     /// 仅做Maker：拒绝任何Taker成交（PostOnly）
-    PostOnly = 1
+    PostOnly = 1,
 }
 
 impl Default for MakerConstraint {
-    fn default() -> Self { Self::None }
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -86,11 +91,13 @@ pub enum ConditionalType {
     /// 止损：当价格跌破 stop_price 时触发（用于风险控制）
     StopLoss = 1,
     /// 止盈：当价格上涨到 take_profit_price 时触发（用于利润固定）
-    TakeProfit = 2
+    TakeProfit = 2,
 }
 
 impl Default for ConditionalType {
-    fn default() -> Self { Self::None }
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 /// 自交易防护模式 - 防止订单与自己的其他订单成交
@@ -122,12 +129,14 @@ pub enum SelfTradePrevention {
     /// - 新订单作为Taker时，如发生自交易则新订单被取消
     /// - 订单簿中的Maker订单保留
     /// - 最安全、最常用、最适合大多数场景
-    ExpireTaker = 1
+    ExpireTaker = 1,
 }
 
 // 默认实现：所有订单都使用 ExpireTaker
 impl Default for SelfTradePrevention {
-    fn default() -> Self { Self::ExpireTaker }
+    fn default() -> Self {
+        Self::ExpireTaker
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -162,11 +171,13 @@ pub enum AlgorithmStrategy {
     /// DarkPool（暗池执行）
     /// 通过暗池寻找对手方成交，不在公开订单簿显示
     /// 用途：大额交易隐蔽执行，降低市场价格冲击
-    DarkPool = 5
+    DarkPool = 5,
 }
 
 impl Default for AlgorithmStrategy {
-    fn default() -> Self { Self::None }
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 // /// 订单类型
@@ -196,9 +207,8 @@ pub enum OrderType {
     /// 止盈限价单
     TakeProfitLimit,
     /// 限价只挂单
-    LimitMaker
+    LimitMaker,
 }
-
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,11 +221,13 @@ pub enum OrderStatus {
     Cancelled = 4,       // 已取消
 
     Rejected = 5, // 已拒绝
-    Expired = 6   // 已过期
+    Expired = 6,  // 已过期
 }
 
 impl Default for OrderStatus {
-    fn default() -> Self { Self::Pending }
+    fn default() -> Self {
+        Self::Pending
+    }
 }
 
 impl fmt::Display for OrderStatus {
@@ -226,7 +238,7 @@ impl fmt::Display for OrderStatus {
             OrderStatus::Filled => write!(f, "FILLED"),
             OrderStatus::Cancelled => write!(f, "CANCELLED"),
             OrderStatus::Rejected => write!(f, "Rejected"),
-            OrderStatus::Expired => write!(f, "Expired")
+            OrderStatus::Expired => write!(f, "Expired"),
         }
     }
 }
@@ -341,30 +353,42 @@ pub enum TimeInForce {
     /// - 撮合引擎需要定期扫描过期订单并自动取消
     /// - 过期订单状态设置为 `OrderStatus::Expired`
     /// - 过期时释放冻结资金，发布 `OrderExpired` 事件
-    GTD
+    GTD,
 }
 
 impl Default for TimeInForce {
-    fn default() -> Self { Self::GTC }
+    fn default() -> Self {
+        Self::GTC
+    }
 }
 
 impl LobOrder for SpotOrder {
-    fn order_id(&self) -> OrderId { self.order_id }
+    fn order_id(&self) -> OrderId {
+        self.order_id
+    }
 
-    fn price(&self) -> Price { self.price.unwrap_or_default() }
+    fn price(&self) -> Price {
+        self.price.unwrap_or_default()
+    }
 
-    fn quantity(&self) -> Quantity { self.total_qty }
+    fn quantity(&self) -> Quantity {
+        self.total_qty
+    }
 
-    fn filled_quantity(&self) -> Quantity { self.executed_qty }
+    fn filled_quantity(&self) -> Quantity {
+        self.executed_qty
+    }
 
     fn side(&self) -> OrderSide {
         match self.side {
             OrderSide::Buy => OrderSide::Buy,
-            OrderSide::Sell => OrderSide::Sell
+            OrderSide::Sell => OrderSide::Sell,
         }
     }
 
-    fn symbol(&self) -> TradingPair { self.trading_pair }
+    fn symbol(&self) -> TradingPair {
+        self.trading_pair
+    }
 }
 
 /// 订单簿条目（64字节缓存行对齐以提升性能）
@@ -394,10 +418,10 @@ pub struct SpotOrder {
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
 
     // ===== 订单类型维度（4字节）⭐ 新增算法策略维度 =====
-    pub execution_method: ExecutionMethod,     // 执行方式 (Limit/Market) (1字节)
-    pub conditional_type: ConditionalType,     // 条件类型 (None/StopLoss/TakeProfit) (1字节)
+    pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
+    pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
-    pub maker_constraint: MakerConstraint,     // Maker约束 (None/PostOnly) (1字节)
+    pub maker_constraint: MakerConstraint, // Maker约束 (None/PostOnly) (1字节)
 
     // ===== 有效期和防护（2字节）=====
     pub self_trade_prevention: SelfTradePrevention, // 自交易防护 (1字节，固定ExpireTaker)
@@ -421,11 +445,13 @@ pub struct SpotOrder {
 
     // ===== 时间戳（8字节）=====
     pub timestamp: Timestamp, // 创建时间戳 (ms)
-    pub last_updated: Timestamp
+    pub last_updated: Timestamp,
 }
 
 impl SpotOrder {
-    pub fn is_all_filled(&self) -> bool { self.total_qty == self.executed_qty }
+    pub fn is_all_filled(&self) -> bool {
+        self.total_qty == self.executed_qty
+    }
 
     /// 根据 CexFeeEntity 配置计算交易手续费
     ///
@@ -447,8 +473,14 @@ impl SpotOrder {
     /// 基点数 (bp): 1 bp = 0.01%，例如 10 bp = 0.1%
     #[inline]
     fn calculate_fee_with_amount(
-        &self, fee_entity: &CexFeeEntity, is_taker: bool, is_market_maker: bool, user_vip_level: Option<u32>,
-        user_tier: Option<u32>, filled: Quantity, price: Price
+        &self,
+        fee_entity: &CexFeeEntity,
+        is_taker: bool,
+        is_market_maker: bool,
+        user_vip_level: Option<u32>,
+        user_tier: Option<u32>,
+        filled: Quantity,
+        price: Price,
     ) -> (i32, Quantity) {
         // 确定交易对的基础和报价资产
         let base_asset = self.trading_pair.base_asset().as_str().to_string();
@@ -467,7 +499,7 @@ impl SpotOrder {
             price.to_f64(),
             user_tier.map(|t| t as f64), // 30天交易量（用户分层）
             user_vip_level,
-            is_market_maker
+            is_market_maker,
         ) {
             Ok(result) => {
                 // 计算手续费数量 = 成交金额 * 费率
@@ -504,8 +536,12 @@ impl SpotOrder {
     /// 数量的更新在 make_trade() 中进行，此处只更新统计和余额
     #[inline]
     pub fn trade(
-        &mut self, filled: Quantity, price: Price, is_taker: bool, quote_asset_balance: &mut Balance,
-        base_asset_balance: &mut Balance
+        &mut self,
+        filled: Quantity,
+        price: Price,
+        is_taker: bool,
+        quote_asset_balance: &mut Balance,
+        base_asset_balance: &mut Balance,
     ) -> SpotTrade {
         // 更新订单成交统计（只更新累计值，不重复更新计数）
         self.cumulative_quote_qty += filled * price;
@@ -513,7 +549,6 @@ impl SpotOrder {
 
         // 重新计算平均成交价 = 累计成交金额 / 已成交数量
         self.average_price = self.cumulative_quote_qty / self.executed_qty;
-
 
         let now = Timestamp::now_as_nanos();
 
@@ -542,7 +577,7 @@ impl SpotOrder {
             None,  // 无VIP等级
             None,  // 无分层等级
             filled,
-            price
+            price,
         );
 
         let commission_asset = self.frozen_asset;
@@ -562,15 +597,19 @@ impl SpotOrder {
             taker_side,
             commission_qty, // 使用计算出的手续费数量
             commission_asset,
-            commission_rate
+            commission_rate,
         );
 
         trade
     }
 
     pub fn make_trade(
-        &mut self, matched_order: &mut SpotOrder, quote_asset_balance: &mut Balance, base_asset_balance: &mut Balance,
-        o_quote_asset_balance: &mut Balance, o_base_asset_balance: &mut Balance
+        &mut self,
+        matched_order: &mut SpotOrder,
+        quote_asset_balance: &mut Balance,
+        base_asset_balance: &mut Balance,
+        o_quote_asset_balance: &mut Balance,
+        o_base_asset_balance: &mut Balance,
     ) -> Vec<SpotTrade> {
         let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
 
@@ -582,12 +621,24 @@ impl SpotOrder {
 
         let transaction_price = match self.price {
             None => matched_order.price.unwrap(),
-            Some(price) => price
+            Some(price) => price,
         };
 
         let mut vec = Vec::<SpotTrade>::new();
-        vec.push(self.trade(filled, transaction_price, true, quote_asset_balance, base_asset_balance));
-        vec.push(matched_order.trade(filled, transaction_price, false, o_quote_asset_balance, o_base_asset_balance));
+        vec.push(self.trade(
+            filled,
+            transaction_price,
+            true,
+            quote_asset_balance,
+            base_asset_balance,
+        ));
+        vec.push(matched_order.trade(
+            filled,
+            transaction_price,
+            false,
+            o_quote_asset_balance,
+            o_base_asset_balance,
+        ));
         vec
     }
 
@@ -609,12 +660,21 @@ impl SpotOrder {
 
         // 冻结，失败则reject
     }
-    pub fn frozen_asset_balance_id(&self) -> String { format!("{}:{}", self.account_id.0, self.frozen_asset.as_u32()) }
+    pub fn frozen_asset_balance_id(&self) -> String {
+        format!("{}:{}", self.account_id.0, self.frozen_asset.as_u32())
+    }
 
     #[inline]
     pub fn create_order(
-        order_id: OrderId, trader_id: TraderId, account_id: AccountId, trading_pair: TradingPair, side: OrderSide,
-        price: Price, quantity: Quantity, time_in_force: TimeInForce, client_order_id: Option<String>
+        order_id: OrderId,
+        trader_id: TraderId,
+        account_id: AccountId,
+        trading_pair: TradingPair,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+        time_in_force: TimeInForce,
+        client_order_id: Option<String>,
     ) -> Self {
         let timestamp = Timestamp::now_as_nanos();
 
@@ -648,28 +708,28 @@ impl SpotOrder {
             frozen_qty: Quantity::default(),
             frozen_asset: AssetId::default(),
             filled_asset: AssetId::default(),
-            commission_asset: AssetId::default()
+            commission_asset: AssetId::default(),
         }
     }
 
     /// 检查订单是否仍然有效（有未成交数量）
     #[inline]
-    pub fn is_active(&self) -> bool { self.unfilled_qty < self.total_qty }
+    pub fn is_active(&self) -> bool {
+        self.unfilled_qty < self.total_qty
+    }
 
     /// 检查订单是否已成交完毕
     #[inline]
-    pub fn is_filled(&self) -> bool { self.unfilled_qty == Quantity::default() }
+    pub fn is_filled(&self) -> bool {
+        self.unfilled_qty == Quantity::default()
+    }
 
     /// 获取已成交百分比（0.0 - 1.0）
     #[inline]
     pub fn fill_ratio(&self) -> f64 {
         let total = self.total_qty.to_f64();
         let unfilled = self.unfilled_qty.to_f64();
-        if total == 0.0 {
-            0.0
-        } else {
-            unfilled / total
-        }
+        if total == 0.0 { 0.0 } else { unfilled / total }
     }
 
     /// 取消订单（通过将状态置为 Cancelled，单次内存写入，速度快）
@@ -722,10 +782,7 @@ impl SpotOrder {
     }
 }
 
-
-
-
-    /// 交易执行记录
+/// 交易执行记录
 ///
 /// 记录一次撮合成交的完整信息，用于：
 /// - 事件溯源（TradeCreated事件）
@@ -772,15 +829,22 @@ pub struct SpotTrade {
     pub commission_rate: i32,
 
     // ===== 补位（4字节）=====
-    pub _padding: u32
+    pub _padding: u32,
 }
 
 impl SpotTrade {
     /// 创建新的交易记录
     #[inline]
     pub fn new(
-        trade_id: u64, order_id: OrderId, timestamp: Timestamp, price: Price, quantity: Quantity,
-        taker_side: OrderSide, commission_qty: Quantity, commission_asset: AssetId, commission_rate: i32
+        trade_id: u64,
+        order_id: OrderId,
+        timestamp: Timestamp,
+        price: Price,
+        quantity: Quantity,
+        taker_side: OrderSide,
+        commission_qty: Quantity,
+        commission_asset: AssetId,
+        commission_rate: i32,
     ) -> Self {
         let quote_qty = quantity * price; // 计算成交金额
 
@@ -795,7 +859,7 @@ impl SpotTrade {
             commission_qty,
             commission_asset,
             commission_rate,
-            _padding: 0
+            _padding: 0,
         }
     }
 }
@@ -809,11 +873,13 @@ mod tests {
             AccountId(1),
             AssetId::Usdt,
             1_000_000_000, // 10亿
-            Timestamp::now_as_nanos()
+            Timestamp::now_as_nanos(),
         )
     }
 
-    fn create_test_trading_pair() -> TradingPair { TradingPair::BtcUsdt }
+    fn create_test_trading_pair() -> TradingPair {
+        TradingPair::BtcUsdt
+    }
 
     #[test]
     fn test_spot_order_fee_calculation_with_cex_fee_entity() {
@@ -827,7 +893,7 @@ mod tests {
             Price::from_f64(50000.0),
             Quantity::from_f64(1.0),
             TimeInForce::GTC,
-            None
+            None,
         );
 
         // 初始化订单状态
@@ -848,7 +914,7 @@ mod tests {
             None,  // user_vip_level
             None,  // user_tier
             filled,
-            price
+            price,
         );
 
         // 验证 Taker 费率和手续费
@@ -863,14 +929,15 @@ mod tests {
 
         // 执行成交
         let mut quote_balance = create_test_balance();
-        let mut base_balance = Balance::with_available(AccountId(1), AssetId::Btc, 0, Timestamp::now_as_nanos());
+        let mut base_balance =
+            Balance::with_available(AccountId(1), AssetId::Btc, 0, Timestamp::now_as_nanos());
 
         let trade = order.trade(
             filled,
             price,
             true, // is_taker
             &mut quote_balance,
-            &mut base_balance
+            &mut base_balance,
         );
 
         // 验证成交记录

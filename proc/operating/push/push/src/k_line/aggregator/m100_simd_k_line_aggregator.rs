@@ -1,6 +1,7 @@
-use std::simd::{f64x8, num::SimdFloat};
+use std::simd::f64x8;
+use std::simd::num::SimdFloat;
 
-use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, TimeWindow, OHLC};
+use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, OHLC, TimeWindow};
 
 // M100SimdKLineAggregator - 1000M 交易/秒 高性能实现
 // 完全无锁、无分配、极致优化的单线程K线聚合器
@@ -103,11 +104,7 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window,
-            ohlc,
-            is_new_window,
-        };
+        let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
         let handler_count = self.event_handler_count;
         let handlers = &self.event_handlers;
@@ -120,7 +117,13 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn update_window(&mut self, window_idx: usize, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+    fn update_window(
+        &mut self,
+        window_idx: usize,
+        timestamp: u64,
+        price: f64,
+        volume: f64,
+    ) -> Result<(), String> {
         let window_size = self.window_sizes[window_idx];
         let window_start = (timestamp / window_size) * window_size;
         let window = match window_idx {
@@ -165,7 +168,7 @@ impl M100SimdKLineAggregator {
                     &mut self.sliding_1s_head,
                     &mut self.sliding_1s_tail,
                     60,
-                    ohlc
+                    ohlc,
                 );
             }
             1 => {
@@ -174,7 +177,7 @@ impl M100SimdKLineAggregator {
                     &mut self.sliding_1m_head,
                     &mut self.sliding_1m_tail,
                     60,
-                    ohlc
+                    ohlc,
                 );
             }
             2 => {
@@ -183,7 +186,7 @@ impl M100SimdKLineAggregator {
                     &mut self.sliding_15m_head,
                     &mut self.sliding_15m_tail,
                     96,
-                    ohlc
+                    ohlc,
                 );
             }
             3 => {
@@ -192,7 +195,7 @@ impl M100SimdKLineAggregator {
                     &mut self.sliding_1h_head,
                     &mut self.sliding_1h_tail,
                     168,
-                    ohlc
+                    ohlc,
                 );
             }
             _ => return,
@@ -231,7 +234,7 @@ impl M100SimdKLineAggregator {
                     &mut self.history_1s_head,
                     &mut self.history_1s_tail,
                     3600,
-                    ohlc
+                    ohlc,
                 );
             }
             1 => {
@@ -240,7 +243,7 @@ impl M100SimdKLineAggregator {
                     &mut self.history_1m_head,
                     &mut self.history_1m_tail,
                     1440,
-                    ohlc
+                    ohlc,
                 );
             }
             2 => {
@@ -249,7 +252,7 @@ impl M100SimdKLineAggregator {
                     &mut self.history_15m_head,
                     &mut self.history_15m_tail,
                     672,
-                    ohlc
+                    ohlc,
                 );
             }
             3 => {
@@ -258,7 +261,7 @@ impl M100SimdKLineAggregator {
                     &mut self.history_1h_head,
                     &mut self.history_1h_tail,
                     720,
-                    ohlc
+                    ohlc,
                 );
             }
             _ => return,
@@ -288,7 +291,12 @@ impl M100SimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn process_with_simd(&mut self, timestamps: &[u64], prices: &[f64], volumes: &[f64]) -> Result<(), String> {
+    fn process_with_simd(
+        &mut self,
+        timestamps: &[u64],
+        prices: &[f64],
+        volumes: &[f64],
+    ) -> Result<(), String> {
         let len = timestamps.len();
         let chunks = len / 8;
         let remainder = len % 8;

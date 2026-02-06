@@ -1,8 +1,10 @@
-use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+use syn::visit::Visit;
+use syn::{File, Item};
 use walkdir::WalkDir;
-use syn::{visit::Visit, File, Item};
 
 use crate::patterns::PatternDetector;
 use crate::scorer::OptimizationScore;
@@ -65,10 +67,7 @@ pub struct RustCodeAnalyzer {
 
 impl RustCodeAnalyzer {
     pub fn new(root_path: PathBuf) -> Result<Self> {
-        Ok(Self {
-            root_path,
-            pattern_detector: PatternDetector::new(),
-        })
+        Ok(Self { root_path, pattern_detector: PatternDetector::new() })
     }
 
     pub fn analyze(&self) -> Result<AnalysisResult> {
@@ -99,8 +98,8 @@ impl RustCodeAnalyzer {
             }
 
             files_analyzed += 1;
-            let content = fs::read_to_string(path)
-                .with_context(|| format!("读取文件失败: {:?}", path))?;
+            let content =
+                fs::read_to_string(path).with_context(|| format!("读取文件失败: {:?}", path))?;
 
             total_lines += content.lines().count();
 
@@ -124,16 +123,14 @@ impl RustCodeAnalyzer {
         // 计算优化分数
         let score = self.calculate_score(&issues, &statistics);
 
-        Ok(AnalysisResult {
-            files_analyzed,
-            total_lines,
-            issues,
-            score,
-            statistics,
-        })
+        Ok(AnalysisResult { files_analyzed, total_lines, issues, score, statistics })
     }
 
-    fn calculate_score(&self, issues: &[OptimizationIssue], stats: &Statistics) -> OptimizationScore {
+    fn calculate_score(
+        &self,
+        issues: &[OptimizationIssue],
+        stats: &Statistics,
+    ) -> OptimizationScore {
         let mut score = 100.0;
 
         // 根据问题严重程度扣分
@@ -166,10 +163,12 @@ impl RustCodeAnalyzer {
         }
     }
 
-    fn calculate_category_score(&self, issues: &[OptimizationIssue], category: IssueCategory) -> f32 {
-        let category_issues: Vec<_> = issues.iter()
-            .filter(|i| i.category == category)
-            .collect();
+    fn calculate_category_score(
+        &self,
+        issues: &[OptimizationIssue],
+        category: IssueCategory,
+    ) -> f32 {
+        let category_issues: Vec<_> = issues.iter().filter(|i| i.category == category).collect();
 
         if category_issues.is_empty() {
             return 100.0;
@@ -218,9 +217,7 @@ impl<'ast> Visit<'ast> for CodeVisitor {
         self.function_count += 1;
 
         // 检查是否应该内联
-        let has_inline_attr = node.attrs.iter().any(|attr| {
-            attr.path().is_ident("inline")
-        });
+        let has_inline_attr = node.attrs.iter().any(|attr| attr.path().is_ident("inline"));
 
         // 简单的内联候选检测：小函数没有inline属性
         let body_tokens = quote::quote!(#node).to_string();
@@ -244,9 +241,10 @@ impl<'ast> Visit<'ast> for CodeVisitor {
         if let syn::Expr::Call(call) = node {
             let call_str = quote::quote!(#call).to_string();
 
-            if call_str.contains("Vec :: new") ||
-               call_str.contains("Box :: new") ||
-               call_str.contains("String :: new") {
+            if call_str.contains("Vec :: new")
+                || call_str.contains("Box :: new")
+                || call_str.contains("String :: new")
+            {
                 self.heap_allocations += 1;
             }
 

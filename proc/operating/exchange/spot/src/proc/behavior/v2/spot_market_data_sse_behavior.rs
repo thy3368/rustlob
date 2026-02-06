@@ -2,6 +2,7 @@
 // web-socket-streams.md 定义所有 market data 接口
 
 use entity_derive::Entity;
+
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data Stream 消息枚举
@@ -36,7 +37,7 @@ pub enum SpotMarketDataStreamAny {
     /// 部分深度流 <symbol>@depth<levels> or <symbol>@depth<levels>@100ms
     PartialDepth(PartialDepthStream),
     /// 增量深度流 <symbol>@depth or <symbol>@depth@100ms
-    DiffDepth(DiffDepthStream)
+    DiffDepth(DiffDepthStream),
 }
 
 /// 归集交易流数据
@@ -66,7 +67,7 @@ pub struct AggregateTradeStream {
     /// 买方是否为做市方
     is_buyer_maker: bool,
     /// 忽略字段
-    ignore: bool
+    ignore: bool,
 }
 
 /// 逐笔交易流数据
@@ -92,7 +93,7 @@ pub struct TradeStream {
     /// 买方是否为做市方
     is_buyer_maker: bool,
     /// 忽略字段
-    ignore: bool
+    ignore: bool,
 }
 
 /// K线间隔枚举
@@ -129,7 +130,7 @@ pub enum KlineInterval {
     /// 1周
     W1,
     /// 1月
-    Mon1
+    Mon1,
 }
 
 impl KlineInterval {
@@ -151,7 +152,7 @@ impl KlineInterval {
             KlineInterval::D1 => "1d",
             KlineInterval::D3 => "3d",
             KlineInterval::W1 => "1w",
-            KlineInterval::Mon1 => "1M"
+            KlineInterval::Mon1 => "1M",
         }
     }
 }
@@ -193,7 +194,7 @@ pub struct KlineData {
     /// 主动买入成交额 (计价资产)
     taker_buy_quote_volume: String,
     /// 忽略字段
-    ignore: String
+    ignore: String,
 }
 
 /// K线流数据
@@ -209,7 +210,7 @@ pub struct KlineStream {
     /// 交易对
     symbol: String,
     /// K线数据
-    kline: KlineData
+    kline: KlineData,
 }
 
 /// Mini Ticker 流数据
@@ -235,7 +236,7 @@ pub struct MiniTickerStream {
     /// 成交量 (基础资产)
     base_volume: String,
     /// 成交额 (计价资产)
-    quote_volume: String
+    quote_volume: String,
 }
 
 /// 24小时 Ticker 流数据
@@ -289,7 +290,7 @@ pub struct TickerStream {
     /// 最后交易ID
     last_trade_id: i64,
     /// 成交笔数
-    number_of_trades: i64
+    number_of_trades: i64,
 }
 
 /// 滚动窗口统计流数据
@@ -332,7 +333,7 @@ pub struct RollingWindowStatsStream {
     /// 最后交易ID
     last_trade_id: i64,
     /// 成交笔数
-    number_of_trades: i64
+    number_of_trades: i64,
 }
 
 /// 滚动窗口大小枚举
@@ -343,7 +344,7 @@ pub enum WindowSize {
     /// 4小时
     H4,
     /// 1天
-    D1
+    D1,
 }
 
 impl WindowSize {
@@ -352,7 +353,7 @@ impl WindowSize {
         match self {
             WindowSize::H1 => "1h",
             WindowSize::H4 => "4h",
-            WindowSize::D1 => "1d"
+            WindowSize::D1 => "1d",
         }
     }
 }
@@ -374,7 +375,7 @@ pub struct BookTickerStream {
     /// 最优卖价
     best_ask_price: String,
     /// 最优卖量
-    best_ask_quantity: String
+    best_ask_quantity: String,
 }
 
 /// 平均价格流数据
@@ -394,7 +395,7 @@ pub struct AveragePriceStream {
     /// 平均价格
     avg_price: String,
     /// 最后交易时间 (毫秒)
-    last_trade_time: i64
+    last_trade_time: i64,
 }
 
 /// 价格档位
@@ -404,7 +405,7 @@ pub struct PriceLevel {
     /// 价格
     price: String,
     /// 数量
-    quantity: String
+    quantity: String,
 }
 
 /// 部分深度流数据
@@ -419,7 +420,7 @@ pub struct PartialDepthStream {
     /// 买单深度
     bids: Vec<PriceLevel>,
     /// 卖单深度
-    asks: Vec<PriceLevel>
+    asks: Vec<PriceLevel>,
 }
 
 /// 增量深度流数据
@@ -441,7 +442,7 @@ pub struct DiffDepthStream {
     /// 买单更新
     bids: Vec<PriceLevel>,
     /// 卖单更新
-    asks: Vec<PriceLevel>
+    asks: Vec<PriceLevel>,
 }
 
 /// 深度档位枚举
@@ -452,7 +453,7 @@ pub enum DepthLevel {
     /// 10档
     Level10,
     /// 20档
-    Level20
+    Level20,
 }
 
 impl DepthLevel {
@@ -461,7 +462,7 @@ impl DepthLevel {
         match self {
             DepthLevel::Level5 => 5,
             DepthLevel::Level10 => 10,
-            DepthLevel::Level20 => 20
+            DepthLevel::Level20 => 20,
         }
     }
 }
@@ -472,7 +473,7 @@ pub enum UpdateSpeed {
     /// 1000毫秒
     Ms1000,
     /// 100毫秒
-    Ms100
+    Ms100,
 }
 
 impl UpdateSpeed {
@@ -480,7 +481,7 @@ impl UpdateSpeed {
     fn as_str(&self) -> &'static str {
         match self {
             UpdateSpeed::Ms1000 => "1000ms",
-            UpdateSpeed::Ms100 => "100ms"
+            UpdateSpeed::Ms100 => "100ms",
         }
     }
 }
@@ -495,7 +496,7 @@ pub struct SubscriptionRequest {
     /// 参数列表
     params: Vec<String>,
     /// 请求ID (可选)
-    id: Option<SubscriptionId>
+    id: Option<SubscriptionId>,
 }
 
 /// 订阅ID类型
@@ -507,7 +508,7 @@ pub enum SubscriptionId {
     /// 字符串ID (最大36字符)
     String(String),
     /// 空ID
-    Null
+    Null,
 }
 
 /// WebSocket 订阅响应
@@ -517,7 +518,7 @@ pub struct SubscriptionResponse {
     /// 结果 (null表示成功)
     result: Option<SubscriptionResult>,
     /// 请求ID
-    id: Option<SubscriptionId>
+    id: Option<SubscriptionId>,
 }
 
 /// 订阅结果类型
@@ -531,7 +532,7 @@ pub enum SubscriptionResult {
     /// 属性值
     Property(bool),
     /// 错误
-    Error(SubscriptionError)
+    Error(SubscriptionError),
 }
 
 /// 订阅错误
@@ -544,7 +545,7 @@ pub struct SubscriptionError {
     /// 错误消息
     msg: String,
     /// 请求ID
-    id: Option<SubscriptionId>
+    id: Option<SubscriptionId>,
 }
 
 /// Market Data Stream 订阅命令
@@ -556,19 +557,19 @@ pub enum MarketDataSubscriptionCmdAny {
         /// 元数据
         metadata: CMetadata,
         /// 流名称列表
-        streams: Vec<String>
+        streams: Vec<String>,
     },
     /// 取消订阅流
     Unsubscribe {
         /// 元数据
         metadata: CMetadata,
         /// 流名称列表
-        streams: Vec<String>
+        streams: Vec<String>,
     },
     /// 列出当前订阅
     ListSubscriptions {
         /// 元数据
-        metadata: CMetadata
+        metadata: CMetadata,
     },
     /// 设置属性
     SetProperty {
@@ -577,15 +578,15 @@ pub enum MarketDataSubscriptionCmdAny {
         /// 属性名
         property: String,
         /// 属性值
-        value: bool
+        value: bool,
     },
     /// 获取属性
     GetProperty {
         /// 元数据
         metadata: CMetadata,
         /// 属性名
-        property: String
-    }
+        property: String,
+    },
 }
 
 /// 组合流包装
@@ -595,7 +596,7 @@ pub struct CombinedStreamWrapper {
     /// 流名称
     stream: String,
     /// 原始数据
-    data: SpotMarketDataStreamAny
+    data: SpotMarketDataStreamAny,
 }
 
 // ============================================================================
@@ -613,7 +614,7 @@ pub struct CommissionRates {
     /// 买方佣金费率
     buyer: String,
     /// 卖方佣金费率
-    seller: String
+    seller: String,
 }
 
 /// 余额信息
@@ -625,7 +626,7 @@ pub struct Balance {
     /// 可用余额
     free: String,
     /// 锁定余额
-    locked: String
+    locked: String,
 }
 
 /// User Data 命令枚举
@@ -634,7 +635,7 @@ pub struct Balance {
 pub enum SpotUserDataCmdAny {
     /// 账户信息查询 GET /api/v3/account
     /// Weight: 20
-    Account(AccountCmd)
+    Account(AccountCmd),
 }
 
 /// 账户信息查询命令
@@ -650,7 +651,7 @@ pub struct AccountCmd {
     /// 接收窗口（微秒精度），不超过 60000
     recv_window: Option<u64>,
     /// 时间戳
-    timestamp: i64
+    timestamp: i64,
 }
 
 /// User Data 响应枚举
@@ -658,7 +659,7 @@ pub struct AccountCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SpotUserDataRes {
     /// 账户信息响应
-    Account(AccountInfo)
+    Account(AccountInfo),
 }
 
 /// 账户信息
@@ -696,17 +697,17 @@ pub struct AccountInfo {
     /// 权限列表
     permissions: Vec<String>,
     /// 用户ID
-    uid: i64
+    uid: i64,
 }
 
 /// Market Data Stream 行为接口
 pub trait SpotMarketDataSubscriptionBehavior: Send + Sync {
     /// 处理订阅命令
     fn handle_subscription(
-        &mut self, cmd: MarketDataSubscriptionCmdAny
+        &mut self,
+        cmd: MarketDataSubscriptionCmdAny,
     ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdErrorAny>;
 }
-
 
 pub trait SpotMarketDataPublishBehavior: Send + Sync {
     fn generate_stream_message(&self) -> SpotMarketDataStreamAny;

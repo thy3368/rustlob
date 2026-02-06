@@ -1,45 +1,40 @@
 use std::sync::Arc;
 
-use axum::{
-    routing::{get, post},
-    Router
-};
-use base_types::{
-    account::balance::Balance,
-    exchange::spot::spot_types::{SpotOrder, SpotTrade}
-};
+use axum::Router;
+use axum::routing::{get, post};
+use base_types::account::balance::Balance;
+use base_types::actor_x::ActorX;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::MySqlDbRepo;
 use immutable_derive::immutable;
-use lob_repo::adapter::{distributed_lob_repo::DistributedLobRepo, embedded_lob_repo::EmbeddedLobRepo};
-use base_types::actor_x::ActorX;
-use spot_behavior::proc::{
-    behavior::v2::{
-        spot_market_data_behavior::{SpotMarketDataCmdAny, SpotMarketDataResAny},
-        spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny},
-        spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny},
-        spot_user_data_sse_behavior::{SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny}
-    },
-    v2::{
-        spot_market_data::SpotMarketDataImpl, spot_trade_v2::SpotTradeBehaviorV2Impl, spot_user_data::SpotUserDataImpl,
-        spot_user_data_key::SpotUserDataListenKeyImpl
-    }
+use lob_repo::adapter::distributed_lob_repo::DistributedLobRepo;
+use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
+use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
+    SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
-
-use crate::interfaces::{
-    common::http_handler_util::handle_generic,
-    spot::http::{trade_handler, trade_handler::TradeService}
+use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny};
+use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
+    SpotUserDataCmdAny, SpotUserDataResAny,
 };
+use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
+    SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
+};
+use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
+use spot_behavior::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
+use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
 
+use crate::interfaces::common::http_handler_util::handle_generic;
 use crate::interfaces::common::ins_repo;
+use crate::interfaces::spot::http::trade_handler;
+use crate::interfaces::spot::http::trade_handler::TradeService;
 
 // todo 认证： /api/spot/v2/；/api/spot/user/data
 // todo 不认证： /api/spot/v2/；/api/spot/market/data
 /// HTTP 服务器启动器
 
-
 #[immutable]
-pub struct HttpServer{
-}
+pub struct HttpServer {}
 impl HttpServer {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
@@ -51,11 +46,10 @@ impl HttpServer {
         let user_data_service = ins_repo::get_spot_user_data_service();
         let listen_key_service = ins_repo::get_spot_user_data_listen_key_service();
 
-
         // 创建路由，注入服务依赖
-        let order_routes =
-            Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
-
+        let order_routes = Router::new()
+            .route("/api/spot/order/", post(trade_handler::handle))
+            .with_state(trade_service);
 
         let trade_v2_routes = Router::new()
             .route(
@@ -64,40 +58,45 @@ impl HttpServer {
                     handle_generic::<
                         SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>,
                         SpotTradeCmdAny,
-                        SpotTradeResAny
-                    >
-                )
+                        SpotTradeResAny,
+                    >,
+                ),
             )
             .with_state(trade_v2_service);
 
-        let market_data_routes = Router::new()
-            .route(
-                "/api/spot/market/data",
-                post(handle_generic::<SpotMarketDataImpl, SpotMarketDataCmdAny, SpotMarketDataResAny>)
-            )
-            .with_state(market_data_service);
+        let market_data_routes =
+            Router::new()
+                .route(
+                    "/api/spot/market/data",
+                    post(
+                        handle_generic::<
+                            SpotMarketDataImpl,
+                            SpotMarketDataCmdAny,
+                            SpotMarketDataResAny,
+                        >,
+                    ),
+                )
+                .with_state(market_data_service);
 
         let user_data_routes = Router::new()
             .route(
                 "/api/spot/user/data",
-                post(handle_generic::<SpotUserDataImpl, SpotUserDataCmdAny, SpotUserDataResAny>)
+                post(handle_generic::<SpotUserDataImpl, SpotUserDataCmdAny, SpotUserDataResAny>),
             )
             .with_state(user_data_service);
 
-        let user_key_routes =
-            Router::new()
-                .route(
-                    "/api/spot/user/listen_key",
-                    post(
-                        handle_generic::<
-                            SpotUserDataListenKeyImpl,
-                            SpotUserDataListenKeyCmdAny,
-                            SpotUserDataListenKeyResAny
-                        >
-                    )
-                )
-                .with_state(listen_key_service);
-
+        let user_key_routes = Router::new()
+            .route(
+                "/api/spot/user/listen_key",
+                post(
+                    handle_generic::<
+                        SpotUserDataListenKeyImpl,
+                        SpotUserDataListenKeyCmdAny,
+                        SpotUserDataListenKeyResAny,
+                    >,
+                ),
+            )
+            .with_state(listen_key_service);
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
@@ -117,13 +116,14 @@ impl HttpServer {
         tracing::info!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 
         tokio::spawn(async move {
-            axum::serve(http_listener, http_app.into_make_service()).await.expect("Spot HTTP server failed to start");
+            axum::serve(http_listener, http_app.into_make_service())
+                .await
+                .expect("Spot HTTP server failed to start");
         });
 
         Ok(())
     }
 }
-
 
 impl HttpServer {
     /// 启动 Spot HTTP 服务器
@@ -137,9 +137,9 @@ impl HttpServer {
         let user_data_service = ins_repo::get_spot_user_data_service();
 
         // 创建路由，注入服务依赖
-        let order_routes =
-            Router::new().route("/api/spot/order/", post(trade_handler::handle)).with_state(trade_service);
-
+        let order_routes = Router::new()
+            .route("/api/spot/order/", post(trade_handler::handle))
+            .with_state(trade_service);
 
         let trade_v2_routes = Router::new()
             .route(
@@ -148,23 +148,30 @@ impl HttpServer {
                     handle_generic::<
                         SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>,
                         SpotTradeCmdAny,
-                        SpotTradeResAny
-                    >
-                )
+                        SpotTradeResAny,
+                    >,
+                ),
             )
             .with_state(trade_v2_service);
 
-        let market_data_routes = Router::new()
-            .route(
-                "/api/spot/market/data",
-                post(handle_generic::<SpotMarketDataImpl, SpotMarketDataCmdAny, SpotMarketDataResAny>)
-            )
-            .with_state(market_data_service);
+        let market_data_routes =
+            Router::new()
+                .route(
+                    "/api/spot/market/data",
+                    post(
+                        handle_generic::<
+                            SpotMarketDataImpl,
+                            SpotMarketDataCmdAny,
+                            SpotMarketDataResAny,
+                        >,
+                    ),
+                )
+                .with_state(market_data_service);
 
         let user_data_routes = Router::new()
             .route(
                 "/api/spot/user/data",
-                post(handle_generic::<SpotUserDataImpl, SpotUserDataCmdAny, SpotUserDataResAny>)
+                post(handle_generic::<SpotUserDataImpl, SpotUserDataCmdAny, SpotUserDataResAny>),
             )
             .with_state(user_data_service);
 
@@ -185,7 +192,9 @@ impl HttpServer {
         tracing::info!("👤 Spot user data: POST /api/spot/user/data (JSON)");
 
         tokio::spawn(async move {
-            axum::serve(http_listener, http_app.into_make_service()).await.expect("Spot HTTP server failed to start");
+            axum::serve(http_listener, http_app.into_make_service())
+                .await
+                .expect("Spot HTTP server failed to start");
         });
 
         // 启动 K 线服务
@@ -202,5 +211,7 @@ impl HttpServer {
     }
 
     /// 健康检查
-    pub async fn health_check() -> &'static str { "OK" }
+    pub async fn health_check() -> &'static str {
+        "OK"
+    }
 }

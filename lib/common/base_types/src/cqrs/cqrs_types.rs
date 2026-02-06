@@ -11,7 +11,7 @@ pub struct CMetadata {
     command_id: String,
     /// 命令创建时间戳（Unix 毫秒）
     #[cfg_attr(feature = "serde", serde(default))]
-    timestamp: Timestamp ,
+    timestamp: Timestamp,
     /// 关联ID（用于分布式追踪）
     #[cfg_attr(feature = "serde", serde(default))]
     correlation_id: Option<String>,
@@ -23,7 +23,7 @@ pub struct CMetadata {
     actor: Option<String>,
     /// 自定义属性
     #[cfg_attr(feature = "serde", serde(default))]
-    attributes: Vec<(String, String)>
+    attributes: Vec<(String, String)>,
 }
 
 /// 带元数据的命令响应
@@ -38,7 +38,7 @@ pub struct CmdResp<T> {
     /// 命令元数据
     metadata: ResMetadata,
     /// 成功结果
-    result: T
+    result: T,
 }
 
 impl<T> CmdResp<T> {
@@ -46,12 +46,9 @@ impl<T> CmdResp<T> {
     #[inline]
     pub fn map<U, F>(self, f: F) -> CmdResp<U>
     where
-        F: FnOnce(T) -> U
+        F: FnOnce(T) -> U,
     {
-        CmdResp {
-            metadata: self.metadata,
-            result: f(self.result)
-        }
+        CmdResp { metadata: self.metadata, result: f(self.result) }
     }
 }
 
@@ -68,10 +65,8 @@ pub struct ResMetadata {
     /// 是否为重复命令（幂等命中）
     is_duplicate: bool,
     /// 命令接收时间戳
-    received_at: Timestamp
+    received_at: Timestamp,
 }
-
-
 
 /// Nonce 类型 - 客户端生成的唯一标识
 pub type Nonce = u64;
@@ -89,7 +84,7 @@ pub struct Cmd<C> {
     /// 命令时间戳（Unix毫秒，用于过期检查）
     pub timestamp_ms: u64,
     /// 实际命令内容
-    pub payload: C
+    pub payload: C,
 }
 
 impl<C> Cmd<C> {
@@ -99,17 +94,12 @@ impl<C> Cmd<C> {
             user_id,
             nonce,
             timestamp_ms: 0, // 由调用方设置
-            payload
+            payload,
         }
     }
 
     /// 创建带时间戳的命令
     pub fn with_timestamp(user_id: UserId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
-        Self {
-            user_id,
-            nonce,
-            timestamp_ms,
-            payload
-        }
+        Self { user_id, nonce, timestamp_ms, payload }
     }
 }

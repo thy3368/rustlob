@@ -1,6 +1,8 @@
+use crate::account::balance::Balance;
+use crate::lob::lob::LobOrder;
 use crate::{
-    account::balance::Balance, lob::lob::LobOrder, AccountId, AssetId, OrderId, OrderSide, PrepPosition, PrepTrade,
-    Price, Quantity, Timestamp, TradeId, TradingPair
+    AccountId, AssetId, OrderId, OrderSide, PrepPosition, PrepTrade, Price, Quantity, Timestamp,
+    TradeId, TradingPair,
 };
 
 /// 订单类型
@@ -10,7 +12,7 @@ pub enum OrderType {
     /// 市价单
     Market = 1,
     /// 限价单
-    Limit = 2
+    Limit = 2,
 }
 
 impl OrderType {
@@ -19,15 +21,16 @@ impl OrderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             OrderType::Market => "MARKET",
-            OrderType::Limit => "LIMIT"
+            OrderType::Limit => "LIMIT",
         }
     }
 }
 
 impl Default for OrderType {
-    fn default() -> Self { OrderType::Limit }
+    fn default() -> Self {
+        OrderType::Limit
+    }
 }
-
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -44,7 +47,7 @@ pub enum OrderStatus {
     /// 已取消
     Cancelled = 5,
     /// 已拒绝
-    Rejected = 6
+    Rejected = 6,
 }
 
 impl OrderStatus {
@@ -55,7 +58,7 @@ impl OrderStatus {
             OrderStatus::PartiallyFilled => "PARTIALLY_FILLED",
             OrderStatus::Filled => "FILLED",
             OrderStatus::Cancelled => "CANCELLED",
-            OrderStatus::Rejected => "REJECTED"
+            OrderStatus::Rejected => "REJECTED",
         }
     }
 
@@ -66,9 +69,10 @@ impl OrderStatus {
 }
 
 impl Default for OrderStatus {
-    fn default() -> Self { OrderStatus::Pending }
+    fn default() -> Self {
+        OrderStatus::Pending
+    }
 }
-
 
 /// 内部订单状态（扩展字段用于撮合引擎）
 #[derive(Debug, Clone, entity_derive::Entity)]
@@ -87,9 +91,8 @@ pub struct PrepOrder {
     pub created_at: u64,
     /// 冻结的保证金金额（用于订单取消时归还）
     pub frozen_margin: Quantity,
-    pub leverage: u8
+    pub leverage: u8,
 }
-
 
 impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
@@ -97,16 +100,22 @@ impl PrepOrder {
 
         let estimate_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
         // 直接使用 Price，无需转换
-        self.frozen_margin = Self::calculate_required_margin(estimate_price, self.quantity, self.leverage);
+        self.frozen_margin =
+            Self::calculate_required_margin(estimate_price, self.quantity, self.leverage);
         balance.frozen(self.frozen_margin, now);
         // todo 冻结不成功 则reject
         self.change2reject();
     }
 
-
     pub fn pending(
-        order_id: u64, account_id: AccountId, trading_pair: TradingPair, side: OrderSide, order_type: OrderType,
-        quantity: Quantity, price: Option<Price>, leverage: u8
+        order_id: u64,
+        account_id: AccountId,
+        trading_pair: TradingPair,
+        side: OrderSide,
+        order_type: OrderType,
+        quantity: Quantity,
+        price: Option<Price>,
+        leverage: u8,
     ) -> PrepOrder {
         let internal_order = PrepOrder {
             order_id,
@@ -118,9 +127,12 @@ impl PrepOrder {
             price,
             filled_quantity: Quantity::from_raw(0),
             status: OrderStatus::Pending,
-            created_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
             frozen_margin: Price::from_raw(0),
-            leverage
+            leverage,
         };
 
         internal_order
@@ -147,7 +159,6 @@ impl PrepOrder {
         self.status = OrderStatus::Rejected;
     }
 
-
     // 取消订单
     pub fn cancel(&mut self, balance: &mut Balance, now: Timestamp) {
         // 如果filled_quantity==0
@@ -157,15 +168,19 @@ impl PrepOrder {
         self.frozen_margin = Price::from_raw(0);
     }
 
-
     pub fn frozen2pay(&mut self, balance: &mut Balance, now: Timestamp) {
         // 直接使用 Price，无需转换
 
         balance.frozen2pay(self.frozen_margin, now);
     }
 
-
-    pub fn filled_qty(&mut self, balance: &mut Balance, match_p: &mut PrepPosition, qty: i64, now: Timestamp) -> f64 {
+    pub fn filled_qty(
+        &mut self,
+        balance: &mut Balance,
+        match_p: &mut PrepPosition,
+        qty: i64,
+        now: Timestamp,
+    ) -> f64 {
         match self.side {
             OrderSide::Buy => {}
             OrderSide::Sell => {}
@@ -191,20 +206,22 @@ impl PrepOrder {
         self.filled_quantity.to_f64()
     }
 
-
     // todo 每个order会有两个balance, 根据买卖来决定资产流转
     pub fn make_trade(
-        &mut self, matched_order: &mut PrepOrder, matched_b: &mut Balance, matched_p: &mut PrepPosition,
-        my_b: &mut Balance, my_p: &mut PrepPosition, now: Timestamp
+        &mut self,
+        matched_order: &mut PrepOrder,
+        matched_b: &mut Balance,
+        matched_p: &mut PrepPosition,
+        my_b: &mut Balance,
+        my_p: &mut PrepPosition,
+        now: Timestamp,
     ) -> PrepTrade {
         let filled = self.remaining_qty().min(matched_order.quantity.raw());
 
         self.filled_qty(my_b, my_p, filled, now);
         matched_order.filled_qty(matched_b, matched_p, filled, now);
 
-
         matched_b.frozen2pay(Price::from_raw(0), now);
-
 
         // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
         let price = matched_order.price.unwrap_or_else(|| Price::from_raw(0));
@@ -222,7 +239,7 @@ impl PrepOrder {
             Quantity::from_raw(filled),
             fee,
             AssetId::Usdt,
-            true // Maker
+            true, // Maker
         );
 
         // position 变化已在 filled_qty 方法中处理
@@ -232,19 +249,33 @@ impl PrepOrder {
 }
 
 impl PrepOrder {
-    pub fn is_all_filled(&self) -> bool { self.quantity == self.filled_quantity }
+    pub fn is_all_filled(&self) -> bool {
+        self.quantity == self.filled_quantity
+    }
 }
 /// 实现 Order trait 以适配 LOB 仓储
 impl LobOrder for PrepOrder {
-    fn order_id(&self) -> crate::OrderId { self.order_id }
+    fn order_id(&self) -> crate::OrderId {
+        self.order_id
+    }
 
-    fn price(&self) -> Price { self.price.unwrap_or_else(|| Price::from_raw(0)) }
+    fn price(&self) -> Price {
+        self.price.unwrap_or_else(|| Price::from_raw(0))
+    }
 
-    fn quantity(&self) -> Quantity { self.quantity }
+    fn quantity(&self) -> Quantity {
+        self.quantity
+    }
 
-    fn filled_quantity(&self) -> Quantity { self.filled_quantity }
+    fn filled_quantity(&self) -> Quantity {
+        self.filled_quantity
+    }
 
-    fn side(&self) -> crate::OrderSide { self.side }
+    fn side(&self) -> crate::OrderSide {
+        self.side
+    }
 
-    fn symbol(&self) -> TradingPair { self.trading_pair }
+    fn symbol(&self) -> TradingPair {
+        self.trading_pair
+    }
 }

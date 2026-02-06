@@ -40,7 +40,7 @@ pub enum Side {
     /// 买入
     Buy,
     /// 卖出
-    Sell
+    Sell,
 }
 
 /// 持仓方向（双向持仓模式）
@@ -51,7 +51,7 @@ pub enum PositionSide {
     /// 多头（双向持仓）
     Long,
     /// 空头（双向持仓）
-    Short
+    Short,
 }
 
 /// 保证金模式
@@ -60,7 +60,7 @@ pub enum MarginMode {
     /// 全仓
     Cross,
     /// 逐仓
-    Isolated
+    Isolated,
 }
 
 /// 持仓模式
@@ -69,7 +69,7 @@ pub enum PositionMode {
     /// 单向持仓
     OneWay,
     /// 双向持仓
-    Hedge
+    Hedge,
 }
 
 /// 订单有效期
@@ -84,11 +84,13 @@ pub enum TimeInForce {
     /// 指定时间前有效
     GTD { expire_time: Timestamp },
     /// 只做Maker
-    PostOnly
+    PostOnly,
 }
 
 impl Default for TimeInForce {
-    fn default() -> Self { Self::GTC }
+    fn default() -> Self {
+        Self::GTC
+    }
 }
 
 /// 订单状态
@@ -105,5 +107,5 @@ pub enum OrderStatus {
     /// 已拒绝
     Rejected,
     /// 已过期
-    Expired
+    Expired,
 }

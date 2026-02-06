@@ -36,14 +36,17 @@
 //! ```
 
 use std::fmt;
-use base_types::mark_data::spot::level_types::{BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber, SymbolId, TradeEvent};
-use base_types::{OrderId, Quantity, OrderSide};
+
+use base_types::mark_data::spot::level_types::{
+    BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber, SymbolId,
+    TradeEvent,
+};
+use base_types::{OrderId, OrderSide, Quantity};
 // use lob::lob::*;
 // use base_types::mark_data::spot::level_types::{
 //     BboChangeEvent, Level1, Level2, Level3, MarketDataDelta, OrderDelta, SequenceNumber,
 //     SymbolId, TradeEvent
 // };
-
 
 // ============================================================================
 // 数据提供者 Trait 定义
@@ -81,7 +84,7 @@ pub enum MarketDataQueryError {
     /// 当查询的交易对ID在系统中不存在时返回此错误
     SymbolNotFound {
         /// 交易对ID
-        symbol_id: SymbolId
+        symbol_id: SymbolId,
     },
 
     /// 订单不存在
@@ -89,7 +92,7 @@ pub enum MarketDataQueryError {
     /// 当查询的订单ID在订单簿中不存在时返回此错误
     OrderNotFound {
         /// 订单ID
-        order_id: OrderId
+        order_id: OrderId,
     },
 
     /// 订单簿为空
@@ -97,7 +100,7 @@ pub enum MarketDataQueryError {
     /// 当交易对的订单簿中没有任何订单时返回此错误
     EmptyOrderBook {
         /// 交易对ID
-        symbol_id: SymbolId
+        symbol_id: SymbolId,
     },
 
     /// 流动性不足
@@ -111,7 +114,7 @@ pub enum MarketDataQueryError {
         /// 请求数量
         requested: Quantity,
         /// 可用数量
-        available: Quantity
+        available: Quantity,
     },
 
     /// 参数无效
@@ -121,7 +124,7 @@ pub enum MarketDataQueryError {
         /// 参数字段名
         field: &'static str,
         /// 错误原因
-        reason: &'static str
+        reason: &'static str,
     },
 
     /// 序列号范围无效
@@ -131,7 +134,7 @@ pub enum MarketDataQueryError {
         /// 起始序列号
         from: SequenceNumber,
         /// 结束序列号
-        to: SequenceNumber
+        to: SequenceNumber,
     },
 
     /// 深度参数无效
@@ -141,7 +144,7 @@ pub enum MarketDataQueryError {
         /// 请求的深度
         requested: usize,
         /// 最大允许深度
-        max_allowed: usize
+        max_allowed: usize,
     },
 
     /// 内部错误
@@ -149,61 +152,39 @@ pub enum MarketDataQueryError {
     /// 系统内部错误，包含详细错误信息
     Internal {
         /// 错误消息
-        message: String
-    }
+        message: String,
+    },
 }
 
 impl fmt::Display for MarketDataQueryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SymbolNotFound {
-                symbol_id
-            } => {
+            Self::SymbolNotFound { symbol_id } => {
                 write!(f, "交易对不存在: symbol_id={}", symbol_id)
             }
-            Self::OrderNotFound {
-                order_id
-            } => {
+            Self::OrderNotFound { order_id } => {
                 write!(f, "订单不存在: order_id={}", order_id)
             }
-            Self::EmptyOrderBook {
-                symbol_id
-            } => {
+            Self::EmptyOrderBook { symbol_id } => {
                 write!(f, "订单簿为空: symbol_id={}", symbol_id)
             }
-            Self::InsufficientLiquidity {
-                symbol_id,
-                side,
-                requested,
-                available
-            } => {
+            Self::InsufficientLiquidity { symbol_id, side, requested, available } => {
                 write!(
                     f,
                     "流动性不足: symbol_id={}, side={:?}, requested={}, available={}",
                     symbol_id, side, requested, available
                 )
             }
-            Self::InvalidParameter {
-                field,
-                reason
-            } => {
+            Self::InvalidParameter { field, reason } => {
                 write!(f, "参数无效: field='{}', reason='{}'", field, reason)
             }
-            Self::InvalidSequenceRange {
-                from,
-                to
-            } => {
+            Self::InvalidSequenceRange { from, to } => {
                 write!(f, "序列号范围无效: from={}, to={} (from must be < to)", from, to)
             }
-            Self::InvalidDepth {
-                requested,
-                max_allowed
-            } => {
+            Self::InvalidDepth { requested, max_allowed } => {
                 write!(f, "深度参数无效: requested={}, max_allowed={}", requested, max_allowed)
             }
-            Self::Internal {
-                message
-            } => {
+            Self::Internal { message } => {
                 write!(f, "内部错误: {}", message)
             }
         }
@@ -216,71 +197,54 @@ impl MarketDataQueryError {
     /// 创建交易对不存在错误
     #[inline]
     pub fn symbol_not_found(symbol_id: SymbolId) -> Self {
-        Self::SymbolNotFound {
-            symbol_id
-        }
+        Self::SymbolNotFound { symbol_id }
     }
 
     /// 创建订单不存在错误
     #[inline]
     pub fn order_not_found(order_id: OrderId) -> Self {
-        Self::OrderNotFound {
-            order_id
-        }
+        Self::OrderNotFound { order_id }
     }
 
     /// 创建订单簿为空错误
     #[inline]
     pub fn empty_order_book(symbol_id: SymbolId) -> Self {
-        Self::EmptyOrderBook {
-            symbol_id
-        }
+        Self::EmptyOrderBook { symbol_id }
     }
 
     /// 创建流动性不足错误
     #[inline]
-    pub fn insufficient_liquidity(symbol_id: SymbolId, side: OrderSide, requested: Quantity, available: Quantity) -> Self {
-        Self::InsufficientLiquidity {
-            symbol_id,
-            side,
-            requested,
-            available
-        }
+    pub fn insufficient_liquidity(
+        symbol_id: SymbolId,
+        side: OrderSide,
+        requested: Quantity,
+        available: Quantity,
+    ) -> Self {
+        Self::InsufficientLiquidity { symbol_id, side, requested, available }
     }
 
     /// 创建参数无效错误
     #[inline]
     pub fn invalid_parameter(field: &'static str, reason: &'static str) -> Self {
-        Self::InvalidParameter {
-            field,
-            reason
-        }
+        Self::InvalidParameter { field, reason }
     }
 
     /// 创建序列号范围无效错误
     #[inline]
     pub fn invalid_sequence_range(from: SequenceNumber, to: SequenceNumber) -> Self {
-        Self::InvalidSequenceRange {
-            from,
-            to
-        }
+        Self::InvalidSequenceRange { from, to }
     }
 
     /// 创建深度参数无效错误
     #[inline]
     pub fn invalid_depth(requested: usize, max_allowed: usize) -> Self {
-        Self::InvalidDepth {
-            requested,
-            max_allowed
-        }
+        Self::InvalidDepth { requested, max_allowed }
     }
 
     /// 创建内部错误
     #[inline]
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal {
-            message: message.into()
-        }
+        Self::Internal { message: message.into() }
     }
 
     /// 判断是否为客户端错误（4xx类错误）
@@ -298,7 +262,9 @@ impl MarketDataQueryError {
 
     /// 判断是否为服务端错误（5xx类错误）
     #[inline]
-    pub fn is_server_error(&self) -> bool { matches!(self, Self::Internal { .. }) }
+    pub fn is_server_error(&self) -> bool {
+        matches!(self, Self::Internal { .. })
+    }
 }
 
 // ============================================================================
@@ -323,7 +289,7 @@ pub struct QueryLevel1 {
     /// 交易对ID
     pub symbol_id: SymbolId,
     /// 序列号
-    pub sequence: SequenceNumber
+    pub sequence: SequenceNumber,
 }
 
 impl QueryLevel1 {
@@ -335,30 +301,33 @@ impl QueryLevel1 {
     /// * `sequence` - 序列号
     #[inline]
     pub fn new(symbol_id: SymbolId, sequence: SequenceNumber) -> Self {
-        Self {
-            symbol_id,
-            sequence
-        }
+        Self { symbol_id, sequence }
     }
 
     /// 创建 Builder
     #[inline]
-    pub fn builder() -> QueryLevel1Builder { QueryLevel1Builder::default() }
+    pub fn builder() -> QueryLevel1Builder {
+        QueryLevel1Builder::default()
+    }
 
     /// 获取交易对ID
     #[inline]
-    pub fn symbol_id(&self) -> SymbolId { self.symbol_id }
+    pub fn symbol_id(&self) -> SymbolId {
+        self.symbol_id
+    }
 
     /// 获取序列号
     #[inline]
-    pub fn sequence(&self) -> SequenceNumber { self.sequence }
+    pub fn sequence(&self) -> SequenceNumber {
+        self.sequence
+    }
 }
 
 /// Level 1 查询命令 Builder
 #[derive(Debug, Default)]
 pub struct QueryLevel1Builder {
     symbol_id: Option<SymbolId>,
-    sequence: Option<SequenceNumber>
+    sequence: Option<SequenceNumber>,
 }
 
 impl QueryLevel1Builder {
@@ -382,7 +351,7 @@ impl QueryLevel1Builder {
     pub fn build(self) -> QueryLevel1 {
         QueryLevel1 {
             symbol_id: self.symbol_id.expect("symbol_id is required"),
-            sequence: self.sequence.expect("sequence is required")
+            sequence: self.sequence.expect("sequence is required"),
         }
     }
 
@@ -396,7 +365,9 @@ impl QueryLevel1Builder {
             symbol_id: self
                 .symbol_id
                 .ok_or_else(|| MarketDataQueryError::invalid_parameter("symbol_id", "required"))?,
-            sequence: self.sequence.ok_or_else(|| MarketDataQueryError::invalid_parameter("sequence", "required"))?
+            sequence: self
+                .sequence
+                .ok_or_else(|| MarketDataQueryError::invalid_parameter("sequence", "required"))?,
         })
     }
 }
@@ -421,7 +392,7 @@ pub struct QueryLevel1Batch {
     /// 交易对ID列表
     pub symbol_ids: Vec<SymbolId>,
     /// 批次序列号
-    pub sequence: SequenceNumber
+    pub sequence: SequenceNumber,
 }
 
 impl QueryLevel1Batch {
@@ -432,34 +403,39 @@ impl QueryLevel1Batch {
     /// * `symbol_ids` - 交易对ID列表
     /// * `sequence` - 序列号
     pub fn new(symbol_ids: Vec<SymbolId>, sequence: SequenceNumber) -> Self {
-        Self {
-            symbol_ids,
-            sequence
-        }
+        Self { symbol_ids, sequence }
     }
 
     /// 创建 Builder
     #[inline]
-    pub fn builder() -> QueryLevel1BatchBuilder { QueryLevel1BatchBuilder::default() }
+    pub fn builder() -> QueryLevel1BatchBuilder {
+        QueryLevel1BatchBuilder::default()
+    }
 
     /// 获取交易对数量
     #[inline]
-    pub fn len(&self) -> usize { self.symbol_ids.len() }
+    pub fn len(&self) -> usize {
+        self.symbol_ids.len()
+    }
 
     /// 判断是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool { self.symbol_ids.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.symbol_ids.is_empty()
+    }
 
     /// 获取序列号
     #[inline]
-    pub fn sequence(&self) -> SequenceNumber { self.sequence }
+    pub fn sequence(&self) -> SequenceNumber {
+        self.sequence
+    }
 }
 
 /// Level 1 批量查询命令 Builder
 #[derive(Debug, Default)]
 pub struct QueryLevel1BatchBuilder {
     symbol_ids: Vec<SymbolId>,
-    sequence: Option<SequenceNumber>
+    sequence: Option<SequenceNumber>,
 }
 
 impl QueryLevel1BatchBuilder {
@@ -489,7 +465,7 @@ impl QueryLevel1BatchBuilder {
     pub fn build(self) -> QueryLevel1Batch {
         QueryLevel1Batch {
             symbol_ids: self.symbol_ids,
-            sequence: self.sequence.expect("sequence is required")
+            sequence: self.sequence.expect("sequence is required"),
         }
     }
 
@@ -505,11 +481,12 @@ impl QueryLevel1BatchBuilder {
 
         Ok(QueryLevel1Batch {
             symbol_ids: self.symbol_ids,
-            sequence: self.sequence.ok_or_else(|| MarketDataQueryError::invalid_parameter("sequence", "required"))?
+            sequence: self
+                .sequence
+                .ok_or_else(|| MarketDataQueryError::invalid_parameter("sequence", "required"))?,
         })
     }
 }
-
 
 // ============================================================================
 // Level 1 查询结果
@@ -519,7 +496,7 @@ impl QueryLevel1BatchBuilder {
 #[derive(Debug, Clone, Copy)]
 pub struct Level1QueryResult {
     /// Level 1 快照数据
-    pub snapshot: Level1
+    pub snapshot: Level1,
 }
 
 /// Level 1 批量查询结果
@@ -528,9 +505,8 @@ pub struct Level1BatchQueryResult {
     /// 成功的快照列表
     pub snapshots: Vec<(SymbolId, Level1)>,
     /// 失败的交易对ID列表
-    pub failed_symbols: Vec<SymbolId>
+    pub failed_symbols: Vec<SymbolId>,
 }
-
 
 // ============================================================================
 // Level 2 查询命令
@@ -556,7 +532,7 @@ pub struct QueryLevel2 {
     /// 序列号
     pub sequence: SequenceNumber,
     /// 深度档位（例如 10档、20档）
-    pub depth: usize
+    pub depth: usize,
 }
 
 impl QueryLevel2 {
@@ -575,12 +551,12 @@ impl QueryLevel2 {
     ///
     /// 如果深度超过最大允许值，将会 panic
     pub fn new(symbol_id: SymbolId, sequence: SequenceNumber, depth: usize) -> Self {
-        assert!(depth > 0 && depth <= Self::MAX_DEPTH, "depth must be between 1 and {}", Self::MAX_DEPTH);
-        Self {
-            symbol_id,
-            sequence,
-            depth
-        }
+        assert!(
+            depth > 0 && depth <= Self::MAX_DEPTH,
+            "depth must be between 1 and {}",
+            Self::MAX_DEPTH
+        );
+        Self { symbol_id, sequence, depth }
     }
 
     /// 尝试创建 Level 2 查询命令
@@ -588,43 +564,55 @@ impl QueryLevel2 {
     /// # 错误
     ///
     /// 如果深度超出范围，返回错误
-    pub fn try_new(symbol_id: SymbolId, sequence: SequenceNumber, depth: usize) -> Result<Self, MarketDataQueryError> {
+    pub fn try_new(
+        symbol_id: SymbolId,
+        sequence: SequenceNumber,
+        depth: usize,
+    ) -> Result<Self, MarketDataQueryError> {
         if depth == 0 {
             return Err(MarketDataQueryError::invalid_parameter("depth", "must be greater than 0"));
         }
         if depth > Self::MAX_DEPTH {
             return Err(MarketDataQueryError::invalid_depth(depth, Self::MAX_DEPTH));
         }
-        Ok(Self {
-            symbol_id,
-            sequence,
-            depth
-        })
+        Ok(Self { symbol_id, sequence, depth })
     }
 
     /// 创建10档深度查询
     #[inline]
-    pub fn depth_10(symbol_id: SymbolId, sequence: SequenceNumber) -> Self { Self::new(symbol_id, sequence, 10) }
+    pub fn depth_10(symbol_id: SymbolId, sequence: SequenceNumber) -> Self {
+        Self::new(symbol_id, sequence, 10)
+    }
 
     /// 创建20档深度查询
     #[inline]
-    pub fn depth_20(symbol_id: SymbolId, sequence: SequenceNumber) -> Self { Self::new(symbol_id, sequence, 20) }
+    pub fn depth_20(symbol_id: SymbolId, sequence: SequenceNumber) -> Self {
+        Self::new(symbol_id, sequence, 20)
+    }
 
     /// 创建50档深度查询
     #[inline]
-    pub fn depth_50(symbol_id: SymbolId, sequence: SequenceNumber) -> Self { Self::new(symbol_id, sequence, 50) }
+    pub fn depth_50(symbol_id: SymbolId, sequence: SequenceNumber) -> Self {
+        Self::new(symbol_id, sequence, 50)
+    }
 
     /// 获取交易对ID
     #[inline]
-    pub fn symbol_id(&self) -> SymbolId { self.symbol_id }
+    pub fn symbol_id(&self) -> SymbolId {
+        self.symbol_id
+    }
 
     /// 获取序列号
     #[inline]
-    pub fn sequence(&self) -> SequenceNumber { self.sequence }
+    pub fn sequence(&self) -> SequenceNumber {
+        self.sequence
+    }
 
     /// 获取深度
     #[inline]
-    pub fn depth(&self) -> usize { self.depth }
+    pub fn depth(&self) -> usize {
+        self.depth
+    }
 
     /// 验证深度是否有效
     #[inline]
@@ -639,7 +627,6 @@ impl QueryLevel2 {
     }
 }
 
-
 // ============================================================================
 // Level 2 查询结果
 // ============================================================================
@@ -648,9 +635,8 @@ impl QueryLevel2 {
 #[derive(Debug, Clone)]
 pub struct Level2QueryResult {
     /// Level 2 快照数据
-    pub snapshot: Level2<10>
+    pub snapshot: Level2<10>,
 }
-
 
 // ============================================================================
 // Level 3 查询命令
@@ -662,18 +648,14 @@ pub struct QueryLevel3 {
     /// 交易对ID
     pub symbol_id: SymbolId,
     /// 序列号
-    pub sequence: u64
+    pub sequence: u64,
 }
 
 impl QueryLevel3 {
     pub fn new(symbol_id: SymbolId, sequence: u64) -> Self {
-        Self {
-            symbol_id,
-            sequence
-        }
+        Self { symbol_id, sequence }
     }
 }
-
 
 // ============================================================================
 // Level 3 查询结果
@@ -683,9 +665,8 @@ impl QueryLevel3 {
 #[derive(Debug, Clone)]
 pub struct Level3QueryResult {
     /// Level 3 快照数据
-    pub snapshot: Level3
+    pub snapshot: Level3,
 }
-
 
 // ============================================================================
 // 增量数据查询命令
@@ -719,7 +700,7 @@ pub struct QueryIncrementalData {
     /// 起始序列号（不包含）
     pub from_sequence: SequenceNumber,
     /// 结束序列号（包含）
-    pub to_sequence: SequenceNumber
+    pub to_sequence: SequenceNumber,
 }
 
 impl QueryIncrementalData {
@@ -737,13 +718,13 @@ impl QueryIncrementalData {
     /// # Panics
     ///
     /// 如果序列号范围无效，将会 panic
-    pub fn new(symbol_id: SymbolId, from_sequence: SequenceNumber, to_sequence: SequenceNumber) -> Self {
+    pub fn new(
+        symbol_id: SymbolId,
+        from_sequence: SequenceNumber,
+        to_sequence: SequenceNumber,
+    ) -> Self {
         assert!(from_sequence < to_sequence, "from_sequence must be less than to_sequence");
-        Self {
-            symbol_id,
-            from_sequence,
-            to_sequence
-        }
+        Self { symbol_id, from_sequence, to_sequence }
     }
 
     /// 尝试创建增量数据查询命令
@@ -752,7 +733,9 @@ impl QueryIncrementalData {
     ///
     /// 如果序列号范围无效，返回错误
     pub fn try_new(
-        symbol_id: SymbolId, from_sequence: SequenceNumber, to_sequence: SequenceNumber
+        symbol_id: SymbolId,
+        from_sequence: SequenceNumber,
+        to_sequence: SequenceNumber,
     ) -> Result<Self, MarketDataQueryError> {
         if from_sequence >= to_sequence {
             return Err(MarketDataQueryError::invalid_sequence_range(from_sequence, to_sequence));
@@ -760,14 +743,13 @@ impl QueryIncrementalData {
 
         let range = to_sequence - from_sequence;
         if range > Self::MAX_RANGE {
-            return Err(MarketDataQueryError::invalid_parameter("sequence_range", "range too large"));
+            return Err(MarketDataQueryError::invalid_parameter(
+                "sequence_range",
+                "range too large",
+            ));
         }
 
-        Ok(Self {
-            symbol_id,
-            from_sequence,
-            to_sequence
-        })
+        Ok(Self { symbol_id, from_sequence, to_sequence })
     }
 
     /// 创建查询最近 N 个事件的命令
@@ -779,42 +761,54 @@ impl QueryIncrementalData {
     /// * `count` - 要查询的事件数量
     pub fn last_n(symbol_id: SymbolId, latest_sequence: SequenceNumber, count: u64) -> Self {
         let from_sequence = latest_sequence.saturating_sub(count);
-        Self {
-            symbol_id,
-            from_sequence,
-            to_sequence: latest_sequence
-        }
+        Self { symbol_id, from_sequence, to_sequence: latest_sequence }
     }
 
     /// 创建 Builder
     #[inline]
-    pub fn builder() -> QueryIncrementalDataBuilder { QueryIncrementalDataBuilder::default() }
+    pub fn builder() -> QueryIncrementalDataBuilder {
+        QueryIncrementalDataBuilder::default()
+    }
 
     /// 获取交易对ID
     #[inline]
-    pub fn symbol_id(&self) -> SymbolId { self.symbol_id }
+    pub fn symbol_id(&self) -> SymbolId {
+        self.symbol_id
+    }
 
     /// 获取起始序列号
     #[inline]
-    pub fn from_sequence(&self) -> SequenceNumber { self.from_sequence }
+    pub fn from_sequence(&self) -> SequenceNumber {
+        self.from_sequence
+    }
 
     /// 获取结束序列号
     #[inline]
-    pub fn to_sequence(&self) -> SequenceNumber { self.to_sequence }
+    pub fn to_sequence(&self) -> SequenceNumber {
+        self.to_sequence
+    }
 
     /// 获取查询范围大小
     #[inline]
-    pub fn range(&self) -> u64 { self.to_sequence - self.from_sequence }
+    pub fn range(&self) -> u64 {
+        self.to_sequence - self.from_sequence
+    }
 
     /// 验证查询参数
     pub fn validate(&self) -> Result<(), MarketDataQueryError> {
         if self.from_sequence >= self.to_sequence {
-            return Err(MarketDataQueryError::invalid_sequence_range(self.from_sequence, self.to_sequence));
+            return Err(MarketDataQueryError::invalid_sequence_range(
+                self.from_sequence,
+                self.to_sequence,
+            ));
         }
 
         let range = self.range();
         if range > Self::MAX_RANGE {
-            return Err(MarketDataQueryError::invalid_parameter("sequence_range", "range too large"));
+            return Err(MarketDataQueryError::invalid_parameter(
+                "sequence_range",
+                "range too large",
+            ));
         }
 
         Ok(())
@@ -827,7 +821,7 @@ impl QueryIncrementalData {
         Self {
             symbol_id: self.symbol_id,
             from_sequence: self.to_sequence,
-            to_sequence: self.to_sequence + page_size
+            to_sequence: self.to_sequence + page_size,
         }
     }
 }
@@ -837,7 +831,7 @@ impl QueryIncrementalData {
 pub struct QueryIncrementalDataBuilder {
     symbol_id: Option<SymbolId>,
     from_sequence: Option<SequenceNumber>,
-    to_sequence: Option<SequenceNumber>
+    to_sequence: Option<SequenceNumber>,
 }
 
 impl QueryIncrementalDataBuilder {
@@ -875,7 +869,7 @@ impl QueryIncrementalDataBuilder {
         QueryIncrementalData {
             symbol_id: self.symbol_id.expect("symbol_id is required"),
             from_sequence: self.from_sequence.expect("from_sequence is required"),
-            to_sequence: self.to_sequence.expect("to_sequence is required")
+            to_sequence: self.to_sequence.expect("to_sequence is required"),
         }
     }
 
@@ -885,12 +879,15 @@ impl QueryIncrementalDataBuilder {
     ///
     /// 如果必需字段未设置或参数无效，返回错误
     pub fn try_build(self) -> Result<QueryIncrementalData, MarketDataQueryError> {
-        let symbol_id =
-            self.symbol_id.ok_or_else(|| MarketDataQueryError::invalid_parameter("symbol_id", "required"))?;
-        let from_sequence =
-            self.from_sequence.ok_or_else(|| MarketDataQueryError::invalid_parameter("from_sequence", "required"))?;
-        let to_sequence =
-            self.to_sequence.ok_or_else(|| MarketDataQueryError::invalid_parameter("to_sequence", "required"))?;
+        let symbol_id = self
+            .symbol_id
+            .ok_or_else(|| MarketDataQueryError::invalid_parameter("symbol_id", "required"))?;
+        let from_sequence = self
+            .from_sequence
+            .ok_or_else(|| MarketDataQueryError::invalid_parameter("from_sequence", "required"))?;
+        let to_sequence = self
+            .to_sequence
+            .ok_or_else(|| MarketDataQueryError::invalid_parameter("to_sequence", "required"))?;
 
         QueryIncrementalData::try_new(symbol_id, from_sequence, to_sequence)
     }
@@ -910,35 +907,38 @@ pub struct IncrementalDataRes {
     /// 结束序列号
     pub to_sequence: SequenceNumber,
     /// 是否有更多数据
-    pub has_more: bool
+    pub has_more: bool,
 }
 
 impl IncrementalDataRes {
     /// 创建增量数据查询结果
     pub fn new(
-        symbol_id: SymbolId, deltas: Vec<MarketDataDelta>, from_sequence: SequenceNumber, to_sequence: SequenceNumber,
-        has_more: bool
+        symbol_id: SymbolId,
+        deltas: Vec<MarketDataDelta>,
+        from_sequence: SequenceNumber,
+        to_sequence: SequenceNumber,
+        has_more: bool,
     ) -> Self {
-        Self {
-            symbol_id,
-            deltas,
-            from_sequence,
-            to_sequence,
-            has_more
-        }
+        Self { symbol_id, deltas, from_sequence, to_sequence, has_more }
     }
 
     /// 获取事件数量
     #[inline]
-    pub fn len(&self) -> usize { self.deltas.len() }
+    pub fn len(&self) -> usize {
+        self.deltas.len()
+    }
 
     /// 判断是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool { self.deltas.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.deltas.is_empty()
+    }
 
     /// 获取查询范围
     #[inline]
-    pub fn range(&self) -> u64 { self.to_sequence - self.from_sequence }
+    pub fn range(&self) -> u64 {
+        self.to_sequence - self.from_sequence
+    }
 
     /// 过滤订单簿变更事件
     pub fn filter_orderbook_changes(&self) -> Vec<&OrderDelta> {
@@ -946,7 +946,7 @@ impl IncrementalDataRes {
             .iter()
             .filter_map(|delta| match delta {
                 MarketDataDelta::OrderChange(change) => Some(change),
-                _ => None
+                _ => None,
             })
             .collect()
     }
@@ -957,7 +957,7 @@ impl IncrementalDataRes {
             .iter()
             .filter_map(|delta| match delta {
                 MarketDataDelta::Trade(trade) => Some(trade),
-                _ => None
+                _ => None,
             })
             .collect()
     }
@@ -968,7 +968,7 @@ impl IncrementalDataRes {
             .iter()
             .filter_map(|delta| match delta {
                 MarketDataDelta::BboChange(bbo) => Some(bbo),
-                _ => None
+                _ => None,
             })
             .collect()
     }
@@ -980,7 +980,7 @@ impl IncrementalDataRes {
             match delta {
                 MarketDataDelta::OrderChange(_) => count.orderbook_changes += 1,
                 MarketDataDelta::Trade(_) => count.trades += 1,
-                MarketDataDelta::BboChange(_) => count.bbo_changes += 1
+                MarketDataDelta::BboChange(_) => count.bbo_changes += 1,
             }
         }
         count
@@ -991,7 +991,7 @@ impl IncrementalDataRes {
         self.deltas.first().map(|delta| match delta {
             MarketDataDelta::OrderChange(d) => d.sequence,
             MarketDataDelta::Trade(t) => t.sequence,
-            MarketDataDelta::BboChange(b) => b.sequence
+            MarketDataDelta::BboChange(b) => b.sequence,
         })
     }
 
@@ -1000,7 +1000,7 @@ impl IncrementalDataRes {
         self.deltas.last().map(|delta| match delta {
             MarketDataDelta::OrderChange(d) => d.sequence,
             MarketDataDelta::Trade(t) => t.sequence,
-            MarketDataDelta::BboChange(b) => b.sequence
+            MarketDataDelta::BboChange(b) => b.sequence,
         })
     }
 }
@@ -1013,13 +1013,15 @@ pub struct EventTypeCount {
     /// 成交数量
     pub trades: usize,
     /// 最优买卖价变更数量
-    pub bbo_changes: usize
+    pub bbo_changes: usize,
 }
 
 impl EventTypeCount {
     /// 获取总事件数
     #[inline]
-    pub fn total(&self) -> usize { self.orderbook_changes + self.trades + self.bbo_changes }
+    pub fn total(&self) -> usize {
+        self.orderbook_changes + self.trades + self.bbo_changes
+    }
 }
 
 // ============================================================================
@@ -1030,7 +1032,10 @@ impl EventTypeCount {
 pub trait IncrementalDataRepo {
     /// 查询增量数据
     fn query_incremental_data(
-        &self, symbol_id: SymbolId, from_sequence: u64, to_sequence: u64
+        &self,
+        symbol_id: SymbolId,
+        from_sequence: u64,
+        to_sequence: u64,
     ) -> Result<Vec<MarketDataDelta>, MarketDataQueryError>;
 
     /// 获取最新序列号
@@ -1056,10 +1061,10 @@ pub trait MarketDataQueryProc {
 
     /// 处理增量数据查询
     fn query_incremental_data(
-        &self, query: QueryIncrementalData
+        &self,
+        query: QueryIncrementalData,
     ) -> Result<IncrementalDataRes, MarketDataQueryError>;
 }
-
 
 // ============================================================================
 // 单元测试
@@ -1067,9 +1072,10 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
+    use base_types::Price;
     use base_types::base_types::TraderId;
     use base_types::mark_data::spot::level_types::OrderChangeType;
-    use base_types::Price;
+
     use super::*;
 
     #[test]

@@ -14,12 +14,16 @@ pub trait FromBytes: Sized {
 
 /// 为实现了 Serialize 的类型自动实现 ToBytes
 impl<T: Serialize> ToBytes for T {
-    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error>> { Ok(Bytes::from(serde_json::to_vec(self)?)) }
+    fn to_bytes(&self) -> Result<Bytes, Box<dyn std::error::Error>> {
+        Ok(Bytes::from(serde_json::to_vec(self)?))
+    }
 }
 
 /// 为实现了 DeserializeOwned 的类型自动实现 FromBytes
 impl<T: serde::de::DeserializeOwned> FromBytes for T {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>> { Ok(serde_json::from_slice(bytes)?) }
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(serde_json::from_slice(bytes)?)
+    }
 }
 
 /// 队列消息发送选项
@@ -32,11 +36,13 @@ pub struct SendOptions {
     /// 启用背压机制（当队列满时阻塞发送）
     pub enable_backpressure: bool,
     /// 背压超时时间（毫秒）
-    pub backpressure_timeout_ms: u32
+    pub backpressure_timeout_ms: u32,
 }
 
 impl SendOptions {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn with_require_ack(mut self, require: bool) -> Self {
         self.require_ack = require;
@@ -69,11 +75,13 @@ pub struct SubscribeOptions {
     /// 订阅超时时间（毫秒）
     pub timeout_ms: u32,
     /// 缓冲区大小（用于背压控制）
-    pub buffer_size: usize
+    pub buffer_size: usize,
 }
 
 impl SubscribeOptions {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn with_group_id(mut self, group_id: impl Into<String>) -> Self {
         self.group_id = Some(group_id.into());
@@ -116,7 +124,6 @@ pub trait Queue {
     where
         Self: Sized;
 
-
     /// 发送事件到指定 topic
     ///
     /// # 参数
@@ -127,7 +134,10 @@ pub trait Queue {
     /// # 返回
     /// 返回成功发送到的本地订阅者数量
     fn send(
-        &self, topic: &str, event: bytes::Bytes, options: Option<SendOptions>
+        &self,
+        topic: &str,
+        event: bytes::Bytes,
+        options: Option<SendOptions>,
     ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>>;
 
     /// 批量发送事件到指定 topic（高性能优化）
@@ -140,9 +150,11 @@ pub trait Queue {
     /// # 返回
     /// 返回成功发送的事件数量和每个事件的接收者数量
     fn send_batch(
-        &self, topic: &str, events: Vec<bytes::Bytes>, options: Option<SendOptions>
+        &self,
+        topic: &str,
+        events: Vec<bytes::Bytes>,
+        options: Option<SendOptions>,
     ) -> Result<Vec<Result<usize, broadcast::error::SendError<bytes::Bytes>>>, ()>;
-
 
     /// 订阅指定 topic 的事件
     ///
@@ -152,8 +164,11 @@ pub trait Queue {
     ///
     /// # 返回
     /// 返回一个接收器，用于异步接收事件
-    fn subscribe(&self, topic: &str, options: Option<SubscribeOptions>) -> broadcast::Receiver<bytes::Bytes>;
-
+    fn subscribe(
+        &self,
+        topic: &str,
+        options: Option<SubscribeOptions>,
+    ) -> broadcast::Receiver<bytes::Bytes>;
 
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize;
@@ -183,7 +198,7 @@ pub struct DefaultQueueConfig {
     /// 全局缓冲区大小（用于背压控制）
     pub buffer_size: usize,
     /// 全局启用背压机制
-    pub enable_backpressure: bool
+    pub enable_backpressure: bool,
 }
 
 impl Default for DefaultQueueConfig {
@@ -195,13 +210,15 @@ impl Default for DefaultQueueConfig {
             send_timeout_ms: 5000,
             recv_timeout_ms: 3000,
             buffer_size: 1024,
-            enable_backpressure: false
+            enable_backpressure: false,
         }
     }
 }
 
 impl DefaultQueueConfig {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn with_brokers(mut self, brokers: impl Into<String>) -> Self {
         self.brokers = brokers.into();

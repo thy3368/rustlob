@@ -1,6 +1,5 @@
-use once_cell::sync::Lazy;
 use id_generator::generator::IdGenerator;
-
+use once_cell::sync::Lazy;
 
 pub struct IdRepo {}
 
@@ -29,16 +28,28 @@ static TRANS_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
 });
 
 impl IdRepo {
-    pub fn next_event_id(&mut self) -> i64 { EVENT_ID_GEN.next_id() }
+    pub fn next_event_id(&mut self) -> i64 {
+        EVENT_ID_GEN.next_id()
+    }
 
-    pub fn next_transaction_id(&mut self) -> i64 { TRANS_ID_GEN.next_id() }
+    pub fn next_transaction_id(&mut self) -> i64 {
+        TRANS_ID_GEN.next_id()
+    }
 
-    pub fn next_order_id(&mut self) -> i64 { ORDER_ID_GEN.next_id() }
+    pub fn next_order_id(&mut self) -> i64 {
+        ORDER_ID_GEN.next_id()
+    }
 
-    pub fn next_trade_id(&mut self) -> i64 { TRADE_ID_GEN.next_id() }
+    pub fn next_trade_id(&mut self) -> i64 {
+        TRADE_ID_GEN.next_id()
+    }
 
     // 兼容 u64 的方法（用于事件系统）
-    pub fn next_event_id_u64(&mut self) -> u64 { self.next_event_id() as u64 }
+    pub fn next_event_id_u64(&mut self) -> u64 {
+        self.next_event_id() as u64
+    }
 
-    pub fn next_transaction_id_u64(&mut self) -> u64 { self.next_transaction_id() as u64 }
+    pub fn next_transaction_id_u64(&mut self) -> u64 {
+        self.next_transaction_id() as u64
+    }
 }

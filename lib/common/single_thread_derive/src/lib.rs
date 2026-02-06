@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemStruct, Fields};
+use syn::{Fields, ItemStruct, parse_macro_input};
 
 /// 标记结构体为单线程使用，编译时防止跨线程访问
 ///
@@ -142,4 +142,3 @@ pub fn single_thread(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-

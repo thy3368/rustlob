@@ -1,4 +1,4 @@
-use syn::{DeriveInput, Fields, Data, Type, Ident};
+use syn::{Data, DeriveInput, Fields, Ident, Type};
 
 /// 编译时验证配置
 #[derive(Debug, Clone)]
@@ -177,17 +177,10 @@ fn check_cache_line_alignment(
 
     // 2. 估算结构体的实际大小和自然对齐
     let struct_size = estimate_struct_size(fields);
-    let max_field_alignment = fields
-        .iter()
-        .filter_map(|f| f.estimated_alignment())
-        .max()
-        .unwrap_or(1);
+    let max_field_alignment =
+        fields.iter().filter_map(|f| f.estimated_alignment()).max().unwrap_or(1);
 
-    let natural_alignment = if has_repr_packed {
-        1
-    } else {
-        max_field_alignment
-    };
+    let natural_alignment = if has_repr_packed { 1 } else { max_field_alignment };
 
     let effective_alignment = explicit_alignment.unwrap_or(natural_alignment);
 
@@ -204,10 +197,8 @@ fn check_cache_line_alignment(
                 size, cache_lines_needed, cache_line_size
             ));
 
-            warnings.push(format!(
-                "当前对齐为 {} 字节，可能导致缓存行分割问题",
-                effective_alignment
-            ));
+            warnings
+                .push(format!("当前对齐为 {} 字节，可能导致缓存行分割问题", effective_alignment));
 
             // 计算最坏情况：结构体实例可能跨越的缓存行数
             let worst_case_lines = if size % cache_line_size == 0 {
@@ -217,10 +208,8 @@ fn check_cache_line_alignment(
             };
 
             if worst_case_lines > cache_lines_needed {
-                warnings.push(format!(
-                    "最坏情况下，单个实例可能跨越 {} 个缓存行",
-                    worst_case_lines
-                ));
+                warnings
+                    .push(format!("最坏情况下，单个实例可能跨越 {} 个缓存行", worst_case_lines));
             }
 
             return Err(format!(
@@ -410,10 +399,8 @@ fn check_optimal_field_order(fields: &[FieldInfo], struct_name: &Ident) -> Resul
                     align_b.cmp(&align_a)
                 });
 
-                let suggested_order: Vec<String> = sorted_fields
-                    .iter()
-                    .map(|(_, f)| f.name.clone())
-                    .collect();
+                let suggested_order: Vec<String> =
+                    sorted_fields.iter().map(|(_, f)| f.name.clone()).collect();
 
                 return Err(format!(
                     "结构体 {} 的字段顺序不是最优的\n\
@@ -472,10 +459,7 @@ fn estimate_struct_size(fields: &[FieldInfo]) -> Option<usize> {
     }
 
     // 最终对齐到结构体对齐
-    let max_alignment = fields
-        .iter()
-        .filter_map(|f| f.estimated_alignment())
-        .max()?;
+    let max_alignment = fields.iter().filter_map(|f| f.estimated_alignment()).max()?;
 
     let final_padding = (max_alignment - (total_size % max_alignment)) % max_alignment;
     total_size += final_padding;
@@ -548,11 +532,7 @@ fn estimate_type_size(ty: &Type) -> Option<usize> {
         Type::Ptr(_) => Some(8),       // 裸指针
         Type::Array(arr) => {
             // 数组大小 = 元素大小 * 长度
-            if let syn::Expr::Lit(syn::ExprLit {
-                lit: syn::Lit::Int(len),
-                ..
-            }) = &arr.len
-            {
+            if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(len), .. }) = &arr.len {
                 let element_size = estimate_type_size(&arr.elem)?;
                 let length: usize = len.base10_parse().ok()?;
                 Some(element_size * length)
@@ -655,8 +635,10 @@ fn check_false_sharing_risk(
 
             // 如果在同一缓存行且可能被不同线程访问
             if cache_line_i == cache_line_j {
-                let both_shared = field_i.is_potentially_shared() && field_j.is_potentially_shared();
-                let both_atomic = is_atomic_or_sync_type(&field_i.ty) && is_atomic_or_sync_type(&field_j.ty);
+                let both_shared =
+                    field_i.is_potentially_shared() && field_j.is_potentially_shared();
+                let both_atomic =
+                    is_atomic_or_sync_type(&field_i.ty) && is_atomic_or_sync_type(&field_j.ty);
 
                 if both_shared || both_atomic {
                     warnings.push(format!(
@@ -708,8 +690,16 @@ fn is_atomic_or_sync_type(ty: &Type) -> bool {
         matches!(
             type_name.as_str(),
             "AtomicBool"
-                | "AtomicI8" | "AtomicI16" | "AtomicI32" | "AtomicI64" | "AtomicIsize"
-                | "AtomicU8" | "AtomicU16" | "AtomicU32" | "AtomicU64" | "AtomicUsize"
+                | "AtomicI8"
+                | "AtomicI16"
+                | "AtomicI32"
+                | "AtomicI64"
+                | "AtomicIsize"
+                | "AtomicU8"
+                | "AtomicU16"
+                | "AtomicU32"
+                | "AtomicU64"
+                | "AtomicUsize"
                 | "AtomicPtr"
                 | "Mutex"
                 | "RwLock"

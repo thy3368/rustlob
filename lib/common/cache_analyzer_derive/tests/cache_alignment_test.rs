@@ -59,15 +59,12 @@ fn test_hot_fields() {
     println!("\n=== HotFieldStruct 分析 ===");
     for field in &report.field_analyses {
         let hot_marker = if field.is_hot { " [HOT]" } else { "" };
-        println!("  {}{}: offset={}, size={}",
-            field.name, hot_marker, field.offset, field.size);
+        println!("  {}{}: offset={}, size={}", field.name, hot_marker, field.offset, field.size);
     }
 
     // 检查热点字段标记
-    let hot_fields: Vec<_> = report.field_analyses.iter()
-        .filter(|f| f.is_hot)
-        .map(|f| f.name.as_str())
-        .collect();
+    let hot_fields: Vec<_> =
+        report.field_analyses.iter().filter(|f| f.is_hot).map(|f| f.name.as_str()).collect();
 
     assert!(hot_fields.contains(&"id"));
     assert!(hot_fields.contains(&"timestamp"));
@@ -76,10 +73,10 @@ fn test_hot_fields() {
 // 测试4：优化的字段顺序
 #[derive(CacheAnalyzer)]
 struct OptimizedOrder {
-    b: u64,   // 8 字节，最大对齐
-    d: u32,   // 4 字节
-    c: u16,   // 2 字节
-    a: u8,    // 1 字节
+    b: u64, // 8 字节，最大对齐
+    d: u32, // 4 字节
+    c: u16, // 2 字节
+    a: u8,  // 1 字节
 }
 
 #[test]
@@ -87,13 +84,11 @@ fn test_optimized_order() {
     let report = OptimizedOrder::detailed_cache_analysis();
 
     println!("\n=== OptimizedOrder 分析 ===");
-    println!("填充: {} 字节 ({:.1}%)",
-        report.padding_bytes, report.padding_percentage);
+    println!("填充: {} 字节 ({:.1}%)", report.padding_bytes, report.padding_percentage);
     println!("当前顺序是否最优: {}", report.is_current_order_optimal);
 
     // 优化的顺序应该减少填充
-    assert!(report.padding_percentage < 10.0,
-        "优化的顺序应该有较少的填充");
+    assert!(report.padding_percentage < 10.0, "优化的顺序应该有较少的填充");
 }
 
 // 测试5：使用 repr(C) 的结构体

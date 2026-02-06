@@ -1,6 +1,8 @@
 //! 订单实体
 
-use super::types::{OrderId, OrderStatus, PositionSide, Price, Quantity, Side, TimeInForce, Timestamp, TraderId};
+use super::types::{
+    OrderId, OrderStatus, PositionSide, Price, Quantity, Side, TimeInForce, Timestamp, TraderId,
+};
 
 /// 订单实体
 #[derive(Debug, Clone)]
@@ -30,14 +32,21 @@ pub struct Order {
     /// 创建时间
     pub created_at: Timestamp,
     /// 更新时间
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }
 
 impl Order {
     /// 创建新订单
     pub fn new(
-        id: OrderId, trader: TraderId, side: Side, price: Price, quantity: Quantity, position_side: PositionSide,
-        reduce_only: bool, time_in_force: TimeInForce, timestamp: Timestamp
+        id: OrderId,
+        trader: TraderId,
+        side: Side,
+        price: Price,
+        quantity: Quantity,
+        position_side: PositionSide,
+        reduce_only: bool,
+        time_in_force: TimeInForce,
+        timestamp: Timestamp,
     ) -> Self {
         Self {
             id,
@@ -52,7 +61,7 @@ impl Order {
             time_in_force,
             status: OrderStatus::New,
             created_at: timestamp,
-            updated_at: timestamp
+            updated_at: timestamp,
         }
     }
 
@@ -77,16 +86,20 @@ impl Order {
     }
 
     /// 是否可成交
-    pub fn is_active(&self) -> bool { matches!(self.status, OrderStatus::New | OrderStatus::PartiallyFilled) }
+    pub fn is_active(&self) -> bool {
+        matches!(self.status, OrderStatus::New | OrderStatus::PartiallyFilled)
+    }
 
     /// 是否为买单
-    pub fn is_buy(&self) -> bool { matches!(self.side, Side::Buy) }
+    pub fn is_buy(&self) -> bool {
+        matches!(self.side, Side::Buy)
+    }
 
     /// 价格是否可匹配
     pub fn can_match(&self, other_price: Price) -> bool {
         match self.side {
             Side::Buy => self.price >= other_price,
-            Side::Sell => self.price <= other_price
+            Side::Sell => self.price <= other_price,
         }
     }
 }

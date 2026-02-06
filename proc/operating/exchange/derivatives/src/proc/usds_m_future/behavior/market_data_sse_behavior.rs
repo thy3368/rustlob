@@ -38,21 +38,21 @@ pub enum DepthLevel {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum KlineInterval {
-    M1,   // 1分钟
-    M3,   // 3分钟
-    M5,   // 5分钟
-    M15,  // 15分钟
-    M30,  // 30分钟
-    H1,   // 1小时
-    H2,   // 2小时
-    H4,   // 4小时
-    H6,   // 6小时
-    H8,   // 8小时
-    H12,  // 12小时
-    D1,   // 1天
-    D3,   // 3天
-    W1,   // 1周
-    MO1,  // 1月
+    M1,  // 1分钟
+    M3,  // 3分钟
+    M5,  // 5分钟
+    M15, // 15分钟
+    M30, // 30分钟
+    H1,  // 1小时
+    H2,  // 2小时
+    H4,  // 4小时
+    H6,  // 6小时
+    H8,  // 8小时
+    H12, // 12小时
+    D1,  // 1天
+    D3,  // 3天
+    W1,  // 1周
+    MO1, // 1月
 }
 
 /// 持续合约类型
@@ -882,11 +882,7 @@ impl StreamNameBuilder {
 
     /// 全市场标记价格流: !markPrice@arr 或 !markPrice@arr@1s
     pub fn mark_price_all(fast_update: bool) -> String {
-        if fast_update {
-            "!markPrice@arr@1s".to_string()
-        } else {
-            "!markPrice@arr".to_string()
-        }
+        if fast_update { "!markPrice@arr@1s".to_string() } else { "!markPrice@arr".to_string() }
     }
 
     /// K线流: <symbol>@kline_<interval>
@@ -896,12 +892,7 @@ impl StreamNameBuilder {
 
     /// 持续合约K线流: <pair>_<contractType>@continuousKline_<interval>
     pub fn continuous_kline(pair: &str, contract_type: &str, interval: &str) -> String {
-        format!(
-            "{}_{}_@continuousKline_{}",
-            pair.to_lowercase(),
-            contract_type,
-            interval
-        )
+        format!("{}_{}_@continuousKline_{}", pair.to_lowercase(), contract_type, interval)
     }
 
     /// 个股Ticker流: <symbol>@ticker

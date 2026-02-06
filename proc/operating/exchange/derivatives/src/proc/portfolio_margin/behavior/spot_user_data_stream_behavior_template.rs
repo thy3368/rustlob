@@ -51,5 +51,6 @@ pub enum SpotCmdError {
 /// User Data 行为接口
 pub trait SpotUserDataStreamBehavior: Send + Sync {
     /// 处理 User Data 命令
-    fn handle(&mut self, cmd: SpotUserDataCmdAny) -> Result<CmdResp<SpotUserDataRes>, SpotCmdError>;
+    fn handle(&mut self, cmd: SpotUserDataCmdAny)
+    -> Result<CmdResp<SpotUserDataRes>, SpotCmdError>;
 }

@@ -1,7 +1,7 @@
 pub enum SpotTopic {
     EntityChangeLog,
     KLine,
-    Other
+    Other,
 }
 
 impl SpotTopic {
@@ -9,7 +9,7 @@ impl SpotTopic {
         match self {
             SpotTopic::EntityChangeLog => "entity_change_log",
             SpotTopic::KLine => "kline",
-            SpotTopic::Other => "other"
+            SpotTopic::Other => "other",
         }
     }
 }

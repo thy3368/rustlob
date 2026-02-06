@@ -30,8 +30,6 @@ pub mod domain;
 #[cfg(test)]
 mod tests;
 
-pub use domain::{
-    consensus::HotStuffConsensus,
-    entities::{Block, QuorumCertificate, Vote},
-    node::Node
-};
+pub use domain::consensus::HotStuffConsensus;
+pub use domain::entities::{Block, QuorumCertificate, Vote};
+pub use domain::node::Node;

@@ -6,7 +6,7 @@ mod trade_codec_examples {
     //     ReadBuf, WriteBuf,
     // };
 
-    use sbe::trade_codec::{TradeDecoder, TradeEncoder, SBE_BLOCK_LENGTH};
+    use sbe::trade_codec::{SBE_BLOCK_LENGTH, TradeDecoder, TradeEncoder};
     use sbe::{Encoder, ReadBuf, WriteBuf};
 
     /// 示例 1: 基本编码
@@ -157,12 +157,13 @@ mod trade_codec_examples {
             encoder.price(price);
             encoder.quantity(quantity);
 
-            println!("✓ 交易 {}: ID={}, 符号={}, 价格={}, 数量={}",
-                     idx, trade_id, symbol as char, price, quantity);
+            println!(
+                "✓ 交易 {}: ID={}, 符号={}, 价格={}, 数量={}",
+                idx, trade_id, symbol as char, price, quantity
+            );
         }
 
-        println!("✓ 共编码 {} 个交易，总长度 {} 字节",
-                 trades.len(), buffer.len());
+        println!("✓ 共编码 {} 个交易，总长度 {} 字节", trades.len(), buffer.len());
 
         // 验证可以解码
         for (idx, &(exp_id, exp_symbol, exp_price, exp_qty)) in trades.iter().enumerate() {
@@ -419,8 +420,14 @@ mod trade_codec_examples {
             assert_eq!(price, expected.price);
             assert_eq!(qty, expected.qty);
 
-            println!("  ✓ 交易 {} 验证通过: ID={}, 符号={}, 价格={}, 数量={}",
-                     idx + 1, id, symbol as char, price, qty);
+            println!(
+                "  ✓ 交易 {} 验证通过: ID={}, 符号={}, 价格={}, 数量={}",
+                idx + 1,
+                id,
+                symbol as char,
+                price,
+                qty
+            );
         }
     }
 }

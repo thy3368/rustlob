@@ -1,24 +1,26 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use futures_util::{SinkExt, StreamExt};
 use sockudo_ws::{Config, Message, WebSocketStream};
 use tokio::net::TcpStream;
 
 // 简单的Echo服务器处理函数（用于基准测试）
 async fn echo_server(stream: tokio::net::TcpStream) -> Result<(), String> {
-    let config = Config::builder()
-        .compression(sockudo_ws::Compression::Disabled)
-        .build();
+    let config = Config::builder().compression(sockudo_ws::Compression::Disabled).build();
 
     let mut websocket = WebSocketStream::server(stream, config);
 
     while let Some(msg) = websocket.next().await {
         match msg.map_err(|e| format!("WebSocket error: {}", e))? {
             Message::Text(text) => {
-                websocket.send(Message::text(String::from_utf8_lossy(&text).to_string())).await
+                websocket
+                    .send(Message::text(String::from_utf8_lossy(&text).to_string()))
+                    .await
                     .map_err(|e| format!("Send failed: {}", e))?;
             }
             Message::Binary(data) => {
-                websocket.send(Message::binary(data)).await
+                websocket
+                    .send(Message::binary(data))
+                    .await
                     .map_err(|e| format!("Send failed: {}", e))?;
             }
             _ => {}
@@ -44,9 +46,7 @@ async fn start_benchmark_server() -> u16 {
 
 async fn connect_and_send_small_message(port: u16) {
     if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)).await {
-        let config = Config::builder()
-            .compression(sockudo_ws::Compression::Disabled)
-            .build();
+        let config = Config::builder().compression(sockudo_ws::Compression::Disabled).build();
 
         let mut websocket = WebSocketStream::client(stream, config);
 
@@ -63,9 +63,7 @@ async fn connect_and_send_small_message(port: u16) {
 
 async fn multiple_small_messages_test(port: u16, num_messages: usize) {
     if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)).await {
-        let config = Config::builder()
-            .compression(sockudo_ws::Compression::Disabled)
-            .build();
+        let config = Config::builder().compression(sockudo_ws::Compression::Disabled).build();
 
         let mut websocket = WebSocketStream::client(stream, config);
 
@@ -82,9 +80,7 @@ async fn multiple_small_messages_test(port: u16, num_messages: usize) {
 
 async fn connect_and_send_binary_message(port: u16, size: usize) {
     if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)).await {
-        let config = Config::builder()
-            .compression(sockudo_ws::Compression::Disabled)
-            .build();
+        let config = Config::builder().compression(sockudo_ws::Compression::Disabled).build();
 
         let mut websocket = WebSocketStream::client(stream, config);
 

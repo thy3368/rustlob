@@ -1,10 +1,10 @@
+use std::sync::atomic::{AtomicBool, AtomicU64};
+
 /// 伪共享(False Sharing)检查示例
 ///
 /// 伪共享是多线程程序中常见的性能杀手
 /// 当多个线程访问同一缓存行中的不同变量时,会导致缓存行频繁失效
-
 use cache_analyzer_derive::CacheAnalyzer;
-use std::sync::atomic::{AtomicU64, AtomicBool};
 
 // ✅ 示例 1: 无伪共享风险 - 单线程访问
 #[derive(CacheAnalyzer, Debug)]
@@ -29,12 +29,12 @@ pub struct FalseSharingRisk {
 
 // ✅ 示例 3: 正确做法 - 使用对齐隔离原子变量
 #[derive(CacheAnalyzer, Debug)]
-#[repr(align(64))]  // 对齐到缓存行边界
+#[repr(align(64))] // 对齐到缓存行边界
 pub struct NoFalseSharing {
     counter1: AtomicU64,
-    _pad1: [u8; 56],    // 填充到 64 字节
+    _pad1: [u8; 56], // 填充到 64 字节
     counter2: AtomicU64,
-    _pad2: [u8; 56],    // 填充到 64 字节
+    _pad2: [u8; 56], // 填充到 64 字节
 }
 
 // ✅ 示例 4: 非原子类型不触发伪共享检查
@@ -63,7 +63,7 @@ pub struct SeparatedHotCold {
 pub struct Thread1Data {
     counter: AtomicU64,
     flag: AtomicBool,
-    _pad: [u8; 55],  // 确保独占缓存行
+    _pad: [u8; 55], // 确保独占缓存行
 }
 
 #[derive(CacheAnalyzer, Debug)]

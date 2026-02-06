@@ -10,7 +10,6 @@
 // /// - `Err(RepositoryError)`: 应用事件失败
 // fn replay(&mut self, events: Vec<EntityEvent>) -> Result<(), RepoError>;
 
-
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepoError {
@@ -27,14 +26,10 @@ pub enum RepoError {
     /// 反序列化失败
     DeserializationFailed(String),
     /// 交易对不匹配
-    SymbolMismatch {
-        expected: String,
-        actual: String,
-    },
+    SymbolMismatch { expected: String, actual: String },
     /// 序列化失败
     SerializationFailed(String),
 }
-
 
 /// 仓储快照能力 Trait
 ///
@@ -209,9 +204,13 @@ pub trait EventReplay {
     /// # 说明
     /// 只回放序列号 >= from_sequence 的事件
     /// 用于从快照后的增量事件开始回放
-    fn replay_from_sequence(&mut self, events: &[Self::Event], from_sequence: u64) -> Result<(), RepoError>
+    fn replay_from_sequence(
+        &mut self,
+        events: &[Self::Event],
+        from_sequence: u64,
+    ) -> Result<(), RepoError>
     where
-        Self::Event: HasSequence
+        Self::Event: HasSequence,
     {
         for event in events {
             if event.sequence() >= from_sequence {

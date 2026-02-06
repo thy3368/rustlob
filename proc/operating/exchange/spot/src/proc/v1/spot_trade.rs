@@ -1,12 +1,16 @@
-use base_types::{account::balance::Balance, exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce}, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
+use base_types::account::balance::Balance;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
+use base_types::{OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLogEntry;
 use id_generator::generator::IdGenerator;
-use lob_repo::{adapter::embedded_lob_repo::EmbeddedLobRepo, core::symbol_lob_repo::MultiSymbolLobRepo};
+use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
+use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{
-    CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError, IdemSpotResult, LimitOrder,
-    LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdErrorAny, SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny
+    CancelAllOrders, CancelAllOrdersRes, CancelOrder, CancelOrderRes, CmdResp, CommonError,
+    IdemSpotResult, LimitOrder, LimitOrderRes, MarketOrder, MarketOrderRes, SpotCmdErrorAny,
+    SpotTradeBehavior, SpotTradeCmdAny, SpotTradeResAny,
 };
 
 pub struct SpotTradeBehaviorImpl {
@@ -16,41 +20,47 @@ pub struct SpotTradeBehaviorImpl {
     pub order_repo: MySqlDbRepo<SpotOrder>,
     pub lob_repo: EmbeddedLobRepo<SpotOrder>,
     /// ID生成器（节点ID为0）
-    pub id_generator: IdGenerator
+    pub id_generator: IdGenerator,
 }
 
 impl SpotTradeBehaviorImpl {
     /// 创建新的 SpotOrderExchBehaviorImpl 实例
     pub fn new(
-        balance_repo: MySqlDbRepo<Balance>, trade_repo: MySqlDbRepo<SpotTrade>, order_repo: MySqlDbRepo<SpotOrder>,
-        lob_repo: EmbeddedLobRepo<SpotOrder>, id_generator: IdGenerator
+        balance_repo: MySqlDbRepo<Balance>,
+        trade_repo: MySqlDbRepo<SpotTrade>,
+        order_repo: MySqlDbRepo<SpotOrder>,
+        lob_repo: EmbeddedLobRepo<SpotOrder>,
+        id_generator: IdGenerator,
     ) -> Self {
-        Self {
-            balance_repo,
-            trade_repo,
-            order_repo,
-            lob_repo,
-            id_generator
-        }
+        Self { balance_repo, trade_repo, order_repo, lob_repo, id_generator }
     }
 }
 
 impl SpotTradeBehaviorImpl {
     /// 生成订单ID
-    fn generate_order_id(&self) -> u64 { self.id_generator.next_id() as u64 }
+    fn generate_order_id(&self) -> u64 {
+        self.id_generator.next_id() as u64
+    }
 
-    pub(crate) fn handle_cancel_order(&self, _p0: CancelOrder) -> Result<CmdResp<CancelOrderRes>, SpotCmdErrorAny> {
+    pub(crate) fn handle_cancel_order(
+        &self,
+        _p0: CancelOrder,
+    ) -> Result<CmdResp<CancelOrderRes>, SpotCmdErrorAny> {
         todo!()
     }
 
-    pub(crate) fn handle_market_order(&self, _p0: MarketOrder) -> Result<CmdResp<MarketOrderRes>, SpotCmdErrorAny> {
+    pub(crate) fn handle_market_order(
+        &self,
+        _p0: MarketOrder,
+    ) -> Result<CmdResp<MarketOrderRes>, SpotCmdErrorAny> {
         // todo 风控检查
         // todo 匹配
         todo!()
     }
 
     pub(crate) fn handle_cancel_all_orders(
-        &self, _p0: CancelAllOrders
+        &self,
+        _p0: CancelAllOrders,
     ) -> Result<CmdResp<CancelAllOrdersRes>, SpotCmdErrorAny> {
         todo!()
     }
@@ -58,14 +68,19 @@ impl SpotTradeBehaviorImpl {
 
 impl SpotTradeBehaviorImpl {
     // Result<CmdResp<SpotCmdRes>, SpotCmdError>;
-    fn handle_limit_order(&mut self, limit_order: LimitOrder) -> Result<CmdResp<LimitOrderRes>, SpotCmdErrorAny> {
+    fn handle_limit_order(
+        &mut self,
+        limit_order: LimitOrder,
+    ) -> Result<CmdResp<LimitOrderRes>, SpotCmdErrorAny> {
         // ========================================================================
         // 1. 命令验证 风控检查 - 余额检查并冻结保证金
         // ========================================================================
         // cmd.validate().map_err(PrepCommandError::ValidationError)?;
         //
         let order_id = self.generate_order_id();
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
+                as u64;
 
         let mut internal_order = SpotOrder::create_order(
             order_id,
@@ -76,7 +91,7 @@ impl SpotTradeBehaviorImpl {
             limit_order.price,
             limit_order.quantity,
             limit_order.time_in_force,
-            limit_order.client_order_id
+            limit_order.client_order_id,
         );
 
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
@@ -95,7 +110,7 @@ impl SpotTradeBehaviorImpl {
             internal_order.trading_pair,
             internal_order.side,
             internal_order.price.unwrap(),
-            internal_order.total_qty
+            internal_order.total_qty,
         );
 
         // 如果匹配
@@ -117,14 +132,25 @@ impl SpotTradeBehaviorImpl {
 
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
-                    let quote_asset_balance_id =
-                        format!("{}:{}", matched_order.account_id.0, matched_order.trading_pair.quote_asset());
+                    let quote_asset_balance_id = format!(
+                        "{}:{}",
+                        matched_order.account_id.0,
+                        matched_order.trading_pair.quote_asset()
+                    );
                     let base_asset_balance_id = matched_order.frozen_asset_balance_id();
 
-                    let mut o_quote_asset_balance =
-                        self.balance_repo.find_by_id_4_update(&quote_asset_balance_id).ok().unwrap().unwrap();
-                    let mut o_base_asset_balance =
-                        self.balance_repo.find_by_id_4_update(&base_asset_balance_id).ok().unwrap().unwrap();
+                    let mut o_quote_asset_balance = self
+                        .balance_repo
+                        .find_by_id_4_update(&quote_asset_balance_id)
+                        .ok()
+                        .unwrap()
+                        .unwrap();
+                    let mut o_base_asset_balance = self
+                        .balance_repo
+                        .find_by_id_4_update(&base_asset_balance_id)
+                        .ok()
+                        .unwrap()
+                        .unwrap();
 
                     let mut matched_order_mut = matched_order.clone();
                     let trade = internal_order.make_trade(
@@ -132,7 +158,7 @@ impl SpotTradeBehaviorImpl {
                         &mut frozen_asset_balance,
                         &mut base_asset_balance,
                         &mut o_quote_asset_balance,
-                        &mut o_base_asset_balance
+                        &mut o_base_asset_balance,
                     );
 
                     trades.push(trade);
@@ -186,28 +212,27 @@ impl SpotTradeBehavior for SpotTradeBehaviorImpl {
         match cmd {
             SpotTradeCmdAny::LimitOrder(limit_order) => {
                 // 将 LimitOrderRes 包装到 SpotCmdRes::LimitOrder 中
-                self.handle_limit_order(limit_order).map(|resp| resp.map(SpotTradeResAny::LimitOrder))
+                self.handle_limit_order(limit_order)
+                    .map(|resp| resp.map(SpotTradeResAny::LimitOrder))
             }
-            SpotTradeCmdAny::MarketOrder(market_order) => {
-                self.handle_market_order(market_order).map(|resp| resp.map(SpotTradeResAny::MarketOrder))
-            }
-            SpotTradeCmdAny::CancelOrder(cancel_order) => {
-                self.handle_cancel_order(cancel_order).map(|resp| resp.map(SpotTradeResAny::CancelOrder))
-            }
-            SpotTradeCmdAny::CancelAllOrders(cancel_all_orders) => {
-                self.handle_cancel_all_orders(cancel_all_orders).map(|resp| resp.map(SpotTradeResAny::CancelAllOrders))
-            }
+            SpotTradeCmdAny::MarketOrder(market_order) => self
+                .handle_market_order(market_order)
+                .map(|resp| resp.map(SpotTradeResAny::MarketOrder)),
+            SpotTradeCmdAny::CancelOrder(cancel_order) => self
+                .handle_cancel_order(cancel_order)
+                .map(|resp| resp.map(SpotTradeResAny::CancelOrder)),
+            SpotTradeCmdAny::CancelAllOrders(cancel_all_orders) => self
+                .handle_cancel_all_orders(cancel_all_orders)
+                .map(|resp| resp.map(SpotTradeResAny::CancelAllOrders)),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use base_types::{
-        base_types::TraderId,
-        exchange::spot::spot_types::{OrderStatus, TimeInForce},
-        AccountId, AssetId, TradingPair
-    };
+    use base_types::base_types::TraderId;
+    use base_types::exchange::spot::spot_types::{OrderStatus, TimeInForce};
+    use base_types::{AccountId, AssetId, TradingPair};
 
     use super::*;
 
@@ -241,7 +266,7 @@ mod tests {
             price,                          // price
             quantity,                       // quantity
             TimeInForce::GTC,               // GTC: Good Till Cancel
-            Some("CLIENT-001".to_string())  // client_order_id
+            Some("CLIENT-001".to_string()), // client_order_id
         );
 
         // ========================================================================

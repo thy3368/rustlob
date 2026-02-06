@@ -1,18 +1,16 @@
-use crate::*;
-
 pub use decoder::TradeDecoder;
 pub use encoder::TradeEncoder;
 
-pub use crate::SBE_SCHEMA_ID;
-pub use crate::SBE_SCHEMA_VERSION;
-pub use crate::SBE_SEMANTIC_VERSION;
+use crate::*;
+pub use crate::{SBE_SCHEMA_ID, SBE_SCHEMA_VERSION, SBE_SEMANTIC_VERSION};
 
 pub const SBE_BLOCK_LENGTH: u16 = 21;
 pub const SBE_TEMPLATE_ID: u16 = 1;
 
 pub mod encoder {
-    use super::*;
     use message_header_codec::*;
+
+    use super::*;
 
     #[derive(Debug, Default)]
     pub struct TradeEncoder<'a> {
@@ -124,14 +122,13 @@ pub mod encoder {
             let offset = self.offset + 17;
             self.get_buf_mut().put_i32_at(offset, value);
         }
-
     }
-
 } // end encoder
 
 pub mod decoder {
-    use super::*;
     use message_header_codec::*;
+
+    use super::*;
 
     #[derive(Clone, Copy, Debug, Default)]
     pub struct TradeDecoder<'a> {
@@ -228,8 +225,5 @@ pub mod decoder {
         pub fn quantity(&self) -> i32 {
             self.get_buf().get_i32_at(self.offset + 17)
         }
-
     }
-
 } // end decoder
-

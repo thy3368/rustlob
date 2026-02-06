@@ -1,5 +1,6 @@
 use diff::Entity;
-use crate::{OrderId, Price, Quantity, OrderSide, TradingPair};
+
+use crate::{OrderId, OrderSide, Price, Quantity, TradingPair};
 
 /// 仓储接口定义
 

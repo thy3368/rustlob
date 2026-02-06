@@ -1,11 +1,11 @@
-use base_types::{OrderId, Price, Quantity, OrderSide, TradingPair};
 use base_types::lob::lob::LobOrder;
+use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::Entity;
 
 pub(crate) use crate::core::repo_snapshot_support::RepoError;
 
 // /// 仓储接口定义
-// 
+//
 // /// 订单抽象 trait
 // ///
 // /// 定义订单的核心行为，遵循依赖倒置原则
@@ -15,13 +15,13 @@ pub(crate) use crate::core::repo_snapshot_support::RepoError;
 // pub trait Order: Entity + Send + Sync {
 //     /// 获取订单ID
 //     fn order_id(&self) -> OrderId;
-// 
+//
 //     /// 获取价格
 //     fn price(&self) -> Price;
-// 
+//
 //     /// 获取数量（订单总数量）
 //     fn quantity(&self) -> Quantity;
-// 
+//
 //     /// 获取已成交数量
 //     ///
 //     /// # 返回
@@ -32,10 +32,10 @@ pub(crate) use crate::core::repo_snapshot_support::RepoError;
 //     /// - 对于部分成交订单，返回已成交的数量
 //     /// - 对于完全成交订单，返回值等于 `quantity()`
 //     fn filled_quantity(&self) -> Quantity;
-// 
+//
 //     /// 获取方向
 //     fn side(&self) -> Side;
-// 
+//
 //     /// 获取交易对
 //     fn symbol(&self) -> TradingPair;
 // }
@@ -58,24 +58,21 @@ pub struct LobSnapshot {
     /// 最佳卖价（快照时）
     pub best_ask: Option<Price>,
     /// 最后成交价（快照时）
-    pub last_price: Option<Price>
+    pub last_price: Option<Price>,
 }
 
 impl LobSnapshot {
     /// 创建 LOB 快照
     pub fn new(
-        symbol: TradingPair, timestamp: u64, sequence: u64, data: Vec<u8>, best_bid: Option<Price>,
-        best_ask: Option<Price>, last_price: Option<Price>
+        symbol: TradingPair,
+        timestamp: u64,
+        sequence: u64,
+        data: Vec<u8>,
+        best_bid: Option<Price>,
+        best_ask: Option<Price>,
+        last_price: Option<Price>,
     ) -> Self {
-        Self {
-            symbol,
-            timestamp,
-            sequence,
-            data,
-            best_bid,
-            best_ask,
-            last_price
-        }
+        Self { symbol, timestamp, sequence, data, best_bid, best_ask, last_price }
     }
 }
 
@@ -97,7 +94,12 @@ pub trait SymbolLob {
     /// # 返回
     /// - `Some(Vec<&Self::Order>)`: 匹配到的订单列表（总数量 >= quantity）
     /// - `None`: 无法匹配
-    fn match_orders(&self, side: OrderSide, price: Price, quantity: Quantity) -> Option<Vec<&Self::Order>>;
+    fn match_orders(
+        &self,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+    ) -> Option<Vec<&Self::Order>>;
 
     /// 添加订单到仓储
     ///
@@ -135,7 +137,6 @@ pub trait SymbolLob {
     /// 根据订单ID查找订单（可变引用）
     fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut Self::Order>;
 
-
     // === 市场数据查询 ===
 
     /// 获取最佳买价（O(1) 缓存访问）
@@ -165,7 +166,6 @@ pub trait SymbolLob {
     fn update_last_price(&mut self, price: Price);
 }
 
-
 impl std::fmt::Display for RepoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -175,19 +175,15 @@ impl std::fmt::Display for RepoError {
             RepoError::PriceOutOfRange => write!(f, "价格超出范围"),
             RepoError::SnapshotNotSupported => write!(f, "不支持快照功能"),
             RepoError::DeserializationFailed(msg) => write!(f, "反序列化失败: {}", msg),
-            RepoError::SymbolMismatch {
-                expected,
-                actual
-            } => {
+            RepoError::SymbolMismatch { expected, actual } => {
                 write!(f, "交易对不匹配: 期望 {}, 实际 {}", expected, actual)
             }
-            RepoError::SerializationFailed(msg) => write!(f, "序列化失败: {}", msg)
+            RepoError::SerializationFailed(msg) => write!(f, "序列化失败: {}", msg),
         }
     }
 }
 
 impl std::error::Error for RepoError {}
-
 
 /// 多 LOB 仓储接口
 ///
@@ -218,7 +214,11 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
     fn match_orders(
-        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity
+        &self,
+        symbol: TradingPair,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
     ) -> Option<Vec<&Self::Order>>;
 
     /// 获取指定交易对的最佳买价
@@ -276,7 +276,11 @@ where
     type Order = L::Order;
 
     fn match_orders(
-        &self, symbol: TradingPair, side: OrderSide, price: Price, quantity: Quantity
+        &self,
+        symbol: TradingPair,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
     ) -> Option<Vec<&Self::Order>> {
         (**self).match_orders(symbol, side, price, quantity)
     }

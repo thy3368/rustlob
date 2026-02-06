@@ -1,10 +1,10 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 use immutable_derive::immutable;
 
 use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 // use serde_json::json;
-
 
 /// 订阅服务 - 无状态设计，可安全地在多线程间共享
 ///
@@ -13,9 +13,8 @@ use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 #[immutable]
 pub struct SubscriptionService {
     /// 连接管理仓储（不可变引用）
-    connection_repo: Arc<ConnectionRepo>
+    connection_repo: Arc<ConnectionRepo>,
 }
-
 
 impl SubscriptionService {
     /// 添加新连接

@@ -1,8 +1,8 @@
 use futures_util::{SinkExt, StreamExt};
-use sockudo_ws::{Config, Compression, Message, WebSocketStream, handshake};
-use tokio::net::TcpListener;
 use serde::Deserialize;
 use simd_json::json;
+use sockudo_ws::{Compression, Config, Message, WebSocketStream, handshake};
+use tokio::net::TcpListener;
 
 #[derive(Deserialize, Debug)]
 struct MessageData {
@@ -15,9 +15,7 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     println!("Open index.html in your browser to test");
 
     let listener = TcpListener::bind("0.0.0.0:8081").await?;
-    let config = Config::builder()
-        .compression(Compression::Disabled)
-        .build();
+    let config = Config::builder().compression(Compression::Disabled).build();
 
     while let Ok((stream, addr)) = listener.accept().await {
         println!("New connection from: {}", addr);
@@ -73,14 +71,18 @@ async fn handle_connection(
                             "type": "special",
                             "message": "Hello World! 👋"
                         });
-                        websocket.send(Message::text(simd_json::to_string(&special_response).unwrap())).await?;
+                        websocket
+                            .send(Message::text(simd_json::to_string(&special_response).unwrap()))
+                            .await?;
                     }
                 } else {
                     let error_response = json!({
                         "type": "error",
                         "message": "Invalid message format"
                     });
-                    websocket.send(Message::text(simd_json::to_string(&error_response).unwrap())).await?;
+                    websocket
+                        .send(Message::text(simd_json::to_string(&error_response).unwrap()))
+                        .await?;
                 }
             }
             Message::Binary(data) => {

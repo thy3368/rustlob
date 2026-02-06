@@ -1,9 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, Ident, Meta, Token, Type,
-    punctuated::Punctuated,
-};
+use syn::punctuated::Punctuated;
+use syn::{Data, DeriveInput, Fields, Ident, Meta, Token, Type, parse_macro_input};
 
 /// Entity derive macro - 自动实现 Entity trait 和 FromCreatedEvent trait
 ///
@@ -99,7 +97,8 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
 fn extract_id_field(input: &DeriveInput) -> Option<proc_macro2::TokenStream> {
     for attr in &input.attrs {
         if attr.path().is_ident("entity") {
-            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            {
                 for item in meta {
                     if let Meta::NameValue(nv) = item {
                         if nv.path.is_ident("id") {
@@ -122,7 +121,8 @@ fn extract_id_field(input: &DeriveInput) -> Option<proc_macro2::TokenStream> {
 fn extract_type_name(input: &DeriveInput) -> Option<String> {
     for attr in &input.attrs {
         if attr.path().is_ident("entity") {
-            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            {
                 for item in meta {
                     if let Meta::NameValue(nv) = item {
                         if nv.path.is_ident("type_name") {
@@ -169,10 +169,7 @@ fn generate_diff_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
                 // 检查是否有 #[diff(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("diff")
-                        && attr
-                            .parse_args::<Ident>()
-                            .map(|i| i == "skip")
-                            .unwrap_or(false)
+                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
                 });
 
                 if skip {
@@ -265,10 +262,7 @@ fn generate_replay_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
                 // 检查是否有 #[replay(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("replay")
-                        && attr
-                            .parse_args::<Ident>()
-                            .map(|i| i == "skip")
-                            .unwrap_or(false)
+                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
                 });
 
                 if skip {
@@ -325,9 +319,20 @@ fn generate_parse_logic_for_type(
     // 基础数值类型
     if matches!(
         type_str.as_str(),
-        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-        "f32" | "f64" | "bool"
+        "u8" | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "f32"
+            | "f64"
+            | "bool"
     ) {
         return quote! {
             // 基础类型：直接解析
@@ -396,10 +401,7 @@ fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenSt
                 // 检查是否有 #[created(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("created")
-                        && attr
-                            .parse_args::<Ident>()
-                            .map(|i| i == "skip")
-                            .unwrap_or(false)
+                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
                 });
 
                 if skip {
@@ -421,7 +423,8 @@ fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenSt
                     let type_str = quote!(#ty).to_string();
 
                     // 根据类型生成解析代码
-                    let parse_code = generate_field_parse_code_for_created(ident, &type_str, &field_name);
+                    let parse_code =
+                        generate_field_parse_code_for_created(ident, &type_str, &field_name);
                     constructions.push(parse_code);
                 }
             }
@@ -440,10 +443,7 @@ fn generate_field_parse_code_for_created(
     match type_str {
         // 整数类型
         "u64" | "u32" | "u16" | "u8" | "i64" | "i32" | "i16" | "i8" | "usize" | "isize" => {
-            let type_ident = Ident::new(
-                &type_str.replace(" ", ""),
-                proc_macro2::Span::call_site(),
-            );
+            let type_ident = Ident::new(&type_str.replace(" ", ""), proc_macro2::Span::call_site());
             quote! {
                 #field_ident: fields
                     .get(#field_name)
@@ -456,10 +456,7 @@ fn generate_field_parse_code_for_created(
         }
         // 浮点数类型
         "f64" | "f32" => {
-            let type_ident = Ident::new(
-                &type_str.replace(" ", ""),
-                proc_macro2::Span::call_site(),
-            );
+            let type_ident = Ident::new(&type_str.replace(" ", ""), proc_macro2::Span::call_site());
             quote! {
                 #field_ident: fields
                     .get(#field_name)
@@ -558,10 +555,7 @@ fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
                 // 检查是否有 #[schema(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("schema")
-                        && attr
-                            .parse_args::<Ident>()
-                            .map(|i| i == "skip")
-                            .unwrap_or(false)
+                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
                 });
 
                 if skip {
@@ -596,7 +590,8 @@ fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
 fn extract_default_value(field: &syn::Field) -> Option<String> {
     for attr in &field.attrs {
         if attr.path().is_ident("schema") {
-            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+            if let Ok(meta) = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            {
                 for item in meta {
                     if let Meta::NameValue(nv) = item {
                         if nv.path.is_ident("default") {
@@ -617,12 +612,11 @@ fn extract_default_value(field: &syn::Field) -> Option<String> {
 /// 根据类型获取默认值字符串
 fn get_type_default(type_str: &str) -> &'static str {
     match type_str {
-        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => "0",
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "i8" | "i16" | "i32" | "i64" | "i128"
+        | "isize" => "0",
         "f32" | "f64" => "0.0",
         "bool" => "false",
         "String" => "\"\"",
-        _ => ""
+        _ => "",
     }
 }
-

@@ -4,14 +4,12 @@
 mod integration_tests {
     use std::collections::HashMap;
 
-    use crate::{
-        crypto::PrivateKey,
-        domain::node::{Message, Node}
-    };
+    use crate::crypto::PrivateKey;
+    use crate::domain::node::{Message, Node};
 
     /// 模拟网络 - 广播消息给所有节点
     struct Network {
-        nodes: HashMap<u64, Node>
+        nodes: HashMap<u64, Node>,
     }
 
     impl Network {
@@ -29,9 +27,7 @@ mod integration_tests {
                 nodes.insert(i as u64, node);
             }
 
-            Self {
-                nodes
-            }
+            Self { nodes }
         }
 
         /// 广播消息给所有节点（除了发送者）
@@ -51,10 +47,14 @@ mod integration_tests {
         }
 
         /// 获取节点
-        fn get_node(&self, id: u64) -> &Node { self.nodes.get(&id).unwrap() }
+        fn get_node(&self, id: u64) -> &Node {
+            self.nodes.get(&id).unwrap()
+        }
 
         /// 获取可变节点
-        fn get_node_mut(&mut self, id: u64) -> &mut Node { self.nodes.get_mut(&id).unwrap() }
+        fn get_node_mut(&mut self, id: u64) -> &mut Node {
+            self.nodes.get_mut(&id).unwrap()
+        }
 
         /// 打印所有节点状态
         fn print_all_status(&self) {
@@ -151,7 +151,9 @@ mod integration_tests {
             println!("Leader: Node {}", leader_id);
 
             // Prepare 阶段
-            let proposal = network.get_node_mut(leader_id).propose(vec![format!("tx_view_{}", view).into_bytes()]);
+            let proposal = network
+                .get_node_mut(leader_id)
+                .propose(vec![format!("tx_view_{}", view).into_bytes()]);
 
             let votes = network.broadcast(leader_id, proposal);
 
@@ -206,7 +208,12 @@ mod integration_tests {
 
         // 初始视图
         for node in network.nodes.values() {
-            println!("Node {}: View {}, Role: {:?}", node.id(), node.consensus().state().current_view(), node.role());
+            println!(
+                "Node {}: View {}, Role: {:?}",
+                node.id(),
+                node.consensus().state().current_view(),
+                node.role()
+            );
         }
 
         println!("\n--- Advancing to View 2 ---");
@@ -217,7 +224,12 @@ mod integration_tests {
         }
 
         for node in network.nodes.values() {
-            println!("Node {}: View {}, Role: {:?}", node.id(), node.consensus().state().current_view(), node.role());
+            println!(
+                "Node {}: View {}, Role: {:?}",
+                node.id(),
+                node.consensus().state().current_view(),
+                node.role()
+            );
             assert_eq!(node.consensus().state().current_view().as_u64(), 2);
         }
 

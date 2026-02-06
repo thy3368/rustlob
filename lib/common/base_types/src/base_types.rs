@@ -17,7 +17,6 @@ pub type Price = Decimal;
 /// 数量（语义别名，实际使用 Decimal）
 pub type Quantity = Decimal;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // #[immutable]
@@ -35,13 +34,14 @@ impl Timestamp {
 }
 
 impl default::Default for Timestamp {
-    fn default() -> Self { Self(0) }
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 /// 订单ID
 /// todo 要改
 pub type OrderId = u64;
-
 
 /// 用户ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -51,7 +51,9 @@ pub struct UserId(pub u64);
 
 impl From<u64> for UserId {
     #[inline]
-    fn from(id: u64) -> Self { Self(id) }
+    fn from(id: u64) -> Self {
+        Self(id)
+    }
 }
 
 /// 账户ID
@@ -63,9 +65,10 @@ pub struct AccountId(pub u64);
 
 impl From<u64> for AccountId {
     #[inline]
-    fn from(id: u64) -> Self { Self(id) }
+    fn from(id: u64) -> Self {
+        Self(id)
+    }
 }
-
 
 /// 持仓ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,15 +83,21 @@ impl PositionId {
         Self(nanos)
     }
 
-    pub fn as_u64(&self) -> u64 { self.0 }
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl fmt::Display for PositionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 impl Default for PositionId {
-    fn default() -> Self { Self(0) }
+    fn default() -> Self {
+        Self(0)
+    }
 }
 
 /// 交易员标识符（8字节固定长度）
@@ -97,19 +106,21 @@ impl Default for PositionId {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // todo 币安是怎么定义
 
-
 pub struct TraderId([u8; 8]);
 
 impl Default for TraderId {
-    fn default() -> Self { Self([0; 8]) }
+    fn default() -> Self {
+        Self([0; 8])
+    }
 }
 
 impl TraderId {
     /// 创建新的交易员ID
     #[inline]
-    pub fn new(bytes: [u8; 8]) -> Self { Self(bytes) }
+    pub fn new(bytes: [u8; 8]) -> Self {
+        Self(bytes)
+    }
 }
-
 
 /// 成交ID
 /// todo 要改
@@ -119,7 +130,9 @@ pub struct TradeId(String);
 
 impl TradeId {
     /// 创建新的成交ID
-    pub fn new(id: impl Into<String>) -> Self { Self(id.into()) }
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
 
     /// 生成随机成交ID
     pub fn generate() -> Self {
@@ -129,11 +142,15 @@ impl TradeId {
     }
 
     /// 获取字符串表示
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for TradeId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// 资产类型枚举
@@ -148,19 +165,21 @@ pub enum AssetId {
     /// BTC（比特币）- 主要加密货币
     Btc = 2,
     /// ETH（以太坊）- 智能合约平台
-    Eth = 3
+    Eth = 3,
 }
 
 impl AssetId {
     /// 将资产ID转换为原始数值
-    pub const fn as_u32(self) -> u32 { self as u32 }
+    pub const fn as_u32(self) -> u32 {
+        self as u32
+    }
 
     /// 将资产ID转换为字符串表示
     pub const fn as_str(self) -> &'static str {
         match self {
             AssetId::Usdt => "USDT",
             AssetId::Btc => "BTC",
-            AssetId::Eth => "ETH"
+            AssetId::Eth => "ETH",
         }
     }
 
@@ -170,23 +189,29 @@ impl AssetId {
             "USDT" => Some(AssetId::Usdt),
             "BTC" => Some(AssetId::Btc),
             "ETH" => Some(AssetId::Eth),
-            _ => None
+            _ => None,
         }
     }
 }
 
 impl Default for AssetId {
     #[inline]
-    fn default() -> Self { AssetId::Usdt }
+    fn default() -> Self {
+        AssetId::Usdt
+    }
 }
 
 impl fmt::Display for AssetId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.as_str()) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 impl From<AssetId> for u32 {
     #[inline]
-    fn from(asset: AssetId) -> Self { asset as u32 }
+    fn from(asset: AssetId) -> Self {
+        asset as u32
+    }
 }
 
 impl TryFrom<u32> for AssetId {
@@ -198,7 +223,7 @@ impl TryFrom<u32> for AssetId {
             1 => Ok(AssetId::Usdt),
             2 => Ok(AssetId::Btc),
             3 => Ok(AssetId::Eth),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
@@ -222,7 +247,7 @@ pub enum TradingPair {
     /// BTC/ETH 交易对
     BtcEth = 3,
     /// USDT/USDT（用于费用资产表示）
-    UsdtUsdt = 4
+    UsdtUsdt = 4,
 }
 
 impl TradingPair {
@@ -232,7 +257,7 @@ impl TradingPair {
             TradingPair::BtcUsdt => AssetId::Btc,
             TradingPair::EthUsdt => AssetId::Eth,
             TradingPair::BtcEth => AssetId::Btc,
-            TradingPair::UsdtUsdt => AssetId::Usdt
+            TradingPair::UsdtUsdt => AssetId::Usdt,
         }
     }
 
@@ -242,7 +267,7 @@ impl TradingPair {
             TradingPair::BtcUsdt => AssetId::Usdt,
             TradingPair::EthUsdt => AssetId::Usdt,
             TradingPair::BtcEth => AssetId::Eth,
-            TradingPair::UsdtUsdt => AssetId::Usdt
+            TradingPair::UsdtUsdt => AssetId::Usdt,
         }
     }
 
@@ -268,7 +293,7 @@ impl TradingPair {
             "ETHUSDT" => Some(TradingPair::EthUsdt),
             "BTCETH" => Some(TradingPair::BtcEth),
             "USDTUSDT" => Some(TradingPair::UsdtUsdt),
-            _ => None
+            _ => None,
         }
     }
 
@@ -288,20 +313,23 @@ impl TradingPair {
             TradingPair::BtcUsdt => "BTCUSDT",
             TradingPair::EthUsdt => "ETHUSDT",
             TradingPair::BtcEth => "BTCETH",
-            TradingPair::UsdtUsdt => "USDTUSDT"
+            TradingPair::UsdtUsdt => "USDTUSDT",
         }
     }
 }
 
 impl Default for TradingPair {
     #[inline]
-    fn default() -> Self { TradingPair::BtcUsdt }
+    fn default() -> Self {
+        TradingPair::BtcUsdt
+    }
 }
 
 impl fmt::Display for TradingPair {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.to_symbol_string()) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_symbol_string())
+    }
 }
-
 
 /// 买卖方向
 ///
@@ -312,7 +340,7 @@ impl fmt::Display for TradingPair {
 #[cfg_attr(feature = "serde", serde(rename_all = "PascalCase"))]
 pub enum OrderSide {
     Buy = 0,
-    Sell = 1
+    Sell = 1,
 }
 
 impl OrderSide {
@@ -321,11 +349,13 @@ impl OrderSide {
     pub fn opposite(&self) -> OrderSide {
         match self {
             OrderSide::Buy => OrderSide::Sell,
-            OrderSide::Sell => OrderSide::Buy
+            OrderSide::Sell => OrderSide::Buy,
         }
     }
 }
 
 impl Default for OrderSide {
-    fn default() -> Self { OrderSide::Buy }
+    fn default() -> Self {
+        OrderSide::Buy
+    }
 }

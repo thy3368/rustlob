@@ -4,10 +4,9 @@
 
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
-use crate::proc::behavior::{
-    spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny},
-    v2::spot_behavior::{SpotCmdAny, SpotResAny}
-};
+
+use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_behavior::{SpotCmdAny, SpotResAny};
 
 /// Market Data 命令枚举
 #[derive(Debug, Clone)]
@@ -59,7 +58,7 @@ pub enum SpotMarketDataCmdAny {
 
     /// 滚动窗口价格变动统计 GET /api/v3/ticker
     /// Weight: 4 per symbol (max 200)
-    RollingWindowTicker(RollingWindowTickerCmd)
+    RollingWindowTicker(RollingWindowTickerCmd),
 }
 
 /// 订单簿查询命令
@@ -75,7 +74,7 @@ pub struct OrderBookCmd {
     /// 深度限制，默认 100，最大 5000
     limit: Option<i32>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// 最近成交查询命令
@@ -89,7 +88,7 @@ pub struct RecentTradesCmd {
     /// 交易对（必填）
     symbol: String,
     /// 限制数量，默认 500，最大 1000
-    limit: Option<i32>
+    limit: Option<i32>,
 }
 
 /// 历史成交查询命令
@@ -105,7 +104,7 @@ pub struct HistoricalTradesCmd {
     /// 限制数量，默认 500，最大 1000
     limit: Option<i32>,
     /// 从该成交ID开始，默认返回最近的成交
-    from_id: Option<i64>
+    from_id: Option<i64>,
 }
 
 /// 聚合成交查询命令
@@ -125,7 +124,7 @@ pub struct AggTradesCmd {
     /// 结束时间（毫秒，包含）
     end_time: Option<i64>,
     /// 限制数量，默认 500，最大 1000
-    limit: Option<i32>
+    limit: Option<i32>,
 }
 
 /// K线数据查询命令
@@ -148,7 +147,7 @@ pub struct KlinesCmd {
     /// 时区，默认 0 (UTC)，范围 [-12:00 到 +14:00]
     time_zone: Option<String>,
     /// 限制数量，默认 500，最大 1000
-    limit: Option<i32>
+    limit: Option<i32>,
 }
 
 /// UI K线数据查询命令
@@ -171,7 +170,7 @@ pub struct UIKlinesCmd {
     /// 时区，默认 0 (UTC)
     time_zone: Option<String>,
     /// 限制数量，默认 500，最大 1000
-    limit: Option<i32>
+    limit: Option<i32>,
 }
 
 /// 当前平均价格查询命令
@@ -183,7 +182,7 @@ pub struct UIKlinesCmd {
 pub struct AvgPriceCmd {
     metadata: CMetadata,
     /// 交易对（必填）
-    symbol: String
+    symbol: String,
 }
 
 /// 24小时价格变动统计查询命令
@@ -201,7 +200,7 @@ pub struct Ticker24hrCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// 交易日价格变动查询命令
@@ -221,7 +220,7 @@ pub struct TradingDayTickerCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// 最新价格查询命令
@@ -237,7 +236,7 @@ pub struct SymbolPriceTickerCmd {
     /// 多个交易对数组（与 symbol 互斥）
     symbols: Option<Vec<String>>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// 最优挂单查询命令
@@ -253,7 +252,7 @@ pub struct BookTickerCmd {
     /// 多个交易对数组（与 symbol 互斥）
     symbols: Option<Vec<String>>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// 滚动窗口价格变动统计查询命令
@@ -273,7 +272,7 @@ pub struct RollingWindowTickerCmd {
     /// 响应类型：FULL 或 MINI，默认 FULL
     ticker_type: Option<String>,
     /// 交易状态过滤（TRADING, HALT, BREAK）
-    symbol_status: Option<String>
+    symbol_status: Option<String>,
 }
 
 /// Market Data 响应枚举
@@ -323,7 +322,7 @@ pub enum SpotMarketDataResAny {
     RollingWindowTicker(RollingWindowTickerData),
 
     /// 滚动窗口Ticker响应（数组）
-    RollingWindowTickerList(Vec<RollingWindowTickerData>)
+    RollingWindowTickerList(Vec<RollingWindowTickerData>),
 }
 
 /// 订单簿数据
@@ -336,7 +335,7 @@ pub struct OrderBookData {
     /// 买单列表 [[价格, 数量], ...]
     bids: Vec<(String, String)>,
     /// 卖单列表 [[价格, 数量], ...]
-    asks: Vec<(String, String)>
+    asks: Vec<(String, String)>,
 }
 
 /// 成交数据
@@ -356,7 +355,7 @@ pub struct TradeData {
     /// 是否为买方maker
     is_buyer_maker: bool,
     /// 是否为最佳匹配
-    is_best_match: bool
+    is_best_match: bool,
 }
 
 /// 聚合成交数据
@@ -378,7 +377,7 @@ pub struct AggTradeData {
     /// 是否为买方maker
     is_buyer_maker: bool,
     /// 是否为最佳匹配
-    is_best_match: bool
+    is_best_match: bool,
 }
 
 /// K线数据
@@ -406,7 +405,7 @@ pub struct KlineData {
     /// Taker买入成交量
     taker_buy_base_asset_volume: String,
     /// Taker买入成交额
-    taker_buy_quote_asset_volume: String
+    taker_buy_quote_asset_volume: String,
 }
 
 /// 平均价格数据
@@ -419,7 +418,7 @@ pub struct AvgPriceData {
     /// 平均价格
     price: String,
     /// 最后成交时间
-    close_time: i64
+    close_time: i64,
 }
 
 /// 24小时Ticker数据（完整）
@@ -467,7 +466,7 @@ pub struct Ticker24hrData {
     /// 最后一笔成交ID
     last_id: Option<i64>,
     /// 成交笔数
-    count: i64
+    count: i64,
 }
 
 /// 交易日Ticker数据
@@ -503,7 +502,7 @@ pub struct TradingDayTickerData {
     /// 最后一笔成交ID
     last_id: i64,
     /// 成交笔数
-    count: i64
+    count: i64,
 }
 
 /// 价格Ticker数据
@@ -513,7 +512,7 @@ pub struct PriceTickerData {
     /// 交易对
     symbol: String,
     /// 价格
-    price: String
+    price: String,
 }
 
 /// 订单簿Ticker数据
@@ -529,7 +528,7 @@ pub struct BookTickerData {
     /// 卖一价
     ask_price: String,
     /// 卖一量
-    ask_qty: String
+    ask_qty: String,
 }
 
 /// 滚动窗口Ticker数据
@@ -565,10 +564,8 @@ pub struct RollingWindowTickerData {
     /// 最后一笔成交ID
     last_id: i64,
     /// 成交笔数
-    count: i64
+    count: i64,
 }
-
-
 
 /// Market Data 行为接口
 pub trait SpotMarketDataBehavior:

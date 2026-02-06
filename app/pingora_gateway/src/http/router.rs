@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    sync::Arc
-};
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
 
 use pingora::upstreams::peer::HttpPeer;
 use serde::{Deserialize, Serialize};
@@ -15,7 +13,7 @@ pub struct UserRouteConfig {
     pub partition_ips: HashMap<usize, Vec<String>>,
     pub num_partitions: usize,
     /// 默认后端地址（当用户未配置时使用）
-    pub default_backend: String
+    pub default_backend: String,
 }
 
 impl Default for UserRouteConfig {
@@ -31,7 +29,7 @@ impl Default for UserRouteConfig {
         UserRouteConfig {
             partition_ips,
             num_partitions: 10,
-            default_backend: "127.0.0.1:3001".to_string()
+            default_backend: "127.0.0.1:3001".to_string(),
         }
     }
 }
@@ -40,7 +38,7 @@ impl Default for UserRouteConfig {
 pub struct UserRouter {
     config: Arc<RwLock<UserRouteConfig>>,
     /// 轮询索引，用于负载均衡（用户ID -> 当前索引）
-    round_robin_index: Arc<RwLock<HashMap<String, usize>>>
+    round_robin_index: Arc<RwLock<HashMap<String, usize>>>,
 }
 
 impl UserRouter {
@@ -48,7 +46,7 @@ impl UserRouter {
     pub fn new(config: UserRouteConfig) -> Self {
         UserRouter {
             config: Arc::new(RwLock::new(config)),
-            round_robin_index: Arc::new(RwLock::new(HashMap::new()))
+            round_robin_index: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -62,7 +60,6 @@ impl UserRouter {
         //todo fix 语法错
         (hash % config.num_partitions as u64) + 1
     }
-
 
     /// 根据用户ID选择后端服务器（轮询负载均衡）
     pub async fn select_backend(&self, user_id: &str) -> HttpPeer {
@@ -96,7 +93,9 @@ impl UserRouter {
     }
 
     /// 创建 HttpPeer
-    fn create_peer(&self, addr: &str) -> HttpPeer { HttpPeer::new(addr, false, "localhost".to_string()) }
+    fn create_peer(&self, addr: &str) -> HttpPeer {
+        HttpPeer::new(addr, false, "localhost".to_string())
+    }
 }
 
 /// 从 HTTP 请求中提取用户ID
@@ -114,7 +113,8 @@ impl UserIdExtractor {
     pub fn extract_from_json(body: &[u8]) -> Option<String> {
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(body) {
             // 尝试多个可能的字段名
-            let possible_fields = ["user_id", "userId", "trader_id", "traderId", "uid", "accountId", "account_id"];
+            let possible_fields =
+                ["user_id", "userId", "trader_id", "traderId", "uid", "accountId", "account_id"];
 
             for field in &possible_fields {
                 if let Some(user_id) = json.get(field) {
@@ -203,7 +203,6 @@ mod tests {
         assert!(peer_default.address().to_string().contains("3001"));
     }
 
-
     #[tokio::test]
     async fn test_round_robin() {
         let config = UserRouteConfig::default();
@@ -215,7 +214,10 @@ mod tests {
         let peer3 = router.select_backend("user_1").await;
 
         // 应该轮询在 3001 和 3002 之间
-        assert!(peer1.address().to_string().contains("3001") || peer1.address().to_string().contains("3002"));
+        assert!(
+            peer1.address().to_string().contains("3001")
+                || peer1.address().to_string().contains("3002")
+        );
     }
 
     #[test]

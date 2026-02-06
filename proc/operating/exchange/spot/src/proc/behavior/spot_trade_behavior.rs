@@ -12,10 +12,10 @@
 // 幂等性包装 (Idempotent Command)
 // ============================================================================
 
+use base_types::base_types::TraderId;
 pub use base_types::cqrs::cqrs_types::{CMetadata, Cmd, CmdResp};
 use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce};
-use base_types::{AccountId, OrderId, Price, Quantity, OrderSide, TradingPair};
-use base_types::base_types::TraderId;
+use base_types::{AccountId, OrderId, OrderSide, Price, Quantity, TradingPair};
 // ============================================================================
 // 错误类型定义 (混合方案)
 // ============================================================================
@@ -491,7 +491,13 @@ pub enum UrgencyLevel {
 pub enum AlgoCmdAny {
     /// TWAP订单 (Time-Weighted Average Price)
     /// 按时间均匀分配订单
-    Twap { trader: TraderId, side: OrderSide, total_quantity: Quantity, duration_secs: u64, interval_secs: u64 },
+    Twap {
+        trader: TraderId,
+        side: OrderSide,
+        total_quantity: Quantity,
+        duration_secs: u64,
+        interval_secs: u64,
+    },
 
     /// VWAP订单 (Volume-Weighted Average Price)
     /// 按市场成交量分配订单
@@ -508,20 +514,40 @@ pub enum AlgoCmdAny {
 
     /// 实施缺口订单 (Implementation Shortfall)
     /// 最小化执行成本与决策价格的差异
-    ImplementationShortfall { trader: TraderId, side: OrderSide, total_quantity: Quantity, urgency: UrgencyLevel },
+    ImplementationShortfall {
+        trader: TraderId,
+        side: OrderSide,
+        total_quantity: Quantity,
+        urgency: UrgencyLevel,
+    },
 }
 
 /// 算法命令执行结果
 #[derive(Debug, Clone)]
 pub enum AlgoCmdResult {
     /// TWAP结果
-    Twap { parent_order_id: OrderId, child_orders: Vec<OrderId>, total_traded: Quantity, avg_price: Option<Price> },
+    Twap {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        avg_price: Option<Price>,
+    },
 
     /// VWAP结果
-    Vwap { parent_order_id: OrderId, child_orders: Vec<OrderId>, total_traded: Quantity, achieved_vwap: Option<Price> },
+    Vwap {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        achieved_vwap: Option<Price>,
+    },
 
     /// POV结果
-    Pov { parent_order_id: OrderId, child_orders: Vec<OrderId>, total_traded: Quantity, actual_participation_rate: u32 },
+    Pov {
+        parent_order_id: OrderId,
+        child_orders: Vec<OrderId>,
+        total_traded: Quantity,
+        actual_participation_rate: u32,
+    },
 
     /// 实施缺口结果
     ImplementationShortfall {
@@ -575,7 +601,13 @@ pub enum ConditionalCmdAny {
 
     /// 止损限价单
     /// 当市价达到触发价时，转为限价单
-    StopLimit { trader: TraderId, side: OrderSide, stop_price: Price, limit_price: Price, quantity: Quantity },
+    StopLimit {
+        trader: TraderId,
+        side: OrderSide,
+        stop_price: Price,
+        limit_price: Price,
+        quantity: Quantity,
+    },
 
     /// 追踪止损单
     /// 止损价随市价变化而移动
@@ -609,7 +641,13 @@ pub enum ConditionalCmdAny {
     // ========== 高级订单 ==========
     /// 冰山单 - 部分隐藏订单
     /// 只显示 display_quantity，成交后自动从隐藏部分补充
-    Iceberg { trader: TraderId, side: OrderSide, price: Price, total_quantity: Quantity, display_quantity: Quantity },
+    Iceberg {
+        trader: TraderId,
+        side: OrderSide,
+        price: Price,
+        total_quantity: Quantity,
+        display_quantity: Quantity,
+    },
 
     /// 隐藏订单
     /// 完全不显示在订单簿中
@@ -620,7 +658,13 @@ pub enum ConditionalCmdAny {
     Pegged { trader: TraderId, side: OrderSide, offset: i32, quantity: Quantity, peg_type: PegType },
 
     /// 最小成交量订单
-    MinimumQuantity { trader: TraderId, side: OrderSide, price: Price, quantity: Quantity, min_quantity: Quantity },
+    MinimumQuantity {
+        trader: TraderId,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+        min_quantity: Quantity,
+    },
 }
 
 /// 条件命令执行结果
@@ -711,18 +755,39 @@ pub trait ConditionalTradeProc: Send + Sync {
 #[derive(Debug, Clone)]
 pub enum MarketMakerCmdAny {
     /// 双向报价
-    TwoWayQuote { trader: TraderId, bid_price: Price, bid_quantity: Quantity, ask_price: Price, ask_quantity: Quantity },
+    TwoWayQuote {
+        trader: TraderId,
+        bid_price: Price,
+        bid_quantity: Quantity,
+        ask_price: Price,
+        ask_quantity: Quantity,
+    },
 
     /// 拍卖订单
-    AuctionOrder { trader: TraderId, side: OrderSide, price: Price, quantity: Quantity, auction_type: AuctionType },
+    AuctionOrder {
+        trader: TraderId,
+        side: OrderSide,
+        price: Price,
+        quantity: Quantity,
+        auction_type: AuctionType,
+    },
 }
 
 /// 做市商命令结果
 #[derive(Debug, Clone)]
 pub enum MarketMakerCmdResult {
-    TwoWayQuote { bid_order_id: OrderId, ask_order_id: OrderId, bid_trades: Vec<SpotTrade>, ask_trades: Vec<SpotTrade> },
+    TwoWayQuote {
+        bid_order_id: OrderId,
+        ask_order_id: OrderId,
+        bid_trades: Vec<SpotTrade>,
+        ask_trades: Vec<SpotTrade>,
+    },
 
-    AuctionOrder { order_id: OrderId, auction_price: Option<Price>, trades: Vec<SpotTrade> },
+    AuctionOrder {
+        order_id: OrderId,
+        auction_price: Option<Price>,
+        trades: Vec<SpotTrade>,
+    },
 
     NotImplemented,
 }
@@ -779,7 +844,12 @@ impl std::error::Error for QueryError {}
 #[derive(Debug, Clone)]
 pub enum OrderQueryCmd {
     /// 查询当前活跃订单
-    QueryOpenOrders { trader: TraderId, trading_pair: Option<TradingPair>, side: Option<OrderSide>, page: Option<u32> },
+    QueryOpenOrders {
+        trader: TraderId,
+        trading_pair: Option<TradingPair>,
+        side: Option<OrderSide>,
+        page: Option<u32>,
+    },
 
     /// 查询订单详情
     QueryOrderDetail { order_id: OrderId },
@@ -874,5 +944,5 @@ pub trait OrderQueryProc: Send + Sync {
 /// 核心订单处理接口，返回 Result<CommandResponse, SpotCommandError>
 /// 支持 ? 操作符进行错误传播
 pub trait SpotTradeBehavior: Send + Sync {
-     fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult;
+    fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult;
 }

@@ -1,20 +1,20 @@
 // 手续费计算模式枚举
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FeeCalculationMode {
-    Fixed,          // 固定费率
-    Tiered,         // 分层费率
-    MarketMaker,    // 做市商优惠
-    VIP,            // VIP等级费率
+    Fixed,       // 固定费率
+    Tiered,      // 分层费率
+    MarketMaker, // 做市商优惠
+    VIP,         // VIP等级费率
 }
 
 // 手续费类型枚举
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FeeType {
-    Taker,          // 吃单手续费
-    Maker,          // 挂单手续费
-    Withdrawal,     // 提现手续费
-    Deposit,        // 充值手续费
-    Transfer,       // 转账手续费
+    Taker,      // 吃单手续费
+    Maker,      // 挂单手续费
+    Withdrawal, // 提现手续费
+    Deposit,    // 充值手续费
+    Transfer,   // 转账手续费
 }
 
 // 资产类型枚举
@@ -25,11 +25,10 @@ pub enum AssetType {
     Stablecoin,     // 稳定币
 }
 
-
-
-
 use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
+
 use crate::InstrumentType;
 
 /// 产品特定的分层费率配置
@@ -219,10 +218,8 @@ impl ProductFeeConfig {
                 } else {
                     self.get_tiered_fee(user_volume_30d, user_vip_level, FeeType::Maker)
                 }
-            },
-            FeeType::Taker => {
-                self.get_tiered_fee(user_volume_30d, user_vip_level, FeeType::Taker)
-            },
+            }
+            FeeType::Taker => self.get_tiered_fee(user_volume_30d, user_vip_level, FeeType::Taker),
             _ => return Err(FeeError::InvalidFeeTypeForTrade),
         };
 
@@ -282,8 +279,9 @@ impl ProductFeeConfig {
 
         // 2. 应用VIP折扣
         if let Some(vip_level) = user_vip_level {
-            if let Some(vip_config) = self.product_vip_levels.iter()
-                .find(|vip| vip.level_id == vip_level) {
+            if let Some(vip_config) =
+                self.product_vip_levels.iter().find(|vip| vip.level_id == vip_level)
+            {
                 base_fee *= 1.0 - vip_config.fee_discount;
             }
         }
@@ -306,7 +304,6 @@ impl ProductFeeConfig {
     }
 }
 
-
 // 核心手续费实体
 #[derive(Debug, Clone)]
 pub struct CexFeeEntity {
@@ -317,9 +314,7 @@ pub struct CexFeeEntity {
 impl CexFeeEntity {
     // 创建新的手续费实体
     pub fn new() -> Self {
-        Self {
-            product_fee_configs: HashMap::new(),
-        }
+        Self { product_fee_configs: HashMap::new() }
     }
 
     /// 添加产品费率配置
@@ -347,10 +342,11 @@ impl CexFeeEntity {
         user_vip_level: Option<u32>,
         is_market_maker: bool,
     ) -> Result<FeeCalculationResult, FeeError> {
-        let product_config = self.get_product_config(instrument_type)
-            .ok_or(FeeError::CalculationError(
-                format!("Product type {:?} not configured", instrument_type)
-            ))?;
+        let product_config =
+            self.get_product_config(instrument_type).ok_or(FeeError::CalculationError(format!(
+                "Product type {:?} not configured",
+                instrument_type
+            )))?;
 
         product_config.calculate_trading_fee(
             fee_type,
@@ -367,11 +363,11 @@ impl CexFeeEntity {
 // 手续费计算结果
 #[derive(Debug, Clone)]
 pub struct FeeCalculationResult {
-    pub base_rate: f64,           // 基础费率
-    pub discount_rate: f64,      // 折扣率
-    pub final_rate: f64,         // 最终费率
-    pub fee_amount: f64,         // 手续费金额
-    pub fee_asset: String,       // 手续费资产
+    pub base_rate: f64,              // 基础费率
+    pub discount_rate: f64,          // 折扣率
+    pub final_rate: f64,             // 最终费率
+    pub fee_amount: f64,             // 手续费金额
+    pub fee_asset: String,           // 手续费资产
     pub calculation_details: String, // 计算详情
 }
 
@@ -433,85 +429,85 @@ mod tests {
         let mut fee_entity = CexFeeEntity::new();
 
         // 添加现货配置
-        fee_entity.add_product_config(
-            ProductFeeConfig::spot(0.001, 0.001)
-        );
+        fee_entity.add_product_config(ProductFeeConfig::spot(0.001, 0.001));
 
         // 添加永续合约配置
-        fee_entity.add_product_config(
-            ProductFeeConfig::perpetual(0.0002, 0.0005, 0.0075)
-        );
+        fee_entity.add_product_config(ProductFeeConfig::perpetual(0.0002, 0.0005, 0.0075));
 
         // 添加交割合约配置
-        fee_entity.add_product_config(
-            ProductFeeConfig::futures(0.0002, 0.0005, 0.0001)
-        );
+        fee_entity.add_product_config(ProductFeeConfig::futures(0.0002, 0.0005, 0.0001));
 
         // 添加期权配置
-        fee_entity.add_product_config(
-            ProductFeeConfig::options(0.0005, 0.001)
-        );
+        fee_entity.add_product_config(ProductFeeConfig::options(0.0005, 0.001));
 
         // 测试现货费用计算
-        let spot_result = fee_entity.calculate_product_trading_fee(
-            InstrumentType::Spot,
-            FeeType::Taker,
-            "BTC",
-            "USDT",
-            1.0,
-            50000.0,
-            None,
-            None,
-            false,
-        ).unwrap();
+        let spot_result = fee_entity
+            .calculate_product_trading_fee(
+                InstrumentType::Spot,
+                FeeType::Taker,
+                "BTC",
+                "USDT",
+                1.0,
+                50000.0,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
 
         assert_eq!(spot_result.base_rate, 0.001);
         assert_eq!(spot_result.fee_amount, 50.0); // 50000 * 0.001
 
         // 测试永续合约费用计算
-        let perp_result = fee_entity.calculate_product_trading_fee(
-            InstrumentType::Perpetual,
-            FeeType::Taker,
-            "BTC",
-            "USDT",
-            1.0,
-            50000.0,
-            None,
-            None,
-            false,
-        ).unwrap();
+        let perp_result = fee_entity
+            .calculate_product_trading_fee(
+                InstrumentType::Perpetual,
+                FeeType::Taker,
+                "BTC",
+                "USDT",
+                1.0,
+                50000.0,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
 
         assert_eq!(perp_result.base_rate, 0.0005);
         assert_eq!(perp_result.fee_amount, 25.0); // 50000 * 0.0005
 
         // 测试交割合约费用计算
-        let futures_result = fee_entity.calculate_product_trading_fee(
-            InstrumentType::Futures,
-            FeeType::Maker,
-            "BTC",
-            "USDT",
-            1.0,
-            50000.0,
-            None,
-            None,
-            false,
-        ).unwrap();
+        let futures_result = fee_entity
+            .calculate_product_trading_fee(
+                InstrumentType::Futures,
+                FeeType::Maker,
+                "BTC",
+                "USDT",
+                1.0,
+                50000.0,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
 
         assert_eq!(futures_result.base_rate, 0.0002);
         assert_eq!(futures_result.fee_amount, 10.0); // 50000 * 0.0002
 
         // 测试期权费用计算（作为做市商）
-        let options_result = fee_entity.calculate_product_trading_fee(
-            InstrumentType::Options,
-            FeeType::Maker,
-            "BTC",
-            "USDT",
-            1.0,
-            50000.0,
-            None,
-            None,
-            true,  // is_market_maker = true
-        ).unwrap();
+        let options_result = fee_entity
+            .calculate_product_trading_fee(
+                InstrumentType::Options,
+                FeeType::Maker,
+                "BTC",
+                "USDT",
+                1.0,
+                50000.0,
+                None,
+                None,
+                true, // is_market_maker = true
+            )
+            .unwrap();
 
         assert_eq!(options_result.base_rate, 0.00025); // 0.0005 * 0.5 (做市商折扣)
         assert_eq!(options_result.fee_amount, 12.5); // 50000 * 0.00025
@@ -522,22 +518,22 @@ mod tests {
         let mut fee_entity = CexFeeEntity::new();
 
         // 添加永续合约配置（最小费用较低）
-        fee_entity.add_product_config(
-            ProductFeeConfig::perpetual(0.0002, 0.0005, 0.0075)
-        );
+        fee_entity.add_product_config(ProductFeeConfig::perpetual(0.0002, 0.0005, 0.0075));
 
         // 测试小额交易的最小费用限制
-        let result = fee_entity.calculate_product_trading_fee(
-            InstrumentType::Perpetual,
-            FeeType::Taker,
-            "BTC",
-            "USDT",
-            0.001,
-            10.0, // 极小金额：0.001 * 10 = 0.01
-            None,
-            None,
-            false,
-        ).unwrap();
+        let result = fee_entity
+            .calculate_product_trading_fee(
+                InstrumentType::Perpetual,
+                FeeType::Taker,
+                "BTC",
+                "USDT",
+                0.001,
+                10.0, // 极小金额：0.001 * 10 = 0.01
+                None,
+                None,
+                false,
+            )
+            .unwrap();
 
         // 应用最小费用 0.00005
         assert_eq!(result.fee_amount, 0.00005);
@@ -564,7 +560,7 @@ mod tests {
         match result {
             Err(FeeError::CalculationError(msg)) => {
                 assert!(msg.contains("not configured"));
-            },
+            }
             _ => panic!("Expected CalculationError"),
         }
     }

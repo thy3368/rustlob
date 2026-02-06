@@ -3,10 +3,8 @@
 //! 注意：这是简化的实现，用于演示目的。
 //! 生产环境应使用标准密码学库（如 ed25519-dalek, sha2 等）
 
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash as StdHash, Hasher}
-};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash as StdHash, Hasher};
 
 /// 哈希值类型（256位）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,13 +12,19 @@ pub struct Hash([u8; 32]);
 
 impl Hash {
     /// 创建零哈希
-    pub const fn zero() -> Self { Self([0u8; 32]) }
+    pub const fn zero() -> Self {
+        Self([0u8; 32])
+    }
 
     /// 从字节数组创建
-    pub const fn from_bytes(bytes: [u8; 32]) -> Self { Self(bytes) }
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
 
     /// 获取字节数组
-    pub const fn as_bytes(&self) -> &[u8; 32] { &self.0 }
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
 
     /// 计算数据的哈希（简化实现）
     pub fn compute<T: StdHash>(data: &T) -> Self {
@@ -40,7 +44,9 @@ impl Hash {
 }
 
 impl Default for Hash {
-    fn default() -> Self { Self::zero() }
+    fn default() -> Self {
+        Self::zero()
+    }
 }
 
 impl std::fmt::Display for Hash {
@@ -55,17 +61,25 @@ pub struct Signature([u8; 64]);
 
 impl Signature {
     /// 创建零签名
-    pub const fn zero() -> Self { Self([0u8; 64]) }
+    pub const fn zero() -> Self {
+        Self([0u8; 64])
+    }
 
     /// 从字节数组创建
-    pub const fn from_bytes(bytes: [u8; 64]) -> Self { Self(bytes) }
+    pub const fn from_bytes(bytes: [u8; 64]) -> Self {
+        Self(bytes)
+    }
 
     /// 获取字节数组
-    pub const fn as_bytes(&self) -> &[u8; 64] { &self.0 }
+    pub const fn as_bytes(&self) -> &[u8; 64] {
+        &self.0
+    }
 }
 
 impl Default for Signature {
-    fn default() -> Self { Self::zero() }
+    fn default() -> Self {
+        Self::zero()
+    }
 }
 
 /// 公钥类型（256位）
@@ -74,10 +88,14 @@ pub struct PublicKey([u8; 32]);
 
 impl PublicKey {
     /// 从字节数组创建
-    pub const fn from_bytes(bytes: [u8; 32]) -> Self { Self(bytes) }
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
 
     /// 获取字节数组
-    pub const fn as_bytes(&self) -> &[u8; 32] { &self.0 }
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
 
     /// 从 u64 创建（用于测试）
     pub fn from_u64(id: u64) -> Self {
@@ -99,7 +117,9 @@ pub struct PrivateKey([u8; 32]);
 
 impl PrivateKey {
     /// 从字节数组创建
-    pub const fn from_bytes(bytes: [u8; 32]) -> Self { Self(bytes) }
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
 
     /// 从 u64 创建（用于测试）
     pub fn from_u64(id: u64) -> Self {
@@ -109,7 +129,9 @@ impl PrivateKey {
     }
 
     /// 获取对应的公钥
-    pub fn public_key(&self) -> PublicKey { PublicKey(self.0) }
+    pub fn public_key(&self) -> PublicKey {
+        PublicKey(self.0)
+    }
 
     /// 签名数据（简化实现）
     pub fn sign<T: StdHash>(&self, data: &T) -> Signature {

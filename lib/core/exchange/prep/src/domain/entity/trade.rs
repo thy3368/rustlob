@@ -30,15 +30,23 @@ pub struct Trade {
     /// 已实现盈亏
     realized_pnl: i64,
     /// 是否Maker
-    is_maker: bool
+    is_maker: bool,
 }
 
 impl Trade {
     /// 创建新的成交记录
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        id: TradeId, order_id: OrderId, price: Price, quantity: Quantity, side: Side, position_side: PositionSide,
-        timestamp: Timestamp, fee: u64, realized_pnl: i64, is_maker: bool
+        id: TradeId,
+        order_id: OrderId,
+        price: Price,
+        quantity: Quantity,
+        side: Side,
+        position_side: PositionSide,
+        timestamp: Timestamp,
+        fee: u64,
+        realized_pnl: i64,
+        is_maker: bool,
     ) -> Self {
         Self {
             id,
@@ -50,53 +58,75 @@ impl Trade {
             timestamp,
             fee,
             realized_pnl,
-            is_maker
+            is_maker,
         }
     }
 
     // ========== Getters (不可变，只有读取方法) ==========
 
     /// 成交ID
-    pub fn id(&self) -> TradeId { self.id }
+    pub fn id(&self) -> TradeId {
+        self.id
+    }
 
     /// 订单ID
-    pub fn order_id(&self) -> OrderId { self.order_id }
+    pub fn order_id(&self) -> OrderId {
+        self.order_id
+    }
 
     /// 成交价格
-    pub fn price(&self) -> Price { self.price }
+    pub fn price(&self) -> Price {
+        self.price
+    }
 
     /// 成交数量
-    pub fn quantity(&self) -> Quantity { self.quantity }
+    pub fn quantity(&self) -> Quantity {
+        self.quantity
+    }
 
     /// 方向
-    pub fn side(&self) -> Side { self.side }
+    pub fn side(&self) -> Side {
+        self.side
+    }
 
     /// 持仓方向
-    pub fn position_side(&self) -> PositionSide { self.position_side }
+    pub fn position_side(&self) -> PositionSide {
+        self.position_side
+    }
 
     /// 时间戳
-    pub fn timestamp(&self) -> Timestamp { self.timestamp }
+    pub fn timestamp(&self) -> Timestamp {
+        self.timestamp
+    }
 
     /// 手续费
-    pub fn fee(&self) -> u64 { self.fee }
+    pub fn fee(&self) -> u64 {
+        self.fee
+    }
 
     /// 已实现盈亏
-    pub fn realized_pnl(&self) -> i64 { self.realized_pnl }
+    pub fn realized_pnl(&self) -> i64 {
+        self.realized_pnl
+    }
 
     /// 是否Maker
-    pub fn is_maker(&self) -> bool { self.is_maker }
+    pub fn is_maker(&self) -> bool {
+        self.is_maker
+    }
 
     // ========== 业务方法 ==========
 
     /// 计算成交金额 (notional value)
-    pub fn notional(&self) -> u64 { self.price * self.quantity }
+    pub fn notional(&self) -> u64 {
+        self.price * self.quantity
+    }
 
     /// 计算净收益（卖出）或净支出（买入）
     pub fn net_value(&self) -> i64 {
         let gross = self.notional() as i64;
         match self.side {
-            Side::Buy => gross + self.fee as i64, // 买入：支出
-            Side::Sell => gross - self.fee as i64 // 卖出：收入
+            Side::Buy => gross + self.fee as i64,  // 买入：支出
+            Side::Sell => gross - self.fee as i64, // 卖出：收入
         }
     }
 
@@ -106,12 +136,14 @@ impl Trade {
             (Side::Buy, PositionSide::Long) => true,
             (Side::Sell, PositionSide::Short) => true,
             (Side::Buy, PositionSide::Both) => true, // 单向模式买入开多
-            _ => false
+            _ => false,
         }
     }
 
     /// 是否为平仓成交
-    pub fn is_close(&self) -> bool { !self.is_open() }
+    pub fn is_close(&self) -> bool {
+        !self.is_open()
+    }
 }
 
 #[cfg(test)]
@@ -130,7 +162,7 @@ mod tests {
             1700000000000,      // timestamp
             5,                  // fee
             0,                  // realized_pnl
-            true                // is_maker
+            true,               // is_maker
         );
 
         assert_eq!(trade.id(), 1);
@@ -142,7 +174,8 @@ mod tests {
 
     #[test]
     fn test_notional_value() {
-        let trade = Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
+        let trade =
+            Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
 
         assert_eq!(trade.notional(), 500000); // 50000 * 10
     }
@@ -150,17 +183,40 @@ mod tests {
     #[test]
     fn test_is_open_close() {
         // 买入开多 = 开仓
-        let open_long = Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
+        let open_long =
+            Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
         assert!(open_long.is_open());
         assert!(!open_long.is_close());
 
         // 卖出平多 = 平仓
-        let close_long = Trade::new(2, 101, 51000, 10, Side::Sell, PositionSide::Long, 1700000000000, 5, 10000, false);
+        let close_long = Trade::new(
+            2,
+            101,
+            51000,
+            10,
+            Side::Sell,
+            PositionSide::Long,
+            1700000000000,
+            5,
+            10000,
+            false,
+        );
         assert!(!close_long.is_open());
         assert!(close_long.is_close());
 
         // 卖出开空 = 开仓
-        let open_short = Trade::new(3, 102, 50000, 10, Side::Sell, PositionSide::Short, 1700000000000, 5, 0, true);
+        let open_short = Trade::new(
+            3,
+            102,
+            50000,
+            10,
+            Side::Sell,
+            PositionSide::Short,
+            1700000000000,
+            5,
+            0,
+            true,
+        );
         assert!(open_short.is_open());
     }
 }

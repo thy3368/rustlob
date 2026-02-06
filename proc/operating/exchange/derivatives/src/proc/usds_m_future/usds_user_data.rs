@@ -1,14 +1,16 @@
 use base_types::cqrs::cqrs_types::CmdResp;
 
 use crate::proc::usds_m_future::behavior::user_data_behavior::{
-    UsdsMFutureUserDataBehavior, UsdsMFutureUserDataCmdAny, UsdsMFutureUserDataError, UsdsMFutureUserDataRes
+    UsdsMFutureUserDataBehavior, UsdsMFutureUserDataCmdAny, UsdsMFutureUserDataError,
+    UsdsMFutureUserDataRes,
 };
 
 pub struct UsdsMFutureUserDataBehaviorImpl {}
 
 impl UsdsMFutureUserDataBehavior for UsdsMFutureUserDataBehaviorImpl {
     fn handle(
-        &mut self, cmd: UsdsMFutureUserDataCmdAny
+        &mut self,
+        cmd: UsdsMFutureUserDataCmdAny,
     ) -> Result<CmdResp<UsdsMFutureUserDataRes>, UsdsMFutureUserDataError> {
         match cmd {
             UsdsMFutureUserDataCmdAny::AccountInfoV3(_) => {}

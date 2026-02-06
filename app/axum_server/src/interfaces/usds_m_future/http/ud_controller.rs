@@ -1,18 +1,16 @@
-use axum::{
-    extract::{Json, State},
-    response::IntoResponse,
-    routing::post,
-    Router,
-};
-use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+use axum::Router;
+use axum::extract::{Json, State};
+use axum::response::IntoResponse;
+use axum::routing::post;
+use derivatives_behavior::proc::usds_m_future::behavior::user_data_behavior::UsdsMFutureUserDataError;
 // USDS-M期货用户数据相关导入
 use derivatives_behavior::proc::usds_m_future::behavior::user_data_behavior::{
     UsdsMFutureUserDataBehavior, UsdsMFutureUserDataCmdAny, UsdsMFutureUserDataRes,
 };
 use derivatives_behavior::proc::usds_m_future::usds_user_data::UsdsMFutureUserDataBehaviorImpl;
-use derivatives_behavior::proc::usds_m_future::behavior::user_data_behavior::UsdsMFutureUserDataError;
+use serde::{Deserialize, Serialize};
 use spot_behavior::proc::behavior::spot_trade_behavior::CmdResp;
 
 // ============================================================================
@@ -32,7 +30,10 @@ impl UserDataService {
     }
 
     /// 处理用户数据请求 - 使用服务层
-    pub async fn handle_all(&self, cmd: UsdsMFutureUserDataCmdAny) -> Result<CmdResp<UsdsMFutureUserDataRes>, String> {
+    pub async fn handle_all(
+        &self,
+        cmd: UsdsMFutureUserDataCmdAny,
+    ) -> Result<CmdResp<UsdsMFutureUserDataRes>, String> {
         println!("👤 收到USDS-M期货用户数据请求: {:?}", cmd);
 
         self.processor
@@ -56,7 +57,10 @@ pub struct UserDataResponse {
     error: Option<String>,
 }
 
-pub async fn handle(State(service): State<Arc<UserDataService>>, Json(cmd): Json<UsdsMFutureUserDataCmdAny>) -> impl IntoResponse {
+pub async fn handle(
+    State(service): State<Arc<UserDataService>>,
+    Json(cmd): Json<UsdsMFutureUserDataCmdAny>,
+) -> impl IntoResponse {
     println!("👤 收到USDS-M期货用户数据请求: {:?}", cmd);
 
     match service.handle_all(cmd).await {
@@ -83,5 +87,9 @@ fn create_error_response(
         error: Some(error_msg.to_string()),
     };
     let json = serde_json::to_string(&response).unwrap();
-    (axum::http::StatusCode::BAD_REQUEST, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
+    (
+        axum::http::StatusCode::BAD_REQUEST,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        json,
+    )
 }

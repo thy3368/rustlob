@@ -1,6 +1,7 @@
+use std::path::Path;
+
 use anyhow::Result;
 use colored::Colorize;
-use std::path::Path;
 
 use crate::analyzer::{AnalysisResult, IssueCategory, Severity};
 use crate::llvm_analyzer::LLVMAnalysisResult;
@@ -12,10 +13,7 @@ pub struct Reporter {
 
 impl Reporter {
     pub fn new(analysis_result: AnalysisResult, llvm_result: Option<LLVMAnalysisResult>) -> Self {
-        Self {
-            analysis_result,
-            llvm_result,
-        }
+        Self { analysis_result, llvm_result }
     }
 
     pub fn generate_report(&self, format: &str, output_file: Option<&Path>) -> Result<()> {
@@ -37,7 +35,10 @@ impl Reporter {
         println!("  • 分析文件数: {}", self.analysis_result.files_analyzed.to_string().green());
         println!("  • 总代码行数: {}", self.analysis_result.total_lines.to_string().green());
         println!("  • 发现问题数: {}", self.analysis_result.issues.len().to_string().yellow());
-        println!("  • 总函数数量: {}", self.analysis_result.statistics.total_functions.to_string().green());
+        println!(
+            "  • 总函数数量: {}",
+            self.analysis_result.statistics.total_functions.to_string().green()
+        );
 
         // 优化分数
         println!("\n{}", "🎯 优化分数:".yellow().bold());
@@ -48,7 +49,8 @@ impl Reporter {
             _ => "red",
         };
 
-        println!("  • 总体评分: {} ({})",
+        println!(
+            "  • 总体评分: {} ({})",
             self.colorize(&format!("{:.1}/100", score.overall), grade_color),
             self.colorize(score.grade(), grade_color)
         );
@@ -62,12 +64,14 @@ impl Reporter {
         // LLVM分析结果
         if let Some(llvm) = &self.llvm_result {
             println!("\n{}", "🔬 LLVM深度分析:".cyan().bold());
-            println!("  • 向量化循环: {}/{} ({:.1}%)",
+            println!(
+                "  • 向量化循环: {}/{} ({:.1}%)",
                 llvm.vectorization.vectorized_loops,
                 llvm.vectorization.vectorized_loops + llvm.vectorization.missed_loops,
                 llvm.vectorization.vectorization_rate * 100.0
             );
-            println!("  • 内联函数: {}/{} ({:.1}%)",
+            println!(
+                "  • 内联函数: {}/{} ({:.1}%)",
                 llvm.inlining.inlined_functions,
                 llvm.inlining.inlined_functions + llvm.inlining.not_inlined,
                 llvm.inlining.inlining_rate * 100.0
@@ -189,7 +193,8 @@ impl Reporter {
     fn build_html(&self) -> String {
         let score = &self.analysis_result.score;
 
-        format!(r#"<!DOCTYPE html>
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">

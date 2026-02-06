@@ -12,7 +12,7 @@ pub enum RepositoryError {
     /// 重复
     Duplicate,
     /// 容量已满
-    CapacityFull
+    CapacityFull,
 }
 
 /// 订单仓储接口
@@ -69,10 +69,16 @@ pub trait PositionRepository: Send + Sync {
     fn remove_position(&mut self, id: PositionId) -> Option<Position>;
 
     /// 获取用户某方向的仓位
-    fn get_position_by_trader_side(&self, trader: TraderId, position_side: PositionSide) -> Option<&Position>;
+    fn get_position_by_trader_side(
+        &self,
+        trader: TraderId,
+        position_side: PositionSide,
+    ) -> Option<&Position>;
 
     /// 获取用户某方向的可变仓位
     fn get_position_by_trader_side_mut(
-        &mut self, trader: TraderId, position_side: PositionSide
+        &mut self,
+        trader: TraderId,
+        position_side: PositionSide,
     ) -> Option<&mut Position>;
 }

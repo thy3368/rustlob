@@ -3,35 +3,32 @@
 use std::fmt;
 
 use entity_derive::Entity;
-use crate::{AccountId, AssetId, Price, Quantity, Timestamp};
+
 use crate::exchange::spot::spot_types::SpotOrder;
+use crate::{AccountId, AssetId, Price, Quantity, Timestamp};
 
 /// 余额ID（复合键：account_id:asset_id）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BalanceId {
     pub account_id: AccountId,
-    pub asset_id: AssetId
+    pub asset_id: AssetId,
 }
 
 impl BalanceId {
     pub fn new(account_id: AccountId, asset_id: AssetId) -> Self {
-        Self {
-            account_id,
-            asset_id
-        }
+        Self { account_id, asset_id }
     }
 }
 
 impl fmt::Display for BalanceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}:{}", self.account_id.0, u32::from(self.asset_id)) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.account_id.0, u32::from(self.asset_id))
+    }
 }
 
 impl Default for BalanceId {
     fn default() -> Self {
-        Self {
-            account_id: AccountId(0),
-            asset_id: AssetId::default()
-        }
+        Self { account_id: AccountId(0), asset_id: AssetId::default() }
     }
 }
 
@@ -61,10 +58,8 @@ pub struct Balance {
     /// 乐观锁版本号（每次修改 +1）
     pub version: u64,
     /// 最后更新时间
-    pub updated_at: Timestamp
+    pub updated_at: Timestamp,
 }
-
-
 
 impl Balance {
     /// 创建新余额记录
@@ -76,12 +71,17 @@ impl Balance {
             available: Quantity::default(),
             frozen: Quantity::default(),
             version: 0,
-            updated_at: now
+            updated_at: now,
         }
     }
 
     /// 创建带初始余额的记录
-    pub fn with_available(account_id: AccountId, asset_id: AssetId, available: i64, now: Timestamp) -> Self {
+    pub fn with_available(
+        account_id: AccountId,
+        asset_id: AssetId,
+        available: i64,
+        now: Timestamp,
+    ) -> Self {
         Self {
             id: BalanceId::new(account_id, asset_id),
             account_id,
@@ -89,15 +89,15 @@ impl Balance {
             available: Quantity::from_raw(available),
             frozen: Quantity::default(),
             version: 0,
-            updated_at: now
+            updated_at: now,
         }
     }
 
-
-
     /// 检查是否有足够的冻结余额
     #[inline]
-    pub fn has_frozen(&self, amount: Quantity) -> bool { self.frozen >= amount }
+    pub fn has_frozen(&self, amount: Quantity) -> bool {
+        self.frozen >= amount
+    }
 
     #[inline]
     pub fn add_balance(&mut self, amount: Quantity, now: Timestamp) {
@@ -120,7 +120,6 @@ impl Balance {
         self.version += 1;
         self.updated_at = now;
     }
-
 
     #[inline]
     pub fn un_frozen(&mut self, amount: Quantity, now: Timestamp) {
@@ -151,5 +150,5 @@ pub enum BalanceOp {
     /// 扣减冻结余额
     DebitFrozen(Price),
     /// 结算盈亏（可正可负）
-    SettlePnl(Price)
+    SettlePnl(Price),
 }

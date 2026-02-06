@@ -41,7 +41,7 @@ pub enum KlineInterval {
     /// 1周
     W1,
     /// 1月
-    MO1
+    MO1,
 }
 
 /// 合约类型
@@ -53,7 +53,7 @@ pub enum ContractType {
     /// 当季合约
     CURRENT_QUARTER,
     /// 次季合约
-    NEXT_QUARTER
+    NEXT_QUARTER,
 }
 
 /// 持续合约类型
@@ -65,7 +65,7 @@ pub enum ContinuousContractType {
     /// 当季
     CURRENT_QUARTER,
     /// 次季
-    NEXT_QUARTER
+    NEXT_QUARTER,
 }
 
 /// 统计周期类型
@@ -89,7 +89,7 @@ pub enum PeriodType {
     /// 12小时
     H12,
     /// 1天
-    D1
+    D1,
 }
 
 // ============================================================================
@@ -225,7 +225,7 @@ pub enum UsdsMFutureMarketDataCmdAny {
 
     /// 交割价格 GET /fapi/v1/deliveryPrice
     /// Weight: 1
-    DeliveryPrice(DeliveryPriceCmd)
+    DeliveryPrice(DeliveryPriceCmd),
 }
 
 // ============================================================================
@@ -238,7 +238,7 @@ pub enum UsdsMFutureMarketDataCmdAny {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TestConnectivityCmd {
-    pub metadata: CMetadata
+    pub metadata: CMetadata,
 }
 
 /// 检查服务器时间命令
@@ -247,7 +247,7 @@ pub struct TestConnectivityCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CheckServerTimeCmd {
-    pub metadata: CMetadata
+    pub metadata: CMetadata,
 }
 
 /// 交易所信息命令
@@ -256,7 +256,7 @@ pub struct CheckServerTimeCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExchangeInformationCmd {
-    pub metadata: CMetadata
+    pub metadata: CMetadata,
 }
 
 // ============================================================================
@@ -273,7 +273,7 @@ pub struct OrderBookCmd {
     /// 交易对
     pub symbol: String,
     /// 深度限制 [5, 10, 20, 50, 100, 500, 1000] (默认500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 最近成交命令
@@ -286,7 +286,7 @@ pub struct RecentTradesListCmd {
     /// 交易对
     pub symbol: String,
     /// 限制数量 (默认500, 最大1000)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 历史成交命令
@@ -301,7 +301,7 @@ pub struct OldTradesLookupCmd {
     /// 限制数量 (默认500, 最大1000)
     pub limit: Option<i32>,
     /// 从哪个tradeId开始返回
-    pub from_id: Option<i64>
+    pub from_id: Option<i64>,
 }
 
 /// 归集成交命令
@@ -320,7 +320,7 @@ pub struct CompressedAggregateTradesListCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1000)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 // ============================================================================
@@ -343,7 +343,7 @@ pub struct KlineCandlestickDataCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 持续合约K线命令
@@ -364,7 +364,7 @@ pub struct ContinuousContractKlineCandlestickDataCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 指数价格K线命令
@@ -383,7 +383,7 @@ pub struct IndexPriceKlineCandlestickDataCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 标记价格K线命令
@@ -402,7 +402,7 @@ pub struct MarkPriceKlineCandlestickDataCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 溢价指数K线命令
@@ -421,7 +421,7 @@ pub struct PremiumIndexKlineDataCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1500)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 // ============================================================================
@@ -436,7 +436,7 @@ pub struct PremiumIndexKlineDataCmd {
 pub struct MarkPriceCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 资金费率历史命令
@@ -453,7 +453,7 @@ pub struct GetFundingRateHistoryCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认100, 最大1000)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 资金费率信息命令
@@ -462,7 +462,7 @@ pub struct GetFundingRateHistoryCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GetFundingRateInfoCmd {
-    pub metadata: CMetadata
+    pub metadata: CMetadata,
 }
 
 // ============================================================================
@@ -477,7 +477,7 @@ pub struct GetFundingRateInfoCmd {
 pub struct Ticker24hrCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 最新价格命令
@@ -488,7 +488,7 @@ pub struct Ticker24hrCmd {
 pub struct SymbolPriceTickerCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 最新价格V2命令
@@ -499,7 +499,7 @@ pub struct SymbolPriceTickerCmd {
 pub struct SymbolPriceTickerV2Cmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 最优挂单命令
@@ -510,7 +510,7 @@ pub struct SymbolPriceTickerV2Cmd {
 pub struct SymbolOrderBookTickerCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 // ============================================================================
@@ -525,7 +525,7 @@ pub struct SymbolOrderBookTickerCmd {
 pub struct OpenInterestCmd {
     pub metadata: CMetadata,
     /// 交易对
-    pub symbol: String
+    pub symbol: String,
 }
 
 /// 持仓量统计命令
@@ -544,7 +544,7 @@ pub struct OpenInterestStatisticsCmd {
     /// 起始时间
     pub start_time: Option<i64>,
     /// 结束时间
-    pub end_time: Option<i64>
+    pub end_time: Option<i64>,
 }
 
 // ============================================================================
@@ -567,7 +567,7 @@ pub struct TopLongShortAccountRatioCmd {
     /// 起始时间
     pub start_time: Option<i64>,
     /// 结束时间
-    pub end_time: Option<i64>
+    pub end_time: Option<i64>,
 }
 
 /// 大户持仓量多空比命令
@@ -586,7 +586,7 @@ pub struct TopTraderLongShortRatioCmd {
     /// 起始时间
     pub start_time: Option<i64>,
     /// 结束时间
-    pub end_time: Option<i64>
+    pub end_time: Option<i64>,
 }
 
 /// 多空持仓人数比命令
@@ -605,7 +605,7 @@ pub struct LongShortRatioCmd {
     /// 起始时间
     pub start_time: Option<i64>,
     /// 结束时间
-    pub end_time: Option<i64>
+    pub end_time: Option<i64>,
 }
 
 // ============================================================================
@@ -628,7 +628,7 @@ pub struct TakerBuySellVolumeCmd {
     /// 起始时间
     pub start_time: Option<i64>,
     /// 结束时间
-    pub end_time: Option<i64>
+    pub end_time: Option<i64>,
 }
 
 // ============================================================================
@@ -650,7 +650,7 @@ pub struct HistoricalBLVTNAVKlineCandlestickCmd {
     /// 结束时间
     pub end_time: Option<i64>,
     /// 限制数量 (默认500, 最大1000)
-    pub limit: Option<i32>
+    pub limit: Option<i32>,
 }
 
 /// 复合指数信息命令
@@ -661,7 +661,7 @@ pub struct HistoricalBLVTNAVKlineCandlestickCmd {
 pub struct CompositeIndexSymbolInformationCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 指数成分命令
@@ -671,7 +671,7 @@ pub struct CompositeIndexSymbolInformationCmd {
 pub struct IndexConstituentsCmd {
     pub metadata: CMetadata,
     /// 交易对
-    pub symbol: String
+    pub symbol: String,
 }
 
 /// 多资产模式资产指数命令
@@ -682,7 +682,7 @@ pub struct IndexConstituentsCmd {
 pub struct MultiAssetsModeAssetIndexCmd {
     pub metadata: CMetadata,
     /// 资产 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 /// 交割价格命令
@@ -693,7 +693,7 @@ pub struct MultiAssetsModeAssetIndexCmd {
 pub struct DeliveryPriceCmd {
     pub metadata: CMetadata,
     /// 交易对 (不填返回所有)
-    pub symbol: Option<String>
+    pub symbol: Option<String>,
 }
 
 // ============================================================================
@@ -745,14 +745,14 @@ pub enum UsdsMFutureMarketDataRes {
     /// 资产指数响应
     AssetIndex(Vec<AssetIndexResponse>),
     /// 交割价格响应
-    DeliveryPrice(Vec<DeliveryPriceResponse>)
+    DeliveryPrice(Vec<DeliveryPriceResponse>),
 }
 
 /// 服务器时间响应
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ServerTimeResponse {
-    pub server_time: i64
+    pub server_time: i64,
 }
 
 /// 交易所信息响应
@@ -764,7 +764,7 @@ pub struct ExchangeInfoResponse {
     pub rate_limits: Vec<RateLimit>,
     pub exchange_filters: Vec<ExchangeFilter>,
     pub assets: Vec<AssetInfo>,
-    pub symbols: Vec<SymbolInfo>
+    pub symbols: Vec<SymbolInfo>,
 }
 
 /// 限流规则
@@ -774,14 +774,14 @@ pub struct RateLimit {
     pub rate_limit_type: String,
     pub interval: String,
     pub interval_num: i32,
-    pub limit: i32
+    pub limit: i32,
 }
 
 /// 交易所过滤器
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExchangeFilter {
-    pub filter_type: String
+    pub filter_type: String,
 }
 
 /// 资产信息
@@ -790,7 +790,7 @@ pub struct ExchangeFilter {
 pub struct AssetInfo {
     pub asset: String,
     pub margin_available: bool,
-    pub auto_asset_exchange: Option<String>
+    pub auto_asset_exchange: Option<String>,
 }
 
 /// 交易对信息
@@ -820,15 +820,14 @@ pub struct SymbolInfo {
     pub market_take_bound: String,
     pub filters: Vec<SymbolFilter>,
     pub order_types: Vec<String>,
-    pub time_in_force: Vec<String>
+    pub time_in_force: Vec<String>,
 }
 
 /// 交易对过滤器
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolFilter {
-    pub filter_type: String
-    // 其他字段根据filter_type动态解析
+    pub filter_type: String, // 其他字段根据filter_type动态解析
 }
 
 /// 订单簿响应
@@ -839,7 +838,7 @@ pub struct OrderBookResponse {
     pub message_output_time: i64,
     pub transaction_time: i64,
     pub bids: Vec<PriceLevel>,
-    pub asks: Vec<PriceLevel>
+    pub asks: Vec<PriceLevel>,
 }
 
 /// 价格档位
@@ -847,7 +846,7 @@ pub struct OrderBookResponse {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PriceLevel {
     pub price: String,
-    pub quantity: String
+    pub quantity: String,
 }
 
 /// 成交响应
@@ -859,7 +858,7 @@ pub struct TradeResponse {
     pub qty: String,
     pub quote_qty: String,
     pub time: i64,
-    pub is_buyer_maker: bool
+    pub is_buyer_maker: bool,
 }
 
 /// 归集成交响应
@@ -872,7 +871,7 @@ pub struct AggTradeResponse {
     pub first_trade_id: i64,
     pub last_trade_id: i64,
     pub timestamp: i64,
-    pub is_buyer_maker: bool
+    pub is_buyer_maker: bool,
 }
 
 /// K线响应
@@ -890,7 +889,7 @@ pub struct KlineResponse {
     pub number_of_trades: i64,
     pub taker_buy_base_asset_volume: String,
     pub taker_buy_quote_asset_volume: String,
-    pub ignore: String
+    pub ignore: String,
 }
 
 /// 标记价格响应数据
@@ -898,7 +897,7 @@ pub struct KlineResponse {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MarkPriceResponseData {
     Single(MarkPriceResponse),
-    Multiple(Vec<MarkPriceResponse>)
+    Multiple(Vec<MarkPriceResponse>),
 }
 
 /// 标记价格响应
@@ -912,7 +911,7 @@ pub struct MarkPriceResponse {
     pub last_funding_rate: String,
     pub interest_rate: String,
     pub next_funding_time: i64,
-    pub time: i64
+    pub time: i64,
 }
 
 /// 资金费率响应
@@ -922,7 +921,7 @@ pub struct FundingRateResponse {
     pub symbol: String,
     pub funding_time: i64,
     pub funding_rate: String,
-    pub mark_price: String
+    pub mark_price: String,
 }
 
 /// 资金费率信息响应
@@ -932,7 +931,7 @@ pub struct FundingRateInfoResponse {
     pub symbol: String,
     pub adjusted_funding_rate_cap: String,
     pub adjusted_funding_rate_floor: String,
-    pub funding_interval_hours: i32
+    pub funding_interval_hours: i32,
 }
 
 /// 24小时行情响应数据
@@ -940,7 +939,7 @@ pub struct FundingRateInfoResponse {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Ticker24hrResponseData {
     Single(Ticker24hrResponse),
-    Multiple(Vec<Ticker24hrResponse>)
+    Multiple(Vec<Ticker24hrResponse>),
 }
 
 /// 24小时行情响应
@@ -962,7 +961,7 @@ pub struct Ticker24hrResponse {
     pub close_time: i64,
     pub first_id: i64,
     pub last_id: i64,
-    pub count: i64
+    pub count: i64,
 }
 
 /// 价格响应数据
@@ -970,7 +969,7 @@ pub struct Ticker24hrResponse {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PriceResponseData {
     Single(PriceResponse),
-    Multiple(Vec<PriceResponse>)
+    Multiple(Vec<PriceResponse>),
 }
 
 /// 价格响应
@@ -979,7 +978,7 @@ pub enum PriceResponseData {
 pub struct PriceResponse {
     pub symbol: String,
     pub price: String,
-    pub time: Option<i64>
+    pub time: Option<i64>,
 }
 
 /// 最优挂单响应数据
@@ -987,7 +986,7 @@ pub struct PriceResponse {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BookTickerResponseData {
     Single(BookTickerResponse),
-    Multiple(Vec<BookTickerResponse>)
+    Multiple(Vec<BookTickerResponse>),
 }
 
 /// 最优挂单响应
@@ -999,7 +998,7 @@ pub struct BookTickerResponse {
     pub bid_qty: String,
     pub ask_price: String,
     pub ask_qty: String,
-    pub time: i64
+    pub time: i64,
 }
 
 /// 持仓量响应
@@ -1008,7 +1007,7 @@ pub struct BookTickerResponse {
 pub struct OpenInterestResponse {
     pub open_interest: String,
     pub symbol: String,
-    pub time: i64
+    pub time: i64,
 }
 
 /// 持仓量统计响应
@@ -1018,7 +1017,7 @@ pub struct OpenInterestStatisticsResponse {
     pub symbol: String,
     pub sum_open_interest: String,
     pub sum_open_interest_value: String,
-    pub timestamp: i64
+    pub timestamp: i64,
 }
 
 /// 多空比响应
@@ -1029,7 +1028,7 @@ pub struct LongShortRatioResponse {
     pub long_short_ratio: String,
     pub long_account: String,
     pub short_account: String,
-    pub timestamp: i64
+    pub timestamp: i64,
 }
 
 /// 主动买卖量响应
@@ -1039,7 +1038,7 @@ pub struct TakerBuySellVolumeResponse {
     pub buy_sell_ratio: String,
     pub buy_vol: String,
     pub sell_vol: String,
-    pub timestamp: i64
+    pub timestamp: i64,
 }
 
 /// 复合指数响应
@@ -1049,7 +1048,7 @@ pub struct CompositeIndexResponse {
     pub symbol: String,
     pub time: i64,
     pub component: String,
-    pub base_asset_list: Vec<BaseAssetInfo>
+    pub base_asset_list: Vec<BaseAssetInfo>,
 }
 
 /// 基础资产信息
@@ -1059,7 +1058,7 @@ pub struct BaseAssetInfo {
     pub base_asset: String,
     pub quote_asset: String,
     pub weight_in_quantity: String,
-    pub weight_in_percentage: String
+    pub weight_in_percentage: String,
 }
 
 /// 资产指数响应
@@ -1076,7 +1075,7 @@ pub struct AssetIndexResponse {
     pub auto_exchange_bid_buffer: String,
     pub auto_exchange_ask_buffer: String,
     pub auto_exchange_bid_rate: String,
-    pub auto_exchange_ask_rate: String
+    pub auto_exchange_ask_rate: String,
 }
 
 /// 交割价格响应
@@ -1085,7 +1084,7 @@ pub struct AssetIndexResponse {
 pub struct DeliveryPriceResponse {
     pub symbol: String,
     pub delivery_price: String,
-    pub delivery_time: i64
+    pub delivery_time: i64,
 }
 
 // ============================================================================
@@ -1105,7 +1104,7 @@ pub enum UsdsMFutureMarketDataCmdError {
     /// 限流错误
     RateLimitExceeded(String),
     /// 未知错误
-    Unknown(String)
+    Unknown(String),
 }
 
 // ============================================================================
@@ -1116,6 +1115,7 @@ pub enum UsdsMFutureMarketDataCmdError {
 pub trait UsdsMFutureMarketDataBehavior: Send + Sync {
     /// 处理市场数据命令
     fn handle(
-        &mut self, cmd: UsdsMFutureMarketDataCmdAny
+        &mut self,
+        cmd: UsdsMFutureMarketDataCmdAny,
     ) -> Result<CmdResp<UsdsMFutureMarketDataRes>, UsdsMFutureMarketDataCmdError>;
 }

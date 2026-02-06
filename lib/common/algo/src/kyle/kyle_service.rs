@@ -43,7 +43,7 @@ pub struct KyleParameters {
     /// 总交易轮数（T）
     pub total_rounds: u32,
     /// 风险厌恶系数（扩展模型使用）
-    pub risk_aversion: f64
+    pub risk_aversion: f64,
 }
 
 impl KyleParameters {
@@ -58,7 +58,12 @@ impl KyleParameters {
     /// # Panics
     /// 当波动率参数为非正数时 panic
     #[inline]
-    pub fn new(value_volatility: f64, noise_volatility: f64, initial_price: f64, total_rounds: u32) -> Self {
+    pub fn new(
+        value_volatility: f64,
+        noise_volatility: f64,
+        initial_price: f64,
+        total_rounds: u32,
+    ) -> Self {
         assert!(value_volatility > 0.0, "Value volatility must be positive");
         assert!(noise_volatility > 0.0, "Noise volatility must be positive");
         assert!(total_rounds > 0, "Total rounds must be positive");
@@ -68,7 +73,7 @@ impl KyleParameters {
             noise_volatility,
             initial_price,
             total_rounds,
-            risk_aversion: 0.0 // 默认风险中性
+            risk_aversion: 0.0, // 默认风险中性
         }
     }
 
@@ -85,7 +90,9 @@ impl KyleParameters {
     ///
     /// 经济含义：衡量订单流对价格的影响程度
     #[inline]
-    pub fn price_impact(&self) -> f64 { self.value_volatility / (2.0 * self.noise_volatility) }
+    pub fn price_impact(&self) -> f64 {
+        self.value_volatility / (2.0 * self.noise_volatility)
+    }
 
     /// 计算知情交易者的交易强度 β
     ///
@@ -106,13 +113,17 @@ impl KyleParameters {
     ///
     /// 公式: E[π] = (1/2) * σ_v * σ_u
     #[inline]
-    pub fn expected_profit(&self) -> f64 { 0.5 * self.value_volatility * self.noise_volatility }
+    pub fn expected_profit(&self) -> f64 {
+        0.5 * self.value_volatility * self.noise_volatility
+    }
 
     /// 计算市场深度（Market Depth）
     ///
     /// 定义为价格影响的倒数: 1/λ
     #[inline]
-    pub fn market_depth(&self) -> f64 { 1.0 / self.price_impact() }
+    pub fn market_depth(&self) -> f64 {
+        1.0 / self.price_impact()
+    }
 }
 
 /// Kyle 模型状态（可变市场状态）
@@ -133,7 +144,7 @@ pub struct KyleState {
     /// 历史价格路径
     pub price_history: Vec<f64>,
     /// 历史订单流
-    pub order_flow_history: Vec<f64>
+    pub order_flow_history: Vec<f64>,
 }
 
 impl Default for KyleState {
@@ -145,7 +156,7 @@ impl Default for KyleState {
             informed_position: 0.0,
             market_maker_pnl: 0.0,
             price_history: Vec::new(),
-            order_flow_history: Vec::new()
+            order_flow_history: Vec::new(),
         }
     }
 }
@@ -177,11 +188,7 @@ impl KyleState {
     /// 获取价格变化量
     #[inline]
     pub fn price_change(&self) -> f64 {
-        if self.price_history.is_empty() {
-            0.0
-        } else {
-            self.current_price - self.price_history[0]
-        }
+        if self.price_history.is_empty() { 0.0 } else { self.current_price - self.price_history[0] }
     }
 
     /// 计算价格波动率（历史标准差）
@@ -192,8 +199,8 @@ impl KyleState {
         }
 
         let mean = self.price_history.iter().sum::<f64>() / self.price_history.len() as f64;
-        let variance =
-            self.price_history.iter().map(|&p| (p - mean).powi(2)).sum::<f64>() / self.price_history.len() as f64;
+        let variance = self.price_history.iter().map(|&p| (p - mean).powi(2)).sum::<f64>()
+            / self.price_history.len() as f64;
 
         variance.sqrt()
     }
@@ -213,7 +220,7 @@ pub struct KyleTradeResult {
     /// 价格影响（ΔP = λ * Q）
     pub price_impact: f64,
     /// 知情交易者本轮利润
-    pub informed_profit: f64
+    pub informed_profit: f64,
 }
 
 impl fmt::Display for KyleTradeResult {
@@ -242,7 +249,7 @@ pub struct KyleModelService {
     /// 价格影响系数（缓存计算结果）
     lambda: f64,
     /// 交易强度（缓存计算结果）
-    beta: f64
+    beta: f64,
 }
 
 impl KyleModelService {
@@ -253,33 +260,38 @@ impl KyleModelService {
         let beta = params.trading_intensity();
         let state = KyleState::new(params.initial_price);
 
-        Self {
-            params,
-            state,
-            lambda,
-            beta
-        }
+        Self { params, state, lambda, beta }
     }
 
     /// 获取模型参数的不可变引用
     #[inline]
-    pub fn parameters(&self) -> &KyleParameters { &self.params }
+    pub fn parameters(&self) -> &KyleParameters {
+        &self.params
+    }
 
     /// 获取当前状态的不可变引用
     #[inline]
-    pub fn state(&self) -> &KyleState { &self.state }
+    pub fn state(&self) -> &KyleState {
+        &self.state
+    }
 
     /// 获取价格影响系数
     #[inline]
-    pub fn lambda(&self) -> f64 { self.lambda }
+    pub fn lambda(&self) -> f64 {
+        self.lambda
+    }
 
     /// 获取交易强度
     #[inline]
-    pub fn beta(&self) -> f64 { self.beta }
+    pub fn beta(&self) -> f64 {
+        self.beta
+    }
 
     /// 重置模型到初始状态
     #[inline]
-    pub fn reset(&mut self) { self.state.reset(self.params.initial_price); }
+    pub fn reset(&mut self) {
+        self.state.reset(self.params.initial_price);
+    }
 
     /// 计算知情交易者的最优订单
     ///
@@ -356,7 +368,7 @@ impl KyleModelService {
             total_order_flow,
             execution_price: new_price,
             price_impact,
-            informed_profit
+            informed_profit,
         }
     }
 
@@ -401,8 +413,9 @@ impl KyleModelService {
 
         // 信息不对称 = 订单流的标准差 / 噪音标准差
         let mean_flow = self.state.cumulative_order_flow / self.state.current_round as f64;
-        let variance = self.state.order_flow_history.iter().map(|&q| (q - mean_flow).powi(2)).sum::<f64>()
-            / self.state.order_flow_history.len() as f64;
+        let variance =
+            self.state.order_flow_history.iter().map(|&q| (q - mean_flow).powi(2)).sum::<f64>()
+                / self.state.order_flow_history.len() as f64;
 
         variance.sqrt() / self.params.noise_volatility
     }
@@ -582,7 +595,9 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Value volatility must be positive")]
-    fn test_invalid_parameters() { KyleParameters::new(0.0, 5.0, 100.0, 1); }
+    fn test_invalid_parameters() {
+        KyleParameters::new(0.0, 5.0, 100.0, 1);
+    }
 
     #[test]
     fn test_market_efficiency() {

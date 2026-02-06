@@ -91,7 +91,7 @@ fn main() {
         20.0,  // σ_v: 价值不确定性
         10.0,  // σ_u: 噪音交易波动
         100.0, // 初始价格
-        5      // 5轮交易
+        5,     // 5轮交易
     );
 
     let mut service = KyleModelService::new(params);
