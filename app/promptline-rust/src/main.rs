@@ -3,6 +3,7 @@ mod cli;
 use cli::{Cli, Commands};
 use promptline::prelude::*;
 use promptline::{model::openai::OpenAIProvider, tools::*};
+use promptline::agent::domain::agent::Agent;
 use promptline::agent::domain::agent_int::AgentInt;
 
 #[tokio::main]

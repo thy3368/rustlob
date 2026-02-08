@@ -2,6 +2,7 @@
 //! This module provides Actor capabilities for the domain Agent
 
 use actix::{Actor, Context, Handler, Message, Running};
+use actix::fut::wrap_future;
 use serde::{Deserialize, Serialize};
 use crate::agent::domain::agent::{Agent, AgentResult};
 use crate::error;
@@ -59,10 +60,10 @@ impl Handler<RunTaskCmd> for Agent {
 
         let task = msg.0;
 
-        // Call the async run method and return its future
+        // Call the async run method and wrap the future
         let future = self.execute_task(task);
 
-        Box::pin(future)
+        Box::pin(wrap_future(future))
     }
 }
 

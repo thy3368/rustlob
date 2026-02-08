@@ -521,7 +521,7 @@ mod tests {
         let mut agent =
             Agent::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
 
-        let result = agent.execute_task("List the files and size in m").await.unwrap();
+        let result = agent.execute_task("List the files and size in m".to_string()).await.unwrap();
 
         assert!(result.success);
         assert_eq!(result.iterations, 2);
