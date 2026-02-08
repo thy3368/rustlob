@@ -1,6 +1,6 @@
 //! Google Gemini API provider implementation
 
-use super::{LanguageModel, Message, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
+use super::{LanguageModel, MMessage, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
 use crate::error::{ModelError, Result};
 use async_trait::async_trait;
 use serde_json::json;
@@ -30,7 +30,7 @@ impl GeminiProvider {
         self
     }
 
-    fn convert_messages(&self, messages: &[Message]) -> Vec<serde_json::Value> {
+    fn convert_messages(&self, messages: &[MMessage]) -> Vec<serde_json::Value> {
         let mut parts = Vec::new();
         
         for msg in messages {
@@ -58,15 +58,15 @@ impl LanguageModel for GeminiProvider {
         let mut messages = Vec::new();
         
         if let Some(sys) = system_prompt {
-            messages.push(Message::system(sys));
+            messages.push(MMessage::system(sys));
         }
         
-        messages.push(Message::user(prompt));
+        messages.push(MMessage::user(prompt));
         
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[Message]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1/models/{}:generateContent?key={}",
             self.model, self.api_key
@@ -130,7 +130,7 @@ impl LanguageModel for GeminiProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[Message],
+        messages: &[MMessage],
         _tools: &[ToolDefinition],
     ) -> Result<ModelResponse> {
         // For MVP, use regular chat
@@ -175,9 +175,9 @@ mod tests {
         let provider = GeminiProvider::new("test-key".to_string(), None);
 
         let messages = vec![
-            Message::system("You are helpful"),
-            Message::user("Hello"),
-            Message::assistant("Hi there"),
+            MMessage::system("You are helpful"),
+            MMessage::user("Hello"),
+            MMessage::assistant("Hi there"),
         ];
 
         let converted = provider.convert_messages(&messages);

@@ -1,7 +1,7 @@
 //! Context management for PromptLine
 
 use crate::error::Result;
-use crate::model::Message;
+use crate::model::MMessage;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -30,18 +30,18 @@ impl ContextManager {
         self.context_dir.join(HISTORY_FILE_NAME)
     }
 
-    pub async fn load_history(&self) -> Result<Vec<Message>> {
+    pub async fn load_history(&self) -> Result<Vec<MMessage>> {
         let path = self.history_file_path();
         if path.exists() {
             let content = fs::read_to_string(&path).await?;
-            let history: Vec<Message> = serde_json::from_str(&content)?;
+            let history: Vec<MMessage> = serde_json::from_str(&content)?;
             Ok(history)
         } else {
             Ok(Vec::new())
         }
     }
 
-    pub async fn save_history(&self, history: &[Message]) -> Result<()> {
+    pub async fn save_history(&self, history: &[MMessage]) -> Result<()> {
         let path = self.history_file_path();
         let content = serde_json::to_string_pretty(history)?;
         fs::write(&path, content).await?;
@@ -97,8 +97,8 @@ mod tests {
         let manager = ContextManager { context_dir: temp_dir.path().to_path_buf() };
 
         let messages = vec![
-            Message::user("Hello"),
-            Message::assistant("Hi there"),
+            MMessage::user("Hello"),
+            MMessage::assistant("Hi there"),
         ];
 
         // Save history

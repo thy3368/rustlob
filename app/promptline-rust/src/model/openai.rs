@@ -1,6 +1,6 @@
 //! OpenAI API provider implementation
 
-use super::{LanguageModel, Message, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
+use super::{LanguageModel, MMessage, ModelInfo, ModelResponse, ToolDefinition, TokenUsage};
 use crate::error::{ModelError, Result};
 use async_trait::async_trait;
 
@@ -30,7 +30,7 @@ impl OpenAIProvider {
         self
     }
 
-    fn convert_message(&self, msg: &Message) -> async_openai::types::ChatCompletionRequestMessage {
+    fn convert_message(&self, msg: &MMessage) -> async_openai::types::ChatCompletionRequestMessage {
         use async_openai::types::*;
 
         match msg.role.as_str() {
@@ -75,15 +75,15 @@ impl LanguageModel for OpenAIProvider {
         let mut messages = Vec::new();
 
         if let Some(sys) = system_prompt {
-            messages.push(Message::system(sys));
+            messages.push(MMessage::system(sys));
         }
 
-        messages.push(Message::user(prompt));
+        messages.push(MMessage::user(prompt));
 
         self.chat(&messages).await
     }
 
-    async fn chat(&self, messages: &[Message]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse> {
         use async_openai::types::*;
 
         let openai_messages: Vec<_> = messages.iter().map(|m| self.convert_message(m)).collect();
@@ -135,7 +135,7 @@ impl LanguageModel for OpenAIProvider {
 
     async fn chat_with_tools(
         &self,
-        messages: &[Message],
+        messages: &[MMessage],
         _tools: &[ToolDefinition],
     ) -> Result<ModelResponse> {
         // For MVP, we'll use regular chat
@@ -180,7 +180,7 @@ mod tests {
     fn test_message_conversion() {
         let provider = OpenAIProvider::new("test-key".to_string(), None);
 
-        let msg = Message::user("Hello");
+        let msg = MMessage::user("Hello");
         let _converted = provider.convert_message(&msg);
 
         // Just testing that conversion doesn't panic

@@ -3,7 +3,7 @@ mod cli;
 use cli::{Cli, Commands};
 use promptline::prelude::*;
 use promptline::{model::openai::OpenAIProvider, tools::*};
-use promptline::agent::agent_int::AgentInt;
+use promptline::agent::domain::agent_int::AgentInt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -429,7 +429,7 @@ async fn handle_chat(mut config: Config) -> anyhow::Result<()> {
                             }
 
                             // Add the response to history so the model remembers it
-                            agent.conversation_history.push(promptline::model::Message::assistant(response_content.clone()));
+                            agent.conversation_history.push(promptline::model::MMessage::assistant(response_content.clone()));
                         }
                         Err(e) => {
                             eprintln!("\n\x1b[1;31mError:\x1b[0m {}\n", e);

@@ -14,7 +14,7 @@ pub struct PromptTemplate {
     pub description: String,
     pub template: String,
     pub variables: HashMap<String, String>,
-    pub few_shot_examples: Option<Vec<crate::model::Message>>,
+    pub few_shot_examples: Option<Vec<crate::model::MMessage>>,
 }
 
 pub struct TemplateManager {

@@ -18,7 +18,6 @@ pub mod tools;
 pub mod util;
 
 // Re-export commonly used types
-pub use agent::Agent;
 pub use config::Config;
 pub use error::{PromptLineError, Result};
 pub use model::{LanguageModel, ModelResponse};
@@ -29,7 +28,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Prelude for convenient imports
 pub mod prelude {
-    pub use crate::agent::Agent;
     pub use crate::config::Config;
     pub use crate::error::{PromptLineError, Result};
     pub use crate::model::{LanguageModel, ModelResponse};

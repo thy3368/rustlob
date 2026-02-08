@@ -10,12 +10,12 @@ pub mod ollama;
 
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct MMessage {
     pub role: String,
     pub content: String,
 }
 
-impl Message {
+impl MMessage {
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: "system".to_string(),
@@ -83,12 +83,12 @@ pub trait LanguageModel: Send + Sync {
     ) -> Result<ModelResponse>;
 
     /// Generate a chat completion
-    async fn chat(&self, messages: &[Message]) -> Result<ModelResponse>;
+    async fn chat(&self, messages: &[MMessage]) -> Result<ModelResponse>;
 
     /// Generate a chat completion with tool support
     async fn chat_with_tools(
         &self,
-        messages: &[Message],
+        messages: &[MMessage],
         tools: &[ToolDefinition],
     ) -> Result<ModelResponse>;
 
@@ -128,11 +128,11 @@ mod tests {
 
     #[test]
     fn test_message_creation() {
-        let msg = Message::user("Hello");
+        let msg = MMessage::user("Hello");
         assert_eq!(msg.role, "user");
         assert_eq!(msg.content, "Hello");
 
-        let sys = Message::system("System prompt");
+        let sys = MMessage::system("System prompt");
         assert_eq!(sys.role, "system");
     }
 
@@ -146,13 +146,13 @@ mod tests {
                 unimplemented!()
             }
 
-            async fn chat(&self, _: &[Message]) -> Result<ModelResponse> {
+            async fn chat(&self, _: &[MMessage]) -> Result<ModelResponse> {
                 unimplemented!()
             }
 
             async fn chat_with_tools(
                 &self,
-                _: &[Message],
+                _: &[MMessage],
                 _: &[ToolDefinition],
             ) -> Result<ModelResponse> {
                 unimplemented!()

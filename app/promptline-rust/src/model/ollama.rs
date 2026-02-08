@@ -37,7 +37,7 @@ struct OllamaMessage {
 
 #[async_trait]
 impl LanguageModel for OllamaProvider {
-    async fn chat(&self, messages: &[crate::model::Message]) -> Result<ModelResponse> {
+    async fn chat(&self, messages: &[crate::model::MMessage]) -> Result<ModelResponse> {
         let url = format!("{}/api/chat", self.base_url);
         
         // Debug logging
@@ -92,15 +92,15 @@ impl LanguageModel for OllamaProvider {
     async fn complete(&self, prompt: &str, system_prompt: Option<&str>) -> Result<ModelResponse> {
         let mut messages = Vec::new();
         if let Some(sys) = system_prompt {
-            messages.push(crate::model::Message::system(sys));
+            messages.push(crate::model::MMessage::system(sys));
         }
-        messages.push(crate::model::Message::user(prompt));
+        messages.push(crate::model::MMessage::user(prompt));
         self.chat(&messages).await
     }
 
     async fn chat_with_tools(
         &self,
-        messages: &[crate::model::Message],
+        messages: &[crate::model::MMessage],
         _tools: &[crate::model::ToolDefinition],
     ) -> Result<ModelResponse> {
         // For now, just ignore tools and chat normally
