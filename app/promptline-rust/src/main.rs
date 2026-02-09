@@ -4,7 +4,6 @@ use cli::{Cli, Commands};
 use promptline::prelude::*;
 use promptline::{model::openai::OpenAIProvider, tools::*};
 use promptline::agent::domain::agent::Agent;
-use promptline::agent::domain::agent_int::AgentInt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -216,7 +215,7 @@ async fn handle_agent(task: &str, config: Config) -> anyhow::Result<()> {
 
     // Run agent
     println!("Task: {}\n", task);
-    let result = agent.run(task).await?;
+    let result = agent.execute_task(task.to_string()).await?;
 
     // Display result
     println!("\n{}", "=".repeat(60));
@@ -418,7 +417,7 @@ async fn handle_chat(mut config: Config) -> anyhow::Result<()> {
                     print!("\n\x1b[1;34mPromptLine:\x1b[0m ");
                     io::stdout().flush()?;
 
-                    match agent.run(input).await {
+                    match agent.execute_task(input.to_string()).await {
                         Ok(result) => {
                             // Use the result output directly
                             let response_content = &result.output;

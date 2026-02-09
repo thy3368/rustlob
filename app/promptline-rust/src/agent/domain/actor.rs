@@ -96,29 +96,29 @@ mod tests {
 
         let agent = Agent::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
 
-        // Test handle method through actor system
-        let prepared = Agent::prepare();
-        let actor_ref = prepared.actor_ref().clone();
+        // Spawn the actor using kameo's spawn method
+        let actor_ref = Agent::spawn(agent);
 
-        let ask_future = actor_ref.ask(RunTaskCmd("test task".to_string()));
-        let run_future = prepared.run(agent);
+        // Send message and await response
+        let result = actor_ref.ask(RunTaskCmd("test task".to_string())).await.unwrap();
 
-        let (result, _) = tokio::join!(ask_future, run_future);
-
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert!(response.success);
-        assert_eq!(response.iterations, 1);
+        assert!(result.success);
+        assert_eq!(result.iterations, 1);
     }
 
     #[tokio::test]
     async fn test_run_task_cmd_multiple_messages() {
         let model = Box::new(MockModel {
-            responses: vec!["FINISH".to_string(), "FINISH".to_string(), "FINISH".to_string()],
+            responses: vec![
+                "I will list the files. {\"tool\": \"file_list\", \"args\": {}}".to_string(),
+                "FINISH".to_string(),
+            ],
             call_count: Arc::new(Mutex::new(0)),
         });
 
-        let tools = ToolRegistry::new();
+        let mut tools = ToolRegistry::new();
+        tools.register(crate::tools::file_ops::FileListTool::new());
+
         let mut config = Config::default();
         config.safety.require_approval = false;
 
@@ -126,12 +126,14 @@ mod tests {
 
         let agent = Agent::new(model, tools, config, Vec::new(), permission_manager).await.unwrap();
 
-        // Test handle method through actor system with multiple messages
-        let prepared = Agent::prepare();
-        let actor_ref = prepared.actor_ref().clone();
+        // Spawn the actor using kameo's spawn method
+        let actor_ref = Agent::spawn(agent);
 
-        let msg1 = actor_ref.ask(RunTaskCmd("List the files and size in".to_string()));
+        // Send message and await response
+        let result = actor_ref.ask(RunTaskCmd("List the files and size in".to_string())).await.unwrap();
 
-        //todo 打印结果
+        println!("msg1 result: {:?}", result);
+
+        assert!(result.success);
     }
 }
