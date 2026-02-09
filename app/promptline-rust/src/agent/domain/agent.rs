@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use kameo::Actor;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -31,6 +32,7 @@ pub struct ParsedToolCall {
 }
 
 /// Core Agent domain entity - orchestrates LLM interactions and tool execution
+#[derive(Actor)]
 pub struct Agent {
     model: Box<dyn LanguageModel>,
     tools: ToolRegistry,

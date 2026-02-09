@@ -28,8 +28,11 @@ glob = "0.3.1"
 rand = "0.8"
 rustyline = { version = "13.0", features = ["derive"] }
 dotenv = "0.15"
-actix = "0.13.5"
-actix-rt = "2.11.0"
+#actix = "0.13.5"
+#actix-rt = "2.11.0"
+
+kameo = "0.19.2"
+
 # 交易相关依赖
 base_types = { path = "../../lib/common/base_types" }
 spot_behavior = { path = "../../proc/operating/exchange/spot" }
