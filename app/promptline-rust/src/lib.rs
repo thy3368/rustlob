@@ -17,6 +17,8 @@ pub mod safety;
 pub mod tools;
 pub mod util;
 
+pub mod inbound_adapter;
+
 // Re-export commonly used types
 pub use config::Config;
 pub use error::{PromptLineError, Result};

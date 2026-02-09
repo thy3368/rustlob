@@ -8,6 +8,9 @@ license = "MIT"
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
+teloxide = { version = "0.17", features = ["macros"] }
+twitter-api-v2 = { version = "0.12", features = ["oauth1a"] }
+
 clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -37,6 +40,8 @@ kameo = "0.19.2"
 base_types = { path = "../../lib/common/base_types" }
 spot_behavior = { path = "../../proc/operating/exchange/spot" }
 client = { path = "../client" }
+pretty_env_logger = "0.5.0"
+log = "0.4.29"
 
 [dev-dependencies]
 tokio-test = "0.4"
