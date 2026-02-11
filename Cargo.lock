@@ -4,6 +4,30 @@ version = 4
 
 [[package]]
 name = "actix"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "543c47e7827f8fcc9d1445bd98ba402137bfce80ee2187429de49c52b5131bd3"
+dependencies = [
+ "actix-rt",
+ "actix_derive",
+ "bitflags 1.3.2",
+ "bytes",
+ "crossbeam-channel",
+ "futures-core",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "log",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "pin-project-lite",
+ "smallvec",
+ "tokio",
+ "tokio-util 0.6.10",
+]
+
+[[package]]
+name = "actix"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de7fa236829ba0841304542f7614c42b80fca007455315c45c785ccfa873a85b"
@@ -440,7 +464,7 @@ dependencies = [
 name = "axum_server"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.13.5",
  "axum",
  "base_types",
  "chrono",
@@ -1783,6 +1807,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-box"
+version = "0.1.0-beta.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f0caf12e46bf454b73bb77f571df464118ef6579843140fa7edf54a783b67fb"
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2159,6 +2189,15 @@ checksum = "8588661a8607108a5ca69cab034063441a0413a0b041c13618a7dd348021ef6f"
 dependencies = [
  "hashbrown 0.14.5",
  "serde",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash 0.7.8",
 ]
 
 [[package]]
@@ -3206,6 +3245,15 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "lru"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ea2d928b485416e8908cff2d97d621db22b27f7b3b6729e438bcf42c671ba91"
+dependencies = [
+ "hashbrown 0.11.2",
+]
+
+[[package]]
+name = "lru"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718e8fae447df0c7e1ba7f5189829e63fd536945c8988d61444c19039f16b670"
@@ -3689,6 +3737,17 @@ name = "num-conv"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
+
+[[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "num-integer"
@@ -4394,12 +4453,14 @@ dependencies = [
  "async-openai",
  "async-trait",
  "base_types",
+ "chrono",
  "clap 4.5.53",
  "client",
  "colored 2.2.0",
  "dialoguer",
  "dirs",
  "dotenv",
+ "futures",
  "glob",
  "kameo",
  "log",
@@ -4421,6 +4482,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "wechaty",
  "wiremock",
 ]
 
@@ -4464,7 +4526,7 @@ dependencies = [
 name = "push"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.13.5",
  "actix-rt",
  "axum",
  "base_types",
@@ -5464,6 +5526,17 @@ dependencies = [
  "itoa",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -6751,6 +6824,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wallet_behavior"
+version = "0.1.0"
+dependencies = [
+ "base_types",
+ "immutable_derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "want"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6885,6 +6968,42 @@ dependencies = [
  "simd-json",
  "sockudo-ws",
  "tokio",
+]
+
+[[package]]
+name = "wechaty"
+version = "0.1.0-beta.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75cf1263a531d26d8f9f2b5881fa093e691055bcc1624a9e031baf8fc158a89"
+dependencies = [
+ "actix 0.11.1",
+ "actix-rt",
+ "async-trait",
+ "futures",
+ "log",
+ "tokio",
+ "tokio-stream",
+ "wechaty_puppet",
+]
+
+[[package]]
+name = "wechaty_puppet"
+version = "0.1.0-beta.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "561facdbf94bd095fd9701bc4d7ae0463dcccfc326de3bcde1c8b4148fefaeb9"
+dependencies = [
+ "actix 0.11.1",
+ "async-trait",
+ "file-box",
+ "futures",
+ "log",
+ "lru 0.6.6",
+ "num-derive",
+ "num-traits",
+ "regex",
+ "serde",
+ "serde_repr",
+ "tokio-stream",
 ]
 
 [[package]]

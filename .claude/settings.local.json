@@ -96,7 +96,17 @@
       "Bash(npm -g uninstall:*)",
       "Bash(npm -g install @anthropic-ai/claude-code)",
       "Bash(sudo npm -g uninstall @anthropic-ai/claude-code:*)",
-      "Bash(sudo npm:*)"
+      "Bash(sudo npm:*)",
+      "Bash(npm --version)",
+      "Bash(npm install -g @actionbookdev/actionbook)",
+      "Bash(npm search actionbook)",
+      "Bash(actionbook browser snapshot)",
+      "Bash(actionbook browser click \"[ref=e30]\")",
+      "Bash(actionbook browser click \"[ref=e31]\")",
+      "Bash(actionbook browser click \"[ref=e57]\")",
+      "Bash(actionbook browser click \"[ref=e58]\")",
+      "Bash(actionbook browser click \"[ref=e73]\")",
+      "Bash(actionbook browser close)"
     ],
     "deny": [],
     "ask": []

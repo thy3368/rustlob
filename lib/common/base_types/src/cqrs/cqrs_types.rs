@@ -24,6 +24,10 @@ pub struct CMetadata {
     /// 自定义属性
     #[cfg_attr(feature = "serde", serde(default))]
     attributes: Vec<(String, String)>,
+
+    #[cfg_attr(feature = "serde", serde(default))]
+     recv_window: Option<u64>,
+    
 }
 
 /// 带元数据的命令响应
