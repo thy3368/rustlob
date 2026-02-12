@@ -8,6 +8,8 @@ pub mod gemini;
 pub mod openai;
 pub mod ollama;
 
+pub mod kimi;
+
 /// Message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MMessage {
