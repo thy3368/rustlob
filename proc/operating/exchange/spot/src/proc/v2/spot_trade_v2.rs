@@ -7,14 +7,15 @@ use base_types::exchange::spot::spot_types::{
     ConditionalType, ExecutionMethod, MakerConstraint, OrderType, SpotOrder, SpotTrade, TimeInForce,
 };
 use base_types::handler::handler::Handler;
+use base_types::lob::lob::LobOrder;
 use base_types::spot_topic::SpotTopic;
 use base_types::{AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
-use diff::ChangeLogEntry;
+use diff::{ChangeLogEntry, Entity};
 use immutable_derive::immutable;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
-use rust_queue::queue::queue::Queue;
+use rust_queue::queue::queue::{Queue, ToBytes};
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
@@ -49,6 +50,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 )
             }
             OrderType::Market => {
@@ -63,6 +65,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC, // 市价单默认IOC
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None; // 市价单价格为None
@@ -80,6 +83,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.conditional_type = ConditionalType::StopLoss;
                 order.stop_price = *cmd.stop_price();
@@ -99,6 +103,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.conditional_type = ConditionalType::StopLoss;
                 order.stop_price = *cmd.stop_price();
@@ -116,6 +121,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.stop_price = *cmd.stop_price();
@@ -135,6 +141,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.stop_price = *cmd.stop_price();
@@ -152,6 +159,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::GTX, // GTX = PostOnly
                     cmd.new_client_order_id().clone(),
+                    cmd.quote_order_qty().clone(),
                 );
                 order.maker_constraint = MakerConstraint::PostOnly;
                 order
@@ -183,63 +191,126 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 }
 
 impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
-    /// 订单预处理 - 负责创建订单、冻结余额和生成事件
-    fn pre_process(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
+    /// 根据资产ID查找余额ID
+    fn queryBalanceId(&self, asset_id: AssetId) -> String {
+        // BalanceId format: "account_id:asset_id"
+        format!("{:?}:{}", AccountId(1), u32::from(asset_id))
+    }
 
+    /// 订单预处理 - 负责创建订单、冻结余额和生成事件
+    fn pre_process(&self, cmd: NewOrderCmd) -> (Balance, SpotOrder) {
+        // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
         // 根据 NewOrderCmd 创建 SpotOrder
         // todo cmd.clone() 太贵了
         let mut internal_order = SpotOrder::from(cmd);
 
-        match internal_order.side {
-            OrderSide::Buy => {}
-            OrderSide::Sell => {}
-        }
-        // 根据买卖方向冻结相应的余额
-        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
+        // 根据买卖方向冻结相应的资产余额：买则冻结计算资产，卖则冻结基础资产
+        let asset_id = match internal_order.side() {
+            OrderSide::Buy => internal_order.trading_pair.quote_asset(),
+            OrderSide::Sell => internal_order.trading_pair.base_asset(),
+        };
+
+        // todo 根据资产查找余额id
+        let frozen_asset_balance_id = self.queryBalanceId(asset_id);
+
+        //查账户,竞争点
         let mut frozen_asset_balance =
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
-        // frozen_asset_balance.frozen_margin_4(internal_order);
-        // 冻结余额
-        internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
+        //计算逻辑
+        let (order_change_log, balance_change_log) =
+            self.handle_data(&mut frozen_asset_balance, &mut internal_order);
 
-        // TODO: 生成新增/账户冻结 eventlog
-        // TODO: 发送eventlog到消息队列，行情对外发布消息
+        // TODO: 发送eventlog到消息队列，user data/market data对外发布消息
         // TODO: 在db中回放eventlog
-
-        match internal_order.time_in_force {
-            TimeInForce::GTC => {}
-            TimeInForce::IOC => {}
-            TimeInForce::FOK => {}
-            TimeInForce::GTX => {}
-            TimeInForce::GTD => {}
-        }
-
-        // 生成 NewOrderAck 响应
-        let order_id = order_next_id as u64;
-
-        let ack = NewOrderAck::new(
-            internal_order.trading_pair,
-            order_id,
-            -1, // 不属于任何订单列表
-            internal_order.client_order_id,
-            internal_order.timestamp,
+        //持久消息队列
+        self.queue.send(
+            SpotTopic::EntityChangeLog.name(),
+            balance_change_log.to_bytes().unwrap(),
+            None,
+        );
+        self.queue.send(
+            SpotTopic::EntityChangeLog.name(),
+            order_change_log.to_bytes().unwrap(),
+            None,
         );
 
-        Ok(CmdResp::new(
-            ResMetadata::new(0, false, internal_order.timestamp),
-            SpotTradeResAny::NewOrderAck(ack),
-        ))
+        //数据库回放以便持久
+        if let Err(e) = self.balance_repo.replay_event(&balance_change_log) {
+            log::error!("Failed to replay balance event: {:?}", e);
+        }
+        if let Err(e) = self.order_repo.replay_event(&order_change_log) {
+            log::error!("Failed to replay order event: {:?}", e);
+        }
+
+        (frozen_asset_balance, internal_order)
+    }
+
+    fn handle_data(
+        &self,
+        balance: &mut Balance,
+        order: &mut SpotOrder,
+    ) -> (ChangeLogEntry, ChangeLogEntry) {
+        let (balance_change_log, order_change_log) = match order.side() {
+            OrderSide::Buy => {
+                // Freeze the quote asset balance
+                // Priority: use quote_order_qty if available (market orders), otherwise use price * quantity
+                let frozen_amount = if let Some(quote_qty) = order.quote_order_qty {
+                    // Market order with explicit quote amount
+                    quote_qty
+                } else {
+                    // Limit order: use price * quantity
+                    order.price.unwrap_or(Price::from_f64(0.0)) * order.quantity()
+                };
+
+                // Generate update log with frozen balance
+                let balance_change_log = balance
+                    .track_update(|b| {
+                        b.frozen(frozen_amount, order.timestamp);
+                    })
+                    .unwrap();
+
+                //todo order有需要改的吗？
+                // Update order and generate create log
+                let order_change_log = order.track_create().unwrap();
+
+                (balance_change_log, order_change_log)
+            }
+            OrderSide::Sell => {
+                // Freeze the base asset balance (quantity)
+                let balance_change_log = balance
+                    .track_update(|b| {
+                        b.frozen(order.quantity(), order.timestamp);
+                    })
+                    .unwrap();
+
+                // Update order and generate create log
+                let order_change_log = order.track_create().unwrap();
+
+                (balance_change_log, order_change_log)
+            }
+        };
+
+        (balance_change_log, order_change_log)
     }
 
     /// 处理新订单命令的主方法
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 执行订单预处理
-        let ack_result = self.pre_process(cmd)?;
-
+        let (mut frozen_asset_balance, mut internal_order) = self.pre_process(cmd);
         // TODO: 执行订单匹配逻辑
-        // let matches = self.lob_repo.match_order(&internal_order);
+        let matches = self.lob_repo.match_order(&internal_order);
+
+        let (
+            trades,
+            trade_change_logs,
+            order_change_log,
+            matches_change_log,
+            base_balance_change_log,
+            quote_balance_change_log,
+            base_balance_change_logs,
+            quote_balance_change_logs,
+        ) = self.handle_data2(&mut frozen_asset_balance, &mut internal_order, &mut matches);
 
         // TODO: 处理匹配结果，生成交易记录
 
@@ -303,7 +374,18 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
             }
         }
 
-        Ok(ack_result)
+        let ack = NewOrderAck::new(
+            internal_order.trading_pair,
+            internal_order.order_id,
+            -1, // 不属于任何订单列表
+            internal_order.client_order_id,
+            internal_order.timestamp,
+        );
+
+        Ok(CmdResp::new(
+            ResMetadata::new(0, false, internal_order.timestamp),
+            SpotTradeResAny::NewOrderAck(ack),
+        ))
     }
 }
 

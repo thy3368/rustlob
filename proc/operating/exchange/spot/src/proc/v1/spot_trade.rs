@@ -92,6 +92,7 @@ impl SpotTradeBehaviorImpl {
             limit_order.quantity,
             limit_order.time_in_force,
             limit_order.client_order_id,
+            None, // quote_order_qty not used in v1
         );
 
         let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
@@ -267,6 +268,7 @@ mod tests {
             quantity,                       // quantity
             TimeInForce::GTC,               // GTC: Good Till Cancel
             Some("CLIENT-001".to_string()), // client_order_id
+            None,                           // quote_order_qty
         );
 
         // ========================================================================

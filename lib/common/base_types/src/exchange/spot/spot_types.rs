@@ -405,6 +405,7 @@ pub struct SpotOrder {
 
     pub total_qty: Quantity,        // 总数量
     pub price: Option<Price>,       // 订单价格 (0表示市价单)
+    pub quote_order_qty: Option<Quantity>, // 报价数量（市价单使用，最多花费金额）
     pub side: OrderSide,            // 买卖方向 (BUY/SELL) (1字节)
     pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
@@ -675,6 +676,7 @@ impl SpotOrder {
         quantity: Quantity,
         time_in_force: TimeInForce,
         client_order_id: Option<String>,
+        quote_order_qty: Option<Quantity>,
     ) -> Self {
         let timestamp = Timestamp::now_as_nanos();
 
@@ -686,6 +688,7 @@ impl SpotOrder {
             total_qty: quantity,
             unfilled_qty: quantity,
             price: Some(price),
+            quote_order_qty,
             side,
             status: OrderStatus::Pending,
             execution_method: ExecutionMethod::Limit,
@@ -894,6 +897,7 @@ mod tests {
             Quantity::from_f64(1.0),
             TimeInForce::GTC,
             None,
+            None, // quote_order_qty
         );
 
         // 初始化订单状态
