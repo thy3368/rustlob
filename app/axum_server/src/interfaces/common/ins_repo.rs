@@ -91,6 +91,14 @@ static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
     Arc::new(queue)
 });
 
+//todo 类型不匹配 [E0308]
+//
+// 应为:
+// EmbeddedLobRepo<SpotOrder>
+// 已找到:
+// Arc<EmbeddedLobRepo<SpotOrder>>
+//
+
 // 核心服务单例（直接包装在 Arc 中）
 static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<
     Arc<SpotTradeBehaviorV2Impl>,
