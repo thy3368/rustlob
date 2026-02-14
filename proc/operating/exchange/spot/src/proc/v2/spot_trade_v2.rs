@@ -8,11 +8,13 @@ use base_types::exchange::spot::spot_types::{
 };
 use base_types::handler::handler::Handler;
 use base_types::lob::lob::LobOrder;
+use base_types::mark_data::spot::level_types::OrderDelta;
 use base_types::spot_topic::SpotTopic;
 use base_types::{AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::{ChangeLogEntry, Entity};
 use immutable_derive::immutable;
+use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
 use rust_queue::queue::queue::{Queue, ToBytes};
@@ -33,17 +35,16 @@ impl From<NewOrderCmd> for SpotOrder {
         let order_id = order_next_id as u64;
 
         let trader_id = TraderId::default(); // TODO: 从 metadata 中获取真实的 trader_id
-        let account_id = AccountId(1); // TODO: 从 metadata 中获取真实的 account_id
         let trading_pair = cmd.symbol().clone();
 
         // todo 可以simd优化吗
-        match cmd.order_type() {
+        let order_type = *cmd.order_type();
+        match order_type {
             OrderType::Limit => {
                 // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
-                SpotOrder::create_order(
+                let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
@@ -51,14 +52,15 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
-                )
+                );
+                order.order_type = order_type;
+                order
             }
             OrderType::Market => {
                 // 市价单
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     Price::from_f64(0.0), // 市价单价格为0
@@ -67,6 +69,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
+                order.order_type = order_type;
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None; // 市价单价格为None
                 order
@@ -76,7 +79,6 @@ impl From<NewOrderCmd> for SpotOrder {
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     Price::from_f64(0.0), // 市价止损
@@ -85,6 +87,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
+                order.order_type = order_type;
                 order.conditional_type = ConditionalType::StopLoss;
                 order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
@@ -96,7 +99,6 @@ impl From<NewOrderCmd> for SpotOrder {
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
@@ -105,7 +107,9 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
+                order.order_type = order_type;
                 order.conditional_type = ConditionalType::StopLoss;
+                order.execution_method = ExecutionMethod::Limit;
                 order.stop_price = *cmd.stop_price();
                 order
             }
@@ -114,7 +118,6 @@ impl From<NewOrderCmd> for SpotOrder {
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     Price::from_f64(0.0), // 市价止盈
@@ -123,6 +126,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
+                order.order_type = order_type;
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
@@ -134,7 +138,6 @@ impl From<NewOrderCmd> for SpotOrder {
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
@@ -143,7 +146,9 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
+                order.order_type = order_type;
                 order.conditional_type = ConditionalType::TakeProfit;
+                order.execution_method = ExecutionMethod::Limit;
                 order.stop_price = *cmd.stop_price();
                 order
             }
@@ -152,7 +157,6 @@ impl From<NewOrderCmd> for SpotOrder {
                 let mut order = SpotOrder::create_order(
                     order_id,
                     trader_id,
-                    account_id,
                     trading_pair,
                     cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
@@ -161,7 +165,7 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().clone(),
                 );
-                order.maker_constraint = MakerConstraint::PostOnly;
+                order.order_type = order_type;
                 order
             }
         }
@@ -169,7 +173,7 @@ impl From<NewOrderCmd> for SpotOrder {
 }
 
 #[immutable]
-pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
+pub struct SpotTradeBehaviorV2Impl {
     // uid路由
     balance_repo: Arc<MySqlDbRepo<Balance>>,
     // uid路由
@@ -185,12 +189,12 @@ pub struct SpotTradeBehaviorV2Impl<L: MultiSymbolLobRepo<Order = SpotOrder>> {
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 静态分发
-    lob_repo: L,
+    lob_repo: EmbeddedLobRepo<SpotOrder>,
 
     queue: Arc<MPMCQueue>,
 }
 
-impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
+impl SpotTradeBehaviorV2Impl {
     /// 根据资产ID查找余额ID
     fn queryBalanceId(&self, asset_id: AssetId) -> String {
         // BalanceId format: "account_id:asset_id"
@@ -202,16 +206,23 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
         // 根据 NewOrderCmd 创建 SpotOrder
         // todo cmd.clone() 太贵了
+
         let mut internal_order = SpotOrder::from(cmd);
 
-        // 根据买卖方向冻结相应的资产余额：买则冻结计算资产，卖则冻结基础资产
-        let asset_id = match internal_order.side() {
-            OrderSide::Buy => internal_order.trading_pair.quote_asset(),
-            OrderSide::Sell => internal_order.trading_pair.base_asset(),
-        };
+        match internal_order.conditional_type {
+            ConditionalType::None => {}
+            ConditionalType::StopLoss => {
+                //要专门挂 到特定低价格才挂
+                todo!()
+            }
+            ConditionalType::TakeProfit => {
+                //要专门挂 到特定高价格才挂
+                todo!()
+            }
+        }
 
-        // todo 根据资产查找余额id
-        let frozen_asset_balance_id = self.queryBalanceId(asset_id);
+        let frozen_asset_id = internal_order.frozen_asset_id();
+        let frozen_asset_balance_id = self.queryBalanceId(frozen_asset_id);
 
         //查账户,竞争点
         let mut frozen_asset_balance =
@@ -294,33 +305,445 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
         (balance_change_log, order_change_log)
     }
 
+    /// 处理订单匹配逻辑
+    ///
+    /// 根据匹配的订单生成交易记录和相关的变更日志
+    fn handle_match(
+        &self,
+        internal_order: &mut SpotOrder,
+        matches: &Option<Vec<&SpotOrder>>,
+        is_fully_filled: bool,
+        remaining: Quantity,
+    ) -> (Vec<SpotTrade>, Vec<ChangeLogEntry>, ChangeLogEntry, Vec<ChangeLogEntry>) {
+        let mut trades = Vec::new();
+        let mut trade_change_logs = Vec::new();
+        let mut order_change_logs = Vec::new();
+
+        //todo 对每种TimeInForce 单独处理订单
+        match internal_order.time_in_force {
+            //持续有效直到取消 - 处理匹配的订单，剩余部分进入订单簿
+            TimeInForce::GTC => {
+                match internal_order.execution_method {
+                    ExecutionMethod::Limit => {
+                        // 限价单：处理匹配的订单，剩余部分进入订单簿
+                        if let Some(matched_orders) = matches {
+                            for matched_order in matched_orders {
+                                // 计算成交数量
+                                let filled =
+                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                // 计算成交价格
+                                let transaction_price =
+                                    matched_order.price.unwrap_or(internal_order.price.unwrap());
+
+                                // 生成交易ID
+                                let trade_id = (internal_order.timestamp.0 << 32)
+                                    | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                // 计算手续费（简化版，使用默认费率）
+                                let taker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.001);
+                                let maker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                // 创建成交记录
+                                let trade = SpotTrade::new(
+                                    trade_id,
+                                    internal_order.order_id,
+                                    matched_order.order_id,
+                                    Timestamp::now_as_nanos(),
+                                    transaction_price,
+                                    filled,
+                                    internal_order.side,
+                                    taker_commission_qty,
+                                    maker_commission_qty,
+                                    internal_order.frozen_asset,
+                                    10, // taker commission rate in bp
+                                    5,  // maker commission rate in bp
+                                );
+                                trades.push(trade);
+                            }
+                        }
+
+                        // 如果有剩余数量，将订单添加到LOB
+                        if !is_fully_filled {
+                            // 将internal_order添加到LOB
+                            if let Err(e) = self
+                                .lob_repo
+                                .add_order(internal_order.trading_pair, internal_order.clone())
+                            {
+                                log::error!("Failed to add order to LOB: {:?}", e);
+                            }
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                        } else {
+                            // 全部成交
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Filled;
+                        }
+                    }
+                    ExecutionMethod::Market => {
+                        // GTC不支持市价单
+                        todo!("GTC does not support market orders")
+                    }
+                }
+            }
+            TimeInForce::IOC => {
+                //立即成交否则取消
+                match internal_order.execution_method {
+                    ExecutionMethod::Limit => {
+                        // 限价单：处理匹配的订单，剩余部分取消
+                        if let Some(matched_orders) = matches {
+                            for matched_order in matched_orders {
+                                // 计算成交数量
+                                let filled =
+                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                // 计算成交价格
+                                let transaction_price =
+                                    matched_order.price.unwrap_or(internal_order.price.unwrap());
+
+                                // 生成交易ID
+                                let trade_id = (internal_order.timestamp.0 << 32)
+                                    | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                // 计算手续费
+                                let taker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.001);
+                                let maker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                // 创建成交记录
+                                let trade = SpotTrade::new(
+                                    trade_id,
+                                    internal_order.order_id,
+                                    matched_order.order_id,
+                                    Timestamp::now_as_nanos(),
+                                    transaction_price,
+                                    filled,
+                                    internal_order.side,
+                                    taker_commission_qty,
+                                    maker_commission_qty,
+                                    internal_order.frozen_asset,
+                                    10,
+                                    5,
+                                );
+                                trades.push(trade);
+                            }
+                        }
+                        // 剩余部分自动取消，不进入订单簿
+                        if !remaining.is_zero() {
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
+                        } else {
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Filled;
+                        }
+                    }
+                    ExecutionMethod::Market => {
+                        // 市价单：尽可能成交，剩余部分取消
+                        if let Some(matched_orders) = matches {
+                            for matched_order in matched_orders {
+                                // 计算成交数量
+                                let filled =
+                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                // 计算成交价格
+                                let transaction_price =
+                                    matched_order.price.unwrap_or(internal_order.price.unwrap());
+
+                                // 生成交易ID
+                                let trade_id = (internal_order.timestamp.0 << 32)
+                                    | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                // 计算手续费
+                                let taker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.001);
+                                let maker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                // 创建成交记录
+                                let trade = SpotTrade::new(
+                                    trade_id,
+                                    internal_order.order_id,
+                                    matched_order.order_id,
+                                    Timestamp::now_as_nanos(),
+                                    transaction_price,
+                                    filled,
+                                    internal_order.side,
+                                    taker_commission_qty,
+                                    maker_commission_qty,
+                                    internal_order.frozen_asset,
+                                    10,
+                                    5,
+                                );
+                                trades.push(trade);
+                            }
+                        }
+                        internal_order.status =
+                            base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
+                    }
+                }
+            }
+            TimeInForce::FOK => {
+                //全部成交否则取消
+                match internal_order.execution_method {
+                    ExecutionMethod::Limit => {
+                        if is_fully_filled {
+                            // 全部成交：处理所有匹配的订单
+                            if let Some(matched_orders) = matches {
+                                for matched_order in matched_orders {
+                                    // 计算成交数量
+                                    let filled =
+                                        internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                    // 计算成交价格
+                                    let transaction_price = matched_order
+                                        .price
+                                        .unwrap_or(internal_order.price.unwrap());
+
+                                    // 生成交易ID
+                                    let trade_id = (internal_order.timestamp.0 << 32)
+                                        | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                    // 计算手续费
+                                    let taker_commission_qty =
+                                        filled * transaction_price * Quantity::from_f64(0.001);
+                                    let maker_commission_qty =
+                                        filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                    // 创建成交记录
+                                    let trade = SpotTrade::new(
+                                        trade_id,
+                                        internal_order.order_id,
+                                        matched_order.order_id,
+                                        Timestamp::now_as_nanos(),
+                                        transaction_price,
+                                        filled,
+                                        internal_order.side,
+                                        taker_commission_qty,
+                                        maker_commission_qty,
+                                        internal_order.frozen_asset,
+                                        10,
+                                        5,
+                                    );
+                                    trades.push(trade);
+                                }
+                            }
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Filled;
+                        } else {
+                            // 未能全部成交：取消整个订单
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
+                        }
+                    }
+                    ExecutionMethod::Market => {
+                        // 市价单：必须全部成交
+                        if is_fully_filled {
+                            if let Some(matched_orders) = matches {
+                                for matched_order in matched_orders {
+                                    // 计算成交数量
+                                    let filled =
+                                        internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                    // 计算成交价格
+                                    let transaction_price = matched_order
+                                        .price
+                                        .unwrap_or(internal_order.price.unwrap());
+
+                                    // 生成交易ID
+                                    let trade_id = (internal_order.timestamp.0 << 32)
+                                        | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                    // 计算手续费
+                                    let taker_commission_qty =
+                                        filled * transaction_price * Quantity::from_f64(0.001);
+                                    let maker_commission_qty =
+                                        filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                    // 创建成交记录
+                                    let trade = SpotTrade::new(
+                                        trade_id,
+                                        internal_order.order_id,
+                                        matched_order.order_id,
+                                        Timestamp::now_as_nanos(),
+                                        transaction_price,
+                                        filled,
+                                        internal_order.side,
+                                        taker_commission_qty,
+                                        maker_commission_qty,
+                                        internal_order.frozen_asset,
+                                        10,
+                                        5,
+                                    );
+                                    trades.push(trade);
+                                }
+                            }
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Filled;
+                        } else {
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
+                        }
+                    }
+                }
+            }
+            TimeInForce::GTX => {
+                //只做Maker直到成交（Post-Only）
+                match internal_order.execution_method {
+                    ExecutionMethod::Limit => {
+                        if matches.is_some() {
+                            // GTX订单不能立即成交，必须作为Maker
+                            // 如果有匹配，说明会立即成交，应该拒绝
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Rejected;
+                        } else {
+                            // 没有匹配，可以作为Maker进入订单簿
+                            // TODO: 将internal_order添加到LOB
+                        }
+                    }
+                    ExecutionMethod::Market => {
+                        // GTX不支持市价单
+                        todo!("GTX does not support market orders")
+                    }
+                }
+            }
+            TimeInForce::GTD => {
+                //持续有效直到指定日期/时间
+                match internal_order.execution_method {
+                    ExecutionMethod::Limit => {
+                        // 限价单：处理匹配的订单，剩余部分进入订单簿（直到GTD时间）
+                        if let Some(matched_orders) = matches {
+                            for matched_order in matched_orders {
+                                // 计算成交数量
+                                let filled =
+                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+
+                                // 计算成交价格
+                                let transaction_price =
+                                    matched_order.price.unwrap_or(internal_order.price.unwrap());
+
+                                // 生成交易ID
+                                let trade_id = (internal_order.timestamp.0 << 32)
+                                    | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                                // 计算手续费
+                                let taker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.001);
+                                let maker_commission_qty =
+                                    filled * transaction_price * Quantity::from_f64(0.0005);
+
+                                // 创建成交记录
+                                let trade = SpotTrade::new(
+                                    trade_id,
+                                    internal_order.order_id,
+                                    matched_order.order_id,
+                                    Timestamp::now_as_nanos(),
+                                    transaction_price,
+                                    filled,
+                                    internal_order.side,
+                                    taker_commission_qty,
+                                    maker_commission_qty,
+                                    internal_order.frozen_asset,
+                                    10,
+                                    5,
+                                );
+                                trades.push(trade);
+                            }
+                        }
+                        // 如果有剩余数量，将订单添加到LOB
+                        if !is_fully_filled {
+                            // 将internal_order添加到LOB（带GTD时间约束）
+                            if let Err(e) = self
+                                .lob_repo
+                                .add_order(internal_order.trading_pair, internal_order.clone())
+                            {
+                                log::error!("Failed to add order to LOB: {:?}", e);
+                            }
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                        } else {
+                            // 全部成交
+                            internal_order.status =
+                                base_types::exchange::spot::spot_types::OrderStatus::Filled;
+                        }
+                    }
+                    ExecutionMethod::Market => {
+                        // GTD不支持市价单
+                        todo!("GTD does not support market orders")
+                    }
+                }
+            }
+        }
+
+        // 生成新订单的变更日志
+        let order_change_log = internal_order.track_create().unwrap();
+
+        (trades, trade_change_logs, order_change_log, order_change_logs)
+    }
+
+    /// 处理交易的清算操作
+    ///
+    /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
+    ///
+    /// TODO: 完整的清算逻辑需要以下信息：
+    /// 1. Taker 和 Maker 的账户ID（当前 SpotOrder 中不可用）
+    /// 2. 从订单中获取交易对信息来确定资产
+    /// 3. 更新双方的 base 和 quote 资产余额
+    /// 4. 扣除手续费
+    /// 5. 生成变更日志
+    fn handle_clear(
+        &self,
+        trades: Vec<SpotTrade>,
+        _taker_order: &SpotOrder,
+        _maker_orders: &[&SpotOrder],
+    ) -> Vec<ChangeLogEntry> {
+        let mut balance_change_logs = Vec::new();
+
+        for _trade in trades {
+            // TODO: 实现完整的清算逻辑
+            // 需要从订单中获取账户ID，然后更新余额
+        }
+
+        balance_change_logs
+    }
+
     /// 处理新订单命令的主方法
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 执行订单预处理
         let (mut frozen_asset_balance, mut internal_order) = self.pre_process(cmd);
         // TODO: 执行订单匹配逻辑
-        let matches = self.lob_repo.match_order(&internal_order);
+        // 判断是否全成交，还是
+        let (matches, remaining) = self.lob_repo.match_orders(
+            internal_order.trading_pair,
+            internal_order.side,
+            internal_order.price.unwrap(),
+            internal_order.quote_order_qty.unwrap(),
+        );
+        let is_fully_filled = remaining.is_zero();
 
-        let (
-            trades,
-            trade_change_logs,
-            order_change_log,
-            matches_change_log,
-            base_balance_change_log,
-            quote_balance_change_log,
-            base_balance_change_logs,
-            quote_balance_change_logs,
-        ) = self.handle_data2(&mut frozen_asset_balance, &mut internal_order, &mut matches);
+        let (trades, trade_change_logs, order_change_log, order_change_logs) =
+            self.handle_match(&mut internal_order, &matches, is_fully_filled, remaining);
+
+        if let Err(e) = self.order_repo.replay_event(&order_change_log) {
+            log::error!("Failed to replay order event: {:?}", e);
+        }
+
+        for trade_log in trade_change_logs {
+            if let Err(e) = self.trade_repo.replay_event(&trade_log) {
+                log::error!("Failed to replay trade event: {:?}", e);
+            }
+        }
+
+        // 执行交易的清算操作
+        let maker_orders_slice = matches.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+        let balance_change_logs = self.handle_clear(trades, &internal_order, maker_orders_slice);
 
         // TODO: 处理匹配结果，生成交易记录
 
         // 所有数据持久化操作，一次性回放所有事件到数据库
         let all_events: Vec<ChangeLogEntry> = Vec::new();
-
-        // self.
-
-        // let change_log_queue_repo = ChangeLogChannelQueueRepo::new();
-        // change_log_queue_repo.send_batch(&all_events);
 
         // 批量发送事件 - 将 ChangeLogEntry 转换为 Bytes
         let bytes_events: Vec<bytes::Bytes> = all_events
@@ -389,9 +812,7 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>> SpotTradeBehaviorV2Impl<L> {
     }
 }
 
-impl<L: MultiSymbolLobRepo<Order = SpotOrder>>
-    Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV2Impl<L>
-{
+impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV2Impl {
     async fn handle(
         &self,
         cmd: SpotTradeCmdAny,
@@ -467,5 +888,37 @@ impl<L: MultiSymbolLobRepo<Order = SpotOrder>>
                 todo!()
             }
         }
+    }
+}
+
+// ============================================================================
+// 单元测试
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use base_types::base_types::TraderId;
+    use base_types::mark_data::spot::level_types::OrderChangeType;
+    use base_types::Price;
+
+    use super::*;
+
+    #[test]
+    fn test_orderbook_delta_creation() {
+        let delta = OrderDelta {
+            symbol_id: 1,
+            timestamp: 1234567890,
+            sequence: 100,
+            change_type: OrderChangeType::Add,
+            order_id: 12345,
+            side: OrderSide::Buy,
+            price: Price::from_raw(50000),
+            quantity: Quantity::from_raw(100),
+            trader_id: Some(TraderId::default()),
+        };
+
+        assert_eq!(delta.symbol_id, 1);
+        assert_eq!(delta.change_type, OrderChangeType::Add);
+        assert_eq!(delta.order_id, 12345);
     }
 }

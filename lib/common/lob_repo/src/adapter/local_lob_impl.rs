@@ -303,7 +303,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
     /// 匹配订单
     ///
     /// 根据 side, price, quantity 匹配所有符合条件的订单
-    /// 总数量要大于等于 quantity，返回匹配上的订单数组
+    /// 返回匹配上的订单数组和剩余未匹配数量
     ///
     /// # 算法
     /// - 买单：从最低卖价开始匹配（价格优先，时间优先）
@@ -313,7 +313,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
@@ -324,12 +324,18 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                 // 买单：从最低卖价开始匹配
                 if let Some(ask_min) = self.ask_min {
                     if price < ask_min {
-                        return None; // 买价太低，无法匹配
+                        return (None, quantity); // 买价太低，无法匹配
                     }
 
                     // 转换为 tick 索引进行遍历
-                    let price_tick = self.price_to_tick_idx(price)?;
-                    let ask_min_tick = self.price_to_tick_idx(ask_min)?;
+                    let price_tick = match self.price_to_tick_idx(price) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
+                    let ask_min_tick = match self.price_to_tick_idx(ask_min) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
 
                     for current_tick in ask_min_tick..=price_tick {
                         if remaining.is_zero() {
@@ -372,12 +378,18 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                 // 卖单：从最高买价开始匹配
                 if let Some(bid_max) = self.bid_max {
                     if price > bid_max {
-                        return None; // 卖价太高，无法匹配
+                        return (None, quantity); // 卖价太高，无法匹配
                     }
 
                     // 转换为 tick 索引进行遍历
-                    let price_tick = self.price_to_tick_idx(price)?;
-                    let bid_max_tick = self.price_to_tick_idx(bid_max)?;
+                    let price_tick = match self.price_to_tick_idx(price) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
+                    let bid_max_tick = match self.price_to_tick_idx(bid_max) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
 
                     for current_tick in (price_tick..=bid_max_tick).rev() {
                         if remaining.is_zero() {
@@ -418,7 +430,12 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
             }
         }
 
-        if matched_orders.is_empty() { None } else { Some(matched_orders) }
+        // 返回匹配结果和剩余未匹配数量
+        if matched_orders.is_empty() {
+            (None, quantity)
+        } else {
+            (Some(matched_orders), remaining)
+        }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {

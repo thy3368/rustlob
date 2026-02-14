@@ -282,7 +282,7 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
     /// 匹配订单
     ///
     /// 根据 side, price, quantity 匹配所有符合条件的订单
-    /// 总数量要大于等于 quantity，返回匹配上的订单数组
+    /// 返回匹配上的订单数组和剩余未匹配数量
     ///
     /// # 算法
     /// - 买单：从最低卖价开始匹配（价格优先，时间优先）
@@ -296,7 +296,7 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         // 预分配容量，减少内存重分配开销
         let mut matched_orders = Vec::with_capacity(16);
         let mut remaining = quantity;
@@ -307,12 +307,18 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
                 // 买单：从最低卖价开始匹配
                 if let Some(ask_min) = self.ask_min {
                     if price < ask_min {
-                        return None; // 买价太低，无法匹配
+                        return (None, quantity); // 买价太低，无法匹配
                     }
 
                     // 获取价格范围的 tick
-                    let price_tick = self.price_to_tick(price)?;
-                    let ask_min_tick = self.price_to_tick(ask_min)?;
+                    let price_tick = match self.price_to_tick(price) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
+                    let ask_min_tick = match self.price_to_tick(ask_min) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
 
                     // 使用 BTreeMap 的 range 方法，自动按升序遍历
                     for (&tick, _) in self.asks.range(ask_min_tick..=price_tick) {
@@ -354,12 +360,18 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
                 // 卖单：从最高买价开始匹配
                 if let Some(bid_max) = self.bid_max {
                     if price > bid_max {
-                        return None; // 卖价太高，无法匹配
+                        return (None, quantity); // 卖价太高，无法匹配
                     }
 
                     // 获取价格范围的 tick
-                    let price_tick = self.price_to_tick(price)?;
-                    let bid_max_tick = self.price_to_tick(bid_max)?;
+                    let price_tick = match self.price_to_tick(price) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
+                    let bid_max_tick = match self.price_to_tick(bid_max) {
+                        Some(t) => t,
+                        None => return (None, quantity),
+                    };
 
                     // 使用 BTreeMap 的 range 方法，并反向遍历（从高到低）
                     for (&tick, _) in self.bids.range(price_tick..=bid_max_tick).rev() {
@@ -399,7 +411,11 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
             }
         }
 
-        if matched_orders.is_empty() { None } else { Some(matched_orders) }
+        if matched_orders.is_empty() {
+            (None, quantity)
+        } else {
+            (Some(matched_orders), remaining)
+        }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {

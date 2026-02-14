@@ -310,12 +310,13 @@ impl PrepMatchingService {
         internal_order.frozen_margin(balance.clone(), Timestamp::now_as_nanos());
 
         // 匹配
-        let matched_orders = self.lob_repo.match_orders(
+        let (matched_orders, remaining) = self.lob_repo.match_orders(
             cmd.trading_pair,
             cmd.side,
             cmd.price.unwrap_or_else(|| Price::from_f64(50000.0)),
             cmd.quantity,
         );
+        let is_fully_filled = remaining.is_zero();
 
         // 获取或创建持仓（通过 self.position_repo）
         let mut position = self.get_position(cmd.trading_pair);

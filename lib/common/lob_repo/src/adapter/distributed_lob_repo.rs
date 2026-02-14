@@ -37,7 +37,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         // todo 根据Symbol 找到对应的Lob
         todo!()
     }

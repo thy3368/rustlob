@@ -84,7 +84,7 @@ pub trait SymbolLob {
     /// 订单类型关联类型
     type Order: LobOrder;
 
-    /// 匹配订单，返回匹配到的订单引用列表
+    /// 匹配订单，返回匹配到的订单引用列表和剩余未匹配数量
     ///
     /// # 参数
     /// - `side`: 订单方向（买/卖）
@@ -92,14 +92,16 @@ pub trait SymbolLob {
     /// - `quantity`: 需要匹配的数量
     ///
     /// # 返回
-    /// - `Some(Vec<&Self::Order>)`: 匹配到的订单列表（总数量 >= quantity）
-    /// - `None`: 无法匹配
+    /// - `(Some(Vec<&Self::Order>), remaining)`: 匹配到的订单列表和剩余未匹配数量
+    ///   - `remaining`: 0 表示全部匹配（全成交）
+    ///   - `remaining` > 0 表示部分匹配（部分成交）
+    /// - `(None, quantity)`: 无法匹配，返回原始数量
     fn match_orders(
         &self,
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>>;
+    ) -> (Option<Vec<&Self::Order>>, Quantity);
 
     /// 添加订单到仓储
     ///
@@ -207,8 +209,10 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `quantity`: 需要匹配的数量
     ///
     /// # 返回
-    /// - `Some(Vec<&Self::Order>)`: 匹配到的订单列表
-    /// - `None`: 找不到对应的 LOB 或无法匹配足够数量的订单
+    /// - `(Some(Vec<&Self::Order>), remaining)`: 匹配到的订单列表和剩余未匹配数量
+    ///   - `remaining`: 0 表示全部匹配（全成交）
+    ///   - `remaining` > 0 表示部分匹配（部分成交）
+    /// - `(None, quantity)`: 找不到对应的 LOB 或无法匹配，返回原始数量
     ///
     /// # 性能要求
     /// - 查找 LOB: O(1) 时间复杂度
@@ -219,7 +223,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>>;
+    ) -> (Option<Vec<&Self::Order>>, Quantity);
 
     /// 获取指定交易对的最佳买价
     ///
@@ -281,7 +285,7 @@ where
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         (**self).match_orders(symbol, side, price, quantity)
     }
 

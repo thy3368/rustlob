@@ -1,5 +1,5 @@
 use std::fmt;
-
+use diff::ChangeLogEntry;
 use entity_derive::Entity;
 
 use crate::account::balance::Balance;
@@ -180,34 +180,223 @@ impl Default for AlgorithmStrategy {
     }
 }
 
-// /// 订单类型
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// #[repr(u8)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// pub enum OrderType {
-//     Limit = 1,  // 限价单
-//     Market = 2, // 市价单
-// }
-
-/// 订单类型
+/// 订单类型 - 定义订单的执行方式和触发条件
+///
+/// 订单类型是对订单行为的高层分类，结合 `ExecutionMethod`、`ConditionalType` 和 `TimeInForce` 字段
+/// 可以完整描述订单的所有特性。
+///
+/// ## 订单类型矩阵
+///
+/// | 订单类型 | ExecutionMethod | ConditionalType | TimeInForce | 触发条件 | 应用场景 |
+/// |---------|-----------------|-----------------|-------------|---------|---------|
+/// | Limit | Limit | None | GTC/IOC/FOK/GTX/GTD | 价格达到限价 | 精确价格交易 |
+/// | Market | Market | None | IOC | 立即执行 | 快速成交 |
+/// | StopLoss | Market | StopLoss | IOC | 价格跌破止损价 | 风险控制 |
+/// | StopLossLimit | Limit | StopLoss | GTC/IOC/FOK/GTX/GTD | 价格跌破止损价 | 精确止损 |
+/// | TakeProfit | Market | TakeProfit | IOC | 价格上涨到止盈价 | 利润固定 |
+/// | TakeProfitLimit | Limit | TakeProfit | GTC/IOC/FOK/GTX/GTD | 价格上涨到止盈价 | 精确止盈 |
+/// | LimitMaker | Limit | None | GTX | 仅做Maker | 做市商策略 |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
 pub enum OrderType {
-    /// 限价单
+    /// **限价单 (Limit Order)**
+    ///
+    /// 按指定价格或更优价格执行的订单。订单进入订单簿，等待价格匹配时成交。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Limit`
+    /// - 条件类型: `ConditionalType::None`
+    /// - 支持的TimeInForce: GTC, IOC, FOK, GTX, GTD
+    /// - 价格: 必须指定
+    /// - 数量: 必须指定
+    ///
+    /// **应用场景**:
+    /// - 精确价格交易：以特定价格买入/卖出
+    /// - 做市商策略：在买卖两侧同时挂单
+    /// - 套利交易：等待特定价格差异
+    ///
+    /// **示例**:
+    /// - 以50000 USDT买入1 BTC，等待卖家成交
+    /// - 以51000 USDT卖出1 BTC，等待买家成交
+    ///
+    /// **手续费**: Maker手续费（通常0.05%）
     Limit,
-    /// 市价单
+
+    /// **市价单 (Market Order)**
+    ///
+    /// 以当前市场价格立即执行的订单。按对手盘最优价格逐级成交，不进入订单簿。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Market`
+    /// - 条件类型: `ConditionalType::None`
+    /// - 支持的TimeInForce: IOC（固定）
+    /// - 价格: 无（为None）
+    /// - 数量或报价数量: 必须指定其一
+    ///
+    /// **应用场景**:
+    /// - 快速成交：需要立即执行
+    /// - 大额交易：快速吃掉对手盘流动性
+    /// - 追单：追随市场价格变化
+    ///
+    /// **示例**:
+    /// - 市价买入1 BTC，按当前最低卖价成交
+    /// - 市价卖出1 BTC，按当前最高买价成交
+    ///
+    /// **手续费**: Taker手续费（通常0.1%）
+    /// **风险**: 可能因流动性不足而滑点
     Market,
-    /// 止损单
+
+    /// **止损单 (Stop Loss Order)**
+    ///
+    /// 当价格跌破指定的止损价时，自动以市价执行的订单。用于风险控制和止损。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Market`
+    /// - 条件类型: `ConditionalType::StopLoss`
+    /// - 支持的TimeInForce: IOC（固定）
+    /// - 触发价格: `stop_price`（必须指定）
+    /// - 执行价格: 无（市价执行）
+    /// - 数量: 必须指定
+    ///
+    /// **触发逻辑**:
+    /// - 买单: 当价格上涨到stop_price时触发
+    /// - 卖单: 当价格跌破stop_price时触发
+    ///
+    /// **应用场景**:
+    /// - 风险控制：限制亏损
+    /// - 止损保护：自动平仓
+    /// - 反向对冲：对冲头寸风险
+    ///
+    /// **示例**:
+    /// - 持有1 BTC，设置止损价49000 USDT，价格跌破时自动卖出
+    /// - 空头头寸，设置止损价51000 USDT，价格上涨时自动平仓
+    ///
+    /// **手续费**: Taker手续费（通常0.1%）
+    /// **风险**: 市价执行可能滑点，极端行情可能无法成交
     StopLoss,
-    /// 止损限价单
+
+    /// **止损限价单 (Stop Loss Limit Order)**
+    ///
+    /// 当价格跌破止损价时，以指定的限价执行的订单。结合止损和限价的优势。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Limit`
+    /// - 条件类型: `ConditionalType::StopLoss`
+    /// - 支持的TimeInForce: GTC, IOC, FOK, GTX, GTD
+    /// - 触发价格: `stop_price`（必须指定）
+    /// - 执行价格: `price`（必须指定）
+    /// - 数量: 必须指定
+    ///
+    /// **触发逻辑**:
+    /// - 价格跌破stop_price时，订单激活
+    /// - 激活后按限价规则执行（进入订单簿等待匹配）
+    ///
+    /// **应用场景**:
+    /// - 精确止损：控制止损价格
+    /// - 风险控制：避免市价滑点
+    /// - 套利交易：在特定价格范围内止损
+    ///
+    /// **示例**:
+    /// - 持有1 BTC，设置止损价49000，限价48500，价格跌破49000时以≤48500价格卖出
+    ///
+    /// **手续费**: Maker手续费（通常0.05%）
+    /// **优势**: 精确控制止损价格，避免市价滑点
+    /// **风险**: 激活后可能无法以限价成交
     StopLossLimit,
-    /// 止盈单
+
+    /// **止盈单 (Take Profit Order)**
+    ///
+    /// 当价格上涨到指定的止盈价时，自动以市价执行的订单。用于利润固定。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Market`
+    /// - 条件类型: `ConditionalType::TakeProfit`
+    /// - 支持的TimeInForce: IOC（固定）
+    /// - 触发价格: `stop_price`（必须指定）
+    /// - 执行价格: 无（市价执行）
+    /// - 数量: 必须指定
+    ///
+    /// **触发逻辑**:
+    /// - 买单: 当价格跌破stop_price时触发
+    /// - 卖单: 当价格上涨到stop_price时触发
+    ///
+    /// **应用场景**:
+    /// - 利润固定：自动平仓获利
+    /// - 目标价格成交：达到目标价自动执行
+    /// - 趋势交易：在关键价位自动止盈
+    ///
+    /// **示例**:
+    /// - 以50000 USDT买入1 BTC，设置止盈价52000，价格上涨到52000时自动卖出
+    ///
+    /// **手续费**: Taker手续费（通常0.1%）
+    /// **风险**: 市价执行可能滑点，可能无法以预期价格成交
     TakeProfit,
-    /// 止盈限价单
+
+    /// **止盈限价单 (Take Profit Limit Order)**
+    ///
+    /// 当价格上涨到止盈价时，以指定的限价执行的订单。结合止盈和限价的优势。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Limit`
+    /// - 条件类型: `ConditionalType::TakeProfit`
+    /// - 支持的TimeInForce: GTC, IOC, FOK, GTX, GTD
+    /// - 触发价格: `stop_price`（必须指定）
+    /// - 执行价格: `price`（必须指定）
+    /// - 数量: 必须指定
+    ///
+    /// **触发逻辑**:
+    /// - 价格上涨到stop_price时，订单激活
+    /// - 激活后按限价规则执行（进入订单簿等待匹配）
+    ///
+    /// **应用场景**:
+    /// - 精确止盈：控制止盈价格
+    /// - 风险控制：避免市价滑点
+    /// - 分层止盈：多个止盈单在不同价位
+    ///
+    /// **示例**:
+    /// - 以50000 USDT买入1 BTC，设置止盈价52000，限价52500，价格上涨到52000时以≥52500价格卖出
+    ///
+    /// **手续费**: Maker手续费（通常0.05%）
+    /// **优势**: 精确控制止盈价格，避免市价滑点
+    /// **风险**: 激活后可能无法以限价成交
     TakeProfitLimit,
-    /// 限价只挂单
+
+    /// **限价只挂单 (Limit Maker / Post-Only Order)**
+    ///
+    /// 只能作为Maker（挂单方）的限价单。如果会立即成交则拒绝，确保享受Maker手续费优惠。
+    ///
+    /// **特性**:
+    /// - 执行方式: `ExecutionMethod::Limit`
+    /// - 条件类型: `ConditionalType::None`
+    /// - 支持的TimeInForce: GTX（固定，PostOnly）
+    /// - Maker约束: `MakerConstraint::PostOnly`
+    /// - 价格: 必须指定
+    /// - 数量: 必须指定
+    ///
+    /// **执行逻辑**:
+    /// - 检查限价是否会立即匹配对手盘
+    /// - 如果会立即成交，订单被拒绝（Rejected）
+    /// - 如果不会立即成交，订单进入订单簿
+    ///
+    /// **应用场景**:
+    /// - 做市商策略：确保享受Maker手续费
+    /// - 流动性提供：在买卖两侧挂单
+    /// - 高频交易：优化手续费成本
+    ///
+    /// **示例**:
+    /// - 当前卖一价50000，提交49999买单 → 进入订单簿（Maker）
+    /// - 当前卖一价50000，提交50000买单 → 订单被拒绝（会立即成交）
+    ///
+    /// **手续费**: Maker手续费（通常0.05%）
+    /// **优势**: 保证Maker身份，手续费最低
+    /// **风险**: 订单可能被拒绝，需要重新提交
     LimitMaker,
+}
+
+impl Default for OrderType {
+    fn default() -> Self {
+        Self::Limit
+    }
 }
 
 /// 订单状态
@@ -397,32 +586,30 @@ impl LobOrder for SpotOrder {
 #[entity(id = "order_id")]
 pub struct SpotOrder {
     // ===== 核心标识字段（24字节）=====
-    pub order_id: OrderId,     // 订单ID (u64)
-    pub trader_id: TraderId,   // 交易员ID ([u8; 8])
-    pub account_id: AccountId, // 账户ID
+    pub order_id: OrderId,   // 订单ID (u64)
+    pub trader_id: TraderId, // 交易员ID ([u8; 8])
 
     pub trading_pair: TradingPair, // 交易对 (u64)
 
-    pub total_qty: Quantity,        // 总数量
-    pub price: Option<Price>,       // 订单价格 (0表示市价单)
+    pub total_qty: Quantity,               // 总数量
+    pub price: Option<Price>,              // 订单价格 (0表示市价单)
     pub quote_order_qty: Option<Quantity>, // 报价数量（市价单使用，最多花费金额）
-    pub side: OrderSide,            // 买卖方向 (BUY/SELL) (1字节)
-    pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
+    pub side: OrderSide,                   // 买卖方向 (BUY/SELL) (1字节)
+    pub time_in_force: TimeInForce,        // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
     pub status: OrderStatus, // 订单状态 (1字节)
 
     // ===== 可选字段 =====
     pub client_order_id: Option<String>, // 客户订单ID
-    // pub tag: Option<String>,                    // 订单标签
 
     // ===== 订单来源（Phase 3：1字节）=====
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
 
     // ===== 订单类型维度（4字节）⭐ 新增算法策略维度 =====
+    pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...)
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
     pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
-    pub maker_constraint: MakerConstraint, // Maker约束 (None/PostOnly) (1字节)
 
     // ===== 有效期和防护（2字节）=====
     pub self_trade_prevention: SelfTradePrevention, // 自交易防护 (1字节，固定ExpireTaker)
@@ -447,6 +634,18 @@ pub struct SpotOrder {
     // ===== 时间戳（8字节）=====
     pub timestamp: Timestamp, // 创建时间戳 (ms)
     pub last_updated: Timestamp,
+}
+
+impl SpotOrder {
+    pub fn frozen_asset_id(&self) -> AssetId {
+        // 根据买卖方向冻结相应的资产余额：买则冻结计算资产，卖则冻结基础资产
+        let frozen_asset_id = match self.side() {
+            OrderSide::Buy => self.trading_pair.quote_asset(),
+            OrderSide::Sell => self.trading_pair.base_asset(),
+        };
+
+        frozen_asset_id
+    }
 }
 
 impl SpotOrder {
@@ -525,85 +724,6 @@ impl SpotOrder {
         }
     }
 
-    /// 更新订单的成交统计信息
-    ///
-    /// 计算并更新：
-    /// - 累计成交金额 (cumulative_quote_qty)
-    /// - 平均成交价 (average_price)
-    /// - 生成成交记录 SpotTrade
-    /// - 更新账户余额
-    ///
-    /// 注意：本方法被 make_trade() 调用两次（自身订单和对方订单）
-    /// 数量的更新在 make_trade() 中进行，此处只更新统计和余额
-    #[inline]
-    pub fn trade(
-        &mut self,
-        filled: Quantity,
-        price: Price,
-        is_taker: bool,
-        quote_asset_balance: &mut Balance,
-        base_asset_balance: &mut Balance,
-    ) -> SpotTrade {
-        // 更新订单成交统计（只更新累计值，不重复更新计数）
-        self.cumulative_quote_qty += filled * price;
-        self.frozen_qty -= filled * price; // 扣减冻结金额（价值，不是数量）
-
-        // 重新计算平均成交价 = 累计成交金额 / 已成交数量
-        self.average_price = self.cumulative_quote_qty / self.executed_qty;
-
-        let now = Timestamp::now_as_nanos();
-
-        // 更新账户余额
-        match self.side {
-            OrderSide::Buy => {
-                // 买方：释放冻结的 quote 资产，增加 base 资产
-                quote_asset_balance.frozen2pay(filled * price, now);
-                base_asset_balance.add_balance(filled, now);
-            }
-            OrderSide::Sell => {
-                // 卖方：释放冻结的 base 资产，增加 quote 资产
-                base_asset_balance.frozen2pay(filled, now);
-                quote_asset_balance.add_balance(filled * price, now);
-            }
-        };
-
-        // 生成交易ID（基于时间戳和订单ID）
-        let trade_id = (self.timestamp.0 << 32) | (self.order_id & 0xFFFFFFFF) as u64;
-
-        // 根据 CexFeeEntity 配置计算手续费率和数量
-        let (commission_rate, commission_qty) = self.calculate_fee_with_amount(
-            &CexFeeEntity::new(),
-            is_taker,
-            false, // 假设非做市商
-            None,  // 无VIP等级
-            None,  // 无分层等级
-            filled,
-            price,
-        );
-
-        let commission_asset = self.frozen_asset;
-
-        // Taker 的方向记录在 SpotTrade 中
-        // 当 is_taker=true 时，使用 self.side（Taker 的方向）
-        // 当 is_taker=false 时，反转到 Taker 的方向
-        let taker_side = if is_taker { self.side } else { self.side.opposite() };
-
-        // 创建成交记录
-        let trade = SpotTrade::new(
-            trade_id,
-            self.order_id,
-            self.timestamp,
-            price,
-            filled,
-            taker_side,
-            commission_qty, // 使用计算出的手续费数量
-            commission_asset,
-            commission_rate,
-        );
-
-        trade
-    }
-
     pub fn make_trade(
         &mut self,
         matched_order: &mut SpotOrder,
@@ -611,7 +731,7 @@ impl SpotOrder {
         base_asset_balance: &mut Balance,
         o_quote_asset_balance: &mut Balance,
         o_base_asset_balance: &mut Balance,
-    ) -> Vec<SpotTrade> {
+    ) -> SpotTrade {
         let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
 
         // 更新双方订单的成交数量
@@ -625,22 +745,70 @@ impl SpotOrder {
             Some(price) => price,
         };
 
-        let mut vec = Vec::<SpotTrade>::new();
-        vec.push(self.trade(
+        // 计算 Taker 的手续费
+        let (taker_commission_rate, taker_commission_qty) = self.calculate_fee_with_amount(
+            &CexFeeEntity::new(),
+            true,  // is_taker
+            false, // is_market_maker
+            None,  // user_vip_level
+            None,  // user_tier
             filled,
             transaction_price,
-            true,
-            quote_asset_balance,
-            base_asset_balance,
-        ));
-        vec.push(matched_order.trade(
+        );
+
+        // 计算 Maker 的手续费
+        let (maker_commission_rate, maker_commission_qty) = matched_order.calculate_fee_with_amount(
+            &CexFeeEntity::new(),
+            false, // is_maker
+            false, // is_market_maker
+            None,  // user_vip_level
+            None,  // user_tier
             filled,
             transaction_price,
-            false,
-            o_quote_asset_balance,
-            o_base_asset_balance,
-        ));
-        vec
+        );
+
+        // 更新 Taker 的余额
+        match self.side {
+            OrderSide::Buy => {
+                quote_asset_balance.frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
+                base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
+            }
+            OrderSide::Sell => {
+                base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
+                quote_asset_balance.add_balance(filled * transaction_price, Timestamp::now_as_nanos());
+            }
+        };
+
+        // 更新 Maker 的余额
+        match matched_order.side {
+            OrderSide::Buy => {
+                o_quote_asset_balance.frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
+                o_base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
+            }
+            OrderSide::Sell => {
+                o_base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
+                o_quote_asset_balance.add_balance(filled * transaction_price, Timestamp::now_as_nanos());
+            }
+        };
+
+        // 生成交易ID
+        let trade_id = (self.timestamp.0 << 32) | (self.order_id & 0xFFFFFFFF) as u64;
+
+        // 创建一条 trade 记录（包含买卖双方信息）
+        SpotTrade::new(
+            trade_id,
+            self.order_id,
+            matched_order.order_id,
+            Timestamp::now_as_nanos(),
+            transaction_price,
+            filled,
+            self.side,
+            taker_commission_qty,
+            maker_commission_qty,
+            self.frozen_asset,
+            taker_commission_rate,
+            maker_commission_rate,
+        )
     }
 
     pub fn frozen_margin(&mut self, balance: &mut Balance, now: Timestamp) {
@@ -661,15 +829,11 @@ impl SpotOrder {
 
         // 冻结，失败则reject
     }
-    pub fn frozen_asset_balance_id(&self) -> String {
-        format!("{}:{}", self.account_id.0, self.frozen_asset.as_u32())
-    }
 
     #[inline]
     pub fn create_order(
         order_id: OrderId,
         trader_id: TraderId,
-        account_id: AccountId,
         trading_pair: TradingPair,
         side: OrderSide,
         price: Price,
@@ -683,7 +847,6 @@ impl SpotOrder {
         Self {
             order_id,
             trader_id,
-            account_id,
             trading_pair,
             total_qty: quantity,
             unfilled_qty: quantity,
@@ -691,10 +854,10 @@ impl SpotOrder {
             quote_order_qty,
             side,
             status: OrderStatus::Pending,
+            order_type: OrderType::Limit,
             execution_method: ExecutionMethod::Limit,
             conditional_type: ConditionalType::None,
             algorithm_strategy: AlgorithmStrategy::None,
-            maker_constraint: MakerConstraint::None,
             time_in_force,
             self_trade_prevention: SelfTradePrevention::ExpireTaker,
             timestamp,
@@ -792,77 +955,90 @@ impl SpotOrder {
 /// - 账户结算（确定资金划转方向）
 /// - 交易历史查询
 ///
-/// 竞品分析对标：
-/// - 币安: id, orderId, price, qty, quoteQty, commission, commissionAsset,
-///   time, isBuyer, isMaker
-/// - OKX: ordId, tradeId, side, px, sz, fee, feeRate, feeCcy, execType,
-///   tradeTime
-/// - Coinbase: trade_id, order_id, price, size, fee, liquidity, created_at
+/// 一笔成交只生成一条记录，包含买卖双方的订单ID
 #[derive(Debug, Clone, Copy, Entity)]
 #[entity(id = "trade_id")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
 pub struct SpotTrade {
-    // ===== 交易标识字段（24字节）=====
-    /// 交易唯一标识（对标币安/OKX/Coinbase）
+    // ===== 交易标识字段（32字节）=====
+    /// 交易唯一标识
     pub trade_id: u64,
-    /// 订单ID（对标币安 orderId、OKX ordId、Coinbase order_id）
-    pub order_id: OrderId,
-    /// 成交时间戳 (ms)（对标币安/OKX/Coinbase）
+    /// Taker 订单ID（新提交的订单）
+    pub taker_order_id: OrderId,
+    /// Maker 订单ID（订单簿中的订单）
+    pub maker_order_id: OrderId,
+    /// 成交时间戳 (ms)
     pub timestamp: Timestamp,
 
     // ===== 价格和数量（24字节）=====
-    /// 成交价格（对标所有交易所）
+    /// 成交价格
     pub price: Price,
-    /// 成交数量（对标所有交易所）
+    /// 成交数量
     pub quantity: Quantity,
-    /// 成交金额 = quantity × price（对标币安 quoteQty）
+    /// 成交金额 = quantity × price
     pub quote_qty: Quantity,
 
     // ===== 交易方向（1字节）=====
     /// Taker方向（Buy=Taker买入, Sell=Taker卖出）
     pub taker_side: OrderSide,
 
-    // ===== 手续费字段（16字节）=====
-    /// 手续费数量（对标币安 commission、Coinbase fee）
-    pub commission_qty: Quantity,
-    /// 手续费资产（对标币安 commissionAsset）
+    // ===== 手续费字段（32字节）=====
+    /// Taker 手续费数量
+    pub taker_commission_qty: Quantity,
+    /// Maker 手续费数量
+    pub maker_commission_qty: Quantity,
+    /// 手续费资产
     pub commission_asset: AssetId,
-    /// 手续费率 (bp, 基点)（对标OKX feeRate，1 bp = 0.01%）
-    pub commission_rate: i32,
-
-    // ===== 补位（4字节）=====
-    pub _padding: u32,
+    /// Taker 手续费率 (bp, 基点)
+    pub taker_commission_rate: i32,
+    /// Maker 手续费率 (bp, 基点)
+    pub maker_commission_rate: i32,
 }
 
 impl SpotTrade {
-    /// 创建新的交易记录
+    
+    
+    
+    
+    //todo 计算balance change logs
+    pub fn cal_balance(&self, taker_base_balance:  &mut Balance, taker_quoto_balance:  &mut Balance, marker_base_balance:  &mut Balance, maker_quoto_balance:  &mut Balance) -> Vec<ChangeLogEntry> {
+        todo!()
+    }
+}
+
+impl SpotTrade {
+    /// 创建新的交易记录（一笔成交只生成一条记录）
     #[inline]
     pub fn new(
         trade_id: u64,
-        order_id: OrderId,
+        taker_order_id: OrderId,
+        maker_order_id: OrderId,
         timestamp: Timestamp,
         price: Price,
         quantity: Quantity,
         taker_side: OrderSide,
-        commission_qty: Quantity,
+        taker_commission_qty: Quantity,
+        maker_commission_qty: Quantity,
         commission_asset: AssetId,
-        commission_rate: i32,
+        taker_commission_rate: i32,
+        maker_commission_rate: i32,
     ) -> Self {
-        let quote_qty = quantity * price; // 计算成交金额
+        let quote_qty = quantity * price;
 
         Self {
             trade_id,
-            order_id,
+            taker_order_id,
+            maker_order_id,
             timestamp,
             price,
             quantity,
             quote_qty,
             taker_side,
-            commission_qty,
+            taker_commission_qty,
+            maker_commission_qty,
             commission_asset,
-            commission_rate,
-            _padding: 0,
+            taker_commission_rate,
+            maker_commission_rate,
         }
     }
 }
@@ -884,70 +1060,4 @@ mod tests {
         TradingPair::BtcUsdt
     }
 
-    #[test]
-    fn test_spot_order_fee_calculation_with_cex_fee_entity() {
-        // 创建限价买单
-        let mut order = SpotOrder::create_order(
-            OrderId::from(1u64),
-            TraderId::default(),
-            AccountId(1),
-            create_test_trading_pair(),
-            OrderSide::Buy,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
-            TimeInForce::GTC,
-            None,
-            None, // quote_order_qty
-        );
-
-        // 初始化订单状态
-        order.frozen_qty = Quantity::from_f64(50000.0);
-        order.frozen_asset = order.trading_pair.quote_asset();
-
-        // 创建费率表配置
-        let fee_entity = CexFeeEntity::new();
-
-        // 测试成交手续费计算
-        let filled = Quantity::from_f64(1.0);
-        let price = Price::from_f64(50000.0);
-
-        let (rate_bp_taker, commission_qty_taker) = order.calculate_fee_with_amount(
-            &fee_entity,
-            true,  // is_taker
-            false, // is_market_maker
-            None,  // user_vip_level
-            None,  // user_tier
-            filled,
-            price,
-        );
-
-        // 验证 Taker 费率和手续费
-        assert_eq!(rate_bp_taker, 10, "Taker 费率应为 10 bp (0.1%)");
-
-        // 手续费 = 50000 * 1.0 * 0.001 = 50
-        let expected_commission = Quantity::from_f64(50.0);
-        assert!(
-            (commission_qty_taker.to_f64() - expected_commission.to_f64()).abs() < 0.01,
-            "Taker 手续费应为 50 (成交金额 * 0.1%)"
-        );
-
-        // 执行成交
-        let mut quote_balance = create_test_balance();
-        let mut base_balance =
-            Balance::with_available(AccountId(1), AssetId::Btc, 0, Timestamp::now_as_nanos());
-
-        let trade = order.trade(
-            filled,
-            price,
-            true, // is_taker
-            &mut quote_balance,
-            &mut base_balance,
-        );
-
-        // 验证成交记录
-        assert_eq!(trade.commission_rate, 10, "成交记录中的手续费率应为 10 bp");
-        assert_eq!(trade.quantity, filled, "成交数量应正确");
-        assert_eq!(trade.price, price, "成交价格应正确");
-        assert!((trade.commission_qty.to_f64() - 50.0).abs() < 0.01, "成交手续费应为 50");
-    }
 }

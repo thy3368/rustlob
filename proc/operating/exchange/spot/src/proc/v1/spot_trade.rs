@@ -85,7 +85,6 @@ impl SpotTradeBehaviorImpl {
         let mut internal_order = SpotOrder::create_order(
             order_id,
             limit_order.trader,
-            limit_order.account_id,
             limit_order.trading_pair,
             limit_order.side,
             limit_order.price,
@@ -95,9 +94,9 @@ impl SpotTradeBehaviorImpl {
             None, // quote_order_qty not used in v1
         );
 
-        let frozen_asset_balance_id = internal_order.frozen_asset_balance_id();
+        let frozen_asset_balance_id = format!("{}:{}", limit_order.account_id.0, internal_order.frozen_asset);
         let base_asset_balance_id =
-            format!("{}:{}", internal_order.account_id.0, internal_order.trading_pair.base_asset());
+            format!("{}:{}", limit_order.account_id.0, internal_order.trading_pair.base_asset());
 
         let mut frozen_asset_balance =
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).ok().unwrap().unwrap();
@@ -107,12 +106,13 @@ impl SpotTradeBehaviorImpl {
         internal_order.frozen_margin(&mut frozen_asset_balance, Timestamp::now_as_nanos());
 
         // 匹配
-        let matched_orders = self.lob_repo.match_orders(
+        let (matched_orders, remaining) = self.lob_repo.match_orders(
             internal_order.trading_pair,
             internal_order.side,
             internal_order.price.unwrap(),
             internal_order.total_qty,
         );
+        let is_fully_filled = remaining.is_zero();
 
         // 如果匹配
         let mut trades = Vec::new();
@@ -133,33 +133,33 @@ impl SpotTradeBehaviorImpl {
 
                 // matched_order 的状态也要同步变更，生成 log event 放在一个数据里
                 for matched_order in matched {
-                    let quote_asset_balance_id = format!(
-                        "{}:{}",
-                        matched_order.account_id.0,
-                        matched_order.trading_pair.quote_asset()
-                    );
-                    let base_asset_balance_id = matched_order.frozen_asset_balance_id();
+                    // 计算成交数量
+                    let filled = internal_order.unfilled_qty.min(matched_order.unfilled_qty);
 
-                    let mut o_quote_asset_balance = self
-                        .balance_repo
-                        .find_by_id_4_update(&quote_asset_balance_id)
-                        .ok()
-                        .unwrap()
-                        .unwrap();
-                    let mut o_base_asset_balance = self
-                        .balance_repo
-                        .find_by_id_4_update(&base_asset_balance_id)
-                        .ok()
-                        .unwrap()
-                        .unwrap();
+                    // 计算成交价格
+                    let transaction_price = matched_order.price.unwrap_or(internal_order.price.unwrap());
 
-                    let mut matched_order_mut = matched_order.clone();
-                    let trade = internal_order.make_trade(
-                        &mut matched_order_mut,
-                        &mut frozen_asset_balance,
-                        &mut base_asset_balance,
-                        &mut o_quote_asset_balance,
-                        &mut o_base_asset_balance,
+                    // 生成交易ID
+                    let trade_id = (internal_order.timestamp.0 << 32) | (internal_order.order_id & 0xFFFFFFFF) as u64;
+
+                    // 计算手续费
+                    let taker_commission_qty = filled * transaction_price * Quantity::from_f64(0.001);
+                    let maker_commission_qty = filled * transaction_price * Quantity::from_f64(0.0005);
+
+                    // 创建成交记录
+                    let trade = SpotTrade::new(
+                        trade_id,
+                        internal_order.order_id,
+                        matched_order.order_id,
+                        Timestamp::now_as_nanos(),
+                        transaction_price,
+                        filled,
+                        internal_order.side,
+                        taker_commission_qty,
+                        maker_commission_qty,
+                        internal_order.frozen_asset,
+                        10,
+                        5,
                     );
 
                     trades.push(trade);
@@ -261,7 +261,6 @@ mod tests {
         let order = SpotOrder::create_order(
             12345,                          // order_id
             trader_id,                      // trader
-            account_id,                     // account_id
             trading_pair,                   // trading_pair
             OrderSide::Buy,                 // Buy order
             price,                          // price

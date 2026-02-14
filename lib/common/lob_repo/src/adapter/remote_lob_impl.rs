@@ -28,7 +28,7 @@ impl<O: LobOrder> SymbolLob for RemoteLob<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         todo!()
     }
 

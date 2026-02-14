@@ -42,8 +42,10 @@ impl<O: LobOrder> EmbeddedLobRepo<O> {
     /// - `quantity`: 数量
     ///
     /// # 返回
-    /// - `Some(Vec<&O>)`: 匹配到的订单列表
-    /// - `None`: 找不到对应的 LOB 或无法匹配
+    /// - `(Some(Vec<&O>), remaining)`: 匹配到的订单列表和剩余未匹配数量
+    ///   - `remaining`: 0 表示全部匹配（全成交）
+    ///   - `remaining` > 0 表示部分匹配（部分成交）
+    /// - `(None, quantity)`: 找不到对应的 LOB 或无法匹配，返回原始数量
     #[allow(dead_code)]
     pub fn match_orders(
         &self,
@@ -51,7 +53,7 @@ impl<O: LobOrder> EmbeddedLobRepo<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&O>> {
+    ) -> (Option<Vec<&O>>, Quantity) {
         // 使用 trait 方法
         MultiSymbolLobRepo::match_orders(self, symbol, side, price, quantity)
     }
@@ -67,12 +69,12 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> Option<Vec<&Self::Order>> {
+    ) -> (Option<Vec<&Self::Order>>, Quantity) {
         // O(1) 查找对应的 LOB
-        let lob = self.lobs.get(&symbol)?;
-
-        // 在找到的 LOB 中进行订单匹配
-        lob.match_orders(side, price, quantity)
+        match self.lobs.get(&symbol) {
+            Some(lob) => lob.match_orders(side, price, quantity),
+            None => (None, quantity),
+        }
     }
 
     fn best_bid(&self, symbol: TradingPair) -> Option<Price> {

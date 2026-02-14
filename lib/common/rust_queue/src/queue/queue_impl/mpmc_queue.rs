@@ -87,17 +87,6 @@ impl Queue for MPMCQueue {
         sender.send(event)
     }
 
-    /// 订阅指定 topic 的事件
-    /// 支持反序列化的事件类型
-    fn subscribe(
-        &self,
-        topic: &str,
-        _options: Option<SubscribeOptions>,
-    ) -> broadcast::Receiver<bytes::Bytes> {
-        let channel = self.get_or_create_channel(topic);
-        channel.subscribe()
-    }
-
     /// 批量发送事件到指定 topic（高性能优化）
     /// 支持序列化的事件类型
     fn send_batch(
@@ -132,6 +121,17 @@ impl Queue for MPMCQueue {
         }
 
         Ok(results)
+    }
+
+    /// 订阅指定 topic 的事件
+    /// 支持反序列化的事件类型
+    fn subscribe(
+        &self,
+        topic: &str,
+        _options: Option<SubscribeOptions>,
+    ) -> broadcast::Receiver<bytes::Bytes> {
+        let channel = self.get_or_create_channel(topic);
+        channel.subscribe()
     }
 
     /// 获取指定 topic 的当前订阅者数量
