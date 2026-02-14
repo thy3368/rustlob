@@ -26,8 +26,7 @@ use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
 
 use crate::interfaces::common::http_handler_util::handle_generic;
 use crate::interfaces::common::ins_repo;
-use crate::interfaces::spot::http::trade_handler;
-use crate::interfaces::spot::http::trade_handler::TradeService;
+
 
 // todo 认证： /api/spot/v2/；/api/spot/user/data
 // todo 不认证： /api/spot/v2/；/api/spot/market/data
@@ -38,7 +37,6 @@ pub struct HttpServer {}
 impl HttpServer {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
-        let trade_service = Arc::new(TradeService::new());
 
         // 使用 id_repo 中的单例服务
         let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_distributed();
@@ -46,17 +44,14 @@ impl HttpServer {
         let user_data_service = ins_repo::get_spot_user_data_service();
         let listen_key_service = ins_repo::get_spot_user_data_listen_key_service();
 
-        // 创建路由，注入服务依赖
-        let order_routes = Router::new()
-            .route("/api/spot/order/", post(trade_handler::handle))
-            .with_state(trade_service);
+
 
         let trade_v2_routes = Router::new()
             .route(
                 "/api/spot/v2/",
                 post(
                     handle_generic::<
-                        SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>,
+                        SpotTradeBehaviorV2Impl,
                         SpotTradeCmdAny,
                         SpotTradeResAny,
                     >,
@@ -100,7 +95,6 @@ impl HttpServer {
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
-            .merge(order_routes)
             .merge(trade_v2_routes)
             .merge(market_data_routes)
             .merge(user_data_routes)
@@ -129,24 +123,20 @@ impl HttpServer {
     /// 启动 Spot HTTP 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
-        let trade_service = Arc::new(TradeService::new());
 
         // 使用 id_repo 中的单例服务
         let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_embedded();
         let market_data_service = ins_repo::get_spot_market_data_service();
         let user_data_service = ins_repo::get_spot_user_data_service();
 
-        // 创建路由，注入服务依赖
-        let order_routes = Router::new()
-            .route("/api/spot/order/", post(trade_handler::handle))
-            .with_state(trade_service);
+
 
         let trade_v2_routes = Router::new()
             .route(
                 "/api/spot/v2/",
                 post(
                     handle_generic::<
-                        SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>,
+                        SpotTradeBehaviorV2Impl,
                         SpotTradeCmdAny,
                         SpotTradeResAny,
                     >,
@@ -177,7 +167,6 @@ impl HttpServer {
 
         let http_app = Router::new()
             .route("/api/spot/health", get(Self::health_check))
-            .merge(order_routes)
             .merge(trade_v2_routes)
             .merge(market_data_routes)
             .merge(user_data_routes);

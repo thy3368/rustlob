@@ -9,7 +9,7 @@ pub mod interfaces {
     pub mod spot {
 
         pub mod http {
-            pub mod trade_handler;
+
         }
 
         pub mod websocket {

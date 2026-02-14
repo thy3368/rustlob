@@ -93,7 +93,7 @@ static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
 
 // 核心服务单例（直接包装在 Arc 中）
 static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<
-    Arc<SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>>,
+    Arc<SpotTradeBehaviorV2Impl>,
 > = Lazy::new(|| {
     Arc::new(SpotTradeBehaviorV2Impl::new(
         BALANCE_REPO.clone(),
@@ -107,7 +107,7 @@ static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<
 });
 
 static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<
-    Arc<SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>>,
+    Arc<SpotTradeBehaviorV2Impl>,
 > = Lazy::new(|| {
     Arc::new(SpotTradeBehaviorV2Impl::new(
         BALANCE_REPO.clone(),
@@ -140,12 +140,12 @@ static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
 pub fn get_spot_trade_behavior_v2_embedded()
--> Arc<SpotTradeBehaviorV2Impl<Arc<EmbeddedLobRepo<SpotOrder>>>> {
+-> Arc<SpotTradeBehaviorV2Impl> {
     SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()
 }
 
 pub fn get_spot_trade_behavior_v2_distributed()
--> Arc<SpotTradeBehaviorV2Impl<Arc<DistributedLobRepo<SpotOrder>>>> {
+-> Arc<SpotTradeBehaviorV2Impl> {
     SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED.clone()
 }
 
