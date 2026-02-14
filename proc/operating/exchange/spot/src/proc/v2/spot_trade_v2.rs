@@ -686,24 +686,163 @@ impl SpotTradeBehaviorV2Impl {
     /// 处理交易的清算操作
     ///
     /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
-    ///
-    /// TODO: 完整的清算逻辑需要以下信息：
-    /// 1. Taker 和 Maker 的账户ID（当前 SpotOrder 中不可用）
-    /// 2. 从订单中获取交易对信息来确定资产
-    /// 3. 更新双方的 base 和 quote 资产余额
-    /// 4. 扣除手续费
-    /// 5. 生成变更日志
     fn handle_clear(
         &self,
         trades: Vec<SpotTrade>,
-        _taker_order: &SpotOrder,
-        _maker_orders: &[&SpotOrder],
+        taker_order: &SpotOrder,
+        maker_orders: &[&SpotOrder],
     ) -> Vec<ChangeLogEntry> {
         let mut balance_change_logs = Vec::new();
 
-        for _trade in trades {
-            // TODO: 实现完整的清算逻辑
-            // 需要从订单中获取账户ID，然后更新余额
+        for trade in trades {
+            // 查找 Maker 订单
+            let maker_order = match maker_orders.iter().find(|o| o.order_id == trade.maker_order_id) {
+                Some(order) => *order,
+                None => {
+                    log::warn!("Maker order {} not found for trade {}", trade.maker_order_id, trade.trade_id);
+                    continue;
+                }
+            };
+
+            // 获取交易对信息
+            let trading_pair = taker_order.trading_pair;
+            let base_asset = trading_pair.base_asset();
+            let quote_asset = trading_pair.quote_asset();
+
+            // 使用硬编码的账户ID（与 pre_process 中的 queryBalanceId 一致）
+            // TODO: 从真实的账户信息中获取
+            let taker_account_id = AccountId(1);
+            let maker_account_id = AccountId(1);
+
+            // 构建余额ID
+            let taker_base_balance_id = format!("{}:{}", taker_account_id.0, u32::from(base_asset));
+            let taker_quote_balance_id = format!("{}:{}", taker_account_id.0, u32::from(quote_asset));
+            let maker_base_balance_id = format!("{}:{}", maker_account_id.0, u32::from(base_asset));
+            let maker_quote_balance_id = format!("{}:{}", maker_account_id.0, u32::from(quote_asset));
+
+            // 根据 Taker 方向更新余额
+            match taker_order.side {
+                OrderSide::Buy => {
+                    // Taker 买入：支付 quote 资产，获得 base 资产
+                    // Maker 卖出：支付 base 资产，获得 quote 资产
+
+                    // 更新 Taker 的 quote 资产（支付）
+                    if let Ok(Some(mut taker_quote_balance)) =
+                        self.balance_repo.find_by_id_4_update(&taker_quote_balance_id)
+                    {
+                        let payment = trade.quantity * trade.price;
+                        let log = taker_quote_balance.track_update(|b| {
+                            b.frozen2pay(payment, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.taker_commission_qty, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Taker 的 base 资产（获得）
+                    if let Ok(Some(mut taker_base_balance)) =
+                        self.balance_repo.find_by_id_4_update(&taker_base_balance_id)
+                    {
+                        let log = taker_base_balance.track_update(|b| {
+                            b.add_balance(trade.quantity, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Maker 的 base 资产（支付）
+                    if let Ok(Some(mut maker_base_balance)) =
+                        self.balance_repo.find_by_id_4_update(&maker_base_balance_id)
+                    {
+                        let log = maker_base_balance.track_update(|b| {
+                            b.frozen2pay(trade.quantity, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Maker 的 quote 资产（获得）
+                    if let Ok(Some(mut maker_quote_balance)) =
+                        self.balance_repo.find_by_id_4_update(&maker_quote_balance_id)
+                    {
+                        let proceeds = trade.quantity * trade.price;
+                        let log = maker_quote_balance.track_update(|b| {
+                            b.add_balance(proceeds, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.maker_commission_qty, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+                }
+                OrderSide::Sell => {
+                    // Taker 卖出：支付 base 资产，获得 quote 资产
+                    // Maker 买入：支付 quote 资产，获得 base 资产
+
+                    // 更新 Taker 的 base 资产（支付）
+                    if let Ok(Some(mut taker_base_balance)) =
+                        self.balance_repo.find_by_id_4_update(&taker_base_balance_id)
+                    {
+                        let log = taker_base_balance.track_update(|b| {
+                            b.frozen2pay(trade.quantity, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Taker 的 quote 资产（获得）
+                    if let Ok(Some(mut taker_quote_balance)) =
+                        self.balance_repo.find_by_id_4_update(&taker_quote_balance_id)
+                    {
+                        let proceeds = trade.quantity * trade.price;
+                        let log = taker_quote_balance.track_update(|b| {
+                            b.add_balance(proceeds, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.taker_commission_qty, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Maker 的 quote 资产（支付）
+                    if let Ok(Some(mut maker_quote_balance)) =
+                        self.balance_repo.find_by_id_4_update(&maker_quote_balance_id)
+                    {
+                        let payment = trade.quantity * trade.price;
+                        let log = maker_quote_balance.track_update(|b| {
+                            b.frozen2pay(payment, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+
+                    // 更新 Maker 的 base 资产（获得）
+                    if let Ok(Some(mut maker_base_balance)) =
+                        self.balance_repo.find_by_id_4_update(&maker_base_balance_id)
+                    {
+                        let log = maker_base_balance.track_update(|b| {
+                            b.add_balance(trade.quantity, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.maker_commission_qty, Timestamp::now_as_nanos());
+                        });
+                        if let Ok(entry) = log {
+                            balance_change_logs.push(entry);
+                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                        }
+                    }
+                }
+            }
         }
 
         balance_change_logs
