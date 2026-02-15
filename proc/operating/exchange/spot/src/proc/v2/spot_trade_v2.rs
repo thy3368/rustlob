@@ -4,13 +4,16 @@ use base_types::account::balance::Balance;
 use base_types::account::error::BalanceError;
 use base_types::base_types::TraderId;
 use base_types::cqrs::cqrs_types::ResMetadata;
-use base_types::exchange::spot::spot_types::{ConditionalType, ExecutionMethod, MakerConstraint, OrderStatus, OrderType, SpotOrder, SpotTrade, TimeInForce};
+use base_types::exchange::spot::spot_types::{
+    ConditionalType, ExecutionMethod, MakerConstraint, OrderStatus, OrderType, SpotOrder,
+    SpotTrade, TimeInForce,
+};
 use base_types::handler::handler::Handler;
 use base_types::lob::lob::LobOrder;
 use base_types::mark_data::spot::level_types::OrderDelta;
 use base_types::spot_topic::SpotTopic;
 use base_types::{AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
-use db_repo::{CmdRepo, MySqlDbRepo};
+use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 use diff::{ChangeLogEntry, Entity};
 use immutable_derive::immutable;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
@@ -521,15 +524,7 @@ impl SpotTradeBehaviorV2Impl {
 
     /// 批量发送变更事件并持久化（优化B：批量发送）
     fn persist_change_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), SpotCmdErrorAny> {
-        // 批量发送到消息队列
-        let bytes_events: Vec<bytes::Bytes> =
-            logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
-
-        if !bytes_events.is_empty() {
-            let _ = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
-        }
-
-        // 批量回放到数据库
+        // 1.批量回放到数据库
         for log in logs {
             match log.entity_type().as_str() {
                 "Balance" => {
@@ -546,6 +541,14 @@ impl SpotTradeBehaviorV2Impl {
                     log::warn!("Unknown entity type: {}", log.entity_type());
                 }
             }
+        }
+
+        // 2.批量发送到消息队列
+        let bytes_events: Vec<bytes::Bytes> =
+            logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
+
+        if !bytes_events.is_empty() {
+            let _ = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
         }
 
         Ok(())
@@ -680,7 +683,10 @@ impl SpotTradeBehaviorV2Impl {
         Ok(Price::from_f64(0.0))
     }
 
-    fn handle_acquiring(&self, cmd: NewOrderCmd) -> Result<(SpotOrder), SpotCmdErrorAny> {
+    pub(crate) fn handle_acquiring(
+        &self,
+        cmd: NewOrderCmd,
+    ) -> Result<(SpotOrder, Vec<ChangeLogEntry>), SpotCmdErrorAny> {
         // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
         self.validate_order_cmd(&cmd)?;
 
@@ -742,19 +748,11 @@ impl SpotTradeBehaviorV2Impl {
             }
         };
 
-        // 步骤2: 处理条件单（资金已冻结）
-        // 优化E: 条件单触发判断，触发后状态变为 Pending 进入订单簿
-        // if let Some(pending_order) = self.handle_conditional_order(&mut internal_order)? {
-        //     // 条件单未触发，已挂起（资金已冻结）
-        //     // 持久化资金冻结和订单挂起事件
-        //     self.persist_change_logs(&[balance_change_log, order_change_log])?;
-        //     return Ok(pending_order);
-        // }
-
         // 非条件单或已触发，持久化资金冻结和订单创建事件
-        self.persist_change_logs(&[balance_change_log, order_change_log])?;
+        let logs = vec![balance_change_log.clone(), order_change_log.clone()];
+        self.persist_change_logs(&logs)?;
 
-        Ok(internal_order)
+        Ok((internal_order, logs))
     }
 
     fn handle_data(
@@ -1398,7 +1396,112 @@ impl SpotTradeBehaviorV2Impl {
             log::error!("Failed to replay order event: {:?}", e);
         }
 
+        //todo 回放 order_change_logs/trade_change_logs
+        //发消息 order_change_logs/trade_change_logs
+
         trades
+    }
+
+    /// 通过订单ID进行撮合处理（用于Actor模式）
+    ///
+    /// # Arguments
+    /// * `order_id` - 订单ID
+    ///
+    /// # Returns
+    /// * `Ok(Vec<ChangeLogEntry>)` - 撮合产生的所有变更日志（包括trade和order更新）
+    /// * `Err(SpotCmdErrorAny)` - 处理失败
+    pub(crate) fn handle_match2(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+        // 1. 从订单仓库查询订单
+        let order_id_str = order_id.to_string();
+        let mut order = match self.order_repo.find_by_id(&order_id_str) {
+            Ok(Some(order)) => order,
+            Ok(None) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                    field: "order_id",
+                    reason: "order not found",
+                }));
+            }
+            Err(e) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("Failed to query order: {}", e),
+                }));
+            }
+        };
+
+        // 2. 检查订单状态是否为Pending
+        if order.status != OrderStatus::Pending {
+            return Ok(Vec::new()); // 非Pending状态不需要撮合
+        }
+
+        tracing::info!(
+            "开始撮合订单: order_id={}, trading_pair={:?}, side={:?}, qty={}",
+            order.order_id,
+            order.trading_pair,
+            order.side,
+            order.total_qty
+        );
+
+        // 3. 执行撮合
+        let trades = self.handle_match(&mut order);
+
+        // 4. 生成变更日志
+        let mut all_change_logs: Vec<ChangeLogEntry> = Vec::new();
+
+        // 生成trade的changelog
+        for trade in &trades {
+            // 手动创建 ChangeLogEntry（因为 SpotTrade 没有实现 Entity trait）
+            let trade_log = ChangeLogEntry::new(
+                trade.trade_id.to_string(),
+                "SpotTrade".to_string(),
+                diff::ChangeType::Created { fields: Vec::new() },
+                Timestamp::now_as_nanos().0,
+                0, // sequence
+            );
+            all_change_logs.push(trade_log);
+        }
+
+        // 生成order更新的changelog（如果有成交）
+        if !trades.is_empty() {
+            // 手动创建 order 更新的 ChangeLogEntry
+            let order_log = ChangeLogEntry::new(
+                order.order_id.to_string(),
+                "SpotOrder".to_string(),
+                diff::ChangeType::Updated {
+                    changed_fields: vec![
+                        diff::FieldChange::new(
+                            "status",
+                            "Pending".to_string(),
+                            format!("{:?}", order.status),
+                        ),
+                        diff::FieldChange::new(
+                            "executed_qty",
+                            "0".to_string(),
+                            order.executed_qty.to_string(),
+                        ),
+                        diff::FieldChange::new(
+                            "unfilled_qty",
+                            order.total_qty.to_string(),
+                            order.unfilled_qty.to_string(),
+                        ),
+                    ],
+                },
+                Timestamp::now_as_nanos().0,
+                0, // sequence
+            );
+            all_change_logs.push(order_log);
+        }
+
+        tracing::info!(
+            "订单撮合完成: order_id={}, 成交数={}, 变更日志数={}",
+            order_id,
+            trades.len(),
+            all_change_logs.len()
+        );
+
+        Ok(all_change_logs)
     }
 
     /// 处理交易的清算操作
@@ -1584,6 +1687,44 @@ impl SpotTradeBehaviorV2Impl {
         balance_change_logs
     }
 
+    /// 通过交易ID进行结算处理（用于Actor模式）
+    ///
+    /// # Arguments
+    /// * `trade_id` - 交易ID
+    ///
+    /// # Returns
+    /// * `Ok(Vec<ChangeLogEntry>)` - 结算产生的所有余额变更日志
+    /// * `Err(SpotCmdErrorAny)` - 处理失败
+    pub(crate) fn handle_settlement2(&self, trade_id: u64) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+        // 1. 从交易仓库查询交易
+        let trade_id_str = trade_id.to_string();
+        let trade = match self.trade_repo.find_by_id(&trade_id_str) {
+            Ok(Some(trade)) => trade,
+            Ok(None) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                    field: "trade_id",
+                    reason: "trade not found",
+                }));
+            }
+            Err(e) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("Failed to query trade: {}", e),
+                }));
+            }
+        };
+
+        tracing::info!("开始结算交易: trade_id={}, taker_order_id={}, maker_order_id={}",
+            trade.trade_id, trade.taker_order_id, trade.maker_order_id);
+
+        // 2. 执行结算
+        let balance_change_logs = self.handle_settlement(vec![trade]);
+
+        tracing::info!("交易结算完成: trade_id={}, 生成 {} 条余额变更日志",
+            trade_id, balance_change_logs.len());
+
+        Ok(balance_change_logs)
+    }
+
     /// 处理新订单命令的主方法
     ///
     /// ## 状态处理逻辑
@@ -1614,7 +1755,7 @@ impl SpotTradeBehaviorV2Impl {
     /// ```
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 1.执行订单预处理（创建订单 + 冻结资金）
-        let mut internal_order = self.handle_acquiring(cmd)?;
+        let (mut internal_order, _logs) = self.handle_acquiring(cmd)?;
 
         match internal_order.status {
             OrderStatus::ConditionalPending => {
@@ -1645,10 +1786,7 @@ impl SpotTradeBehaviorV2Impl {
             }
             OrderStatus::Filled => {
                 // 预处理不应返回此状态，如果发生则报错
-                log::error!(
-                    "Unexpected Filled status for new order {}",
-                    internal_order.order_id
-                );
+                log::error!("Unexpected Filled status for new order {}", internal_order.order_id);
                 return Err(SpotCmdErrorAny::Common(CommonError::Internal {
                     message: "Unexpected order status: Filled".to_string(),
                 }));
@@ -1674,10 +1812,7 @@ impl SpotTradeBehaviorV2Impl {
             }
             OrderStatus::Expired => {
                 // 预处理不应返回此状态
-                log::error!(
-                    "Unexpected Expired status for new order {}",
-                    internal_order.order_id
-                );
+                log::error!("Unexpected Expired status for new order {}", internal_order.order_id);
                 return Err(SpotCmdErrorAny::Common(CommonError::Internal {
                     message: "Unexpected order status: Expired".to_string(),
                 }));
