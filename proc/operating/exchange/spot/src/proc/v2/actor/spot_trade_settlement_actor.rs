@@ -72,33 +72,7 @@ impl SpotSettlementActor {
             }
         };
 
-        // 发送余额变更日志到消息队列
-        if !balance_change_logs.is_empty() {
-            let bytes_events: Vec<bytes::Bytes> = balance_change_logs
-                .iter()
-                .filter_map(|log| {
-                    serde_json::to_vec(log)
-                        .ok()
-                        .map(bytes::Bytes::from)
-                })
-                .collect();
 
-            if !bytes_events.is_empty() {
-                match self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None) {
-                    Ok(results) => {
-                        let success_count = results.iter().filter(|r| r.is_ok()).count();
-                        tracing::info!(
-                            "成功发送 {}/{} 个余额变更日志到队列",
-                            success_count,
-                            balance_change_logs.len()
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!("批量发送余额变更日志失败: {:?}", e);
-                    }
-                }
-            }
-        }
 
         tracing::info!("结算处理完成: trade_id={}", trade_id);
     }

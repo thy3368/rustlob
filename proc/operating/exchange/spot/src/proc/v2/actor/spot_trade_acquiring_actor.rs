@@ -18,7 +18,6 @@ pub type NewOrderCmdReceiver = Receiver<NewOrderCmd>;
 //收单
 pub struct SpotAcquiringActor {
     trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
-    queue: Arc<MPMCQueue>,
     /// 无锁命令队列接收端（使用 Mutex 允许在 Arc 中可变）
     command_receiver: Mutex<Option<NewOrderCmdReceiver>>,
 }
@@ -29,7 +28,7 @@ impl SpotAcquiringActor {
         queue: Arc<MPMCQueue>,
         command_receiver: NewOrderCmdReceiver,
     ) -> Self {
-        Self { trade_behavior, queue, command_receiver: Mutex::new(Some(command_receiver)) }
+        Self { trade_behavior, command_receiver: Mutex::new(Some(command_receiver)) }
     }
     /// 处理 NewOrderCmd 命令
     /// 1. 验证订单
@@ -74,32 +73,6 @@ impl SpotAcquiringActor {
             _ => "其他订单",
         };
         tracing::info!("订单类型: {}, status={:?}", order_type_str, order.status);
-
-        // 步骤3: 发送事件logs到消息队列
-        // 批量发送变更日志到消息队列，使用 send_batch 减少 IO 次数
-        if !logs.is_empty() {
-            let bytes_events: Vec<bytes::Bytes> = logs
-                .iter()
-                .filter_map(|log| serde_json::to_vec(log).ok().map(bytes::Bytes::from))
-                .collect();
-
-            if !bytes_events.is_empty() {
-                match self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None) {
-                    Ok(results) => {
-                        let success_count = results.iter().filter(|r| r.is_ok()).count();
-                        tracing::info!(
-                            "成功发送 {}/{} 个变更日志事件到队列 (topic: {})",
-                            success_count,
-                            logs.len(),
-                            SpotTopic::EntityChangeLog.name()
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!("批量发送变更日志事件失败: {:?}", e);
-                    }
-                }
-            }
-        }
 
         Ok(())
     }

@@ -1,13 +1,18 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
 use base_types::actor_x::ActorX;
-use base_types::spot_topic::SpotTopic;
-use base_types::{OrderSide, TradingPair, Quantity, Price};
 use base_types::base_types::TraderId;
-use base_types::exchange::spot::spot_types::{OrderStatus, SpotOrder, SpotTrade, OrderType, TimeInForce, ExecutionMethod, ConditionalType, AlgorithmStrategy, SelfTradePrevention};
+use base_types::exchange::spot::spot_types::{
+    AlgorithmStrategy, ConditionalType, ExecutionMethod, OrderStatus, OrderType,
+    SelfTradePrevention, SpotOrder, SpotTrade, TimeInForce,
+};
+use base_types::spot_topic::SpotTopic;
+use base_types::{OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLogEntry, ChangeType, FieldChange};
 use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+
 use crate::proc::v2::actor::spot_trade_acquiring_actor::{NewOrderCmdReceiver, SpotAcquiringActor};
 use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
@@ -17,10 +22,10 @@ pub struct SpotMatchActor {
 }
 
 /// 从 ChangeLogEntry 重构 SpotOrder
-/// 
+///
 /// # Arguments
 /// * `change_log` - 包含订单创建或更新信息的变更日志
-/// 
+///
 /// # Returns
 /// * `Ok(SpotOrder)` - 成功重构的订单
 /// * `Err(String)` - 重构失败的原因
@@ -28,9 +33,7 @@ fn reconstruct_order_from_changelog(change_log: &ChangeLogEntry) -> Result<SpotO
     // 提取字段映射
     let fields_map: HashMap<&str, &str> = match change_log.change_type() {
         ChangeType::Created { fields } | ChangeType::Updated { changed_fields: fields } => {
-            fields.iter()
-                .map(|f| (f.field_name.as_ref(), f.new_value.as_str()))
-                .collect()
+            fields.iter().map(|f| (f.field_name.as_ref(), f.new_value.as_str())).collect()
         }
         ChangeType::Deleted => {
             return Err("Cannot reconstruct order from Deleted event".to_string());
@@ -38,43 +41,47 @@ fn reconstruct_order_from_changelog(change_log: &ChangeLogEntry) -> Result<SpotO
     };
 
     // 解析必需字段
-    let order_id: u64 = fields_map.get("order_id")
+    let order_id: u64 = fields_map
+        .get("order_id")
         .and_then(|v| v.parse().ok())
         .ok_or("Missing or invalid order_id")?;
 
-    let trading_pair = fields_map.get("trading_pair")
+    let trading_pair = fields_map
+        .get("trading_pair")
         .and_then(|v| parse_trading_pair(v))
         .ok_or("Missing or invalid trading_pair")?;
 
-    let side = fields_map.get("side")
+    let side = fields_map
+        .get("side")
         .and_then(|v| parse_order_side(v))
         .ok_or("Missing or invalid side")?;
 
-    let quantity = fields_map.get("total_qty")
+    let quantity = fields_map
+        .get("total_qty")
         .and_then(|v| v.parse::<f64>().ok())
         .map(Quantity::from_f64)
         .ok_or("Missing or invalid total_qty")?;
 
-    let price = fields_map.get("price")
-        .and_then(|v| v.parse::<f64>().ok())
-        .map(Price::from_f64);
+    let price = fields_map.get("price").and_then(|v| v.parse::<f64>().ok()).map(Price::from_f64);
 
-    let time_in_force = fields_map.get("time_in_force")
+    let time_in_force = fields_map
+        .get("time_in_force")
         .and_then(|v| parse_time_in_force(v))
         .unwrap_or(TimeInForce::GTC);
 
     // 解析可选字段
     let client_order_id = fields_map.get("client_order_id").map(|v| v.to_string());
-    let quote_order_qty = fields_map.get("quote_order_qty")
+    let quote_order_qty = fields_map
+        .get("quote_order_qty")
         .and_then(|v| v.parse::<f64>().ok())
         .map(Quantity::from_f64);
 
-    let trader_id = fields_map.get("trader_id")
-        .and_then(|v| parse_trader_id(v))
-        .unwrap_or_default();
+    let trader_id =
+        fields_map.get("trader_id").and_then(|v| parse_trader_id(v)).unwrap_or_default();
 
     // 解析订单状态（如果不是Pending，说明有问题）
-    let status = fields_map.get("status")
+    let status = fields_map
+        .get("status")
         .and_then(|v| parse_order_status(v))
         .unwrap_or(OrderStatus::Pending);
 
@@ -93,13 +100,14 @@ fn reconstruct_order_from_changelog(change_log: &ChangeLogEntry) -> Result<SpotO
 
     // 设置其他字段
     order.status = status;
-    order.order_type = fields_map.get("order_type")
-        .and_then(|v| parse_order_type(v))
-        .unwrap_or(OrderType::Limit);
-    order.execution_method = fields_map.get("execution_method")
+    order.order_type =
+        fields_map.get("order_type").and_then(|v| parse_order_type(v)).unwrap_or(OrderType::Limit);
+    order.execution_method = fields_map
+        .get("execution_method")
         .and_then(|v| parse_execution_method(v))
         .unwrap_or(ExecutionMethod::Limit);
-    order.conditional_type = fields_map.get("conditional_type")
+    order.conditional_type = fields_map
+        .get("conditional_type")
         .and_then(|v| parse_conditional_type(v))
         .unwrap_or(ConditionalType::None);
 
@@ -230,8 +238,8 @@ impl SpotMatchActor {
         let is_pending = match change_log.change_type() {
             ChangeType::Created { fields } | ChangeType::Updated { changed_fields: fields } => {
                 fields.iter().any(|field| {
-                    field.field_name.as_ref() == "status" && 
-                    (field.new_value == "Pending" || field.new_value == "PENDING")
+                    field.field_name.as_ref() == "status"
+                        && (field.new_value == "Pending" || field.new_value == "PENDING")
                 })
             }
             _ => false,
@@ -241,13 +249,21 @@ impl SpotMatchActor {
             return;
         }
 
-        tracing::info!("检测到订单进入 Pending 状态，开始撮合处理: order_id={}", change_log.entity_id());
+        tracing::info!(
+            "检测到订单进入 Pending 状态，开始撮合处理: order_id={}",
+            change_log.entity_id()
+        );
 
         // 从 ChangeLogEntry 重构 SpotOrder
         let order = match reconstruct_order_from_changelog(&change_log) {
             Ok(order) => {
-                tracing::info!("成功重构订单: order_id={}, trading_pair={:?}, side={:?}, qty={}", 
-                    order.order_id, order.trading_pair, order.side, order.total_qty);
+                tracing::info!(
+                    "成功重构订单: order_id={}, trading_pair={:?}, side={:?}, qty={}",
+                    order.order_id,
+                    order.trading_pair,
+                    order.side,
+                    order.total_qty
+                );
                 order
             }
             Err(e) => {
@@ -255,30 +271,37 @@ impl SpotMatchActor {
                 return;
             }
         };
-        
+
         // 执行撮合处理
         self.process_match(order).await;
     }
 
     /// 执行撮合处理
     async fn process_match(&self, mut order: SpotOrder) {
-        tracing::info!("执行撮合处理: order_id={}, trading_pair={:?}", 
-            order.order_id, order.trading_pair);
+        tracing::info!(
+            "执行撮合处理: order_id={}, trading_pair={:?}",
+            order.order_id,
+            order.trading_pair
+        );
 
         // 调用 handle_match 进行撮合
         // 注意：trade_behavior.handle_match 需要返回 trades
         // 这里假设 trade_behavior 有 handle_match 方法
-        
+
         // 由于 handle_match 是私有方法，我们需要通过其他方式调用
         // 可能的方案：
         // 1. 将 handle_match 改为 pub(crate) 或 pub
         // 2. 通过命令模式调用
         // 3. 直接调用 trade_behavior 的公开方法
-        
+
         // 调用 handle_match2 进行撮合并获取变更日志
         let change_logs = match self.trade_behavior.handle_match2(order.order_id) {
             Ok(logs) => {
-                tracing::info!("撮合成功: order_id={}, 生成 {} 条变更日志", order.order_id, logs.len());
+                tracing::info!(
+                    "撮合成功: order_id={}, 生成 {} 条变更日志",
+                    order.order_id,
+                    logs.len()
+                );
                 logs
             }
             Err(e) => {
@@ -287,41 +310,7 @@ impl SpotMatchActor {
             }
         };
 
-        // 发送变更日志到消息队列
-        if !change_logs.is_empty() {
-            let bytes_events: Vec<bytes::Bytes> = change_logs
-                .iter()
-                .filter_map(|log| {
-                    serde_json::to_vec(log)
-                        .ok()
-                        .map(bytes::Bytes::from)
-                })
-                .collect();
-
-            if !bytes_events.is_empty() {
-                match self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None) {
-                    Ok(results) => {
-                        let success_count = results.iter().filter(|r| r.is_ok()).count();
-                        tracing::info!(
-                            "成功发送 {}/{} 个变更日志到队列",
-                            success_count,
-                            change_logs.len()
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!("批量发送变更日志失败: {:?}", e);
-                    }
-                }
-            }
-        }
-
         tracing::info!("撮合处理完成: order_id={}", order.order_id);
-
-
-
-
-
-
     }
 }
 
