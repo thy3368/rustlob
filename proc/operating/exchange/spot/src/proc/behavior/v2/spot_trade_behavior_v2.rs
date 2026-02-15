@@ -2,7 +2,7 @@
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
 
-use base_types::exchange::spot::spot_types::{OrderType, TimeInForce};
+use base_types::exchange::spot::spot_types::{OrderStatus, OrderType, TimeInForce};
 use base_types::handler::handler::Handler;
 use base_types::{AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use immutable_derive::immutable;
@@ -185,28 +185,28 @@ pub enum OrderRateLimitExceededMode {
     CANCEL_ONLY,
 }
 
-/// 订单状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-
-pub enum OrderStatus {
-    /// 新建订单
-    NEW,
-    /// 部分成交
-    PARTIALLY_FILLED,
-    /// 全部成交
-    FILLED,
-    /// 已取消
-    CANCELED,
-    /// 待取消（当前未使用）
-    PENDING_CANCEL,
-    /// 订单被拒绝
-    REJECTED,
-    /// 订单过期
-    EXPIRED,
-    /// 订单过期（在匹配引擎中）
-    EXPIRED_IN_MATCH,
-}
+// /// 订单状态
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//
+// pub enum OrderStatus {
+//     /// 新建订单
+//     NEW,
+//     /// 部分成交
+//     PARTIALLY_FILLED,
+//     /// 全部成交
+//     FILLED,
+//     /// 已取消
+//     CANCELED,
+//     /// 待取消（当前未使用）
+//     PENDING_CANCEL,
+//     /// 订单被拒绝
+//     REJECTED,
+//     /// 订单过期
+//     EXPIRED,
+//     /// 订单过期（在匹配引擎中）
+//     EXPIRED_IN_MATCH,
+// }
 
 /// OCO 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,7 +268,10 @@ pub struct NewOrderCmd {
     time_in_force: Option<TimeInForce>,
     /// 数量
     quantity: Option<Quantity>,
-    /// 报价数量（市价单使用）
+    /// 报价数量（仅市价单 MARKET 使用），以报价资产（quote asset）计价的交易金额
+    /// 与 quantity 互斥：
+    /// - quantity: 以基础资产计价（如买入 0.5 BTC）
+    /// - quote_order_qty: 以报价资产计价（如花费 100 USDT 购买 BTC）
     quote_order_qty: Option<Quantity>,
     /// 价格
     price: Option<Price>,
