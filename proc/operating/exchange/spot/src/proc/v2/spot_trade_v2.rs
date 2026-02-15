@@ -4,9 +4,7 @@ use base_types::account::balance::Balance;
 use base_types::account::error::BalanceError;
 use base_types::base_types::TraderId;
 use base_types::cqrs::cqrs_types::ResMetadata;
-use base_types::exchange::spot::spot_types::{
-    ConditionalType, ExecutionMethod, MakerConstraint, OrderType, SpotOrder, SpotTrade, TimeInForce,
-};
+use base_types::exchange::spot::spot_types::{ConditionalType, ExecutionMethod, MakerConstraint, OrderStatus, OrderType, SpotOrder, SpotTrade, TimeInForce};
 use base_types::handler::handler::Handler;
 use base_types::lob::lob::LobOrder;
 use base_types::mark_data::spot::level_types::OrderDelta;
@@ -55,6 +53,8 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.quote_order_qty().clone(),
                 );
                 order.order_type = order_type;
+                order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
+
                 order
             }
             OrderType::Market => {
@@ -72,6 +72,7 @@ impl From<NewOrderCmd> for SpotOrder {
                 );
                 order.order_type = order_type;
                 order.execution_method = ExecutionMethod::Market;
+                order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
                 order.price = None; // 市价单价格为None
                 order
             }
@@ -93,6 +94,8 @@ impl From<NewOrderCmd> for SpotOrder {
                 order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None;
+                order.status =
+                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
                 order
             }
             OrderType::StopLossLimit => {
@@ -112,6 +115,8 @@ impl From<NewOrderCmd> for SpotOrder {
                 order.conditional_type = ConditionalType::StopLoss;
                 order.execution_method = ExecutionMethod::Limit;
                 order.stop_price = *cmd.stop_price();
+                order.status =
+                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
                 order
             }
             OrderType::TakeProfit => {
@@ -132,6 +137,8 @@ impl From<NewOrderCmd> for SpotOrder {
                 order.stop_price = *cmd.stop_price();
                 order.execution_method = ExecutionMethod::Market;
                 order.price = None;
+                order.status =
+                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
                 order
             }
             OrderType::TakeProfitLimit => {
@@ -151,6 +158,8 @@ impl From<NewOrderCmd> for SpotOrder {
                 order.conditional_type = ConditionalType::TakeProfit;
                 order.execution_method = ExecutionMethod::Limit;
                 order.stop_price = *cmd.stop_price();
+                order.status =
+                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
                 order
             }
             OrderType::LimitMaker => {
@@ -211,9 +220,9 @@ impl SpotTradeBehaviorV2Impl {
     /// | **A. 消除 unwrap()** | 使用 match/Result 处理所有错误，避免 panic | Line 560-573 |
     /// | **B. 批量发送事件** | send_batch 批量发送，减少 IO 次数 | Line 480-510 |
     /// | **D. 参数验证前置** | 创建订单前验证，避免无效资源分配 | Line 427-465 |
-    /// | **E. 条件单实现** | StopLoss/TakeProfit 触发判断和挂起逻辑 | Line 517-620 |
+    /// | **E. 条件单实现** | StopLoss/TakeProfit 触发判断和挂起逻辑（创建时冻结资金） | Line 517-620 |
     ///
-    /// ## 状态流转流程
+    /// ## 状态流转流程（方案A：条件单创建时冻结资金）
     ///
     /// ```
     /// 接收 NewOrderCmd
@@ -231,65 +240,67 @@ impl SpotTradeBehaviorV2Impl {
     /// │                   │  - 根据 OrderType 设置不同字段
     /// │                   │  - Market/StopLoss/TakeProfit 设置 price=None
     /// │                   │  - Limit 设置具体价格
+    /// │                   │  - 条件单初始状态: ConditionalPending
     /// └─────────┬─────────┘
     ///           │
-    ///     ┌─────┴─────┐
-    ///     ▼           ▼
-    /// ┌──────────┐ ┌──────────────┐
-    /// │ 条件单?  │ │   普通单     │
-    /// │(StopLoss)│ │              │
-    /// └────┬─────┘ └──────┬───────┘
-    ///      │              │
-    ///      ▼              ▼
-    /// ┌──────────┐ ┌───────────────────┐
-    /// │ 挂条件单 │ │  2.计算冻结资产   │
-    /// │  优化E   │ │  frozen_asset_id()│
-    /// │          │ │                   │
-    /// │ 等待触发 │ │  Buy: 冻结 quote  │
-    /// │          │ │  Sell: 冻结 base  │
-    /// └──────────┘ └─────────┬─────────┘
-    ///                        │
-    ///                        ▼
-    ///            ┌───────────────────────┐
-    ///            │  3.查询并锁定余额     │
-    ///            │  find_by_id_4_update()│
-    ///            │  ⚠️ 竞争点：DB行锁   │
-    ///            └───────────┬───────────┘
-    ///                        │
-    ///         ┌──────────────┼──────────────┐
-    ///         ▼              ▼              ▼
-    ///   ┌──────────┐  ┌──────────┐  ┌──────────┐
-    ///   │余额不足  │  │余额充足  │  │DB错误    │
-    ///   │Insufficient│  │(正常流程)│  │         │
-    ///   └────┬─────┘  └────┬─────┘  └────┬─────┘
-    ///        │             │             │
-    ///        ▼             ▼             ▼
-    ///   返回错误      ┌──────────┐   返回错误
-    ///                 │4.冻结余额│
-    ///                 │handle_data
-    ///                 └────┬─────┘
-    ///                      │
-    ///         ┌────────────┼────────────┐
-    ///         ▼            ▼            ▼
-    ///   ┌──────────┐ ┌──────────┐ ┌──────────┐
-    ///   │生成Balance│ │生成Order │ │发送Event │
-    ///   │ChangeLog │ │ChangeLog │ │到队列    │
-    ///   └────┬─────┘ └────┬─────┘ └────┬─────┘
-    ///        │            │            │
-    ///        └────────────┴────────────┘
-    ///                     │
-    ///                     ▼
-    ///            ┌───────────────────┐
-    ///            │ 5.持久化到数据库  │
-    ///            │ replay_event()    │
-    ///            │                   │
-    ///            │ ⚠️ 异常处理：     │
-    ///            │ 日志记录，不返回错误│
-    ///            │ （消息队列已发送）  │
-    ///            └─────────┬─────────┘
-    ///                      │
-    ///                      ▼
-    ///              返回 SpotOrder
+    ///           ▼
+    /// ┌───────────────────┐
+    /// │ 2.计算冻结资产    │  frozen_asset_id()
+    /// │                   │  - Buy: 冻结 quote
+    /// │                   │  - Sell: 冻结 base
+    /// │                   │  - ⚠️ 所有订单类型统一冻结（含条件单）
+    /// └─────────┬─────────┘
+    ///           │
+    ///           ▼
+    /// ┌───────────────────────┐
+    /// │  3.查询并锁定余额     │
+    /// │  find_by_id_4_update()│
+    /// │  ⚠️ 竞争点：DB行锁   │
+    /// └───────────┬───────────┘
+    ///             │
+    ///  ┌──────────┼──────────┐
+    ///  ▼          ▼          ▼
+    /// ┌──────┐ ┌──────┐ ┌──────┐
+    /// │余额  │ │余额  │ │DB    │
+    /// │不足  │ │充足  │ │错误  │
+    /// └──┬───┘ └──┬───┘ └──┬───┘
+    ///    │        │        │
+    ///    ▼        ▼        ▼
+    /// 返回错误  ┌──────┐  返回错误
+    ///          │4.冻结│
+    ///          │资金  │
+    ///          └──┬───┘
+    ///             │
+    ///             ▼
+    /// ┌───────────────────────────┐
+    /// │ 5.处理条件单（优化E）     │
+    /// │                           │
+    /// │ ┌─────────┐ ┌─────────┐   │
+    /// │ │条件单   │ │普通单   │   │
+    /// │ │         │ │         │   │
+    /// │ │检查触发 │ │         │   │
+    /// │ └───┬─────┘ │         │   │
+    /// │     │       │         │   │
+    /// │  ┌──┴──┐    │         │   │
+    /// │  ▼     ▼    │         │   │
+    /// │ 触发   未触发 │         │   │
+    /// │  │      │   │         │   │
+    /// │  ▼      ▼   │         │   │
+    /// │ Pending Conditional │   │
+    /// │ (进LOB) Pending     │   │
+    /// │         (挂起)      │   │
+    /// └────┬────────┬───────┴───┘
+    ///      │        │
+    ///      ▼        ▼
+    /// ┌───────────────────┐
+    /// │ 6.持久化到数据库  │
+    /// │ replay_event()    │
+    /// │                   │
+    /// │ 冻结资金+订单状态 │
+    /// └─────────┬─────────┘
+    ///           │
+    ///           ▼
+    ///     返回 SpotOrder
     /// ```
     ///
     /// ## 关键竞争点分析
@@ -330,85 +341,87 @@ impl SpotTradeBehaviorV2Impl {
     /// - [ ] 余额查询缓存（Redis）
     /// - [ ] 条件单价格订阅（实时价格推送）
     ///
-    /// ## 订单状态 (order_status) 变化分析
+    /// ## 订单状态 (order_status) 变化分析（方案A：条件单创建时冻结）
     ///
     /// ### pre_process 中的状态流转
     ///
     /// ```
-    /// ┌─────────────────────────────────────────────────────────────┐
-    /// │                    pre_process 状态流转                     │
-    /// ├─────────────────────────────────────────────────────────────┤
-    /// │                                                             │
-    /// │   接收 NewOrderCmd                                          │
-    /// │        │                                                    │
-    /// │        ▼                                                    │
-    /// │   ┌─────────────────┐                                       │
-    /// │   │ SpotOrder::from │  初始状态设置                         │
-    /// │   │    (cmd)        │  status = Pending (Line 1006)         │
-    /// │   └────────┬────────┘                                       │
-    /// │            │                                                │
-    /// │            ▼                                                │
-    /// │   ┌─────────────────┐                                       │
-    /// │   │  conditional_   │  条件单处理 (优化E)                   │
-    /// │   │  type 检查      │  - None: 继续                         │
-    /// │   │                 │  - StopLoss: 检查触发并处理           │
-    /// │   │                 │  - TakeProfit: 检查触发并处理         │
-    /// │   │                 │  - 未触发: 挂起到条件单队列           │
-    /// │   └────────┬────────┘                                       │
-    /// │            │                                                │
-    /// │            ▼                                                │
-    /// │   ┌─────────────────┐                                       │
-    /// │   │  handle_data    │  冻结余额处理                         │
-    /// │   │                 │  - 成功: 返回变更日志                 │
-    /// │   │                 │  - 失败: 返回 Error (不修改状态)      │
-    /// │   └────────┬────────┘                                       │
-    /// │            │                                                │
-    /// │    ┌───────┴───────┐                                        │
-    /// │    ▼               ▼                                        │
-    /// │ 成功             失败                                       │
-    /// │    │               │                                        │
-    /// │    ▼               ▼                                        │
-    /// │ ┌────────┐    ┌─────────────┐                               │
-    /// │ │ Pending│    │ 余额不足    │  ✅ 已改进                    │
-    /// │ │ (保持) │    │  设置状态   │  - 设置 Rejected              │
-    /// │ └────┬───┘    │  发送事件   │  - 生成变更日志               │
-    /// │      │        │  持久化DB   │  - 发送队列+DB持久化          │
-    /// │      │        └──────┬──────┘  - 然后返回错误               │
-    /// │      │               │                                       │
-    /// │      │                                                      │
-    /// │      ▼                                                      │
-    /// │ 发送事件到队列                                               │
-    /// │ 回放事件到DB                                                 │
-    /// │      │                                                      │
-    /// │      ▼                                                      │
-    /// │ 返回 Ok(SpotOrder)                                           │
-    /// │ status = Pending                                             │
-    /// │                                                             │
-    /// └─────────────────────────────────────────────────────────────┘
+    /// ┌─────────────────────────────────────────────────────────────────┐
+    /// │                    pre_process 状态流转（方案A）               │
+    /// ├─────────────────────────────────────────────────────────────────┤
+    /// │                                                                 │
+    /// │   接收 NewOrderCmd                                              │
+    /// │        │                                                        │
+    /// │        ▼                                                        │
+    /// │   ┌─────────────────┐                                           │
+    /// │   │ SpotOrder::from │  初始状态设置                             │
+    /// │   │    (cmd)        │  - 普通单: Pending                        │
+    /// │   └────────┬────────┘  - 条件单: ConditionalPending (Line 997)  │
+    /// │            │                                                    │
+    /// │            ▼                                                    │
+    /// │   ┌─────────────────┐                                           │
+    /// │   │  handle_data    │  冻结资金（所有订单类型）                 │
+    /// │   │                 │  - ✅ 条件单创建时即冻结                  │
+    /// │   │                 │  - 确保触发时资金充足                     │
+    /// │   └────────┬────────┘                                           │
+    /// │            │                                                    │
+    /// │    ┌───────┴───────┐                                            │
+    /// │    ▼               ▼                                            │
+    /// │ 成功             失败                                           │
+    /// │    │               │                                            │
+    /// │    ▼               ▼                                            │
+    /// │ ┌───────┐    ┌─────────────┐                                    │
+    /// │ │ 步骤2  │    │ 余额不足    │  ✅ 已改进                         │
+    /// │ │条件单  │    │  设置状态   │  - 设置 Rejected                   │
+    /// │ │处理    │    │  发送事件   │  - 生成变更日志                    │
+    /// │ └───┬───┘    │  持久化DB   │  - 发送队列+DB持久化               │
+    /// │     │        └──────┬──────┘  - 然后返回错误                    │
+    /// │     │               │                                          │
+    /// │     ▼               │                                          │
+    /// │ ┌─────────────┐     │                                          │
+    /// │ │检查触发条件 │     │                                          │
+    /// │ └──────┬──────┘     │                                          │
+    /// │        │             │                                          │
+    /// │   ┌────┴────┐        │                                          │
+    /// │   ▼         ▼        │                                          │
+    /// │ 已触发    未触发     │                                          │
+    /// │   │         │        │                                          │
+    /// │   ▼         ▼        │                                          │
+    /// │ Pending  Conditional │                                          │
+    /// │(资金冻结)  Pending   │                                          │
+    /// │   │      (资金冻结)  │                                          │
+    /// │   │         │        │                                          │
+    /// │   ▼         ▼        │                                          │
+    /// │  进入    挂起等待    │                                          │
+    /// │ 订单簿   价格触发    │                                          │
+    /// │                      │                                          │
+    /// └──────────────────────┴──────────────────────────────────────────┘
     /// ```
     ///
     /// ### 关键结论
     ///
     /// | 分析项 | 结论 |
     /// |--------|------|
-    /// | 初始状态 | **Pending** (由 SpotOrder::create_order 设置) |
-    /// | 正常流程状态变更 | **0次** - 成功时保持 Pending |
-    /// | 异常流程状态变更 | **1次** - 余额不足时设置为 **Rejected** |
-    /// | 条件单处理 | 当前为 todo!()，未实现状态变更 |
-    /// | 余额不足 | ✅ **已改进** - 设置 Rejected 状态并记录日志 |
-    /// | 成功返回 | 状态保持 **Pending** |
+    /// | 初始状态 | **Pending/ConditionalPending** (根据订单类型) |
+    /// | 普通单 | **Pending** → 直接进入订单簿 |
+    /// | 条件单 | **ConditionalPending** → 等待触发（资金已冻结）|
+    /// | 条件单触发后 | **ConditionalPending** → **Pending** → 进入订单簿 |
+    /// | 资金冻结时机 | **创建时冻结**（方案A）|
+    /// | 异常流程 | 余额不足 → **Rejected** |
     ///
     /// ### 状态变更规则
     ///
-    /// 1. **正常流程**: pre_process 只负责"预处理"（创建订单+冻结资金）
-    ///    - 成功时状态保持 **Pending**
-    ///    - 真正的撮合在 handle_match 中进行
-    ///    - 状态变更（Filled/Cancelled等）由撮合结果决定
+    /// 1. **普通订单流程**:
+    ///    - 创建订单 → 冻结资金 → 状态保持 **Pending** → 进入订单簿
     ///
-    /// 2. **异常流程** (余额不足):
-    ///    - 状态从 **Pending** → **Rejected**
-    ///    - 生成变更日志并持久化
-    ///    - 确保订单可追踪，用户可查询被拒绝记录
+    /// 2. **条件单流程**（方案A：创建时冻结）:
+    ///    - 创建订单 → 冻结资金 → 状态 **ConditionalPending** → 等待触发
+    ///    - 触发后: ConditionalPending → **Pending** → 进入订单簿
+    ///    - 资金始终冻结，确保触发时可执行
+    ///
+    /// 3. **异常流程** (余额不足):
+    ///    - 状态从初始状态 → **Rejected**
+    ///    - 不冻结资金，生成变更日志并持久化
     ///
     /// ### ✅ 已实现的改进
     ///
@@ -473,7 +486,10 @@ impl SpotTradeBehaviorV2Impl {
 
         // 验证价格（限价单必须提供价格）
         match cmd.order_type() {
-            OrderType::Limit | OrderType::StopLossLimit | OrderType::TakeProfitLimit | OrderType::LimitMaker => {
+            OrderType::Limit
+            | OrderType::StopLossLimit
+            | OrderType::TakeProfitLimit
+            | OrderType::LimitMaker => {
                 if cmd.price().is_none() {
                     return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
                         field: "price",
@@ -486,7 +502,10 @@ impl SpotTradeBehaviorV2Impl {
 
         // 验证止损/止盈价格（条件单必须提供）
         match cmd.order_type() {
-            OrderType::StopLoss | OrderType::StopLossLimit | OrderType::TakeProfit | OrderType::TakeProfitLimit => {
+            OrderType::StopLoss
+            | OrderType::StopLossLimit
+            | OrderType::TakeProfit
+            | OrderType::TakeProfitLimit => {
                 if cmd.stop_price().is_none() {
                     return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
                         field: "stop_price",
@@ -501,15 +520,10 @@ impl SpotTradeBehaviorV2Impl {
     }
 
     /// 批量发送变更事件并持久化（优化B：批量发送）
-    fn persist_change_logs(
-        &self,
-        logs: &[ChangeLogEntry],
-    ) -> Result<(), SpotCmdErrorAny> {
+    fn persist_change_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), SpotCmdErrorAny> {
         // 批量发送到消息队列
-        let bytes_events: Vec<bytes::Bytes> = logs
-            .iter()
-            .filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from))
-            .collect();
+        let bytes_events: Vec<bytes::Bytes> =
+            logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
 
         if !bytes_events.is_empty() {
             let _ = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
@@ -538,6 +552,35 @@ impl SpotTradeBehaviorV2Impl {
     }
 
     /// 处理条件单（优化E：条件单实现）
+    ///
+    /// **前提条件**: 资金已在 pre_process 中冻结
+    ///
+    /// ## 条件单生命周期（方案A：创建时冻结）
+    ///
+    /// ```
+    /// 创建条件单
+    ///     │
+    ///     ▼
+    /// 冻结资金 ←───────────────────────────┐
+    ///     │                                 │
+    ///     ▼                                 │
+    /// ConditionalPending (等待触发)        │
+    ///     │                                 │
+    ///     ├─ 未触发 ──→ 继续等待            │
+    ///     │              资金保持冻结        │
+    ///     │                                 │
+    ///     └─ 触发 ─────→ Pending            │
+    ///       (资金已冻结)  进入订单簿         │
+    ///                       │              │
+    ///                       ▼              │
+    ///                   撮合成交           │
+    ///                       │              │
+    ///                       ▼              │
+    ///                   Filled ────────────┤
+    ///                       │              │
+    ///                       ▼              │
+    ///                   解冻剩余资金 ◄─────┘
+    /// ```
     fn handle_conditional_order(
         &self,
         order: &mut SpotOrder,
@@ -565,31 +608,24 @@ impl SpotTradeBehaviorV2Impl {
                     // 已触发，转为市价单执行
                     log::info!(
                         "StopLoss order {} triggered at price {:?}, stop_price: {:?}",
-                        order.order_id, current_price, stop_price
+                        order.order_id,
+                        current_price,
+                        stop_price
                     );
                     order.execution_method = ExecutionMethod::Market;
                     order.price = None;
                     order.conditional_type = ConditionalType::None;
-                    Ok(None) // 继续正常流程
+                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                    Ok(None) // 继续正常流程（资金已冻结）
                 } else {
-                    // 未触发，挂起等待
+                    // 未触发，挂起等待（资金已冻结）
                     log::info!(
                         "StopLoss order {} pending: current_price={:?}, stop_price={:?}",
-                        order.order_id, current_price, stop_price
+                        order.order_id,
+                        current_price,
+                        stop_price
                     );
-                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
-
-                    // 生成挂起日志
-                    let pending_log = order.track_create().map_err(|e| {
-                        SpotCmdErrorAny::Common(CommonError::Internal {
-                            message: format!("Failed to track conditional order: {}", e),
-                        })
-                    })?;
-
-                    // 持久化到条件单队列
-                    // TODO: 实现条件单队列存储
-                    self.persist_change_logs(&[pending_log])?;
-
+                    // 保持 ConditionalPending 状态（已在 from 中设置）
                     Ok(Some(order.clone())) // 返回订单，不再执行撮合
                 }
             }
@@ -613,30 +649,24 @@ impl SpotTradeBehaviorV2Impl {
                     // 已触发，转为市价单执行
                     log::info!(
                         "TakeProfit order {} triggered at price {:?}, target: {:?}",
-                        order.order_id, current_price, take_profit_price
+                        order.order_id,
+                        current_price,
+                        take_profit_price
                     );
                     order.execution_method = ExecutionMethod::Market;
                     order.price = None;
                     order.conditional_type = ConditionalType::None;
-                    Ok(None) // 继续正常流程
+                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                    Ok(None) // 继续正常流程（资金已冻结）
                 } else {
-                    // 未触发，挂起等待
+                    // 未触发，挂起等待（资金已冻结）
                     log::info!(
                         "TakeProfit order {} pending: current_price={:?}, target={:?}",
-                        order.order_id, current_price, take_profit_price
+                        order.order_id,
+                        current_price,
+                        take_profit_price
                     );
-                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
-
-                    // 生成挂起日志
-                    let pending_log = order.track_create().map_err(|e| {
-                        SpotCmdErrorAny::Common(CommonError::Internal {
-                            message: format!("Failed to track conditional order: {}", e),
-                        })
-                    })?;
-
-                    // 持久化到条件单队列
-                    self.persist_change_logs(&[pending_log])?;
-
+                    // 保持 ConditionalPending 状态（已在 from 中设置）
                     Ok(Some(order.clone())) // 返回订单，不再执行撮合
                 }
             }
@@ -650,38 +680,33 @@ impl SpotTradeBehaviorV2Impl {
         Ok(Price::from_f64(0.0))
     }
 
-    fn pre_process(&self, cmd: NewOrderCmd) -> Result<(SpotOrder), SpotCmdErrorAny> {
+    fn handle_acquiring(&self, cmd: NewOrderCmd) -> Result<(SpotOrder), SpotCmdErrorAny> {
         // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
         self.validate_order_cmd(&cmd)?;
 
         // 根据 NewOrderCmd 创建 SpotOrder
         let mut internal_order = SpotOrder::from(cmd);
 
-        // 优化E: 处理条件单（StopLoss/TakeProfit）
-        if let Some(pending_order) = self.handle_conditional_order(&mut internal_order)? {
-            // 条件单未触发，已挂起，直接返回
-            return Ok(pending_order);
-        }
-
-        // 非条件单或已触发，继续冻结资金流程
+        // 步骤1: 冻结资金（所有订单类型，包括条件单）
         let frozen_asset_id = internal_order.frozen_asset_id();
         let frozen_asset_balance_id = self.queryBalanceId(frozen_asset_id);
 
         // 优化A: 消除 unwrap() - 使用安全的错误处理
-        let mut frozen_asset_balance = match self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id) {
-            Ok(Some(balance)) => balance,
-            Ok(None) => {
-                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                    field: "balance",
-                    reason: "balance not found",
-                }));
-            }
-            Err(e) => {
-                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
-                    message: format!("Failed to query balance: {}", e),
-                }));
-            }
-        };
+        let mut frozen_asset_balance =
+            match self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id) {
+                Ok(Some(balance)) => balance,
+                Ok(None) => {
+                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                        field: "balance",
+                        reason: "balance not found",
+                    }));
+                }
+                Err(e) => {
+                    return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                        message: format!("Failed to query balance: {}", e),
+                    }));
+                }
+            };
 
         // 计算逻辑
         let result = self.handle_data(&mut frozen_asset_balance, &mut internal_order);
@@ -717,7 +742,16 @@ impl SpotTradeBehaviorV2Impl {
             }
         };
 
-        // 优化B: 批量发送变更事件并持久化
+        // 步骤2: 处理条件单（资金已冻结）
+        // 优化E: 条件单触发判断，触发后状态变为 Pending 进入订单簿
+        // if let Some(pending_order) = self.handle_conditional_order(&mut internal_order)? {
+        //     // 条件单未触发，已挂起（资金已冻结）
+        //     // 持久化资金冻结和订单挂起事件
+        //     self.persist_change_logs(&[balance_change_log, order_change_log])?;
+        //     return Ok(pending_order);
+        // }
+
+        // 非条件单或已触发，持久化资金冻结和订单创建事件
         self.persist_change_logs(&[balance_change_log, order_change_log])?;
 
         Ok(internal_order)
@@ -1551,15 +1585,104 @@ impl SpotTradeBehaviorV2Impl {
     }
 
     /// 处理新订单命令的主方法
+    ///
+    /// ## 状态处理逻辑
+    ///
+    /// ```
+    /// ┌─────────────────────────────────────────────────────────────┐
+    /// │                    handle 方法状态处理                       │
+    /// ├─────────────────────────────────────────────────────────────┤
+    /// │                                                             │
+    /// │  pre_process(cmd)                                           │
+    /// │       │                                                     │
+    /// │       ▼                                                     │
+    /// │  ┌─────────────────┐                                        │
+    /// │  │ 返回订单状态    │                                        │
+    /// │  └────────┬────────┘                                        │
+    /// │           │                                                 │
+    /// │     ┌─────┴─────┬──────────────┬─────────────────────┐      │
+    /// │     ▼         ▼              ▼                     ▼      │
+    /// │ Conditional  Pending      PartiallyFilled        终态     │
+    /// │  Pending              │    (不应出现)          (不应出现) │
+    /// │     │                 │                                │   │
+    /// │     ▼                 ▼                                │   │
+    /// │  直接返回          撮合+结算                           │   │
+    /// │  (资金已冻结)      handle_match                        │   │
+    /// │                    handle_settlement                   │   │
+    /// │                                                             │
+    /// └─────────────────────────────────────────────────────────────┘
+    /// ```
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        // 1.执行订单预处理
-        let (mut internal_order) = self.pre_process(cmd)?;
+        // 1.执行订单预处理（创建订单 + 冻结资金）
+        let mut internal_order = self.handle_acquiring(cmd)?;
 
-        // 2.撮合逻辑
-        let trades = self.handle_match(&mut internal_order);
+        match internal_order.status {
+            OrderStatus::ConditionalPending => {
+                // 条件单未触发，资金已冻结，等待后续触发
+                // 直接返回确认，不进行撮合
+                log::info!(
+                    "Conditional order {} is pending, waiting for trigger",
+                    internal_order.order_id
+                );
+            }
+            OrderStatus::Pending => {
+                // 普通订单或已触发的条件单，执行撮合和结算
+                // 2.撮合逻辑
+                let trades = self.handle_match(&mut internal_order);
 
-        // 3.结算操作
-        let balance_change_logs = self.handle_settlement(trades);
+                // 3.结算操作
+                let _balance_change_logs = self.handle_settlement(trades);
+            }
+            OrderStatus::PartiallyFilled => {
+                // 预处理不应返回此状态，如果发生则报错
+                log::error!(
+                    "Unexpected PartiallyFilled status for new order {}",
+                    internal_order.order_id
+                );
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: "Unexpected order status: PartiallyFilled".to_string(),
+                }));
+            }
+            OrderStatus::Filled => {
+                // 预处理不应返回此状态，如果发生则报错
+                log::error!(
+                    "Unexpected Filled status for new order {}",
+                    internal_order.order_id
+                );
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: "Unexpected order status: Filled".to_string(),
+                }));
+            }
+            OrderStatus::Cancelled => {
+                // 预处理不应返回此状态，如果发生则报错
+                log::error!(
+                    "Unexpected Cancelled status for new order {}",
+                    internal_order.order_id
+                );
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: "Unexpected order status: Cancelled".to_string(),
+                }));
+            }
+            OrderStatus::Rejected => {
+                // 余额不足等原因被拒绝，pre_process 已处理并返回错误
+                // 这里不应该到达，但为了完整性处理
+                log::warn!("Order {} was rejected", internal_order.order_id);
+                return Err(SpotCmdErrorAny::Common(CommonError::InsufficientBalance {
+                    required: 0,
+                    available: 0,
+                }));
+            }
+            OrderStatus::Expired => {
+                // 预处理不应返回此状态
+                log::error!(
+                    "Unexpected Expired status for new order {}",
+                    internal_order.order_id
+                );
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: "Unexpected order status: Expired".to_string(),
+                }));
+            }
+        }
 
         let ack = NewOrderAck::new(
             internal_order.trading_pair,

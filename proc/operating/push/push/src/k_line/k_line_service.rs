@@ -9,13 +9,13 @@ use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 use crate::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
 use crate::k_line::k_line_types::{KLineAggMut, KLineUpdateEvent};
 
-pub struct KLineService {
+pub struct KLineActor {
     //todo 每个交易对 分配一个aggregator
     aggregator: Arc<tokio::sync::Mutex<M100SimdKLineAggregator>>,
     queue: Arc<MPMCQueue>, // 使用具体类型而不是trait对象，因为Queue trait有泛型方法
 }
 
-impl KLineService {
+impl KLineActor {
     pub fn new(queue: Arc<MPMCQueue>) -> Self {
         let mut aggregator = M100SimdKLineAggregator::new();
 
@@ -45,7 +45,7 @@ impl KLineService {
     }
 }
 
-impl ActorX for KLineService {
+impl ActorX for KLineActor {
     fn start(self: &Arc<Self>) {
         let mut receiver = self.queue.subscribe(SpotTopic::EntityChangeLog.name(), None);
         let aggregator = self.aggregator.clone();

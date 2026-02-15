@@ -18,14 +18,14 @@ use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 /// 该服务只包含不可变的依赖引用，不包含任何运行时状态，
 /// 因此可以被多个线程同时访问而无需克隆。
 #[immutable]
-pub struct PushService {
+pub struct PushActor {
     /// 连接管理仓储（不可变引用）
     connection_repo: Arc<ConnectionRepo>,
     /// 变更日志仓储（不可变引用）
     change_log_repo: Arc<MPMCQueue>,
 }
 
-impl PushService {
+impl PushActor {
     /// 后台运行事件监听循环
     async fn run(&self) {
         // 订阅变更日志事件
@@ -122,7 +122,7 @@ impl PushService {
     }
 }
 
-impl ActorX for PushService {
+impl ActorX for PushActor {
     /// 启动后台事件监听任务
     ///
     /// 该方法不获取 self 所有权，而是克隆 Arc 引用在后台任务中使用。

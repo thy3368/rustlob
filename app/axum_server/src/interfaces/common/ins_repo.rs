@@ -12,10 +12,10 @@ use lob_repo::adapter::local_lob_impl::LocalLob;
 use lob_repo::adapter::remote_lob_impl::RemoteLob;
 // KLine 相关服务单例
 use push::k_line::{
-    aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator, k_line_service::KLineService,
+    aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator, k_line_service::KLineActor,
 };
 use push::push::connection_types::ConnectionRepo;
-use push::push::push_service::PushService;
+use push::push::push_service::PushActor;
 use push::push::subscription_service::SubscriptionService;
 use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
@@ -32,15 +32,15 @@ use crate::interfaces::spot::websocket::ud_sse_controller::SpotUserDataSSEImpl;
 static M100_SIMD_K_LINE_AGGREGATOR: Lazy<Arc<M100SimdKLineAggregator>> =
     Lazy::new(|| Arc::new(M100SimdKLineAggregator::new()));
 
-static K_LINE_SERVICE: Lazy<Arc<KLineService>> =
-    Lazy::new(|| Arc::new(KLineService::new(MPMC_QUEUE.clone())));
+static K_LINE_SERVICE: Lazy<Arc<KLineActor>> =
+    Lazy::new(|| Arc::new(KLineActor::new(MPMC_QUEUE.clone())));
 
 // KLine 相关服务访问方法
 pub fn get_m100_simd_k_line_aggregator() -> Arc<M100SimdKLineAggregator> {
     M100_SIMD_K_LINE_AGGREGATOR.clone()
 }
 
-pub fn get_k_line_service() -> Arc<KLineService> {
+pub fn get_k_line_service() -> Arc<KLineActor> {
     K_LINE_SERVICE.clone()
 }
 
@@ -138,8 +138,8 @@ static SPOT_USER_DATA_LISTEN_KEY_SERVICE: Lazy<Arc<SpotUserDataListenKeyImpl>> =
 // WebSocket 相关服务单例
 static CONNECTION_REPO: Lazy<Arc<ConnectionRepo>> =
     Lazy::new(|| Arc::new(ConnectionRepo::default()));
-static PUSH_SERVICE: Lazy<Arc<PushService>> =
-    Lazy::new(|| Arc::new(PushService::new(CONNECTION_REPO.clone(), MPMC_QUEUE.clone())));
+static PUSH_SERVICE: Lazy<Arc<PushActor>> =
+    Lazy::new(|| Arc::new(PushActor::new(CONNECTION_REPO.clone(), MPMC_QUEUE.clone())));
 static SUBSCRIPTION_SERVICE: Lazy<Arc<SubscriptionService>> =
     Lazy::new(|| Arc::new(SubscriptionService::new(CONNECTION_REPO.clone())));
 static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
@@ -174,7 +174,7 @@ pub fn get_connection_repo() -> Arc<ConnectionRepo> {
     CONNECTION_REPO.clone()
 }
 
-pub fn get_push_service() -> Arc<PushService> {
+pub fn get_push_service() -> Arc<PushActor> {
     PUSH_SERVICE.clone()
 }
 
