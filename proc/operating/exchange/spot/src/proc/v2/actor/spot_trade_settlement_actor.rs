@@ -83,7 +83,7 @@ impl ActorX for SpotSettlementActor {
         // 同时订阅变更日志事件（用于接收其他系统事件）
         let self_clone2 = Arc::clone(self);
         tokio::spawn(async move {
-            let mut receiver = self_clone2.queue.subscribe(SpotTopic::EntityChangeLog.name(), None);
+            let mut receiver = self_clone2.queue.subscribe(SpotTopic::OrderChangeLog.name(), None);
 
             while let Ok(event) = receiver.recv().await {
                 // 如果事件是 trade.create=true  则进行结算处理； 并发送balance的changelog

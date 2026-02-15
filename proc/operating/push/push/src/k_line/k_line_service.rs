@@ -24,7 +24,7 @@ impl KLineActor {
         aggregator.subscribe(move |event: KLineUpdateEvent| {
             // 将K线更新事件发送到队列，供push服务推送
             if let Err(e) =
-                queue_clone.send(SpotTopic::KLine.name(), event.to_bytes().unwrap(), None)
+                queue_clone.send(SpotTopic::KLineChangeLog.name(), event.to_bytes().unwrap(), None)
             {
                 tracing::error!("Failed to publish KLineUpdateEvent: {:?}", e);
             }
@@ -47,7 +47,7 @@ impl KLineActor {
 
 impl ActorX for KLineActor {
     fn start(self: &Arc<Self>) {
-        let mut receiver = self.queue.subscribe(SpotTopic::EntityChangeLog.name(), None);
+        let mut receiver = self.queue.subscribe(SpotTopic::OrderChangeLog.name(), None);
         let aggregator = self.aggregator.clone();
 
         // todo 优化性能， lock导致的

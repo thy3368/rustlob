@@ -548,7 +548,7 @@ impl SpotTradeBehaviorV2Impl {
             logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
 
         if !bytes_events.is_empty() {
-            let _ = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
+            let _ = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
         }
 
         Ok(())
@@ -1682,7 +1682,7 @@ impl SpotTradeBehaviorV2Impl {
             .filter_map(|event| serde_json::to_vec(event).ok().map(bytes::Bytes::from))
             .collect();
 
-        let results = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
+        let results = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
 
         balance_change_logs
     }

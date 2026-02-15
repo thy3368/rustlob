@@ -29,7 +29,7 @@ impl PushActor {
     /// 后台运行事件监听循环
     async fn run(&self) {
         // 订阅变更日志事件
-        let mut receiver = self.change_log_repo.subscribe(SpotTopic::EntityChangeLog.name(), None);
+        let mut receiver = self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
 
         // 持续监听事件
         while let Ok(event) = receiver.recv().await {

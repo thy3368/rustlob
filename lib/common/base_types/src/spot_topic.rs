@@ -1,15 +1,17 @@
 pub enum SpotTopic {
-    EntityChangeLog,
-    KLine,
-    Other,
+    OrderChangeLog,
+    TradeChangeLog,
+    BalanceChangeLog,
+    KLineChangeLog,
 }
 
 impl SpotTopic {
     pub fn name(&self) -> &'static str {
         match self {
-            SpotTopic::EntityChangeLog => "entity_change_log",
-            SpotTopic::KLine => "kline",
-            SpotTopic::Other => "other",
+            SpotTopic::OrderChangeLog => "OrderChangeLog",
+            SpotTopic::KLineChangeLog => "KLineChangeLog",
+            SpotTopic::TradeChangeLog => "TradeChangeLog",
+            SpotTopic::BalanceChangeLog => "BalanceChangeLog",
         }
     }
 }

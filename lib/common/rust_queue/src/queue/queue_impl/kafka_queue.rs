@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
+use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+use rdkafka::client::DefaultClientContext;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::types::RDKafkaErrorCode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -164,6 +167,45 @@ impl KafkaQueue {
             Err((e, _)) => Err(Box::new(e)),
         }
     }
+
+    /// 创建 Kafka topic（如果不存在）
+    async fn create_topic_if_not_exists(&self, topic: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let admin_client: AdminClient<DefaultClientContext> = ClientConfig::new()
+            .set("bootstrap.servers", &self.config.brokers)
+            .create()?;
+
+        let new_topic = NewTopic {
+            name: topic,
+            num_partitions: 3,
+            replication: TopicReplication::Fixed(1),
+            config: vec![],
+        };
+
+        let opts = AdminOptions::new();
+
+        match admin_client.create_topics(&[new_topic], &opts).await {
+            Ok(results) => {
+                for result in results {
+                    match result {
+                        Ok(_) => {
+                            tracing::info!("Kafka topic '{}' created successfully", topic);
+                        }
+                        Err((RDKafkaErrorCode::TopicAlreadyExists, _)) => {
+                            tracing::debug!("Kafka topic '{}' already exists", topic);
+                        }
+                        Err((code, msg)) => {
+                            tracing::warn!("Failed to create topic '{}': {:?} - {}", topic, code, msg);
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Failed to create topic '{}': {}", topic, e);
+                Ok(()) // 即使创建失败也继续，因为发送时可能会自动创建
+            }
+        }
+    }
 }
 
 impl Queue for KafkaQueue {
@@ -183,8 +225,16 @@ impl Queue for KafkaQueue {
                 let buffer_size =
                     if self.config.buffer_size > 0 { self.config.buffer_size } else { 1024 };
                 let (tx, _) = broadcast::channel(buffer_size);
+                let topic = topic.to_string();
+                // 异步创建 Kafka topic（如果不存在）
+                let queue = self.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = queue.create_topic_if_not_exists(&topic).await {
+                        tracing::warn!("Failed to create topic '{}': {}", topic, e);
+                    }
+                });
                 // 启动 Kafka 消费者任务
-                self.spawn_consumer_task(topic, tx.clone());
+                self.spawn_consumer_task(&topic, tx.clone());
                 tx
             })
             .clone()

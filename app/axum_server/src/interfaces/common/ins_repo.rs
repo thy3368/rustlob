@@ -79,15 +79,15 @@ static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> =
 // 队列服务单例（包装在 Arc 中）
 static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
     let queue = MPMCQueue::new();
-    queue.get_or_create_channel(SpotTopic::KLine.name());
-    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
+    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name());
+    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name());
     Arc::new(queue)
 });
 
 static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
     let queue = KafkaQueue::new();
-    queue.get_or_create_channel(SpotTopic::KLine.name());
-    queue.get_or_create_channel(SpotTopic::EntityChangeLog.name());
+    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name());
+    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name());
     Arc::new(queue)
 });
 
