@@ -110,6 +110,7 @@ impl<E: Entity> Default for MySqlDbRepo<E> {
 impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
     type E = E;
 
+    //todo 增加replay_events 批量回放
     fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
         // 验证事件的实体类型是否匹配
         if event.entity_type() != E::entity_type() {

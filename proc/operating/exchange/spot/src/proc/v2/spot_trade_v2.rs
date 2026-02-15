@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use base_types::account::balance::Balance;
+use base_types::account::error::BalanceError;
 use base_types::base_types::TraderId;
 use base_types::cqrs::cqrs_types::ResMetadata;
 use base_types::exchange::spot::spot_types::{
@@ -20,7 +21,7 @@ use rand::Rng;
 use rust_queue::queue::queue::{Queue, ToBytes};
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 
-use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny,
@@ -188,8 +189,8 @@ pub struct SpotTradeBehaviorV2Impl {
     market_data_repo: Arc<MySqlDbRepo<SpotOrder>>,
 
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
-    // 交易对路由 - 静态分发
-    lob_repo: EmbeddedLobRepo<SpotOrder>,
+    // 交易对路由 - 动态分发
+    lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
 
     queue: Arc<MPMCQueue>,
 }
@@ -202,7 +203,7 @@ impl SpotTradeBehaviorV2Impl {
     }
 
     /// 订单预处理 - 负责创建订单、冻结余额和生成事件
-    fn pre_process(&self, cmd: NewOrderCmd) -> (Balance, SpotOrder) {
+    fn pre_process(&self, cmd: NewOrderCmd) -> Result<(SpotOrder), SpotCmdErrorAny> {
         // 生成订单ID（这里使用简单的时间戳+随机数，实际应该使用更 robust 的生成方式）
         // 根据 NewOrderCmd 创建 SpotOrder
         // todo cmd.clone() 太贵了
@@ -229,8 +230,19 @@ impl SpotTradeBehaviorV2Impl {
             self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id).unwrap().unwrap();
 
         //计算逻辑
-        let (order_change_log, balance_change_log) =
-            self.handle_data(&mut frozen_asset_balance, &mut internal_order);
+        let (order_change_log, balance_change_log) = self
+            .handle_data(&mut frozen_asset_balance, &mut internal_order)
+            .map_err(|e| match e {
+                BalanceError::InsufficientAvailable { required, available } => {
+                    SpotCmdErrorAny::Common(CommonError::InsufficientBalance {
+                        required: required as u64,
+                        available: available as u64,
+                    })
+                }
+                _ => SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("Balance error: {}", e),
+                }),
+            })?;
 
         // TODO: 发送eventlog到消息队列，user data/market data对外发布消息
         // TODO: 在db中回放eventlog
@@ -254,14 +266,14 @@ impl SpotTradeBehaviorV2Impl {
             log::error!("Failed to replay order event: {:?}", e);
         }
 
-        (frozen_asset_balance, internal_order)
+        Ok(( internal_order))
     }
 
     fn handle_data(
         &self,
         balance: &mut Balance,
         order: &mut SpotOrder,
-    ) -> (ChangeLogEntry, ChangeLogEntry) {
+    ) -> Result<(ChangeLogEntry, ChangeLogEntry), BalanceError> {
         let (balance_change_log, order_change_log) = match order.side() {
             OrderSide::Buy => {
                 // Freeze the quote asset balance
@@ -274,26 +286,47 @@ impl SpotTradeBehaviorV2Impl {
                     order.price.unwrap_or(Price::from_f64(0.0)) * order.quantity()
                 };
 
+                // Pre-check balance sufficiency before track_update
+                let available_raw = balance.available.raw();
+                let frozen_raw = frozen_amount.raw();
+                if available_raw < frozen_raw {
+                    return Err(BalanceError::InsufficientAvailable {
+                        required: frozen_raw,
+                        available: available_raw,
+                    });
+                }
+
                 // Generate update log with frozen balance
                 let balance_change_log = balance
                     .track_update(|b| {
-                        b.frozen(frozen_amount, order.timestamp);
+                        // Safe to unwrap because we pre-checked the balance
+                        b.frozen(frozen_amount, order.timestamp).unwrap();
                     })
-                    .unwrap();
+                    .map_err(|_| BalanceError::Overflow)?;
 
-                //todo order有需要改的吗？
                 // Update order and generate create log
                 let order_change_log = order.track_create().unwrap();
 
                 (balance_change_log, order_change_log)
             }
             OrderSide::Sell => {
+                // Pre-check balance sufficiency
+                let available_raw = balance.available.raw();
+                let qty_raw = order.quantity().raw();
+                if available_raw < qty_raw {
+                    return Err(BalanceError::InsufficientAvailable {
+                        required: qty_raw,
+                        available: available_raw,
+                    });
+                }
+
                 // Freeze the base asset balance (quantity)
                 let balance_change_log = balance
                     .track_update(|b| {
-                        b.frozen(order.quantity(), order.timestamp);
+                        // Safe to unwrap because we pre-checked the balance
+                        b.frozen(order.quantity(), order.timestamp).unwrap();
                     })
-                    .unwrap();
+                    .map_err(|_| BalanceError::Overflow)?;
 
                 // Update order and generate create log
                 let order_change_log = order.track_create().unwrap();
@@ -302,22 +335,23 @@ impl SpotTradeBehaviorV2Impl {
             }
         };
 
-        (balance_change_log, order_change_log)
+        Ok((balance_change_log, order_change_log))
     }
 
     /// 处理订单匹配逻辑
     ///
-    /// 根据匹配的订单生成交易记录和相关的变更日志
-    fn handle_match(
-        &self,
-        internal_order: &mut SpotOrder,
-        matches: &Option<Vec<&SpotOrder>>,
-        is_fully_filled: bool,
-        remaining: Quantity,
-    ) -> (Vec<SpotTrade>, Vec<ChangeLogEntry>, ChangeLogEntry, Vec<ChangeLogEntry>) {
+    /// 根据匹配的订单生成交易记录，变更日志已在内部持久化
+    fn handle_match(&self, internal_order: &mut SpotOrder) -> Vec<SpotTrade> {
+        // TODO: 2.执行订单匹配逻辑
+        let (matches, remaining) = self.lob_repo.match_orders(
+            internal_order.trading_pair,
+            internal_order.side,
+            internal_order.price.unwrap(),
+            internal_order.quote_order_qty.unwrap(),
+        );
+        let is_fully_filled = remaining.is_zero();
+
         let mut trades = Vec::new();
-        let mut trade_change_logs = Vec::new();
-        let mut order_change_logs = Vec::new();
 
         //todo 对每种TimeInForce 单独处理订单
         match internal_order.time_in_force {
@@ -349,6 +383,7 @@ impl SpotTradeBehaviorV2Impl {
                                 // 创建成交记录
                                 let trade = SpotTrade::new(
                                     trade_id,
+                                    internal_order.trading_pair,
                                     internal_order.order_id,
                                     matched_order.order_id,
                                     Timestamp::now_as_nanos(),
@@ -416,6 +451,7 @@ impl SpotTradeBehaviorV2Impl {
                                 // 创建成交记录
                                 let trade = SpotTrade::new(
                                     trade_id,
+                                    internal_order.trading_pair,
                                     internal_order.order_id,
                                     matched_order.order_id,
                                     Timestamp::now_as_nanos(),
@@ -465,6 +501,7 @@ impl SpotTradeBehaviorV2Impl {
                                 // 创建成交记录
                                 let trade = SpotTrade::new(
                                     trade_id,
+                                    internal_order.trading_pair,
                                     internal_order.order_id,
                                     matched_order.order_id,
                                     Timestamp::now_as_nanos(),
@@ -515,6 +552,7 @@ impl SpotTradeBehaviorV2Impl {
                                     // 创建成交记录
                                     let trade = SpotTrade::new(
                                         trade_id,
+                                        internal_order.trading_pair,
                                         internal_order.order_id,
                                         matched_order.order_id,
                                         Timestamp::now_as_nanos(),
@@ -565,6 +603,7 @@ impl SpotTradeBehaviorV2Impl {
                                     // 创建成交记录
                                     let trade = SpotTrade::new(
                                         trade_id,
+                                        internal_order.trading_pair,
                                         internal_order.order_id,
                                         matched_order.order_id,
                                         Timestamp::now_as_nanos(),
@@ -634,23 +673,24 @@ impl SpotTradeBehaviorV2Impl {
                                 let maker_commission_qty =
                                     filled * transaction_price * Quantity::from_f64(0.0005);
 
-                                // 创建成交记录
-                                let trade = SpotTrade::new(
-                                    trade_id,
-                                    internal_order.order_id,
-                                    matched_order.order_id,
-                                    Timestamp::now_as_nanos(),
-                                    transaction_price,
-                                    filled,
-                                    internal_order.side,
-                                    taker_commission_qty,
-                                    maker_commission_qty,
-                                    internal_order.frozen_asset,
-                                    10,
-                                    5,
-                                );
-                                trades.push(trade);
-                            }
+                                    // 创建成交记录
+                                    let trade = SpotTrade::new(
+                                        trade_id,
+                                        internal_order.trading_pair,
+                                        internal_order.order_id,
+                                        matched_order.order_id,
+                                        Timestamp::now_as_nanos(),
+                                        transaction_price,
+                                        filled,
+                                        internal_order.side,
+                                        taker_commission_qty,
+                                        maker_commission_qty,
+                                        internal_order.frozen_asset,
+                                        10,
+                                        5,
+                                    );
+                                    trades.push(trade);
+                                }
                         }
                         // 如果有剩余数量，将订单添加到LOB
                         if !is_fully_filled {
@@ -680,48 +720,44 @@ impl SpotTradeBehaviorV2Impl {
         // 生成新订单的变更日志
         let order_change_log = internal_order.track_create().unwrap();
 
-        (trades, trade_change_logs, order_change_log, order_change_logs)
+        if let Err(e) = self.order_repo.replay_event(&order_change_log) {
+            log::error!("Failed to replay order event: {:?}", e);
+        }
+
+        trades
     }
 
     /// 处理交易的清算操作
     ///
     /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
-    fn handle_clear(
-        &self,
-        trades: Vec<SpotTrade>,
-        taker_order: &SpotOrder,
-        maker_orders: &[&SpotOrder],
-    ) -> Vec<ChangeLogEntry> {
+    fn handle_settlement(&self, trades: Vec<SpotTrade>) -> Vec<ChangeLogEntry> {
         let mut balance_change_logs = Vec::new();
 
-        for trade in trades {
-            // 查找 Maker 订单
-            let maker_order = match maker_orders.iter().find(|o| o.order_id == trade.maker_order_id) {
-                Some(order) => *order,
-                None => {
-                    log::warn!("Maker order {} not found for trade {}", trade.maker_order_id, trade.trade_id);
-                    continue;
-                }
-            };
+        // 使用第一笔交易的交易对（所有交易应该属于同一交易对）
+        let trading_pair = trades.first().map(|t| t.trading_pair);
 
-            // 获取交易对信息
-            let trading_pair = taker_order.trading_pair;
+        // 使用硬编码的账户ID（与 pre_process 中的 queryBalanceId 一致）
+        // TODO: 从真实的账户信息中获取
+        let taker_account_id = AccountId(1);
+        let maker_account_id = AccountId(1);
+
+        for trade in trades {
+            let trading_pair = match trading_pair {
+                Some(tp) => tp,
+                None => continue,
+            };
             let base_asset = trading_pair.base_asset();
             let quote_asset = trading_pair.quote_asset();
 
-            // 使用硬编码的账户ID（与 pre_process 中的 queryBalanceId 一致）
-            // TODO: 从真实的账户信息中获取
-            let taker_account_id = AccountId(1);
-            let maker_account_id = AccountId(1);
-
             // 构建余额ID
             let taker_base_balance_id = format!("{}:{}", taker_account_id.0, u32::from(base_asset));
-            let taker_quote_balance_id = format!("{}:{}", taker_account_id.0, u32::from(quote_asset));
+            let taker_quote_balance_id =
+                format!("{}:{}", taker_account_id.0, u32::from(quote_asset));
             let maker_base_balance_id = format!("{}:{}", maker_account_id.0, u32::from(base_asset));
-            let maker_quote_balance_id = format!("{}:{}", maker_account_id.0, u32::from(quote_asset));
-
+            let maker_quote_balance_id =
+                format!("{}:{}", maker_account_id.0, u32::from(quote_asset));
             // 根据 Taker 方向更新余额
-            match taker_order.side {
+            match trade.taker_side {
                 OrderSide::Buy => {
                     // Taker 买入：支付 quote 资产，获得 base 资产
                     // Maker 卖出：支付 base 资产，获得 quote 资产
@@ -737,7 +773,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -750,7 +788,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -763,7 +803,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -778,7 +820,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
                 }
@@ -795,7 +839,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -810,7 +856,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -824,7 +872,9 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
 
@@ -838,103 +888,47 @@ impl SpotTradeBehaviorV2Impl {
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
-                            let _ = self.balance_repo.replay_event(&balance_change_logs.last().unwrap());
+                            let _ = self
+                                .balance_repo
+                                .replay_event(&balance_change_logs.last().unwrap());
                         }
                     }
                 }
             }
         }
 
-        balance_change_logs
-    }
-
-    /// 处理新订单命令的主方法
-    fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        // 执行订单预处理
-        let (mut frozen_asset_balance, mut internal_order) = self.pre_process(cmd);
-        // TODO: 执行订单匹配逻辑
-        // 判断是否全成交，还是
-        let (matches, remaining) = self.lob_repo.match_orders(
-            internal_order.trading_pair,
-            internal_order.side,
-            internal_order.price.unwrap(),
-            internal_order.quote_order_qty.unwrap(),
-        );
-        let is_fully_filled = remaining.is_zero();
-
-        let (trades, trade_change_logs, order_change_log, order_change_logs) =
-            self.handle_match(&mut internal_order, &matches, is_fully_filled, remaining);
-
-        if let Err(e) = self.order_repo.replay_event(&order_change_log) {
-            log::error!("Failed to replay order event: {:?}", e);
-        }
-
-        for trade_log in trade_change_logs {
-            if let Err(e) = self.trade_repo.replay_event(&trade_log) {
-                log::error!("Failed to replay trade event: {:?}", e);
-            }
-        }
-
-        // 执行交易的清算操作
-        let maker_orders_slice = matches.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
-        let balance_change_logs = self.handle_clear(trades, &internal_order, maker_orders_slice);
-
-        // TODO: 处理匹配结果，生成交易记录
 
         // 所有数据持久化操作，一次性回放所有事件到数据库
-        let all_events: Vec<ChangeLogEntry> = Vec::new();
 
         // 批量发送事件 - 将 ChangeLogEntry 转换为 Bytes
-        let bytes_events: Vec<bytes::Bytes> = all_events
+        let bytes_events: Vec<bytes::Bytes> = balance_change_logs
             .iter()
             .filter_map(|event| serde_json::to_vec(event).ok().map(bytes::Bytes::from))
             .collect();
 
         let results = self.queue.send_batch(SpotTopic::EntityChangeLog.name(), bytes_events, None);
 
-        // 检查发送结果
-        if let Ok(send_results) = results {
-            for (index, result) in send_results.iter().enumerate() {
-                match result {
-                    Ok(count) => {
-                        if *count == 0 {
-                            log::warn!("Event {} sent but no subscribers received it", index);
-                        } else {
-                            log::debug!("Event {} received by {} subscribers", index, count);
-                        }
-                    }
-                    Err(e) => log::error!("Failed to send event {}: {:?}", index, e),
-                }
-            }
-        } else {
-            log::error!("Failed to send batch events");
-        }
 
-        if !all_events.is_empty() {
-            // 回放 matched_order 更新和订单创建事件到各自的 repo
-            for event in &all_events {
-                // 根据 entity_type 判断回放到哪个 repo
-                match event.entity_type().as_str() {
-                    "SpotOrder" => {
-                        if let Err(e) = self.order_repo.replay_event(event) {
-                            log::error!("Failed to replay order event: {:?}", e);
-                        }
-                    }
-                    "SpotTrade" => {
-                        if let Err(e) = self.trade_repo.replay_event(event) {
-                            log::error!("Failed to replay trade event: {:?}", e);
-                        }
-                    }
-                    "Balance" => {
-                        if let Err(e) = self.balance_repo.replay_event(event) {
-                            log::error!("Failed to replay balance event: {:?}", e);
-                        }
-                    }
+        balance_change_logs
+    }
 
-                    _ => {}
-                }
-            }
-        }
+    /// 处理新订单命令的主方法
+    fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        // 1.执行订单预处理
+        let ( mut internal_order) = self.pre_process(cmd)?;
+
+        // 2.撮合逻辑
+        let trades = self.handle_match(&mut internal_order);
+
+
+
+        // 3.执行交易的结算操作
+        let balance_change_logs = self.handle_settlement(trades);
+
+
+
+
+
 
         let ack = NewOrderAck::new(
             internal_order.trading_pair,

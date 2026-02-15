@@ -1,4 +1,5 @@
 use std::fmt;
+
 use diff::ChangeLogEntry;
 use entity_derive::Entity;
 
@@ -757,37 +758,42 @@ impl SpotOrder {
         );
 
         // 计算 Maker 的手续费
-        let (maker_commission_rate, maker_commission_qty) = matched_order.calculate_fee_with_amount(
-            &CexFeeEntity::new(),
-            false, // is_maker
-            false, // is_market_maker
-            None,  // user_vip_level
-            None,  // user_tier
-            filled,
-            transaction_price,
-        );
+        let (maker_commission_rate, maker_commission_qty) = matched_order
+            .calculate_fee_with_amount(
+                &CexFeeEntity::new(),
+                false, // is_maker
+                false, // is_market_maker
+                None,  // user_vip_level
+                None,  // user_tier
+                filled,
+                transaction_price,
+            );
 
         // 更新 Taker 的余额
         match self.side {
             OrderSide::Buy => {
-                quote_asset_balance.frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
+                quote_asset_balance
+                    .frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
                 base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
             }
             OrderSide::Sell => {
                 base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
-                quote_asset_balance.add_balance(filled * transaction_price, Timestamp::now_as_nanos());
+                quote_asset_balance
+                    .add_balance(filled * transaction_price, Timestamp::now_as_nanos());
             }
         };
 
         // 更新 Maker 的余额
         match matched_order.side {
             OrderSide::Buy => {
-                o_quote_asset_balance.frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
+                o_quote_asset_balance
+                    .frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
                 o_base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
             }
             OrderSide::Sell => {
                 o_base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
-                o_quote_asset_balance.add_balance(filled * transaction_price, Timestamp::now_as_nanos());
+                o_quote_asset_balance
+                    .add_balance(filled * transaction_price, Timestamp::now_as_nanos());
             }
         };
 
@@ -797,6 +803,7 @@ impl SpotOrder {
         // 创建一条 trade 记录（包含买卖双方信息）
         SpotTrade::new(
             trade_id,
+            self.trading_pair,
             self.order_id,
             matched_order.order_id,
             Timestamp::now_as_nanos(),
@@ -959,10 +966,13 @@ impl SpotOrder {
 #[derive(Debug, Clone, Copy, Entity)]
 #[entity(id = "trade_id")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SpotTrade {
     // ===== 交易标识字段（32字节）=====
     /// 交易唯一标识
     pub trade_id: u64,
+    /// 交易对
+    pub trading_pair: TradingPair,
     /// Taker 订单ID（新提交的订单）
     pub taker_order_id: OrderId,
     /// Maker 订单ID（订单簿中的订单）
@@ -996,12 +1006,14 @@ pub struct SpotTrade {
 }
 
 impl SpotTrade {
-    
-    
-    
-    
     //todo 计算balance change logs
-    pub fn cal_balance(&self, taker_base_balance:  &mut Balance, taker_quoto_balance:  &mut Balance, marker_base_balance:  &mut Balance, maker_quoto_balance:  &mut Balance) -> Vec<ChangeLogEntry> {
+    pub fn cal_balance(
+        &self,
+        taker_base_balance: &mut Balance,
+        taker_quoto_balance: &mut Balance,
+        marker_base_balance: &mut Balance,
+        maker_quoto_balance: &mut Balance,
+    ) -> Vec<ChangeLogEntry> {
         todo!()
     }
 }
@@ -1011,6 +1023,7 @@ impl SpotTrade {
     #[inline]
     pub fn new(
         trade_id: u64,
+        trading_pair: TradingPair,
         taker_order_id: OrderId,
         maker_order_id: OrderId,
         timestamp: Timestamp,
@@ -1027,6 +1040,7 @@ impl SpotTrade {
 
         Self {
             trade_id,
+            trading_pair,
             taker_order_id,
             maker_order_id,
             timestamp,
@@ -1059,5 +1073,4 @@ mod tests {
     fn create_test_trading_pair() -> TradingPair {
         TradingPair::BtcUsdt
     }
-
 }

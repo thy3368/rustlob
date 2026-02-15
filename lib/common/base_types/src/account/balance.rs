@@ -4,6 +4,7 @@ use std::fmt;
 
 use entity_derive::Entity;
 
+use crate::account::error::BalanceError;
 use crate::exchange::spot::spot_types::SpotOrder;
 use crate::{AccountId, AssetId, Price, Quantity, Timestamp};
 
@@ -107,26 +108,71 @@ impl Balance {
     }
 
     #[inline]
-    pub fn frozen(&mut self, amount: Quantity, now: Timestamp) {
+    /// 冻结余额（可用 → 冻结）
+    ///
+    /// # 错误
+    /// 当可用余额不足时返回 `BalanceError::InsufficientAvailable`
+    pub fn frozen(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
+        let available_raw = self.available.raw();
+        let amount_raw = amount.raw();
+
+        if available_raw < amount_raw {
+            return Err(BalanceError::InsufficientAvailable {
+                required: amount_raw,
+                available: available_raw,
+            });
+        }
+
         self.available = self.available - amount;
         self.frozen = self.frozen + amount;
         self.version += 1;
         self.updated_at = now;
+        Ok(())
     }
 
     #[inline]
-    pub fn frozen2pay(&mut self, amount: Quantity, now: Timestamp) {
+    /// 从冻结余额中扣款（冻结 → 扣除）
+    ///
+    /// # 错误
+    /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
+    pub fn frozen2pay(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
+        let frozen_raw = self.frozen.raw();
+        let amount_raw = amount.raw();
+
+        if frozen_raw < amount_raw {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount_raw,
+                frozen: frozen_raw,
+            });
+        }
+
         self.frozen = self.frozen - amount;
         self.version += 1;
         self.updated_at = now;
+        Ok(())
     }
 
     #[inline]
-    pub fn un_frozen(&mut self, amount: Quantity, now: Timestamp) {
+    /// 解冻余额（冻结 → 可用）
+    ///
+    /// # 错误
+    /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
+    pub fn un_frozen(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
+        let frozen_raw = self.frozen.raw();
+        let amount_raw = amount.raw();
+
+        if frozen_raw < amount_raw {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount_raw,
+                frozen: frozen_raw,
+            });
+        }
+
         self.available = self.available + amount;
         self.frozen = self.frozen - amount;
         self.version += 1;
         self.updated_at = now;
+        Ok(())
     }
 
     /// 检查余额是否为空
