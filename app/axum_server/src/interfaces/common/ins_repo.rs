@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
+use base_types::TradingPair;
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use base_types::spot_topic::SpotTopic;
 use db_repo::MySqlDbRepo;
 use lob_repo::adapter::distributed_lob_repo::DistributedLobRepo;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
-use once_cell::sync::Lazy;
-use base_types::TradingPair;
 use lob_repo::adapter::local_lob_impl::LocalLob;
 use lob_repo::adapter::remote_lob_impl::RemoteLob;
+use once_cell::sync::Lazy;
 // KLine 相关服务单例
 use push::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator, k_line_service::KLineActor,
@@ -58,36 +58,39 @@ static MARKET_DATA_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> =
 // LOB Repo 单例（包装在 Arc 中）
 
 // 为每个 TradingPair 枚举对应一个 LocalLob
-static EMBEDDED_LOB_REPO: Lazy<Arc<EmbeddedLobRepo<SpotOrder>>> =
-    Lazy::new(|| {
-        let lobs = TradingPair::all()
-            .iter()
-            .map(|&symbol| LocalLob::new(symbol))
-            .collect::<Vec<_>>();
-        Arc::new(EmbeddedLobRepo::new(lobs))
-    });
+static EMBEDDED_LOB_REPO: Lazy<Arc<EmbeddedLobRepo<SpotOrder>>> = Lazy::new(|| {
+    let lobs = TradingPair::all().iter().map(|&symbol| LocalLob::new(symbol)).collect::<Vec<_>>();
+    Arc::new(EmbeddedLobRepo::new(lobs))
+});
 
-static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> =
-    Lazy::new(|| {
-        let lobs = TradingPair::all()
-            .iter()
-            .map(|&symbol| RemoteLob::new(symbol))
-            .collect::<Vec<_>>();
-        Arc::new(DistributedLobRepo::new(lobs))
-    });
+static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> = Lazy::new(|| {
+    let lobs = TradingPair::all().iter().map(|&symbol| RemoteLob::new(symbol)).collect::<Vec<_>>();
+    Arc::new(DistributedLobRepo::new(lobs))
+});
 
 // 队列服务单例（包装在 Arc 中）
 static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
     let queue = MPMCQueue::new();
-    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name());
-    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name());
+    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::BalanceChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::TradeChangeLog.name(), None);
     Arc::new(queue)
 });
 
+use rust_queue::queue::queue_impl::kafka_queue::KafkaConfig;
+
+// Kafka 队列配置：10分区 3副本
 static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
-    let queue = KafkaQueue::new();
-    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name());
-    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name());
+    let config = KafkaConfig::default().with_num_partitions(10).with_replication_factor(3);
+    let queue = KafkaQueue::new_with_config(config);
+
+    // 为每个 topic 创建 channel，使用全局配置（10分区 3副本）
+    queue.get_or_create_channel(SpotTopic::KLineChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::OrderChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::BalanceChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::TradeChangeLog.name(), None);
+
     Arc::new(queue)
 });
 
@@ -100,9 +103,7 @@ static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
 //
 
 // 核心服务单例（直接包装在 Arc 中）
-static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<
-    Arc<SpotTradeBehaviorV2Impl>,
-> = Lazy::new(|| {
+static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Lazy::new(|| {
     Arc::new(SpotTradeBehaviorV2Impl::new(
         BALANCE_REPO.clone(),
         TRADE_REPO.clone(),
@@ -114,9 +115,7 @@ static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<
     ))
 });
 
-static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<
-    Arc<SpotTradeBehaviorV2Impl>,
-> = Lazy::new(|| {
+static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Lazy::new(|| {
     Arc::new(SpotTradeBehaviorV2Impl::new(
         BALANCE_REPO.clone(),
         TRADE_REPO.clone(),
@@ -147,13 +146,11 @@ static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
 static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
-pub fn get_spot_trade_behavior_v2_embedded()
--> Arc<SpotTradeBehaviorV2Impl> {
+pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl> {
     SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()
 }
 
-pub fn get_spot_trade_behavior_v2_distributed()
--> Arc<SpotTradeBehaviorV2Impl> {
+pub fn get_spot_trade_behavior_v2_distributed() -> Arc<SpotTradeBehaviorV2Impl> {
     SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED.clone()
 }
 

@@ -3,7 +3,9 @@ use std::sync::{Arc, RwLock};
 
 use tokio::sync::broadcast;
 
-use crate::queue::queue::{DefaultQueueConfig, Queue, SendOptions, SubscribeOptions};
+use crate::queue::queue::{
+    ChannelConfig, DefaultQueueConfig, Queue, SendOptions, SubscribeOptions,
+};
 
 /// 高性能异步广播队列，用于分发 K 线更新事件
 /// 基于 Tokio 的 broadcast channel 实现，支持多生产者多消费者模式
@@ -37,14 +39,22 @@ impl MPMCQueue {
 
 impl Queue for MPMCQueue {
     /// 为指定 topic 创建或获取 channel
-    fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes> {
+    fn get_or_create_channel(
+        &self,
+        topic: &str,
+        config: Option<ChannelConfig>,
+    ) -> broadcast::Sender<bytes::Bytes> {
         let mut channels = self.topic_channels.write().unwrap();
 
         if let Some(existing) = channels.get(topic) {
             return existing.clone();
         }
 
-        let (tx, _) = broadcast::channel(1024);
+        // 优先使用传入的配置，其次使用全局配置
+        let buffer_size = config.and_then(|c| c.buffer_size).unwrap_or_else(|| {
+            if self.config.buffer_size > 0 { self.config.buffer_size } else { 1024 }
+        });
+        let (tx, _) = broadcast::channel(buffer_size);
         channels.insert(topic.to_string(), tx.clone());
 
         tx
@@ -69,7 +79,7 @@ impl Queue for MPMCQueue {
         event: bytes::Bytes,
         options: Option<SendOptions>,
     ) -> Result<usize, broadcast::error::SendError<bytes::Bytes>> {
-        let sender = self.get_or_create_channel(topic);
+        let sender = self.get_or_create_channel(topic, None);
 
         // 背压控制
         if self.should_apply_backpressure(&options) {
@@ -95,7 +105,7 @@ impl Queue for MPMCQueue {
         events: Vec<bytes::Bytes>,
         options: Option<SendOptions>,
     ) -> Result<Vec<Result<usize, broadcast::error::SendError<bytes::Bytes>>>, ()> {
-        let channel = self.get_or_create_channel(topic);
+        let channel = self.get_or_create_channel(topic, None);
         let mut results = Vec::with_capacity(events.len());
 
         // 背压控制
@@ -128,9 +138,12 @@ impl Queue for MPMCQueue {
     fn subscribe(
         &self,
         topic: &str,
-        _options: Option<SubscribeOptions>,
+        options: Option<SubscribeOptions>,
     ) -> broadcast::Receiver<bytes::Bytes> {
-        let channel = self.get_or_create_channel(topic);
+        // 从 SubscribeOptions 中提取 buffer_size 并创建 ChannelConfig
+        let channel_config =
+            options.as_ref().map(|opts| ChannelConfig::new().with_buffer_size(opts.buffer_size));
+        let channel = self.get_or_create_channel(topic, channel_config);
         channel.subscribe()
     }
 

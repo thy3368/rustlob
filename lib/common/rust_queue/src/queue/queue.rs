@@ -65,6 +65,38 @@ impl SendOptions {
     }
 }
 
+/// Channel 配置选项
+#[derive(Debug, Clone, Default)]
+pub struct ChannelConfig {
+    /// 缓冲区大小（用于背压控制）
+    pub buffer_size: Option<usize>,
+    /// Kafka topic 分区数
+    pub num_partitions: Option<i32>,
+    /// Kafka topic 副本数
+    pub replication_factor: Option<i32>,
+}
+
+impl ChannelConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_buffer_size(mut self, size: usize) -> Self {
+        self.buffer_size = Some(size);
+        self
+    }
+
+    pub fn with_num_partitions(mut self, num: i32) -> Self {
+        self.num_partitions = Some(num);
+        self
+    }
+
+    pub fn with_replication_factor(mut self, factor: i32) -> Self {
+        self.replication_factor = Some(factor);
+        self
+    }
+}
+
 /// 队列订阅选项
 #[derive(Debug, Clone, Default)]
 pub struct SubscribeOptions {
@@ -173,7 +205,11 @@ pub trait Queue {
     /// 获取指定 topic 的当前订阅者数量
     fn subscriber_count(&self, topic: &str) -> usize;
 
-    fn get_or_create_channel(&self, topic: &str) -> broadcast::Sender<bytes::Bytes>;
+    fn get_or_create_channel(
+        &self,
+        topic: &str,
+        config: Option<ChannelConfig>,
+    ) -> broadcast::Sender<bytes::Bytes>;
 
     /// 获取所有支持的 topic 列表
     fn topics(&self) -> Vec<String>;
@@ -259,6 +295,8 @@ impl DefaultQueueConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
 
     #[tokio::test]
     async fn test_send_options_builder() {
