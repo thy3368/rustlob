@@ -32,6 +32,9 @@ db_repo = { path = "../../../../lib/common/db_repo" }
 # ID generator
 id_generator = { path = "../../../../lib/common/id_generator" }
 
+# Push service
+push = { path = "../../../operating/push/push" }
+
 # Logging
 log = "0.4"
 
