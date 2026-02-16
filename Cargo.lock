@@ -1336,6 +1336,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "disruptor"
+version = "3.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c19b278be1f736d7cd35ca8581754af80bb289a81dc2074175a6f08935a780a"
+dependencies = [
+ "core_affinity",
+ "crossbeam-utils",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4820,6 +4831,7 @@ dependencies = [
  "crossbeam-channel",
  "db_repo",
  "diff",
+ "disruptor",
  "entity_derive",
  "id_generator",
  "immutable_derive",

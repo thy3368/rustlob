@@ -20,6 +20,8 @@ pub struct SpotAcquiringActor {
     trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
     /// 无锁命令队列接收端（使用 Mutex 允许在 Arc 中可变）
     command_receiver: Mutex<Option<NewOrderCmdReceiver>>,
+    /// MPMC 队列，用于发送事件到不同 topic
+    queue: Arc<MPMCQueue>,
 }
 
 impl SpotAcquiringActor {
@@ -28,12 +30,13 @@ impl SpotAcquiringActor {
         queue: Arc<MPMCQueue>,
         command_receiver: NewOrderCmdReceiver,
     ) -> Self {
-        Self { trade_behavior, command_receiver: Mutex::new(Some(command_receiver)) }
+        Self { trade_behavior, command_receiver: Mutex::new(Some(command_receiver)), queue }
     }
     /// 处理 NewOrderCmd 命令
     /// 1. 验证订单
     /// 2. 生成 spot_order
     /// 3. 发送相应事件 (order_pending / order_cond_pending)
+    ///
     async fn handle_new_order(&self, cmd: NewOrderCmd) -> Result<(), Box<dyn std::error::Error>> {
         use base_types::exchange::spot::spot_types::{OrderStatus, SpotOrder};
         use diff::Entity;
@@ -45,34 +48,52 @@ impl SpotAcquiringActor {
             cmd.order_type()
         );
 
-        // 步骤1: 调用 trade_behavior 处理命令
         // 包括验证、生成订单、冻结资金等
-        let (order, logs) = match self.trade_behavior.handle_acquiring(cmd) {
-            Ok((order, logs)) => {
-                tracing::info!(
-                    "订单处理成功: order_id={}, status={:?}",
-                    order.order_id,
-                    order.status
-                );
-                (order, logs)
-            }
-            Err(e) => {
-                tracing::error!("订单处理失败: {:?}", e);
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("订单处理失败: {:?}", e),
-                )));
-            }
-        };
+        let (balance_change_log, order_change_log) =
+            match self.trade_behavior.handle_acquiring2(cmd) {
+                Ok((balance_log, order_log)) => (balance_log, order_log),
+                Err(e) => {
+                    tracing::error!("订单处理失败: {:?}", e);
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("订单处理失败: {:?}", e),
+                    )));
+                }
+            };
 
-        // 步骤2: 根据订单状态判断是否是条件单
-        let order_type_str = match order.status {
-            OrderStatus::ConditionalPending => "条件单",
-            OrderStatus::Pending => "普通单",
-            OrderStatus::Rejected => "被拒绝订单",
-            _ => "其他订单",
+        // 发送 balance_change_log 到 BalanceChangeLog topic
+        let balance_bytes = match serde_json::to_vec(&balance_change_log) {
+            Ok(bytes) => bytes::Bytes::from(bytes),
+            Err(e) => {
+                tracing::error!("序列化 balance_change_log 失败: {:?}", e);
+                return Err(Box::new(e));
+            }
         };
-        tracing::info!("订单类型: {}, status={:?}", order_type_str, order.status);
+        if let Err(e) = self.queue.send(SpotTopic::BalanceChangeLog.name(), balance_bytes, None) {
+            tracing::error!("发送 balance_change_log 到 topic 失败: {:?}", e);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("发送 balance_change_log 失败: {:?}", e),
+            )));
+        }
+        tracing::info!("成功发送 balance_change_log 到 BalanceChangeLog topic, entity_id={}", balance_change_log.entity_id());
+
+        // 发送 order_change_log 到 OrderChangeLog topic
+        let order_bytes = match serde_json::to_vec(&order_change_log) {
+            Ok(bytes) => bytes::Bytes::from(bytes),
+            Err(e) => {
+                tracing::error!("序列化 order_change_log 失败: {:?}", e);
+                return Err(Box::new(e));
+            }
+        };
+        if let Err(e) = self.queue.send(SpotTopic::OrderChangeLog.name(), order_bytes, None) {
+            tracing::error!("发送 order_change_log 到 topic 失败: {:?}", e);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("发送 order_change_log 失败: {:?}", e),
+            )));
+        }
+        tracing::info!("成功发送 order_change_log 到 OrderChangeLog topic, entity_id={}", order_change_log.entity_id());
 
         Ok(())
     }

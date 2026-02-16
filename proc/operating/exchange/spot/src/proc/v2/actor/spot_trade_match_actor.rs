@@ -254,64 +254,24 @@ impl SpotMatchActor {
             change_log.entity_id()
         );
 
-        // 从 ChangeLogEntry 重构 SpotOrder
-        let order = match reconstruct_order_from_changelog(&change_log) {
-            Ok(order) => {
-                tracing::info!(
-                    "成功重构订单: order_id={}, trading_pair={:?}, side={:?}, qty={}",
-                    order.order_id,
-                    order.trading_pair,
-                    order.side,
-                    order.total_qty
-                );
-                order
-            }
-            Err(e) => {
-                tracing::error!("重构订单失败: {:?}", e);
-                return;
-            }
-        };
-
-        // 执行撮合处理
-        self.process_match(order).await;
-    }
-
-    /// 执行撮合处理
-    async fn process_match(&self, mut order: SpotOrder) {
-        tracing::info!(
-            "执行撮合处理: order_id={}, trading_pair={:?}",
-            order.order_id,
-            order.trading_pair
-        );
-
-        // 调用 handle_match 进行撮合
-        // 注意：trade_behavior.handle_match 需要返回 trades
-        // 这里假设 trade_behavior 有 handle_match 方法
-
-        // 由于 handle_match 是私有方法，我们需要通过其他方式调用
-        // 可能的方案：
-        // 1. 将 handle_match 改为 pub(crate) 或 pub
-        // 2. 通过命令模式调用
-        // 3. 直接调用 trade_behavior 的公开方法
 
         // 调用 handle_match2 进行撮合并获取变更日志
-        let change_logs = match self.trade_behavior.handle_match2(order.order_id) {
+        let change_logs = match self.trade_behavior.handle_match3(change_log) {
             Ok(logs) => {
-                tracing::info!(
-                    "撮合成功: order_id={}, 生成 {} 条变更日志",
-                    order.order_id,
-                    logs.len()
-                );
+
                 logs
             }
             Err(e) => {
-                tracing::error!("撮合失败: order_id={}, error={:?}", order.order_id, e);
                 return;
             }
         };
 
-        tracing::info!("撮合处理完成: order_id={}", order.order_id);
+
+        //todo 发送 change_logs
+
     }
+
+
 }
 
 impl ActorX for SpotMatchActor {

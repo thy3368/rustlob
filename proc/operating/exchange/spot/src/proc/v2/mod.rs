@@ -2,6 +2,10 @@ pub mod spot_trade_v2;
 
 pub mod actor;
 
+pub mod disruptor;
+
+pub mod s_thread_pipeline;
+
 pub mod spot_user_data;
 
 pub mod spot_market_data;

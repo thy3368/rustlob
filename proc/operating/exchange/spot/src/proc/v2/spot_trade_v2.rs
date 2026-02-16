@@ -683,6 +683,80 @@ impl SpotTradeBehaviorV2Impl {
         Ok(Price::from_f64(0.0))
     }
 
+    pub(crate) fn handle_acquiring2(
+        &self,
+        cmd: NewOrderCmd,
+    ) -> Result<(ChangeLogEntry,ChangeLogEntry), SpotCmdErrorAny> {
+        // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
+        self.validate_order_cmd(&cmd)?;
+
+        // 根据 NewOrderCmd 创建 SpotOrder
+        let mut internal_order = SpotOrder::from(cmd);
+
+        // 步骤1: 冻结资金（所有订单类型，包括条件单）
+        let frozen_asset_id = internal_order.frozen_asset_id();
+        let frozen_asset_balance_id = self.queryBalanceId(frozen_asset_id);
+
+        // 优化A: 消除 unwrap() - 使用安全的错误处理
+        let mut frozen_asset_balance =
+            match self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id) {
+                Ok(Some(balance)) => balance,
+                Ok(None) => {
+                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                        field: "balance",
+                        reason: "balance not found",
+                    }));
+                }
+                Err(e) => {
+                    return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                        message: format!("Failed to query balance: {}", e),
+                    }));
+                }
+            };
+
+        // 计算逻辑
+        let result = self.handle_data(&mut frozen_asset_balance, &mut internal_order);
+
+        // 处理余额不足：显式设置 Rejected 状态并记录日志
+        let (order_change_log, balance_change_log) = match result {
+            Ok(logs) => logs,
+            Err(BalanceError::InsufficientAvailable { required, available }) => {
+                // 设置订单状态为 Rejected
+                internal_order.status =
+                    base_types::exchange::spot::spot_types::OrderStatus::Rejected;
+                internal_order.last_updated = Timestamp::now_as_nanos();
+
+                // 优化A: 使用 map_err 替代 unwrap
+                let rejected_order_change_log = internal_order.track_create().map_err(|e| {
+                    SpotCmdErrorAny::Common(CommonError::Internal {
+                        message: format!("Failed to track rejected order: {}", e),
+                    })
+                })?;
+
+                // 优化B: 批量持久化
+                self.persist_change_logs(&[rejected_order_change_log])?;
+
+                return Err(SpotCmdErrorAny::Common(CommonError::InsufficientBalance {
+                    required: required as u64,
+                    available: available as u64,
+                }));
+            }
+            Err(e) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("Balance error: {}", e),
+                }));
+            }
+        };
+
+        // 非条件单或已触发，持久化资金冻结和订单创建事件
+        let logs = vec![balance_change_log.clone(), order_change_log.clone()];
+        self.persist_change_logs(&logs)?;
+
+        Ok((balance_change_log.clone(), order_change_log.clone()))
+    }
+
+    
+
     pub(crate) fn handle_acquiring(
         &self,
         cmd: NewOrderCmd,
@@ -1504,6 +1578,121 @@ impl SpotTradeBehaviorV2Impl {
         Ok(all_change_logs)
     }
 
+
+    /// 处理订单撮合
+    /// 
+    /// # 参数
+    /// - `order_log`: 订单变更日志，从中提取订单ID
+    /// 
+    /// # 返回
+    /// - `Ok((order_change_logs, trade_change_logs))`: 成功时返回订单变更日志列表和成交变更日志列表
+    ///   - order_change_logs: 订单变更日志，None表示无订单变更
+    ///   - trade_change_logs: 成交变更日志，None表示无成交
+    /// - `Err(SpotCmdErrorAny)`: 失败时返回错误
+    pub(crate) fn handle_match3(
+        &self,
+        order_log: ChangeLogEntry,
+    ) -> Result<(Option<Vec<ChangeLogEntry>>, Option<Vec<ChangeLogEntry>>), SpotCmdErrorAny> {
+        // 1. 从 order_log 中提取订单ID
+        let order_id_str = order_log.entity_id().to_string();
+        
+        // 2. 从订单仓库查询订单
+        let mut order = match self.order_repo.find_by_id(&order_id_str) {
+            Ok(Some(order)) => order,
+            Ok(None) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                    field: "order_id",
+                    reason: "order not found",
+                }));
+            }
+            Err(e) => {
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("Failed to query order: {}", e),
+                }));
+            }
+        };
+
+        // 3. 检查订单状态是否为Pending
+        if order.status != OrderStatus::Pending {
+            return Ok((None, None)); // 非Pending状态不需要撮合
+        }
+
+        tracing::info!(
+            "开始撮合订单: order_id={}, trading_pair={:?}, side={:?}, qty={}",
+            order.order_id,
+            order.trading_pair,
+            order.side,
+            order.total_qty
+        );
+
+        // 4. 执行撮合
+        let trades = self.handle_match(&mut order);
+
+        // 5. 生成变更日志
+        let mut order_change_logs: Vec<ChangeLogEntry> = Vec::new();
+        let mut trade_change_logs: Vec<ChangeLogEntry> = Vec::new();
+
+        // 生成trade的changelog
+        for trade in &trades {
+            // 手动创建 ChangeLogEntry（因为 SpotTrade 没有实现 Entity trait）
+            let trade_log = ChangeLogEntry::new(
+                trade.trade_id.to_string(),
+                "SpotTrade".to_string(),
+                diff::ChangeType::Created { fields: Vec::new() },
+                Timestamp::now_as_nanos().0,
+                0, // sequence
+            );
+            trade_change_logs.push(trade_log);
+        }
+
+        // 生成order更新的changelog（如果有成交）
+        if !trades.is_empty() {
+            // 手动创建 order 更新的 ChangeLogEntry
+            let order_update_log = ChangeLogEntry::new(
+                order.order_id.to_string(),
+                "SpotOrder".to_string(),
+                diff::ChangeType::Updated {
+                    changed_fields: vec![
+                        diff::FieldChange::new(
+                            "status",
+                            "Pending".to_string(),
+                            format!("{:?}", order.status),
+                        ),
+                        diff::FieldChange::new(
+                            "executed_qty",
+                            "0".to_string(),
+                            order.executed_qty.to_string(),
+                        ),
+                        diff::FieldChange::new(
+                            "unfilled_qty",
+                            order.total_qty.to_string(),
+                            order.unfilled_qty.to_string(),
+                        ),
+                    ],
+                },
+                Timestamp::now_as_nanos().0,
+                0, // sequence
+            );
+            order_change_logs.push(order_update_log);
+        }
+
+        tracing::info!(
+            "订单撮合完成: order_id={}, 成交数={}, 订单日志数={}, 成交日志数={}",
+            order_id_str,
+            trades.len(),
+            order_change_logs.len(),
+            trade_change_logs.len()
+        );
+
+        // 只有在有数据时才返回 Some，否则返回 None
+        let order_logs_opt = if order_change_logs.is_empty() { None } else { Some(order_change_logs) };
+        let trade_logs_opt = if trade_change_logs.is_empty() { None } else { Some(trade_change_logs) };
+
+        Ok((order_logs_opt, trade_logs_opt))
+    }
+    
+    
+    
     /// 处理交易的清算操作
     ///
     /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
@@ -1695,6 +1884,7 @@ impl SpotTradeBehaviorV2Impl {
     /// # Returns
     /// * `Ok(Vec<ChangeLogEntry>)` - 结算产生的所有余额变更日志
     /// * `Err(SpotCmdErrorAny)` - 处理失败
+    ///
     pub(crate) fn handle_settlement2(&self, trade_id: u64) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
         // 1. 从交易仓库查询交易
         let trade_id_str = trade_id.to_string();

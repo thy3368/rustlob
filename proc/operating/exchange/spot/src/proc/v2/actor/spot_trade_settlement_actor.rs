@@ -63,7 +63,11 @@ impl SpotSettlementActor {
         // 调用 handle_settlement2 进行结算并获取余额变更日志
         let balance_change_logs = match self.trade_behavior.handle_settlement2(trade_id) {
             Ok(logs) => {
-                tracing::info!("结算成功: trade_id={}, 生成 {} 条余额变更日志", trade_id, logs.len());
+                tracing::info!(
+                    "结算成功: trade_id={}, 生成 {} 条余额变更日志",
+                    trade_id,
+                    logs.len()
+                );
                 logs
             }
             Err(e) => {
@@ -72,7 +76,7 @@ impl SpotSettlementActor {
             }
         };
 
-
+        //todo 发送 balance_change_logs
 
         tracing::info!("结算处理完成: trade_id={}", trade_id);
     }
