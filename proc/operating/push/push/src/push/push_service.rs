@@ -18,27 +18,49 @@ use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 /// 该服务只包含不可变的依赖引用，不包含任何运行时状态，
 /// 因此可以被多个线程同时访问而无需克隆。
 #[immutable]
-pub struct PushActor {
+pub struct PushBehaviorV2Imp {
     /// 连接管理仓储（不可变引用）
     connection_repo: Arc<ConnectionRepo>,
     /// 变更日志仓储（不可变引用）
     change_log_repo: Arc<MPMCQueue>,
 }
 
-impl PushActor {
+impl PushBehaviorV2Imp {
     /// 后台运行事件监听循环
+    /// 订阅并处理: OrderChangeLog + KLineChangeLog + BalanceChangeLog + TradeChangeLog
     async fn run(&self) {
-        // 订阅变更日志事件
-        let mut receiver = self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
+        // 订阅所有变更日志Topic
+        let mut order_receiver = self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
+        let mut kline_receiver = self.change_log_repo.subscribe(SpotTopic::KLineChangeLog.name(), None);
+        let mut balance_receiver = self.change_log_repo.subscribe(SpotTopic::BalanceChangeLog.name(), None);
+        let mut trade_receiver = self.change_log_repo.subscribe(SpotTopic::TradeChangeLog.name(), None);
 
-        // 持续监听事件
-        while let Ok(event) = receiver.recv().await {
-            self.process_event(event).await;
+        tracing::info!("PushService 已订阅所有变更日志Topic");
+
+        loop {
+            tokio::select! {
+                // 处理 OrderChangeLog
+                Ok(event) = order_receiver.recv() => {
+                    self.process_change_log_event(event).await;
+                }
+                // 处理 KLineChangeLog
+                Ok(event) = kline_receiver.recv() => {
+                    self.process_change_log_event(event).await;
+                }
+                // 处理 BalanceChangeLog
+                Ok(event) = balance_receiver.recv() => {
+                    self.process_change_log_event(event).await;
+                }
+                // 处理 TradeChangeLog
+                Ok(event) = trade_receiver.recv() => {
+                    self.process_change_log_event(event).await;
+                }
+            }
         }
     }
 
-    /// 处理单个变更日志事件
-    async fn process_event(&self, event: bytes::Bytes) {
+    /// 处理变更日志事件字节流
+    async fn process_change_log_event(&self, event: bytes::Bytes) {
         // 将字节转换为 entity_change_log
         let entity_change_log = match serde_json::from_slice::<ChangeLogEntry>(&event) {
             Ok(log) => log,
@@ -48,6 +70,11 @@ impl PushActor {
             }
         };
 
+        self.handle_event(entity_change_log).await;
+    }
+
+    /// 处理单个变更日志事件
+    pub async fn handle_event(&self, entity_change_log: ChangeLogEntry) {
         tracing::debug!(
             "Processing event: entity_type={}, entity_id={}, change_type={:?}",
             entity_change_log.entity_type(),
@@ -122,7 +149,7 @@ impl PushActor {
     }
 }
 
-impl ActorX for PushActor {
+impl ActorX for PushBehaviorV2Imp {
     /// 启动后台事件监听任务
     ///
     /// 该方法不获取 self 所有权，而是克隆 Arc 引用在后台任务中使用。

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use diff::ChangeLogEntry;
+use push::k_line::k_line_service::KLineBehaviorV2Imp;
+use push::push::push_service::PushBehaviorV2Imp;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
@@ -8,78 +10,113 @@ use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 pub struct SThreadSpotTradePipeline {
     trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+    push_service: Arc<PushBehaviorV2Imp>,
+    kline_service: Arc<KLineBehaviorV2Imp>,
 }
 
 impl SThreadSpotTradePipeline {
-    pub fn new(trade_behavior: Arc<SpotTradeBehaviorV2Impl>) -> Self {
-        Self { trade_behavior }
+    pub fn new(
+        trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+        push_service: Arc<PushBehaviorV2Imp>,
+        kline_service: Arc<KLineBehaviorV2Imp>,
+    ) -> Self {
+        Self { trade_behavior, push_service, kline_service }
     }
 
     pub fn handle_new_order(&self, cmd: NewOrderCmd) -> Result<(), SpotCmdErrorAny> {
-        // 步骤1: 收单处理
+        // Step 1: Order acquisition
         let (balance_change_log, order_change_log) =
-            match self.trade_behavior.handle_acquiring2(cmd) {
-                Ok((balance_log, order_log)) => (balance_log, order_log),
-                Err(e) => {
-                    tracing::error!("MThread Pipeline [收单]: 处理失败: {:?}", e);
-                    return Err(e);
-                }
-            };
+            self.trade_behavior.handle_acquiring2(cmd).map_err(|e| {
+                tracing::error!("Pipeline [acquire]: Failed - {:?}", e);
+                e
+            })?;
 
-        tracing::info!("MThread Pipeline [收单]: 成功, order_id={}", order_change_log.entity_id());
+        tracing::info!("Pipeline [acquire]: Success, order_id={}", order_change_log.entity_id());
 
-        // 步骤2: 撮合处理
+        // Step 2: Order matching
         let (order_change_logs_opt, trade_change_logs_opt) =
-            match self.trade_behavior.handle_match3(order_change_log) {
-                Ok((order_logs, trade_logs)) => (order_logs, trade_logs),
-                Err(e) => {
-                    tracing::error!("MThread Pipeline [撮合]: 处理失败: {:?}", e);
-                    return Err(e);
-                }
-            };
+            self.trade_behavior.handle_match3(order_change_log).map_err(|e| {
+                tracing::error!("Pipeline [match]: Failed - {:?}", e);
+                e
+            })?;
 
         let trade_count = trade_change_logs_opt.as_ref().map(|v| v.len()).unwrap_or(0);
-        tracing::info!("MThread Pipeline [撮合]: 完成, {} 笔成交", trade_count);
+        tracing::info!("Pipeline [match]: Complete, {} trades", trade_count);
 
-        // 步骤3: 结算处理
-        let mut settlement_balance_logs: Vec<ChangeLogEntry> = Vec::new();
+        // Step 3: Settlement
+        let mut settlement_balance_logs = Vec::new();
         if let Some(ref trade_logs) = trade_change_logs_opt {
             for trade_log in trade_logs {
-                let trade_id = match trade_log.entity_id().parse::<u64>() {
-                    Ok(id) => id,
-                    Err(e) => {
+                let trade_id = trade_log
+                    .entity_id()
+                    .parse::<u64>()
+                    .map_err(|e| {
                         tracing::error!(
-                            "MThread Pipeline [结算]: 解析 trade_id 失败: entity_id={}, error={}",
+                            "Pipeline [settle]: Parse trade_id failed - entity_id={}, error={}",
                             trade_log.entity_id(),
                             e
                         );
-                        continue;
-                    }
-                };
+                    })
+                    .ok();
 
-                match self.trade_behavior.handle_settlement2(trade_id) {
-                    Ok(balance_logs) => {
-                        settlement_balance_logs.extend(balance_logs);
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            "MThread Pipeline [结算]: trade_id={} 结算失败: {:?}",
-                            trade_id,
-                            e
-                        );
-                        continue;
+                if let Some(id) = trade_id {
+                    if let Err(e) = self.trade_behavior.handle_settlement2(id) {
+                        tracing::error!("Pipeline [settle]: trade_id={} failed - {:?}", id, e);
+                    } else {
+                        settlement_balance_logs.push(trade_log.clone());
                     }
                 }
             }
         }
 
-        //todo k线聚合&推送
+        // Send trade logs to K-line service
+        if let Some(ref trade_logs) = trade_change_logs_opt {
+            for trade_log in trade_logs {
+                self.kline_service.handle_event(trade_log.clone());
+            }
+        }
+
+        // Publish change logs to queue
+        let balance_logs_count = settlement_balance_logs.len();
+        self.publish_change_logs(
+            order_change_logs_opt,
+            trade_change_logs_opt,
+            settlement_balance_logs,
+        );
+
         tracing::info!(
-            "MThread Pipeline [结算]: 完成, 生成 {} 条余额变更日志",
-            settlement_balance_logs.len()
+            "Pipeline [settle]: Complete, generated {} balance logs",
+            balance_logs_count
         );
 
         Ok(())
+    }
+
+    /// Publish change logs to corresponding topics for PushService to subscribe and push
+    fn publish_change_logs(
+        &self,
+        order_change_logs_opt: Option<Vec<ChangeLogEntry>>,
+        trade_change_logs_opt: Option<Vec<ChangeLogEntry>>,
+        balance_change_logs: Vec<ChangeLogEntry>,
+    ) {
+        // Publish OrderChangeLog
+        if let Some(order_logs) = order_change_logs_opt {
+            for log in order_logs {
+                self.push_service.handle_event(log);
+            }
+        }
+
+        // Publish TradeChangeLog
+        if let Some(trade_logs) = trade_change_logs_opt {
+            for log in trade_logs {
+                self.push_service.handle_event(log);
+            }
+        }
+
+        // Publish BalanceChangeLog
+        for log in balance_change_logs {
+            self.push_service.handle_event(log);
+        }
     }
 }
 
