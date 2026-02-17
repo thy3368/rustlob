@@ -5,7 +5,7 @@ use base_types::spot_topic::SpotTopic;
 use crossbeam_channel::{Receiver, Sender};
 use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
-
+use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
 use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
@@ -37,7 +37,7 @@ impl SpotAcquiringActor {
     /// 2. 生成 spot_order
     /// 3. 发送相应事件 (order_pending / order_cond_pending)
     ///
-    async fn handle_new_order(&self, cmd: NewOrderCmd) -> Result<(), Box<dyn std::error::Error>> {
+    async fn handle_new_order(&self, cmd: NewOrderCmd) -> Result<(), SpotCmdErrorAny> {
         use base_types::exchange::spot::spot_types::{OrderStatus, SpotOrder};
         use diff::Entity;
 
@@ -54,10 +54,7 @@ impl SpotAcquiringActor {
                 Ok((balance_log, order_log)) => (balance_log, order_log),
                 Err(e) => {
                     tracing::error!("订单处理失败: {:?}", e);
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!("订单处理失败: {:?}", e),
-                    )));
+                    return Err(e);
                 }
             };
 
@@ -66,15 +63,16 @@ impl SpotAcquiringActor {
             Ok(bytes) => bytes::Bytes::from(bytes),
             Err(e) => {
                 tracing::error!("序列化 balance_change_log 失败: {:?}", e);
-                return Err(Box::new(e));
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("序列化 balance_change_log 失败: {:?}", e),
+                }));
             }
         };
         if let Err(e) = self.queue.send(SpotTopic::BalanceChangeLog.name(), balance_bytes, None) {
             tracing::error!("发送 balance_change_log 到 topic 失败: {:?}", e);
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("发送 balance_change_log 失败: {:?}", e),
-            )));
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("发送 balance_change_log 失败: {:?}", e),
+            }));
         }
         tracing::info!("成功发送 balance_change_log 到 BalanceChangeLog topic, entity_id={}", balance_change_log.entity_id());
 
@@ -83,15 +81,16 @@ impl SpotAcquiringActor {
             Ok(bytes) => bytes::Bytes::from(bytes),
             Err(e) => {
                 tracing::error!("序列化 order_change_log 失败: {:?}", e);
-                return Err(Box::new(e));
+                return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                    message: format!("序列化 order_change_log 失败: {:?}", e),
+                }));
             }
         };
         if let Err(e) = self.queue.send(SpotTopic::OrderChangeLog.name(), order_bytes, None) {
             tracing::error!("发送 order_change_log 到 topic 失败: {:?}", e);
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("发送 order_change_log 失败: {:?}", e),
-            )));
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("发送 order_change_log 失败: {:?}", e),
+            }));
         }
         tracing::info!("成功发送 order_change_log 到 OrderChangeLog topic, entity_id={}", order_change_log.entity_id());
 
