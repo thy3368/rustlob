@@ -19,6 +19,8 @@ use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
 use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
     SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
 };
+use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig;
+use spot_behavior::proc::v2::actor::spot_trade_acquiring_stage::SpotAcquiringStage;
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
 use spot_behavior::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
@@ -125,7 +127,14 @@ impl HttpServer {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
 
         // 使用 id_repo 中的单例服务
-        let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_embedded();
+        let trade_v2_behavior = ins_repo::get_spot_trade_behavior_v2_embedded();
+        let kafka_config = KafkaConfig::default_local();
+        let trade_v2_service = Arc::new(SpotAcquiringStage::new(trade_v2_behavior, kafka_config));
+        
+        // 启动 SpotAcquiringStage
+        trade_v2_service.start();
+        tracing::info!("✅ SpotAcquiringStage started");
+        
         let market_data_service = ins_repo::get_spot_market_data_service();
         let user_data_service = ins_repo::get_spot_user_data_service();
 
@@ -136,7 +145,7 @@ impl HttpServer {
                 "/api/spot/v2/",
                 post(
                     handle_generic::<
-                        SpotTradeBehaviorV2Impl,
+                        SpotAcquiringStage,
                         SpotTradeCmdAny,
                         SpotTradeResAny,
                     >,

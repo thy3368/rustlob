@@ -297,10 +297,7 @@ pub struct NewOrderCmd {
     peg_offset_value: Option<i32>,
     /// 价格偏移类型
     peg_offset_type: Option<PegOffsetType>,
-    /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<u64>,
-    /// 时间戳
-    timestamp: Timestamp,
+
 }
 
 /// 测试下单命令

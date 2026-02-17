@@ -686,7 +686,7 @@ impl SpotTradeBehaviorV2Impl {
     pub(crate) fn handle_acquiring2(
         &self,
         cmd: NewOrderCmd,
-    ) -> Result<(ChangeLogEntry,ChangeLogEntry), SpotCmdErrorAny> {
+    ) -> Result<(ChangeLogEntry, ChangeLogEntry), SpotCmdErrorAny> {
         // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
         self.validate_order_cmd(&cmd)?;
 
@@ -754,8 +754,6 @@ impl SpotTradeBehaviorV2Impl {
 
         Ok((balance_change_log.clone(), order_change_log.clone()))
     }
-
-    
 
     pub(crate) fn handle_acquiring(
         &self,
@@ -1578,12 +1576,11 @@ impl SpotTradeBehaviorV2Impl {
         Ok(all_change_logs)
     }
 
-
     /// 处理订单撮合
-    /// 
+    ///
     /// # 参数
     /// - `order_log`: 订单变更日志，从中提取订单ID
-    /// 
+    ///
     /// # 返回
     /// - `Ok((order_change_logs, trade_change_logs))`: 成功时返回订单变更日志列表和成交变更日志列表
     ///   - order_change_logs: 订单变更日志，None表示无订单变更
@@ -1595,7 +1592,7 @@ impl SpotTradeBehaviorV2Impl {
     ) -> Result<(Option<Vec<ChangeLogEntry>>, Option<Vec<ChangeLogEntry>>), SpotCmdErrorAny> {
         // 1. 从 order_log 中提取订单ID
         let order_id_str = order_log.entity_id().to_string();
-        
+
         // 2. 从订单仓库查询订单
         let mut order = match self.order_repo.find_by_id(&order_id_str) {
             Ok(Some(order)) => order,
@@ -1625,6 +1622,7 @@ impl SpotTradeBehaviorV2Impl {
             order.total_qty
         );
 
+        //todo 要优化
         // 4. 执行撮合
         let trades = self.handle_match(&mut order);
 
@@ -1685,14 +1683,14 @@ impl SpotTradeBehaviorV2Impl {
         );
 
         // 只有在有数据时才返回 Some，否则返回 None
-        let order_logs_opt = if order_change_logs.is_empty() { None } else { Some(order_change_logs) };
-        let trade_logs_opt = if trade_change_logs.is_empty() { None } else { Some(trade_change_logs) };
+        let order_logs_opt =
+            if order_change_logs.is_empty() { None } else { Some(order_change_logs) };
+        let trade_logs_opt =
+            if trade_change_logs.is_empty() { None } else { Some(trade_change_logs) };
 
         Ok((order_logs_opt, trade_logs_opt))
     }
-    
-    
-    
+
     /// 处理交易的清算操作
     ///
     /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
@@ -1885,7 +1883,10 @@ impl SpotTradeBehaviorV2Impl {
     /// * `Ok(Vec<ChangeLogEntry>)` - 结算产生的所有余额变更日志
     /// * `Err(SpotCmdErrorAny)` - 处理失败
     ///
-    pub(crate) fn handle_settlement2(&self, trade_id: u64) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+    pub(crate) fn handle_settlement2(
+        &self,
+        trade_id: u64,
+    ) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
         // 1. 从交易仓库查询交易
         let trade_id_str = trade_id.to_string();
         let trade = match self.trade_repo.find_by_id(&trade_id_str) {
@@ -1903,14 +1904,21 @@ impl SpotTradeBehaviorV2Impl {
             }
         };
 
-        tracing::info!("开始结算交易: trade_id={}, taker_order_id={}, maker_order_id={}",
-            trade.trade_id, trade.taker_order_id, trade.maker_order_id);
+        tracing::info!(
+            "开始结算交易: trade_id={}, taker_order_id={}, maker_order_id={}",
+            trade.trade_id,
+            trade.taker_order_id,
+            trade.maker_order_id
+        );
 
         // 2. 执行结算
         let balance_change_logs = self.handle_settlement(vec![trade]);
 
-        tracing::info!("交易结算完成: trade_id={}, 生成 {} 条余额变更日志",
-            trade_id, balance_change_logs.len());
+        tracing::info!(
+            "交易结算完成: trade_id={}, 生成 {} 条余额变更日志",
+            trade_id,
+            balance_change_logs.len()
+        );
 
         Ok(balance_change_logs)
     }

@@ -50,6 +50,7 @@ core_affinity = "0.8"
 tracing = "0.1.44"
 crossbeam-channel = "0.5"
 disruptor = "3.7"
+rdkafka = "0.36.2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

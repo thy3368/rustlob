@@ -4840,6 +4840,7 @@ dependencies = [
  "once_cell",
  "push",
  "rand 0.9.2",
+ "rdkafka",
  "rust_queue",
  "serde",
  "serde_json",
