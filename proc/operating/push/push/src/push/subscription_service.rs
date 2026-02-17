@@ -21,15 +21,15 @@ impl SubscriptionService {
     ///
     /// # 参数
     /// - `conn_info`: 连接信息
-    pub async fn add_connection(&self, conn_info: ConnectionInfo) {
-        self.connection_repo.add_connection(conn_info).await;
+    pub fn add_connection(&self, conn_info: ConnectionInfo) {
+        self.connection_repo.add_connection(conn_info);
     }
 
     /// 移除连接
     ///
     /// # 参数
     /// - `client_addr`: 客户端地址
-    pub async fn remove_connection(&self, client_addr: SocketAddr) {
-        self.connection_repo.remove_connection(client_addr).await;
+    pub fn remove_connection(&self, client_addr: SocketAddr) {
+        self.connection_repo.remove_connection(client_addr);
     }
 }

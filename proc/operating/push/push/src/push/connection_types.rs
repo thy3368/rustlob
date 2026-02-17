@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use axum::extract::ws::Message;
 use chrono;
 use immutable_derive::immutable;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::mpsc;
 
 /// 连接信息结构体
 #[derive(Debug)]
@@ -90,12 +90,9 @@ impl ConnectionRepo {
     ///
     /// # 性能优化
     /// 使用读锁，允许多个并发查询
-    pub async fn get_senders_by_event(
-        &self,
-        event_type: &str,
-    ) -> Vec<mpsc::UnboundedSender<Message>> {
+    pub fn get_senders_by_event(&self, event_type: &str) -> Vec<mpsc::UnboundedSender<Message>> {
         let mut matched_senders = Vec::new();
-        let all_conns = self.all_connections.read().await;
+        let all_conns = self.all_connections.read().unwrap();
 
         for conn in all_conns.values() {
             if conn
@@ -118,13 +115,13 @@ impl ConnectionRepo {
     ///
     /// # 性能优化
     /// 使用读锁，允许多个并发查询
-    pub async fn get_senders_by_entity(
+    pub fn get_senders_by_entity(
         &self,
         entity_type: &str,
         entity_id: &str,
     ) -> Vec<mpsc::UnboundedSender<Message>> {
         let mut matched_senders = Vec::new();
-        let all_conns = self.all_connections.read().await;
+        let all_conns = self.all_connections.read().unwrap();
 
         let specific_topic = format!("{}:{}", entity_type, entity_id);
 
@@ -146,30 +143,30 @@ impl ConnectionRepo {
     ///
     /// # 性能考虑
     /// 虽然需要写锁，但添加连接的频率远低于查询，因此总体性能良好
-    pub async fn add_connection(&self, conn_info: ConnectionInfo) {
+    pub fn add_connection(&self, conn_info: ConnectionInfo) {
         let client_addr = conn_info.client_addr;
 
         // 添加到所有连接映射
         {
-            let mut all_conns = self.all_connections.write().await;
+            let mut all_conns = self.all_connections.write().unwrap();
             all_conns.insert(client_addr, conn_info.clone());
         }
 
         // 添加到发送器映射
         {
-            let mut conn_senders = self.connection_senders.write().await;
+            let mut conn_senders = self.connection_senders.write().unwrap();
             conn_senders.insert(client_addr, conn_info.sender.clone());
         }
 
         // 如果有用户ID，添加到用户相关映射
         if let Some(user_id) = &conn_info.user_id {
             {
-                let mut user_conns = self.user_connections.write().await;
+                let mut user_conns = self.user_connections.write().unwrap();
                 user_conns.entry(user_id.clone()).or_insert_with(Vec::new).push(conn_info.clone());
             }
 
             {
-                let mut user_senders = self.user_senders.write().await;
+                let mut user_senders = self.user_senders.write().unwrap();
                 user_senders
                     .entry(user_id.clone())
                     .or_insert_with(Vec::new)
@@ -189,24 +186,24 @@ impl ConnectionRepo {
     ///
     /// # 参数
     /// - `client_addr`: 客户端地址
-    pub async fn remove_connection(&self, client_addr: SocketAddr) {
+    pub fn remove_connection(&self, client_addr: SocketAddr) {
         // 从所有连接映射中移除并获取连接信息
         let removed_conn = {
-            let mut all_conns = self.all_connections.write().await;
+            let mut all_conns = self.all_connections.write().unwrap();
             all_conns.remove(&client_addr)
         };
 
         if let Some(conn) = removed_conn {
             // 从发送器映射中移除
             {
-                let mut conn_senders = self.connection_senders.write().await;
+                let mut conn_senders = self.connection_senders.write().unwrap();
                 conn_senders.remove(&client_addr);
             }
 
             // 如果有用户ID，从用户相关映射中移除
             if let Some(user_id) = &conn.user_id {
                 {
-                    let mut user_conns = self.user_connections.write().await;
+                    let mut user_conns = self.user_connections.write().unwrap();
                     if let Some(conns) = user_conns.get_mut(user_id) {
                         conns.retain(|c| c.client_addr != client_addr);
                         if conns.is_empty() {
@@ -216,7 +213,7 @@ impl ConnectionRepo {
                 }
 
                 {
-                    let mut user_senders = self.user_senders.write().await;
+                    let mut user_senders = self.user_senders.write().unwrap();
                     if let Some(senders) = user_senders.get_mut(user_id) {
                         // 注意：由于 Sender 没有实现 PartialEq，我们无法精确移除
                         // 这里简单地保留所有发送器，依赖 mpsc 的自动清理机制
@@ -236,47 +233,47 @@ impl ConnectionRepo {
     }
 
     /// 根据用户ID获取所有连接信息
-    pub async fn get_connections_by_user(&self, user_id: &str) -> Vec<ConnectionInfo> {
-        let user_conns = self.user_connections.read().await;
+    pub fn get_connections_by_user(&self, user_id: &str) -> Vec<ConnectionInfo> {
+        let user_conns = self.user_connections.read().unwrap();
         user_conns.get(user_id).cloned().unwrap_or_default()
     }
 
     /// 根据用户ID获取所有发送器
-    pub async fn get_senders_by_user(&self, user_id: &str) -> Vec<mpsc::UnboundedSender<Message>> {
-        let user_senders = self.user_senders.read().await;
+    pub fn get_senders_by_user(&self, user_id: &str) -> Vec<mpsc::UnboundedSender<Message>> {
+        let user_senders = self.user_senders.read().unwrap();
         user_senders.get(user_id).cloned().unwrap_or_default()
     }
 
     /// 根据客户端地址获取发送器
-    pub async fn get_sender_by_addr(
+    pub fn get_sender_by_addr(
         &self,
         client_addr: SocketAddr,
     ) -> Option<mpsc::UnboundedSender<Message>> {
-        let conn_senders = self.connection_senders.read().await;
+        let conn_senders = self.connection_senders.read().unwrap();
         conn_senders.get(&client_addr).cloned()
     }
 
     /// 获取所有连接信息
-    pub async fn get_all_connections(&self) -> Vec<ConnectionInfo> {
-        let all_conns = self.all_connections.read().await;
+    pub fn get_all_connections(&self) -> Vec<ConnectionInfo> {
+        let all_conns = self.all_connections.read().unwrap();
         all_conns.values().cloned().collect()
     }
 
     /// 获取所有发送器
-    pub async fn get_all_senders(&self) -> Vec<mpsc::UnboundedSender<Message>> {
-        let conn_senders = self.connection_senders.read().await;
+    pub fn get_all_senders(&self) -> Vec<mpsc::UnboundedSender<Message>> {
+        let conn_senders = self.connection_senders.read().unwrap();
         conn_senders.values().cloned().collect()
     }
 
     /// 获取用户连接数量
-    pub async fn get_user_connection_count(&self, user_id: &str) -> usize {
-        let user_conns = self.user_connections.read().await;
+    pub fn get_user_connection_count(&self, user_id: &str) -> usize {
+        let user_conns = self.user_connections.read().unwrap();
         user_conns.get(user_id).map(|v| v.len()).unwrap_or(0)
     }
 
     /// 获取总连接数量
-    pub async fn get_total_connection_count(&self) -> usize {
-        let all_conns = self.all_connections.read().await;
+    pub fn get_total_connection_count(&self) -> usize {
+        let all_conns = self.all_connections.read().unwrap();
         all_conns.len()
     }
 
@@ -284,10 +281,10 @@ impl ConnectionRepo {
     ///
     /// # 性能考虑
     /// 这是一个写操作，但频率相对较低
-    pub async fn update_last_active(&self, client_addr: SocketAddr) {
+    pub fn update_last_active(&self, client_addr: SocketAddr) {
         let now = chrono::Utc::now().timestamp_millis();
         let user_id_opt = {
-            let mut all_conns = self.all_connections.write().await;
+            let mut all_conns = self.all_connections.write().unwrap();
             if let Some(conn) = all_conns.get_mut(&client_addr) {
                 conn.last_active_at = now;
                 conn.user_id.clone()
@@ -298,7 +295,7 @@ impl ConnectionRepo {
 
         // 同步更新用户连接映射中的时间戳
         if let Some(user_id) = user_id_opt {
-            let mut user_conns = self.user_connections.write().await;
+            let mut user_conns = self.user_connections.write().unwrap();
             if let Some(conns) = user_conns.get_mut(&user_id) {
                 if let Some(user_conn) = conns.iter_mut().find(|c| c.client_addr == client_addr) {
                     user_conn.last_active_at = now;
@@ -312,8 +309,8 @@ impl ConnectionRepo {
     /// # 参数
     /// - `client_addr`: 客户端地址
     /// - `new_user_id`: 新的用户ID
-    pub async fn update_user_id(&self, client_addr: SocketAddr, new_user_id: String) {
-        let mut all_conns = self.all_connections.write().await;
+    pub fn update_user_id(&self, client_addr: SocketAddr, new_user_id: String) {
+        let mut all_conns = self.all_connections.write().unwrap();
 
         if let Some(conn) = all_conns.get_mut(&client_addr) {
             let old_user_id = conn.user_id.clone();
@@ -323,7 +320,7 @@ impl ConnectionRepo {
                 drop(all_conns); // 释放 all_conns 的锁以避免死锁
 
                 {
-                    let mut user_conns = self.user_connections.write().await;
+                    let mut user_conns = self.user_connections.write().unwrap();
                     if let Some(conns) = user_conns.get_mut(old_id) {
                         conns.retain(|c| c.client_addr != client_addr);
                         if conns.is_empty() {
@@ -333,12 +330,12 @@ impl ConnectionRepo {
                 }
 
                 {
-                    let mut user_senders = self.user_senders.write().await;
+                    let mut user_senders = self.user_senders.write().unwrap();
                     user_senders.remove(old_id);
                 }
 
                 // 重新获取锁
-                all_conns = self.all_connections.write().await;
+                all_conns = self.all_connections.write().unwrap();
             }
 
             // 更新连接的用户ID
@@ -350,7 +347,7 @@ impl ConnectionRepo {
 
                 // 添加到新用户ID的映射
                 {
-                    let mut user_conns = self.user_connections.write().await;
+                    let mut user_conns = self.user_connections.write().unwrap();
                     user_conns
                         .entry(new_user_id.clone())
                         .or_insert_with(Vec::new)
@@ -358,7 +355,7 @@ impl ConnectionRepo {
                 }
 
                 {
-                    let mut user_senders = self.user_senders.write().await;
+                    let mut user_senders = self.user_senders.write().unwrap();
                     user_senders
                         .entry(new_user_id.clone())
                         .or_insert_with(Vec::new)

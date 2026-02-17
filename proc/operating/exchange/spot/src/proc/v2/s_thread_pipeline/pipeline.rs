@@ -43,8 +43,11 @@ impl SThreadSpotTradePipeline {
         let trade_count = trade_change_logs_opt.as_ref().map(|v| v.len()).unwrap_or(0);
         tracing::info!("Pipeline [match]: Complete, {} trades", trade_count);
 
-        // Step 3: Settlement
+        // Step 3: Settlement + K-line processing (batch optimized)
+        // Note: Settlement and K-line processing are done together to avoid double iteration
         let mut settlement_balance_logs = Vec::new();
+        let mut kline_trade_logs = Vec::new();
+
         if let Some(ref trade_logs) = trade_change_logs_opt {
             for trade_log in trade_logs {
                 let trade_id = trade_log
@@ -59,30 +62,38 @@ impl SThreadSpotTradePipeline {
                     })
                     .ok();
 
+                // Always add to kline logs regardless of settlement result
+                kline_trade_logs.push(trade_log.clone());
+
                 if let Some(id) = trade_id {
-                    if let Err(e) = self.trade_behavior.handle_settlement2(id) {
-                        tracing::error!("Pipeline [settle]: trade_id={} failed - {:?}", id, e);
-                    } else {
-                        settlement_balance_logs.push(trade_log.clone());
+                    match self.trade_behavior.handle_settlement2(id) {
+                        Ok(balance_logs) => {
+                            settlement_balance_logs.extend(balance_logs);
+                        }
+                        Err(e) => {
+                            tracing::error!("Pipeline [settle]: trade_id={} failed - {:?}", id, e);
+                        }
                     }
                 }
             }
         }
 
-        // Send trade logs to K-line service
-        if let Some(ref trade_logs) = trade_change_logs_opt {
-            for trade_log in trade_logs {
-                self.kline_service.handle_event(trade_log.clone());
-            }
+        // Batch send trade logs to K-line service
+        if !kline_trade_logs.is_empty() {
+            self.kline_service.handle_events(&kline_trade_logs);
         }
 
-        // Publish change logs to queue
+        // Publish change logs to queue (batch optimized)
         let balance_logs_count = settlement_balance_logs.len();
-        self.publish_change_logs(
+        let all_logs = Self::combine_logs(
             order_change_logs_opt,
             trade_change_logs_opt,
             settlement_balance_logs,
         );
+
+        if !all_logs.is_empty() {
+            self.push_service.handle_events(&all_logs);
+        }
 
         tracing::info!(
             "Pipeline [settle]: Complete, generated {} balance logs",
@@ -92,31 +103,23 @@ impl SThreadSpotTradePipeline {
         Ok(())
     }
 
-    /// Publish change logs to corresponding topics for PushService to subscribe and push
-    fn publish_change_logs(
-        &self,
+    /// Combine all change logs into a single vector
+    fn combine_logs(
         order_change_logs_opt: Option<Vec<ChangeLogEntry>>,
         trade_change_logs_opt: Option<Vec<ChangeLogEntry>>,
         balance_change_logs: Vec<ChangeLogEntry>,
-    ) {
-        // Publish OrderChangeLog
+    ) -> Vec<ChangeLogEntry> {
+        let mut all_logs = Vec::new();
+
         if let Some(order_logs) = order_change_logs_opt {
-            for log in order_logs {
-                self.push_service.handle_event(log);
-            }
+            all_logs.extend(order_logs);
         }
-
-        // Publish TradeChangeLog
         if let Some(trade_logs) = trade_change_logs_opt {
-            for log in trade_logs {
-                self.push_service.handle_event(log);
-            }
+            all_logs.extend(trade_logs);
         }
+        all_logs.extend(balance_change_logs);
 
-        // Publish BalanceChangeLog
-        for log in balance_change_logs {
-            self.push_service.handle_event(log);
-        }
+        all_logs
     }
 }
 

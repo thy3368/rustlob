@@ -70,37 +70,76 @@ impl PushBehaviorV2Imp {
             }
         };
 
-        self.handle_event(entity_change_log).await;
+        self.handle_event(entity_change_log);
     }
 
     /// 处理单个变更日志事件
-    pub async fn handle_event(&self, entity_change_log: ChangeLogEntry) {
-        tracing::debug!(
-            "Processing event: entity_type={}, entity_id={}, change_type={:?}",
-            entity_change_log.entity_type(),
-            entity_change_log.entity_id(),
-            entity_change_log.change_type()
-        );
+    pub fn handle_event(&self, entity_change_log: ChangeLogEntry) {
+        self.handle_events(&[entity_change_log]);
+    }
 
-        // 通过 ConnectionRepo 找到对该事件感兴趣的发送器列表
-        let interested_senders: Vec<
-            tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>,
-        > = self
-            .connection_repo
-            .get_senders_by_entity(&entity_change_log.entity_type(), &entity_change_log.entity_id())
-            .await;
-
-        if interested_senders.is_empty() {
-            tracing::trace!(
-                "No connections interested in event: entity_type={}, entity_id={}",
-                entity_change_log.entity_type(),
-                entity_change_log.entity_id()
-            );
-            return; // 没有感兴趣的连接，直接返回
+    /// 批量处理变更日志事件（性能优化）
+    pub fn handle_events(&self, entity_change_logs: &[ChangeLogEntry]) {
+        if entity_change_logs.is_empty() {
+            return;
         }
 
-        // 序列化事件为 JSON 消息
-        let msg_text = match serde_json::to_string(&json!({
+        tracing::debug!(
+            "Processing {} events in batch",
+            entity_change_logs.len()
+        );
+
+        let mut total_sent = 0;
+        let mut total_skipped = 0;
+        let mut total_failed = 0;
+
+        // 批量处理：减少日志打印和重复计算
+        for event in entity_change_logs {
+            // 通过 ConnectionRepo 找到对该事件感兴趣的发送器列表
+            let interested_senders: Vec<
+                tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>,
+            > = self
+                .connection_repo
+                .get_senders_by_entity(event.entity_type(), event.entity_id());
+
+            if interested_senders.is_empty() {
+                total_skipped += 1;
+                continue;
+            }
+
+            // 序列化事件
+            let msg_text = match self.serialize_event(event) {
+                Ok(text) => text,
+                Err(e) => {
+                    tracing::error!("Failed to serialize event: {:?}", e);
+                    total_failed += 1;
+                    continue;
+                }
+            };
+
+            let ws_msg = axum::extract::ws::Message::Text(msg_text.into());
+
+            // 发送给所有感兴趣的连接
+            for sender in interested_senders {
+                if sender.send(ws_msg.clone()).is_ok() {
+                    total_sent += 1;
+                } else {
+                    total_failed += 1;
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Batch processing complete: {} sent, {} skipped, {} failed",
+            total_sent,
+            total_skipped,
+            total_failed
+        );
+    }
+
+    /// 序列化单个事件为 JSON
+    fn serialize_event(&self, entity_change_log: &ChangeLogEntry) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&json!({
             "stream_type": "user_data",
             "data": {
                 "entity_id": entity_change_log.entity_id(),
@@ -109,37 +148,7 @@ impl PushBehaviorV2Imp {
                 "timestamp": entity_change_log.timestamp(),
                 "sequence": entity_change_log.sequence()
             }
-        })) {
-            Ok(text) => text,
-            Err(e) => {
-                tracing::error!("Failed to serialize event to JSON: {:?}", e);
-                return;
-            }
-        };
-
-        let ws_msg = axum::extract::ws::Message::Text(msg_text.into());
-
-        // 发送消息给所有感兴趣的连接
-        let sender_count = interested_senders.len();
-        let mut success_count = 0;
-
-        for sender in interested_senders {
-            if sender.send(ws_msg.clone()).is_ok() {
-                success_count += 1;
-            } else {
-                tracing::debug!(
-                    "Failed to send message to WebSocket connection (connection may be closed)"
-                );
-            }
-        }
-
-        tracing::debug!(
-            "Sent event to {}/{} connections: entity_type={}, entity_id={}",
-            success_count,
-            sender_count,
-            entity_change_log.entity_type(),
-            entity_change_log.entity_id()
-        );
+        }))
     }
 
     /// 保留 try_send 方法以保持向后兼容（空实现）

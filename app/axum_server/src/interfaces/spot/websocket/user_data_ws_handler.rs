@@ -34,7 +34,7 @@ pub async fn user_data_websocket_handler(
         };
 
         // 添加到连接管理器（使用 mpsc Sender）
-        sub_service.add_connection(conn_info).await;
+        sub_service.add_connection(conn_info);
 
         // 处理客户端消息和服务端主动推送，有多少个连接便有多少个这个
         loop {
@@ -73,7 +73,7 @@ pub async fn user_data_websocket_handler(
         }
 
         // 连接关闭时移除连接信息
-        sub_service.remove_connection(client_addr).await;
+        sub_service.remove_connection(client_addr);
         println!("Spot User Data WebSocket connection closed: {}", client_addr);
     })
 }

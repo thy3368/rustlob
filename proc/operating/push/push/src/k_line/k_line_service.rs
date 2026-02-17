@@ -33,48 +33,54 @@ impl KLineBehaviorV2Imp {
         Self { aggregator: Arc::new(std::sync::Mutex::new(aggregator)), queue }
     }
 
-    /// 处理交易变更日志，提取交易数据并更新K线
+    /// 处理单个交易变更日志
     pub fn handle_event(&self, change_log: ChangeLogEntry) {
-        // 从ChangeLogEntry中提取交易数据
+        if let Some((timestamp, price, volume)) = Self::extract_trade_data(&change_log) {
+            let mut agg = self.aggregator.lock().unwrap();
+            if let Err(e) = agg.process_trade(timestamp, price, volume) {
+                tracing::error!("Failed to process trade: {:?}", e);
+            }
+        }
+    }
+
+    /// 批量处理交易变更日志（性能优化）
+    pub fn handle_events(&self, change_logs: &[ChangeLogEntry]) {
+        let trades: Vec<(u64, f64, f64)> = change_logs
+            .iter()
+            .filter_map(|log| Self::extract_trade_data(log))
+            .collect();
+
+        if trades.is_empty() {
+            return;
+        }
+
+        let mut agg = self.aggregator.lock().unwrap();
+        if let Err(e) = agg.process_trades_batch(&trades) {
+            tracing::error!("Failed to process {} trades batch: {:?}", trades.len(), e);
+        } else {
+            tracing::debug!("Successfully processed {} trades in batch", trades.len());
+        }
+    }
+
+    /// 从 ChangeLogEntry 提取交易数据 (timestamp, price, volume)
+    fn extract_trade_data(change_log: &ChangeLogEntry) -> Option<(u64, f64, f64)> {
         let fields_map: std::collections::HashMap<&str, &str> = match change_log.change_type() {
             diff::ChangeType::Created { fields } | diff::ChangeType::Updated { changed_fields: fields } => {
                 fields.iter().map(|f| (f.field_name.as_ref(), f.new_value.as_str())).collect()
             }
             diff::ChangeType::Deleted => {
-                tracing::debug!("Skipping deleted entity in ChangeLogEntry");
-                return;
+                return None;
             }
         };
 
-        // 解析交易必需字段
-        let price: f64 = match fields_map.get("price").and_then(|v| v.parse().ok()) {
-            Some(p) => p,
-            None => {
-                tracing::debug!("Missing or invalid price field in ChangeLogEntry");
-                return;
-            }
-        };
+        let price: f64 = fields_map.get("price")?.parse().ok()?;
+        let volume: f64 = fields_map
+            .get("volume")
+            .or_else(|| fields_map.get("amount"))?
+            .parse()
+            .ok()?;
 
-        let volume: f64 = match fields_map.get("volume").or_else(|| fields_map.get("amount"))
-            .and_then(|v| v.parse().ok()) {
-            Some(v) => v,
-            None => {
-                tracing::debug!("Missing or invalid volume/amount field in ChangeLogEntry");
-                return;
-            }
-        };
-
-        // todo 根据交易对查找对应的aggregator（当前单交易对实现）
-        let mut agg = self.aggregator.lock().unwrap();
-        
-        // 处理交易数据
-        if let Err(e) = agg.process_trade(
-            *change_log.timestamp(),
-            price,
-            volume,
-        ) {
-            tracing::error!("Failed to process trade: {:?}", e);
-        }
+        Some((*change_log.timestamp(), price, volume))
     }
 
 }
