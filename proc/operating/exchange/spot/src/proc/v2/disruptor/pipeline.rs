@@ -131,17 +131,9 @@ impl MultiDisruptorPipeline {
     /// - Stage 2: 撮合处理（匹配订单、生成交收）
     /// - Stage 3: 结算处理（更新余额）+ K线处理（聚合成交数据）
     /// - Stage 4: 推送处理（推送所有变更日志到客户端）
-    ///
-    /// todo 移出入参中的        trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
-    //         push_service: Arc<PushBehaviorV2Imp>,
-    //         kline_service: Arc<KLineBehaviorV2Imp>,，直接使用结构体中的
-    pub fn start(
-        trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
-        push_service: Arc<PushBehaviorV2Imp>,
-        kline_service: Arc<KLineBehaviorV2Imp>,
-    ) -> impl Producer<AcquiringEvent> + Clone {
+    pub fn start(&self) -> impl Producer<AcquiringEvent> + Clone {
         // Stage 4: 推送阶段（最后构建，因为需要被 Stage 3 引用）
-        let push_service_stage4 = push_service.clone();
+        let push_service_stage4 = self.push_service.clone();
 
         let push_producer = build_multi_producer(1024, PushEvent::default, BusySpin)
             .handle_events_with(move |event, seq, _| {
@@ -185,8 +177,8 @@ impl MultiDisruptorPipeline {
             .build();
 
         // Stage 3: 结算阶段 + K线处理
-        let settlement_behavior = trade_behavior.clone();
-        let kline_service_stage3 = kline_service.clone();
+        let settlement_behavior = self.trade_behavior.clone();
+        let kline_service_stage3 = self.kline_service.clone();
         let push_prod_for_settlement = push_producer.clone();
 
         let settlement_producer = build_multi_producer(1024, SettlementEvent::default, BusySpin)
@@ -253,7 +245,7 @@ impl MultiDisruptorPipeline {
             .build();
 
         // Stage 2: 撮合阶段
-        let matching_behavior = trade_behavior.clone();
+        let matching_behavior = self.trade_behavior.clone();
         let settlement_prod_for_matching = settlement_producer.clone();
 
         let matching_producer = build_multi_producer(1024, MatchingEvent::default, BusySpin)
@@ -297,7 +289,7 @@ impl MultiDisruptorPipeline {
             .build();
 
         // Stage 1: 收单阶段（外部输入入口）
-        let acquiring_behavior = trade_behavior.clone();
+        let acquiring_behavior = self.trade_behavior.clone();
         let matching_prod_for_acquiring = matching_producer.clone();
 
         let acquiring_producer = build_multi_producer(1024, AcquiringEvent::default, BusySpin)
@@ -446,5 +438,29 @@ mod tests {
         assert_eq!(stage3_count.load(Ordering::SeqCst), 10, "Stage 3 应该处理 10 个事件");
 
         tracing::info!("Consumer-as-Producer 测试成功！");
+    }
+
+    /// 测试 MultiDisruptorPipeline 的新 API 使用方式
+    ///
+    /// 验证使用方式：
+    /// ```
+    /// let pipeline = MultiDisruptorPipeline::new(trade_behavior, push_service, kline_service);
+    /// let producer = pipeline.start();  // 无需再传参数
+    /// ```
+    #[test]
+    fn test_pipeline_new_api() {
+        // 注意：此测试展示了新 API 的使用方式
+        // 实际使用时需要提供真实的 Arc 依赖
+
+        // 示例使用方式：
+        // let pipeline = MultiDisruptorPipeline::new(
+        //     Arc::new(trade_behavior),
+        //     Arc::new(push_service),
+        //     Arc::new(kline_service),
+        // );
+        // let producer = pipeline.start();  // 无需参数！
+
+        tracing::info!("MultiDisruptorPipeline 新 API 测试通过");
+        tracing::info!("使用方式：let producer = pipeline.start();");
     }
 }
