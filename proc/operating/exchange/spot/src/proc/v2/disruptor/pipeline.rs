@@ -39,6 +39,8 @@ use std::thread;
 use std::time::Duration;
 
 use disruptor::{BusySpin, Producer, build_multi_producer};
+use push::k_line::k_line_service::KLineBehaviorV2Imp;
+use push::push::push_service::PushBehaviorV2Imp;
 
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
 use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
@@ -96,18 +98,83 @@ pub struct PushEvent {
 /// 多 Disruptor 交易流水线
 ///
 /// 每个阶段一个独立的 Disruptor，消费者同时也是下一阶段的生产者
-pub struct MultiDisruptorPipeline;
+pub struct MultiDisruptorPipeline {
+    /// 交易行为实现，包含收单、撮合、结算等核心业务逻辑
+    trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+    /// 推送服务，负责将变更日志推送到客户端
+    push_service: Arc<PushBehaviorV2Imp>,
+    /// K线服务，负责聚合交易数据生成K线
+    kline_service: Arc<KLineBehaviorV2Imp>,
+}
 
 impl MultiDisruptorPipeline {
+    /// 创建新的流水线实例
+    ///
+    /// # 参数
+    /// - `trade_behavior`: 交易行为实现
+    /// - `push_service`: 推送服务
+    /// - `kline_service`: K线服务
+    pub fn new(
+        trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+        push_service: Arc<PushBehaviorV2Imp>,
+        kline_service: Arc<KLineBehaviorV2Imp>,
+    ) -> Self {
+        Self { trade_behavior, push_service, kline_service }
+    }
+
     /// 创建并启动流水线
     ///
     /// 返回 Stage 1 的生产者，用于提交订单
+    ///
+    /// 完整处理流程：
+    /// - Stage 1: 收单处理（验证订单、冻结资金）
+    /// - Stage 2: 撮合处理（匹配订单、生成交收）
+    /// - Stage 3: 结算处理（更新余额）+ K线处理（聚合成交数据）
+    /// - Stage 4: 推送处理（推送所有变更日志到客户端）
+    ///
+    /// todo 移出入参中的        trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+    //         push_service: Arc<PushBehaviorV2Imp>,
+    //         kline_service: Arc<KLineBehaviorV2Imp>,，直接使用结构体中的
     pub fn start(
         trade_behavior: Arc<SpotTradeBehaviorV2Impl>,
+        push_service: Arc<PushBehaviorV2Imp>,
+        kline_service: Arc<KLineBehaviorV2Imp>,
     ) -> impl Producer<AcquiringEvent> + Clone {
         // Stage 4: 推送阶段（最后构建，因为需要被 Stage 3 引用）
+        let push_service_stage4 = push_service.clone();
+
         let push_producer = build_multi_producer(1024, PushEvent::default, BusySpin)
-            .handle_events_with(|event, seq, _| {
+            .handle_events_with(move |event, seq, _| {
+                tracing::debug!("[Stage 4: 推送] 开始 seq={}", seq);
+
+                // 合并不同时期的变更日志
+                let mut all_logs = Vec::new();
+
+                // 收单阶段的变更日志
+                if let Some(ref log) = event.acquiring_balance_log {
+                    all_logs.push(log.clone());
+                }
+                if let Some(ref log) = event.acquiring_order_log {
+                    all_logs.push(log.clone());
+                }
+
+                // 撮合阶段的变更日志
+                if let Some(ref logs) = event.matching_order_logs {
+                    all_logs.extend(logs.clone());
+                }
+                if let Some(ref logs) = event.matching_trade_logs {
+                    all_logs.extend(logs.clone());
+                }
+
+                // 结算阶段的变更日志
+                all_logs.extend(event.settlement_balance_logs.clone());
+
+                // 批量推送到客户端
+                if !all_logs.is_empty() {
+                    push_service_stage4.handle_events(&all_logs);
+                    tracing::debug!("[Stage 4: 推送] 推送 {} 条变更日志", all_logs.len());
+                }
+
                 tracing::info!(
                     "[Stage 4: 推送] 完成 seq={} trades={} settled={}",
                     seq,
@@ -117,8 +184,9 @@ impl MultiDisruptorPipeline {
             })
             .build();
 
-        // Stage 3: 结算阶段
+        // Stage 3: 结算阶段 + K线处理
         let settlement_behavior = trade_behavior.clone();
+        let kline_service_stage3 = kline_service.clone();
         let push_prod_for_settlement = push_producer.clone();
 
         let settlement_producer = build_multi_producer(1024, SettlementEvent::default, BusySpin)
@@ -128,8 +196,14 @@ impl MultiDisruptorPipeline {
                 let mut settlement_logs = vec![];
                 let mut settlement_count = 0u32;
 
+                // 收集需要推送给K线服务的成交日志
+                let mut kline_trade_logs = Vec::new();
+
                 if let Some(ref trade_logs) = event.trade_change_logs {
                     for trade_log in trade_logs {
+                        // 无论结算是否成功，都推送给K线服务（K线应反映实际成交）
+                        kline_trade_logs.push(trade_log.clone());
+
                         if let Ok(trade_id) = trade_log.entity_id().parse::<u64>() {
                             match settlement_behavior.handle_settlement2(trade_id) {
                                 Ok(balance_logs) => {
@@ -138,7 +212,7 @@ impl MultiDisruptorPipeline {
                                 }
                                 Err(e) => {
                                     tracing::error!(
-                                        "[Stage 3] trade_id={} 结算失败: {:?}",
+                                        "[Stage 3] 成交ID={} 结算失败: {:?}",
                                         trade_id,
                                         e
                                     );
@@ -148,7 +222,16 @@ impl MultiDisruptorPipeline {
                     }
                 }
 
-                tracing::info!("[Stage 3: 结算] 完成 seq={} settled={}", seq, settlement_count);
+                // 批量推送成交日志到K线服务
+                if !kline_trade_logs.is_empty() {
+                    kline_service_stage3.handle_events(&kline_trade_logs);
+                    tracing::debug!(
+                        "[Stage 3: 结算] 推送 {} 条成交到K线服务",
+                        kline_trade_logs.len()
+                    );
+                }
+
+                tracing::info!("[Stage 3: 结算] 完成 seq={} 结算成功={} 笔", seq, settlement_count);
 
                 // Consumer-as-Producer: 发布到 Stage 4
                 let push_event = PushEvent {
