@@ -205,6 +205,19 @@ impl HttpServer {
         push_service.start();
         tracing::info!("✅ Push service started");
 
+        // 初始化并启动所有 Stage（Kafka 事件驱动流程）
+        let _match_stage = ins_repo::get_spot_match_stage();
+        tracing::info!("✅ SpotMatchStage started");
+
+        let _kline_stage = ins_repo::get_spot_k_line_stage();
+        tracing::info!("✅ SpotKLineStage started");
+
+        let _push_stage = ins_repo::get_spot_push_stage();
+        tracing::info!("✅ SpotPushStage started");
+
+        let _settlement_stage = ins_repo::get_spot_settlement_stage();
+        tracing::info!("✅ SpotSettlementStage started");
+
         Ok(())
     }
 

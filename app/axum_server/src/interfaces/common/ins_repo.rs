@@ -79,6 +79,11 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
 });
 
 use rust_queue::queue::queue_impl::kafka_queue::KafkaConfig;
+use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig as SpotKafkaConfig;
+use spot_behavior::proc::v2::actor::spot_trade_match_stage::SpotMatchStage;
+use spot_behavior::proc::v2::actor::spot_trade_k_line_stage::SpotKLineStage;
+use spot_behavior::proc::v2::actor::spot_trade_push_stage::SpotPushStage;
+use spot_behavior::proc::v2::actor::spot_trade_settlement_stage::SpotSettlementStage;
 
 // Kafka 队列配置：10分区 3副本
 static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
@@ -145,6 +150,39 @@ static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotMarketDataSSEImpl::new()));
 static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
+
+// Stage 单例（Kafka 事件驱动流程）
+static SPOT_MATCH_STAGE: Lazy<Arc<SpotMatchStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotMatchStage::create_and_start(
+        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
+        kafka_config,
+    )
+});
+
+static SPOT_K_LINE_STAGE: Lazy<Arc<SpotKLineStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotKLineStage::create_and_start(
+        K_LINE_SERVICE.clone(),
+        kafka_config,
+    )
+});
+
+static SPOT_PUSH_STAGE: Lazy<Arc<SpotPushStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotPushStage::create_and_start(
+        PUSH_SERVICE.clone(),
+        kafka_config,
+    )
+});
+
+static SPOT_SETTLEMENT_STAGE: Lazy<Arc<SpotSettlementStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotSettlementStage::create_and_start(
+        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
+        kafka_config,
+    )
+});
 
 pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl> {
     SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()
@@ -215,4 +253,21 @@ pub fn get_user_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> {
 
 pub fn get_market_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> {
     MARKET_DATA_REPO.clone()
+}
+
+// Stage 访问方法
+pub fn get_spot_match_stage() -> Arc<SpotMatchStage> {
+    SPOT_MATCH_STAGE.clone()
+}
+
+pub fn get_spot_k_line_stage() -> Arc<SpotKLineStage> {
+    SPOT_K_LINE_STAGE.clone()
+}
+
+pub fn get_spot_push_stage() -> Arc<SpotPushStage> {
+    SPOT_PUSH_STAGE.clone()
+}
+
+pub fn get_spot_settlement_stage() -> Arc<SpotSettlementStage> {
+    SPOT_SETTLEMENT_STAGE.clone()
 }
