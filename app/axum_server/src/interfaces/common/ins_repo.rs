@@ -12,7 +12,8 @@ use lob_repo::adapter::remote_lob_impl::RemoteLob;
 use once_cell::sync::Lazy;
 // KLine 相关服务单例
 use push::k_line::{
-    aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator, k_line_service::KLineBehaviorV2Imp,
+    aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
+    k_line_service::KLineBehaviorV2Imp,
 };
 use push::push::connection_types::ConnectionRepo;
 use push::push::push_service::PushBehaviorV2Imp;
@@ -80,8 +81,8 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
 
 use rust_queue::queue::queue_impl::kafka_queue::KafkaConfig;
 use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig as SpotKafkaConfig;
-use spot_behavior::proc::v2::actor::spot_trade_match_stage::SpotMatchStage;
 use spot_behavior::proc::v2::actor::spot_trade_k_line_stage::SpotKLineStage;
+use spot_behavior::proc::v2::actor::spot_trade_match_stage::SpotMatchStage;
 use spot_behavior::proc::v2::actor::spot_trade_push_stage::SpotPushStage;
 use spot_behavior::proc::v2::actor::spot_trade_settlement_stage::SpotSettlementStage;
 
@@ -116,7 +117,6 @@ static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Laz
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
         EMBEDDED_LOB_REPO.clone(),
-        MPMC_QUEUE.clone(),
     ))
 });
 
@@ -128,7 +128,6 @@ static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = 
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
         DISTRIBUTED_LOB_REPO.clone(),
-        MPMC_QUEUE.clone(), // 使用 MPMC 队列而不是 Kafka 队列
     ))
 });
 
@@ -154,34 +153,22 @@ static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
 // Stage 单例（Kafka 事件驱动流程）
 static SPOT_MATCH_STAGE: Lazy<Arc<SpotMatchStage>> = Lazy::new(|| {
     let kafka_config = SpotKafkaConfig::default_local();
-    SpotMatchStage::create_and_start(
-        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
-        kafka_config,
-    )
+    SpotMatchStage::create_and_start(SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(), kafka_config)
 });
 
 static SPOT_K_LINE_STAGE: Lazy<Arc<SpotKLineStage>> = Lazy::new(|| {
     let kafka_config = SpotKafkaConfig::default_local();
-    SpotKLineStage::create_and_start(
-        K_LINE_SERVICE.clone(),
-        kafka_config,
-    )
+    SpotKLineStage::create_and_start(K_LINE_SERVICE.clone(), kafka_config)
 });
 
 static SPOT_PUSH_STAGE: Lazy<Arc<SpotPushStage>> = Lazy::new(|| {
     let kafka_config = SpotKafkaConfig::default_local();
-    SpotPushStage::create_and_start(
-        PUSH_SERVICE.clone(),
-        kafka_config,
-    )
+    SpotPushStage::create_and_start(PUSH_SERVICE.clone(), kafka_config)
 });
 
 static SPOT_SETTLEMENT_STAGE: Lazy<Arc<SpotSettlementStage>> = Lazy::new(|| {
     let kafka_config = SpotKafkaConfig::default_local();
-    SpotSettlementStage::create_and_start(
-        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
-        kafka_config,
-    )
+    SpotSettlementStage::create_and_start(SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(), kafka_config)
 });
 
 pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl> {

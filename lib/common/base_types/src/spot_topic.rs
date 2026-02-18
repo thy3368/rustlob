@@ -3,6 +3,8 @@ pub enum SpotTopic {
     TradeChangeLog,
     BalanceChangeLog,
     KLineChangeLog,
+    KUserDataChangeLog,
+    KMarketChangeLog,
 }
 
 impl SpotTopic {
@@ -12,6 +14,8 @@ impl SpotTopic {
             SpotTopic::KLineChangeLog => "KLineChangeLog",
             SpotTopic::TradeChangeLog => "TradeChangeLog",
             SpotTopic::BalanceChangeLog => "BalanceChangeLog",
+            SpotTopic::KUserDataChangeLog => "KUserDataChangeLog",
+            SpotTopic::KMarketChangeLog => "KMarketChangeLog",
         }
     }
 }

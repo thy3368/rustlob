@@ -19,8 +19,6 @@ use immutable_derive::immutable;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rand::Rng;
-use rust_queue::queue::queue::{Queue, ToBytes};
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
@@ -203,8 +201,6 @@ pub struct SpotTradeBehaviorV2Impl {
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 动态分发
     lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
-
-    queue: Arc<MPMCQueue>,
 }
 
 impl SpotTradeBehaviorV2Impl {
@@ -214,192 +210,6 @@ impl SpotTradeBehaviorV2Impl {
         format!("{:?}:{}", AccountId(1), u32::from(asset_id))
     }
 
-    /// 订单预处理 - 负责创建订单、冻结余额和生成事件
-    ///
-    /// ## ✅ 已实现的优化
-    ///
-    /// | 优化项 | 说明 | 实现位置 |
-    /// |--------|------|----------|
-    /// | **A. 消除 unwrap()** | 使用 match/Result 处理所有错误，避免 panic | Line 560-573 |
-    /// | **B. 批量发送事件** | send_batch 批量发送，减少 IO 次数 | Line 480-510 |
-    /// | **D. 参数验证前置** | 创建订单前验证，避免无效资源分配 | Line 427-465 |
-    /// | **E. 条件单实现** | StopLoss/TakeProfit 触发判断和挂起逻辑（创建时冻结资金） | Line 517-620 |
-    ///
-    /// ## 状态流转流程（方案A：条件单创建时冻结资金）
-    ///
-    /// ```
-    /// 接收 NewOrderCmd
-    ///     │
-    ///     ▼
-    /// ┌───────────────────┐
-    /// │ 0.参数验证        │  validate_order_cmd() - 优化D
-    /// │                   │  - 数量>0、价格有效性检查
-    /// │                   │  - 提前返回，避免无效订单创建
-    /// └─────────┬─────────┘
-    ///           │
-    ///           ▼
-    /// ┌───────────────────┐
-    /// │  1.创建订单实体   │  SpotOrder::from(cmd) - 零拷贝转换
-    /// │                   │  - 根据 OrderType 设置不同字段
-    /// │                   │  - Market/StopLoss/TakeProfit 设置 price=None
-    /// │                   │  - Limit 设置具体价格
-    /// │                   │  - 条件单初始状态: ConditionalPending
-    /// └─────────┬─────────┘
-    ///           │
-    ///           ▼
-    /// ┌───────────────────┐
-    /// │ 2.计算冻结资产    │  frozen_asset_id()
-    /// │                   │  - Buy: 冻结 quote
-    /// │                   │  - Sell: 冻结 base
-    /// │                   │  - ⚠️ 所有订单类型统一冻结（含条件单）
-    /// └─────────┬─────────┘
-    ///           │
-    ///           ▼
-    /// ┌───────────────────────┐
-    /// │  3.查询并锁定余额     │
-    /// │  find_by_id_4_update()│
-    /// │  ⚠️ 竞争点：DB行锁   │
-    /// └───────────┬───────────┘
-    ///             │
-    ///  ┌──────────┼──────────┐
-    ///  ▼          ▼          ▼
-    /// ┌──────┐ ┌──────┐ ┌──────┐
-    /// │余额  │ │余额  │ │DB    │
-    /// │不足  │ │充足  │ │错误  │
-    /// └──┬───┘ └──┬───┘ └──┬───┘
-    ///    │        │        │
-    ///    ▼        ▼        ▼
-    /// 返回错误  ┌──────┐  返回错误
-    ///          │4.冻结│
-    ///          │资金  │
-    ///          └──┬───┘
-    ///             │
-    ///             ▼
-    /// ┌───────────────────────────┐
-    /// │ 5.处理条件单（优化E）     │
-    /// │                           │
-    /// │ ┌─────────┐ ┌─────────┐   │
-    /// │ │条件单   │ │普通单   │   │
-    /// │ │         │ │         │   │
-    /// │ │检查触发 │ │         │   │
-    /// │ └───┬─────┘ │         │   │
-    /// │     │       │         │   │
-    /// │  ┌──┴──┐    │         │   │
-    /// │  ▼     ▼    │         │   │
-    /// │ 触发   未触发 │         │   │
-    /// │  │      │   │         │   │
-    /// │  ▼      ▼   │         │   │
-    /// │ Pending Conditional │   │
-    /// │ (进LOB) Pending     │   │
-    /// │         (挂起)      │   │
-    /// └────┬────────┬───────┴───┘
-    ///      │        │
-    ///      ▼        ▼
-    /// ┌───────────────────┐
-    /// │ 6.持久化到数据库  │
-    /// │ replay_event()    │
-    /// │                   │
-    /// │ 冻结资金+订单状态 │
-    /// └─────────┬─────────┘
-    ///           │
-    ///           ▼
-    ///     返回 SpotOrder
-    /// ```
-    ///
-    /// ## 关键竞争点分析
-    ///
-    /// 1. **余额查询加锁** (优化A: Line 560-573)
-    ///    - `find_by_id_4_update()` 使用 `SELECT FOR UPDATE` 锁定余额行
-    ///    - ✅ **已优化**: 使用 match 替代 unwrap，安全处理 None/Error 情况
-    ///    - 防止并发下单导致的超卖
-    ///    - 风险：高并发时可能成为瓶颈
-    ///
-    /// 2. **批量事件处理** (优化B: Line 480-510)
-    ///    - ✅ **已优化**: `send_batch()` 批量发送，减少网络 IO
-    ///    - ✅ **已优化**: 统一 `persist_change_logs()` 封装发送+持久化逻辑
-    ///    - 先发送消息队列，再回放DB事件（最终一致性）
-    ///    - 如果DB回放失败，消息已发出，可能导致不一致
-    ///    - 目前策略：记录错误日志，不阻塞流程
-    ///
-    /// ## 错误处理策略
-    ///
-    /// | 错误类型 | 处理方案 | 返回状态 |
-    /// |---------|---------|---------|
-    /// | 余额不足 | 返回 InsufficientBalance | Rejected |
-    /// | DB查询失败 | 返回 Internal Error | Rejected |
-    /// | 冻结失败 | 返回 Internal Error | Rejected |
-    /// | 事件回放失败 | 记录日志，继续 | 正常返回 |
-    ///
-    /// ## ✅ 已完成优化点
-    ///
-    /// - [x] **A. 消除 unwrap()** - 使用 match/Result 安全处理错误
-    /// - [x] **B. 批量事件发送优化** - send_batch 批量发送，统一封装
-    /// - [x] **D. 参数验证前置** - 创建订单前验证所有参数
-    /// - [x] **E. 条件单实现** - StopLoss/TakeProfit 触发判断和挂起
-    ///
-    /// ## 待办优化点
-    ///
-    /// - [ ] cmd.clone() 性能优化（当前有克隆开销）
-    /// - [ ] 分布式事务（消息队列与DB一致性）
-    /// - [ ] 余额查询缓存（Redis）
-    /// - [ ] 条件单价格订阅（实时价格推送）
-    ///
-    /// ## 订单状态 (order_status) 变化分析（方案A：条件单创建时冻结）
-    ///
-    /// ### pre_process 中的状态流转
-    ///
-    /// ```
-    /// ┌─────────────────────────────────────────────────────────────────┐
-    /// │                    pre_process 状态流转（方案A）               │
-    /// ├─────────────────────────────────────────────────────────────────┤
-    /// │                                                                 │
-    /// │   接收 NewOrderCmd                                              │
-    /// │        │                                                        │
-    /// │        ▼                                                        │
-    /// │   ┌─────────────────┐                                           │
-    /// │   │ SpotOrder::from │  初始状态设置                             │
-    /// │   │    (cmd)        │  - 普通单: Pending                        │
-    /// │   └────────┬────────┘  - 条件单: ConditionalPending (Line 997)  │
-    /// │            │                                                    │
-    /// │            ▼                                                    │
-    /// │   ┌─────────────────┐                                           │
-    /// │   │  handle_data    │  冻结资金（所有订单类型）                 │
-    /// │   │                 │  - ✅ 条件单创建时即冻结                  │
-    /// │   │                 │  - 确保触发时资金充足                     │
-    /// │   └────────┬────────┘                                           │
-    /// │            │                                                    │
-    /// │    ┌───────┴───────┐                                            │
-    /// │    ▼               ▼                                            │
-    /// │ 成功             失败                                           │
-    /// │    │               │                                            │
-    /// │    ▼               ▼                                            │
-    /// │ ┌───────┐    ┌─────────────┐                                    │
-    /// │ │ 步骤2  │    │ 余额不足    │  ✅ 已改进                         │
-    /// │ │条件单  │    │  设置状态   │  - 设置 Rejected                   │
-    /// │ │处理    │    │  发送事件   │  - 生成变更日志                    │
-    /// │ └───┬───┘    │  持久化DB   │  - 发送队列+DB持久化               │
-    /// │     │        └──────┬──────┘  - 然后返回错误                    │
-    /// │     │               │                                          │
-    /// │     ▼               │                                          │
-    /// │ ┌─────────────┐     │                                          │
-    /// │ │检查触发条件 │     │                                          │
-    /// │ └──────┬──────┘     │                                          │
-    /// │        │             │                                          │
-    /// │   ┌────┴────┐        │                                          │
-    /// │   ▼         ▼        │                                          │
-    /// │ 已触发    未触发     │                                          │
-    /// │   │         │        │                                          │
-    /// │   ▼         ▼        │                                          │
-    /// │ Pending  Conditional │                                          │
-    /// │(资金冻结)  Pending   │                                          │
-    /// │   │      (资金冻结)  │                                          │
-    /// │   │         │        │                                          │
-    /// │   ▼         ▼        │                                          │
-    /// │  进入    挂起等待    │                                          │
-    /// │ 订单簿   价格触发    │                                          │
-    /// │                      │                                          │
-    /// └──────────────────────┴──────────────────────────────────────────┘
-    /// ```
     ///
     /// ### 关键结论
     ///
@@ -544,12 +354,12 @@ impl SpotTradeBehaviorV2Impl {
         }
 
         // 2.批量发送到消息队列
-        let bytes_events: Vec<bytes::Bytes> =
-            logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
-
-        if !bytes_events.is_empty() {
-            let _ = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
-        }
+        // let bytes_events: Vec<bytes::Bytes> =
+        //     logs.iter().filter_map(|log| log.to_bytes().ok().map(bytes::Bytes::from)).collect();
+        //
+        // if !bytes_events.is_empty() {
+        //     let _ = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
+        // }
 
         Ok(())
     }
@@ -1863,13 +1673,13 @@ impl SpotTradeBehaviorV2Impl {
 
         // 所有数据持久化操作，一次性回放所有事件到数据库
 
-        // 批量发送事件 - 将 ChangeLogEntry 转换为 Bytes
-        let bytes_events: Vec<bytes::Bytes> = balance_change_logs
-            .iter()
-            .filter_map(|event| serde_json::to_vec(event).ok().map(bytes::Bytes::from))
-            .collect();
-
-        let results = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
+        // // 批量发送事件 - 将 ChangeLogEntry 转换为 Bytes
+        // let bytes_events: Vec<bytes::Bytes> = balance_change_logs
+        //     .iter()
+        //     .filter_map(|event| serde_json::to_vec(event).ok().map(bytes::Bytes::from))
+        //     .collect();
+        //
+        // let results = self.queue.send_batch(SpotTopic::OrderChangeLog.name(), bytes_events, None);
 
         balance_change_logs
     }
