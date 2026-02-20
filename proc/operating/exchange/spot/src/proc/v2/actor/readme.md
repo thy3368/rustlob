@@ -1,7 +1,6 @@
-# 委托到行情的SEDA单体事件流架构
+# ust之从0-1低时延CEX：狗屎微服务，从委托到行情的全SEDA单体事件流架构
 
 
-//todo 增加 user_data/market_data stage
 ## 概述
 
 本文档详细介绍 Spot 委托订单在端到端场景中支持的多种 SEDA（Staged Event-Driven Architecture）部署架构，包括单机单线程版、单机多线程版（MPMC）和分布式版（Kafka）。所有架构共享统一的领域逻辑，通过配置即可切换部署模式，实现逻辑内聚与部署灵活的完美结合。
@@ -18,7 +17,7 @@
 │                                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────────────────────┐   │
 │   │                              Push Stage (推送)                                   │   │
-│   │  (订阅所有 Kafka Topics: Order/Trade/Balance/KLine ChangeLog)                    │   │
+│   │  (订阅所有 Kafka Topics: Order/Trade/Balance/KLine/MarketData/UserData ChangeLog) │   │
 │   └───────────────────────────────────┬─────────────────────────────────────────────┘   │
 │                                       │ WebSocket                                      │
 │                                       ↓                                                  │
@@ -28,35 +27,42 @@
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
       客户端下单
-           │
-           ↓
-  ┌──────────────────────┐
-  │   Acquiring Stage    │
-  │     (收单委托)        │
-  └──────────┬───────────┘
-             │
-             │ OrderChangeLog + BalanceChangeLog (Kafka)
-             │
-             ↓
-  ┌──────────────────────┐
-  │    Match Stage       │
-  │     (订单撮合)        │
-  └──────────┬───────────┘
-             │
-             │ TradeChangeLog + OrderChangeLog (Kafka)
-             │
-             ├────────────────────────┬────────────────────────┐
-             │                        │                        │
-             ↓                        ↓                        ↓
-  ┌──────────────────────┐  ┌──────────────────────┐  (Push 直接订阅 Kafka)
-  │  Settlement Stage    │  │   KLine Stage        │
-  │     (结算处理)        │  │     (K线聚合)         │
-  └──────────┬───────────┘  └──────────┬───────────┘
-             │                         │
-             │ BalanceChangeLog        │ KLineChangeLog
-             │ (Kafka)                 │ (Kafka)
-             │                         │
-             └─────────────────────────┘
+            │
+            ↓
+   ┌──────────────────────┐
+   │   Acquiring Stage    │
+   │     (收单委托)        │
+   └──────────┬───────────┘
+              │
+              │ OrderChangeLog + BalanceChangeLog (Kafka)
+              │
+              ↓
+   ┌──────────────────────┐
+   │    Match Stage       │
+   │     (订单撮合)        │
+   └──────────┬───────────┘
+              │
+              │ TradeChangeLog + OrderChangeLog (Kafka)
+              │
+              ├────────────────────────┬────────────────────────┬────────────────────────┐
+              │                        │                        │                        │
+              ↓                        ↓                        ↓                        ↓
+   ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+   │  Settlement Stage    │  │   KLine Stage        │  │  MarketData Stage    │  │   UserData Stage     │
+   │     (结算处理)        │  │     (K线聚合)         │  │   (市场数据聚合)      │  │   (用户数据推送)      │
+   └──────────┬───────────┘  └──────────┬───────────┘  └──────────┬───────────┘  └──────────┬───────────┘
+              │                         │                        │                        │
+              │ BalanceChangeLog        │ KLineChangeLog         │ MarketDataChangeLog    │ UserDataChangeLog
+              │ (Kafka)                 │ (Kafka)                │ (Kafka)                │ (Kafka)
+              │                         │                        │                        │
+              └─────────────────────────┴────────────────────────┴────────────────────────┘
+                                                                │
+                                                                │ (Push 直接订阅 Kafka)
+                                                                ↓
+                                                    ┌──────────────────────┐
+                                                    │      Push Stage      │
+                                                    │     (WebSocket推送)   │
+                                                    └──────────────────────┘
 ```
 
 ### 各 Stage 职责
@@ -67,7 +73,11 @@
 | **MatchStage** | OrderChangeLog | TradeChangeLog+OrderChangeLog | 订单撮合、成交生成 |
 | **SettlementStage** | TradeChangeLog | BalanceChangeLog | 账户结算、余额更新 |
 | **KLineStage** | TradeChangeLog | KLineChangeLog | 成交数据聚合、K线生成 |
+| **MarketDataStage** | OrderChangeLog+TradeChangeLog | MarketDataChangeLog | 订单簿深度更新、市场数据快照 |
+| **UserDataStage** | OrderChangeLog+TradeChangeLog | UserDataChangeLog | 用户订单更新、账户数据推送 |
 | **PushStage** | All ChangeLogs | WebSocket Message | 实时推送所有变更到客户端 |
+
+
 
 ## 多部署架构支持
 
@@ -99,26 +109,32 @@
 适用于**极致延迟**要求的场景，如高频撮合核心。
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                    Single Process (Main Thread)                       │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐ │
-│  │Acquiring│ → │  Match  │ → │Settlement│ → │  KLine  │ → │  Push  │ │
-│  │ Stage   │   │ Stage   │   │ Stage   │   │ Stage   │   │ Stage  │ │
-│  └────┬────┘   └────┬────┘   └────┬────┘   └────┬────┘   └───┬────┘ │
-│       │             │             │             │            │      │
-│       └─────────────┴─────────────┴─────────────┴────────────┘      │
-│                              ↓                                       │
-│              ┌──────────────────────────────────────┐               │
-│              │        In-Memory SPSC Queue          │               │
-│              │   (无锁单生产者单消费者队列)          │               │
-│              └──────────────────────────────────────┘               │
-│                                                                       │
-│  延迟: < 1μs (内存操作)                                               │
-│  特点: 无序列化、无网络、无锁竞争                                      │
-│                                                                       │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                    Single Process (Main Thread)                                   │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                   │
+│  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐│
+│  │Acquiring│ → │  Match  │ → │Settlement│ → │  KLine  │ → │  Market │ → │  Push  ││
+│  │ Stage   │   │ Stage   │   │ Stage   │   │ Stage   │   │  Data   │   │ Stage  ││
+│  └────┬────┘   └────┬────┘   └────┬────┘   └────┬────┘   │ Stage   │   └────┬───┘│
+│       │             │             │             │        └────┬────┘        │    │
+│       │             │             │             │             │             │    │
+│       │             │             │             │        ┌─────────┐         │    │
+│       │             │             │             │        │  User   │─────────┘    │
+│       │             │             │             │        │  Data   │              │
+│       │             │             │             │        │ Stage   │              │
+│       │             │             │             │        └────┬────┘              │
+│       └─────────────┴─────────────┴─────────────┴─────────────┴──────────────────┘│
+│                              ↓                                                    │
+│              ┌──────────────────────────────────────┐                            │
+│              │        In-Memory SPSC Queue          │                            │
+│              │   (无锁单生产者单消费者队列)          │                            │
+│              └──────────────────────────────────────┘                            │
+│                                                                                   │
+│  延迟: < 1μs (内存操作)                                                           │
+│  特点: 无序列化、无网络、无锁竞争                                                  │
+│                                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **实现代码位置**: `/Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/v2/s_thread_pipeline/`
@@ -139,13 +155,13 @@
 │                         Single Process (Multi-Threaded)                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
-│  Thread 1         Thread 2          Thread 3          Thread 4         Thread 5│
-│  ┌─────────┐      ┌─────────┐       ┌─────────┐       ┌─────────┐      ┌─────┐│
-│  │Acquiring│─────→│  Match  │──────→│Settlement│──────→│  KLine  │─────→│Push ││
-│  │ Stage   │      │ Stage   │       │ Stage   │       │ Stage   │      │Stage││
-│  └────┬────┘      └────┬────┘       └────┬────┘       └────┬────┘      └──┬──┘│
-│       │                │                │                │               │   │
-│       └────────────────┴────────────────┴────────────────┴───────────────┘   │
+│  Thread 1         Thread 2          Thread 3          Thread 4          Thread 5         Thread 6         Thread 7│
+│  ┌─────────┐      ┌─────────┐       ┌─────────┐       ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────┐│
+│  │Acquiring│─────→│  Match  │──────→│Settlement│──────→│  KLine  │─────→│ Market  │─────→│  User   │─────→│Push ││
+│  │ Stage   │      │ Stage   │       │ Stage   │       │ Stage   │      │ Data    │      │ Data    │      │Stage││
+│  └────┬────┘      └────┬────┘       └────┬────┘       └────┬────┘      │ Stage   │      │ Stage   │      └─────┘│
+│       │                │                │                │            └────┬────┘      └────┬────┘            │
+│       └────────────────┴────────────────┴────────────────┴─────────────────┴───────────────┴───────────────────┘│
 │                                       ↓                                       │
 │                        ┌──────────────────────────┐                          │
 │                        │      MPMC Queue          │                          │
@@ -178,17 +194,19 @@
 │                            Kafka Cluster                                     │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │  Topics:                                                              │   │
-│  │  · OrderChangeLog  (10 partitions, 3 replicas)                      │   │
-│  │  · TradeChangeLog  (10 partitions, 3 replicas)                      │   │
-│  │  · BalanceChangeLog (10 partitions, 3 replicas)                     │   │
-│  │  · KLineChangeLog   (10 partitions, 3 replicas)                     │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
+  │  │  · OrderChangeLog      (10 partitions, 3 replicas)                │   │
+  │  │  · TradeChangeLog      (10 partitions, 3 replicas)                │   │
+  │  │  · BalanceChangeLog    (10 partitions, 3 replicas)                │   │
+  │  │  · KLineChangeLog      (10 partitions, 3 replicas)                │   │
+  │  │  · MarketDataChangeLog (10 partitions, 3 replicas)                │   │
+  │  │  · UserDataChangeLog   (10 partitions, 3 replicas)                │   │
+  │  └──────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────────┘
-         ↑              ↑              ↑              ↑              ↑
-    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
-    │Acquiring│    │  Match │    │KLine   │    │Settlement│   │  Push  │
-    │ Stage   │    │ Stage  │    │ Stage  │    │ Stage   │   │ Stage  │
-    │(Pod 1)  │    │(Pod 2) │    │(Pod 3) │    │(Pod 4)  │   │(Pod 5) │
+     ↑              ↑              ↑              ↑              ↑              ↑              ↑
+     ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
+     │Acquiring│    │  Match │    │KLine   │    │Settlement│   │ Market │   │  User  │   │  Push  │
+     │ Stage   │    │ Stage  │    │ Stage  │    │ Stage   │   │ Data   │   │ Data   │   │ Stage  │
+     │(Pod 1)  │    │(Pod 2) │    │(Pod 3) │    │(Pod 4)  │   │(Pod 5) │   │(Pod 6) │   │(Pod 7) │
     └────────┘    └────────┘    └────────┘    └────────┘    └────────┘
     Process 1      Process 2      Process 3      Process 4      Process 5
                                                                          ↓
@@ -524,6 +542,22 @@ static SPOT_SETTLEMENT_STAGE: Lazy<Arc<SpotSettlementStage>> = Lazy::new(|| {
     )
 });
 
+static SPOT_MARKET_DATA_STAGE: Lazy<Arc<SpotMarketDataStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotMarketDataStage::create_and_start(
+        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
+        kafka_config,
+    )
+});
+
+static SPOT_USER_DATA_STAGE: Lazy<Arc<SpotUserDataStage>> = Lazy::new(|| {
+    let kafka_config = SpotKafkaConfig::default_local();
+    SpotUserDataStage::create_and_start(
+        SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(),
+        kafka_config,
+    )
+});
+
 // 队列服务单例
 static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
     let queue = MPMCQueue::new();
@@ -531,6 +565,8 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
     queue.get_or_create_channel(SpotTopic::TradeChangeLog.name(), None);
     queue.get_or_create_channel(SpotTopic::BalanceChangeLog.name(), None);
     queue.get_or_create_channel(SpotTopic::KLineChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::MarketDataChangeLog.name(), None);
+    queue.get_or_create_channel(SpotTopic::UserDataChangeLog.name(), None);
     Arc::new(queue)
 });
 
@@ -577,7 +613,6 @@ static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Laz
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
         EMBEDDED_LOB_REPO.clone(),  // 使用嵌入式 LOB
-        MPMC_QUEUE.clone(),
     ))
 });
 
@@ -589,7 +624,6 @@ static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = 
         USER_DATA_REPO.clone(),
         MARKET_DATA_REPO.clone(),
         DISTRIBUTED_LOB_REPO.clone(),  // 使用分布式 LOB
-        MPMC_QUEUE.clone(),
     ))
 });
 ```
@@ -612,6 +646,14 @@ pub fn get_spot_push_stage() -> Arc<SpotPushStage> {
 
 pub fn get_spot_settlement_stage() -> Arc<SpotSettlementStage> {
     SPOT_SETTLEMENT_STAGE.clone()
+}
+
+pub fn get_spot_market_data_stage() -> Arc<SpotMarketDataStage> {
+    SPOT_MARKET_DATA_STAGE.clone()
+}
+
+pub fn get_spot_user_data_stage() -> Arc<SpotUserDataStage> {
+    SPOT_USER_DATA_STAGE.clone()
 }
 
 // 业务行为访问方法
@@ -700,6 +742,12 @@ impl HttpServer {
         let _settlement_stage = ins_repo::get_spot_settlement_stage();
         tracing::info!("✅ SpotSettlementStage started");
 
+        let _market_data_stage = ins_repo::get_spot_market_data_stage();
+        tracing::info!("✅ SpotMarketDataStage started");
+
+        let _user_data_stage = ins_repo::get_spot_user_data_stage();
+        tracing::info!("✅ SpotUserDataStage started");
+
         Ok(())
     }
 }
@@ -709,7 +757,11 @@ impl HttpServer {
 1. **创建 AcquiringStage**: 接收 HTTP 请求，处理下单命令
 2. **启动 HTTP 服务器**: 监听 3001 端口，处理 API 请求
 3. **启动基础服务**: K 线服务、Push 服务
-4. **启动事件驱动 Stage**: Match、KLine、Push、Settlement 通过 Kafka 消费事件
+4. **启动事件驱动 Stage**: Match、KLine、Push、Settlement、MarketData、UserData 通过 Kafka 消费事件
+
+**新增 Stage 说明**：
+- **MarketDataStage**: 消费 OrderChangeLog，维护实时订单簿深度，生成 MarketDataChangeLog
+- **UserDataStage**: 消费 OrderChangeLog 和 TradeChangeLog，按用户维度聚合数据，生成 UserDataChangeLog
 
 **关键设计**：
 - ✅ **懒加载**: 所有 Stage 使用 `Lazy` 懒加载，首次访问时自动启动
@@ -742,6 +794,13 @@ impl HttpServer {
 
 - HTTP 服务器启动: `/Users/hongyaotang/src/rustlob/app/axum_server/src/interfaces/spot/http_server.rs`
 - Stage 实现: `/Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/v2/actor/`
+  - AcquiringStage: `spot_trade_acquiring_stage.rs`
+  - MatchStage: `spot_trade_match_stage.rs`
+  - SettlementStage: `spot_trade_settlement_stage.rs`
+  - KLineStage: `spot_trade_k_line_stage.rs`
+  - **MarketDataStage**: `spot_trade_market_data_stage.rs` ✨新增
+  - **UserDataStage**: `spot_trade_user_data_stage.rs` ✨新增
+  - PushStage: `spot_trade_push_stage.rs`
 - 单线程管道: `/Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/v2/s_thread_pipeline/`
 - 架构文档: `/Users/hongyaotang/src/rustlob/proc/operating/exchange/spot/src/proc/v2/actor/ARCHITECTURE.md`
 
@@ -754,3 +813,15 @@ impl HttpServer {
 - **分布式版**: 高可用、水平扩展，适用于生产环境
 
 三种架构**逻辑内聚、部署灵活**，通过配置即可切换，无需修改业务代码，充分体现了 SEDA 架构**去耦合、低延迟、省 API 调用**的优势。
+
+### 7个核心 Stage
+
+| # | Stage | 职责 | 输入 Topic | 输出 Topic |
+|---|-------|------|------------|------------|
+| 1 | **AcquiringStage** | 收单委托 | HTTP | OrderChangeLog, BalanceChangeLog |
+| 2 | **MatchStage** | 订单撮合 | OrderChangeLog | TradeChangeLog, OrderChangeLog |
+| 3 | **SettlementStage** | 结算处理 | TradeChangeLog | BalanceChangeLog |
+| 4 | **KLineStage** | K线聚合 | TradeChangeLog | KLineChangeLog |
+| 5 | **MarketDataStage** ✨ | 市场数据聚合 | OrderChangeLog | MarketDataChangeLog |
+| 6 | **UserDataStage** ✨ | 用户数据推送 | OrderChangeLog, TradeChangeLog | UserDataChangeLog |
+| 7 | **PushStage** | WebSocket推送 | All ChangeLogs | WebSocket Message |

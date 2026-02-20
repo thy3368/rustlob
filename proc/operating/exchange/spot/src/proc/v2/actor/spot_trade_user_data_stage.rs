@@ -47,17 +47,14 @@ impl SpotUserDataStage {
     /// 发送变更日志到 Kafka
     async fn send_change_logs(
         producer: &FutureProducer,
-        order_change_logs: Vec<ChangeLogEntry>,
-        trade_change_logs: Vec<ChangeLogEntry>,
+        user_data_change_logs: Vec<ChangeLogEntry>,
+
     ) {
         // 发送订单变更日志到 OrderChangeLog topic
-        if !order_change_logs.is_empty() {
-            send_log_batch(producer, SpotTopic::OrderChangeLog.name(), order_change_logs).await;
+        if !user_data_change_logs.is_empty() {
+            send_log_batch(producer, SpotTopic::KUserDataChangeLog.name(), user_data_change_logs).await;
         }
-        // 发送成交变更日志到 TradeChangeLog topic
-        if !trade_change_logs.is_empty() {
-            send_log_batch(producer, SpotTopic::TradeChangeLog.name(), trade_change_logs).await;
-        }
+
     }
 }
 
@@ -134,14 +131,13 @@ impl ActorX for SpotUserDataStage {
                                     );
 
                                     // 调用 handle_match3 进行撮合处理
-                                    match self_clone.trade_behavior.handle_match3(change_log) {
-                                        Ok((order_change_logs, trade_change_logs)) => {
+                                    match self_clone.trade_behavior.handle_user_data(change_log) {
+                                        Ok(user_data_change_logs) => {
                                             // 发送变更日志到对应的 Kafka topics
                                             //todo 发送user_data changelog
                                             Self::send_change_logs(
                                                 &producer,
-                                                order_change_logs.unwrap_or_default(),
-                                                trade_change_logs.unwrap_or_default(),
+                                                user_data_change_logs.unwrap_or_default(),
                                             )
                                             .await;
                                         }
@@ -167,7 +163,8 @@ impl ActorX for SpotUserDataStage {
 mod tests {
     use std::borrow::Cow;
 
-    use diff::FieldChange;
+    use diff::{ChangeLogEntry, ChangeType, FieldChange};
+    use crate::proc::v2::actor::kafka_config::KafkaConfig;
 
     /// 创建测试用的 ChangeLogEntry
     fn create_test_change_log(entity_id: &str, entity_type: &str, status: &str) -> ChangeLogEntry {
