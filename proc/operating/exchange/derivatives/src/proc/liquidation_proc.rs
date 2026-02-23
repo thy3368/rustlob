@@ -151,7 +151,7 @@ impl LiquidationProcessor {
         .await;
 
         match order_result {
-            Ok(Ok(result)) if result.status == OrderStatus::Filled => {
+            Ok(Ok(result)) if result.status == FutureOrderStatus::Filled => {
                 // 成交成功
                 let avg_price = result.avg_price.unwrap_or(Price::from_raw(0));
                 let loss = Self::calculate_liquidation_loss(position, avg_price);
@@ -281,7 +281,7 @@ impl LiquidationProcessor {
             liquidated_quantity: position.quantity,
             margin_loss,
             insurance_fund_loss,
-            order_status: OrderStatus::Filled,
+            order_status: FutureOrderStatus::Filled,
         })
     }
 
@@ -297,7 +297,7 @@ impl LiquidationProcessor {
             liquidated_quantity: position.quantity,
             margin_loss: position.margin,
             insurance_fund_loss: takeover.total_loss,
-            order_status: OrderStatus::Filled, // TODO: 使用新状态 NewInsurance
+            order_status: FutureOrderStatus::Filled, // TODO: 使用新状态 NewInsurance
         })
     }
 
@@ -313,7 +313,7 @@ impl LiquidationProcessor {
             liquidated_quantity: position.quantity,
             margin_loss: position.margin,
             insurance_fund_loss: Price::from_raw(0),
-            order_status: OrderStatus::Filled, // TODO: 使用新状态 NewADL
+            order_status: FutureOrderStatus::Filled, // TODO: 使用新状态 NewADL
         })
     }
 

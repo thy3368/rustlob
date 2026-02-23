@@ -25,4 +25,5 @@ pub use base_types::{
 };
 pub use decimal::Decimal;
 pub use exchange::prep::perp_types::{PositionSide, PrepPosition, PrepTrade};
+pub use exchange::prep::prep_order::{FutureOrderStatus, TimeInForce};
 pub use instrument::instrument_types::InstrumentType;

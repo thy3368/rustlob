@@ -1,41 +1,70 @@
 use crate::account::balance::Balance;
+use crate::exchange::spot::spot_types::OrderType;
 use crate::lob::lob::LobOrder;
 use crate::{
-    AccountId, AssetId, OrderId, OrderSide, PrepPosition, PrepTrade, Price, Quantity, Timestamp,
-    TradeId, TradingPair,
+    AccountId, AssetId, OrderId, OrderSide, PositionSide, PrepPosition, PrepTrade, Price, Quantity,
+    Timestamp, TradeId, TradingPair,
 };
 
-/// 订单类型
+/// 订单有效期
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum OrderType {
-    /// 市价单
-    Market = 1,
-    /// 限价单
-    Limit = 2,
+pub enum TimeInForce {
+    /// Good Till Cancel - 取消前有效
+    GTC = 1,
+    /// Immediate Or Cancel - 立即成交否则取消
+    IOC = 2,
+    /// Fill or Kill - 全部成交否则取消
+    FOK = 3,
 }
 
-impl OrderType {
-    /// 转换为字符串
-    #[inline(always)]
+impl TimeInForce {
     pub const fn as_str(self) -> &'static str {
         match self {
-            OrderType::Market => "MARKET",
-            OrderType::Limit => "LIMIT",
+            TimeInForce::GTC => "GTC",
+            TimeInForce::IOC => "IOC",
+            TimeInForce::FOK => "FOK",
         }
     }
 }
 
-impl Default for OrderType {
+impl Default for TimeInForce {
     fn default() -> Self {
-        OrderType::Limit
+        TimeInForce::GTC
     }
 }
+// /// 订单类型
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// #[repr(u8)]
+// pub enum OrderType {
+//     /// 市价单
+//     Market = 1,
+//     /// 限价单
+//     Limit = 2,
+// }
+//
+// impl OrderType {
+//     /// 转换为字符串
+//     #[inline(always)]
+//     pub const fn as_str(self) -> &'static str {
+//         match self {
+//             OrderType::Market => "MARKET",
+//             OrderType::Limit => "LIMIT",
+//         }
+//     }
+// }
+//
+// impl Default for OrderType {
+//     fn default() -> Self {
+//         OrderType::Limit
+//     }
+// }
 
 /// 订单状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum OrderStatus {
+// 参考下竞品，u本位永续合约 都有哪些status
+pub enum FutureOrderStatus {
     /// 等待提交
     Pending = 1,
     /// 已提交
@@ -44,42 +73,55 @@ pub enum OrderStatus {
     PartiallyFilled = 3,
     /// 完全成交
     Filled = 4,
-    /// 已取消
+    /// 已取消（用户主动）
     Cancelled = 5,
-    /// 已拒绝
+    /// 已拒绝（引擎拒绝）
     Rejected = 6,
+    /// 已过期（GTC/FOK/IOC 过期）
+    Expired = 7,
+    /// 待取消（取消请求中）
+    PendingCancel = 8,
 }
 
-impl OrderStatus {
+impl FutureOrderStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
-            OrderStatus::Pending => "PENDING",
-            OrderStatus::Submitted => "SUBMITTED",
-            OrderStatus::PartiallyFilled => "PARTIALLY_FILLED",
-            OrderStatus::Filled => "FILLED",
-            OrderStatus::Cancelled => "CANCELLED",
-            OrderStatus::Rejected => "REJECTED",
+            FutureOrderStatus::Pending => "PENDING",
+            FutureOrderStatus::Submitted => "SUBMITTED",
+            FutureOrderStatus::PartiallyFilled => "PARTIALLY_FILLED",
+            FutureOrderStatus::Filled => "FILLED",
+            FutureOrderStatus::Cancelled => "CANCELLED",
+            FutureOrderStatus::Rejected => "REJECTED",
+            FutureOrderStatus::Expired => "EXPIRED",
+            FutureOrderStatus::PendingCancel => "PENDING_CANCEL",
         }
     }
 
     /// 是否为最终状态
     pub const fn is_final(self) -> bool {
-        matches!(self, OrderStatus::Filled | OrderStatus::Cancelled | OrderStatus::Rejected)
+        matches!(
+            self,
+            FutureOrderStatus::Filled
+                | FutureOrderStatus::Cancelled
+                | FutureOrderStatus::Rejected
+                | FutureOrderStatus::Expired
+        )
     }
 }
 
-impl Default for OrderStatus {
+impl Default for FutureOrderStatus {
     fn default() -> Self {
-        OrderStatus::Pending
+        FutureOrderStatus::Pending
     }
 }
 
 /// 内部订单状态（扩展字段用于撮合引擎）
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "order_id")]
+// 参考竞口 永续合约order都有哪些字段？
 pub struct PrepOrder {
     pub order_id: OrderId,
-    /// 账户ID（固定账户）
+    /// todo remove account_id 账户ID（固定账户）
     pub account_id: AccountId,
     pub trading_pair: TradingPair,
     pub side: OrderSide,
@@ -87,16 +129,34 @@ pub struct PrepOrder {
     pub quantity: Quantity,
     pub price: Option<Price>,
     pub filled_quantity: Quantity,
-    pub status: OrderStatus,
+    pub status: FutureOrderStatus,
     pub created_at: u64,
     /// 冻结的保证金金额（用于订单取消时归还）
     pub frozen_margin: Quantity,
     pub leverage: u8,
+    /// 客户端订单ID
+    pub client_order_id: Option<String>,
+    /// 持仓方向（LONG/SHORT/BOTH）
+    pub position_side: PositionSide,
+    /// 订单有效期（GTC/IOC/FOK）
+    pub time_in_force: TimeInForce,
+    /// 平均成交价
+    pub avg_price: Option<Price>,
+    /// 累计成交额
+    pub cum_quote: Option<Price>,
+    /// 触发价格（止损/止盈）
+    pub stop_price: Option<Price>,
+    /// 只减仓
+    pub reduce_only: bool,
+    /// 全平
+    pub close_position: bool,
+    /// 更新时间
+    pub update_time: u64,
 }
 
 impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
-        assert!(self.status == OrderStatus::Pending, "Pending状态才能冻结");
+        assert!(self.status == FutureOrderStatus::Pending, "Pending状态才能冻结");
 
         let estimate_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
         // 直接使用 Price，无需转换
@@ -126,13 +186,22 @@ impl PrepOrder {
             quantity,
             price,
             filled_quantity: Quantity::from_raw(0),
-            status: OrderStatus::Pending,
+            status: FutureOrderStatus::Pending,
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
             frozen_margin: Price::from_raw(0),
             leverage,
+            client_order_id: None,
+            position_side: PositionSide::Long,
+            time_in_force: TimeInForce::GTC,
+            avg_price: None,
+            cum_quote: None,
+            stop_price: None,
+            reduce_only: false,
+            close_position: false,
+            update_time: 0,
         };
 
         internal_order
@@ -151,18 +220,18 @@ impl PrepOrder {
 
     pub fn change2submit(&mut self) {
         // 如果filled_quantity==0
-        self.status = OrderStatus::Submitted;
+        self.status = FutureOrderStatus::Submitted;
     }
 
     pub fn change2reject(&mut self) {
         // 如果filled_quantity==0
-        self.status = OrderStatus::Rejected;
+        self.status = FutureOrderStatus::Rejected;
     }
 
     // 取消订单
     pub fn cancel(&mut self, balance: &mut Balance, now: Timestamp) {
         // 如果filled_quantity==0
-        self.status = OrderStatus::Rejected;
+        self.status = FutureOrderStatus::Rejected;
 
         balance.un_frozen(self.frozen_margin, now);
         self.frozen_margin = Price::from_raw(0);
@@ -199,9 +268,9 @@ impl PrepOrder {
         match_p.add(fill_qty, fill_price, self.leverage, self.side, crate::PositionSide::Long);
 
         if self.remaining_qty() == 0 {
-            self.status = OrderStatus::Filled
+            self.status = FutureOrderStatus::Filled
         } else {
-            self.status = OrderStatus::PartiallyFilled
+            self.status = FutureOrderStatus::PartiallyFilled
         }
         self.filled_quantity.to_f64()
     }

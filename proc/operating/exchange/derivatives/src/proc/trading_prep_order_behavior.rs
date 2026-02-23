@@ -8,7 +8,7 @@ use std::fmt;
 // ============================================================================
 // 从 base_types 导入核心基础类型（Clean Architecture - 统一类型管理）
 // ============================================================================
-pub use base_types::exchange::prep::prep_order::{OrderStatus, OrderType};
+pub use base_types::exchange::prep::prep_order::{FutureOrderStatus, OrderType};
 use base_types::exchange::spot::spot_types::TimeInForce;
 // ============================================================================
 // 从 account crate 导入领域实体
@@ -378,7 +378,7 @@ pub struct OpenPositionResult {
     /// 订单ID
     pub order_id: OrderId,
     /// 订单状态
-    pub status: OrderStatus,
+    pub status: FutureOrderStatus,
     /// 成交均价（如果已成交）
     pub avg_price: Option<Price>,
     /// 已成交数量
@@ -399,7 +399,7 @@ impl OpenPositionResult {
         let now = current_timestamp_ms();
         Self {
             order_id,
-            status: OrderStatus::Pending,
+            status: FutureOrderStatus::Pending,
             avg_price: None,
             filled_quantity: Quantity::from_raw(0),
             trades: Vec::new(),
@@ -414,7 +414,7 @@ impl OpenPositionResult {
         let now = current_timestamp_ms();
         Self {
             order_id,
-            status: OrderStatus::Submitted,
+            status: FutureOrderStatus::Submitted,
             avg_price: None,
             filled_quantity: Quantity::from_raw(0),
             trades: Vec::new(),
@@ -433,7 +433,7 @@ impl OpenPositionResult {
 
         Self {
             order_id,
-            status: OrderStatus::Filled,
+            status: FutureOrderStatus::Filled,
             avg_price: Some(avg_price),
             filled_quantity,
             trades,
@@ -452,7 +452,7 @@ impl OpenPositionResult {
 
         Self {
             order_id,
-            status: OrderStatus::PartiallyFilled,
+            status: FutureOrderStatus::PartiallyFilled,
             avg_price: Some(avg_price),
             filled_quantity,
             trades,
@@ -493,7 +493,7 @@ pub struct ClosePositionResult {
     /// 订单ID
     pub order_id: OrderId,
     /// 订单状态
-    pub status: OrderStatus,
+    pub status: FutureOrderStatus,
     /// 成交均价（如果已成交）
     pub avg_price: Option<Price>,
     /// 已平仓数量
@@ -516,7 +516,7 @@ impl ClosePositionResult {
         let now = current_timestamp_ms();
         Self {
             order_id,
-            status: OrderStatus::Pending,
+            status: FutureOrderStatus::Pending,
             avg_price: None,
             closed_quantity: Quantity::from_raw(0),
             trades: Vec::new(),
@@ -532,7 +532,7 @@ impl ClosePositionResult {
         let now = current_timestamp_ms();
         Self {
             order_id,
-            status: OrderStatus::Submitted,
+            status: FutureOrderStatus::Submitted,
             avg_price: None,
             closed_quantity: Quantity::from_raw(0),
             trades: Vec::new(),
@@ -557,7 +557,7 @@ impl ClosePositionResult {
 
         Self {
             order_id,
-            status: OrderStatus::Filled,
+            status: FutureOrderStatus::Filled,
             avg_price: Some(avg_price),
             closed_quantity,
             trades,
@@ -582,7 +582,7 @@ impl ClosePositionResult {
 
         Self {
             order_id,
-            status: OrderStatus::PartiallyFilled,
+            status: FutureOrderStatus::PartiallyFilled,
             avg_price: Some(avg_price),
             closed_quantity,
             trades,
@@ -642,7 +642,7 @@ pub struct CancelOrderResult {
     /// 是否成功取消
     pub cancelled: bool,
     /// 订单状态
-    pub status: OrderStatus,
+    pub status: FutureOrderStatus,
     /// 取消时间戳（毫秒）
     pub cancelled_at: u64,
 }
@@ -653,13 +653,13 @@ impl CancelOrderResult {
         Self {
             order_id,
             cancelled: true,
-            status: OrderStatus::Cancelled,
+            status: FutureOrderStatus::Cancelled,
             cancelled_at: current_timestamp_ms(),
         }
     }
 
     /// 创建取消失败的响应（订单已成交等）
-    pub fn failed(order_id: OrderId, status: OrderStatus) -> Self {
+    pub fn failed(order_id: OrderId, status: FutureOrderStatus) -> Self {
         Self { order_id, cancelled: false, status, cancelled_at: current_timestamp_ms() }
     }
 }
@@ -692,7 +692,7 @@ pub struct OrderQueryResult {
     /// 订单类型
     pub order_type: OrderType,
     /// 订单状态
-    pub status: OrderStatus,
+    pub status: FutureOrderStatus,
     /// 订单数量
     pub quantity: Quantity,
     /// 订单价格（限价单）

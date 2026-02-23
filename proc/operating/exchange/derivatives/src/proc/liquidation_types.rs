@@ -29,7 +29,7 @@ pub struct LiquidationResult {
     pub liquidated_quantity: Quantity,
     pub margin_loss: Price,
     pub insurance_fund_loss: Price,
-    pub order_status: OrderStatus,
+    pub order_status: FutureOrderStatus,
 }
 
 /// 保险基金接管结果
