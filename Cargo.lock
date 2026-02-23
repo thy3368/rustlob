@@ -1255,6 +1255,7 @@ dependencies = [
  "db_repo",
  "diff",
  "entity_derive",
+ "immutable_derive",
  "lob_repo",
  "log",
  "rand 0.8.5",
