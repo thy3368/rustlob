@@ -80,6 +80,7 @@ pub enum ChangeType {
 
 /// 字段变更记录（零拷贝优化）
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+// FieldChange 会写到硬盘 占用多少字节，可以省字节吗？
 pub struct FieldChange {
     /// 字段名称（通常为静态字符串）
     pub field_name: Cow<'static, str>,
@@ -258,6 +259,8 @@ impl std::fmt::Display for TableSchema {
 /// 变更日志条目
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[immutable]
+//ChangeLogEntry 会写到硬盘 占用多少字节，可以省字节吗？
+
 pub struct ChangeLogEntry {
     /// 实体唯一标识符
     entity_id: String,
