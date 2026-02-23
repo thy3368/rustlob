@@ -5,8 +5,8 @@
 use std::fmt;
 
 use crate::base_types::{
-    AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
-    TradingPair, UserId,
+    AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId, TradingPair,
+    UserId,
 };
 
 // ============================================================================
@@ -48,6 +48,30 @@ impl Default for PositionSide {
 //
 // field `entity_id` of struct `ChangeLogEntry` is private [E0616]"
 /// 持仓信息
+///
+/// ## 字段说明（参考 Binance USDT-Margined Futures Position Information V3）
+///
+/// | 字段 | 说明 |
+/// |------|------|
+/// | symbol | 交易对 |
+/// | positionSide | 持仓方向 (LONG/SHORT/BOTH) |
+/// | positionAmt | 持仓数量 |
+/// | entryPrice | 开仓价格 |
+/// | breakEvenPrice | 盈亏平衡价格 |
+/// | markPrice | 标记价格 |
+/// | unRealizedProfit | 未实现盈亏 |
+/// | liquidationPrice | 强平价格 |
+/// | isolatedMargin | 逐仓保证金 |
+/// | notional | 名义价值 |
+/// | marginAsset | 保证金资产 |
+/// | isolatedWallet | 逐仓钱包 |
+/// | initialMargin | 初始保证金 |
+/// | maintMargin | 维持保证金 |
+/// | positionInitialMargin | 持仓初始保证金 |
+/// | openOrderInitialMargin | 挂单初始保证金 |
+/// | adl | 自动减仓排序 |
+/// | bidNotional | 买一价名义价值 |
+/// | askNotional | 卖一价名义价值 |
 #[derive(Debug, Clone, entity_derive::Entity)]
 #[entity(id = "position_id")]
 pub struct PrepPosition {
@@ -55,8 +79,6 @@ pub struct PrepPosition {
     pub user_id: UserId,
     /// 持仓ID
     pub position_id: PositionId,
-    /// 账户ID
-    pub account_id: AccountId,
 
     /// 交易对（包含 base_asset 和 quote_asset）
     pub trading_pair: TradingPair,
@@ -64,8 +86,10 @@ pub struct PrepPosition {
     pub position_side: PositionSide,
     /// 持仓数量（正数表示多头，负数表示空头）
     pub quantity: Quantity,
-    /// 持仓均价
+    /// 开仓价格（持仓均价）
     pub entry_price: Price,
+    /// 盈亏平衡价格
+    pub break_even_price: Price,
     /// 标记价格（用于计算未实现盈亏）
     pub mark_price: Price,
     /// 未实现盈亏
@@ -74,11 +98,33 @@ pub struct PrepPosition {
     pub realized_pnl: Price,
     /// 杠杆倍数
     pub leverage: u8,
-    /// 保证金
+    /// 保证金资产（如 USDT）
+    pub margin_asset: AssetId,
+    /// 保证金总额
     pub margin: Price,
+    /// 初始保证金
+    pub initial_margin: Price,
+    /// 维持保证金
+    pub maint_margin: Price,
+    /// 持仓初始保证金（以当前标记价格计算）
+    pub position_initial_margin: Price,
+    /// 挂单初始保证金（以当前标记价格计算）
+    pub open_order_initial_margin: Price,
+    /// 逐仓保证金（逐仓模式）
+    pub isolated_margin: Price,
+    /// 逐仓钱包（逐仓模式）
+    pub isolated_wallet: Price,
+    /// 名义价值（持仓数量 * 标记价格）
+    pub notional: Price,
     /// 强平价格
     pub liquidation_price: Option<Price>,
-    /// 更新时间戳（纳秒）
+    /// 自动减仓排序（ADL）
+    pub adl: i32,
+    /// 买一价名义价值
+    pub bid_notional: Price,
+    /// 卖一价名义价值
+    pub ask_notional: Price,
+    /// 更新时间戳（毫秒）
     pub updated_at: Timestamp,
 }
 
@@ -88,17 +134,28 @@ impl PrepPosition {
         Self {
             user_id: UserId(0),
             position_id: PositionId::generate(),
-            account_id: AccountId(0),
             trading_pair,
             position_side,
             quantity: Quantity::from_raw(0),
             entry_price: Price::from_raw(0),
+            break_even_price: Price::from_raw(0),
             mark_price: Price::from_raw(0),
             unrealized_pnl: Price::from_raw(0),
             realized_pnl: Price::from_raw(0),
             leverage: 1,
+            margin_asset: AssetId::from_str("USDT").unwrap(),
             margin: Price::from_raw(0),
+            initial_margin: Price::from_raw(0),
+            maint_margin: Price::from_raw(0),
+            position_initial_margin: Price::from_raw(0),
+            open_order_initial_margin: Price::from_raw(0),
+            isolated_margin: Price::from_raw(0),
+            isolated_wallet: Price::from_raw(0),
+            notional: Price::from_raw(0),
             liquidation_price: None,
+            adl: 0,
+            bid_notional: Price::from_raw(0),
+            ask_notional: Price::from_raw(0),
             updated_at: Timestamp::now_as_nanos(),
         }
     }
@@ -216,12 +273,30 @@ impl PrepPosition {
         // 更新标记价格
         self.mark_price = new_price;
 
+        // 更新盈亏平衡价格（简化处理：等于开仓均价）
+        self.break_even_price = self.entry_price;
+
         // 更新杠杆
         self.leverage = leverage;
 
-        // 计算保证金 = (持仓价值) / 杠杆倍数
-        let notional = self.entry_price.to_f64() * self.quantity.to_f64();
-        self.margin = Price::from_f64(notional / leverage as f64);
+        // 计算名义价值 = 持仓数量 * 标记价格
+        self.notional = Price::from_f64(self.mark_price.to_f64() * self.quantity.to_f64());
+
+        // 计算保证金 = 名义价值 / 杠杆倍数
+        self.margin = Price::from_f64(self.notional.to_f64() / leverage as f64);
+
+        // 计算初始保证金 = 名义价值 / 杠杆倍数
+        self.initial_margin = self.margin;
+
+        // 计算维持保证金 = 名义价值 * 维持保证金率 (0.5%)
+        const MAINTENANCE_MARGIN_RATE: f64 = 0.005;
+        self.maint_margin = Price::from_f64(self.notional.to_f64() * MAINTENANCE_MARGIN_RATE);
+
+        // 持仓初始保证金 = 初始保证金
+        self.position_initial_margin = self.initial_margin;
+
+        // 挂单初始保证金（暂无挂单）
+        self.open_order_initial_margin = Price::from_raw(0);
 
         // 计算未实现盈亏
         self.unrealized_pnl = self.calculate_unrealized_pnl_value();
