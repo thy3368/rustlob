@@ -2,18 +2,19 @@
 // 定义所有trade 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
-
+use base_types::exchange::spot::spot_types::TimeInForce;
+use base_types::OrderSide;
 // ============================================================================
 // 枚举类型定义
 // ============================================================================
 
-/// 订单方向
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum OrderSide {
-    BUY,
-    SELL,
-}
+// /// 订单方向
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// pub enum OrderSide {
+//     BUY,
+//     SELL,
+// }
 
 /// 持仓方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,21 +41,21 @@ pub enum OrderType {
     TRAILING_STOP_MARKET,
 }
 
-/// 有效时间类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum TimeInForce {
-    /// 成交为止
-    GTC,
-    /// 立即成交或取消
-    IOC,
-    /// 全部成交或取消
-    FOK,
-    /// 只做Maker
-    GTX,
-    /// 指定时间前有效
-    GTD,
-}
+// /// 有效时间类型
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// pub enum TimeInForce {
+//     /// 成交为止
+//     GTC,
+//     /// 立即成交或取消
+//     IOC,
+//     /// 全部成交或取消
+//     FOK,
+//     /// 只做Maker
+//     GTX,
+//     /// 指定时间前有效
+//     GTD,
+// }
 
 /// 工作类型（触发价格类型）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
