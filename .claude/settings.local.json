@@ -106,7 +106,12 @@
       "Bash(actionbook browser click \"[ref=e57]\")",
       "Bash(actionbook browser click \"[ref=e58]\")",
       "Bash(actionbook browser click \"[ref=e73]\")",
-      "Bash(actionbook browser close)"
+      "Bash(actionbook browser close)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(opencode config --help)",
+      "Bash(echo $ANTHROPIC_BASE_URL)",
+      "Bash(opencode models anthropic)",
+      "Bash(opencode debug env)"
     ],
     "deny": [],
     "ask": []
