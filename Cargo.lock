@@ -4481,6 +4481,19 @@ name = "sbe"
 version = "0.1.0"
 
 [[package]]
+name = "sbe-derive"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "proc-macro2",
+ "quote",
+ "sbe",
+ "serde",
+ "serde_json",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"

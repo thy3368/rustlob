@@ -102,6 +102,9 @@
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/wallet/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

@@ -6,7 +6,6 @@ mod trade_codec_examples {
     //     ReadBuf, WriteBuf,
     // };
 
-    use sbe::trade_codec::{SBE_BLOCK_LENGTH, TradeDecoder, TradeEncoder};
     use sbe::{Encoder, ReadBuf, WriteBuf};
 
     /// 示例 1: 基本编码

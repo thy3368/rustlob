@@ -6,7 +6,6 @@
 use ::core::convert::TryInto;
 
 pub mod message_header_codec;
-pub mod trade_codec;
 
 pub const SBE_SCHEMA_ID: u16 = 1;
 pub const SBE_SCHEMA_VERSION: u16 = 0;

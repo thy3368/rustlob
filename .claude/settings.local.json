@@ -111,7 +111,8 @@
       "Bash(opencode config --help)",
       "Bash(echo $ANTHROPIC_BASE_URL)",
       "Bash(opencode models anthropic)",
-      "Bash(opencode debug env)"
+      "Bash(opencode debug env)",
+      "Bash(cargo expand:*)"
     ],
     "deny": [],
     "ask": []
