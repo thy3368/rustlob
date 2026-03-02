@@ -231,6 +231,7 @@ impl TypeMapper {
     }
 
     /// Check if a type is an enum (user-defined type that's not a primitive)
+    #[allow(dead_code)]
     pub fn is_enum(ty: &Type) -> bool {
         if let Type::Path(TypePath { path, .. }) = ty {
             if let Some(segment) = path.segments.last() {
@@ -250,6 +251,7 @@ impl TypeMapper {
     }
 
     /// Classify field type
+    #[allow(dead_code)]
     pub fn classify_field(ty: &Type) -> FieldKind {
         if Self::is_optional(ty) {
             FieldKind::Optional

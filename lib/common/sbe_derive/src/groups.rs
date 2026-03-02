@@ -55,7 +55,7 @@ pub fn generate_group_encoder(
 #[allow(dead_code)]
 pub fn generate_group_decoder(
     group_name: &syn::Ident,
-    group_fields: &[syn::Field],
+    _group_fields: &[syn::Field],
 ) -> TokenStream {
     let decoder_name = quote::format_ident!("{}Decoder", group_name);
 
