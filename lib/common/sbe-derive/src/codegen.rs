@@ -195,6 +195,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
         pub mod encoder {
             use super::*;
+            use sbe::{Writer, Encoder};
 
             pub const SBE_BLOCK_LENGTH: u16 = #block_length;
             pub const SBE_TEMPLATE_ID: u16 = #template_id;
@@ -243,7 +244,12 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                     self.limit - self.offset
                 }
 
-                pub fn header(self, offset: usize) -> sbe::message_header_codec::MessageHeaderEncoder<Self> {
+                pub fn header(mut self, offset: usize) -> sbe::message_header_codec::MessageHeaderEncoder<Self> {
+                    // Adjust encoder offset to point to message body (after header)
+                    self.offset = offset + sbe::message_header_codec::ENCODED_LENGTH;
+                    self.initial_offset = offset + sbe::message_header_codec::ENCODED_LENGTH;
+                    self.limit = self.offset + SBE_BLOCK_LENGTH as usize;
+
                     let mut header = sbe::message_header_codec::MessageHeaderEncoder::default().wrap(self, offset);
                     header.block_length(SBE_BLOCK_LENGTH);
                     header.template_id(SBE_TEMPLATE_ID);
@@ -465,6 +471,7 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
         pub mod decoder {
             use super::*;
+            use sbe::{Reader, Decoder, ActingVersion};
 
             pub const SBE_BLOCK_LENGTH: u16 = #block_length;
             pub const SBE_TEMPLATE_ID: u16 = #template_id;

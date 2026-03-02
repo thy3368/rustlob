@@ -48,7 +48,7 @@ fn test_with_message_header() {
     let write_buf = WriteBuf::new(&mut buffer);
 
     // Encode with header
-    let encoder = TradeEncoder::default();
+    let encoder = TradeEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
     encoder.trade_id(99999);
