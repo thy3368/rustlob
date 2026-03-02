@@ -36,7 +36,7 @@ fn main() {
     let mut buffer = vec![0u8; 1024];
     let write_buf = WriteBuf::new(&mut buffer);
 
-    let encoder = VersionedTradeEncoder::default();
+    let encoder = VersionedTradeEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
 
@@ -80,7 +80,7 @@ fn main() {
     let decoder_v0 = VersionedTradeDecoder::default().wrap(
         ReadBuf::new(&buffer),
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        versioned_trade_encoder::SBE_BLOCK_LENGTH,
         0, // Acting version 0
     );
 

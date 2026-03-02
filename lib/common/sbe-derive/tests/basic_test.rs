@@ -30,7 +30,7 @@ fn test_basic_encode_decode() {
 
     // Create decoder and decode message
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = TradeDecoder::default().wrap(read_buf, 0, encoder::SBE_BLOCK_LENGTH, 0);
+    let decoder = TradeDecoder::default().wrap(read_buf, 0, trade_encoder::SBE_BLOCK_LENGTH, 0);
 
     // Verify decoded values
     assert_eq!(decoder.trade_id(), 12345);

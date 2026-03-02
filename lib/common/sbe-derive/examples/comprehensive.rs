@@ -72,7 +72,7 @@ fn main() {
     let mut buffer = vec![0u8; 1024];
     let write_buf = WriteBuf::new(&mut buffer);
 
-    let encoder = ComprehensiveTradeEncoder::default();
+    let encoder = ComprehensiveTradeEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
 
@@ -102,10 +102,10 @@ fn main() {
     println!("  ✓ Liquidity Flag: 2 (v2)");
 
     println!("\n📊 Message Statistics:");
-    println!("  • Block Length: {} bytes", encoder::SBE_BLOCK_LENGTH);
-    println!("  • Template ID: {}", encoder::SBE_TEMPLATE_ID);
-    println!("  • Schema ID: {}", encoder::SBE_SCHEMA_ID);
-    println!("  • Schema Version: {}", encoder::SBE_SCHEMA_VERSION);
+    println!("  • Block Length: {} bytes", comprehensive_trade_encoder::SBE_BLOCK_LENGTH);
+    println!("  • Template ID: {}", comprehensive_trade_encoder::SBE_TEMPLATE_ID);
+    println!("  • Schema ID: {}", comprehensive_trade_encoder::SBE_SCHEMA_ID);
+    println!("  • Schema Version: {}", comprehensive_trade_encoder::SBE_SCHEMA_VERSION);
 
     // Decode the message
     println!("\n📖 Decoding comprehensive trade message...\n");

@@ -7,10 +7,29 @@ use syn::{Data, DeriveInput, Fields, Result};
 use crate::attrs::{SbeContainerAttrs, SbeFieldAttrs};
 use crate::types::{OffsetCalculator, TypeMapper};
 
+/// Convert CamelCase to snake_case
+fn to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    for (i, ch) in s.chars().enumerate() {
+        if ch.is_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.push(ch.to_lowercase().next().unwrap());
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
 /// Generate encoder implementation
 pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let name = &input.ident;
     let encoder_name = quote::format_ident!("{}Encoder", name);
+
+    // Generate unique module name based on struct name (snake_case)
+    let module_name = quote::format_ident!("{}_encoder", to_snake_case(&name.to_string()));
 
     let container_attrs = SbeContainerAttrs::from_attributes(&input.attrs)?;
 
@@ -191,9 +210,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let version = container_attrs.version.unwrap_or(0);
 
     let output = quote! {
-        pub use encoder::#encoder_name;
+        pub use #module_name::#encoder_name;
 
-        pub mod encoder {
+        pub mod #module_name {
             use super::*;
             use sbe::{Writer, Encoder};
 
@@ -270,6 +289,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
     let name = &input.ident;
     let decoder_name = quote::format_ident!("{}Decoder", name);
+
+    // Generate unique module name based on struct name (snake_case)
+    let module_name = quote::format_ident!("{}_decoder", to_snake_case(&name.to_string()));
 
     let container_attrs = SbeContainerAttrs::from_attributes(&input.attrs)?;
 
@@ -467,9 +489,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
     let version = container_attrs.version.unwrap_or(0);
 
     let output = quote! {
-        pub use decoder::#decoder_name;
+        pub use #module_name::#decoder_name;
 
-        pub mod decoder {
+        pub mod #module_name {
             use super::*;
             use sbe::{Reader, Decoder, ActingVersion};
 

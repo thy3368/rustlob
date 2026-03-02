@@ -52,7 +52,7 @@ fn main() {
     println!("  symbol: A");
     println!("  price: 100.50");
     println!("  quantity: 1000");
-    println!("  block_length: {}", encoder::SBE_BLOCK_LENGTH);
+    println!("  block_length: {}", trade_encoder::SBE_BLOCK_LENGTH);
 
 
 
@@ -62,7 +62,7 @@ fn main() {
     let decoder = TradeDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        trade_encoder::SBE_BLOCK_LENGTH,
         0,
     );
 

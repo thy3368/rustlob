@@ -109,7 +109,7 @@ fn test_primitive_types() {
     let decoder = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         2, // version 2
     );
 
@@ -148,7 +148,7 @@ fn test_optional_none() {
     let decoder = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         0,
     );
 
@@ -171,7 +171,7 @@ fn test_version_fields() {
     let decoder_v0 = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         0,
     );
 
@@ -183,7 +183,7 @@ fn test_version_fields() {
     let decoder_v1 = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         1,
     );
 
@@ -195,7 +195,7 @@ fn test_version_fields() {
     let decoder_v2 = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         2,
     );
 
@@ -225,7 +225,7 @@ fn test_constant_field() {
     let decoder = TestMessageDecoder::default().wrap(
         read_buf,
         0,
-        encoder::SBE_BLOCK_LENGTH,
+        test_message_encoder::SBE_BLOCK_LENGTH,
         0,
     );
 

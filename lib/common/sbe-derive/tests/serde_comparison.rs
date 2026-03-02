@@ -56,7 +56,7 @@ fn benchmark_sbe(iterations: usize) -> (u128, u128, usize) {
         let decoder = SbeTradeDecoder::default().wrap(
             read_buf,
             0,
-            encoder::SBE_BLOCK_LENGTH,
+            sbe_trade_encoder::SBE_BLOCK_LENGTH,
             0,
         );
         let _ = decoder.trade_id();
@@ -66,7 +66,7 @@ fn benchmark_sbe(iterations: usize) -> (u128, u128, usize) {
     }
     let decode_time = start.elapsed().as_nanos();
 
-    let size = encoder::SBE_BLOCK_LENGTH as usize;
+    let size = sbe_trade_encoder::SBE_BLOCK_LENGTH as usize;
     (encode_time, decode_time, size)
 }
 

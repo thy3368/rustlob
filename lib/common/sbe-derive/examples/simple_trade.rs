@@ -31,7 +31,7 @@ fn main() {
 
     // Encode a trade message with header
     println!("Encoding trade message...");
-    let encoder = TradeEncoder::default();
+    let encoder = TradeEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
 
@@ -44,8 +44,8 @@ fn main() {
     println!("  Symbol: A (65)");
     println!("  Price: 100.50");
     println!("  Quantity: 1000");
-    println!("  Block Length: {}", encoder::SBE_BLOCK_LENGTH);
-    println!("  Template ID: {}", encoder::SBE_TEMPLATE_ID);
+    println!("  Block Length: {}", trade_encoder::SBE_BLOCK_LENGTH);
+    println!("  Template ID: {}", trade_encoder::SBE_TEMPLATE_ID);
 
     // Decode the message
     println!("\nDecoding trade message...");

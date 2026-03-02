@@ -53,7 +53,7 @@ fn benchmark_decode(iterations: usize) -> std::time::Duration {
         let decoder = BenchTradeDecoder::default().wrap(
             read_buf,
             0,
-            encoder::SBE_BLOCK_LENGTH,
+            bench_trade_encoder::SBE_BLOCK_LENGTH,
             0,
         );
 
@@ -83,7 +83,7 @@ fn benchmark_roundtrip(iterations: usize) -> std::time::Duration {
         let decoder = BenchTradeDecoder::default().wrap(
             read_buf,
             0,
-            encoder::SBE_BLOCK_LENGTH,
+            bench_trade_encoder::SBE_BLOCK_LENGTH,
             0,
         );
 

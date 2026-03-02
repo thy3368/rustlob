@@ -54,7 +54,7 @@ fn main() {
 
     // Encode an advanced trade message
     println!("Encoding advanced trade message...");
-    let encoder = AdvancedTradeEncoder::default();
+    let encoder = AdvancedTradeEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
 
@@ -75,7 +75,7 @@ fn main() {
     println!("  Price: 50000.50");
     println!("  Quantity: 100");
     println!("  Version: 1 (constant)");
-    println!("  Block Length: {}", encoder::SBE_BLOCK_LENGTH);
+    println!("  Block Length: {}", advanced_trade_encoder::SBE_BLOCK_LENGTH);
 
     // Decode the message
     println!("\nDecoding advanced trade message...");
