@@ -6,7 +6,7 @@
 //! Run with: cargo run --example trade_codec
 
 use sbe_derive::{SbeDecode, SbeEncode};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+use sbe::SbeMessage;
 
 /// Trade message
 ///
@@ -36,46 +36,38 @@ pub struct Trade {
 fn main() {
     println!("=== SBE Trade Codec Example ===\n");
 
-    let mut buffer = vec![0u8; 1024];
-
-    // Encode a trade message
+    // Encode using SbeMessage trait
     println!("Encoding trade message...");
-    let write_buf = WriteBuf::new(&mut buffer);
-    let mut encoder = TradeEncoder::default().wrap(write_buf, 0);
+    let trade = Trade {
+        trade_id: 12345,
+        symbol: b'A',
+        price: 100.50,
+        quantity: 1000,
+    };
 
-    encoder.trade_id(12345);
-    encoder.symbol(b'A');
-    encoder.price(100.50);
-    encoder.quantity(1000);
+    let mut buffer = [0u8; 1024];
+    let len = trade.encode_into(&mut buffer).unwrap();
 
-    println!("  trade_id: 12345");
-    println!("  symbol: A");
-    println!("  price: 100.50");
-    println!("  quantity: 1000");
-    println!("  block_length: {}", trade_encoder::SBE_BLOCK_LENGTH);
+    println!("  Encoded {} bytes", len);
+    println!("  trade_id: {}", trade.trade_id);
+    println!("  symbol: {}", trade.symbol as char);
+    println!("  price: {}", trade.price);
+    println!("  quantity: {}", trade.quantity);
 
-
-
-    // Decode the trade message
+    // Decode using SbeMessage trait
     println!("\nDecoding trade message...");
-    let read_buf = ReadBuf::new(&buffer);
-    let decoder = TradeDecoder::default().wrap(
-        read_buf,
-        0,
-        trade_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoded = Trade::decode_from(&buffer[..len]).unwrap();
 
-    println!("  trade_id: {}", decoder.trade_id());
-    println!("  symbol: {}", decoder.symbol() as char);
-    println!("  price: {}", decoder.price());
-    println!("  quantity: {}", decoder.quantity());
+    println!("  trade_id: {}", decoded.trade_id);
+    println!("  symbol: {}", decoded.symbol as char);
+    println!("  price: {}", decoded.price);
+    println!("  quantity: {}", decoded.quantity);
 
     // Verify roundtrip
-    assert_eq!(decoder.trade_id(), 12345);
-    assert_eq!(decoder.symbol(), b'A');
-    assert_eq!(decoder.price(), 100.50);
-    assert_eq!(decoder.quantity(), 1000);
+    assert_eq!(decoded.trade_id, 12345);
+    assert_eq!(decoded.symbol, b'A');
+    assert_eq!(decoded.price, 100.50);
+    assert_eq!(decoded.quantity, 1000);
 
     println!("\n✓ Roundtrip successful!");
 
