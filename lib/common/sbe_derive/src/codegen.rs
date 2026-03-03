@@ -212,6 +212,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     // Generate field encodings for SbeMessage impl
     let field_encodings = fields.iter().filter_map(|field| {
         let field_name = field.ident.as_ref().unwrap();
+        let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
         // Skip constant fields
@@ -220,11 +221,16 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         }
 
         // Skip variable-length fields for now
-        if TypeMapper::is_var_data(&field.ty) {
+        if TypeMapper::is_var_data(field_ty) {
             return None;
         }
 
-        Some(quote! { encoder.#field_name(self.#field_name); })
+        // For array fields, pass by reference
+        if matches!(field_ty, syn::Type::Array(_)) {
+            Some(quote! { encoder.#field_name(&self.#field_name); })
+        } else {
+            Some(quote! { encoder.#field_name(self.#field_name); })
+        }
     }).collect::<Vec<_>>();
 
     // Generate field decodings for SbeMessage impl
@@ -232,17 +238,17 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         let field_name = field.ident.as_ref().unwrap();
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
-        // Skip constant fields
-        if field_attrs.presence.as_deref() == Some("constant") {
-            return None;
-        }
-
         // Skip variable-length fields for now
         if TypeMapper::is_var_data(&field.ty) {
             return None;
         }
 
-        Some(quote! { #field_name: decoder.#field_name(), })
+        // For fields with sinceVersion, decoder returns Option<T>, need to unwrap_or_default
+        if field_attrs.since_version.is_some() {
+            Some(quote! { #field_name: decoder.#field_name().unwrap_or_default(), })
+        } else {
+            Some(quote! { #field_name: decoder.#field_name(), })
+        }
     }).collect::<Vec<_>>();
 
     let decoder_name = quote::format_ident!("{}Decoder", name);
