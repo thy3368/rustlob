@@ -6,9 +6,11 @@
 use ::core::convert::TryInto;
 
 pub mod error;
+pub mod message;
 pub mod message_header_codec;
 
 pub use error::SbeError;
+pub use message::SbeMessage;
 
 pub const SBE_SCHEMA_ID: u16 = 1;
 pub const SBE_SCHEMA_VERSION: u16 = 0;
