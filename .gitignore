@@ -5,3 +5,4 @@ server.log
 *.log
 benchmark_automation.log
 study/web3/target/
+.worktrees/
