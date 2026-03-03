@@ -209,6 +209,45 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let schema_id = container_attrs.schema_id.unwrap_or(1);
     let version = container_attrs.version.unwrap_or(0);
 
+    // Generate field encodings for SbeMessage impl
+    let field_encodings = fields.iter().filter_map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+
+        // Skip constant fields
+        if field_attrs.presence.as_deref() == Some("constant") {
+            return None;
+        }
+
+        // Skip variable-length fields for now
+        if TypeMapper::is_var_data(&field.ty) {
+            return None;
+        }
+
+        Some(quote! { encoder.#field_name(self.#field_name); })
+    }).collect::<Vec<_>>();
+
+    // Generate field decodings for SbeMessage impl
+    let field_decodings = fields.iter().filter_map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+
+        // Skip constant fields
+        if field_attrs.presence.as_deref() == Some("constant") {
+            return None;
+        }
+
+        // Skip variable-length fields for now
+        if TypeMapper::is_var_data(&field.ty) {
+            return None;
+        }
+
+        Some(quote! { #field_name: decoder.#field_name(), })
+    }).collect::<Vec<_>>();
+
+    let decoder_name = quote::format_ident!("{}Decoder", name);
+    let decoder_module = quote::format_ident!("{}_decoder", to_snake_case(&name.to_string()));
+
     let output = quote! {
         pub use #module_name::#encoder_name;
 
@@ -278,6 +317,35 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 }
 
                 #(#field_methods)*
+            }
+        }
+
+        // Generate SbeMessage trait implementation
+        impl sbe::SbeMessage for #name {
+            fn encode_into(&self, buffer: &mut [u8]) -> Result<usize, sbe::SbeError> {
+                if buffer.len() < Self::max_encoded_length() {
+                    return Err(sbe::SbeError::BufferTooSmall {
+                        required: Self::max_encoded_length(),
+                        available: buffer.len(),
+                    });
+                }
+
+                let write_buf = sbe::WriteBuf::new(buffer);
+                let mut encoder = #encoder_name::default().wrap(write_buf, 0);
+                #(#field_encodings)*
+                Ok(encoder.encoded_length())
+            }
+
+            fn decode_from(buffer: &[u8]) -> Result<Self, sbe::SbeError> {
+                let read_buf = sbe::ReadBuf::new(buffer);
+                let decoder = #decoder_module::#decoder_name::default().wrap(
+                    read_buf, 0, #module_name::SBE_BLOCK_LENGTH, 0
+                );
+                Ok(Self { #(#field_decodings)* })
+            }
+
+            fn max_encoded_length() -> usize {
+                #module_name::SBE_BLOCK_LENGTH as usize
             }
         }
     };
