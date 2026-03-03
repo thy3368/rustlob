@@ -21,6 +21,7 @@ impl BufferPool {
         PooledBuffer {
             buf,
             pool: self.pool.clone(),
+            buffer_size: self.buffer_size,
         }
     }
 }
@@ -28,12 +29,14 @@ impl BufferPool {
 pub struct PooledBuffer {
     pub buf: Vec<u8>,
     pool: Arc<ArrayQueue<Vec<u8>>>,
+    buffer_size: usize,
 }
 
 impl Drop for PooledBuffer {
     fn drop(&mut self) {
         let mut buf = std::mem::take(&mut self.buf);
         buf.clear();
+        buf.resize(self.buffer_size, 0);
         let _ = self.pool.push(buf);
     }
 }
