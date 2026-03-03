@@ -1,8 +1,8 @@
 //! Enhanced example with more SBE features
 
-use sbe::message_header_codec::encoder;
+
 use sbe_derive::{SbeDecode, SbeEncode};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+
 
 pub mod trade_codec;
 
@@ -101,7 +101,7 @@ fn main() {
     let mut buffer2 = vec![0u8; 1024];
     let write_buf2 = WriteBuf::new(&mut buffer2);
 
-    let encoder2 = AdvancedTradeEncoder::default();
+    let encoder2 = AdvancedTradeEncoder::default().wrap(write_buf2, 0);
     let mut header2 = encoder2.header(0);
     let mut encoder2 = header2.parent().unwrap();
 

@@ -162,7 +162,8 @@ impl ActorX for SpotUserDataStage {
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
-
+    use std::sync::atomic::AtomicUsize;
+    use crossbeam_utils::CachePadded;
     use diff::{ChangeLogEntry, ChangeType, FieldChange};
     use crate::proc::v2::actor::kafka_config::KafkaConfig;
 
@@ -330,5 +331,12 @@ mod tests {
         // 1. 创建 SpotTradeBehaviorV2Impl 实例
         // 2. 调用 SpotMatchActor::new(trade_behavior, kafka_config)
         // 3. 调用 actor.start() 启动消费者
+
+        let counter = CachePadded::new(AtomicUsize::new(0));
+
+        // 检查对齐
+        println!("Alignment: {}", std::mem::align_of_val(&counter));  // 通常为128
+
+
     }
 }

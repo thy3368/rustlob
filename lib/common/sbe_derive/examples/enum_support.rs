@@ -68,7 +68,7 @@ fn main() {
     let mut buffer = vec![0u8; 1024];
     let write_buf = WriteBuf::new(&mut buffer);
 
-    let encoder = TradeWithEnumEncoder::default();
+    let encoder = TradeWithEnumEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
     let mut encoder = header.parent().unwrap();
 

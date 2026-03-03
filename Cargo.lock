@@ -4481,7 +4481,7 @@ name = "sbe"
 version = "0.1.0"
 
 [[package]]
-name = "sbe-derive"
+name = "sbe_derive"
 version = "0.1.0"
 dependencies = [
  "bincode",
@@ -4843,6 +4843,7 @@ dependencies = [
  "core_affinity",
  "cqrs",
  "crossbeam-channel",
+ "crossbeam-utils",
  "db_repo",
  "diff",
  "disruptor",

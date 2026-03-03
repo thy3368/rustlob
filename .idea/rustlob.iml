@@ -105,6 +105,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

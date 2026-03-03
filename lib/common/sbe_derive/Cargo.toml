@@ -1,5 +1,5 @@
 [package]
-name = "sbe-derive"
+name = "sbe_derive"
 version = "0.1.0"
 edition = "2021"
 authors = ["Hongyao Tang"]

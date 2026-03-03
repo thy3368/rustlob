@@ -78,4 +78,6 @@ fn main() {
     assert_eq!(decoder.quantity(), 1000);
 
     println!("\n✓ Roundtrip successful!");
+
+    //todo TradeEncoder 与Trade 怎么互转？
 }
