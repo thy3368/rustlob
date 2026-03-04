@@ -150,13 +150,18 @@ The SBE derive macro implementation has successfully passed all acceptance crite
 
 #### 2.5 Variable-Length Data
 - **Status**: ✅ IMPLEMENTED
-- **Tests**: Integrated into core codegen
+- **Tests**: `test_var_data_encode_decode` in `acceptance_tests.rs`
 - **Evidence**:
   - `TypeMapper::is_var_data()` detects `Vec<u8>` types
   - `var_data_fields` collection in encoder/decoder generation
   - Variable-length field methods generated in both encoder and decoder
   - Code in `codegen.rs` lines 56-67, 182-184, 392-403, 536-539
-- **Action Required**: Add integration test to validate end-to-end functionality
+  - SbeMessage trait properly handles variable-length fields in encode/decode
+- **Validation**:
+  - Empty payload encoding/decoding works correctly
+  - Small payload (11 bytes) roundtrip verified
+  - Large payload (1KB) roundtrip verified
+  - Special characters (\x00, \xFF, etc.) preserved correctly
 
 #### 2.6 Decimal Types
 - **Status**: ⚠️ PARTIAL IMPLEMENTATION

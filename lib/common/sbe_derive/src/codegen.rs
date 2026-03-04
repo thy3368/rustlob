@@ -220,9 +220,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             return None;
         }
 
-        // Skip variable-length fields for now
+        // Handle variable-length fields
         if TypeMapper::is_var_data(field_ty) {
-            return None;
+            return Some(quote! { encoder.#field_name(&self.#field_name); });
         }
 
         // For array fields, pass by reference
@@ -238,9 +238,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         let field_name = field.ident.as_ref().unwrap();
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
-        // Skip variable-length fields for now
+        // Handle variable-length fields
         if TypeMapper::is_var_data(&field.ty) {
-            return None;
+            return Some(quote! { #field_name: decoder.#field_name(), });
         }
 
         // For fields with sinceVersion, decoder returns Option<T>, need to unwrap_or_default
