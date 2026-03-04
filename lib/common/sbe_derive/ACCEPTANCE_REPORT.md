@@ -11,16 +11,20 @@ The SBE derive macro implementation has successfully passed all acceptance crite
 
 **Feature Verification Results**:
 - **Core Features (Phase 1)**: ✅ FULLY IMPLEMENTED (100%)
-- **Advanced Features (Phase 2)**: ⚠️ PARTIALLY IMPLEMENTED (40%)
+- **Advanced Features (Phase 2)**: ⚠️ PARTIALLY IMPLEMENTED (43%)
   - Constant Fields: ✅ Implemented
   - Version Fields: ✅ Implemented
-  - Variable-Length Data: ✅ Implemented
-  - Repeating Groups: ⚠️ Infrastructure exists, not integrated
-  - Nested Messages: ⚠️ Infrastructure exists, not integrated
-  - Decimal Types: ⚠️ Infrastructure exists, not integrated
-  - Time Types: ⚠️ Infrastructure exists, not integrated
+  - Variable-Length Data: ✅ **IMPLEMENTED WITH TESTS** (fully integrated in codegen.rs)
+  - Repeating Groups: ⚠️ Infrastructure exists, requires codegen.rs integration
+  - Nested Messages: ⚠️ Infrastructure exists, requires codegen.rs integration
+  - Decimal Types: ⚠️ Infrastructure exists, requires codegen.rs integration
+  - Time Types: ⚠️ Infrastructure exists, requires codegen.rs integration
 
-**Overall Status**: ✅ ACCEPTED (Core Features) / ⚠️ EXPERIMENTAL (Advanced Features)
+**Overall Status**: ✅ ACCEPTED (Core Features + Variable-Length Data) / ⚠️ REQUIRES INTEGRATION (4 Advanced Features)
+
+**Implementation Status**:
+- **Production Ready**: Core features, constant fields, version fields, variable-length data
+- **Requires Integration**: Repeating groups, nested messages, decimal types, time types (infrastructure code exists, needs codegen.rs integration)
 
 ## Test Results Overview
 
@@ -295,6 +299,144 @@ None identified.
 1. **Code Cleanup**: Remove `#[allow(dead_code)]` markers once features are integrated
 2. **Error Handling**: Enhance error messages for better debugging
 3. **Documentation**: Update examples to reflect integrated features
+
+## Implementation Roadmap
+
+This section outlines the integration work required to complete the 4 remaining advanced features. All features have infrastructure code in place but require integration into the main `codegen.rs` pipeline.
+
+### Feature 1: Repeating Groups (Priority: HIGH)
+
+**Current Status**: Infrastructure complete, not integrated
+
+**Existing Code**:
+- `lib/common/sbe_derive/src/groups.rs`: Contains `generate_group_encoder()` and `generate_group_decoder()` functions
+- Group dimension header encoding logic (blockLength: u16, numInGroup: u16)
+- GroupIterator and GroupEntry structures implemented
+
+**Integration Requirements**:
+1. **Attribute Parsing**: Add `#[sbe(group)]` attribute detection in `attrs.rs`
+2. **Type Detection**: Extend `TypeMapper::is_var_data()` to detect `Vec<T>` where T is a struct (not just `Vec<u8>`)
+3. **Codegen Integration**:
+   - Call `generate_group_encoder()` in encoder generation (around line 400 in `codegen.rs`)
+   - Call `generate_group_decoder()` in decoder generation (around line 540 in `codegen.rs`)
+4. **Method Generation**: Generate `add_entry()` for encoder and `count()`/`iter()` for decoder
+5. **Testing**: Activate placeholder test `test_repeating_groups_placeholder` in `acceptance_tests.rs`
+
+**Estimated Effort**: 4-6 hours
+
+**Complexity**: HIGH (requires careful handling of nested encoding/decoding)
+
+---
+
+### Feature 2: Nested Messages (Priority: MEDIUM)
+
+**Current Status**: Infrastructure complete, not integrated
+
+**Existing Code**:
+- `lib/common/sbe_derive/src/nested.rs`: Contains `is_nested_message()`, `generate_nested_encoder_call()`, and `generate_nested_decoder_call()` functions
+- Helper functions for detecting nested struct types
+
+**Integration Requirements**:
+1. **Type Detection**: Use `is_nested_message()` in field processing to identify nested struct fields
+2. **Codegen Integration**:
+   - Call `generate_nested_encoder_call()` in encoder field loop (around line 350 in `codegen.rs`)
+   - Call `generate_nested_decoder_call()` in decoder field loop (around line 500 in `codegen.rs`)
+3. **Example Update**: Replace conceptual example in `examples/nested_messages.rs` with actual working code
+4. **Testing**: Add integration test for nested struct encoding/decoding
+
+**Estimated Effort**: 3-4 hours
+
+**Complexity**: MEDIUM (straightforward recursive encoding)
+
+---
+
+### Feature 3: Decimal Types (Priority: MEDIUM)
+
+**Current Status**: Infrastructure complete, not integrated
+
+**Existing Code**:
+- `lib/common/sbe_derive/src/attrs.rs`: Attribute parsing for `mantissa_type` and `exponent`
+- `lib/common/sbe_derive/src/types.rs`: `DecimalConfig` struct and `FieldKind::Decimal` enum variant
+- `examples/decimal_types.rs`: Example demonstrating expected API
+
+**Integration Requirements**:
+1. **Attribute Detection**: Use existing `DecimalConfig` parsing in field processing
+2. **Codegen Integration**:
+   - Generate mantissa encoding (as specified integer type) in encoder
+   - Generate exponent encoding (as i8) in encoder
+   - Generate mantissa/exponent decoding in decoder
+   - Generate helper methods for decimal conversion
+3. **Testing**: Add integration test for decimal encoding/decoding with various mantissa types
+
+**Estimated Effort**: 3-4 hours
+
+**Complexity**: MEDIUM (requires mantissa/exponent encoding logic)
+
+---
+
+### Feature 4: Time Types (Priority: LOW)
+
+**Current Status**: Infrastructure complete, not integrated
+
+**Existing Code**:
+- `lib/common/sbe_derive/src/time_types.rs`: Defines `UTCTimestamp`, `UTCDateOnly`, `UTCTimeOnly`, `MonthYear` types
+- All types follow FIX SBE 2.0 specification
+- Currently marked as `#[allow(dead_code)]`
+
+**Integration Requirements**:
+1. **Type Detection**: Extend `TypeMapper` to recognize time types (UTCTimestamp, UTCDateOnly, etc.)
+2. **Codegen Integration**:
+   - Generate encoding for each time type (u64 for timestamp, u32 for date, etc.)
+   - Generate decoding with proper type conversion
+3. **Testing**: Add integration test for timestamp encoding/decoding
+4. **Cleanup**: Remove `#[allow(dead_code)]` markers once integrated
+
+**Estimated Effort**: 2-3 hours
+
+**Complexity**: LOW (straightforward primitive encoding with type wrappers)
+
+---
+
+### Integration Workflow
+
+**Recommended Order**:
+1. **Nested Messages** (easiest, builds confidence)
+2. **Decimal Types** (moderate complexity)
+3. **Time Types** (straightforward)
+4. **Repeating Groups** (most complex, do last)
+
+**Common Integration Pattern**:
+```rust
+// In codegen.rs encoder generation (around line 350)
+for field in &fields {
+    if TypeMapper::is_nested_message(&field.ty) {
+        // Call generate_nested_encoder_call()
+    } else if field.decimal_config.is_some() {
+        // Generate decimal encoding
+    } else if TypeMapper::is_time_type(&field.ty) {
+        // Generate time type encoding
+    } else if TypeMapper::is_var_data(&field.ty) {
+        // Existing var data handling
+    } else {
+        // Existing primitive handling
+    }
+}
+```
+
+**Testing Strategy**:
+1. Activate placeholder tests in `acceptance_tests.rs`
+2. Add integration tests for each feature
+3. Update examples to demonstrate real usage
+4. Run full test suite to ensure no regressions
+
+**Success Criteria**:
+- All placeholder tests pass
+- No `#[allow(dead_code)]` warnings
+- Examples compile and run successfully
+- Performance benchmarks show no regression
+- Documentation updated to reflect integrated features
+
+---
 
 ## Acceptance Decision
 
