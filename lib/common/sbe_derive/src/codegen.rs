@@ -102,6 +102,14 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             continue;
         }
 
+        // Skip composite fields - not yet implemented due to offset calculation complexity
+        if field_attrs.composite {
+            return Err(syn::Error::new_spanned(
+                field,
+                "Composite types not yet supported - cannot determine nested struct size at compile time"
+            ));
+        }
+
         let offset = offset_calc
             .next_offset(field_ty)
             .ok_or_else(|| syn::Error::new_spanned(field_ty, "Unsupported field type"))?;

@@ -34,6 +34,7 @@ pub struct SbeFieldAttrs {
     pub exponent: Option<i8>,
     pub length_field: Option<String>,
     pub time_type: Option<String>,
+    pub composite: bool,
 }
 
 impl SbeContainerAttrs {
@@ -175,6 +176,8 @@ impl SbeFieldAttrs {
                     if let Lit::Str(lit_str) = value {
                         result.time_type = Some(lit_str.value());
                     }
+                } else if meta.path.is_ident("composite") {
+                    result.composite = true;
                 }
                 Ok(())
             })?;

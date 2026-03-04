@@ -183,81 +183,19 @@ fn test_repeating_groups_encode_decode() {
     assert_eq!(decoded_bids[2].quantity, 300);
 }
 
-/// Placeholder test for Nested Messages feature
+/// Test nested messages (composite types) encoding/decoding
 ///
-/// This test documents the expected API for nested messages (composite types).
-/// Currently ignored because:
-/// 1. Composite type encoding/decoding infrastructure needs implementation
-/// 2. Nested struct field detection and inline encoding not yet supported
-/// 3. No support for #[sbe(composite)] attribute parsing
-///
-/// Implementation requirements:
-/// - Detect nested struct fields with #[sbe(composite)] attribute
-/// - Generate inline encoding (no length prefix, fixed layout)
-/// - Support nested field access through generated methods
-/// - Maintain zero-copy semantics for nested structures
-/// - Calculate correct block length including nested types
-///
-/// Wire format: Nested fields are encoded inline in parent message block
-/// Example: Parent { field1: u64, nested: Nested { a: u32, b: u32 } }
-/// Layout: [field1: 8 bytes][nested.a: 4 bytes][nested.b: 4 bytes]
-///
-/// Expected schema definition:
-/// ```rust,ignore
-/// #[derive(SbeEncode, SbeDecode)]
-/// #[sbe(template_id = 400, schema_id = 1, version = 1)]
-/// struct TradeReport {
-///     #[sbe(id = 0)]
-///     trade_id: u64,
-///     #[sbe(id = 1, composite)]
-///     price_qty: PriceQuantity,
-///     #[sbe(id = 2)]
-///     timestamp: u64,
-/// }
-///
-/// #[derive(SbeEncode, SbeDecode)]
-/// struct PriceQuantity {
-///     #[sbe(id = 0)]
-///     price: u64,
-///     #[sbe(id = 1)]
-///     quantity: u64,
-/// }
-/// ```
-///
-/// Expected encoding workflow:
-/// ```rust,ignore
-/// let mut buffer = vec![0u8; 1024];
-/// let write_buf = WriteBuf::new(&mut buffer);
-/// let mut encoder = TradeReportEncoder::default().wrap(write_buf, 0);
-/// encoder.trade_id(123456);
-/// let mut price_qty = encoder.price_qty();
-/// price_qty.price(50000);
-/// price_qty.quantity(100);
-/// encoder.timestamp(1234567890);
-/// ```
-///
-/// Expected decoding workflow:
-/// ```rust,ignore
-/// let read_buf = ReadBuf::new(&buffer);
-/// let decoder = TradeReportDecoder::default().wrap(read_buf, 0, block_length, 0);
-/// assert_eq!(decoder.trade_id(), 123456);
-/// let price_qty = decoder.price_qty();
-/// assert_eq!(price_qty.price(), 50000);
-/// assert_eq!(price_qty.quantity(), 100);
-/// assert_eq!(decoder.timestamp(), 1234567890);
-/// ```
-///
-/// Wire format verification:
-/// - Offset 0-7:   trade_id (u64)
-/// - Offset 8-15:  price_qty.price (u64)
-/// - Offset 16-23: price_qty.quantity (u64)
-/// - Offset 24-31: timestamp (u64)
-/// - Total block length: 32 bytes
+/// Composite types are encoded inline in the parent message block.
+/// Wire format: [trade_id: 8 bytes][price: 8 bytes][quantity: 8 bytes][timestamp: 8 bytes]
+/// Total block length: 32 bytes
 #[test]
-#[ignore = "Nested messages (composite types) not yet implemented"]
+#[ignore = "Nested messages (composite types) not yet implemented - requires complex offset calculation"]
 fn test_nested_messages_encode_decode() {
-    // This test is a placeholder documenting the expected API.
-    // Implementation requires composite type detection and inline encoding in codegen.rs.
+    // Composite types require knowing the size of nested structs at proc-macro compile time,
+    // which is not possible without parsing the nested type's definition.
+    // This would require significant architectural changes to the offset calculator.
+    //
+    // Workaround: Users can manually flatten composite fields into the parent struct.
 }
 
 /// Test decimal types encoding/decoding (mantissa + exponent)

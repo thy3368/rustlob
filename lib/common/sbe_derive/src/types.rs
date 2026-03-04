@@ -317,6 +317,18 @@ impl OffsetCalculator {
         Some(offset)
     }
 
+    pub fn next_offset_with_size(&mut self, size_tokens: &proc_macro2::TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
+        let offset = self.current_offset;
+        // For composite types, we can't know the size at compile time
+        // So we return a symbolic offset and mark that we need to skip ahead
+        // For now, we'll just return the current offset and let the caller handle size tracking
+        Ok(quote::quote! { #offset })
+    }
+
+    pub fn skip_composite(&mut self, size: usize) {
+        self.current_offset += size;
+    }
+
     pub fn total_size(&self) -> usize {
         self.current_offset
     }
