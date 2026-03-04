@@ -23,8 +23,9 @@ fn test_message_header_format() {
     // Encode with header
     let encoder = TestMsgEncoder::default().wrap(write_buf, 0);
     let mut header = encoder.header(0);
-    let mut encoder = header.parent().unwrap();
+    let mut encoder = header.parent().expect("Failed to get encoder from header");
     encoder.value(12345);
+    // Encoding completes when encoder is dropped
 
     // Verify header format (8 bytes)
     let read_buf = ReadBuf::new(&buffer);
@@ -35,4 +36,8 @@ fn test_message_header_format() {
     assert_eq!(header.schema_id(), 1);
     assert_eq!(header.version(), 2);
     assert_eq!(header.block_length(), test_msg_encoder::SBE_BLOCK_LENGTH);
+
+    // Verify message body data
+    let decoder = TestMsgDecoder::default().header(header, 0);
+    assert_eq!(decoder.value(), 12345);
 }
