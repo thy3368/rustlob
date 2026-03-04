@@ -124,14 +124,22 @@ The SBE derive macro implementation has successfully passed all acceptance crite
 
 #### 2.3 Repeating Groups
 - **Status**: ⚠️ PARTIAL IMPLEMENTATION
-- **Tests**: Example code exists (`examples/repeating_groups.rs`)
+- **Tests**: Placeholder test added (`test_repeating_groups_placeholder` - ignored)
 - **Evidence**:
   - Module `groups.rs` contains `generate_group_encoder` and `generate_group_decoder` functions
   - GroupIterator and GroupEntry structures implemented
   - Functions marked as `#[allow(dead_code)]` - not integrated into codegen pipeline
+  - Placeholder test documents expected API and integration requirements
+- **Integration Complexity**: HIGH
+  - Requires attribute parsing for `#[sbe(group)]`
+  - Group dimension header encoding (blockLength: u16, numInGroup: u16)
+  - GroupEncoder generation with add_entry() method
+  - GroupDecoder generation with count() and iter() methods
+  - Integration of generate_group_encoder/generate_group_decoder into codegen.rs
+  - Vec<T> field detection and special handling in type mapper
 - **Action Required**:
-  - Integrate group generation functions into `codegen.rs`
-  - Add integration test for `Vec<T>` encoding/decoding
+  - Complete integration work as documented in placeholder test
+  - Activate test once integration is complete
   - Remove dead code warnings
 
 #### 2.4 Nested Messages
