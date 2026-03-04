@@ -112,7 +112,8 @@
       "Bash(echo $ANTHROPIC_BASE_URL)",
       "Bash(opencode models anthropic)",
       "Bash(opencode debug env)",
-      "Bash(cargo expand:*)"
+      "Bash(cargo expand:*)",
+      "Bash(git worktree:*)"
     ],
     "deny": [],
     "ask": []
