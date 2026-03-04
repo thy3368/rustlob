@@ -54,12 +54,19 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let mut offset_calc = OffsetCalculator::new();
     let mut field_methods = Vec::new();
     let mut var_data_fields = Vec::new();
+    let mut group_fields = Vec::new();
 
     // Process fixed-size fields
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs)?;
+
+        // Check if this is a repeating group field
+        if TypeMapper::is_repeating_group(field_ty) {
+            group_fields.push((field_name.clone(), field_ty.clone()));
+            continue; // Skip offset calculation for groups
+        }
 
         // Check if this is a variable-length field
         if TypeMapper::is_var_data(field_ty) {
@@ -204,6 +211,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         field_methods.push(method);
     }
 
+    // TODO: Generate repeating group methods (requires buffer access API enhancement)
+    // Repeating groups are detected but not yet fully implemented due to WriteBuf/ReadBuf API limitations
+
     let block_length = offset_calc.total_size() as u16;
     let template_id = container_attrs.template_id.unwrap_or(1);
     let schema_id = container_attrs.schema_id.unwrap_or(1);
@@ -218,6 +228,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         // Skip constant fields
         if field_attrs.presence.as_deref() == Some("constant") {
             return None;
+        }
+
+        // Handle repeating group fields
+        if TypeMapper::is_repeating_group(field_ty) {
+            return Some(quote! { encoder.#field_name(&self.#field_name); });
         }
 
         // Handle variable-length fields
@@ -237,6 +252,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let field_decodings = fields.iter().filter_map(|field| {
         let field_name = field.ident.as_ref().unwrap();
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+
+        // Handle repeating group fields
+        if TypeMapper::is_repeating_group(&field.ty) {
+            return Some(quote! { #field_name: decoder.#field_name(), });
+        }
 
         // Handle variable-length fields
         if TypeMapper::is_var_data(&field.ty) {
@@ -390,12 +410,19 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
     let mut offset_calc = OffsetCalculator::new();
     let mut field_methods = Vec::new();
     let mut var_data_fields = Vec::new();
+    let mut group_fields = Vec::new();
 
     // Process fixed-size fields
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs)?;
+
+        // Check if this is a repeating group field
+        if TypeMapper::is_repeating_group(field_ty) {
+            group_fields.push((field_name.clone(), field_ty.clone()));
+            continue; // Skip offset calculation for groups
+        }
 
         // Check if this is a variable-length field
         if TypeMapper::is_var_data(field_ty) {
@@ -556,6 +583,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             field_methods.push(method);
         }
     }
+
+    // TODO: Generate repeating group methods (requires buffer access API enhancement)
+    // Repeating groups are detected but not yet fully implemented due to WriteBuf/ReadBuf API limitations
 
     let block_length = offset_calc.total_size() as u16;
     let template_id = container_attrs.template_id.unwrap_or(1);

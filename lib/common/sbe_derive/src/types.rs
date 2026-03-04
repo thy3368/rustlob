@@ -230,6 +230,41 @@ impl TypeMapper {
         false
     }
 
+    /// Check if a type is Vec<T> where T is a struct (repeating group)
+    pub fn is_repeating_group(ty: &Type) -> bool {
+        if let Type::Path(TypePath { path, .. }) = ty {
+            if let Some(segment) = path.segments.last() {
+                if segment.ident == "Vec" {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) = args.args.first() {
+                            if let Some(inner_seg) = inner_path.path.segments.last() {
+                                // Not u8, so it's a struct type
+                                return inner_seg.ident != "u8";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Extract inner type from Vec<T>
+    pub fn vec_inner_type(ty: &Type) -> Option<&Type> {
+        if let Type::Path(TypePath { path, .. }) = ty {
+            if let Some(segment) = path.segments.last() {
+                if segment.ident == "Vec" {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                            return Some(inner);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Check if a type is an enum (user-defined type that's not a primitive)
     #[allow(dead_code)]
     pub fn is_enum(ty: &Type) -> bool {

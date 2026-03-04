@@ -126,66 +126,17 @@ fn test_var_data_encode_decode() {
 
 /// Placeholder test for Repeating Groups feature
 ///
-/// This test documents the expected API for repeating groups once fully integrated.
-/// Currently ignored because:
-/// 1. groups.rs contains generate_group_encoder/generate_group_decoder functions
-/// 2. These functions are not integrated into codegen.rs pipeline
-/// 3. Vec<T> field detection and group generation needs to be added
+/// This test documents the expected API for repeating groups.
+/// Currently not implemented because:
+/// 1. WriteBuf/ReadBuf API doesn't support direct buffer access for sub-encoders
+/// 2. Requires API enhancement to support nested encoder/decoder creation
 ///
-/// Integration requirements:
-/// - Detect Vec<T> fields with #[sbe(group)] attribute
-/// - Generate group dimension header (blockLength: u16, numInGroup: u16)
-/// - Generate GroupEncoder with add_entry() method
-/// - Generate GroupDecoder with count() and iter() methods
-/// - Integrate generate_group_encoder/generate_group_decoder into codegen.rs
-///
-/// Expected schema definition:
-/// ```rust,ignore
-/// #[derive(SbeEncode, SbeDecode)]
-/// #[sbe(template_id = 300, schema_id = 1, version = 1)]
-/// struct OrderBook {
-///     #[sbe(id = 0)]
-///     symbol: u64,
-///     #[sbe(id = 1, group)]
-///     bids: Vec<BidLevel>,
-/// }
-///
-/// #[derive(SbeEncode, SbeDecode)]
-/// struct BidLevel {
-///     #[sbe(id = 0)]
-///     price: u64,
-///     #[sbe(id = 1)]
-///     quantity: u64,
-/// }
-/// ```
-///
-/// Expected encoding workflow:
-/// ```rust,ignore
-/// let mut buffer = vec![0u8; 1024];
-/// let write_buf = WriteBuf::new(&mut buffer);
-/// let mut encoder = OrderBookEncoder::default().wrap(write_buf, 0);
-/// encoder.symbol(12345);
-/// let mut bids_encoder = encoder.bids_count(2);
-/// bids_encoder.next().price(50000).quantity(100);
-/// bids_encoder.next().price(49900).quantity(200);
-/// ```
-///
-/// Expected decoding workflow:
-/// ```rust,ignore
-/// let read_buf = ReadBuf::new(&buffer);
-/// let decoder = OrderBookDecoder::default().wrap(read_buf, 0, block_length, 0);
-/// assert_eq!(decoder.symbol(), 12345);
-/// let bids_decoder = decoder.bids();
-/// assert_eq!(bids_decoder.count(), 2);
-/// for bid in bids_decoder.iter() {
-///     println!("price={}, qty={}", bid.price(), bid.quantity());
-/// }
-/// ```
+/// Implementation blocked by: WriteBuf/ReadBuf needs Index trait or as_mut_slice() method
 #[test]
-#[ignore = "Repeating groups infrastructure exists but not integrated into codegen pipeline"]
-fn test_repeating_groups_placeholder() {
+#[ignore = "Repeating groups blocked by WriteBuf/ReadBuf API limitations"]
+fn test_repeating_groups_encode_decode() {
     // This test is a placeholder documenting the expected API.
-    // Implementation requires codegen.rs integration of groups.rs functions.
+    // Implementation requires WriteBuf/ReadBuf API enhancement.
 }
 
 /// Placeholder test for Nested Messages feature
