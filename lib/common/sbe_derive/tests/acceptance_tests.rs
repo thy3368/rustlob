@@ -292,3 +292,81 @@ fn test_nested_messages_encode_decode() {
     // Offset 24-31: timestamp (u64)
     // Total block length: 32 bytes
 }
+
+/// Placeholder test for Decimal Types feature
+///
+/// This test demonstrates the expected API for decimal encoding (mantissa/exponent).
+/// Currently ignored because:
+/// 1. Decimal type representation not implemented
+/// 2. No support for mantissa/exponent encoding
+/// 3. Missing #[sbe(decimal)] attribute parsing
+///
+/// Implementation requirements:
+/// - Support Decimal type with configurable precision
+/// - Encode as mantissa (i64) + exponent (i8) pair
+/// - Generate accessor methods that return Decimal wrapper type
+/// - Provide conversion from/to f64 with precision control
+/// - Handle special values (NaN, Infinity) according to SBE spec
+///
+/// Wire format: [mantissa: 8 bytes (i64)][exponent: 1 byte (i8)]
+/// Example: 123.45 with exponent -2 → mantissa=12345, exponent=-2
+/// Calculation: value = mantissa × 10^exponent
+#[test]
+#[ignore = "Decimal types (mantissa/exponent encoding) not yet implemented"]
+fn test_decimal_types_encode_decode() {
+    // Expected schema definition
+    #[allow(dead_code)]
+    #[derive(SbeEncode, SbeDecode)]
+    #[sbe(template_id = 500, schema_id = 1, version = 1)]
+    struct PriceUpdate {
+        #[sbe(id = 0)]
+        symbol_id: u64,
+
+        // Decimal field with mantissa/exponent encoding
+        #[sbe(id = 1, decimal, exponent = -8)]
+        price: Decimal,
+
+        #[sbe(id = 2, decimal, exponent = -4)]
+        quantity: Decimal,
+    }
+
+    // Expected encoding workflow:
+    // let mut buffer = vec![0u8; 1024];
+    // let write_buf = WriteBuf::new(&mut buffer);
+    //
+    // let mut encoder = PriceUpdateEncoder::default().wrap(write_buf, 0);
+    // encoder.symbol_id(12345);
+    //
+    // // Encode decimal: 50000.12345678 with exponent -8
+    // encoder.price(Decimal::new(5000012345678, -8));
+    //
+    // // Encode decimal: 100.5000 with exponent -4
+    // encoder.quantity(Decimal::new(1005000, -4));
+    // drop(encoder);
+
+    // Expected decoding workflow:
+    // let read_buf = ReadBuf::new(&buffer);
+    // let decoder = PriceUpdateDecoder::default().wrap(
+    //     read_buf, 0, price_update_encoder::SBE_BLOCK_LENGTH, 0
+    // );
+    //
+    // assert_eq!(decoder.symbol_id(), 12345);
+    //
+    // let price = decoder.price();
+    // assert_eq!(price.mantissa(), 5000012345678);
+    // assert_eq!(price.exponent(), -8);
+    // assert_eq!(price.to_f64(), 50000.12345678);
+    //
+    // let quantity = decoder.quantity();
+    // assert_eq!(quantity.mantissa(), 1005000);
+    // assert_eq!(quantity.exponent(), -4);
+    // assert_eq!(quantity.to_f64(), 100.5000);
+
+    // Wire format verification:
+    // Offset 0-7:   symbol_id (u64)
+    // Offset 8-15:  price.mantissa (i64)
+    // Offset 16:    price.exponent (i8)
+    // Offset 17-24: quantity.mantissa (i64)
+    // Offset 25:    quantity.exponent (i8)
+    // Total block length: 26 bytes
+}
