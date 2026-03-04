@@ -208,3 +208,87 @@ fn test_repeating_groups_placeholder() {
     // 4. GroupEncoder/GroupDecoder generation
     // 5. Iterator support for group entries
 }
+
+/// Placeholder test for Nested Messages feature
+///
+/// This test demonstrates the expected API for nested messages (composite types).
+/// Currently ignored because:
+/// 1. Composite type encoding/decoding infrastructure needs implementation
+/// 2. Nested struct field detection and inline encoding not yet supported
+/// 3. No support for #[sbe(composite)] attribute parsing
+///
+/// Implementation requirements:
+/// - Detect nested struct fields with #[sbe(composite)] attribute
+/// - Generate inline encoding (no length prefix, fixed layout)
+/// - Support nested field access through generated methods
+/// - Maintain zero-copy semantics for nested structures
+/// - Calculate correct block length including nested types
+///
+/// Wire format: Nested fields are encoded inline in parent message block
+/// Example: Parent { field1: u64, nested: Nested { a: u32, b: u32 } }
+/// Layout: [field1: 8 bytes][nested.a: 4 bytes][nested.b: 4 bytes]
+#[test]
+#[ignore = "Nested messages (composite types) not yet implemented"]
+fn test_nested_messages_encode_decode() {
+    // Expected schema definition
+    #[allow(dead_code)]
+    #[derive(SbeEncode, SbeDecode)]
+    #[sbe(template_id = 400, schema_id = 1, version = 1)]
+    struct TradeReport {
+        #[sbe(id = 0)]
+        trade_id: u64,
+
+        // Nested composite type
+        #[sbe(id = 1, composite)]
+        price_qty: PriceQuantity,
+
+        #[sbe(id = 2)]
+        timestamp: u64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(SbeEncode, SbeDecode)]
+    struct PriceQuantity {
+        #[sbe(id = 0)]
+        price: u64,
+        #[sbe(id = 1)]
+        quantity: u64,
+    }
+
+    // Expected encoding workflow:
+    // let mut buffer = vec![0u8; 1024];
+    // let write_buf = WriteBuf::new(&mut buffer);
+    //
+    // let mut encoder = TradeReportEncoder::default().wrap(write_buf, 0);
+    // encoder.trade_id(123456);
+    //
+    // // Inline composite encoding
+    // let mut price_qty = encoder.price_qty();
+    // price_qty.price(50000);
+    // price_qty.quantity(100);
+    //
+    // encoder.timestamp(1234567890);
+    // drop(encoder);
+
+    // Expected decoding workflow:
+    // let read_buf = ReadBuf::new(&buffer);
+    // let decoder = TradeReportDecoder::default().wrap(
+    //     read_buf, 0, trade_report_encoder::SBE_BLOCK_LENGTH, 0
+    // );
+    //
+    // assert_eq!(decoder.trade_id(), 123456);
+    //
+    // // Inline composite decoding
+    // let price_qty = decoder.price_qty();
+    // assert_eq!(price_qty.price(), 50000);
+    // assert_eq!(price_qty.quantity(), 100);
+    //
+    // assert_eq!(decoder.timestamp(), 1234567890);
+
+    // Wire format verification:
+    // Offset 0-7:   trade_id (u64)
+    // Offset 8-15:  price_qty.price (u64)
+    // Offset 16-23: price_qty.quantity (u64)
+    // Offset 24-31: timestamp (u64)
+    // Total block length: 32 bytes
+}
