@@ -1,0 +1,259 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml
+workspace: /Users/hongyaotang/src/rustlob/Cargo.toml
+warning: /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: /Users/hongyaotang/src/rustlob/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: function `generate_nested_decoder_call` is never used
+  --> lib/common/sbe_derive/src/nested.rs:57:8
+   |
+57 | pub fn generate_nested_decoder_call(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (lib) generated 1 warning
+   Compiling sbe_derive v0.1.0 (/Users/hongyaotang/src/rustlob/lib/common/sbe_derive)
+warning: unused import: `SbeEnum`
+ --> lib/common/sbe_derive/tests/acceptance_tests.rs:5:40
+  |
+5 | use sbe_derive::{SbeDecode, SbeEncode, SbeEnum};
+  |                                        ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TestMsg` is never constructed
+  --> lib/common/sbe_derive/tests/acceptance_tests.rs:15:12
+   |
+15 |     struct TestMsg {
+   |            ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `Reader`, and `Writer`
+ --> lib/common/sbe_derive/tests/serde_comparison.rs:7:30
+  |
+7 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |                              ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (test "acceptance_tests") generated 2 warnings (run `cargo fix --test "acceptance_tests" -p sbe_derive` to apply 1 suggestion)
+warning: `sbe_derive` (lib test) generated 1 warning (1 duplicate)
+warning: `sbe_derive` (test "serde_comparison") generated 1 warning (run `cargo fix --test "serde_comparison" -p sbe_derive` to apply 1 suggestion)
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `ReadBuf`, `Reader`, `WriteBuf`, and `Writer`
+ --> lib/common/sbe_derive/tests/comprehensive_test.rs:4:11
+  |
+4 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |           ^^^^^^^  ^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TestMessage` is never constructed
+  --> lib/common/sbe_derive/tests/comprehensive_test.rs:16:8
+   |
+16 | struct TestMessage {
+   |        ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `Trade` is never constructed
+ --> lib/common/sbe_derive/tests/basic_test.rs:5:8
+  |
+5 | struct Trade {
+  |        ^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `ReadBuf`, `Reader`, `WriteBuf`, and `Writer`
+ --> lib/common/sbe_derive/tests/performance_test.rs:4:11
+  |
+4 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |           ^^^^^^^  ^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `BenchTrade` is never constructed
+  --> lib/common/sbe_derive/tests/performance_test.rs:10:8
+   |
+10 | struct BenchTrade {
+   |        ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (test "comprehensive_test") generated 2 warnings (run `cargo fix --test "comprehensive_test" -p sbe_derive` to apply 1 suggestion)
+warning: `sbe_derive` (test "basic_test") generated 1 warning
+warning: `sbe_derive` (test "performance_test") generated 2 warnings (run `cargo fix --test "performance_test" -p sbe_derive` to apply 1 suggestion)
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `ReadBuf`, `Reader`, `WriteBuf`, and `Writer`
+ --> lib/common/sbe_derive/examples/comprehensive.rs:4:11
+  |
+4 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |           ^^^^^^^  ^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `ReadBuf`, `Reader`, `WriteBuf`, and `Writer`
+ --> lib/common/sbe_derive/examples/enum_support.rs:4:11
+  |
+4 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |           ^^^^^^^  ^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TradeWithEnum` is never constructed
+  --> lib/common/sbe_derive/examples/enum_support.rs:25:8
+   |
+25 | struct TradeWithEnum {
+   |        ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `ComprehensiveTrade` is never constructed
+  --> lib/common/sbe_derive/examples/comprehensive.rs:16:8
+   |
+16 | struct ComprehensiveTrade {
+   |        ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `DecimalTrade` is never constructed
+  --> lib/common/sbe_derive/examples/decimal_types.rs:33:8
+   |
+33 | struct DecimalTrade {
+   |        ^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `VersionedTrade` is never constructed
+ --> lib/common/sbe_derive/examples/version_fields.rs:8:8
+  |
+8 | struct VersionedTrade {
+  |        ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `Trade` is never constructed
+  --> lib/common/sbe_derive/examples/simple_trade.rs:11:8
+   |
+11 | struct Trade {
+   |        ^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `ValidatedTrade` is never constructed
+ --> lib/common/sbe_derive/examples/value_validation.rs:8:8
+  |
+8 | struct ValidatedTrade {
+  |        ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `PriceLevel` is never constructed
+ --> lib/common/sbe_derive/examples/nested_messages.rs:8:8
+  |
+8 | struct PriceLevel {
+  |        ^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TradeWithNested` is never constructed
+  --> lib/common/sbe_derive/examples/nested_messages.rs:20:8
+   |
+20 | struct TradeWithNested {
+   |        ^^^^^^^^^^^^^^^
+
+warning: struct `TradeWithOrders` is never constructed
+  --> lib/common/sbe_derive/examples/repeating_groups.rs:17:8
+   |
+17 | struct TradeWithOrders {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TimedTrade` is never constructed
+ --> lib/common/sbe_derive/examples/time_types.rs:8:8
+  |
+8 | struct TimedTrade {
+  |        ^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `AdvancedTrade` is never constructed
+  --> lib/common/sbe_derive/examples/advanced_features.rs:12:8
+   |
+12 | struct AdvancedTrade {
+   |        ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `main` is never used
+  --> lib/common/sbe_derive/examples/trade_codec.rs:36:4
+   |
+36 | fn main() {
+   |    ^^^^
+
+warning: `sbe_derive` (example "nested_messages") generated 2 warnings
+warning: `sbe_derive` (example "repeating_groups") generated 1 warning
+warning: `sbe_derive` (example "enum_support") generated 2 warnings (run `cargo fix --example "enum_support" -p sbe_derive` to apply 1 suggestion)
+warning: `sbe_derive` (example "advanced_features") generated 2 warnings
+warning: `sbe_derive` (example "comprehensive") generated 2 warnings (run `cargo fix --example "comprehensive" -p sbe_derive` to apply 1 suggestion)
+warning: `sbe_derive` (example "simple_trade") generated 1 warning
+warning: `sbe_derive` (example "decimal_types") generated 1 warning
+warning: `sbe_derive` (example "value_validation") generated 1 warning
+warning: `sbe_derive` (example "version_fields") generated 1 warning
+warning: `sbe_derive` (example "time_types") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.98s
+     Running unittests src/lib.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/sbe_derive-299b36f4970364ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acceptance_tests.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/acceptance_tests-b9af61edf03a471f)
+
+running 1 test
+test test_message_header_format ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/basic_test.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/basic_test-84286387637c13d1)
+
+running 2 tests
+test test_basic_encode_decode ... ok
+test test_with_message_header ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/comprehensive_test.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/comprehensive_test-1c4e76cd9426dc8f)
+
+running 5 tests
+test test_constant_field ... ok
+test test_enum_conversion ... ok
+test test_optional_none ... ok
+test test_primitive_types ... ok
+test test_version_fields ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/performance_test.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/performance_test-389aaba8ef1d6ace)
+
+running 1 test
+test test_performance_benchmarks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/serde_comparison.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/serde_comparison-fb031c30fef8e01f)
+
+running 1 test
+test test_serde_comparison ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+   Doc-tests sbe_derive
+
+running 3 tests
+test lib/common/sbe_derive/src/lib.rs - derive_sbe_decode (line 51) ... ignored
+test lib/common/sbe_derive/src/lib.rs - derive_sbe_encode (line 24) ... ignored
+test lib/common/sbe_derive/src/lib.rs - derive_sbe_enum (line 80) ... ignored
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

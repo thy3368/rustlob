@@ -1,0 +1,245 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!dependabot/**'
+  pull_request:
+    branches: [ master ]
+  workflow_call:
+
+jobs:
+  test:
+    name: Test [${{ matrix.rust }}, ${{ matrix.profile }}]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, nightly]
+        profile: [dev]
+        include:
+          - rust: stable
+            profile: release
+    # Anything nightly is treated as informational-only.
+    continue-on-error: ${{ matrix.rust == 'nightly' }}
+    steps:
+    - name: "Set environmental variables"
+      shell: bash
+      run: |
+        RUST_BACKTRACE_nightly='1'
+        CFLAGS_nightly='-fsanitize=leak'
+        CXXFLAGS_nightly='-fsanitize=leak'
+        RUSTFLAGS_nightly='-Zsanitizer=leak'
+
+        # A function for defining a variable conditional on the toolchain in
+        # use.
+        tc_var() {
+          # Replace any dots in the toolchain name with underscores. Necessary
+          # due to shell imposed variable naming restrictions.
+          var="${1}_$(echo ${{ matrix.rust }} | tr . _)"
+          echo "${1}=${!var}" >> ${GITHUB_ENV}
+        }
+
+        tc_var RUST_BACKTRACE
+        tc_var RUSTFLAGS
+        tc_var CFLAGS
+        tc_var CXXFLAGS
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt
+    - name: Install deps
+      run: |
+        sudo apt-get install -y clang-14 libelf-dev zlib1g-dev linux-headers-$(uname -r)
+        sudo ln -s /usr/include/asm-generic /usr/include/asm
+        sudo rm -f /bin/clang && sudo ln -s /usr/bin/clang-14 /bin/clang
+    - uses: Swatinem/rust-cache@v2
+    - name: Build
+      run: cargo build --profile=${{ matrix.profile }} --locked --verbose --workspace --exclude runqslower
+    - name: Run tests
+      # Skip tests which require sudo
+      run: cargo test --profile=${{ matrix.profile }} --locked --verbose --workspace --exclude runqslower -- --skip ':root:'  --include-ignored
+    - name: Run root tests
+      run: cd libbpf-rs && cargo test --profile=${{ matrix.profile }} --locked --verbose -- ':root:'
+
+  run-tcp-ca:
+    name: Run tcp_ca example
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tcp_ca
+        env:
+          CFLAGS: '-fsanitize=leak'
+          CXXFLAGS: '-fsanitize=leak'
+          RUSTFLAGS: '-Zsanitizer=leak'
+        run: |
+          cargo build --package tcp_ca
+          sudo target/debug/tcp_ca
+
+  build-features:
+    name: Build [${{ matrix.args }}]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - args: "features = ['vendored']"
+          - args: "features = ['static']"
+          # TODO: Should build without features, but that requires system
+          #       libbpf and ubuntu 22.04 only has 0.5 (..?)
+          #- args: "default-features = false"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev autopoint
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build libbpf-rs sample
+        run: |
+          cargo init --bin libbpf-rs-test-project
+          cd libbpf-rs-test-project
+          cat >> Cargo.toml <<EOF
+          libbpf-rs = { version = "*", path = "../libbpf-rs", ${{ matrix.args }} }
+          EOF
+          cat > src/main.rs <<EOF
+          fn main() {
+              // Use *some* libbpf API so that we actually link against the library.
+              let _linker = libbpf_rs::Linker::new("/tmp/foobar").unwrap();
+          }
+          EOF
+          RUSTFLAGS="$RUSTFLAGS -L /usr/lib/x86_64-linux-gnu" cargo build
+
+  build-minimum:
+    name: Build using minimum versions of dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev
+      - name: Install Nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+      - run: cargo +nightly -Z minimal-versions update
+      - name: Install minimum Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          # Please adjust README and rust-version field in Cargo.toml files when
+          # bumping version.
+          toolchain: 1.71.0
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --verbose --workspace --exclude runqslower
+
+  build-capable:
+    name: Build capable example with static libelf and libz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: RUSTFLAGS="$RUSTFLAGS -L /usr/lib/x86_64-linux-gnu" cargo build --locked --package capable --features=static
+
+  build-aarch64:
+    name: Build for aarch64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add apt sources for arm64
+        run: |
+          dpkg --add-architecture arm64
+          release=$(. /etc/os-release && echo "$UBUNTU_CODENAME")
+          sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          printf 'deb [arch=arm64] http://ports.ubuntu.com/ %s main restricted\n' \
+              $release $release-updates $release-security \
+              >> /etc/apt/sources.list
+        shell: sudo sh -e {0}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libelf-dev:arm64 zlib1g-dev:arm64 gcc-aarch64-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        env:
+          CARGO_BUILD_TARGET: aarch64-unknown-linux-gnu
+          RUSTFLAGS: -C linker=/usr/bin/aarch64-linux-gnu-gcc
+        run: cargo build --lib
+
+  build-armhf:
+    name: Build for aarch32
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add apt sources for armhf
+        run: |
+          dpkg --add-architecture armhf
+          release=$(. /etc/os-release && echo "$UBUNTU_CODENAME")
+          sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          printf 'deb [arch=armhf] http://ports.ubuntu.com/ %s main restricted\n' \
+              $release $release-updates $release-security \
+              >> /etc/apt/sources.list
+        shell: sudo sh -e {0}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: armv7-unknown-linux-gnueabihf
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libelf-dev:armhf zlib1g-dev:armhf gcc-arm-linux-gnueabihf
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        env:
+          CARGO_BUILD_TARGET: armv7-unknown-linux-gnueabihf
+          RUSTFLAGS: -C linker=/usr/bin/armhf-linux-gnu-gcc
+        run: cargo build --lib
+
+  clippy:
+    name: Lint with clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          # We want the old resolver here as it has more suitable feature
+          # unification logic for this invocation.
+          sed -i 's@resolver = "2"@resolver = "1"@' Cargo.toml
+          cargo clippy --locked --no-deps --all-targets --tests --features=dont-generate-test-files -- -D warnings -D clippy::absolute_paths
+
+  rustfmt:
+    name: Check code formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt -- --check
+
+  cargo-doc:
+    name: Check documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: '-D warnings'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get install -y libelf-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --locked --no-deps

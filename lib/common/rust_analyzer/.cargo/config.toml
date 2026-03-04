@@ -1,0 +1,3 @@
+# 防止继承父工作空间配置
+[build]
+target-dir = "target"

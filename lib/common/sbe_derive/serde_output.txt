@@ -1,0 +1,63 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml
+workspace: /Users/hongyaotang/src/rustlob/Cargo.toml
+warning: /Users/hongyaotang/src/rustlob/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: function `generate_nested_decoder_call` is never used
+  --> lib/common/sbe_derive/src/nested.rs:57:8
+   |
+57 | pub fn generate_nested_decoder_call(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (lib) generated 1 warning
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `Reader`, and `Writer`
+ --> lib/common/sbe_derive/tests/serde_comparison.rs:7:30
+  |
+7 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |                              ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (test "serde_comparison") generated 1 warning (run `cargo fix --test "serde_comparison" -p sbe_derive` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running tests/serde_comparison.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/serde_comparison-fb031c30fef8e01f)
+
+running 1 test
+
+=== Serialization Performance Comparison ===
+Iterations: 100000
+
+SBE (Simple Binary Encoding):
+  Encode: 40 ns/op
+  Decode: 77 ns/op
+  Total:  117 ns/op
+  Size:   21 bytes
+
+serde_json:
+  Encode: 1703 ns/op
+  Decode: 1173 ns/op
+  Total:  2876 ns/op
+  Size:   60 bytes
+
+bincode:
+  Encode: 233 ns/op
+  Decode: 222 ns/op
+  Total:  455 ns/op
+  Size:   21 bytes
+
+=== Performance Comparison ===
+SBE vs JSON:
+  Encode: 42.58x faster
+  Decode: 15.23x faster
+  Size:   2.86x smaller
+
+SBE vs Bincode:
+  Encode: 5.83x faster
+  Decode: 2.88x faster
+  Size:   1.00x smaller
+test test_serde_comparison ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+

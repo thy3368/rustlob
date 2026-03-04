@@ -1,0 +1,57 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml
+workspace: /Users/hongyaotang/src/rustlob/Cargo.toml
+warning: /Users/hongyaotang/src/rustlob/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: /Users/hongyaotang/src/rustlob/app/websocket_sockudo/Cargo.toml: unused manifest key: profile.release.target-cpu
+warning: function `generate_nested_decoder_call` is never used
+  --> lib/common/sbe_derive/src/nested.rs:57:8
+   |
+57 | pub fn generate_nested_decoder_call(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (lib) generated 1 warning
+warning: unused imports: `ActingVersion`, `Decoder`, `Encoder`, `ReadBuf`, `Reader`, `WriteBuf`, and `Writer`
+ --> lib/common/sbe_derive/tests/performance_test.rs:4:11
+  |
+4 | use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
+  |           ^^^^^^^  ^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `BenchTrade` is never constructed
+  --> lib/common/sbe_derive/tests/performance_test.rs:10:8
+   |
+10 | struct BenchTrade {
+   |        ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sbe_derive` (test "performance_test") generated 2 warnings (run `cargo fix --test "performance_test" -p sbe_derive` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running tests/performance_test.rs (/Users/hongyaotang/src/rustlob/target/debug/deps/performance_test-389aaba8ef1d6ace)
+
+running 1 test
+
+=== SBE Derive Macro Performance Benchmarks ===
+Iterations: 100000
+
+Encode:
+  Total: 7.140959ms
+  Per operation: 71 ns
+  Throughput: 14003721.35 ops/sec
+
+Decode:
+  Total: 7.478291ms
+  Per operation: 74 ns
+  Throughput: 13372039.15 ops/sec
+
+Roundtrip (encode + decode):
+  Total: 14.498667ms
+  Per operation: 144 ns
+  Throughput: 6897185.79 ops/sec
+test test_performance_benchmarks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

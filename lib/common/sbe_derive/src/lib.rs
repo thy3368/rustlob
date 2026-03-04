@@ -8,6 +8,7 @@ use syn::{parse_macro_input, DeriveInput};
 
 mod attrs;
 mod codegen;
+mod decimal;
 mod enums;
 mod groups;
 mod nested;

@@ -74,6 +74,34 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             continue; // Skip offset calculation for var-data
         }
 
+        // Check if this is a decimal field (mantissa + exponent)
+        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
+            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let exponent_val = field_attrs.exponent.unwrap();
+
+            let doc_comment = format!(
+                "decimal field '{}'\n - mantissa offset: {}\n - exponent offset: {} (constant: {})\n - encodedLength: 9",
+                field_name, offset, exponent_offset, exponent_val
+            );
+
+            let method = quote! {
+                #[doc = #doc_comment]
+                #[inline]
+                pub fn #field_name(&mut self, mantissa: i64, exponent: i8) {
+                    let mantissa_offset = self.offset + #offset;
+                    let exponent_offset = self.offset + #exponent_offset;
+                    self.get_buf_mut().put_i64_at(mantissa_offset, mantissa);
+                    self.get_buf_mut().put_i8_at(exponent_offset, exponent);
+                }
+            };
+
+            field_methods.push(method);
+            continue;
+        }
+
         let offset = offset_calc
             .next_offset(field_ty)
             .ok_or_else(|| syn::Error::new_spanned(field_ty, "Unsupported field type"))?;
@@ -230,6 +258,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             return None;
         }
 
+        // Decimal fields need to destructure tuple (mantissa, exponent)
+        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+            return Some(quote! { encoder.#field_name(self.#field_name.0, self.#field_name.1); });
+        }
+
         // Handle repeating group fields
         if TypeMapper::is_repeating_group(field_ty) {
             return Some(quote! { encoder.#field_name(&self.#field_name); });
@@ -252,6 +285,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let field_decodings = fields.iter().filter_map(|field| {
         let field_name = field.ident.as_ref().unwrap();
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+
+        // Decimal fields return tuples from decoder
+        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+            return Some(quote! { #field_name: decoder.#field_name(), });
+        }
 
         // Handle repeating group fields
         if TypeMapper::is_repeating_group(&field.ty) {
@@ -428,6 +466,35 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
         if TypeMapper::is_var_data(field_ty) {
             var_data_fields.push((field_name.clone(), field_ty.clone()));
             continue; // Skip offset calculation for var-data
+        }
+
+        // Check if this is a decimal field (mantissa + exponent)
+        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
+            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let exponent_val = field_attrs.exponent.unwrap();
+
+            let doc_comment = format!(
+                "decimal field '{}'\n - mantissa offset: {}\n - exponent offset: {} (constant: {})\n - encodedLength: 9\n - returns: (mantissa: i64, exponent: i8)",
+                field_name, offset, exponent_offset, exponent_val
+            );
+
+            let method = quote! {
+                #[doc = #doc_comment]
+                #[inline]
+                pub fn #field_name(&self) -> (i64, i8) {
+                    let mantissa_offset = self.offset + #offset;
+                    let exponent_offset = self.offset + #exponent_offset;
+                    let mantissa = self.get_buf().get_i64_at(mantissa_offset);
+                    let exponent = self.get_buf().get_i8_at(exponent_offset);
+                    (mantissa, exponent)
+                }
+            };
+
+            field_methods.push(method);
+            continue;
         }
 
         let offset = offset_calc

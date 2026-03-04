@@ -1,0 +1,17 @@
+[package]
+name = "tcp_ca"
+version = "0.0.0"
+edition.workspace = true
+authors = ["Daniel Müller <deso@posteo.net>"]
+license = "LGPL-2.1-only OR BSD-2-Clause"
+
+[build-dependencies]
+libbpf-cargo = { path = "../../libbpf-cargo" }
+vmlinux = { version = "0.0", git = "https://github.com/libbpf/vmlinux.h.git", rev = "83a228cf37fc65f2d14e4896a04922b5ee531a94" }
+
+[dependencies]
+clap = { version = "4.0.32", features = ["derive"] }
+# We rename the `libbpf-rs` dependency here to illustrate how skeleton creation
+# works with that.
+the-original-libbpf-rs = { path = "../../libbpf-rs", package = "libbpf-rs" }
+libc = "0.2"
