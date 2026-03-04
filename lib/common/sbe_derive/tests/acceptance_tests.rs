@@ -2,8 +2,8 @@
 //!
 //! This test suite validates the implementation against the plan requirements.
 
-use sbe_derive::{SbeDecode, SbeEncode, SbeEnum};
-use sbe::{ReadBuf, WriteBuf};
+use sbe_derive::{SbeDecode, SbeEncode};
+use sbe::{ReadBuf, WriteBuf, SbeMessage};
 
 /// Test message header format (8 bytes: blockLength + templateId + schemaId + version)
 #[test]
@@ -124,19 +124,63 @@ fn test_var_data_encode_decode() {
     }
 }
 
-/// Placeholder test for Repeating Groups feature
+/// Test repeating groups encoding/decoding
 ///
-/// This test documents the expected API for repeating groups.
-/// Currently not implemented because:
-/// 1. WriteBuf/ReadBuf API doesn't support direct buffer access for sub-encoders
-/// 2. Requires API enhancement to support nested encoder/decoder creation
-///
-/// Implementation blocked by: WriteBuf/ReadBuf needs Index trait or as_mut_slice() method
+/// Group entry type
+#[derive(SbeEncode, SbeDecode, Debug, Clone, PartialEq)]
+#[sbe(template_id = 301, schema_id = 1, version = 1)]
+struct BidLevel {
+    #[sbe(id = 0)]
+    price: u64,
+    #[sbe(id = 1)]
+    quantity: u64,
+}
+
+/// Parent message with repeating group
+#[derive(SbeEncode, SbeDecode)]
+#[sbe(template_id = 300, schema_id = 1, version = 1)]
+struct OrderBook {
+    #[sbe(id = 0)]
+    symbol_id: u64,
+    #[sbe(id = 1)]
+    bids: Vec<BidLevel>,
+}
+
 #[test]
-#[ignore = "Repeating groups blocked by WriteBuf/ReadBuf API limitations"]
 fn test_repeating_groups_encode_decode() {
-    // This test is a placeholder documenting the expected API.
-    // Implementation requires WriteBuf/ReadBuf API enhancement.
+    use sbe::{ReadBuf, WriteBuf};
+
+    let mut buffer = vec![0u8; 1024];
+    let write_buf = WriteBuf::new(&mut buffer);
+
+    // Encode with 3 bid levels
+    let bids = vec![
+        BidLevel { price: 50000, quantity: 100 },
+        BidLevel { price: 49900, quantity: 200 },
+        BidLevel { price: 49800, quantity: 300 },
+    ];
+
+    let mut encoder = OrderBookEncoder::default().wrap(write_buf, 0);
+    encoder.symbol_id(12345);
+    encoder.bids(&bids);
+    drop(encoder);
+
+    // Decode and verify
+    let read_buf = ReadBuf::new(&buffer);
+    let decoder = OrderBookDecoder::default().wrap(
+        read_buf,
+        0,
+        order_book_encoder::SBE_BLOCK_LENGTH,
+        0,
+    );
+
+    assert_eq!(decoder.symbol_id(), 12345);
+    let decoded_bids = decoder.bids();
+    assert_eq!(decoded_bids.len(), 3);
+    assert_eq!(decoded_bids[0].price, 50000);
+    assert_eq!(decoded_bids[0].quantity, 100);
+    assert_eq!(decoded_bids[1].price, 49900);
+    assert_eq!(decoded_bids[2].quantity, 300);
 }
 
 /// Placeholder test for Nested Messages feature

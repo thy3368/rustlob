@@ -239,6 +239,44 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         field_methods.push(method);
     }
 
+    // Generate repeating group methods (appended after var-data)
+    for (group_field_name, group_field_ty) in &group_fields {
+        let inner_ty = TypeMapper::vec_inner_type(group_field_ty)
+            .ok_or_else(|| syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group"))?;
+
+        let doc_comment = format!("repeating group field '{}'", group_field_name);
+        let inner_ty_str = quote!(#inner_ty).to_string();
+        let encoder_module = quote::format_ident!("{}_encoder", to_snake_case(&inner_ty_str));
+
+        let method = quote! {
+            #[doc = #doc_comment]
+            #[inline]
+            pub fn #group_field_name(&mut self, value: &[#inner_ty]) {
+                let offset = self.limit;
+
+                // Write group dimension header: blockLength (u16) + numInGroup (u16)
+                let block_length = #encoder_module::SBE_BLOCK_LENGTH;
+                let num_in_group = value.len() as u16;
+                self.get_buf_mut().put_u16_at(offset, block_length);
+                self.get_buf_mut().put_u16_at(offset + 2, num_in_group);
+
+                // Write each group entry
+                let mut entry_offset = offset + 4;
+                for entry in value {
+                    let mut entry_buf = [0u8; 1024];
+                    let encoded_len = entry.encode_into(&mut entry_buf).unwrap();
+                    self.get_buf_mut().put_slice_at(entry_offset, &entry_buf[..encoded_len]);
+                    entry_offset += encoded_len;
+                }
+
+                // Update limit
+                self.limit = entry_offset;
+            }
+        };
+
+        field_methods.push(method);
+    }
+
     // TODO: Generate repeating group methods (requires buffer access API enhancement)
     // Repeating groups are detected but not yet fully implemented due to WriteBuf/ReadBuf API limitations
 
@@ -649,6 +687,41 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
             field_methods.push(method);
         }
+    }
+
+    // Generate repeating group methods (read from after var-data)
+    for (group_field_name, group_field_ty) in &group_fields {
+        let inner_ty = TypeMapper::vec_inner_type(group_field_ty)
+            .ok_or_else(|| syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group"))?;
+
+        let doc_comment = format!("repeating group field '{}'", group_field_name);
+
+        let method = quote! {
+            #[doc = #doc_comment]
+            #[inline]
+            pub fn #group_field_name(&self) -> Vec<#inner_ty> {
+                let offset = self.limit;
+
+                // Read group dimension header: blockLength (u16) + numInGroup (u16)
+                let block_length = self.get_buf().get_u16_at(offset) as usize;
+                let num_in_group = self.get_buf().get_u16_at(offset + 2) as usize;
+
+                // Read each group entry
+                let mut entries = Vec::with_capacity(num_in_group);
+                let mut entry_offset = offset + 4;
+
+                for _ in 0..num_in_group {
+                    let entry_buf = self.get_buf().get_slice_at(entry_offset, block_length);
+                    let entry = #inner_ty::decode_from(entry_buf).unwrap();
+                    entry_offset += block_length;
+                    entries.push(entry);
+                }
+
+                entries
+            }
+        };
+
+        field_methods.push(method);
     }
 
     // TODO: Generate repeating group methods (requires buffer access API enhancement)
