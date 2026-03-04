@@ -136,13 +136,15 @@ The SBE derive macro implementation has successfully passed all acceptance crite
 
 #### 2.4 Nested Messages
 - **Status**: ⚠️ PARTIAL IMPLEMENTATION
-- **Tests**: Example code exists (`examples/nested_messages.rs`)
+- **Tests**: ❌ NO WORKING TESTS - `examples/nested_messages.rs` is a **conceptual example only** (prints documentation, no actual encoding/decoding)
 - **Evidence**:
   - Module `nested.rs` contains `is_nested_message`, `generate_nested_encoder_call`, and `generate_nested_decoder_call` functions
   - Functions exist but not called from `codegen.rs`
   - Infrastructure present but not integrated
+  - Example file only demonstrates the concept with println statements, no actual nested field implementation
 - **Action Required**:
   - Integrate nested message generation into `codegen.rs`
+  - Create actual working example with nested struct fields
   - Add integration test for nested struct encoding/decoding
   - Remove unused function warnings
 
