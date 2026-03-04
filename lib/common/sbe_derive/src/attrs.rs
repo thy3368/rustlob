@@ -33,6 +33,7 @@ pub struct SbeFieldAttrs {
     pub mantissa_type: Option<String>,
     pub exponent: Option<i8>,
     pub length_field: Option<String>,
+    pub time_type: Option<String>,
 }
 
 impl SbeContainerAttrs {
@@ -168,6 +169,11 @@ impl SbeFieldAttrs {
                     let value: Lit = meta.value()?.parse()?;
                     if let Lit::Str(lit_str) = value {
                         result.length_field = Some(lit_str.value());
+                    }
+                } else if meta.path.is_ident("time_type") {
+                    let value: Lit = meta.value()?.parse()?;
+                    if let Lit::Str(lit_str) = value {
+                        result.time_type = Some(lit_str.value());
                     }
                 }
                 Ok(())
