@@ -370,3 +370,77 @@ fn test_decimal_types_encode_decode() {
     // Offset 25:    quantity.exponent (i8)
     // Total block length: 26 bytes
 }
+
+/// Placeholder test for Time Types feature
+///
+/// This test demonstrates the expected API for timestamp encoding.
+/// Currently ignored because:
+/// 1. Time type representation not implemented
+/// 2. No support for UTC timestamp encoding
+/// 3. Missing #[sbe(timestamp)] attribute parsing
+///
+/// Implementation requirements:
+/// - Support timestamp types with configurable time units
+/// - Encode as u64 nanoseconds since Unix epoch (UTC)
+/// - Generate accessor methods that return timestamp wrapper type
+/// - Provide conversion from/to standard time types (SystemTime, DateTime)
+/// - Support different time units (nanos, micros, millis, seconds)
+///
+/// Wire format: [timestamp: 8 bytes (u64)] - nanoseconds since Unix epoch
+/// Example: 2024-01-01 00:00:00 UTC → 1704067200000000000 nanoseconds
+/// Time unit conversion handled by wrapper type
+#[test]
+#[ignore = "Time types (UTC timestamp encoding) not yet implemented"]
+fn test_time_types_encode_decode() {
+    // Expected schema definition
+    #[allow(dead_code)]
+    #[derive(SbeEncode, SbeDecode)]
+    #[sbe(template_id = 600, schema_id = 1, version = 1)]
+    struct OrderEvent {
+        #[sbe(id = 0)]
+        order_id: u64,
+
+        // Timestamp field with nanosecond precision
+        #[sbe(id = 1, timestamp, unit = "nanosecond")]
+        created_at: Timestamp,
+
+        // Timestamp field with millisecond precision
+        #[sbe(id = 2, timestamp, unit = "millisecond")]
+        updated_at: Timestamp,
+    }
+
+    // Expected encoding workflow:
+    // let mut buffer = vec![0u8; 1024];
+    // let write_buf = WriteBuf::new(&mut buffer);
+    //
+    // let mut encoder = OrderEventEncoder::default().wrap(write_buf, 0);
+    // encoder.order_id(789);
+    //
+    // // Encode timestamp in nanoseconds
+    // encoder.created_at(Timestamp::from_nanos(1704067200000000000));
+    //
+    // // Encode timestamp in milliseconds (auto-converted to nanos)
+    // encoder.updated_at(Timestamp::from_millis(1704067200000));
+    // drop(encoder);
+
+    // Expected decoding workflow:
+    // let read_buf = ReadBuf::new(&buffer);
+    // let decoder = OrderEventDecoder::default().wrap(
+    //     read_buf, 0, order_event_encoder::SBE_BLOCK_LENGTH, 0
+    // );
+    //
+    // assert_eq!(decoder.order_id(), 789);
+    //
+    // let created_at = decoder.created_at();
+    // assert_eq!(created_at.as_nanos(), 1704067200000000000);
+    //
+    // let updated_at = decoder.updated_at();
+    // assert_eq!(updated_at.as_millis(), 1704067200000);
+    // assert_eq!(updated_at.as_nanos(), 1704067200000000000);
+
+    // Wire format verification:
+    // Offset 0-7:   order_id (u64)
+    // Offset 8-15:  created_at (u64 nanoseconds)
+    // Offset 16-23: updated_at (u64 nanoseconds)
+    // Total block length: 24 bytes
+}
