@@ -8,11 +8,9 @@ use syn::{parse_macro_input, DeriveInput};
 
 mod attrs;
 mod codegen;
-mod decimal;
 mod enums;
 mod groups;
 mod nested;
-mod time_types;
 mod types;
 mod xml_schema;
 

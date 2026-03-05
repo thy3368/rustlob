@@ -185,17 +185,81 @@ fn test_repeating_groups_encode_decode() {
 
 /// Test nested messages (composite types) encoding/decoding
 ///
-/// Composite types are encoded inline in the parent message block.
-/// Wire format: [trade_id: 8 bytes][price: 8 bytes][quantity: 8 bytes][timestamp: 8 bytes]
-/// Total block length: 32 bytes
+/// NOTE: Composite types are currently not fully supported due to WriteBuf API limitations.
+/// This test is marked as ignored until the implementation is complete.
+#[derive(SbeEncode, SbeDecode)]
+#[sbe(template_id = 401, schema_id = 1, version = 1)]
+struct PriceQuantity {
+    #[sbe(id = 0)]
+    price: u64,
+    #[sbe(id = 1)]
+    quantity: u64,
+}
+
+#[derive(SbeEncode, SbeDecode)]
+#[sbe(template_id = 400, schema_id = 1, version = 1)]
+struct TradeReport {
+    #[sbe(id = 0)]
+    trade_id: u64,
+    #[sbe(id = 1, composite)]
+    price_qty: PriceQuantity,
+    #[sbe(id = 2)]
+    timestamp: u64,
+}
+
 #[test]
-#[ignore = "Nested messages (composite types) not yet implemented - requires complex offset calculation"]
+#[ignore = "Composite types not yet fully implemented - requires WriteBuf API enhancement"]
 fn test_nested_messages_encode_decode() {
-    // Composite types require knowing the size of nested structs at proc-macro compile time,
-    // which is not possible without parsing the nested type's definition.
-    // This would require significant architectural changes to the offset calculator.
+    // TODO: Implement composite type support
+    // The fundamental issue is that WriteBuf doesn't implement Copy or Clone because it
+    // contains a mutable reference (&'a mut [u8]), making it impossible to share the buffer
+    // between parent and nested encoders without complex lifetime management.
     //
-    // Workaround: Users can manually flatten composite fields into the parent struct.
+    // Expected API (once implemented):
+    //
+    // use sbe::{ReadBuf, WriteBuf};
+    //
+    // let mut buffer = vec![0u8; 1024];
+    // let write_buf = WriteBuf::new(&mut buffer);
+    //
+    // // Encode with nested composite type
+    // let mut encoder = TradeReportEncoder::default().wrap(write_buf, 0);
+    // encoder.trade_id(123456);
+    //
+    // // Access nested encoder for composite field
+    // let mut price_qty_encoder = encoder.price_qty();
+    // price_qty_encoder.price(50000);
+    // price_qty_encoder.quantity(100);
+    // drop(price_qty_encoder);
+    //
+    // encoder.timestamp(1234567890);
+    // drop(encoder);
+    //
+    // // Decode and verify
+    // let read_buf = ReadBuf::new(&buffer);
+    // let decoder = TradeReportDecoder::default().wrap(
+    //     read_buf,
+    //     0,
+    //     trade_report_encoder::SBE_BLOCK_LENGTH,
+    //     0,
+    // );
+    //
+    // assert_eq!(decoder.trade_id(), 123456);
+    //
+    // // Access nested decoder for composite field
+    // let price_qty_decoder = decoder.price_qty();
+    // assert_eq!(price_qty_decoder.price(), 50000);
+    // assert_eq!(price_qty_decoder.quantity(), 100);
+    //
+    // assert_eq!(decoder.timestamp(), 1234567890);
+    //
+    // // Verify wire format
+    // // Offset 0-7:   trade_id (u64) = 123456
+    // // Offset 8-15:  price_qty.price (u64) = 50000
+    // // Offset 16-23: price_qty.quantity (u64) = 100
+    // // Offset 24-31: timestamp (u64) = 1234567890
+    // // Total block length: 32 bytes
+    // assert_eq!(trade_report_encoder::SBE_BLOCK_LENGTH, 32);
 }
 
 /// Test decimal types encoding/decoding (mantissa + exponent)

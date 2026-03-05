@@ -5,14 +5,22 @@
 
 use ::core::convert::TryInto;
 
-pub mod error;
-pub mod message;
+pub mod codec;
 pub mod message_header_codec;
 pub mod pool;
+pub mod sbe_types;
+pub mod time_types;
 
-pub use error::SbeError;
-pub use message::SbeMessage;
+// 标准类型的 SbeEncode/SbeDecode 实现
+mod impls;
+
+// 重新导出核心 trait
+pub use codec::error::SbeError;
 pub use pool::{BufferPool, PooledBuffer};
+// 重新导出 SBE 类型
+pub use sbe_types::{Decimal, Timestamp};
+// 重新导出简单编解码器
+pub use codec::simple_codec::{CodecError, SimpleDecoder, SimpleEncoder};
 
 pub const SBE_SCHEMA_ID: u16 = 1;
 pub const SBE_SCHEMA_VERSION: u16 = 0;
@@ -123,6 +131,16 @@ impl<'a> ReadBuf<'a> {
     }
 
     #[inline]
+    pub fn get_i128_at(&self, index: usize) -> i128 {
+        i128::from_le_bytes(Self::get_bytes_at(self.data, index))
+    }
+
+    #[inline]
+    pub fn get_u128_at(&self, index: usize) -> u128 {
+        u128::from_le_bytes(Self::get_bytes_at(self.data, index))
+    }
+
+    #[inline]
     pub fn get_f32_at(&self, index: usize) -> f32 {
         f32::from_le_bytes(Self::get_bytes_at(self.data, index))
     }
@@ -133,7 +151,7 @@ impl<'a> ReadBuf<'a> {
     }
 
     #[inline]
-    pub fn get_slice_at(&self, index: usize, len: usize) -> &[u8] {
+    pub fn get_slice_at(&self, index: usize, len: usize) -> &'a [u8] {
         &self.data[index..index + len]
     }
 }
@@ -191,6 +209,16 @@ impl<'a> WriteBuf<'a> {
     #[inline]
     pub fn put_u64_at(&mut self, index: usize, value: u64) {
         self.put_bytes_at(index, &u64::to_le_bytes(value));
+    }
+
+    #[inline]
+    pub fn put_i128_at(&mut self, index: usize, value: i128) {
+        self.put_bytes_at(index, &i128::to_le_bytes(value));
+    }
+
+    #[inline]
+    pub fn put_u128_at(&mut self, index: usize, value: u128) {
+        self.put_bytes_at(index, &u128::to_le_bytes(value));
     }
 
     #[inline]

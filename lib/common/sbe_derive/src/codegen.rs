@@ -55,6 +55,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let mut field_methods = Vec::new();
     let mut var_data_fields = Vec::new();
     let mut group_fields = Vec::new();
+    let mut composite_fields = Vec::new(); // Track composite fields for offset calculation
 
     // Process fixed-size fields
     for field in fields {
@@ -102,17 +103,77 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             continue;
         }
 
-        // Skip composite fields - not yet implemented due to offset calculation complexity
+        // Handle composite fields (nested structs)
+        // TODO: Composite types not yet fully implemented - requires WriteBuf API enhancement
+        // The fundamental issue is that WriteBuf doesn't implement Copy or Clone because it
+        // contains a mutable reference, making it impossible to share the buffer between
+        // parent and nested encoders without complex lifetime management.
         if field_attrs.composite {
-            return Err(syn::Error::new_spanned(
-                field,
-                "Composite types not yet supported - cannot determine nested struct size at compile time"
-            ));
+            let inner_ty_str = quote!(#field_ty).to_string();
+            let encoder_module = quote::format_ident!("{}_encoder", to_snake_case(&inner_ty_str));
+
+            // Track this composite field for offset calculation of subsequent fields
+            let base_offset = offset_calc.total_size();
+            composite_fields.push((base_offset, encoder_module.clone()));
+
+            // Skip method generation - composite fields are not yet supported
+            continue;
+        }
+
+        // Check if this is a decimal field (mantissa + exponent)
+        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
+            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let exponent_val = field_attrs.exponent.unwrap();
+
+            // Generate offset expressions including composite fields
+            let offset_expr = if composite_fields.is_empty() {
+                quote! { #offset }
+            } else {
+                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+            };
+
+            let exponent_offset_expr = if composite_fields.is_empty() {
+                quote! { #exponent_offset }
+            } else {
+                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                quote! { #exponent_offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+            };
+
+            let doc_comment = format!(
+                "decimal field '{}'\n - mantissa offset: {}\n - exponent offset: {} (constant: {})\n - encodedLength: 9",
+                field_name, offset, exponent_offset, exponent_val
+            );
+
+            let method = quote! {
+                #[doc = #doc_comment]
+                #[inline]
+                pub fn #field_name(&mut self, mantissa: i64, exponent: i8) {
+                    let mantissa_offset = self.offset + #offset_expr;
+                    let exponent_offset = self.offset + #exponent_offset_expr;
+                    self.get_buf_mut().put_i64_at(mantissa_offset, mantissa);
+                    self.get_buf_mut().put_i8_at(exponent_offset, exponent);
+                }
+            };
+
+            field_methods.push(method);
+            continue;
         }
 
         let offset = offset_calc
             .next_offset(field_ty)
             .ok_or_else(|| syn::Error::new_spanned(field_ty, "Unsupported field type"))?;
+
+        // Generate offset expression including composite fields
+        let offset_expr = if composite_fields.is_empty() {
+            quote! { #offset }
+        } else {
+            let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+            quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+        };
 
         let field_size = TypeMapper::type_size(field_ty)
             .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot determine field size"))?;
@@ -147,7 +208,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 #[doc = #doc_comment]
                 #[inline]
                 pub fn #field_name(&mut self, value: #field_ty) {
-                    let offset = self.offset + #offset;
+                    let offset = self.offset + #offset_expr;
                     match value {
                         Some(v) => self.get_buf_mut().#write_method(offset, v),
                         None => self.get_buf_mut().#write_method(offset, #null_value),
@@ -160,7 +221,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 #[doc = #doc_comment]
                 #[inline]
                 pub fn #field_name(&mut self, value: &#field_ty) {
-                    let offset = self.offset + #offset;
+                    let offset = self.offset + #offset_expr;
                     self.get_buf_mut().put_slice_at(offset, value);
                 }
             }
@@ -213,7 +274,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 #[inline]
                 pub fn #field_name(&mut self, value: #field_ty) {
                     #validation
-                    let offset = self.offset + #offset;
+                    let offset = self.offset + #offset_expr;
                     self.get_buf_mut().#write_method(offset, #value_expr);
                 }
             }
@@ -288,7 +349,15 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     // TODO: Generate repeating group methods (requires buffer access API enhancement)
     // Repeating groups are detected but not yet fully implemented due to WriteBuf/ReadBuf API limitations
 
-    let block_length = offset_calc.total_size() as u16;
+    // Calculate block length including composite fields
+    let base_block_length = offset_calc.total_size() as u16;
+    let block_length_expr = if composite_fields.is_empty() {
+        quote! { #base_block_length }
+    } else {
+        let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+        quote! { #base_block_length #(+ #composites::SBE_BLOCK_LENGTH)* }
+    };
+
     let template_id = container_attrs.template_id.unwrap_or(1);
     let schema_id = container_attrs.schema_id.unwrap_or(1);
     let version = container_attrs.version.unwrap_or(0);
@@ -301,6 +370,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
         // Skip constant fields
         if field_attrs.presence.as_deref() == Some("constant") {
+            return None;
+        }
+
+        // Skip composite fields - they must be encoded manually using nested encoders
+        if field_attrs.composite {
             return None;
         }
 
@@ -332,6 +406,11 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
         let field_name = field.ident.as_ref().unwrap();
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
+        // Skip composite fields - they must be decoded manually using nested decoders
+        if field_attrs.composite {
+            return None;
+        }
+
         // Decimal fields return tuples from decoder
         if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
             return Some(quote! { #field_name: decoder.#field_name(), });
@@ -358,14 +437,15 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let decoder_name = quote::format_ident!("{}Decoder", name);
     let decoder_module = quote::format_ident!("{}_decoder", to_snake_case(&name.to_string()));
 
-    let output = quote! {
+    // Generate encoder module
+    let encoder_module = quote! {
         pub use #module_name::#encoder_name;
 
         pub mod #module_name {
             use super::*;
             use sbe::{Writer, Encoder};
 
-            pub const SBE_BLOCK_LENGTH: u16 = #block_length;
+            pub const SBE_BLOCK_LENGTH: u16 = #block_length_expr;
             pub const SBE_TEMPLATE_ID: u16 = #template_id;
             pub const SBE_SCHEMA_ID: u16 = #schema_id;
             pub const SBE_SCHEMA_VERSION: u16 = #version;
@@ -405,6 +485,7 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                     self.offset = offset;
                     self.limit = limit;
                     self
+
                 }
 
                 #[inline]
@@ -429,35 +510,47 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 #(#field_methods)*
             }
         }
+    };
 
-        // Generate SbeMessage trait implementation
-        impl sbe::SbeMessage for #name {
-            fn encode_into(&self, buffer: &mut [u8]) -> Result<usize, sbe::SbeError> {
-                if buffer.len() < Self::max_encoded_length() {
-                    return Err(sbe::SbeError::BufferTooSmall {
-                        required: Self::max_encoded_length(),
-                        available: buffer.len(),
-                    });
+    // Only generate SbeMessage implementation for types without composite fields
+    let sbe_message_impl = if composite_fields.is_empty() {
+        quote! {
+            // Generate SbeMessage trait implementation
+            impl sbe::SbeMessage for #name {
+                fn encode_into(&self, buffer: &mut [u8]) -> Result<usize, sbe::SbeError> {
+                    if buffer.len() < Self::max_encoded_length() {
+                        return Err(sbe::SbeError::BufferTooSmall {
+                            required: Self::max_encoded_length(),
+                            available: buffer.len(),
+                        });
+                    }
+
+                    let write_buf = sbe::WriteBuf::new(buffer);
+                    let mut encoder = #encoder_name::default().wrap(write_buf, 0);
+                    #(#field_encodings)*
+                    Ok(encoder.encoded_length())
                 }
 
-                let write_buf = sbe::WriteBuf::new(buffer);
-                let mut encoder = #encoder_name::default().wrap(write_buf, 0);
-                #(#field_encodings)*
-                Ok(encoder.encoded_length())
-            }
+                fn decode_from(buffer: &[u8]) -> Result<Self, sbe::SbeError> {
+                    let read_buf = sbe::ReadBuf::new(buffer);
+                    let decoder = #decoder_module::#decoder_name::default().wrap(
+                        read_buf, 0, #module_name::SBE_BLOCK_LENGTH, 0
+                    );
+                    Ok(Self { #(#field_decodings)* })
+                }
 
-            fn decode_from(buffer: &[u8]) -> Result<Self, sbe::SbeError> {
-                let read_buf = sbe::ReadBuf::new(buffer);
-                let decoder = #decoder_module::#decoder_name::default().wrap(
-                    read_buf, 0, #module_name::SBE_BLOCK_LENGTH, 0
-                );
-                Ok(Self { #(#field_decodings)* })
-            }
-
-            fn max_encoded_length() -> usize {
-                #module_name::SBE_BLOCK_LENGTH as usize
+                fn max_encoded_length() -> usize {
+                    #module_name::SBE_BLOCK_LENGTH as usize
+                }
             }
         }
+    } else {
+        quote! {}
+    };
+
+    let output = quote! {
+        #encoder_module
+        #sbe_message_impl
     };
 
     Ok(output)
@@ -495,6 +588,7 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
     let mut field_methods = Vec::new();
     let mut var_data_fields = Vec::new();
     let mut group_fields = Vec::new();
+    let mut composite_fields = Vec::new(); // Track composite fields for offset calculation
 
     // Process fixed-size fields
     for field in fields {
@@ -514,6 +608,45 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             continue; // Skip offset calculation for var-data
         }
 
+        // Handle composite fields (nested structs)
+        if field_attrs.composite {
+            let inner_ty_str = quote!(#field_ty).to_string();
+            let decoder_module = quote::format_ident!("{}_decoder", to_snake_case(&inner_ty_str));
+            let decoder_name = quote::format_ident!("{}Decoder", inner_ty_str);
+
+            // Get current offset before the composite
+            let base_offset = offset_calc.total_size();
+
+            // Track this composite field for later offset calculations
+            composite_fields.push((base_offset, decoder_module.clone()));
+
+            // Generate offset expression including all previous composite fields
+            let offset_expr = if composite_fields.len() == 1 {
+                quote! { #base_offset }
+            } else {
+                // Include sizes of all previous composite fields
+                let prev_composites: Vec<_> = composite_fields.iter()
+                    .take(composite_fields.len() - 1)
+                    .map(|(_, module)| module)
+                    .collect();
+                quote! { #base_offset #(+ #prev_composites::SBE_BLOCK_LENGTH as usize)* }
+            };
+
+            let doc_comment = format!("composite field '{}' - inline decoding", field_name);
+
+            let method = quote! {
+                #[doc = #doc_comment]
+                #[inline]
+                pub fn #field_name(&self) -> #decoder_name<'a> {
+                    let offset = self.offset + #offset_expr;
+                    #decoder_name::default().wrap(self.buf, offset, #decoder_module::SBE_BLOCK_LENGTH, self.acting_version)
+                }
+            };
+
+            field_methods.push(method);
+            continue;
+        }
+
         // Check if this is a decimal field (mantissa + exponent)
         if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
             let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
@@ -521,6 +654,21 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
                 .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
             let exponent_val = field_attrs.exponent.unwrap();
+
+            // Generate offset expressions including composite fields
+            let offset_expr = if composite_fields.is_empty() {
+                quote! { #offset }
+            } else {
+                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+            };
+
+            let exponent_offset_expr = if composite_fields.is_empty() {
+                quote! { #exponent_offset }
+            } else {
+                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                quote! { #exponent_offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+            };
 
             let doc_comment = format!(
                 "decimal field '{}'\n - mantissa offset: {}\n - exponent offset: {} (constant: {})\n - encodedLength: 9\n - returns: (mantissa: i64, exponent: i8)",
@@ -531,8 +679,8 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                 #[doc = #doc_comment]
                 #[inline]
                 pub fn #field_name(&self) -> (i64, i8) {
-                    let mantissa_offset = self.offset + #offset;
-                    let exponent_offset = self.offset + #exponent_offset;
+                    let mantissa_offset = self.offset + #offset_expr;
+                    let exponent_offset = self.offset + #exponent_offset_expr;
                     let mantissa = self.get_buf().get_i64_at(mantissa_offset);
                     let exponent = self.get_buf().get_i8_at(exponent_offset);
                     (mantissa, exponent)
@@ -546,6 +694,14 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
         let offset = offset_calc
             .next_offset(field_ty)
             .ok_or_else(|| syn::Error::new_spanned(field_ty, "Unsupported field type"))?;
+
+        // Generate offset expression including composite fields
+        let offset_expr = if composite_fields.is_empty() {
+            quote! { #offset }
+        } else {
+            let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+            quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
+        };
 
         let is_optional = TypeMapper::is_optional(field_ty);
         let is_constant = field_attrs.presence.as_deref() == Some("constant");
@@ -597,7 +753,7 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                 #[doc = #doc_comment]
                 #[inline]
                 pub fn #field_name(&self) -> #field_ty {
-                    let value = self.get_buf().#read_method(self.offset + #offset);
+                    let value = self.get_buf().#read_method(self.offset + #offset_expr);
                     if value == #null_value {
                         None
                     } else {
@@ -615,7 +771,7 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                     #[inline]
                     pub fn #field_name(&self) -> #field_ty {
                         let mut result = [<#elem_ty>::default(); #len];
-                        let slice = self.get_buf().get_slice_at(self.offset + #offset, #len);
+                        let slice = self.get_buf().get_slice_at(self.offset + #offset_expr, #len);
                         result.copy_from_slice(slice);
                         result
                     }
@@ -633,15 +789,15 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             let value_expr = if let syn::Type::Path(type_path) = field_ty {
                 if let Some(segment) = type_path.path.segments.last() {
                     match segment.ident.to_string().as_str() {
-                        "bool" => quote! { self.get_buf().#read_method(self.offset + #offset) != 0 },
-                        "char" => quote! { self.get_buf().#read_method(self.offset + #offset) as char },
-                        _ => quote! { self.get_buf().#read_method(self.offset + #offset) },
+                        "bool" => quote! { self.get_buf().#read_method(self.offset + #offset_expr) != 0 },
+                        "char" => quote! { self.get_buf().#read_method(self.offset + #offset_expr) as char },
+                        _ => quote! { self.get_buf().#read_method(self.offset + #offset_expr) },
                     }
                 } else {
-                    quote! { self.get_buf().#read_method(self.offset + #offset) }
+                    quote! { self.get_buf().#read_method(self.offset + #offset_expr) }
                 }
             } else {
-                quote! { self.get_buf().#read_method(self.offset + #offset) }
+                quote! { self.get_buf().#read_method(self.offset + #offset_expr) }
             };
 
             let base_method = quote! {
@@ -735,7 +891,15 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
     // TODO: Generate repeating group methods (requires buffer access API enhancement)
     // Repeating groups are detected but not yet fully implemented due to WriteBuf/ReadBuf API limitations
 
-    let block_length = offset_calc.total_size() as u16;
+    // Calculate block length including composite fields
+    let base_block_length = offset_calc.total_size() as u16;
+    let block_length_expr = if composite_fields.is_empty() {
+        quote! { #base_block_length }
+    } else {
+        let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+        quote! { #base_block_length #(+ #composites::SBE_BLOCK_LENGTH)* }
+    };
+
     let template_id = container_attrs.template_id.unwrap_or(1);
     let schema_id = container_attrs.schema_id.unwrap_or(1);
     let version = container_attrs.version.unwrap_or(0);
@@ -747,7 +911,7 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             use super::*;
             use sbe::{Reader, Decoder, ActingVersion};
 
-            pub const SBE_BLOCK_LENGTH: u16 = #block_length;
+            pub const SBE_BLOCK_LENGTH: u16 = #block_length_expr;
             pub const SBE_TEMPLATE_ID: u16 = #template_id;
             pub const SBE_SCHEMA_ID: u16 = #schema_id;
             pub const SBE_SCHEMA_VERSION: u16 = #version;
