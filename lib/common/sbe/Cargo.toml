@@ -9,6 +9,7 @@ license.workspace = true
 default = ["std"]
 std = []
 alloc = []
+serde = ["dep:serde"]
 
 [dependencies]
 crossbeam = "0.8"
@@ -21,9 +22,3 @@ serde_json = "1.0"
 [[bench]]
 name = "sbe_vs_json"
 harness = false
-
-[features]
-default = ["std"]
-std = []
-alloc = []
-serde = ["dep:serde"]

@@ -4480,7 +4480,10 @@ checksum = "ece8e78b2f38ec51c51f5d475df0a7187ba5111b2a28bdc761ee05b075d40a71"
 name = "sbe"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "crossbeam",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

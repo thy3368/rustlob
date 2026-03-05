@@ -28,6 +28,7 @@ use crate::codec::codec::{SbeDecode, SbeDecoder, SbeEncode, SbeEncoder};
 /// // 实际值 = 5000012345678 × 10^(-8) = 50000.12345678
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Decimal {
     pub mantissa: i64,
     pub exponent: i8,
@@ -117,6 +118,7 @@ mod tests {
 /// let ts = Timestamp(1704067200000000000);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Timestamp(pub i64);
 
 impl Timestamp {

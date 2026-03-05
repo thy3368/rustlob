@@ -113,7 +113,8 @@
       "Bash(opencode models anthropic)",
       "Bash(opencode debug env)",
       "Bash(cargo expand:*)",
-      "Bash(git worktree:*)"
+      "Bash(git worktree:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
