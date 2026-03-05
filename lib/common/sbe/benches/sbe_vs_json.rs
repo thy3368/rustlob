@@ -51,6 +51,37 @@ fn bench_sbe_decode(c: &mut Criterion) {
     group.finish();
 }
 
+/// SBE 原地更新解码 benchmark (decode_into)
+fn bench_sbe_decode_into(c: &mut Criterion) {
+    let order = ComplexOrder::sample();
+    let mut buffer = vec![0u8; 4096];
+
+    // 预先编码
+    let write_buf = WriteBuf::new(&mut buffer);
+    let mut encoder = SimpleEncoder::new(write_buf);
+    order.sbe_encode(&mut encoder).unwrap();
+    let len = encoder.finish();
+
+    let mut group = c.benchmark_group("sbe_decode_into");
+    group.throughput(Throughput::Elements(1));
+
+    group.bench_function("ComplexOrder", |b| {
+        b.iter_custom(|iters| {
+            let mut reusable_order = ComplexOrder::sample();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let read_buf = ReadBuf::new(&buffer[..len]);
+                let mut decoder = SimpleDecoder::new(read_buf);
+                reusable_order.decode_into(&mut decoder).unwrap();
+                black_box(&reusable_order);
+            }
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
 /// SBE 完整往返 (编码 + 解码) benchmark
 fn bench_sbe_roundtrip(c: &mut Criterion) {
     let order = ComplexOrder::sample();
@@ -247,10 +278,52 @@ fn bench_size_comparison(c: &mut Criterion) {
     group.finish();
 }
 
+/// 对比 SBE decode vs decode_into 性能
+fn bench_decode_methods_comparison(c: &mut Criterion) {
+    let order = ComplexOrder::sample();
+    let mut buffer = vec![0u8; 4096];
+
+    // 预先编码
+    let write_buf = WriteBuf::new(&mut buffer);
+    let mut encoder = SimpleEncoder::new(write_buf);
+    order.sbe_encode(&mut encoder).unwrap();
+    let len = encoder.finish();
+
+    let mut group = c.benchmark_group("decode_methods_comparison");
+    group.throughput(Throughput::Elements(1));
+
+    // decode - 创建新对象
+    group.bench_function("decode (allocate)", |b| {
+        b.iter(|| {
+            let read_buf = ReadBuf::new(&buffer[..len]);
+            let mut decoder = SimpleDecoder::new(read_buf);
+            black_box(ComplexOrder::sbe_decode(&mut decoder).unwrap())
+        });
+    });
+
+    // decode_into - 复用对象
+    group.bench_function("decode_into (reuse)", |b| {
+        b.iter_custom(|iters| {
+            let mut reusable_order = ComplexOrder::sample();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let read_buf = ReadBuf::new(&buffer[..len]);
+                let mut decoder = SimpleDecoder::new(read_buf);
+                reusable_order.decode_into(&mut decoder).unwrap();
+                black_box(&reusable_order);
+            }
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_sbe_encode,
     bench_sbe_decode,
+    bench_sbe_decode_into,
     bench_sbe_roundtrip,
     bench_json_encode,
     bench_json_decode,
@@ -259,6 +332,7 @@ criterion_group!(
     bench_decode_comparison,
     bench_roundtrip_comparison,
     bench_size_comparison,
+    bench_decode_methods_comparison,
 );
 
 criterion_main!(benches);

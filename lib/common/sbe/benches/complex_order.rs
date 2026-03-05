@@ -287,9 +287,55 @@ impl SbeEncode for ComplexOrder {
     }
 }
 
+impl ComplexOrder {
+    /// 原地更新解码 - 零分配优化
+    ///
+    /// 复用现有对象的内存，避免创建新对象
+    pub fn decode_into<'de, D: SbeDecoder<'de>>(&mut self, decoder: &mut D) -> Result<(), D::Error> {
+        // 固定字段 - 直接赋值
+        self.order_id = decoder.decode_u64()?;
+        self.user_id = decoder.decode_u32()?;
+        self.sequence = decoder.decode_u16()?;
+        self.version = decoder.decode_u8()?;
+        self.priority = decoder.decode_i8()?;
+        self.fee_rate = decoder.decode_f32()?;
+        self.slippage_tolerance = decoder.decode_f64()?;
+        self.type_code = decoder.decode_char()?;
+        self.is_active = decoder.decode_bool()?;
+        self.price = Decimal::sbe_decode(decoder)?;
+        self.quantity = Decimal::sbe_decode(decoder)?;
+        self.stop_loss = Option::<PriceQuantity>::sbe_decode(decoder)?;
+        self.created_at = Timestamp::sbe_decode(decoder)?;
+        self.updated_at = Timestamp::sbe_decode(decoder)?;
+        self.side = OrderSide::sbe_decode(decoder)?;
+        self.position_side = Option::<PositionSide>::sbe_decode(decoder)?;
+        self.flags = OrderFlags::sbe_decode(decoder)?;
+        self.client_order_id = decoder.decode_array::<16>()?;
+
+        // 可变长度字段 - 使用swap复用capacity
+        let mut temp_symbol = String::sbe_decode(decoder)?;
+        std::mem::swap(&mut self.symbol, &mut temp_symbol);
+
+        let mut temp_note = Option::<String>::sbe_decode(decoder)?;
+        std::mem::swap(&mut self.note, &mut temp_note);
+
+        let mut temp_custom_data = decoder.decode_bytes()?;
+        std::mem::swap(&mut self.custom_data, &mut temp_custom_data);
+
+        // Vec<Fill> - 复用capacity
+        let count = decoder.decode_u16()? as usize;
+        self.fills.clear();
+        self.fills.reserve(count.saturating_sub(self.fills.capacity()));
+        for _ in 0..count {
+            self.fills.push(Fill::sbe_decode(decoder)?);
+        }
+
+        Ok(())
+    }
+}
+
 impl SbeDecode for ComplexOrder {
     fn sbe_decode<'de, D: SbeDecoder<'de>>(decoder: &mut D) -> Result<Self, D::Error> {
-        //todo 问题在于 解码时创建了新对象
         Ok(ComplexOrder {
             order_id: decoder.decode_u64()?,
             user_id: decoder.decode_u32()?,
