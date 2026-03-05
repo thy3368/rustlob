@@ -3,8 +3,6 @@
 #![allow(non_camel_case_types)]
 #![allow(ambiguous_glob_reexports)]
 
-use ::core::convert::TryInto;
-
 pub mod codec;
 pub mod message_header_codec;
 pub mod pool;
@@ -39,12 +37,6 @@ impl core::fmt::Display for SbeErr {
     }
 }
 impl std::error::Error for SbeErr {}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Either<L, R> {
-    Left(L),
-    Right(R),
-}
 
 pub trait Writer<'a>: Sized {
     fn get_buf_mut(&mut self) -> &mut WriteBuf<'a>;
