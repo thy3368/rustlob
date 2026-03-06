@@ -109,7 +109,11 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_derive/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/fixed_order_cmd/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

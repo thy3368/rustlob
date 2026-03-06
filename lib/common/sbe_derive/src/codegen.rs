@@ -40,15 +40,10 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 return Err(syn::Error::new_spanned(
                     input,
                     "SbeEncode only supports structs with named fields",
-                ))
+                ));
             }
         },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "SbeEncode only supports structs",
-            ))
-        }
+        _ => return Err(syn::Error::new_spanned(input, "SbeEncode only supports structs")),
     };
 
     let mut offset_calc = OffsetCalculator::new();
@@ -77,10 +72,13 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
         // Check if this is a decimal field (mantissa + exponent)
         if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
-            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
-            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64)).ok_or_else(|| {
+                syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset")
+            })?;
+            let exponent_offset =
+                offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
+                    syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
+                })?;
             let exponent_val = field_attrs.exponent.unwrap();
 
             let doc_comment = format!(
@@ -122,24 +120,29 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
         // Check if this is a decimal field (mantissa + exponent)
         if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
-            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
-            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64)).ok_or_else(|| {
+                syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset")
+            })?;
+            let exponent_offset =
+                offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
+                    syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
+                })?;
             let exponent_val = field_attrs.exponent.unwrap();
 
             // Generate offset expressions including composite fields
             let offset_expr = if composite_fields.is_empty() {
                 quote! { #offset }
             } else {
-                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                let composites: Vec<_> =
+                    composite_fields.iter().map(|(_, module)| module).collect();
                 quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
             };
 
             let exponent_offset_expr = if composite_fields.is_empty() {
                 quote! { #exponent_offset }
             } else {
-                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                let composites: Vec<_> =
+                    composite_fields.iter().map(|(_, module)| module).collect();
                 quote! { #exponent_offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
             };
 
@@ -310,8 +313,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
     // Generate repeating group methods (appended after var-data)
     for (group_field_name, group_field_ty) in &group_fields {
-        let inner_ty = TypeMapper::vec_inner_type(group_field_ty)
-            .ok_or_else(|| syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group"))?;
+        let inner_ty = TypeMapper::vec_inner_type(group_field_ty).ok_or_else(|| {
+            syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group")
+        })?;
 
         let doc_comment = format!("repeating group field '{}'", group_field_name);
         let inner_ty_str = quote!(#inner_ty).to_string();
@@ -363,76 +367,84 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let version = container_attrs.version.unwrap_or(0);
 
     // Generate field encodings for SbeMessage impl
-    let field_encodings = fields.iter().filter_map(|field| {
-        let field_name = field.ident.as_ref().unwrap();
-        let field_ty = &field.ty;
-        let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+    let field_encodings = fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field.ident.as_ref().unwrap();
+            let field_ty = &field.ty;
+            let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
-        // Skip constant fields
-        if field_attrs.presence.as_deref() == Some("constant") {
-            return None;
-        }
+            // Skip constant fields
+            if field_attrs.presence.as_deref() == Some("constant") {
+                return None;
+            }
 
-        // Skip composite fields - they must be encoded manually using nested encoders
-        if field_attrs.composite {
-            return None;
-        }
+            // Skip composite fields - they must be encoded manually using nested encoders
+            if field_attrs.composite {
+                return None;
+            }
 
-        // Decimal fields need to destructure tuple (mantissa, exponent)
-        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
-            return Some(quote! { encoder.#field_name(self.#field_name.0, self.#field_name.1); });
-        }
+            // Decimal fields need to destructure tuple (mantissa, exponent)
+            if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+                return Some(
+                    quote! { encoder.#field_name(self.#field_name.0, self.#field_name.1); },
+                );
+            }
 
-        // Handle repeating group fields
-        if TypeMapper::is_repeating_group(field_ty) {
-            return Some(quote! { encoder.#field_name(&self.#field_name); });
-        }
+            // Handle repeating group fields
+            if TypeMapper::is_repeating_group(field_ty) {
+                return Some(quote! { encoder.#field_name(&self.#field_name); });
+            }
 
-        // Handle variable-length fields
-        if TypeMapper::is_var_data(field_ty) {
-            return Some(quote! { encoder.#field_name(&self.#field_name); });
-        }
+            // Handle variable-length fields
+            if TypeMapper::is_var_data(field_ty) {
+                return Some(quote! { encoder.#field_name(&self.#field_name); });
+            }
 
-        // For array fields, pass by reference
-        if matches!(field_ty, syn::Type::Array(_)) {
-            Some(quote! { encoder.#field_name(&self.#field_name); })
-        } else {
-            Some(quote! { encoder.#field_name(self.#field_name); })
-        }
-    }).collect::<Vec<_>>();
+            // For array fields, pass by reference
+            if matches!(field_ty, syn::Type::Array(_)) {
+                Some(quote! { encoder.#field_name(&self.#field_name); })
+            } else {
+                Some(quote! { encoder.#field_name(self.#field_name); })
+            }
+        })
+        .collect::<Vec<_>>();
 
     // Generate field decodings for SbeMessage impl
-    let field_decodings = fields.iter().filter_map(|field| {
-        let field_name = field.ident.as_ref().unwrap();
-        let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
+    let field_decodings = fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field.ident.as_ref().unwrap();
+            let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
-        // Skip composite fields - they must be decoded manually using nested decoders
-        if field_attrs.composite {
-            return None;
-        }
+            // Skip composite fields - they must be decoded manually using nested decoders
+            if field_attrs.composite {
+                return None;
+            }
 
-        // Decimal fields return tuples from decoder
-        if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
-            return Some(quote! { #field_name: decoder.#field_name(), });
-        }
+            // Decimal fields return tuples from decoder
+            if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
+                return Some(quote! { #field_name: decoder.#field_name(), });
+            }
 
-        // Handle repeating group fields
-        if TypeMapper::is_repeating_group(&field.ty) {
-            return Some(quote! { #field_name: decoder.#field_name(), });
-        }
+            // Handle repeating group fields
+            if TypeMapper::is_repeating_group(&field.ty) {
+                return Some(quote! { #field_name: decoder.#field_name(), });
+            }
 
-        // Handle variable-length fields
-        if TypeMapper::is_var_data(&field.ty) {
-            return Some(quote! { #field_name: decoder.#field_name(), });
-        }
+            // Handle variable-length fields
+            if TypeMapper::is_var_data(&field.ty) {
+                return Some(quote! { #field_name: decoder.#field_name(), });
+            }
 
-        // For fields with sinceVersion, decoder returns Option<T>, need to unwrap_or_default
-        if field_attrs.since_version.is_some() {
-            Some(quote! { #field_name: decoder.#field_name().unwrap_or_default(), })
-        } else {
-            Some(quote! { #field_name: decoder.#field_name(), })
-        }
-    }).collect::<Vec<_>>();
+            // For fields with sinceVersion, decoder returns Option<T>, need to unwrap_or_default
+            if field_attrs.since_version.is_some() {
+                Some(quote! { #field_name: decoder.#field_name().unwrap_or_default(), })
+            } else {
+                Some(quote! { #field_name: decoder.#field_name(), })
+            }
+        })
+        .collect::<Vec<_>>();
 
     let decoder_name = quote::format_ident!("{}Decoder", name);
     let decoder_module = quote::format_ident!("{}_decoder", to_snake_case(&name.to_string()));
@@ -573,15 +585,10 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                 return Err(syn::Error::new_spanned(
                     input,
                     "SbeDecode only supports structs with named fields",
-                ))
+                ));
             }
         },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "SbeDecode only supports structs",
-            ))
-        }
+        _ => return Err(syn::Error::new_spanned(input, "SbeDecode only supports structs")),
     };
 
     let mut offset_calc = OffsetCalculator::new();
@@ -625,7 +632,8 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                 quote! { #base_offset }
             } else {
                 // Include sizes of all previous composite fields
-                let prev_composites: Vec<_> = composite_fields.iter()
+                let prev_composites: Vec<_> = composite_fields
+                    .iter()
                     .take(composite_fields.len() - 1)
                     .map(|(_, module)| module)
                     .collect();
@@ -649,24 +657,29 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
         // Check if this is a decimal field (mantissa + exponent)
         if field_attrs.mantissa_type.is_some() && field_attrs.exponent.is_some() {
-            let offset = offset_calc.next_offset(&syn::parse_quote!(i64))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset"))?;
-            let exponent_offset = offset_calc.next_offset(&syn::parse_quote!(i8))
-                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset"))?;
+            let offset = offset_calc.next_offset(&syn::parse_quote!(i64)).ok_or_else(|| {
+                syn::Error::new_spanned(field_ty, "Cannot calculate mantissa offset")
+            })?;
+            let exponent_offset =
+                offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
+                    syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
+                })?;
             let exponent_val = field_attrs.exponent.unwrap();
 
             // Generate offset expressions including composite fields
             let offset_expr = if composite_fields.is_empty() {
                 quote! { #offset }
             } else {
-                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                let composites: Vec<_> =
+                    composite_fields.iter().map(|(_, module)| module).collect();
                 quote! { #offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
             };
 
             let exponent_offset_expr = if composite_fields.is_empty() {
                 quote! { #exponent_offset }
             } else {
-                let composites: Vec<_> = composite_fields.iter().map(|(_, module)| module).collect();
+                let composites: Vec<_> =
+                    composite_fields.iter().map(|(_, module)| module).collect();
                 quote! { #exponent_offset #(+ #composites::SBE_BLOCK_LENGTH as usize)* }
             };
 
@@ -789,8 +802,12 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             let value_expr = if let syn::Type::Path(type_path) = field_ty {
                 if let Some(segment) = type_path.path.segments.last() {
                     match segment.ident.to_string().as_str() {
-                        "bool" => quote! { self.get_buf().#read_method(self.offset + #offset_expr) != 0 },
-                        "char" => quote! { self.get_buf().#read_method(self.offset + #offset_expr) as char },
+                        "bool" => {
+                            quote! { self.get_buf().#read_method(self.offset + #offset_expr) != 0 }
+                        }
+                        "char" => {
+                            quote! { self.get_buf().#read_method(self.offset + #offset_expr) as char }
+                        }
                         _ => quote! { self.get_buf().#read_method(self.offset + #offset_expr) },
                     }
                 } else {
@@ -855,8 +872,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
     // Generate repeating group methods (read from after var-data)
     for (group_field_name, group_field_ty) in &group_fields {
-        let inner_ty = TypeMapper::vec_inner_type(group_field_ty)
-            .ok_or_else(|| syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group"))?;
+        let inner_ty = TypeMapper::vec_inner_type(group_field_ty).ok_or_else(|| {
+            syn::Error::new_spanned(group_field_ty, "Invalid Vec type for repeating group")
+        })?;
 
         let doc_comment = format!("repeating group field '{}'", group_field_name);
 

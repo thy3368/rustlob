@@ -6,7 +6,6 @@
 //! - Composite - 嵌套结构体
 //! - Set/Bitset - 位集合
 
-
 // ============================================================================
 // Decimal 类型 - mantissa + exponent（符合 SBE 官方定义）
 // ============================================================================
@@ -71,10 +70,7 @@ impl SbeEncode for Decimal {
 
 impl SbeDecode for Decimal {
     fn sbe_decode<'de, D: SbeDecoder<'de>>(decoder: &mut D) -> Result<Self, D::Error> {
-        Ok(Decimal {
-            mantissa: decoder.decode_i64()?,
-            exponent: decoder.decode_i8()?,
-        })
+        Ok(Decimal { mantissa: decoder.decode_i64()?, exponent: decoder.decode_i8()? })
     }
 }
 
@@ -154,4 +150,3 @@ impl SbeDecode for Timestamp {
         Ok(Timestamp(decoder.decode_i64()?))
     }
 }
-

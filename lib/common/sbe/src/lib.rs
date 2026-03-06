@@ -8,12 +8,17 @@ pub mod message_header_codec;
 pub mod pool;
 pub mod sbe_types;
 pub mod time_types;
+pub mod sbe_message;
+pub mod zero_copy;
+
 
 // 标准类型的 SbeEncode/SbeDecode 实现
 mod impls;
 
 // 重新导出核心 trait
 pub use codec::error::SbeError;
+pub use sbe_message::SbeMessage;
+pub use zero_copy::ZeroCopyDecode;
 pub use pool::{BufferPool, PooledBuffer};
 // 重新导出 SBE 类型
 pub use sbe_types::{Decimal, Timestamp};

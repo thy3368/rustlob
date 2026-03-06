@@ -3,7 +3,6 @@
 //! 为 Rust 标准库类型提供 SbeEncode/SbeDecode 实现。
 //! 参考 serde 的 impls.rs 设计模式。
 
-
 // ============================================================================
 // 原始类型 (Primitive Types)
 // ============================================================================
@@ -138,11 +137,7 @@ impl<T: SbeDecode> SbeDecode for Option<T> {
     #[inline]
     fn sbe_decode<'de, D: SbeDecoder<'de>>(decoder: &mut D) -> Result<Self, D::Error> {
         let flag = decoder.decode_u8()?;
-        if flag == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(T::sbe_decode(decoder)?))
-        }
+        if flag == 0 { Ok(None) } else { Ok(Some(T::sbe_decode(decoder)?)) }
     }
 }
 

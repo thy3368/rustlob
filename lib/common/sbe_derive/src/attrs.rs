@@ -35,6 +35,8 @@ pub struct SbeFieldAttrs {
     pub length_field: Option<String>,
     pub time_type: Option<String>,
     pub composite: bool,
+    /// Size in bytes for custom types (used in SbeView for zero-copy decoding)
+    pub size: Option<usize>,
 }
 
 impl SbeContainerAttrs {
@@ -175,6 +177,11 @@ impl SbeFieldAttrs {
                     let value: Lit = meta.value()?.parse()?;
                     if let Lit::Str(lit_str) = value {
                         result.time_type = Some(lit_str.value());
+                    }
+                } else if meta.path.is_ident("size") {
+                    let value: Lit = meta.value()?.parse()?;
+                    if let Lit::Int(lit_int) = value {
+                        result.size = Some(lit_int.base10_parse()?);
                     }
                 } else if meta.path.is_ident("composite") {
                     result.composite = true;

@@ -295,7 +295,7 @@ impl SbeDecode for ComplexOrder {
             client_order_id: decoder.decode_array::<16>()?,
             symbol: String::sbe_decode(decoder)?,
             note: Option::<String>::sbe_decode(decoder)?,
-            custom_data: decoder.decode_bytes()?,
+            custom_data: decoder.decode_bytes()?.to_vec(),
             fills: {
                 let count = decoder.decode_u16()? as usize;
                 let mut fills = Vec::with_capacity(count);

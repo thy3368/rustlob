@@ -21,15 +21,10 @@ pub fn generate_xml_schema(input: &DeriveInput) -> Result<String> {
                 return Err(syn::Error::new_spanned(
                     input,
                     "XML generation only supports structs with named fields",
-                ))
+                ));
             }
         },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "XML generation only supports structs",
-            ))
-        }
+        _ => return Err(syn::Error::new_spanned(input, "XML generation only supports structs")),
     };
 
     let template_id = container_attrs.template_id.unwrap_or(1);

@@ -256,6 +256,8 @@ pub enum ContingencyType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 // todo String 应该变成 str?
+// todo 可以都用非装箱类型吗？
+
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对

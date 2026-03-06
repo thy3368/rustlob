@@ -2,8 +2,8 @@
 //!
 //! 提供基于 `WriteBuf` 和 `ReadBuf` 的简单编解码器实现。
 
-use crate::{ReadBuf, WriteBuf};
 use crate::codec::codec::{SbeDecoder, SbeEncoder};
+use crate::{ReadBuf, WriteBuf};
 
 /// 简单的编解码错误类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,12 +276,12 @@ impl<'a> SbeDecoder<'a> for SimpleDecoder<'a> {
         std::str::from_utf8(bytes).map_err(|_| CodecError)
     }
 
-    fn decode_bytes(&mut self) -> Result<Vec<u8>, Self::Error> {
+    fn decode_bytes(&mut self) -> Result<&'a [u8], Self::Error> {
         let len = self.buf.get_u16_at(self.offset) as usize;
         self.offset += 2;
         let bytes = self.buf.get_slice_at(self.offset, len);
         self.offset += len;
-        Ok(bytes.to_vec())
+        Ok(bytes)
     }
 
     fn decode_array<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {

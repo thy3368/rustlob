@@ -1,5 +1,6 @@
-use crossbeam::queue::ArrayQueue;
 use std::sync::Arc;
+
+use crossbeam::queue::ArrayQueue;
 
 pub struct BufferPool {
     pool: Arc<ArrayQueue<Vec<u8>>>,
@@ -16,13 +17,8 @@ impl BufferPool {
     }
 
     pub fn acquire(&self) -> PooledBuffer {
-        let buf = self.pool.pop()
-            .unwrap_or_else(|| vec![0u8; self.buffer_size]);
-        PooledBuffer {
-            buf,
-            pool: self.pool.clone(),
-            buffer_size: self.buffer_size,
-        }
+        let buf = self.pool.pop().unwrap_or_else(|| vec![0u8; self.buffer_size]);
+        PooledBuffer { buf, pool: self.pool.clone(), buffer_size: self.buffer_size }
     }
 }
 

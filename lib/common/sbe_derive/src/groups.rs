@@ -5,10 +5,7 @@ use quote::quote;
 
 /// Generate repeating group encoder
 #[allow(dead_code)]
-pub fn generate_group_encoder(
-    group_name: &syn::Ident,
-    group_fields: &[syn::Field],
-) -> TokenStream {
+pub fn generate_group_encoder(group_name: &syn::Ident, group_fields: &[syn::Field]) -> TokenStream {
     let encoder_name = quote::format_ident!("{}Encoder", group_name);
 
     // Calculate block length for group entries

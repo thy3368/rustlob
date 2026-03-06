@@ -4,7 +4,7 @@
 //! generation of SBE encoding/decoding code according to FIX SBE 2.0 specification.
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 mod attrs;
 mod codegen;
@@ -12,10 +12,12 @@ mod enums;
 mod groups;
 mod nested;
 mod types;
+mod view_codegen;
 mod xml_schema;
 
 use codegen::{generate_decoder, generate_encoder};
 use enums::generate_enum_impl;
+use view_codegen::generate_view;
 
 /// Derive macro for SBE encoding
 ///
@@ -88,6 +90,40 @@ pub fn derive_sbe_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     match generate_enum_impl(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Derive macro for zero-copy SBE view
+///
+/// Generates a view type that borrows from the input buffer without allocation.
+/// This is truly zero-copy - no heap allocation, no stack copy.
+///
+/// # Example
+/// ```ignore
+/// #[derive(SbeView)]
+/// #[sbe(template_id = 1, schema_id = 1, version = 0)]
+/// pub struct Trade {
+///     #[sbe(id = 0)]
+///     pub trade_id: u64,
+///     #[sbe(id = 1)]
+///     pub symbol: u8,
+///     #[sbe(id = 2)]
+///     pub price: f64,
+///     #[sbe(id = 3)]
+///     pub quantity: i32,
+/// }
+///
+/// // Usage - zero allocation!
+/// let view = TradeView::from_bytes(&buffer).unwrap();
+/// let trade_id = view.trade_id();  // Reads directly from buffer
+/// ```
+#[proc_macro_derive(SbeView, attributes(sbe))]
+pub fn derive_sbe_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match generate_view(&input) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }

@@ -115,7 +115,7 @@ pub trait SbeDecoder<'de> {
     fn decode_str(&mut self) -> Result<&'de str, Self::Error>;
 
     /// 解码可变长度字节数组（读取长度前缀）
-    fn decode_bytes(&mut self) -> Result<Vec<u8>, Self::Error>;
+    fn decode_bytes(&mut self) -> Result<&'de [u8], Self::Error>;
 
     // ===== 固定长度数组 =====
     /// 解码固定长度数组（无长度前缀）

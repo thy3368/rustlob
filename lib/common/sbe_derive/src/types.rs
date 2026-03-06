@@ -43,7 +43,9 @@ impl TypeMapper {
                     "Vec" => None, // Variable-length, no fixed size
                     "Option" => {
                         // For Option<T>, size is same as T (null value encoded in-place)
-                        if let syn::PathArguments::AngleBracketed(args) = &path.segments.last()?.arguments {
+                        if let syn::PathArguments::AngleBracketed(args) =
+                            &path.segments.last()?.arguments
+                        {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
                                 return Self::type_size(inner_ty);
                             }
@@ -55,11 +57,7 @@ impl TypeMapper {
             }
             Type::Array(arr) => {
                 // For arrays, multiply element size by length
-                if let syn::Expr::Lit(syn::ExprLit {
-                    lit: syn::Lit::Int(len),
-                    ..
-                }) = &arr.len
-                {
+                if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(len), .. }) = &arr.len {
                     let elem_size = Self::type_size(&arr.elem)?;
                     let array_len: usize = len.base10_parse().ok()?;
                     Some(elem_size * array_len)
@@ -139,7 +137,9 @@ impl TypeMapper {
                     "bool" => Some("put_u8_at"), // bool encoded as u8
                     "Option" => {
                         // For Option<T>, use the write method of T
-                        if let syn::PathArguments::AngleBracketed(args) = &path.segments.last()?.arguments {
+                        if let syn::PathArguments::AngleBracketed(args) =
+                            &path.segments.last()?.arguments
+                        {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
                                 return Self::write_method(inner_ty);
                             }
@@ -172,7 +172,9 @@ impl TypeMapper {
                     "bool" => Some("get_u8_at"), // bool decoded from u8
                     "Option" => {
                         // For Option<T>, use the read method of T
-                        if let syn::PathArguments::AngleBracketed(args) = &path.segments.last()?.arguments {
+                        if let syn::PathArguments::AngleBracketed(args) =
+                            &path.segments.last()?.arguments
+                        {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
                                 return Self::read_method(inner_ty);
                             }
@@ -218,7 +220,9 @@ impl TypeMapper {
             if let Some(segment) = path.segments.last() {
                 if segment.ident == "Vec" {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) = args.args.first() {
+                        if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) =
+                            args.args.first()
+                        {
                             if let Some(inner_seg) = inner_path.path.segments.last() {
                                 return inner_seg.ident == "u8";
                             }
@@ -236,7 +240,9 @@ impl TypeMapper {
             if let Some(segment) = path.segments.last() {
                 if segment.ident == "Vec" {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) = args.args.first() {
+                        if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) =
+                            args.args.first()
+                        {
                             if let Some(inner_seg) = inner_path.path.segments.last() {
                                 // Not u8, so it's a struct type
                                 return inner_seg.ident != "u8";
@@ -274,8 +280,19 @@ impl TypeMapper {
                 // Not a primitive type and not Option/Vec
                 !matches!(
                     ident.as_str(),
-                    "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64"
-                        | "bool" | "char" | "Option" | "Vec"
+                    "u8" | "u16"
+                        | "u32"
+                        | "u64"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "char"
+                        | "Option"
+                        | "Vec"
                 )
             } else {
                 false
@@ -317,7 +334,10 @@ impl OffsetCalculator {
         Some(offset)
     }
 
-    pub fn next_offset_with_size(&mut self, size_tokens: &proc_macro2::TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
+    pub fn next_offset_with_size(
+        &mut self,
+        size_tokens: &proc_macro2::TokenStream,
+    ) -> Result<proc_macro2::TokenStream, syn::Error> {
         let offset = self.current_offset;
         // For composite types, we can't know the size at compile time
         // So we return a symbolic offset and mark that we need to skip ahead
