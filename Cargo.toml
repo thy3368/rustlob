@@ -2,11 +2,48 @@ cargo-features = ["profile-rustflags"]
 
 [workspace]
 members = [
-
-    "lib/common/sbe_derive", "lib/common/fixed_order_cmd",
-]
-
-exclude = [
+    # lib/common
+    "lib/common/algo",
+    "lib/common/base_types",
+    "lib/common/cache_analyzer_derive",
+    "lib/common/cache_analyzer_types",
+    "lib/common/cqrs",
+    "lib/common/db_repo",
+    "lib/common/decimal",
+    "lib/common/diff",
+    "lib/common/entity_derive",
+    "lib/common/fixed_order_cmd",
+    "lib/common/fixed_point",
+    "lib/common/id_generator",
+    "lib/common/immutable_derive",
+    "lib/common/lob_repo",
+    "lib/common/repo_def",
+    "lib/common/rust_analyzer",
+    "lib/common/rust_queue",
+    "lib/common/sbe",
+    "lib/common/sbe_derive",
+    "lib/common/sequencer",
+    "lib/common/single_thread_derive",
+    "lib/common/vector_clock",
+    
+    # lib/core
+    "lib/core/exchange/prep",
+    
+    # app
+    "app/axum_server",
+    "app/client",
+    "app/pingora_gateway",
+    "app/websocket_sockudo",
+    "app/xdp_libbpf",
+    
+    # proc
+    "proc/operating/exchange/spot",
+    "proc/operating/exchange/derivatives",
+    "proc/operating/exchange/wallet",
+    "proc/operating/exchange/spot_market_data",
+    "proc/operating/push/push",
+    
+    # study
     "study/web3",
 ]
 

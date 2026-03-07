@@ -1,3 +1,5 @@
+use arrayvec::ArrayString;
+
 // 参考 Trading endpoints
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
@@ -278,7 +280,7 @@ pub struct NewOrderCmd {
     /// 价格
     price: Option<Price>,
     /// 用户自定义订单 ID
-    new_client_order_id: Option<String>,
+    new_client_order_id: Option<ArrayString<32>>,
     /// 策略 ID
     strategy_id: Option<i64>,
     /// 策略类型（不能小于 1000000）
@@ -1014,7 +1016,8 @@ pub struct NewOrderAck {
     /// 订单列表 ID（-1 表示不属于订单列表）
     order_list_id: i64,
     /// 用户自定义订单 ID
-    client_order_id: Option<String>,
+    /// 用户自定义订单 ID
+    client_order_id: Option<ArrayString<32>>,
     /// 交易时间戳
     transact_time: Timestamp,
 }

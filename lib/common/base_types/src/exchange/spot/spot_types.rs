@@ -1,3 +1,4 @@
+use arrayvec::ArrayString;
 use std::fmt;
 
 use diff::ChangeLogEntry;
@@ -783,7 +784,7 @@ pub struct SpotOrder {
     pub status: OrderStatus, // 订单状态 (1字节)
 
     // ===== 可选字段 =====
-    pub client_order_id: Option<String>, // 客户订单ID
+    pub client_order_id: Option<ArrayString<32>>, // 客户订单ID
 
     // ===== 订单来源（Phase 3：1字节）=====
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
@@ -1028,7 +1029,7 @@ impl SpotOrder {
         price: Price,
         quantity: Quantity,
         time_in_force: TimeInForce,
-        client_order_id: Option<String>,
+        client_order_id: Option<ArrayString<32>>,
         quote_order_qty: Option<Quantity>,
     ) -> Self {
         let timestamp = Timestamp::now_as_nanos();

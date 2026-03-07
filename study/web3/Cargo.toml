@@ -35,16 +35,6 @@ path = "src/mpt/main.rs"
 name = "zevm_demo"
 path = "src/zvem/main.rs"
 
-[[bin]]
-name = "boojum_demo"
-path = "src/boojum/demo.rs"
-
-
-[[bin]]
-name = "boojum_demo2"
-path = "src/boojum/demo_fixed.rs"
-
-
 [dependencies]
 tokio = { version = "1.48", features = ["full"] }
 libp2p = { version = "0.54", features = [
