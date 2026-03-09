@@ -1,6 +1,8 @@
-# Rust之从0-1低时延CEX：实体属性的可变与不可变
+# Rust之从0-1低时延CEX：吞吐量万恶之源，实体属性的可变与不可变
 
 ## 引言
+
+实体的可变 通常会对应到DB的锁，直接会影响系统的吞吐量，主要探索后续优化空间
 
 在高性能交易系统中，实体（Entity）的设计直接影响系统的性能、可维护性和正确性。本文探讨如何在实体设计中区分可变（Mutable）与不可变（Immutable）字段，以及这种区分带来的架构优势。
 
@@ -43,7 +45,7 @@ pub struct SpotOrder {
 
 ## 为什么要区分可变与不可变？
 
-### 1. 缓存局部性优化
+### 1. 缓存局部性优化 （单线程绑核 不存在）
 
 **问题**：CPU 缓存行（Cache Line）通常为 64 字节。当可变字段和不可变字段混杂时，更新可变字段会导致整个缓存行失效，影响不可变字段的读取性能。
 
@@ -60,7 +62,7 @@ pub trading_pair: TradingPair,
 pub state: ExecutionState,
 ```
 
-### 2. False Sharing 防护
+### 2. False Sharing 防护 （单线程绑核 不存在）
 
 **问题**：多核系统中，不同 CPU 核心同时访问同一缓存行的不同字段时，会导致缓存行在核心间频繁传递（False Sharing），严重影响性能。
 
@@ -134,9 +136,6 @@ pub struct SpotOrder {
 
 - ❌ 字段访问路径变长（`self.state.filled_qty`）
 
-```
-
-```
 
 ### 缓存行对齐
 
@@ -253,17 +252,6 @@ pub struct SpotOrder {
 - ✅ 缓存友好的内存布局
 - ✅ 持久化简单（单一结构体）
 
-### 字段访问变化
-
-```rust
-// 重构前
-self .filled_qty += qty;
-self .status = OrderStatus::Filled;
-
-// 重构后
-self .state.filled_qty += qty;
-self .state.status = OrderStatus::Filled;
-```
 
 ## 总结
 
