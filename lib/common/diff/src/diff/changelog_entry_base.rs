@@ -7,12 +7,25 @@
 /// - 使用基础类型：u64、u8、[u8; N]
 /// - 直接包含字段变更列表
 /// - 简单直观，易于使用
+/// - 支持乐观锁版本控制
+///
+/// # 版本控制（乐观锁）
+/// - old_version: 变更前的实体版本号（用于乐观锁验证）
+/// - new_version: 变更后的实体版本号
+/// - Created 事件: old_version=0, new_version=1
+/// - Updated 事件: old_version=N, new_version=N+1
+/// - Deleted 事件: old_version=N, new_version=N+1
 #[derive(Debug, Clone, PartialEq, Eq)]
+//todo entity_id 用 i64
 pub struct ChangeLogEntryBase {
     /// 变更时间戳（纳秒）
     pub timestamp: u64,
-    /// 变更序列号（用于排序）
+    /// 变更序列号（用于全局排序）
     pub sequence: u64,
+    /// 变更前的实体版本号（用于乐观锁验证）
+    pub old_version: u64,
+    /// 变更后的实体版本号
+    pub new_version: u64,
     /// 实体唯一标识符（固定32字节）
     pub entity_id: [u8; 32],
     /// 实体类型标签（用户自定义映射）
@@ -110,6 +123,8 @@ impl ChangeLogEntryBase {
     pub fn new(
         timestamp: u64,
         sequence: u64,
+        old_version: u64,
+        new_version: u64,
         entity_id: [u8; 32],
         entity_type: u8,
         change_type: u8,
@@ -117,11 +132,76 @@ impl ChangeLogEntryBase {
         Self {
             timestamp,
             sequence,
+            old_version,
+            new_version,
             entity_id,
             entity_type,
             change_type,
             field_changes: Vec::new(),
         }
+    }
+
+    /// 创建 Created 事件（old_version=0, new_version=1）
+    pub fn new_created(
+        timestamp: u64,
+        sequence: u64,
+        entity_id: [u8; 32],
+        entity_type: u8,
+    ) -> Self {
+        Self::new(timestamp, sequence, 0, 1, entity_id, entity_type, 0)
+    }
+
+    /// 创建 Updated 事件（需要指定版本转换）
+    pub fn new_updated(
+        timestamp: u64,
+        sequence: u64,
+        old_version: u64,
+        new_version: u64,
+        entity_id: [u8; 32],
+        entity_type: u8,
+    ) -> Self {
+        Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 1)
+    }
+
+    /// 创建 Deleted 事件（需要指定版本转换）
+    pub fn new_deleted(
+        timestamp: u64,
+        sequence: u64,
+        old_version: u64,
+        new_version: u64,
+        entity_id: [u8; 32],
+        entity_type: u8,
+    ) -> Self {
+        Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 2)
+    }
+
+    /// 验证版本号是否匹配（用于乐观锁）
+    ///
+    /// # 参数
+    /// - `expected_version`: 期望的当前版本号
+    ///
+    /// # 返回
+    /// - `true`: 版本匹配，可以应用此变更
+    /// - `false`: 版本冲突，不能应用此变更
+    pub fn verify_version(&self, expected_version: u64) -> bool {
+        self.old_version == expected_version
+    }
+
+    /// 检查是否存在版本冲突
+    ///
+    /// # 参数
+    /// - `current_version`: 当前实体的版本号
+    ///
+    /// # 返回
+    /// - `true`: 存在版本冲突
+    /// - `false`: 无版本冲突
+    pub fn is_version_conflict(&self, current_version: u64) -> bool {
+        self.old_version != current_version
+    }
+
+    /// 获取版本增量
+    pub fn version_delta(&self) -> i64 {
+        self.new_version as i64 - self.old_version as i64
     }
 
     /// 从字符串创建 entity_id
@@ -302,12 +382,17 @@ impl Default for FieldChangeSoa {
 /// - 缓存友好的内存布局
 /// - 支持 SIMD 批量操作
 /// - 高效的列式访问
+/// - 支持乐观锁版本控制
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeLogEntrySoa {
     /// 变更时间戳数组（纳秒）
     pub timestamps: Vec<u64>,
     /// 变更序列号数组（用于排序）
     pub sequences: Vec<u64>,
+    /// 变更前的实体版本号数组（用于乐观锁验证）
+    pub old_versions: Vec<u64>,
+    /// 变更后的实体版本号数组
+    pub new_versions: Vec<u64>,
     /// 实体唯一标识符数组（每个32字节）
     pub entity_ids: Vec<[u8; 32]>,
     /// 实体类型标签数组（用户自定义映射）
@@ -324,6 +409,8 @@ impl ChangeLogEntrySoa {
         Self {
             timestamps: Vec::new(),
             sequences: Vec::new(),
+            old_versions: Vec::new(),
+            new_versions: Vec::new(),
             entity_ids: Vec::new(),
             entity_types: Vec::new(),
             change_types: Vec::new(),
@@ -336,6 +423,8 @@ impl ChangeLogEntrySoa {
         Self {
             timestamps: Vec::with_capacity(capacity),
             sequences: Vec::with_capacity(capacity),
+            old_versions: Vec::with_capacity(capacity),
+            new_versions: Vec::with_capacity(capacity),
             entity_ids: Vec::with_capacity(capacity),
             entity_types: Vec::with_capacity(capacity),
             change_types: Vec::with_capacity(capacity),
@@ -348,6 +437,8 @@ impl ChangeLogEntrySoa {
         &mut self,
         timestamp: u64,
         sequence: u64,
+        old_version: u64,
+        new_version: u64,
         entity_id: [u8; 32],
         entity_type: u8,
         change_type: u8,
@@ -355,6 +446,8 @@ impl ChangeLogEntrySoa {
     ) {
         self.timestamps.push(timestamp);
         self.sequences.push(sequence);
+        self.old_versions.push(old_version);
+        self.new_versions.push(new_version);
         self.entity_ids.push(entity_id);
         self.entity_types.push(entity_type);
         self.change_types.push(change_type);
@@ -365,6 +458,8 @@ impl ChangeLogEntrySoa {
     pub fn push_entry(&mut self, entry: ChangeLogEntryBase) {
         self.timestamps.push(entry.timestamp);
         self.sequences.push(entry.sequence);
+        self.old_versions.push(entry.old_version);
+        self.new_versions.push(entry.new_version);
         self.entity_ids.push(entry.entity_id);
         self.entity_types.push(entry.entity_type);
         self.change_types.push(entry.change_type);
@@ -385,6 +480,8 @@ impl ChangeLogEntrySoa {
     pub fn clear(&mut self) {
         self.timestamps.clear();
         self.sequences.clear();
+        self.old_versions.clear();
+        self.new_versions.clear();
         self.entity_ids.clear();
         self.entity_types.clear();
         self.change_types.clear();
@@ -400,6 +497,8 @@ impl ChangeLogEntrySoa {
         Some(ChangeLogEntryBase {
             timestamp: self.timestamps[index],
             sequence: self.sequences[index],
+            old_version: self.old_versions[index],
+            new_version: self.new_versions[index],
             entity_id: self.entity_ids[index],
             entity_type: self.entity_types[index],
             change_type: self.change_types[index],
@@ -415,6 +514,16 @@ impl ChangeLogEntrySoa {
     /// 获取序列号切片（用于批量操作）
     pub fn sequences(&self) -> &[u64] {
         &self.sequences
+    }
+
+    /// 获取旧版本号切片（用于批量操作）
+    pub fn old_versions(&self) -> &[u64] {
+        &self.old_versions
+    }
+
+    /// 获取新版本号切片（用于批量操作）
+    pub fn new_versions(&self) -> &[u64] {
+        &self.new_versions
     }
 
     /// 获取实体 ID 切片（用于批量操作）
@@ -487,6 +596,8 @@ impl From<ChangeLogEntrySoa> for Vec<ChangeLogEntryBase> {
             .map(|i| ChangeLogEntryBase {
                 timestamp: soa.timestamps[i],
                 sequence: soa.sequences[i],
+                old_version: soa.old_versions[i],
+                new_version: soa.new_versions[i],
                 entity_id: soa.entity_ids[i],
                 entity_type: soa.entity_types[i],
                 change_type: soa.change_types[i],
@@ -503,10 +614,12 @@ mod tests {
     #[test]
     fn test_new_entry() {
         let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
-        let entry = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 0);
+        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
 
         assert_eq!(entry.timestamp, 1000);
         assert_eq!(entry.sequence, 1);
+        assert_eq!(entry.old_version, 0);
+        assert_eq!(entry.new_version, 1);
         assert_eq!(entry.entity_id_as_str().unwrap(), "order_123");
         assert_eq!(entry.entity_type, 1);
         assert_eq!(entry.change_type, 0);
@@ -517,17 +630,17 @@ mod tests {
     fn test_change_type_checks() {
         let entity_id = ChangeLogEntryBase::entity_id_from_str("test");
 
-        let created = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 0);
+        let created = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert!(created.is_created());
         assert!(!created.is_updated());
         assert!(!created.is_deleted());
 
-        let updated = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 1);
+        let updated = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
         assert!(!updated.is_created());
         assert!(updated.is_updated());
         assert!(!updated.is_deleted());
 
-        let deleted = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 2);
+        let deleted = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 2);
         assert!(!deleted.is_created());
         assert!(!deleted.is_updated());
         assert!(deleted.is_deleted());
@@ -536,7 +649,7 @@ mod tests {
     #[test]
     fn test_add_field_change() {
         let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
-        let mut entry = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 1);
+        let mut entry = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
         let field_change = FieldChange::new(
@@ -578,7 +691,7 @@ mod tests {
         assert_eq!(&id2[..], &long_str.as_bytes()[..32]);
 
         let entity_id = ChangeLogEntryBase::entity_id_from_str("test_order_123");
-        let entry = ChangeLogEntryBase::new(1000, 1, entity_id, 1, 0);
+        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert_eq!(entry.entity_id_as_str().unwrap(), "test_order_123");
     }
 }
