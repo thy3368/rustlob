@@ -16,7 +16,6 @@
 /// - Updated 事件: old_version=N, new_version=N+1
 /// - Deleted 事件: old_version=N, new_version=N+1
 #[derive(Debug, Clone, PartialEq, Eq)]
-//todo entity_id 用 i64
 pub struct ChangeLogEntryBase {
     /// 变更时间戳（纳秒）
     pub timestamp: u64,
@@ -26,8 +25,8 @@ pub struct ChangeLogEntryBase {
     pub old_version: u64,
     /// 变更后的实体版本号
     pub new_version: u64,
-    /// 实体唯一标识符（固定32字节）
-    pub entity_id: [u8; 32],
+    /// 实体唯一标识符（i64）
+    pub entity_id: i64,
     /// 实体类型标签（用户自定义映射）
     pub entity_type: u8,
     /// 变更类型标签（0=Created, 1=Updated, 2=Deleted）
@@ -125,7 +124,7 @@ impl ChangeLogEntryBase {
         sequence: u64,
         old_version: u64,
         new_version: u64,
-        entity_id: [u8; 32],
+        entity_id: i64,
         entity_type: u8,
         change_type: u8,
     ) -> Self {
@@ -145,7 +144,7 @@ impl ChangeLogEntryBase {
     pub fn new_created(
         timestamp: u64,
         sequence: u64,
-        entity_id: [u8; 32],
+        entity_id: i64,
         entity_type: u8,
     ) -> Self {
         Self::new(timestamp, sequence, 0, 1, entity_id, entity_type, 0)
@@ -157,7 +156,7 @@ impl ChangeLogEntryBase {
         sequence: u64,
         old_version: u64,
         new_version: u64,
-        entity_id: [u8; 32],
+        entity_id: i64,
         entity_type: u8,
     ) -> Self {
         Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 1)
@@ -169,7 +168,7 @@ impl ChangeLogEntryBase {
         sequence: u64,
         old_version: u64,
         new_version: u64,
-        entity_id: [u8; 32],
+        entity_id: i64,
         entity_type: u8,
     ) -> Self {
         Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 2)
@@ -204,19 +203,14 @@ impl ChangeLogEntryBase {
         self.new_version as i64 - self.old_version as i64
     }
 
-    /// 从字符串创建 entity_id
-    pub fn entity_id_from_str(s: &str) -> [u8; 32] {
-        let mut id = [0u8; 32];
-        let bytes = s.as_bytes();
-        let len = bytes.len().min(32);
-        id[..len].copy_from_slice(&bytes[..len]);
-        id
+    /// 从字符串解析 entity_id
+    pub fn entity_id_from_str(s: &str) -> Result<i64, std::num::ParseIntError> {
+        s.parse::<i64>()
     }
 
     /// 获取 entity_id 的字符串表示
-    pub fn entity_id_as_str(&self) -> Result<&str, std::str::Utf8Error> {
-        let end = self.entity_id.iter().position(|&b| b == 0).unwrap_or(32);
-        std::str::from_utf8(&self.entity_id[..end])
+    pub fn entity_id_as_str(&self) -> String {
+        self.entity_id.to_string()
     }
 
     /// 添加字段变更
@@ -393,8 +387,8 @@ pub struct ChangeLogEntrySoa {
     pub old_versions: Vec<u64>,
     /// 变更后的实体版本号数组
     pub new_versions: Vec<u64>,
-    /// 实体唯一标识符数组（每个32字节）
-    pub entity_ids: Vec<[u8; 32]>,
+    /// 实体唯一标识符数组（i64）
+    pub entity_ids: Vec<i64>,
     /// 实体类型标签数组（用户自定义映射）
     pub entity_types: Vec<u8>,
     /// 变更类型标签数组（0=Created, 1=Updated, 2=Deleted）
@@ -439,7 +433,7 @@ impl ChangeLogEntrySoa {
         sequence: u64,
         old_version: u64,
         new_version: u64,
-        entity_id: [u8; 32],
+        entity_id: i64,
         entity_type: u8,
         change_type: u8,
         field_changes: Vec<FieldChange>,
@@ -527,7 +521,7 @@ impl ChangeLogEntrySoa {
     }
 
     /// 获取实体 ID 切片（用于批量操作）
-    pub fn entity_ids(&self) -> &[[u8; 32]] {
+    pub fn entity_ids(&self) -> &[i64] {
         &self.entity_ids
     }
 
@@ -613,14 +607,14 @@ mod tests {
 
     #[test]
     fn test_new_entry() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
         let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
 
         assert_eq!(entry.timestamp, 1000);
         assert_eq!(entry.sequence, 1);
         assert_eq!(entry.old_version, 0);
         assert_eq!(entry.new_version, 1);
-        assert_eq!(entry.entity_id_as_str().unwrap(), "order_123");
+        assert_eq!(entry.entity_id_as_str(), "123");
         assert_eq!(entry.entity_type, 1);
         assert_eq!(entry.change_type, 0);
         assert_eq!(entry.field_change_count(), 0);
@@ -628,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_change_type_checks() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("test");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("456").unwrap();
 
         let created = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert!(created.is_created());
@@ -648,7 +642,7 @@ mod tests {
 
     #[test]
     fn test_add_field_change() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
         let mut entry = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
@@ -682,17 +676,26 @@ mod tests {
 
     #[test]
     fn test_entity_id_conversion() {
-        let id1 = ChangeLogEntryBase::entity_id_from_str("short");
-        assert_eq!(&id1[..5], b"short");
-        assert_eq!(&id1[5..], &[0u8; 27]);
+        // 测试有效的数字字符串转换
+        let id1 = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
+        assert_eq!(id1, 123);
 
-        let long_str = "this_is_a_very_long_entity_id_that_exceeds_32_bytes";
-        let id2 = ChangeLogEntryBase::entity_id_from_str(long_str);
-        assert_eq!(&id2[..], &long_str.as_bytes()[..32]);
+        // 测试负数
+        let id2 = ChangeLogEntryBase::entity_id_from_str("-456").unwrap();
+        assert_eq!(id2, -456);
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("test_order_123");
+        // 测试大数字
+        let id3 = ChangeLogEntryBase::entity_id_from_str("9223372036854775807").unwrap();
+        assert_eq!(id3, i64::MAX);
+
+        // 测试往返转换
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
         let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
-        assert_eq!(entry.entity_id_as_str().unwrap(), "test_order_123");
+        assert_eq!(entry.entity_id_as_str(), "789");
+
+        // 测试无效字符串应该返回错误
+        assert!(ChangeLogEntryBase::entity_id_from_str("not_a_number").is_err());
+        assert!(ChangeLogEntryBase::entity_id_from_str("").is_err());
     }
 }
 

@@ -7,7 +7,7 @@
 //! ```text
 //! Header (24 字节，8 字节对齐):
 //!   - magic: [u8; 4] = b"CLSB" (ChangeLog SOA Base)
-//!   - version: u8 = 3
+//!   - version: u8 = 4
 //!   - padding: [u8; 3] (对齐到 8 字节)
 //!   - entry_count: u64
 //!   - reserved: u64
@@ -15,9 +15,9 @@
 //! Entry Arrays:
 //!   - timestamps: [u64; entry_count]
 //!   - sequences: [u64; entry_count]
-//!   - old_versions: [u64; entry_count]  (新增：乐观锁支持)
-//!   - new_versions: [u64; entry_count]  (新增：乐观锁支持)
-//!   - entity_ids: [[u8; 32]; entry_count]
+//!   - old_versions: [u64; entry_count]  (乐观锁支持)
+//!   - new_versions: [u64; entry_count]  (乐观锁支持)
+//!   - entity_ids: [i64; entry_count]  (实体ID改为i64)
 //!   - entity_types: [u8; entry_count]
 //!   - change_types: [u8; entry_count]
 //!
@@ -36,8 +36,8 @@ use std::mem::size_of;
 
 /// 魔数标识
 const MAGIC: &[u8; 4] = b"CLSB";
-/// 版本号（版本 3：添加 old_version 和 new_version 支持乐观锁）
-const VERSION: u8 = 3;
+/// 版本号（版本 4：entity_id 改为 i64）
+const VERSION: u8 = 4;
 /// 头部大小（包含 padding）
 const HEADER_SIZE: usize = 24;
 
@@ -118,7 +118,7 @@ impl ChangeLogEntrySoaEncoder {
         size += entry_count * size_of::<u64>(); // sequences
         size += entry_count * size_of::<u64>(); // old_versions
         size += entry_count * size_of::<u64>(); // new_versions
-        size += entry_count * 32; // entity_ids
+        size += entry_count * size_of::<i64>(); // entity_ids
         size += entry_count * size_of::<u8>(); // entity_types
         size += entry_count * size_of::<u8>(); // change_types
 
@@ -200,9 +200,9 @@ impl ChangeLogEntrySoaEncoder {
         }
 
         // 写入 entity_ids
-        for entity_id in &self.soa.entity_ids {
-            buffer[offset..offset + 32].copy_from_slice(entity_id);
-            offset += 32;
+        for &entity_id in &self.soa.entity_ids {
+            buffer[offset..offset + 8].copy_from_slice(&entity_id.to_le_bytes());
+            offset += 8;
         }
 
         // 写入 entity_types
@@ -328,7 +328,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         offset += entry_count * size_of::<u64>();
 
         let entity_ids_offset = offset;
-        offset += entry_count * 32;
+        offset += entry_count * size_of::<i64>();
 
         let entity_types_offset = offset;
         offset += entry_count;
@@ -445,14 +445,23 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     }
 
     /// 获取指定索引的实体 ID
-    pub fn entity_id(&self, index: usize) -> Result<&[u8; 32], DecodeError> {
+    pub fn entity_id(&self, index: usize) -> Result<i64, DecodeError> {
         if index >= self.entry_count {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.entity_ids_offset + index * 32;
-        let end = start + 32;
-        Ok(self.data[start..end].try_into().unwrap())
+        let start = self.entity_ids_offset + index * size_of::<i64>();
+        let bytes = [
+            self.data[start],
+            self.data[start + 1],
+            self.data[start + 2],
+            self.data[start + 3],
+            self.data[start + 4],
+            self.data[start + 5],
+            self.data[start + 6],
+            self.data[start + 7],
+        ];
+        Ok(i64::from_le_bytes(bytes))
     }
 
     /// 获取指定条目的字段变更数量
@@ -536,7 +545,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
 
         // 拷贝 entity_ids
         for i in 0..self.entry_count {
-            soa.entity_ids.push(*self.entity_id(i).unwrap());
+            soa.entity_ids.push(self.entity_id(i).unwrap());
         }
 
         // 拷贝字段变更数据
@@ -567,7 +576,7 @@ mod tests {
     fn test_encode_decode_single_entry() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
         let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
@@ -587,7 +596,7 @@ mod tests {
     fn test_encode_decode_with_field_changes() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("456").unwrap();
         let mut entry = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
@@ -607,7 +616,7 @@ mod tests {
     fn test_encode_to_external_buffer() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
         let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
@@ -626,7 +635,7 @@ mod tests {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
         for i in 0..5 {
-            let entity_id = ChangeLogEntryBase::entity_id_from_str(&format!("order_{}", i));
+            let entity_id = i as i64;
             let mut entry = ChangeLogEntryBase::new(1000 + i, i, i, i + 1, entity_id, 1, 1);
 
             let field_name = FieldChange::field_name_from_str("price");
@@ -655,7 +664,7 @@ mod tests {
     fn test_buffer_too_small() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("order_123");
+        let entity_id = ChangeLogEntryBase::entity_id_from_str("999").unwrap();
         let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
