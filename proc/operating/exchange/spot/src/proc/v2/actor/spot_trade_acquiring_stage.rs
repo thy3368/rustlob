@@ -206,7 +206,7 @@ mod tests {
             Some(Quantity::from_f64(0.1)),
             None,
             Some(Price::from_f64(45000.0)),
-            Some("client_order_456".to_string()),
+            None,
             None,
             None,
             None,

@@ -131,20 +131,20 @@ impl ActorX for SpotUserDataStage {
                                     );
 
                                     // 调用 handle_match3 进行撮合处理
-                                    match self_clone.trade_behavior.handle_user_data(change_log) {
-                                        Ok(user_data_change_logs) => {
-                                            // 发送变更日志到对应的 Kafka topics
-                                            //todo 发送user_data changelog
-                                            Self::send_change_logs(
-                                                &producer,
-                                                user_data_change_logs.unwrap_or_default(),
-                                            )
-                                            .await;
-                                        }
-                                        Err(e) => {
-                                            tracing::error!("Match processing failed: {:?}", e);
-                                        }
-                                    }
+                                    // match self_clone.trade_behavior.handle_user_data(change_log) {
+                                    //     Ok(user_data_change_logs) => {
+                                    //         // 发送变更日志到对应的 Kafka topics
+                                    //         //todo 发送user_data changelog
+                                    //         Self::send_change_logs(
+                                    //             &producer,
+                                    //             user_data_change_logs.unwrap_or_default(),
+                                    //         )
+                                    //         .await;
+                                    //     }
+                                    //     Err(e) => {
+                                    //         tracing::error!("Match processing failed: {:?}", e);
+                                    //     }
+                                    // }
                                 }
                             }
                         }
