@@ -26,7 +26,6 @@ pub struct OrderHandler {
     balance_repo: Arc<MySqlDbRepo<Balance>>,
     trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
     order_repo: Arc<MySqlDbRepo<SpotOrder>>,
-
     lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
 }
 
@@ -54,7 +53,6 @@ impl OrderHandler {
         let frozen_asset_id = internal_order.frozen_asset_id();
         let frozen_asset_balance_id = self.query_balance_id(frozen_asset_id);
 
-        // 优化A: 消除 unwrap() - 使用安全的错误处理
         let mut frozen_asset_balance =
             match self.balance_repo.find_by_id_4_update(&frozen_asset_balance_id) {
                 Ok(Some(balance)) => balance,
@@ -88,7 +86,7 @@ impl OrderHandler {
         cmd: NewOrderCmd,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 转换订单，失败不落单
-        let mut internal_order = match self.validate_cmd(cmd) {
+        let mut internal_order = match self.validate_cmd_cpu(cmd) {
             Ok(order) => order,
             Err(err) => {
                 return Err(err);
@@ -132,7 +130,7 @@ impl OrderHandler {
 
     // ========== 私有辅助方法 ==========
 
-    fn validate_cmd(&self, cmd: NewOrderCmd) -> Result<SpotOrder, SpotCmdErrorAny> {
+    fn validate_cmd_cpu(&self, cmd: NewOrderCmd) -> Result<SpotOrder, SpotCmdErrorAny> {
         // TODO: 实现验证逻辑
 
         // 根据 NewOrderCmd 创建 SpotOrder
