@@ -260,6 +260,9 @@ pub enum ContingencyType {
 // todo String 应该变成 str?
 // todo 可以都用非装箱类型吗？
 
+//生成 NewOrderCmds NewOrderCmd的soa 方便simd
+
+//在新文件 生成新的 NewOrderCmd 用基础类型 像ChangeLogEntryBase，方便simd
 pub struct NewOrderCmd {
     metadata: CMetadata,
     /// 交易对
@@ -1008,6 +1011,7 @@ pub enum SpotTradeResAny {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 
+//todo 研究下其它竞品的返回类型
 pub struct NewOrderAck {
     /// 交易对
     symbol: TradingPair,
