@@ -1,3 +1,5 @@
+use crate::OrderSide;
+
 /// 基于基础类型的 SpotOrder（SIMD 优化版本）
 ///
 /// 设计目标：
@@ -17,6 +19,8 @@
 /// - 零拷贝网络传输
 #[repr(C, align(128))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+
+//todo 根据 SpotOrderBase生成 SpotOrderSoa
 pub struct SpotOrderBase {
     // ===== 第一缓存行（64字节）- 核心标识和数量 =====
     /// 订单ID
@@ -26,33 +30,31 @@ pub struct SpotOrderBase {
     /// 交易对
     pub trading_pair: u64,
     /// 总数量
-    pub total_qty: u64,
+    pub total_base_qty: u64,
+    /// 花多少钱
+    pub total_quote_qty: u64,
+    /// 方向
+    pub order_side: OrderSide,
+
     /// 订单价格（0表示市价单）
     pub price: u64,
-    /// 已成交数量
-    pub filled_qty: u64,
-    /// 未成交数量
-    pub unfilled_qty: u64,
+
     /// 创建时间戳（纳秒）
     pub timestamp: u64,
 
     // ===== 第二缓存行（64字节）- 计算字段和状态 =====
-    /// 最后更新时间戳（纳秒）
-    pub last_updated: u64,
-    /// 冻结数量
-    pub frozen_qty: u64,
-    /// 平均成交价
-    pub average_price: u64,
+    /// 已成交数量
+    pub filled_base_qty: u64,
     /// 累计成交金额
     pub cumulative_quote_qty: u64,
-    /// 手续费数量
-    pub commission_qty: u64,
-    /// 报价数量（市价单使用）
-    pub quote_order_qty: u64,
+    /// 平均成交价
+    pub average_price: u64,
     /// 止损/止盈触发价
     pub stop_price: u64,
     /// 过期时间（GTD订单）
     pub expire_time: u64,
+    /// 最后更新时间戳（纳秒）
+    pub last_updated: u64,
 }
 
 impl SpotOrderBase {
@@ -62,7 +64,9 @@ impl SpotOrderBase {
         order_id: u64,
         trader_id: u64,
         trading_pair: u64,
-        total_qty: u64,
+        total_base_qty: u64,
+        total_quote_qty: u64,
+        order_side: OrderSide,
         price: u64,
         timestamp: u64,
     ) -> Self {
@@ -70,32 +74,37 @@ impl SpotOrderBase {
             order_id,
             trader_id,
             trading_pair,
-            total_qty,
+            total_base_qty,
+            total_quote_qty,
+            order_side,
             price,
-            filled_qty: 0,
-            unfilled_qty: total_qty,
             timestamp,
-            last_updated: timestamp,
-            frozen_qty: 0,
-            average_price: 0,
+            filled_base_qty: 0,
             cumulative_quote_qty: 0,
-            commission_qty: 0,
-            quote_order_qty: 0,
+            average_price: 0,
             stop_price: 0,
             expire_time: 0,
+            last_updated: timestamp,
         }
     }
 
     /// 检查订单是否已完全成交
     #[inline]
     pub const fn is_filled(&self) -> bool {
-        self.unfilled_qty == 0
+        // 买单和卖单都检查 base_qty 是否完全成交
+
+        match self.order_side {
+            OrderSide::Buy => {
+                return self.total_quote_qty == self.cumulative_quote_qty;
+            }
+            OrderSide::Sell => return self.total_base_qty == self.filled_base_qty,
+        }
     }
 
     /// 检查订单是否有未成交数量
     #[inline]
     pub const fn is_active(&self) -> bool {
-        self.unfilled_qty > 0
+        !self.is_filled()
     }
 
     /// 检查是否为市价单
@@ -107,26 +116,25 @@ impl SpotOrderBase {
     /// 获取成交百分比（0-10000，表示0.00%-100.00%）
     #[inline]
     pub const fn fill_percentage(&self) -> u64 {
-        if self.total_qty == 0 {
+        if self.total_base_qty == 0 {
             0
         } else {
-            (self.filled_qty * 10000) / self.total_qty
+            (self.filled_base_qty * 10000) / self.total_base_qty
         }
     }
 
     /// 更新成交信息
     #[inline]
     pub fn update_fill(&mut self, filled_qty: u64, fill_price: u64, timestamp: u64) {
-        self.filled_qty += filled_qty;
-        self.unfilled_qty -= filled_qty;
+        self.filled_base_qty += filled_qty;
 
         // 更新平均成交价
         let old_value = self.cumulative_quote_qty;
         let new_value = filled_qty * fill_price;
         self.cumulative_quote_qty += new_value;
 
-        if self.filled_qty > 0 {
-            self.average_price = self.cumulative_quote_qty / self.filled_qty;
+        if self.filled_base_qty > 0 {
+            self.average_price = self.cumulative_quote_qty / self.filled_base_qty;
         }
 
         self.last_updated = timestamp;
@@ -142,7 +150,8 @@ const _: () = assert!(std::mem::align_of::<SpotOrderBase>() == 128);
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::exchange::spot::spot_order_base::SpotOrderBase;
+    use crate::OrderSide;
 
     #[test]
     fn test_size_and_alignment() {
@@ -152,47 +161,53 @@ mod tests {
 
     #[test]
     fn test_new_order() {
-        let order = SpotOrderBase::new(1, 100, 1, 1000, 50000, 1000000);
+        let order = SpotOrderBase::new(
+            1,
+            100,
+            1,
+            1000,
+            50000,
+            OrderSide::Buy,
+            50000,   // price
+            1000000, // timestamp
+        );
 
         assert_eq!(order.order_id, 1);
         assert_eq!(order.trader_id, 100);
         assert_eq!(order.trading_pair, 1);
-        assert_eq!(order.total_qty, 1000);
+        assert_eq!(order.total_base_qty, 1000);
         assert_eq!(order.price, 50000);
-        assert_eq!(order.filled_qty, 0);
-        assert_eq!(order.unfilled_qty, 1000);
+        assert_eq!(order.filled_base_qty, 0);
         assert!(order.is_active());
         assert!(!order.is_filled());
     }
 
     #[test]
     fn test_market_order() {
-        let order = SpotOrderBase::new(1, 100, 1, 1000, 0, 1000000);
+        let order = SpotOrderBase::new(1, 100, 1, 1000, 50000, OrderSide::Buy, 0, 1000000);
         assert!(order.is_market_order());
     }
 
     #[test]
     fn test_update_fill() {
-        let mut order = SpotOrderBase::new(1, 100, 1, 1000, 50000, 1000000);
+        let mut order = SpotOrderBase::new(1, 100, 1, 1000, 50000, OrderSide::Buy, 50000, 1000000);
 
         // 第一次成交
         order.update_fill(300, 50000, 1000001);
-        assert_eq!(order.filled_qty, 300);
-        assert_eq!(order.unfilled_qty, 700);
+        assert_eq!(order.filled_base_qty, 300);
         assert_eq!(order.average_price, 50000);
         assert!(order.is_active());
 
         // 第二次成交
         order.update_fill(700, 51000, 1000002);
-        assert_eq!(order.filled_qty, 1000);
-        assert_eq!(order.unfilled_qty, 0);
+        assert_eq!(order.filled_base_qty, 1000);
         assert!(order.is_filled());
         assert!(!order.is_active());
     }
 
     #[test]
     fn test_fill_percentage() {
-        let mut order = SpotOrderBase::new(1, 100, 1, 1000, 50000, 1000000);
+        let mut order = SpotOrderBase::new(1, 100, 1, 1000, 50000, OrderSide::Buy, 50000, 1000000);
 
         assert_eq!(order.fill_percentage(), 0);
 

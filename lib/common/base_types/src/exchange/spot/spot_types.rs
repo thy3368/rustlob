@@ -1,6 +1,6 @@
-use arrayvec::ArrayString;
 use std::fmt;
 
+use arrayvec::ArrayString;
 use diff::ChangeLogEntry;
 use entity_derive::Entity;
 
@@ -8,8 +8,8 @@ use crate::account::balance::Balance;
 use crate::base_types::TraderId;
 use crate::fee::fee_types::{CexFeeEntity, FeeType};
 use crate::lob::lob::LobOrder;
-use crate::{
-    AccountId, AssetId, InstrumentType, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair,
+pub use crate::{
+    AssetId, InstrumentType, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair,
 };
 
 /// 订单来源标识 - Phase 3: 区分订单的来源
@@ -411,45 +411,7 @@ impl Default for OrderType {
 /// - 状态编码从1开始，0可用于区分"无效/未初始化"状态
 /// - 终态（Filled, Cancelled, Rejected, Expired）明确，便于状态机判断
 ///
-/// ## 状态流转图
-///
-/// ```
-/// 提交订单
-///    │
-///    ├─────────────────────────────────────┐
-///    │ (普通订单)                           │ (条件单: StopLoss/TakeProfit)
-///    ▼                                     ▼
-/// ┌──────────┐                        ┌──────────────────┐
-/// │ PENDING  │                        │ CONDITIONAL_     │
-/// │  (初始)  │                        │   PENDING        │
-/// └──────────┘                        │  (初始-条件单)   │
-///    │                                └──────────────────┘
-///    │ 部分成交                                │
-///    ▼                              价格触发条件满足 │
-/// ┌───────────────┐                           │
-/// │ PARTIALLY_    │◀──────────────────────────┘
-/// │   FILLED      │
-/// └───────────────┘
-///    │                               ┌──────────┐
-///    │ 全部成交                      │ REJECTED │
-///    ▼                               │  (终态)  │
-/// ┌──────────┐    用户/系统取消      └──────────┘
-/// │  FILLED  │◀──────────────────┐
-/// │  (终态)  │                   │
-/// └──────────┘                   │   ┌──────────┐
-///                                └──▶│CANCELLED │
-/// ┌──────────┐                       │  (终态)  │
-/// │ EXPIRED  │◀─────── GTD到期 ──────┘          │
-/// │  (终态)  │                                  │
-/// └──────────┘                                  │
-///                                               │
-///                                               │ 条件单取消/过期
-///                                               ▼
-///                                        ┌──────────┐
-///                                        │CANCELLED │
-///                                        │  (终态)  │
-///                                        └──────────┘
-/// ```
+
 ///
 /// ## 状态定义
 ///
@@ -470,6 +432,7 @@ impl Default for OrderType {
 /// **风控系统**: 监控异常状态（如过多Rejected）
 /// **用户查询**: 展示订单当前进度
 /// **条件单管理**: 查询等待触发的条件单列表
+/// todo 怎么表达部分成交后取消？
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -745,11 +708,11 @@ impl LobOrder for SpotOrder {
     }
 
     fn quantity(&self) -> Quantity {
-        self.total_qty
+        self.total_base_order_qty
     }
 
     fn filled_quantity(&self) -> Quantity {
-        self.executed_qty
+        self.state.filled_base_qty
     }
 
     fn side(&self) -> OrderSide {
@@ -764,63 +727,111 @@ impl LobOrder for SpotOrder {
     }
 }
 
+/// 订单执行状态 - 可变字段集中管理
+///
+/// 将所有可变字段压缩到单一结构体，优化缓存局部性
+///
+/// 设计原则：不存储可计算的字段
+/// - frozen_asset: 通过 side + trading_pair 推导
+/// - filled_asset: 通过 side + trading_pair 推导
+/// - unfilled_qty: 通过 total_qty - filled_qty 计算
+#[repr(C)]
+#[derive(Debug, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ExecutionState {
+    // ===== 订单状态 =====
+    pub status: OrderStatus, // 订单状态 (1字节)
+
+    // ===== 冻结相关 =====
+    pub frozen_qty: Quantity, // 冻结数量
+
+    // ===== 成交统计 =====
+    pub filled_base_qty: Quantity,      // 已成交数量（递增）
+    pub average_price: Price,           // 平均成交价（动态计算）
+    pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
+
+    // ===== 手续费 =====
+    pub commission_qty: Quantity,  // 手续费（累计）
+    pub commission_asset: AssetId, // 手续费资产
+
+    // ===== 时间戳 =====
+    pub last_updated: Timestamp, // 最后更新时间（每次状态变化更新）
+}
+
 /// 订单簿条目（64字节缓存行对齐以提升性能）
+///
+/// 使用 Bitfield 压缩模式：
+/// - 不可变字段：订单创建时确定，生命周期内不变（19个字段）
+/// - 可变字段：集中到 ExecutionState 结构体中（11个字段）
+///
+/// 优势：
+/// - 单一结构体，持久化简单
+/// - 可变状态集中，缓存友好
+/// - 明确的可变/不可变边界
 #[repr(align(64))]
 #[derive(Debug, Clone, Entity)]
 #[entity(id = "order_id")]
 pub struct SpotOrder {
+    // ==================== 不可变字段区域 ====================
+    // 以下字段在订单创建时确定，生命周期内不会改变
+
     // ===== 核心标识字段（24字节）=====
-    pub order_id: OrderId,   // 订单ID (u64)
-    pub trader_id: TraderId, // 交易员ID ([u8; 8])
-
+    pub order_id: OrderId,         // 订单ID (u64)
+    pub trader_id: TraderId,       // 交易员ID ([u8; 8])
     pub trading_pair: TradingPair, // 交易对 (u64)
+    pub timestamp: Timestamp,      // 创建时间戳 (ms)
 
-    pub total_qty: Quantity,               // 总数量
-    pub price: Option<Price>,              // 订单价格 (0表示市价单)
-    pub quote_order_qty: Option<Quantity>, // 报价数量（市价单使用，最多花费金额）
-    pub side: OrderSide,                   // 买卖方向 (BUY/SELL) (1字节)
-    pub time_in_force: TimeInForce,        // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
+    // ===== 订单参数字段 =====
+    pub total_base_order_qty: Quantity, // 总数量
+    pub price: Option<Price>,           // 订单价格 (None表示市价单)
+    pub quote_order_qty: Quantity,      // 报价数量（市价单使用，最多花费金额）
+    pub side: OrderSide,                // 买卖方向 (BUY/SELL) (1字节)
+    pub time_in_force: TimeInForce,     // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
-    pub status: OrderStatus, // 订单状态 (1字节)
-
-    // ===== 可选字段 =====
+    // ===== 订单属性字段 =====
     pub client_order_id: Option<ArrayString<32>>, // 客户订单ID
-
-    // ===== 订单来源（Phase 3：1字节）=====
-    pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System)
-
-    // ===== 订单类型维度（4字节）⭐ 新增算法策略维度 =====
+    pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System) (1字节)
     pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...)
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
     pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
-
-    // ===== 有效期和防护（2字节）=====
     pub self_trade_prevention: SelfTradePrevention, // 自交易防护 (1字节，固定ExpireTaker)
 
-    // ===== P3 优先级：可选属性 =====
+    // ===== 可选触发条件 =====
     pub stop_price: Option<Price>, // 止损/止盈触发价（仅conditional_type != None时有效）
     pub iceberg_qty: Option<Quantity>, // 冰山单显示数量
     pub expire_time: Option<Timestamp>, // GTD过期时间（Unix时间戳，毫秒）仅time_in_force=GTD时有效
 
-    // ===== 计算出来=====
-    pub frozen_qty: Quantity,  // 冻结数据
-    pub frozen_asset: AssetId, // 冻结资产
-
-    pub filled_asset: AssetId,          // 购买资产
-    pub unfilled_qty: Quantity,         // 未成交数量
-    pub executed_qty: Quantity,         // 已成交数量（计数器去重）
-    pub average_price: Price,           // 平均成交价
-    pub cumulative_quote_qty: Quantity, // 累计成交金额（Quote资产计价）
-    pub commission_qty: Quantity,       // 手续费
-    pub commission_asset: AssetId,      // 手续费资产
-
-    // ===== 时间戳（8字节）=====
-    pub timestamp: Timestamp, // 创建时间戳 (ms)
-    pub last_updated: Timestamp,
+    // ==================== 可变字段区域 ====================
+    // 所有可变字段集中到 ExecutionState 结构体中
+    pub state: ExecutionState,
 }
 
 impl SpotOrder {
+    /// 获取冻结资产（通过 side + trading_pair 推导）
+    #[inline]
+    pub fn frozen_asset(&self) -> AssetId {
+        match self.side {
+            OrderSide::Buy => self.trading_pair.quote_asset(),
+            OrderSide::Sell => self.trading_pair.base_asset(),
+        }
+    }
+
+    /// 获取成交资产（通过 side + trading_pair 推导）
+    #[inline]
+    pub fn filled_asset(&self) -> AssetId {
+        match self.side {
+            OrderSide::Buy => self.trading_pair.base_asset(),
+            OrderSide::Sell => self.trading_pair.quote_asset(),
+        }
+    }
+
+    /// 获取未成交数量（通过 total_qty - filled_qty 计算）
+    #[inline]
+    pub fn unfilled_qty(&self) -> Quantity {
+        self.total_base_order_qty - self.state.filled_base_qty
+    }
+
     pub fn frozen_asset_id(&self) -> AssetId {
         // 根据买卖方向冻结相应的资产余额：买则冻结计算资产，卖则冻结基础资产
         let frozen_asset_id = match self.side() {
@@ -834,7 +845,7 @@ impl SpotOrder {
 
 impl SpotOrder {
     pub fn is_all_filled(&self) -> bool {
-        self.total_qty == self.executed_qty
+        self.total_base_order_qty == self.state.filled_base_qty
     }
 
     /// 根据 CexFeeEntity 配置计算交易手续费
@@ -916,13 +927,11 @@ impl SpotOrder {
         o_quote_asset_balance: &mut Balance,
         o_base_asset_balance: &mut Balance,
     ) -> SpotTrade {
-        let filled = self.unfilled_qty.min(matched_order.unfilled_qty);
+        let filled = self.unfilled_qty().min(matched_order.unfilled_qty());
 
-        // 更新双方订单的成交数量
-        self.unfilled_qty -= filled;
-        self.executed_qty += filled;
-        matched_order.unfilled_qty -= filled;
-        matched_order.executed_qty += filled;
+        // 更新双方订单的成交数量（只更新 filled_qty，unfilled_qty 自动计算）
+        self.state.filled_base_qty += filled;
+        matched_order.state.filled_base_qty += filled;
 
         let transaction_price = match self.price {
             None => matched_order.price.unwrap(),
@@ -995,29 +1004,26 @@ impl SpotOrder {
             self.side,
             taker_commission_qty,
             maker_commission_qty,
-            self.frozen_asset,
+            self.frozen_asset(), // 使用计算方法
             taker_commission_rate,
             maker_commission_rate,
         )
     }
 
     pub fn frozen_margin(&mut self, balance: &mut Balance, now: Timestamp) {
-        // 根据买卖方向确定冻结资产
+        // 根据买卖方向确定冻结资产和数量
         match self.side {
             OrderSide::Buy => {
-                // 冻结，失败则reject
-                self.frozen_qty = self.total_qty * self.price.unwrap();
-                self.frozen_asset = self.trading_pair.quote_asset();
-                balance.frozen(self.frozen_qty, now);
+                // 冻结报价资产（USDT）
+                self.state.frozen_qty = self.total_base_order_qty * self.price.unwrap();
+                balance.frozen(self.state.frozen_qty, now);
             }
             OrderSide::Sell => {
-                self.frozen_qty = self.total_qty;
-                self.frozen_asset = self.trading_pair.base_asset();
-                balance.frozen(self.frozen_qty, now);
+                // 冻结基础资产（BTC）
+                self.state.frozen_qty = self.total_base_order_qty;
+                balance.frozen(self.state.frozen_qty, now);
             }
         };
-
-        // 冻结，失败则reject
     }
 
     #[inline]
@@ -1030,7 +1036,7 @@ impl SpotOrder {
         quantity: Quantity,
         time_in_force: TimeInForce,
         client_order_id: Option<ArrayString<32>>,
-        quote_order_qty: Option<Quantity>,
+        quote_order_qty: Quantity,
     ) -> Self {
         let timestamp = Timestamp::now_as_nanos();
 
@@ -1038,12 +1044,10 @@ impl SpotOrder {
             order_id,
             trader_id,
             trading_pair,
-            total_qty: quantity,
-            unfilled_qty: quantity,
+            total_base_order_qty: quantity,
             price: Some(price),
             quote_order_qty,
             side,
-            status: OrderStatus::Pending,
             order_type: OrderType::Limit,
             execution_method: ExecutionMethod::Limit,
             conditional_type: ConditionalType::None,
@@ -1051,48 +1055,49 @@ impl SpotOrder {
             time_in_force,
             self_trade_prevention: SelfTradePrevention::ExpireTaker,
             timestamp,
-            last_updated: timestamp,
-            executed_qty: Quantity::default(),
-            average_price: Price::default(),
-            cumulative_quote_qty: Quantity::default(),
-            commission_qty: Quantity::default(),
             stop_price: None,
             iceberg_qty: None,
             expire_time: None, // GTD 过期时间，默认为 None
             source: OrderSource::API,
             client_order_id,
-            frozen_qty: Quantity::default(),
-            frozen_asset: AssetId::default(),
-            filled_asset: AssetId::default(),
-            commission_asset: AssetId::default(),
+            state: ExecutionState {
+                status: OrderStatus::Pending,
+                frozen_qty: Quantity::default(),
+                filled_base_qty: Quantity::default(),
+                average_price: Price::default(),
+                cumulative_quote_qty: Quantity::default(),
+                commission_qty: Quantity::default(),
+                commission_asset: AssetId::default(),
+                last_updated: timestamp,
+            },
         }
     }
 
     /// 检查订单是否仍然有效（有未成交数量）
     #[inline]
     pub fn is_active(&self) -> bool {
-        self.unfilled_qty < self.total_qty
+        self.unfilled_qty() > Quantity::default()
     }
 
     /// 检查订单是否已成交完毕
     #[inline]
     pub fn is_filled(&self) -> bool {
-        self.unfilled_qty == Quantity::default()
+        self.unfilled_qty() == Quantity::default()
     }
 
     /// 获取已成交百分比（0.0 - 1.0）
     #[inline]
     pub fn fill_ratio(&self) -> f64 {
-        let total = self.total_qty.to_f64();
-        let unfilled = self.unfilled_qty.to_f64();
+        let total = self.total_base_order_qty.to_f64();
+        let unfilled = self.unfilled_qty().to_f64();
         if total == 0.0 { 0.0 } else { unfilled / total }
     }
 
     /// 取消订单（通过将状态置为 Cancelled，单次内存写入，速度快）
     #[inline]
     pub fn cancel(&mut self) {
-        self.status = OrderStatus::Cancelled;
-        self.last_updated = Timestamp::now_as_nanos();
+        self.state.status = OrderStatus::Cancelled;
+        self.state.last_updated = Timestamp::now_as_nanos();
     }
 
     /// 设置订单来源（Phase 3）
@@ -1243,15 +1248,6 @@ impl SpotTrade {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn create_test_balance() -> Balance {
-        Balance::with_available(
-            AccountId(1),
-            AssetId::Usdt,
-            1_000_000_000, // 10亿
-            Timestamp::now_as_nanos(),
-        )
-    }
 
     fn create_test_trading_pair() -> TradingPair {
         TradingPair::BtcUsdt
