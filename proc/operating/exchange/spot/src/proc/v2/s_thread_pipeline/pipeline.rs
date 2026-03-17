@@ -6,7 +6,7 @@ use push::push::push_service::PushBehaviorV2Imp;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
-use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use crate::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 /// 单线程现货交易流水线
 ///

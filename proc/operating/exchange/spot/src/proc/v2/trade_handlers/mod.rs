@@ -11,6 +11,8 @@ use base_types::cqrs::cqrs_types::CmdResp;
 pub mod account_handler;
 pub mod oco_handler;
 pub mod order_handler;
+pub mod spot_trade_v3;
+pub mod spot_trade_v2;
 
 /// Command Handler trait
 #[async_trait::async_trait]

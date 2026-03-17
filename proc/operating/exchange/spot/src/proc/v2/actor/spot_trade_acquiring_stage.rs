@@ -12,7 +12,7 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny,
 };
 use crate::proc::v2::actor::kafka_config::{send_single_log, KafkaConfig};
-use crate::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use crate::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 //收单
 pub struct SpotAcquiringStage {

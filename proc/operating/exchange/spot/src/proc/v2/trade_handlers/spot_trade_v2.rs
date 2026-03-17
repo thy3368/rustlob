@@ -28,160 +28,8 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::UserDataStreamEventAny;
 use crate::proc::v2::id_repo::order_next_id;
 
-// 方案1：直接在 Command 上实现 Entity 转换（零拷贝）
-impl From<NewOrderCmd> for SpotOrder {
-    #[inline(always)]
-    fn from(cmd: NewOrderCmd) -> Self {
-        let order_id = order_next_id as u64;
+// 导入 NewOrderCmd -> SpotOrder 转换实现
 
-        let trader_id = TraderId::default(); // TODO: 从 metadata 中获取真实的 trader_id
-        let trading_pair = cmd.symbol().clone();
-
-        // todo 可以simd优化吗
-        let order_type = *cmd.order_type();
-        match order_type {
-            OrderType::Limit => {
-                // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    cmd.price().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
-
-                order
-            }
-            OrderType::Market => {
-                // 市价单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    Price::from_f64(0.0), // 市价单价格为0
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    TimeInForce::IOC, // 市价单默认IOC
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.execution_method = ExecutionMethod::Market;
-                order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
-                order.price = None; // 市价单价格为None
-                order
-            }
-            OrderType::StopLoss => {
-                // 止损单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    Price::from_f64(0.0), // 市价止损
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    TimeInForce::IOC,
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::StopLoss;
-                order.stop_price = *cmd.stop_price();
-                order.execution_method = ExecutionMethod::Market;
-                order.price = None;
-                order.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
-                order
-            }
-            OrderType::StopLossLimit => {
-                // 止损限价单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    cmd.price().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::StopLoss;
-                order.execution_method = ExecutionMethod::Limit;
-                order.stop_price = *cmd.stop_price();
-                order.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
-                order
-            }
-            OrderType::TakeProfit => {
-                // 止盈单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    Price::from_f64(0.0), // 市价止盈
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    TimeInForce::IOC,
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::TakeProfit;
-                order.stop_price = *cmd.stop_price();
-                order.execution_method = ExecutionMethod::Market;
-                order.price = None;
-                order.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
-                order
-            }
-            OrderType::TakeProfitLimit => {
-                // 止盈限价单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    cmd.price().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    cmd.time_in_force().unwrap_or(TimeInForce::GTC),
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::TakeProfit;
-                order.execution_method = ExecutionMethod::Limit;
-                order.stop_price = *cmd.stop_price();
-                order.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
-                order
-            }
-            OrderType::LimitMaker => {
-                // 限价只挂单
-                let mut order = SpotOrder::create_order(
-                    order_id,
-                    trader_id,
-                    trading_pair,
-                    cmd.side().clone(),
-                    cmd.price().unwrap_or(Price::from_f64(0.0)),
-                    cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    TimeInForce::GTX, // GTX = PostOnly
-                    cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().clone(),
-                );
-                order.order_type = order_type;
-                order
-            }
-        }
-    }
-}
 
 #[immutable]
 pub struct SpotTradeBehaviorV2Impl {
@@ -210,81 +58,7 @@ impl SpotTradeBehaviorV2Impl {
         format!("{:?}:{}", AccountId(1), u32::from(asset_id))
     }
 
-    ///
-    /// ### 关键结论
-    ///
-    /// | 分析项 | 结论 |
-    /// |--------|------|
-    /// | 初始状态 | **Pending/ConditionalPending** (根据订单类型) |
-    /// | 普通单 | **Pending** → 直接进入订单簿 |
-    /// | 条件单 | **ConditionalPending** → 等待触发（资金已冻结）|
-    /// | 条件单触发后 | **ConditionalPending** → **Pending** → 进入订单簿 |
-    /// | 资金冻结时机 | **创建时冻结**（方案A）|
-    /// | 异常流程 | 余额不足 → **Rejected** |
-    ///
-    /// ### 状态变更规则
-    ///
-    /// 1. **普通订单流程**:
-    ///    - 创建订单 → 冻结资金 → 状态保持 **Pending** → 进入订单簿
-    ///
-    /// 2. **条件单流程**（方案A：创建时冻结）:
-    ///    - 创建订单 → 冻结资金 → 状态 **ConditionalPending** → 等待触发
-    ///    - 触发后: ConditionalPending → **Pending** → 进入订单簿
-    ///    - 资金始终冻结，确保触发时可执行
-    ///
-    /// 3. **异常流程** (余额不足):
-    ///    - 状态从初始状态 → **Rejected**
-    ///    - 不冻结资金，生成变更日志并持久化
-    ///
-    /// ### ✅ 已实现的改进
-    ///
-    /// **余额不足时的状态处理** (Line 454-480):
-    ///
-    /// ```rust
-    /// // 改进后的实现：显式设置 Rejected 状态并记录日志
-    /// Err(BalanceError::InsufficientAvailable { required, available }) => {
-    ///     // 1. 设置订单状态为 Rejected
-    ///     internal_order.status = OrderStatus::Rejected;
-    ///     internal_order.last_updated = Timestamp::now_as_nanos();
-    ///
-    ///     // 2. 生成订单变更日志（记录 Rejected 状态变更）
-    ///     let rejected_order_change_log = internal_order.track_create().unwrap();
-    ///
-    ///     // 3. 发送订单变更事件到队列（对外通知）
-    ///     self.queue.send(SpotTopic::EntityChangeLog.name(), ...);
-    ///
-    ///     // 4. 持久化 Rejected 状态到数据库
-    ///     self.order_repo.replay_event(&rejected_order_change_log);
-    ///
-    ///     // 5. 返回错误
-    ///     return Err(SpotCmdErrorAny::Common(CommonError::InsufficientBalance));
-    /// }
-    /// ```
-    ///
-    /// **改进收益**:
-    /// - ✅ 订单状态明确：从 Pending 变为 Rejected
-    /// - ✅ 可追溯：变更日志记录拒绝原因和时间
-    /// - ✅ 一致性：事件发送到队列，DB持久化
-    /// - ✅ 可查询：用户可查询到被拒绝的订单记录
-    ///
-    /// ### 与 handle_match 的对比
-    ///
-    /// | 函数 | 正常流程状态 | 异常流程状态 | 负责阶段 |
-    /// |------|-------------|-------------|---------|
-    /// | pre_process | Pending（不变） | Rejected（余额不足时） | 订单创建、资金冻结 |
-    /// | handle_match | 多次变更（根据TIF） | - | 撮合、状态流转 |
-    ///
-    /// ---
-    ///
-    /// ## 优化效果总结
-    ///
-    /// | 优化项 | 改进前 | 改进后 | 收益 |
-    /// |--------|--------|--------|------|
-    /// | **A. 消除 unwrap()** | 3处 unwrap() 可能 panic | 使用 match/Result 安全处理 | 系统稳定性↑ |
-    /// | **B. 批量发送** | 2次 send() 调用 | 1次 send_batch() 批量发送 | IO 次数↓ 50% |
-    /// | **D. 参数验证前置** | 创建后验证 | 创建前验证 | 无效资源↓ |
-    /// | **E. 条件单实现** | todo!() panic | 完整的触发/挂起逻辑 | 功能完整性↑ |
-    ///
+
     /// 验证订单命令参数（优化D：参数验证前置）
     fn validate_order_cmd(&self, cmd: &NewOrderCmd) -> Result<(), SpotCmdErrorAny> {
         // 验证数量必须大于0
@@ -646,7 +420,7 @@ impl SpotTradeBehaviorV2Impl {
             OrderSide::Buy => {
                 // Freeze the quote asset balance
                 // Priority: use quote_order_qty if available (market orders), otherwise use price * quantity
-                let frozen_amount = if let Some(quote_qty) = order.quote_order_qty {
+                let frozen_amount = if let Some(quote_qty) = order.total_quote_qty {
                     // Market order with explicit quote amount
                     quote_qty
                 } else {
@@ -1323,7 +1097,7 @@ impl SpotTradeBehaviorV2Impl {
             order.order_id,
             order.trading_pair,
             order.side,
-            order.total_qty
+            order.total_base_qty
         );
 
         // 3. 执行撮合
@@ -1359,13 +1133,13 @@ impl SpotTradeBehaviorV2Impl {
                             format!("{:?}", order.status),
                         ),
                         diff::FieldChange::new(
-                            "executed_qty",
+                            "filled_qty",
                             "0".to_string(),
-                            order.executed_qty.to_string(),
+                            order.filled_qty.to_string(),
                         ),
                         diff::FieldChange::new(
                             "unfilled_qty",
-                            order.total_qty.to_string(),
+                            order.total_base_qty.to_string(),
                             order.unfilled_qty.to_string(),
                         ),
                     ],
@@ -1429,7 +1203,7 @@ impl SpotTradeBehaviorV2Impl {
             order.order_id,
             order.trading_pair,
             order.side,
-            order.total_qty
+            order.total_base_qty
         );
 
         //todo 要优化
@@ -1467,13 +1241,13 @@ impl SpotTradeBehaviorV2Impl {
                             format!("{:?}", order.status),
                         ),
                         diff::FieldChange::new(
-                            "executed_qty",
+                            "filled_qty",
                             "0".to_string(),
-                            order.executed_qty.to_string(),
+                            order.filled_qty.to_string(),
                         ),
                         diff::FieldChange::new(
                             "unfilled_qty",
-                            order.total_qty.to_string(),
+                            order.total_base_qty.to_string(),
                             order.unfilled_qty.to_string(),
                         ),
                     ],
@@ -1733,34 +1507,6 @@ impl SpotTradeBehaviorV2Impl {
         Ok(balance_change_logs)
     }
 
-    /// 处理新订单命令的主方法
-    ///
-    /// ## 状态处理逻辑
-    ///
-    /// ```
-    /// ┌─────────────────────────────────────────────────────────────┐
-    /// │                    handle 方法状态处理                       │
-    /// ├─────────────────────────────────────────────────────────────┤
-    /// │                                                             │
-    /// │  pre_process(cmd)                                           │
-    /// │       │                                                     │
-    /// │       ▼                                                     │
-    /// │  ┌─────────────────┐                                        │
-    /// │  │ 返回订单状态    │                                        │
-    /// │  └────────┬────────┘                                        │
-    /// │           │                                                 │
-    /// │     ┌─────┴─────┬──────────────┬─────────────────────┐      │
-    /// │     ▼         ▼              ▼                     ▼      │
-    /// │ Conditional  Pending      PartiallyFilled        终态     │
-    /// │  Pending              │    (不应出现)          (不应出现) │
-    /// │     │                 │                                │   │
-    /// │     ▼                 ▼                                │   │
-    /// │  直接返回          撮合+结算                           │   │
-    /// │  (资金已冻结)      handle_match                        │   │
-    /// │                    handle_settlement                   │   │
-    /// │                                                             │
-    /// └─────────────────────────────────────────────────────────────┘
-    /// ```
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 1.执行订单预处理（创建订单 + 冻结资金）
         let (mut internal_order, _logs) = self.handle_acquiring(cmd)?;
