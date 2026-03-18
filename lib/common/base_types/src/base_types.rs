@@ -31,6 +31,10 @@ impl Timestamp {
 
         Self(timestamp)
     }
+
+    pub fn now() -> Self {
+        Self::now_as_nanos()
+    }
 }
 
 impl default::Default for Timestamp {
