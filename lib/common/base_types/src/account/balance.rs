@@ -4,9 +4,9 @@ use std::fmt;
 
 use entity_derive::Entity;
 
+use crate::account::balance_change::BalanceChange;
 use crate::account::error::BalanceError;
-use crate::exchange::spot::spot_types::SpotOrder;
-use crate::{AccountId, AssetId, Price, Quantity, Timestamp};
+use crate::{AccountId, AssetId, OrderId, Price, Quantity, Timestamp};
 
 /// 余额ID（复合键：account_id:asset_id）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,8 +41,15 @@ impl Default for BalanceId {
 /// - Balance(account, USDT, 100.00000000) = 100 USDT
 /// - Balance(account, BTC, 1.00000000)    = 1 BTC
 /// - Balance(account, AAPL, 1000.00000000) = 1000 股苹果
+///
+/// 变更追溯：
+/// - 每次余额变更都会生成BalanceChange事件
+/// - 通过sequence_id保证全局顺序
+/// - 支持审计和回溯
 #[derive(Debug, Clone, Entity)]
 #[repr(align(64))]
+//todo 用基础类型生成Balance，simd友好
+
 pub struct Balance {
     /// 余额ID（复合键）
     pub id: BalanceId,
@@ -107,6 +114,30 @@ impl Balance {
         self.updated_at = now;
     }
 
+    /// 添加余额并生成变更事件
+    #[inline]
+    pub fn add_balance_with_change(
+        &mut self,
+        amount: Quantity,
+        now: Timestamp,
+        sequence_id: u64,
+    ) -> BalanceChange {
+        let available_before = self.available;
+        self.available = self.available + amount;
+        self.version += 1;
+        self.updated_at = now;
+
+        BalanceChange::deposit(
+            sequence_id,
+            self.account_id,
+            self.asset_id,
+            amount,
+            available_before,
+            now,
+            self.version,
+        )
+    }
+
     #[inline]
     /// 冻结余额（可用 → 冻结）
     ///
@@ -128,6 +159,46 @@ impl Balance {
         self.version += 1;
         self.updated_at = now;
         Ok(())
+    }
+
+    /// 冻结余额并生成变更事件
+    #[inline]
+    pub fn frozen_with_change(
+        &mut self,
+        amount: Quantity,
+        order_id: OrderId,
+        now: Timestamp,
+        sequence_id: u64,
+    ) -> Result<BalanceChange, BalanceError> {
+        let available_before = self.available;
+        let frozen_before = self.frozen;
+
+        let available_raw = self.available.raw();
+        let amount_raw = amount.raw();
+
+        if available_raw < amount_raw {
+            return Err(BalanceError::InsufficientAvailable {
+                required: amount_raw,
+                available: available_raw,
+            });
+        }
+
+        self.available = self.available - amount;
+        self.frozen = self.frozen + amount;
+        self.version += 1;
+        self.updated_at = now;
+
+        Ok(BalanceChange::freeze(
+            sequence_id,
+            self.account_id,
+            self.asset_id,
+            amount,
+            available_before,
+            frozen_before,
+            order_id,
+            now,
+            self.version,
+        ))
     }
 
     #[inline]
@@ -152,6 +223,45 @@ impl Balance {
         Ok(())
     }
 
+    /// 从冻结余额中扣款并生成变更事件
+    #[inline]
+    pub fn frozen2pay_with_change(
+        &mut self,
+        amount: Quantity,
+        order_id: OrderId,
+        now: Timestamp,
+        sequence_id: u64,
+    ) -> Result<BalanceChange, BalanceError> {
+        let available_before = self.available;
+        let frozen_before = self.frozen;
+
+        let frozen_raw = self.frozen.raw();
+        let amount_raw = amount.raw();
+
+        if frozen_raw < amount_raw {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount_raw,
+                frozen: frozen_raw,
+            });
+        }
+
+        self.frozen = self.frozen - amount;
+        self.version += 1;
+        self.updated_at = now;
+
+        Ok(BalanceChange::trade(
+            sequence_id,
+            self.account_id,
+            self.asset_id,
+            amount,
+            available_before,
+            frozen_before,
+            order_id,
+            now,
+            self.version,
+        ))
+    }
+
     #[inline]
     /// 解冻余额（冻结 → 可用）
     ///
@@ -173,6 +283,46 @@ impl Balance {
         self.version += 1;
         self.updated_at = now;
         Ok(())
+    }
+
+    /// 解冻余额并生成变更事件
+    #[inline]
+    pub fn un_frozen_with_change(
+        &mut self,
+        amount: Quantity,
+        order_id: OrderId,
+        now: Timestamp,
+        sequence_id: u64,
+    ) -> Result<BalanceChange, BalanceError> {
+        let available_before = self.available;
+        let frozen_before = self.frozen;
+
+        let frozen_raw = self.frozen.raw();
+        let amount_raw = amount.raw();
+
+        if frozen_raw < amount_raw {
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount_raw,
+                frozen: frozen_raw,
+            });
+        }
+
+        self.available = self.available + amount;
+        self.frozen = self.frozen - amount;
+        self.version += 1;
+        self.updated_at = now;
+
+        Ok(BalanceChange::unfreeze(
+            sequence_id,
+            self.account_id,
+            self.asset_id,
+            amount,
+            available_before,
+            frozen_before,
+            order_id,
+            now,
+            self.version,
+        ))
     }
 
     /// 检查余额是否为空
