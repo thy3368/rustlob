@@ -2,117 +2,76 @@ use std::collections::HashMap;
 
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
+use parking_lot::RwLock;
 
 use crate::adapter::local_lob_impl::LocalLob;
 use crate::core::repo_snapshot_support::RepoError;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob};
 
-/// 单一 LOB 仓储
-///
-/// 使用 HashMap 存储多个交易对的 LOB，实现 O(1) 查找性能
 #[allow(dead_code)]
 pub struct EmbeddedLobRepo<O: LobOrder> {
-    lobs: HashMap<TradingPair, LocalLob<O>>,
+    lobs: RwLock<HashMap<TradingPair, LocalLob<O>>>,
 }
 
-impl<O: LobOrder> EmbeddedLobRepo<O> {}
-
 impl<O: LobOrder> EmbeddedLobRepo<O> {
-    /// 创建新的 SingleLobRepo
-    ///
-    /// # 参数
-    /// - `lobs`: LOB 的向量，将被转换为 HashMap
-    #[allow(dead_code)]
     pub fn new(lobs: Vec<LocalLob<O>>) -> Self {
         let mut map = HashMap::with_capacity(lobs.len());
         for lob in lobs {
             map.insert(*lob.symbol(), lob);
         }
-        Self { lobs: map }
-    }
-
-    /// 匹配订单
-    ///
-    /// 时间复杂度: O(1) 查找 + O(k) 匹配，其中 k 是匹配的订单数量
-    ///
-    /// # 参数
-    /// - `symbol`: 交易对符号
-    /// - `side`: 订单方向
-    /// - `price`: 价格
-    /// - `quantity`: 数量
-    ///
-    /// # 返回
-    /// - `(Some(Vec<&O>), remaining)`: 匹配到的订单列表和剩余未匹配数量
-    ///   - `remaining`: 0 表示全部匹配（全成交）
-    ///   - `remaining` > 0 表示部分匹配（部分成交）
-    /// - `(None, quantity)`: 找不到对应的 LOB 或无法匹配，返回原始数量
-    #[allow(dead_code)]
-    pub fn match_orders(
-        &self,
-        symbol: TradingPair,
-        side: OrderSide,
-        price: Price,
-        quantity: Quantity,
-    ) -> (Option<Vec<&O>>, Quantity) {
-        // 使用 trait 方法
-        MultiSymbolLobRepo::match_orders(self, symbol, side, price, quantity)
+        Self { lobs: RwLock::new(map) }
     }
 }
 
-/// 实现 MultiLobRepo trait
 impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
     type Order = O;
 
     fn match_orders(
         &self,
-        symbol: TradingPair,
-        side: OrderSide,
-        price: Price,
-        quantity: Quantity,
+        _symbol: TradingPair,
+        _side: OrderSide,
+        _price: Price,
+        _quantity: Quantity,
     ) -> (Option<Vec<&Self::Order>>, Quantity) {
-        // O(1) 查找对应的 LOB
-        match self.lobs.get(&symbol) {
-            Some(lob) => lob.match_orders(side, price, quantity),
-            None => (None, quantity),
-        }
+        todo!()
     }
 
     fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
-        let lob = self.lobs.get(&symbol)?;
-        lob.best_bid()
+        self.lobs.read().get(&symbol)?.best_bid()
     }
 
     fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
-        let lob = self.lobs.get(&symbol)?;
-        lob.best_ask()
+        self.lobs.read().get(&symbol)?.best_ask()
     }
 
     fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-        self.lobs.contains_key(symbol)
+        self.lobs.read().contains_key(symbol)
     }
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), RepoError> {
+    fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), RepoError> {
         todo!()
     }
 
-    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
+    fn remove_order(&self, _symbol: TradingPair, _order_id: OrderId) -> bool {
         todo!()
     }
 
-    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
+    fn find_order(&self, _p0: TradingPair, _p1: OrderId) -> Option<&Self::Order> {
         todo!()
     }
 
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
+    fn find_order_mut(&self, _p0: TradingPair, _order_id: OrderId) -> Option<&mut Self::Order> {
         todo!()
     }
 
     fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-        todo!()
+        self.lobs.read().get(&symbol)?.last_price()
     }
 
     fn update_last_price(&self, symbol: TradingPair, price: Price) {
-        todo!()
+        if let Some(lob) = self.lobs.write().get_mut(&symbol) {
+            lob.update_last_price(price);
+        }
     }
 }
 
@@ -120,7 +79,6 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
 mod tests {
     use super::*;
 
-    // 创建一个模拟的 Order 实现用于测试
     #[derive(Debug, Clone, entity_derive::Entity)]
     struct MockOrder {
         id: u64,
@@ -150,11 +108,11 @@ mod tests {
             self.price
         }
 
-        fn quantity(&self) -> Quantity {
+        fn base_qty(&self) -> Quantity {
             self.quantity
         }
 
-        fn filled_quantity(&self) -> Quantity {
+        fn filled_base_qty(&self) -> Quantity {
             self.filled_quantity
         }
 
@@ -165,5 +123,17 @@ mod tests {
         fn symbol(&self) -> TradingPair {
             self.symbol
         }
+    }
+
+    #[test]
+    fn test_contains_symbol() {
+        let repo = EmbeddedLobRepo::<MockOrder>::new(Vec::new());
+        assert!(!repo.contains_symbol(&TradingPair::BtcUsdt));
+    }
+
+    #[test]
+    fn test_last_price_no_lob() {
+        let repo = EmbeddedLobRepo::<MockOrder>::new(Vec::new());
+        assert!(repo.last_price(TradingPair::BtcUsdt).is_none());
     }
 }

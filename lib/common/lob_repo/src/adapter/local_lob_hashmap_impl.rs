@@ -281,7 +281,7 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                                 let idx = current_idx.unwrap();
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
-                                    let order_qty = node.order.quantity();
+                                    let order_qty = node.order.base_qty();
                                     if order_qty > Quantity::from_raw(0) {
                                         let fill_qty = if remaining < order_qty {
                                             remaining
@@ -343,7 +343,7 @@ impl<O: LobOrder> SymbolLob for LocalLobHashMap<O> {
                                 let idx = current_idx.unwrap();
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
-                                    let order_qty = node.order.quantity();
+                                    let order_qty = node.order.base_qty();
                                     if order_qty > Quantity::from_raw(0) {
                                         let fill_qty = if remaining < order_qty {
                                             remaining

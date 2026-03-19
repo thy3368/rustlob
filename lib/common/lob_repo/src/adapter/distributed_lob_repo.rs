@@ -70,11 +70,9 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         todo!()
     }
 
-    fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-        todo!()
+    fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
+        None
     }
 
-    fn update_last_price(&self, symbol: TradingPair, price: Price) {
-        todo!()
-    }
+    fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
 }

@@ -244,7 +244,7 @@ impl<O: LobOrder> LocalLobBTreeMap<O> {
             let mut current_idx = price_point.first_order_idx;
             while let Some(idx) = current_idx {
                 if let Some(Some(node)) = self.orders.get(idx) {
-                    total_qty = Quantity::from_raw(total_qty.raw() + node.order.quantity().raw());
+                    total_qty = Quantity::from_raw(total_qty.raw() + node.order.base_qty().raw());
                     current_idx = node.next_idx;
                 } else {
                     break;
@@ -263,7 +263,7 @@ impl<O: LobOrder> LocalLobBTreeMap<O> {
             let mut current_idx = price_point.first_order_idx;
             while let Some(idx) = current_idx {
                 if let Some(Some(node)) = self.orders.get(idx) {
-                    total_qty = Quantity::from_raw(total_qty.raw() + node.order.quantity().raw());
+                    total_qty = Quantity::from_raw(total_qty.raw() + node.order.base_qty().raw());
                     current_idx = node.next_idx;
                 } else {
                     break;
@@ -336,7 +336,7 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
                                 let idx = current_idx.unwrap();
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
-                                    let order_qty = node.order.quantity();
+                                    let order_qty = node.order.base_qty();
                                     if order_qty > Quantity::from_raw(0) {
                                         let fill_qty = if remaining < order_qty {
                                             remaining
@@ -389,7 +389,7 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
                                 let idx = current_idx.unwrap();
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
-                                    let order_qty = node.order.quantity();
+                                    let order_qty = node.order.base_qty();
                                     if order_qty > Quantity::from_raw(0) {
                                         let fill_qty = if remaining < order_qty {
                                             remaining
