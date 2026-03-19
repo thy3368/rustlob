@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 pub mod proc;
 
 pub fn add(left: u64, right: u64) -> u64 {

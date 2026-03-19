@@ -14,6 +14,9 @@ pub mod order_handler;
 pub mod spot_trade_v3;
 pub mod spot_trade_v2;
 
+// 撮合相关模块
+pub mod matching_engine;
+
 /// Command Handler trait
 #[async_trait::async_trait]
 pub trait CommandHandler<Cmd, Res, Err>: Send + Sync {

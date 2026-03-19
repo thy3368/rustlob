@@ -1,4 +1,3 @@
-use arrayvec::ArrayString;
 
 // 参考 Trading endpoints
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
@@ -283,7 +282,7 @@ pub struct NewOrderCmd {
     /// 价格
     price: Option<Price>,
     /// 用户自定义订单 ID
-    new_client_order_id: Option<ArrayString<32>>,
+    new_client_order_id: Option<String>,
     /// 策略 ID
     strategy_id: Option<i64>,
     /// 策略类型（不能小于 1000000）
@@ -1021,7 +1020,7 @@ pub struct NewOrderAck {
     order_list_id: i64,
     /// 用户自定义订单 ID
     /// 用户自定义订单 ID
-    client_order_id: Option<ArrayString<32>>,
+    client_order_id: Option<String>,
     /// 交易时间戳
     transact_time: Timestamp,
 }

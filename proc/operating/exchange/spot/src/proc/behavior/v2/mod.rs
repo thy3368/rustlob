@@ -15,4 +15,3 @@ pub mod new_order_cmd_base;
 
 // 订单到变更日志的转换算子
 
-mod op_single_user;

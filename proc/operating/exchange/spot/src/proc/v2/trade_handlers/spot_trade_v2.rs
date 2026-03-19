@@ -202,7 +202,7 @@ impl SpotTradeBehaviorV2Impl {
                     order.execution_method = ExecutionMethod::Market;
                     order.price = None;
                     order.conditional_type = ConditionalType::None;
-                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                    order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
                     Ok(None) // 继续正常流程（资金已冻结）
                 } else {
                     // 未触发，挂起等待（资金已冻结）
@@ -243,7 +243,7 @@ impl SpotTradeBehaviorV2Impl {
                     order.execution_method = ExecutionMethod::Market;
                     order.price = None;
                     order.conditional_type = ConditionalType::None;
-                    order.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
+                    order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
                     Ok(None) // 继续正常流程（资金已冻结）
                 } else {
                     // 未触发，挂起等待（资金已冻结）
@@ -306,9 +306,9 @@ impl SpotTradeBehaviorV2Impl {
             Ok(logs) => logs,
             Err(BalanceError::InsufficientAvailable { required, available }) => {
                 // 设置订单状态为 Rejected
-                internal_order.status =
+                internal_order.state.status =
                     base_types::exchange::spot::spot_types::OrderStatus::Rejected;
-                internal_order.last_updated = Timestamp::now_as_nanos();
+                internal_order.state.last_updated = Timestamp::now_as_nanos();
 
                 // 优化A: 使用 map_err 替代 unwrap
                 let rejected_order_change_log = internal_order.track_create().map_err(|e| {
@@ -378,9 +378,9 @@ impl SpotTradeBehaviorV2Impl {
             Ok(logs) => logs,
             Err(BalanceError::InsufficientAvailable { required, available }) => {
                 // 设置订单状态为 Rejected
-                internal_order.status =
+                internal_order.state.status =
                     base_types::exchange::spot::spot_types::OrderStatus::Rejected;
-                internal_order.last_updated = Timestamp::now_as_nanos();
+                internal_order.state.last_updated = Timestamp::now_as_nanos();
 
                 // 优化A: 使用 map_err 替代 unwrap
                 let rejected_order_change_log = internal_order.track_create().map_err(|e| {
@@ -418,15 +418,7 @@ impl SpotTradeBehaviorV2Impl {
     ) -> Result<(ChangeLogEntry, ChangeLogEntry), BalanceError> {
         let (balance_change_log, order_change_log) = match order.side() {
             OrderSide::Buy => {
-                // Freeze the quote asset balance
-                // Priority: use quote_order_qty if available (market orders), otherwise use price * quantity
-                let frozen_amount = if let Some(quote_qty) = order.total_quote_qty {
-                    // Market order with explicit quote amount
-                    quote_qty
-                } else {
-                    // Limit order: use price * quantity
-                    order.price.unwrap_or(Price::from_f64(0.0)) * order.quantity()
-                };
+                let frozen_amount = order.total_quote_qty;
 
                 // Pre-check balance sufficiency before track_update
                 let available_raw = balance.available.raw();
@@ -692,7 +684,7 @@ impl SpotTradeBehaviorV2Impl {
                             for matched_order in matched_orders {
                                 // 计算成交数量
                                 let filled =
-                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                    internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                 // 计算成交价格
                                 let transaction_price =
@@ -720,7 +712,7 @@ impl SpotTradeBehaviorV2Impl {
                                     internal_order.side,
                                     taker_commission_qty,
                                     maker_commission_qty,
-                                    internal_order.frozen_asset,
+                                    internal_order.frozen_asset(),
                                     10, // taker commission rate in bp
                                     5,  // maker commission rate in bp
                                 );
@@ -737,11 +729,11 @@ impl SpotTradeBehaviorV2Impl {
                             {
                                 log::error!("Failed to add order to LOB: {:?}", e);
                             }
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Pending;
                         } else {
                             // 全部成交
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Filled;
                         }
                     }
@@ -760,7 +752,7 @@ impl SpotTradeBehaviorV2Impl {
                             for matched_order in matched_orders {
                                 // 计算成交数量
                                 let filled =
-                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                    internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                 // 计算成交价格
                                 let transaction_price =
@@ -788,7 +780,7 @@ impl SpotTradeBehaviorV2Impl {
                                     internal_order.side,
                                     taker_commission_qty,
                                     maker_commission_qty,
-                                    internal_order.frozen_asset,
+                                    internal_order.frozen_asset(),
                                     10,
                                     5,
                                 );
@@ -797,10 +789,10 @@ impl SpotTradeBehaviorV2Impl {
                         }
                         // 剩余部分自动取消，不进入订单簿
                         if !remaining.is_zero() {
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
                         } else {
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Filled;
                         }
                     }
@@ -810,7 +802,7 @@ impl SpotTradeBehaviorV2Impl {
                             for matched_order in matched_orders {
                                 // 计算成交数量
                                 let filled =
-                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                    internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                 // 计算成交价格
                                 let transaction_price =
@@ -838,14 +830,14 @@ impl SpotTradeBehaviorV2Impl {
                                     internal_order.side,
                                     taker_commission_qty,
                                     maker_commission_qty,
-                                    internal_order.frozen_asset,
+                                    internal_order.frozen_asset(),
                                     10,
                                     5,
                                 );
                                 trades.push(trade);
                             }
                         }
-                        internal_order.status =
+                        internal_order.state.status =
                             base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
                     }
                 }
@@ -860,7 +852,7 @@ impl SpotTradeBehaviorV2Impl {
                                 for matched_order in matched_orders {
                                     // 计算成交数量
                                     let filled =
-                                        internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                        internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                     // 计算成交价格
                                     let transaction_price = matched_order
@@ -889,18 +881,18 @@ impl SpotTradeBehaviorV2Impl {
                                         internal_order.side,
                                         taker_commission_qty,
                                         maker_commission_qty,
-                                        internal_order.frozen_asset,
+                                        internal_order.frozen_asset(),
                                         10,
                                         5,
                                     );
                                     trades.push(trade);
                                 }
                             }
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Filled;
                         } else {
                             // 未能全部成交：取消整个订单
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
                         }
                     }
@@ -911,7 +903,7 @@ impl SpotTradeBehaviorV2Impl {
                                 for matched_order in matched_orders {
                                     // 计算成交数量
                                     let filled =
-                                        internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                        internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                     // 计算成交价格
                                     let transaction_price = matched_order
@@ -940,17 +932,17 @@ impl SpotTradeBehaviorV2Impl {
                                         internal_order.side,
                                         taker_commission_qty,
                                         maker_commission_qty,
-                                        internal_order.frozen_asset,
+                                        internal_order.frozen_asset(),
                                         10,
                                         5,
                                     );
                                     trades.push(trade);
                                 }
                             }
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Filled;
                         } else {
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Cancelled;
                         }
                     }
@@ -963,7 +955,7 @@ impl SpotTradeBehaviorV2Impl {
                         if matches.is_some() {
                             // GTX订单不能立即成交，必须作为Maker
                             // 如果有匹配，说明会立即成交，应该拒绝
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Rejected;
                         } else {
                             // 没有匹配，可以作为Maker进入订单簿
@@ -985,7 +977,7 @@ impl SpotTradeBehaviorV2Impl {
                             for matched_order in matched_orders {
                                 // 计算成交数量
                                 let filled =
-                                    internal_order.unfilled_qty.min(matched_order.unfilled_qty);
+                                    internal_order.unfilled_qty().min(matched_order.unfilled_qty());
 
                                 // 计算成交价格
                                 let transaction_price =
@@ -1013,7 +1005,7 @@ impl SpotTradeBehaviorV2Impl {
                                     internal_order.side,
                                     taker_commission_qty,
                                     maker_commission_qty,
-                                    internal_order.frozen_asset,
+                                    internal_order.frozen_asset(),
                                     10,
                                     5,
                                 );
@@ -1029,11 +1021,11 @@ impl SpotTradeBehaviorV2Impl {
                             {
                                 log::error!("Failed to add order to LOB: {:?}", e);
                             }
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Pending;
                         } else {
                             // 全部成交
-                            internal_order.status =
+                            internal_order.state.status =
                                 base_types::exchange::spot::spot_types::OrderStatus::Filled;
                         }
                     }
@@ -1088,7 +1080,7 @@ impl SpotTradeBehaviorV2Impl {
         };
 
         // 2. 检查订单状态是否为Pending
-        if order.status != OrderStatus::Pending {
+        if order.state.status != OrderStatus::Pending {
             return Ok(Vec::new()); // 非Pending状态不需要撮合
         }
 
@@ -1130,17 +1122,17 @@ impl SpotTradeBehaviorV2Impl {
                         diff::FieldChange::new(
                             "status",
                             "Pending".to_string(),
-                            format!("{:?}", order.status),
+                            format!("{:?}", order.state.status),
                         ),
                         diff::FieldChange::new(
                             "filled_qty",
                             "0".to_string(),
-                            order.filled_qty.to_string(),
+                            order.state.filled_base_qty.to_string(),
                         ),
                         diff::FieldChange::new(
                             "unfilled_qty",
                             order.total_base_qty.to_string(),
-                            order.unfilled_qty.to_string(),
+                            order.unfilled_qty().to_string(),
                         ),
                     ],
                 },
@@ -1194,7 +1186,7 @@ impl SpotTradeBehaviorV2Impl {
         };
 
         // 3. 检查订单状态是否为Pending
-        if order.status != OrderStatus::Pending {
+        if order.state.status != OrderStatus::Pending {
             return Ok((None, None)); // 非Pending状态不需要撮合
         }
 
@@ -1238,17 +1230,17 @@ impl SpotTradeBehaviorV2Impl {
                         diff::FieldChange::new(
                             "status",
                             "Pending".to_string(),
-                            format!("{:?}", order.status),
+                            format!("{:?}", order.state.status),
                         ),
                         diff::FieldChange::new(
                             "filled_qty",
                             "0".to_string(),
-                            order.filled_qty.to_string(),
+                            order.state.filled_base_qty.to_string(),
                         ),
                         diff::FieldChange::new(
                             "unfilled_qty",
                             order.total_base_qty.to_string(),
-                            order.unfilled_qty.to_string(),
+                            order.unfilled_qty().to_string(),
                         ),
                     ],
                 },
@@ -1314,7 +1306,7 @@ impl SpotTradeBehaviorV2Impl {
                     if let Ok(Some(mut taker_quote_balance)) =
                         self.balance_repo.find_by_id_4_update(&taker_quote_balance_id)
                     {
-                        let payment = trade.quantity * trade.price;
+                        let payment = trade.base_qty * trade.price;
                         let log = taker_quote_balance.track_update(|b| {
                             b.frozen2pay(payment, Timestamp::now_as_nanos());
                             b.frozen2pay(trade.taker_commission_qty, Timestamp::now_as_nanos());
@@ -1332,7 +1324,7 @@ impl SpotTradeBehaviorV2Impl {
                         self.balance_repo.find_by_id_4_update(&taker_base_balance_id)
                     {
                         let log = taker_base_balance.track_update(|b| {
-                            b.add_balance(trade.quantity, Timestamp::now_as_nanos());
+                            b.add_balance(trade.base_qty, Timestamp::now_as_nanos());
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
@@ -1347,7 +1339,7 @@ impl SpotTradeBehaviorV2Impl {
                         self.balance_repo.find_by_id_4_update(&maker_base_balance_id)
                     {
                         let log = maker_base_balance.track_update(|b| {
-                            b.frozen2pay(trade.quantity, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.base_qty, Timestamp::now_as_nanos());
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
@@ -1361,7 +1353,7 @@ impl SpotTradeBehaviorV2Impl {
                     if let Ok(Some(mut maker_quote_balance)) =
                         self.balance_repo.find_by_id_4_update(&maker_quote_balance_id)
                     {
-                        let proceeds = trade.quantity * trade.price;
+                        let proceeds = trade.base_qty * trade.price;
                         let log = maker_quote_balance.track_update(|b| {
                             b.add_balance(proceeds, Timestamp::now_as_nanos());
                             b.frozen2pay(trade.maker_commission_qty, Timestamp::now_as_nanos());
@@ -1383,7 +1375,7 @@ impl SpotTradeBehaviorV2Impl {
                         self.balance_repo.find_by_id_4_update(&taker_base_balance_id)
                     {
                         let log = taker_base_balance.track_update(|b| {
-                            b.frozen2pay(trade.quantity, Timestamp::now_as_nanos());
+                            b.frozen2pay(trade.base_qty, Timestamp::now_as_nanos());
                         });
                         if let Ok(entry) = log {
                             balance_change_logs.push(entry);
@@ -1397,7 +1389,7 @@ impl SpotTradeBehaviorV2Impl {
                     if let Ok(Some(mut taker_quote_balance)) =
                         self.balance_repo.find_by_id_4_update(&taker_quote_balance_id)
                     {
-                        let proceeds = trade.quantity * trade.price;
+                        let proceeds = trade.base_qty * trade.price;
                         let log = taker_quote_balance.track_update(|b| {
                             b.add_balance(proceeds, Timestamp::now_as_nanos());
                             b.frozen2pay(trade.taker_commission_qty, Timestamp::now_as_nanos());
@@ -1414,7 +1406,7 @@ impl SpotTradeBehaviorV2Impl {
                     if let Ok(Some(mut maker_quote_balance)) =
                         self.balance_repo.find_by_id_4_update(&maker_quote_balance_id)
                     {
-                        let payment = trade.quantity * trade.price;
+                        let payment = trade.base_qty * trade.price;
                         let log = maker_quote_balance.track_update(|b| {
                             b.frozen2pay(payment, Timestamp::now_as_nanos());
                         });
@@ -1431,7 +1423,7 @@ impl SpotTradeBehaviorV2Impl {
                         self.balance_repo.find_by_id_4_update(&maker_base_balance_id)
                     {
                         let log = maker_base_balance.track_update(|b| {
-                            b.add_balance(trade.quantity, Timestamp::now_as_nanos());
+                            b.add_balance(trade.base_qty, Timestamp::now_as_nanos());
                             b.frozen2pay(trade.maker_commission_qty, Timestamp::now_as_nanos());
                         });
                         if let Ok(entry) = log {
@@ -1511,7 +1503,7 @@ impl SpotTradeBehaviorV2Impl {
         // 1.执行订单预处理（创建订单 + 冻结资金）
         let (mut internal_order, _logs) = self.handle_acquiring(cmd)?;
 
-        match internal_order.status {
+        match internal_order.state.status {
             OrderStatus::ConditionalPending => {
                 // 条件单未触发，资金已冻结，等待后续触发
                 // 直接返回确认，不进行撮合

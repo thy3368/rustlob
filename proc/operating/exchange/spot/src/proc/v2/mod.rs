@@ -19,3 +19,5 @@ pub mod test;
 pub mod trade_handlers;
 
 pub mod order_conversion;
+
+pub mod processor;

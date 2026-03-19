@@ -10,18 +10,12 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny};
+use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::trade_handlers::account_handler::AccountHandler;
 use crate::proc::v2::trade_handlers::oco_handler::OcoHandler;
 use crate::proc::v2::trade_handlers::order_handler::OrderHandler;
 
-/// SpotTradeBehaviorV3 实现
-///
-/// 设计原则：
-/// - 主协调器作为薄层路由，将命令分发到对应的 Handler
-/// - 每个 Handler 负责一类命令的处理逻辑
-/// - 共享依赖通过构造函数注入
 pub struct SpotTradeBehaviorV3Impl {
-    // 命令处理器
     order_handler: Arc<OrderHandler>,
     oco_handler: Arc<OcoHandler>,
     account_handler: Arc<AccountHandler>,
@@ -33,13 +27,14 @@ impl SpotTradeBehaviorV3Impl {
         trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
         order_repo: Arc<MySqlDbRepo<SpotOrder>>,
         lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
+        event_publisher: Arc<dyn EventPublisher>,
     ) -> Self {
-        // 初始化各个 Handler
         let order_handler = Arc::new(OrderHandler::new(
             balance_repo.clone(),
             trade_repo.clone(),
             order_repo.clone(),
             lob_repo.clone(),
+            event_publisher.clone(),
         ));
 
         let oco_handler = Arc::new(OcoHandler::new(
