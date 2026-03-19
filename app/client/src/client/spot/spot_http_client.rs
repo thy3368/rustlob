@@ -15,7 +15,7 @@ use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
     SpotUserDataListenKeyBehavior, SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
 };
 // 实现HTTP调用客户端，参考
-// /Users/hongyaotang/src/rustlob/app/axum_server/src/interfaces/spot/http_server.rs
+// /Users/hongyaotang/src/rustlob/app/axum_server/src/interfaces/spot/command_processor
 
 /// 泛型Spot HTTP客户端，支持多种行为类型
 pub struct SpotHttpClient {
@@ -151,25 +151,23 @@ mod tests {
                 TradingPair::BtcUsdt,
                 OrderSide::Buy,
                 OrderType::Limit,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Timestamp::default(),
+                None, // time_in_force
+                None, // quantity
+                None, // quote_order_qty
+                None, // price
+                None, // new_client_order_id
+                None, // strategy_id
+                None, // strategy_type
+                None, // stop_price
+                None, // trailing_delta
+                None, // iceberg_qty
+                None, // new_order_resp_type
+                None, // self_trade_prevention_mode
+                None, // peg_price_type
+                None, // peg_offset_value
+                None, // peg_offset_type
             ),
-            None,
+            None, // compute_commission_rates
         ));
 
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");
