@@ -261,6 +261,16 @@ impl std::fmt::Display for TableSchema {
 #[immutable]
 //ChangeLogEntry 会写到硬盘 占用多少字节，可以省字节吗？
 
+//✅ 已完成：使用基础类型定义 ChangeLogEntry 的soa 方便simd； 方便地进制编解码时 0copy 0alloc
+// 实现文件：changelog_soa_raw.rs
+// - ChangeLogHeader: 64字节对齐的文件头，包含魔数验证
+// - ChangeLogDecoder: 零拷贝解码器，直接映射二进制数据
+// - ChangeLogEncoder: 零分配编码器，使用字符串池优化
+
+//✅ 已完成：使用基础类型定义 ChangeLogEntry 单条目版本
+// 实现文件：entity_change_log
+// - ChangeLogEntryBase: 64字节对齐的单条目结构，完全基于基础类型
+
 pub struct ChangeLogEntry {
     /// 实体唯一标识符
     entity_id: String,
@@ -297,45 +307,8 @@ impl Entity for ChangeLogEntry {
     }
 }
 
-// ============================================================================
-// 实体快照
-// ============================================================================
 
-/// 实体快照
-///
-/// 用于保存实体在某个时间点的完整状态
-#[derive(Debug, Clone, PartialEq)]
-pub struct EntitySnapshot {
-    /// 实体ID
-    pub entity_id: String,
-    /// 实体类型
-    pub entity_type: String,
-    /// 快照时间戳
-    pub timestamp: u64,
-    /// 快照序列号
-    pub sequence: u64,
-    /// 序列化后的实体数据
-    pub data: Vec<u8>,
-}
 
-impl EntitySnapshot {
-    /// 创建实体快照
-    pub fn new(
-        entity_id: impl Into<String>,
-        entity_type: impl Into<String>,
-        timestamp: u64,
-        sequence: u64,
-        data: Vec<u8>,
-    ) -> Self {
-        Self {
-            entity_id: entity_id.into(),
-            entity_type: entity_type.into(),
-            timestamp,
-            sequence,
-            data,
-        }
-    }
-}
 
 // ============================================================================
 // 时间戳和序列号提供者

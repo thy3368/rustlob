@@ -16,7 +16,7 @@
 /// - Updated 事件: old_version=N, new_version=N+1
 /// - Deleted 事件: old_version=N, new_version=N+1
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChangeLogEntryBase {
+pub struct EntityChangeLog {
     /// 变更时间戳（纳秒）
     pub timestamp: u64,
     /// 变更序列号（用于全局排序）
@@ -117,7 +117,7 @@ impl FieldChange {
     }
 }
 
-impl ChangeLogEntryBase {
+impl EntityChangeLog {
     /// 创建新的变更日志条目
     pub fn new(
         timestamp: u64,
@@ -378,7 +378,7 @@ impl Default for FieldChangeSoa {
 /// - 高效的列式访问
 /// - 支持乐观锁版本控制
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChangeLogEntrySoa {
+pub struct EntityChangeLogSoa {
     /// 变更时间戳数组（纳秒）
     pub timestamps: Vec<u64>,
     /// 变更序列号数组（用于排序）
@@ -397,7 +397,7 @@ pub struct ChangeLogEntrySoa {
     pub field_changes: Vec<FieldChangeSoa>,
 }
 
-impl ChangeLogEntrySoa {
+impl EntityChangeLogSoa {
     /// 创建新的空 SOA 结构
     pub fn new() -> Self {
         Self {
@@ -449,7 +449,7 @@ impl ChangeLogEntrySoa {
     }
 
     /// 从 AOS 条目添加
-    pub fn push_entry(&mut self, entry: ChangeLogEntryBase) {
+    pub fn push_entry(&mut self, entry: EntityChangeLog) {
         self.timestamps.push(entry.timestamp);
         self.sequences.push(entry.sequence);
         self.old_versions.push(entry.old_version);
@@ -483,12 +483,12 @@ impl ChangeLogEntrySoa {
     }
 
     /// 获取指定索引的条目（转换为 AOS）
-    pub fn get(&self, index: usize) -> Option<ChangeLogEntryBase> {
+    pub fn get(&self, index: usize) -> Option<EntityChangeLog> {
         if index >= self.len() {
             return None;
         }
 
-        Some(ChangeLogEntryBase {
+        Some(EntityChangeLog {
             timestamp: self.timestamps[index],
             sequence: self.sequences[index],
             old_version: self.old_versions[index],
@@ -566,15 +566,15 @@ impl ChangeLogEntrySoa {
     }
 }
 
-impl Default for ChangeLogEntrySoa {
+impl Default for EntityChangeLogSoa {
     fn default() -> Self {
         Self::new()
     }
 }
 
 /// AOS 到 SOA 的转换
-impl From<Vec<ChangeLogEntryBase>> for ChangeLogEntrySoa {
-    fn from(entries: Vec<ChangeLogEntryBase>) -> Self {
+impl From<Vec<EntityChangeLog>> for EntityChangeLogSoa {
+    fn from(entries: Vec<EntityChangeLog>) -> Self {
         let mut soa = Self::with_capacity(entries.len());
         for entry in entries {
             soa.push_entry(entry);
@@ -584,10 +584,10 @@ impl From<Vec<ChangeLogEntryBase>> for ChangeLogEntrySoa {
 }
 
 /// SOA 到 AOS 的转换
-impl From<ChangeLogEntrySoa> for Vec<ChangeLogEntryBase> {
-    fn from(soa: ChangeLogEntrySoa) -> Self {
+impl From<EntityChangeLogSoa> for Vec<EntityChangeLog> {
+    fn from(soa: EntityChangeLogSoa) -> Self {
         (0..soa.len())
-            .map(|i| ChangeLogEntryBase {
+            .map(|i| EntityChangeLog {
                 timestamp: soa.timestamps[i],
                 sequence: soa.sequences[i],
                 old_version: soa.old_versions[i],
@@ -607,8 +607,8 @@ mod tests {
 
     #[test]
     fn test_new_entry() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
-        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityChangeLog::entity_id_from_str("123").unwrap();
+        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
 
         assert_eq!(entry.timestamp, 1000);
         assert_eq!(entry.sequence, 1);
@@ -622,19 +622,19 @@ mod tests {
 
     #[test]
     fn test_change_type_checks() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("456").unwrap();
+        let entity_id = EntityChangeLog::entity_id_from_str("456").unwrap();
 
-        let created = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let created = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert!(created.is_created());
         assert!(!created.is_updated());
         assert!(!created.is_deleted());
 
-        let updated = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let updated = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
         assert!(!updated.is_created());
         assert!(updated.is_updated());
         assert!(!updated.is_deleted());
 
-        let deleted = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 2);
+        let deleted = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 2);
         assert!(!deleted.is_created());
         assert!(!deleted.is_updated());
         assert!(deleted.is_deleted());
@@ -642,8 +642,8 @@ mod tests {
 
     #[test]
     fn test_add_field_change() {
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
-        let mut entry = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
+        let mut entry = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
         let field_change = FieldChange::new(
@@ -677,25 +677,25 @@ mod tests {
     #[test]
     fn test_entity_id_conversion() {
         // 测试有效的数字字符串转换
-        let id1 = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
+        let id1 = EntityChangeLog::entity_id_from_str("123").unwrap();
         assert_eq!(id1, 123);
 
         // 测试负数
-        let id2 = ChangeLogEntryBase::entity_id_from_str("-456").unwrap();
+        let id2 = EntityChangeLog::entity_id_from_str("-456").unwrap();
         assert_eq!(id2, -456);
 
         // 测试大数字
-        let id3 = ChangeLogEntryBase::entity_id_from_str("9223372036854775807").unwrap();
+        let id3 = EntityChangeLog::entity_id_from_str("9223372036854775807").unwrap();
         assert_eq!(id3, i64::MAX);
 
         // 测试往返转换
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
-        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
+        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert_eq!(entry.entity_id_as_str(), "789");
 
         // 测试无效字符串应该返回错误
-        assert!(ChangeLogEntryBase::entity_id_from_str("not_a_number").is_err());
-        assert!(ChangeLogEntryBase::entity_id_from_str("").is_err());
+        assert!(EntityChangeLog::entity_id_from_str("not_a_number").is_err());
+        assert!(EntityChangeLog::entity_id_from_str("").is_err());
     }
 }
 

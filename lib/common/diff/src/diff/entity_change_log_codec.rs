@@ -31,7 +31,7 @@
 //!   - field_types: [u8; field_change_count]
 //! ```
 
-use super::changelog_entry_base::{ChangeLogEntrySoa, FieldChange, FieldChangeSoa};
+use super::entity_change_log::{EntityChangeLogSoa, FieldChange, FieldChangeSoa};
 use std::mem::size_of;
 
 /// 魔数标识
@@ -69,26 +69,26 @@ pub enum DecodeError {
 ///
 /// 支持零分配编码，可复用缓冲区
 pub struct ChangeLogEntrySoaEncoder {
-    soa: ChangeLogEntrySoa,
+    soa: EntityChangeLogSoa,
 }
 
 impl ChangeLogEntrySoaEncoder {
     /// 创建新的编码器
     pub fn new() -> Self {
         Self {
-            soa: ChangeLogEntrySoa::new(),
+            soa: EntityChangeLogSoa::new(),
         }
     }
 
     /// 创建预分配容量的编码器
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            soa: ChangeLogEntrySoa::with_capacity(capacity),
+            soa: EntityChangeLogSoa::with_capacity(capacity),
         }
     }
 
     /// 添加条目
-    pub fn push(&mut self, entry: super::changelog_entry_base::ChangeLogEntryBase) {
+    pub fn push(&mut self, entry: super::entity_change_log::EntityChangeLog) {
         self.soa.push_entry(entry);
     }
 
@@ -532,8 +532,8 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     }
 
     /// 转换为 ChangeLogEntrySoa（需要内存拷贝）
-    pub fn to_soa(&self) -> ChangeLogEntrySoa {
-        let mut soa = ChangeLogEntrySoa::with_capacity(self.entry_count);
+    pub fn to_soa(&self) -> EntityChangeLogSoa {
+        let mut soa = EntityChangeLogSoa::with_capacity(self.entry_count);
 
         // 拷贝基础数据
         soa.timestamps.extend_from_slice(self.timestamps());
@@ -559,7 +559,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::changelog_entry_base::{ChangeLogEntryBase, FieldChange};
+    use super::super::entity_change_log::{EntityChangeLog, FieldChange};
     use super::*;
 
     #[test]
@@ -576,8 +576,8 @@ mod tests {
     fn test_encode_decode_single_entry() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("123").unwrap();
-        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityChangeLog::entity_id_from_str("123").unwrap();
+        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let data = encoder.encode();
@@ -596,8 +596,8 @@ mod tests {
     fn test_encode_decode_with_field_changes() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("456").unwrap();
-        let mut entry = ChangeLogEntryBase::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let entity_id = EntityChangeLog::entity_id_from_str("456").unwrap();
+        let mut entry = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
         let fc = FieldChange::new(field_name, b"100.0", b"120.0", 0);
@@ -616,8 +616,8 @@ mod tests {
     fn test_encode_to_external_buffer() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("789").unwrap();
-        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
+        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let size = encoder.encoded_size();
@@ -636,7 +636,7 @@ mod tests {
 
         for i in 0..5 {
             let entity_id = i as i64;
-            let mut entry = ChangeLogEntryBase::new(1000 + i, i, i, i + 1, entity_id, 1, 1);
+            let mut entry = EntityChangeLog::new(1000 + i, i, i, i + 1, entity_id, 1, 1);
 
             let field_name = FieldChange::field_name_from_str("price");
             let fc = FieldChange::new(field_name, b"100.0", b"120.0", 0);
@@ -664,8 +664,8 @@ mod tests {
     fn test_buffer_too_small() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = ChangeLogEntryBase::entity_id_from_str("999").unwrap();
-        let entry = ChangeLogEntryBase::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityChangeLog::entity_id_from_str("999").unwrap();
+        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let mut small_buffer = vec![0u8; 10];
@@ -1074,7 +1074,7 @@ impl<'a> FieldChangeSoaDecoder<'a> {
 
 #[cfg(test)]
 mod field_change_soa_tests {
-    use super::super::changelog_entry_base::FieldChange;
+    use super::super::entity_change_log::FieldChange;
     use super::*;
 
     #[test]

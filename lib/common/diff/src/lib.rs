@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 pub mod diff;
 pub use diff::diff_types;
 // 重新导出核心类型，方便使用
@@ -11,7 +13,6 @@ pub use diff::diff_types::{
     // 核心 trait（Entity 现在包含了 Diff, Replayable, Trackable 的所有功能）
     Entity,
     EntityError,
-    EntitySnapshot,
     FieldChange,
     FieldSchema,
     // 从 Created 事件重构实体的 trait 和函数
