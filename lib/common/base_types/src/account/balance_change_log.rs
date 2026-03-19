@@ -13,6 +13,8 @@
 //! - 可以直接memcpy
 //! - 128字节对齐（2个缓存行）
 
+use zerocopy::{FromZeros, Immutable, IntoBytes};
+
 use crate::account::balance_change::{BalanceChange, BalanceChangeReason, BalanceChangeType};
 use crate::{AccountId, AssetId, Quantity, Timestamp};
 
@@ -25,8 +27,9 @@ use crate::{AccountId, AssetId, Quantity, Timestamp};
 /// - 可以直接memcpy
 /// - 支持零拷贝序列化
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(IntoBytes, FromZeros)]
 #[repr(C, align(128))]
-pub struct BalanceChangePod {
+pub struct BalanceChangeLog {
     // ===== 第一缓存行（64字节）=====
     /// 全局唯一序列号
     pub sequence_id: u64,
@@ -63,9 +66,11 @@ pub struct BalanceChangePod {
     pub balance_version: u64,
     /// 保留字段（未来扩展）
     pub _reserved: [u64; 3],
+    /// 对齐填充（确保128字节对齐，无padding）
+    pub _align_padding: u64,
 }
 
-impl BalanceChangePod {
+impl BalanceChangeLog {
     /// 创建充值变更
     #[inline]
     pub const fn deposit(
@@ -93,6 +98,7 @@ impl BalanceChangePod {
             timestamp,
             balance_version,
             _reserved: [0; 3],
+            _align_padding: 0,
         }
     }
 
@@ -125,6 +131,7 @@ impl BalanceChangePod {
             timestamp,
             balance_version,
             _reserved: [0; 3],
+            _align_padding: 0,
         }
     }
 
@@ -157,6 +164,7 @@ impl BalanceChangePod {
             timestamp,
             balance_version,
             _reserved: [0; 3],
+            _align_padding: 0,
         }
     }
 
@@ -189,6 +197,7 @@ impl BalanceChangePod {
             timestamp,
             balance_version,
             _reserved: [0; 3],
+            _align_padding: 0,
         }
     }
 
@@ -286,6 +295,7 @@ impl BalanceChangePod {
             timestamp: change.timestamp.0,
             balance_version: change.balance_version,
             _reserved: [0; 3],
+            _align_padding: 0,
         }
     }
 
@@ -358,113 +368,125 @@ impl BalanceChangePod {
 }
 
 // 静态断言：确保POD类型大小和对齐
-const _: () = assert!(std::mem::size_of::<BalanceChangePod>() == 128);
-const _: () = assert!(std::mem::align_of::<BalanceChangePod>() == 128);
+const _: () = assert!(std::mem::size_of::<BalanceChangeLog>() == 128);
+const _: () = assert!(std::mem::align_of::<BalanceChangeLog>() == 128);
+
+/// Balance变更日志容量常量
+pub const BALANCE_CHANGE_LOG_CAPACITY: usize = 64;
 
 /// Balance变更日志（POD版本，SoA结构）
 ///
 /// 用于批量处理和SIMD优化
-#[derive(Debug, Clone)]
+/// 固定容量64条记录，支持零拷贝序列化
+#[derive(Debug, Clone, Copy)]
+#[derive(IntoBytes, FromZeros)]
+#[repr(C)]
 pub struct BalanceChangePodLog {
+    /// 当前记录数量
+    pub len: u64,
     /// 序列号数组
-    pub sequence_ids: Vec<u64>,
+    pub sequence_ids: [u64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 账户ID数组
-    pub account_ids: Vec<u64>,
+    pub account_ids: [u64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 资产ID数组
-    pub asset_ids: Vec<u64>,
+    pub asset_ids: [u64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更类型数组
-    pub change_types: Vec<u8>,
+    pub change_types: [u8; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更原因数组
-    pub reasons: Vec<u8>,
+    pub reasons: [u8; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更金额数组
-    pub amounts: Vec<i64>,
+    pub amounts: [i64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更前可用余额数组
-    pub available_befores: Vec<i64>,
+    pub available_befores: [i64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更后可用余额数组
-    pub available_afters: Vec<i64>,
+    pub available_afters: [i64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更前冻结余额数组
-    pub frozen_befores: Vec<i64>,
+    pub frozen_befores: [i64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 变更后冻结余额数组
-    pub frozen_afters: Vec<i64>,
+    pub frozen_afters: [i64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 订单ID数组
-    pub order_ids: Vec<u64>,
+    pub order_ids: [u64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 时间戳数组
-    pub timestamps: Vec<u64>,
+    pub timestamps: [u64; BALANCE_CHANGE_LOG_CAPACITY],
     /// 版本号数组
-    pub balance_versions: Vec<u64>,
+    pub balance_versions: [u64; BALANCE_CHANGE_LOG_CAPACITY],
 }
 
 impl BalanceChangePodLog {
     /// 创建空日志
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            sequence_ids: Vec::new(),
-            account_ids: Vec::new(),
-            asset_ids: Vec::new(),
-            change_types: Vec::new(),
-            reasons: Vec::new(),
-            amounts: Vec::new(),
-            available_befores: Vec::new(),
-            available_afters: Vec::new(),
-            frozen_befores: Vec::new(),
-            frozen_afters: Vec::new(),
-            order_ids: Vec::new(),
-            timestamps: Vec::new(),
-            balance_versions: Vec::new(),
-        }
-    }
-
-    /// 预分配容量
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            sequence_ids: Vec::with_capacity(capacity),
-            account_ids: Vec::with_capacity(capacity),
-            asset_ids: Vec::with_capacity(capacity),
-            change_types: Vec::with_capacity(capacity),
-            reasons: Vec::with_capacity(capacity),
-            amounts: Vec::with_capacity(capacity),
-            available_befores: Vec::with_capacity(capacity),
-            available_afters: Vec::with_capacity(capacity),
-            frozen_befores: Vec::with_capacity(capacity),
-            frozen_afters: Vec::with_capacity(capacity),
-            order_ids: Vec::with_capacity(capacity),
-            timestamps: Vec::with_capacity(capacity),
-            balance_versions: Vec::with_capacity(capacity),
+            len: 0,
+            sequence_ids: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            account_ids: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            asset_ids: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            change_types: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            reasons: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            amounts: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            available_befores: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            available_afters: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            frozen_befores: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            frozen_afters: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            order_ids: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            timestamps: [0; BALANCE_CHANGE_LOG_CAPACITY],
+            balance_versions: [0; BALANCE_CHANGE_LOG_CAPACITY],
         }
     }
 
     /// 添加变更记录
-    pub fn push(&mut self, change: &BalanceChangePod) {
-        self.sequence_ids.push(change.sequence_id);
-        self.account_ids.push(change.account_id);
-        self.asset_ids.push(change.asset_id);
-        self.change_types.push(change.change_type);
-        self.reasons.push(change.reason);
-        self.amounts.push(change.amount);
-        self.available_befores.push(change.available_before);
-        self.available_afters.push(change.available_after);
-        self.frozen_befores.push(change.frozen_before);
-        self.frozen_afters.push(change.frozen_after);
-        self.order_ids.push(change.order_id);
-        self.timestamps.push(change.timestamp);
-        self.balance_versions.push(change.balance_version);
+    #[inline]
+    pub fn push(&mut self, change: &BalanceChangeLog) -> Result<(), &'static str> {
+        let idx = self.len as usize;
+        if idx >= BALANCE_CHANGE_LOG_CAPACITY {
+            return Err("BalanceChangePodLog is full");
+        }
+
+        self.sequence_ids[idx] = change.sequence_id;
+        self.account_ids[idx] = change.account_id;
+        self.asset_ids[idx] = change.asset_id;
+        self.change_types[idx] = change.change_type;
+        self.reasons[idx] = change.reason;
+        self.amounts[idx] = change.amount;
+        self.available_befores[idx] = change.available_before;
+        self.available_afters[idx] = change.available_after;
+        self.frozen_befores[idx] = change.frozen_before;
+        self.frozen_afters[idx] = change.frozen_after;
+        self.order_ids[idx] = change.order_id;
+        self.timestamps[idx] = change.timestamp;
+        self.balance_versions[idx] = change.balance_version;
+
+        self.len += 1;
+        Ok(())
     }
 
     /// 获取记录数量
     #[inline]
-    pub fn len(&self) -> usize {
-        self.sequence_ids.len()
+    pub const fn len(&self) -> usize {
+        self.len as usize
     }
 
     /// 是否为空
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.sequence_ids.is_empty()
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// 是否已满
+    #[inline]
+    pub const fn is_full(&self) -> bool {
+        self.len as usize >= BALANCE_CHANGE_LOG_CAPACITY
+    }
+
+    /// 清空日志
+    #[inline]
+    pub fn clear(&mut self) {
+        self.len = 0;
     }
 
     /// 按账户ID过滤（SIMD优化潜力）
     pub fn filter_by_account(&self, account_id: u64) -> Vec<usize> {
-        self.account_ids
+        let len = self.len();
+        self.account_ids[..len]
             .iter()
             .enumerate()
             .filter_map(|(idx, &id)| if id == account_id { Some(idx) } else { None })
@@ -473,7 +495,8 @@ impl BalanceChangePodLog {
 
     /// 按时间范围过滤
     pub fn filter_by_time_range(&self, start: u64, end: u64) -> Vec<usize> {
-        self.timestamps
+        let len = self.len();
+        self.timestamps[..len]
             .iter()
             .enumerate()
             .filter_map(|(idx, &ts)| {
@@ -488,7 +511,8 @@ impl BalanceChangePodLog {
 
     /// 按变更类型过滤
     pub fn filter_by_type(&self, change_type: u8) -> Vec<usize> {
-        self.change_types
+        let len = self.len();
+        self.change_types[..len]
             .iter()
             .enumerate()
             .filter_map(|(idx, &t)| if t == change_type { Some(idx) } else { None })
@@ -508,13 +532,13 @@ mod tests {
 
     #[test]
     fn test_pod_size_and_alignment() {
-        assert_eq!(std::mem::size_of::<BalanceChangePod>(), 128);
-        assert_eq!(std::mem::align_of::<BalanceChangePod>(), 128);
+        assert_eq!(std::mem::size_of::<BalanceChangeLog>(), 128);
+        assert_eq!(std::mem::align_of::<BalanceChangeLog>(), 128);
     }
 
     #[test]
     fn test_pod_deposit() {
-        let change = BalanceChangePod::deposit(
+        let change = BalanceChangeLog::deposit(
             1,
             100,
             1,
@@ -533,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_pod_freeze() {
-        let change = BalanceChangePod::freeze(
+        let change = BalanceChangeLog::freeze(
             2,
             100,
             1,
@@ -555,7 +579,7 @@ mod tests {
     #[test]
     fn test_pod_total_balance_delta() {
         // 充值：总余额增加
-        let deposit = BalanceChangePod::deposit(
+        let deposit = BalanceChangeLog::deposit(
             1,
             100,
             1,
@@ -567,7 +591,7 @@ mod tests {
         assert_eq!(deposit.total_balance_delta(), 1000_00000000);
 
         // 冻结：总余额不变
-        let freeze = BalanceChangePod::freeze(
+        let freeze = BalanceChangeLog::freeze(
             2,
             100,
             1,
@@ -581,7 +605,7 @@ mod tests {
         assert_eq!(freeze.total_balance_delta(), 0);
 
         // 成交：总余额减少
-        let trade = BalanceChangePod::trade(
+        let trade = BalanceChangeLog::trade(
             3,
             100,
             1,
@@ -597,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_pod_zero_copy() {
-        let change = BalanceChangePod::deposit(
+        let change = BalanceChangeLog::deposit(
             1,
             100,
             1,
@@ -612,15 +636,15 @@ mod tests {
         assert_eq!(bytes.len(), 128);
 
         // 从字节数组恢复
-        let recovered = unsafe { BalanceChangePod::from_bytes(bytes) };
+        let recovered = unsafe { BalanceChangeLog::from_bytes(bytes) };
         assert_eq!(*recovered, change);
     }
 
     #[test]
     fn test_pod_log() {
-        let mut log = BalanceChangePodLog::with_capacity(10);
+        let mut log = BalanceChangePodLog::new();
 
-        let change1 = BalanceChangePod::deposit(
+        let change1 = BalanceChangeLog::deposit(
             1,
             100,
             1,
@@ -630,7 +654,7 @@ mod tests {
             1,
         );
 
-        let change2 = BalanceChangePod::freeze(
+        let change2 = BalanceChangeLog::freeze(
             2,
             100,
             1,
@@ -642,8 +666,8 @@ mod tests {
             2,
         );
 
-        log.push(&change1);
-        log.push(&change2);
+        log.push(&change1).unwrap();
+        log.push(&change2).unwrap();
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.filter_by_account(100).len(), 2);
