@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use immutable_derive::immutable;
 // ============================================================================
@@ -272,15 +274,10 @@ impl std::fmt::Display for TableSchema {
 // - ChangeLogEntryBase: 64字节对齐的单条目结构，完全基于基础类型
 
 pub struct ChangeLogEntry {
-    /// 实体唯一标识符
     entity_id: String,
-    /// 实体类型名称
     entity_type: String,
-    /// 变更类型
     change_type: ChangeType,
-    /// 变更时间戳（纳秒）
     timestamp: u64,
-    /// 变更序列号（用于排序）
     sequence: u64,
 }
 
@@ -288,140 +285,22 @@ impl Entity for ChangeLogEntry {
     type Id = String;
 
     fn entity_id(&self) -> Self::Id {
-        todo!()
+        self.entity_id.clone()
     }
 
     fn entity_type() -> &'static str
     where
         Self: Sized,
     {
-        todo!()
+        "ChangeLogEntry"
     }
 
-    fn diff(&self, other: &Self) -> Vec<FieldChange> {
-        todo!()
+    fn diff(&self, _other: &Self) -> Vec<FieldChange> {
+        Vec::new()
     }
 
-    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> {
-        todo!()
-    }
-}
-
-
-
-
-// ============================================================================
-// 时间戳和序列号提供者
-// ============================================================================
-
-/// 时间戳提供者 trait
-pub trait TimestampProvider: Send + Sync {
-    /// 获取当前时间戳（纳秒）
-    fn now(&self) -> u64;
-}
-
-/// 默认时间戳提供者（使用系统时间）
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SystemTimestampProvider;
-
-impl TimestampProvider for SystemTimestampProvider {
-    #[inline]
-    fn now(&self) -> u64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-            as u64
-    }
-}
-
-/// 缓存时间戳提供者（低延迟优化，适用于高频调用场景）
-///
-/// 使用线程本地缓存减少系统调用开销
-#[derive(Debug, Default)]
-pub struct CachedTimestampProvider {
-    cache_nanos: std::sync::atomic::AtomicU64,
-    last_update: std::sync::atomic::AtomicU64,
-}
-
-impl CachedTimestampProvider {
-    /// 创建缓存时间戳提供者
-    pub fn new() -> Self {
-        Self {
-            cache_nanos: std::sync::atomic::AtomicU64::new(0),
-            last_update: std::sync::atomic::AtomicU64::new(0),
-        }
-    }
-
-    /// 缓存有效期（纳秒），默认100微秒
-    const CACHE_DURATION_NANOS: u64 = 100_000;
-}
-
-impl TimestampProvider for CachedTimestampProvider {
-    #[inline]
-    fn now(&self) -> u64 {
-        let current =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-                as u64;
-
-        let last_update = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
-
-        // 如果缓存仍然有效，直接返回缓存值
-        if current - last_update < Self::CACHE_DURATION_NANOS {
-            return self.cache_nanos.load(std::sync::atomic::Ordering::Relaxed);
-        }
-
-        // 更新缓存
-        self.cache_nanos.store(current, std::sync::atomic::Ordering::Release);
-        self.last_update.store(current, std::sync::atomic::Ordering::Release);
-
-        current
-    }
-}
-
-/// 序列号生成器 trait
-pub trait SequenceGenerator: Send + Sync {
-    /// 生成下一个序列号
-    fn next(&self) -> u64;
-}
-
-/// 默认序列号生成器（返回0，需要外部管理）
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DefaultSequenceGenerator;
-
-impl SequenceGenerator for DefaultSequenceGenerator {
-    fn next(&self) -> u64 {
-        0 // 调用者需要自行管理序列号
-    }
-}
-
-/// 原子递增序列号生成器（线程安全）
-#[derive(Debug, Default)]
-pub struct AtomicSequenceGenerator {
-    counter: std::sync::atomic::AtomicU64,
-}
-
-impl AtomicSequenceGenerator {
-    /// 创建新的原子序列号生成器
-    #[inline]
-    pub fn new() -> Self {
-        Self { counter: std::sync::atomic::AtomicU64::new(0) }
-    }
-
-    /// 从指定值开始
-    #[inline]
-    pub fn with_start(start: u64) -> Self {
-        Self { counter: std::sync::atomic::AtomicU64::new(start) }
-    }
-
-    /// 批量生成序列号（低延迟优化）
-    #[inline]
-    pub fn next_batch(&self, count: u64) -> u64 {
-        self.counter.fetch_add(count, std::sync::atomic::Ordering::Relaxed)
-    }
-}
-
-impl SequenceGenerator for AtomicSequenceGenerator {
-    #[inline]
-    fn next(&self) -> u64 {
-        self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    fn replay(&mut self, _entry: &ChangeLogEntry) -> Result<(), EntityError> {
+        Ok(())
     }
 }
 
@@ -553,53 +432,8 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
             Self::entity_type().parse().unwrap(),
             ChangeType::Updated { changed_fields: field_changes },
             current_timestamp(),
-            0,
+            next_sequence(),
         ))
-    }
-
-    /// 自动追踪创建操作（带自定义提供者）
-    ///
-    /// # Example
-    /// ```ignore
-    /// let ts_provider = SystemTimestampProvider;
-    /// let seq_gen = AtomicSequenceGenerator::new();
-    /// let entry = order.track_create_with(&ts_provider, &seq_gen).unwrap();
-    /// ```
-    fn track_create_with(
-        &self,
-        ts_provider: &impl TimestampProvider,
-        seq_gen: &impl SequenceGenerator,
-    ) -> Result<ChangeLogEntry, EntityError>
-    where
-        Self: Sized,
-    {
-        track_with(self, Operation::Create, ts_provider, seq_gen)
-    }
-
-    /// 自动追踪删除操作（带自定义提供者）
-    fn track_delete_with(
-        &self,
-        ts_provider: &impl TimestampProvider,
-        seq_gen: &impl SequenceGenerator,
-    ) -> Result<ChangeLogEntry, EntityError>
-    where
-        Self: Sized,
-    {
-        track_with(self, Operation::Delete, ts_provider, seq_gen)
-    }
-
-    /// 自动追踪更新操作（带自定义提供者）
-    fn track_update_with<F>(
-        &mut self,
-        updater: F,
-        ts_provider: &impl TimestampProvider,
-        seq_gen: &impl SequenceGenerator,
-    ) -> Result<ChangeLogEntry, EntityError>
-    where
-        Self: Sized,
-        F: FnOnce(&mut Self),
-    {
-        track_update_with(self, updater, ts_provider, seq_gen)
     }
 
     // ============================================================================
@@ -743,90 +577,50 @@ impl TrackingResult {
 // 统一追踪接口
 // ============================================================================
 
+static SEQUENCE_COUNTER: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
+
+#[inline]
+fn next_sequence() -> u64 {
+    SEQUENCE_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+#[inline]
+fn current_timestamp() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
+}
+
 /// 操作类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
-    /// 创建操作
     Create,
-    /// 删除操作
     Delete,
 }
 
-/// 统一的变更追踪接口
-///
-/// 用于追踪 Create 和 Delete 操作（不需要修改实体）
-/// Update 操作请使用 `track_update` 函数
-///
-/// # 示例
-/// ```ignore
-/// // 创建
-/// let entry = track(&order, Operation::Create).unwrap();
-///
-/// // 删除
-/// let entry = track(&order, Operation::Delete).unwrap();
-/// ```
+/// 追踪实体操作（Create/Delete）
 #[inline]
 pub fn track<T>(entity: &T, operation: Operation) -> Result<ChangeLogEntry, EntityError>
 where
     T: Entity + 'static,
 {
-    track_with(entity, operation, &SystemTimestampProvider, &DefaultSequenceGenerator)
-}
-
-/// 统一的变更追踪接口（带自定义提供者）
-#[inline]
-pub fn track_with<T>(
-    entity: &T,
-    operation: Operation,
-    ts_provider: &impl TimestampProvider,
-    seq_gen: &impl SequenceGenerator,
-) -> Result<ChangeLogEntry, EntityError>
-where
-    T: Entity + 'static,
-{
     let change_type = match operation {
-        Operation::Create => {
-            // Created 事件包含空字段列表（实际字段需要通过 to_bytes 序列化）
-            ChangeType::Created { fields: Vec::new() }
-        }
+        Operation::Create => ChangeType::Created { fields: Vec::new() },
         Operation::Delete => ChangeType::Deleted,
     };
 
-    let entry = ChangeLogEntry::new(
+    Ok(ChangeLogEntry::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
         change_type,
-        ts_provider.now(),
-        seq_gen.next(),
-    );
-
-    Ok(entry)
+        current_timestamp(),
+        next_sequence(),
+    ))
 }
 
-/// 批量追踪实体操作（低延迟优化）
-///
-/// # 示例
-/// ```ignore
-/// let orders = vec![order1, order2, order3];
-/// let entries = track_batch(&orders, Operation::Create).unwrap();
-/// ```
+/// 批量追踪实体操作
 #[inline]
 pub fn track_batch<T>(
     entities: &[T],
     operation: Operation,
-) -> Result<Vec<ChangeLogEntry>, EntityError>
-where
-    T: Entity + 'static,
-{
-    track_batch_with(entities, operation, &SystemTimestampProvider, &AtomicSequenceGenerator::new())
-}
-
-/// 批量追踪实体操作（带自定义提供者）
-pub fn track_batch_with<T>(
-    entities: &[T],
-    operation: Operation,
-    ts_provider: &impl TimestampProvider,
-    seq_gen: &impl SequenceGenerator,
 ) -> Result<Vec<ChangeLogEntry>, EntityError>
 where
     T: Entity + 'static,
@@ -836,7 +630,7 @@ where
         Operation::Delete => ChangeType::Deleted,
     };
 
-    let timestamp = ts_provider.now();
+    let timestamp = current_timestamp();
     let mut entries = Vec::with_capacity(entities.len());
 
     for entity in entities {
@@ -845,7 +639,7 @@ where
             T::entity_type().parse().unwrap(),
             change_type.clone(),
             timestamp,
-            seq_gen.next(),
+            next_sequence(),
         ));
     }
 
@@ -853,57 +647,27 @@ where
 }
 
 /// 追踪实体更新操作（带自动 diff）
-///
-/// # 示例
-/// ```ignore
-/// let entry = track_update(&mut order, |o| {
-///     o.price = 51000.0;
-///     o.status = "confirmed".to_string();
-/// }).unwrap();
-/// ```
 #[inline]
 pub fn track_update<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, EntityError>
 where
     T: Entity + Clone + 'static,
     F: FnOnce(&mut T),
 {
-    track_update_with(entity, updater, &SystemTimestampProvider, &DefaultSequenceGenerator)
-}
-
-/// 追踪实体更新操作（带自定义提供者）
-#[inline]
-pub fn track_update_with<T, F>(
-    entity: &mut T,
-    updater: F,
-    ts_provider: &impl TimestampProvider,
-    seq_gen: &impl SequenceGenerator,
-) -> Result<ChangeLogEntry, EntityError>
-where
-    T: Entity + Clone + 'static,
-    F: FnOnce(&mut T),
-{
-    // 1. 克隆旧状态
     let old_entity = entity.clone();
-
-    // 2. 执行更新
     updater(entity);
 
-    // 3. 自动 diff 检测变更
     let field_changes = old_entity.diff(entity);
-
     if field_changes.is_empty() {
         return Err(EntityError::NoChangesDetected);
     }
 
-    let entry = ChangeLogEntry::new(
+    Ok(ChangeLogEntry::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
         ChangeType::Updated { changed_fields: field_changes },
-        ts_provider.now(),
-        seq_gen.next(),
-    );
-
-    Ok(entry)
+        current_timestamp(),
+        next_sequence(),
+    ))
 }
 
 // ============================================================================
@@ -1049,15 +813,6 @@ where
     T: Entity + 'static,
 {
     track(entity, Operation::Delete)
-}
-
-// ============================================================================
-// 辅助函数
-// ============================================================================
-
-/// 获取当前时间戳（纳秒）
-fn current_timestamp() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
 }
 
 // ============================================================================

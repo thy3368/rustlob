@@ -1,3 +1,5 @@
+use zerocopy::{FromZeros, Immutable, IntoBytes, Unaligned};
+
 /// 变更日志条目（AOS 版本）
 ///
 /// 使用基础类型，不考虑零拷贝和零分配
@@ -39,6 +41,8 @@ pub struct EntityChangeLog {
 ///
 /// 使用基础类型记录字段变更信息
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(packed)]
+#[derive(IntoBytes, FromZeros, Immutable, Unaligned)]
 pub struct FieldChange {
     /// 字段名称（固定32字节）
     pub field_name: [u8; 32],
@@ -56,12 +60,7 @@ pub struct FieldChange {
 
 impl FieldChange {
     /// 创建新的字段变更记录
-    pub fn new(
-        field_name: [u8; 32],
-        old_value: &[u8],
-        new_value: &[u8],
-        field_type: u8,
-    ) -> Self {
+    pub fn new(field_name: [u8; 32], old_value: &[u8], new_value: &[u8], field_type: u8) -> Self {
         let mut old_val = [0u8; 64];
         let mut new_val = [0u8; 64];
 
@@ -141,12 +140,7 @@ impl EntityChangeLog {
     }
 
     /// 创建 Created 事件（old_version=0, new_version=1）
-    pub fn new_created(
-        timestamp: u64,
-        sequence: u64,
-        entity_id: i64,
-        entity_type: u8,
-    ) -> Self {
+    pub fn new_created(timestamp: u64, sequence: u64, entity_id: i64, entity_type: u8) -> Self {
         Self::new(timestamp, sequence, 0, 1, entity_id, entity_type, 0)
     }
 
@@ -355,9 +349,7 @@ impl FieldChangeSoa {
 
     /// 转换为 Vec<FieldChange>
     pub fn to_vec(&self) -> Vec<FieldChange> {
-        (0..self.len())
-            .map(|i| self.get(i).unwrap())
-            .collect()
+        (0..self.len()).map(|i| self.get(i).unwrap()).collect()
     }
 }
 
@@ -378,6 +370,7 @@ impl Default for FieldChangeSoa {
 /// - 高效的列式访问
 /// - 支持乐观锁版本控制
 #[derive(Debug, Clone, PartialEq, Eq)]
+
 pub struct EntityChangeLogSoa {
     /// 变更时间戳数组（纳秒）
     pub timestamps: Vec<u64>,
@@ -646,12 +639,7 @@ mod tests {
         let mut entry = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
-        let field_change = FieldChange::new(
-            field_name,
-            b"100.0",
-            b"120.0",
-            0,
-        );
+        let field_change = FieldChange::new(field_name, b"100.0", b"120.0", 0);
 
         entry.add_field_change(field_change);
         assert_eq!(entry.field_change_count(), 1);
@@ -660,12 +648,7 @@ mod tests {
     #[test]
     fn test_field_change() {
         let field_name = FieldChange::field_name_from_str("price");
-        let field_change = FieldChange::new(
-            field_name,
-            b"100.0",
-            b"120.0",
-            0,
-        );
+        let field_change = FieldChange::new(field_name, b"100.0", b"120.0", 0);
 
         assert_eq!(field_change.field_name_as_str().unwrap(), "price");
         assert_eq!(field_change.old_value_bytes(), b"100.0");
@@ -700,5 +683,3 @@ mod tests {
 }
 
 //todo 在新文件为 ChangeLogEntrySoa 生成0copy 0alloc的二进制编解码
-
-

@@ -31,8 +31,9 @@
 //!   - field_types: [u8; field_change_count]
 //! ```
 
-use super::entity_change_log::{EntityChangeLogSoa, FieldChange, FieldChangeSoa};
 use std::mem::size_of;
+
+use super::entity_change_log::{EntityChangeLogSoa, FieldChange, FieldChangeSoa};
 
 /// 魔数标识
 const MAGIC: &[u8; 4] = b"CLSB";
@@ -75,16 +76,12 @@ pub struct ChangeLogEntrySoaEncoder {
 impl ChangeLogEntrySoaEncoder {
     /// 创建新的编码器
     pub fn new() -> Self {
-        Self {
-            soa: EntityChangeLogSoa::new(),
-        }
+        Self { soa: EntityChangeLogSoa::new() }
     }
 
     /// 创建预分配容量的编码器
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            soa: EntityChangeLogSoa::with_capacity(capacity),
-        }
+        Self { soa: EntityChangeLogSoa::with_capacity(capacity) }
     }
 
     /// 添加条目
@@ -363,10 +360,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
 
             offset += fc_size;
 
-            field_change_infos.push(FieldChangeInfo {
-                offset: fc_offset,
-                count: fc_count,
-            });
+            field_change_infos.push(FieldChangeInfo { offset: fc_offset, count: fc_count });
         }
 
         // 验证数据长度
@@ -713,16 +707,12 @@ pub struct FieldChangeSoaEncoder {
 impl FieldChangeSoaEncoder {
     /// 创建新的编码器
     pub fn new() -> Self {
-        Self {
-            soa: FieldChangeSoa::new(),
-        }
+        Self { soa: FieldChangeSoa::new() }
     }
 
     /// 创建预分配容量的编码器
     pub fn with_capacity(field_capacity: usize) -> Self {
-        Self {
-            soa: FieldChangeSoa::with_capacity(field_capacity),
-        }
+        Self { soa: FieldChangeSoa::with_capacity(field_capacity) }
     }
 
     /// 添加字段变更
@@ -732,9 +722,7 @@ impl FieldChangeSoaEncoder {
 
     /// 从 Vec<FieldChange> 创建
     pub fn from_vec(field_changes: Vec<FieldChange>) -> Self {
-        Self {
-            soa: FieldChangeSoa::from_vec(field_changes),
-        }
+        Self { soa: FieldChangeSoa::from_vec(field_changes) }
     }
 
     /// 获取字段变更数量
