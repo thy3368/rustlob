@@ -106,6 +106,14 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
     fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
         todo!()
     }
+
+    fn last_price(&self, symbol: TradingPair) -> Option<Price> {
+        todo!()
+    }
+
+    fn update_last_price(&self, symbol: TradingPair, price: Price) {
+        todo!()
+    }
 }
 
 #[cfg(test)]
