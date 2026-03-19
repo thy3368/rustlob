@@ -1,7 +1,6 @@
 use std::fmt;
 
 use arrayvec::ArrayString;
-use diff::ChangeLogEntry;
 use entity_derive::Entity;
 
 use crate::account::balance::Balance;
@@ -708,7 +707,7 @@ impl LobOrder for SpotOrder {
     }
 
     fn quantity(&self) -> Quantity {
-        self.total_base_order_qty
+        self.total_base_qty
     }
 
     fn filled_quantity(&self) -> Quantity {
@@ -735,15 +734,13 @@ impl LobOrder for SpotOrder {
 /// - frozen_asset: 通过 side + trading_pair 推导
 /// - filled_asset: 通过 side + trading_pair 推导
 /// - unfilled_qty: 通过 total_qty - filled_qty 计算
+/// - frozen_qty: 通过 unfilled_qty 和 side 计算（买单=unfilled_qty*price，卖单=unfilled_qty）
 #[repr(C)]
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExecutionState {
     // ===== 订单状态 =====
     pub status: OrderStatus, // 订单状态 (1字节)
-
-    // ===== 冻结相关 =====
-    pub frozen_qty: Quantity, // 冻结数量
 
     // ===== 成交统计 =====
     pub filled_base_qty: Quantity,      // 已成交数量（递增）
@@ -782,16 +779,16 @@ pub struct SpotOrder {
     pub timestamp: Timestamp,      // 创建时间戳 (ms)
 
     // ===== 订单参数字段 =====
-    pub total_base_order_qty: Quantity, // 总数量
-    pub price: Option<Price>,           // 订单价格 (None表示市价单)
-    pub quote_order_qty: Quantity,      // 报价数量（市价单使用，最多花费金额）
-    pub side: OrderSide,                // 买卖方向 (BUY/SELL) (1字节)
-    pub time_in_force: TimeInForce,     // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
+    pub total_base_qty: Quantity,   // 总数量
+    pub price: Option<Price>,       // 订单价格 (None表示市价单)
+    pub total_quote_qty: Quantity,  // 报价数量（市价单使用，最多花费金额）
+    pub side: OrderSide,            // 买卖方向 (BUY/SELL) (1字节)
+    pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
     // ===== 订单属性字段 =====
-    pub client_order_id: Option<ArrayString<32>>, // 客户订单ID
+    pub client_order_id: Option<String>, // 客户订单ID
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System) (1字节)
-    pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...)
+    pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...) //todo remove
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
     pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
@@ -829,7 +826,25 @@ impl SpotOrder {
     /// 获取未成交数量（通过 total_qty - filled_qty 计算）
     #[inline]
     pub fn unfilled_qty(&self) -> Quantity {
-        self.total_base_order_qty - self.state.filled_base_qty
+        self.total_base_qty - self.state.filled_base_qty
+    }
+
+    /// 获取冻结数量（通过 unfilled_qty 和 side 计算）
+    ///
+    /// 买单：冻结报价资产 = unfilled_qty * price
+    /// 卖单：冻结基础资产 = unfilled_qty
+    #[inline]
+    pub fn frozen_qty(&self) -> Quantity {
+        match self.side {
+            OrderSide::Buy => {
+                // 买单冻结报价资产（USDT）
+                self.unfilled_qty() * self.price.unwrap_or_default()
+            }
+            OrderSide::Sell => {
+                // 卖单冻结基础资产（BTC）
+                self.unfilled_qty()
+            }
+        }
     }
 
     pub fn frozen_asset_id(&self) -> AssetId {
@@ -845,7 +860,7 @@ impl SpotOrder {
 
 impl SpotOrder {
     pub fn is_all_filled(&self) -> bool {
-        self.total_base_order_qty == self.state.filled_base_qty
+        self.total_base_qty == self.state.filled_base_qty
     }
 
     /// 根据 CexFeeEntity 配置计算交易手续费
@@ -1012,18 +1027,18 @@ impl SpotOrder {
 
     pub fn frozen_margin(&mut self, balance: &mut Balance, now: Timestamp) {
         // 根据买卖方向确定冻结资产和数量
-        match self.side {
+        let frozen_amount = match self.side {
             OrderSide::Buy => {
                 // 冻结报价资产（USDT）
-                self.state.frozen_qty = self.total_base_order_qty * self.price.unwrap();
-                balance.frozen(self.state.frozen_qty, now);
+                self.total_base_qty * self.price.unwrap()
             }
             OrderSide::Sell => {
                 // 冻结基础资产（BTC）
-                self.state.frozen_qty = self.total_base_order_qty;
-                balance.frozen(self.state.frozen_qty, now);
+                self.total_base_qty
             }
         };
+
+        let _ = balance.frozen(frozen_amount, now);
     }
 
     #[inline]
@@ -1035,7 +1050,7 @@ impl SpotOrder {
         price: Price,
         quantity: Quantity,
         time_in_force: TimeInForce,
-        client_order_id: Option<ArrayString<32>>,
+        client_order_id: Option<String>,
         quote_order_qty: Quantity,
     ) -> Self {
         let timestamp = Timestamp::now_as_nanos();
@@ -1044,9 +1059,9 @@ impl SpotOrder {
             order_id,
             trader_id,
             trading_pair,
-            total_base_order_qty: quantity,
+            total_base_qty: quantity,
             price: Some(price),
-            quote_order_qty,
+            total_quote_qty: quote_order_qty,
             side,
             order_type: OrderType::Limit,
             execution_method: ExecutionMethod::Limit,
@@ -1062,7 +1077,6 @@ impl SpotOrder {
             client_order_id,
             state: ExecutionState {
                 status: OrderStatus::Pending,
-                frozen_qty: Quantity::default(),
                 filled_base_qty: Quantity::default(),
                 average_price: Price::default(),
                 cumulative_quote_qty: Quantity::default(),
@@ -1088,7 +1102,7 @@ impl SpotOrder {
     /// 获取已成交百分比（0.0 - 1.0）
     #[inline]
     pub fn fill_ratio(&self) -> f64 {
-        let total = self.total_base_order_qty.to_f64();
+        let total = self.total_base_qty.to_f64();
         let unfilled = self.unfilled_qty().to_f64();
         if total == 0.0 { 0.0 } else { unfilled / total }
     }
@@ -1172,7 +1186,7 @@ pub struct SpotTrade {
     /// 成交价格
     pub price: Price,
     /// 成交数量
-    pub quantity: Quantity,
+    pub base_qty: Quantity,
     /// 成交金额 = quantity × price
     pub quote_qty: Quantity,
 
@@ -1191,19 +1205,6 @@ pub struct SpotTrade {
     pub taker_commission_rate: i32,
     /// Maker 手续费率 (bp, 基点)
     pub maker_commission_rate: i32,
-}
-
-impl SpotTrade {
-    //todo 计算balance change logs
-    pub fn cal_balance(
-        &self,
-        taker_base_balance: &mut Balance,
-        taker_quoto_balance: &mut Balance,
-        marker_base_balance: &mut Balance,
-        maker_quoto_balance: &mut Balance,
-    ) -> Vec<ChangeLogEntry> {
-        todo!()
-    }
 }
 
 impl SpotTrade {
@@ -1233,7 +1234,7 @@ impl SpotTrade {
             maker_order_id,
             timestamp,
             price,
-            quantity,
+            base_qty: quantity,
             quote_qty,
             taker_side,
             taker_commission_qty,
@@ -1251,5 +1252,62 @@ mod tests {
 
     fn create_test_trading_pair() -> TradingPair {
         TradingPair::BtcUsdt
+    }
+
+    #[test]
+    fn test_frozen_qty_calculation() {
+        // 测试买单的frozen_qty计算
+        let buy_order = SpotOrder::create_order(
+            1,
+            TraderId::default(),
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            TimeInForce::GTC,
+            None,
+            Quantity::default(),
+        );
+
+        let frozen_buy = buy_order.frozen_qty();
+        assert_eq!(frozen_buy.to_f64(), 50000.0, "Buy order should freeze 1.0 * 50000.0");
+
+        // 测试卖单的frozen_qty计算
+        let sell_order = SpotOrder::create_order(
+            2,
+            TraderId::default(),
+            TradingPair::BtcUsdt,
+            OrderSide::Sell,
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            TimeInForce::GTC,
+            None,
+            Quantity::default(),
+        );
+
+        let frozen_sell = sell_order.frozen_qty();
+        assert_eq!(frozen_sell.to_f64(), 1.0, "Sell order should freeze 1.0 BTC");
+
+        // 测试部分成交后的frozen_qty
+        let mut partial_order = SpotOrder::create_order(
+            3,
+            TraderId::default(),
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            TimeInForce::GTC,
+            None,
+            Quantity::default(),
+        );
+
+        // 模拟成交0.3
+        partial_order.state.filled_base_qty = Quantity::from_f64(0.3);
+        let frozen_partial = partial_order.frozen_qty();
+        assert_eq!(
+            frozen_partial.to_f64(),
+            35000.0,
+            "Partial filled order should freeze 0.7 * 50000.0"
+        );
     }
 }
