@@ -8,9 +8,7 @@ pub mod interfaces {
 
     pub mod spot {
 
-        pub mod http {
-
-        }
+        pub mod http {}
 
         pub mod websocket {
             pub mod md_sse_controller;
@@ -18,7 +16,7 @@ pub mod interfaces {
             pub mod user_data_ws_handler;
         }
 
-        pub mod http_server;
+        pub mod command_processor;
         pub mod starter;
         pub mod websocket_server;
     }
@@ -63,7 +61,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     // 启动 Spot 模块单机版
-    if let Err(e) = spot::starter::start_spot_module(false).await {
+    if let Err(e) = spot::starter::start_command_processor(false).await {
         eprintln!("❌ Failed to start Spot module: {}", e);
     }
 

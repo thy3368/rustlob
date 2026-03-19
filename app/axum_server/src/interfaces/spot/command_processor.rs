@@ -22,7 +22,7 @@ use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
 use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig;
 use spot_behavior::proc::v2::actor::spot_trade_acquiring_stage::SpotAcquiringStage;
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
-use spot_behavior::proc::v2::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
 
@@ -35,8 +35,8 @@ use crate::interfaces::common::ins_repo;
 /// HTTP 服务器启动器
 
 #[immutable]
-pub struct HttpServer {}
-impl HttpServer {
+pub struct CommandProcessor {}
+impl CommandProcessor {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
 
@@ -121,7 +121,7 @@ impl HttpServer {
     }
 }
 
-impl HttpServer {
+impl CommandProcessor {
     /// 启动 Spot HTTP 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
