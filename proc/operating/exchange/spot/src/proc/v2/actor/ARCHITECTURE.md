@@ -271,7 +271,7 @@ static SPOT_MATCH_STAGE: Lazy<Arc<SpotMatchStage>> = Lazy::new(|| {
 在 `http_server.rs` 中启动所有 Stage：
 
 ```rust
-// http_server.rs
+// command_processor
 pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
     // ... HTTP 路由配置 ...
 

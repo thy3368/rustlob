@@ -446,7 +446,7 @@ impl SpotTradeBehaviorV2Impl {
             OrderSide::Sell => {
                 // Pre-check balance sufficiency
                 let available_raw = balance.available.raw();
-                let qty_raw = order.quantity().raw();
+                let qty_raw = order.base_qty().raw();
                 if available_raw < qty_raw {
                     return Err(BalanceError::InsufficientAvailable {
                         required: qty_raw,
@@ -458,7 +458,7 @@ impl SpotTradeBehaviorV2Impl {
                 let balance_change_log = balance
                     .track_update(|b| {
                         // Safe to unwrap because we pre-checked the balance
-                        b.frozen(order.quantity(), order.timestamp).unwrap();
+                        b.frozen(order.base_qty(), order.timestamp).unwrap();
                     })
                     .map_err(|_| BalanceError::Overflow)?;
 
@@ -667,7 +667,7 @@ impl SpotTradeBehaviorV2Impl {
             internal_order.trading_pair,
             internal_order.side,
             internal_order.price.unwrap(),
-            internal_order.quantity(),
+            internal_order.base_qty(),
         );
         let is_fully_filled = remaining.is_zero();
 
