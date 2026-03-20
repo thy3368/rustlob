@@ -28,11 +28,11 @@ impl LobOrder for MockOrder {
         self.price
     }
 
-    fn quantity(&self) -> Quantity {
+    fn base_qty(&self) -> Quantity {
         self.quantity
     }
 
-    fn filled_quantity(&self) -> Quantity {
+    fn filled_base_qty(&self) -> Quantity {
         self.filled_quantity
     }
 
