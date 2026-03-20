@@ -63,7 +63,7 @@ impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBeh
 
         match cmd {
             // ========== 订单相关命令 ==========
-            SpotTradeCmdAny::NewOrder(new_order) => self.order_handler.handle_new_order(new_order),
+            SpotTradeCmdAny::NewOrder(new_order) => self.order_handler.handle_post(new_order),
 
             SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(
                 ResMetadata::new(nonce, false, Timestamp::default()),

@@ -27,6 +27,8 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
 };
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::UserDataStreamEventAny;
 use crate::proc::v2::id_repo::order_next_id;
+use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
+use crate::proc::v2::trade_handlers::order_handler::OrderHandler;
 
 // 导入 NewOrderCmd -> SpotOrder 转换实现
 
@@ -49,6 +51,9 @@ pub struct SpotTradeBehaviorV2Impl {
     // lob_repo 可以是 EmbeddedLobRepo<SpotOrder> 或者DistributedLobRepo<SpotOrder>
     // 交易对路由 - 动态分发
     lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
+
+    // 事件发布器（支持 Kafka/NATS/Disruptor 切换）
+    event_publisher: Arc<dyn EventPublisher>,
 }
 
 impl SpotTradeBehaviorV2Impl {
@@ -1499,6 +1504,107 @@ impl SpotTradeBehaviorV2Impl {
         Ok(balance_change_logs)
     }
 
+    /// 处理订单投递（验证 + 路由）
+    ///
+    /// # 职责
+    /// 1. 验证订单命令参数
+    /// 2. 根据 symbol 路由到对应市场的收单队列
+    /// 3. 返回订单确认响应
+    ///
+    /// # 参数
+    /// - `cmd`: 新订单命令
+    ///
+    /// # 返回
+    /// - `Ok(CmdResp)`: 订单已接受，返回确认信息
+    /// - `Err(SpotCmdErrorAny)`: 验证失败或路由失败
+    ///
+    /// # 设计说明
+    /// 此方法只负责订单接收和路由，不执行撮合和结算
+    /// 实际的撮合和结算由后续的 MatchStage 和 SettlementStage 处理
+
+    /// 验证交易对是否支持
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对
+    ///
+    /// # 返回
+    /// - `true`: 支持该交易对
+    /// - `false`: 不支持该交易对
+    ///
+    /// # 说明
+    /// 当前实现检查 LOB 仓储中是否存在该交易对
+    /// 生产环境应该从配置或数据库中加载支持的交易对列表
+    fn is_symbol_supported(&self, symbol: TradingPair) -> bool {
+        // 方案1: 检查 LOB 仓储中是否存在该交易对
+        // 这是一个快速检查，避免路由到不存在的市场
+        match self.lob_repo.get_lob(symbol) {
+            Ok(_) => true,
+            Err(_) => {
+                tracing::warn!(
+                    symbol = ?symbol,
+                    "Trading pair not found in LOB repository"
+                );
+                false
+            }
+        }
+
+        // 方案2: 从配置中检查（更高效，推荐生产环境使用）
+        // TODO: 实现配置驱动的交易对白名单
+        // self.supported_symbols.contains(&symbol)
+    }
+
+    /// 路由订单到对应市场的收单队列
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对
+    /// - `order_log`: 订单变更日志
+    ///
+    /// # 返回
+    /// - `Ok(())`: 路由成功
+    /// - `Err(SpotCmdErrorAny)`: 路由失败
+    ///
+    /// # 路由策略
+    /// 使用 EventPublisher 发送订单日志到消息队列：
+    /// - **Kafka**: 按 symbol 分区，确保同一交易对的订单顺序性
+    /// - **NATS**: 使用 subject 路由到对应的 AcquiringStage
+    /// - **Disruptor**: 发布到无锁环形缓冲区
+    ///
+    /// # 分区策略
+    /// - 按 symbol 哈希分区，确保同一交易对的订单顺序性
+    /// - 不同交易对可以并行处理，提高吞吐量
+    fn route_order_to_market(
+        &self,
+        symbol: TradingPair,
+        order_log: ChangeLogEntry,
+    ) -> Result<(), SpotCmdErrorAny> {
+        tracing::trace!(
+            symbol = ?symbol,
+            entity_id = %order_log.entity_id(),
+            "Routing order to market queue"
+        );
+
+        // 使用 EventPublisher 发送订单日志
+        // EventPublisher 会根据配置选择后端（Kafka/NATS/Disruptor）
+        if let Err(e) = self.event_publisher.publish_order_log(&order_log) {
+            tracing::error!(
+                symbol = ?symbol,
+                entity_id = %order_log.entity_id(),
+                error = ?e,
+                "Failed to publish order log to queue"
+            );
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to publish order: {}", e),
+            }));
+        }
+
+        tracing::debug!(
+            symbol = ?symbol,
+            entity_id = %order_log.entity_id(),
+            "Order routed successfully via EventPublisher"
+        );
+
+        Ok(())
+    }
     fn handle(&self, cmd: NewOrderCmd) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 1.执行订单预处理（创建订单 + 冻结资金）
         let (mut internal_order, _logs) = self.handle_acquiring(cmd)?;
@@ -1590,8 +1696,15 @@ impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBeh
 
         match cmd {
             SpotTradeCmdAny::NewOrder(new_order) => {
-                // 执行订单处理
-                self.handle(new_order)
+                // 执行订单处理，委托给 OrderHandler
+                let handler = OrderHandler::new(
+                    self.balance_repo.clone(),
+                    self.trade_repo.clone(),
+                    self.order_repo.clone(),
+                    self.lob_repo.clone(),
+                    self.event_publisher.clone(),
+                );
+                handler.handle_post(new_order)
             }
 
             SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(

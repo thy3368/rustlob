@@ -11,14 +11,17 @@ use std::sync::Arc;
 use base_types::account::balance::Balance;
 use base_types::account::error::BalanceError;
 use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
-use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade};
-use base_types::{AccountId, AssetId, Quantity, Timestamp};
+use base_types::exchange::spot::spot_types::{OrderSide, OrderType, SpotOrder, SpotTrade};
+use base_types::{AccountId, AssetId, Quantity, Timestamp, TradingPair};
 use db_repo::MySqlDbRepo;
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLogEntry, ChangeType, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOrderCmd, SpotTradeResAny};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+    NewOrderAck, NewOrderCmd, SpotTradeResAny,
+};
+use crate::proc::v2::id_repo::order_next_id;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 
 /// 订单处理器
@@ -375,6 +378,114 @@ impl OrderHandler {
     }
 
     // ========== 私有辅助方法 ==========
+
+    /// 验证订单命令参数（优化D：参数验证前置）
+    fn validate_order_cmd(&self, cmd: &NewOrderCmd) -> Result<(), SpotCmdErrorAny> {
+        // 验证数量必须大于0
+        if let Some(qty) = cmd.quantity() {
+            if qty.is_zero() {
+                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                    field: "quantity",
+                    reason: "must be greater than 0",
+                }));
+            }
+        }
+
+        // 验证价格（限价单必须提供价格）
+        match cmd.order_type() {
+            OrderType::Limit
+            | OrderType::StopLossLimit
+            | OrderType::TakeProfitLimit
+            | OrderType::LimitMaker => {
+                if cmd.price().is_none() {
+                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                        field: "price",
+                        reason: "required for limit orders",
+                    }));
+                }
+            }
+            _ => {} // 市价单不需要价格
+        }
+
+        // 验证止损/止盈价格（条件单必须提供）
+        match cmd.order_type() {
+            OrderType::StopLoss
+            | OrderType::StopLossLimit
+            | OrderType::TakeProfit
+            | OrderType::TakeProfitLimit => {
+                if cmd.stop_price().is_none() {
+                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                        field: "stop_price",
+                        reason: "required for conditional orders",
+                    }));
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    /// 验证交易对是否支持
+    ///
+    /// # 参数
+    /// - `symbol`: 交易对
+    ///
+    /// # 返回
+    /// - `true`: 支持该交易对
+    /// - `false`: 不支持该交易对
+    ///
+    /// # 说明
+    /// 当前实现检查 LOB 仓储中是否存在该交易对
+    /// 生产环境应该从配置或数据库中加载支持的交易对列表
+    #[inline]
+    fn is_symbol_supported(&self, symbol: TradingPair) -> bool {
+        self.lob_repo.contains_symbol(&symbol)
+    }
+
+    #[inline]
+    pub(crate) fn handle_post(
+        &self,
+        cmd: NewOrderCmd,
+    ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+        self.validate_order_cmd(&cmd)?;
+
+        let symbol = cmd.symbol();
+        if !self.is_symbol_supported(symbol) {
+            return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                field: "symbol",
+                reason: "trading pair not supported",
+            }));
+        }
+
+        let order_id = order_next_id();
+        let timestamp = Timestamp::now_as_nanos();
+
+        let cmd_log = ChangeLogEntry::new(
+            order_id.to_string(),
+            "NewOrderCmd",
+            ChangeType::Created { fields: Vec::new() },
+            timestamp.0,
+            0,
+        );
+
+        self.event_publisher.publish_order_log(&cmd_log).map_err(|e| {
+            tracing::error!(order_id, symbol = %symbol, error = %e, "Failed to route order");
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to route order: {}", e),
+            })
+        })?;
+
+        let ack = NewOrderAck::new(
+            symbol,
+            order_id,
+            -1,
+            cmd.new_client_order_id().map(String::from),
+            timestamp,
+        );
+
+        Ok(CmdResp::new(ResMetadata::new(0, false, timestamp), SpotTradeResAny::NewOrderAck(ack)))
+    }
 
     /// 验证命令并转换为内部订单
     ///

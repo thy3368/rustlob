@@ -6,6 +6,8 @@ use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::Serialize;
 
+use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeCmdAny;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PublishError {
     #[error("Serialization error: {0}")]
@@ -70,6 +72,8 @@ impl Default for PublisherConfig {
 }
 
 pub trait EventPublisher: Send + Sync {
+    fn publish_command(&self, log: &SpotTradeCmdAny) -> Result<(), PublishError>;
+
     fn publish_order_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
     fn publish_balance_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
     fn publish_trade_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
@@ -123,6 +127,17 @@ impl KafkaEventPublisher {
 }
 
 impl EventPublisher for KafkaEventPublisher {
+    fn publish_command(&self, cmd: &SpotTradeCmdAny) -> Result<(), PublishError> {
+        let payload = serde_json::to_vec(cmd).map_err(|e| PublishError::Serialization(e))?;
+        let record = FutureRecord::to(&self.config.order_log_topic).payload(&payload).key(&());
+        let future = self
+            .producer
+            .send(record, std::time::Duration::from_millis(self.config.send_timeout_ms as u64));
+        futures::executor::block_on(future)
+            .map_err(|(e, _)| PublishError::KafkaSend(format!("{:?}", e)))?;
+        Ok(())
+    }
+
     fn publish_order_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError> {
         self.send(&self.config.order_log_topic, log)
     }
