@@ -13,10 +13,19 @@
 
 ### 1.1 核心目标
 
-- **性能目标**: 50,000-100,000 TPS，延迟 150-200ms
+- **性能目标**:
+  - **初期目标**: 20,000-50,000 TPS，延迟 150-200ms
+  - **优化目标**: 50,000-100,000 TPS（通过流水线和批处理优化）
 - **安全目标**: 拜占庭容错，可容忍 f = (n-1)/3 个恶意节点
 - **可用性目标**: 99.9% 可用性，支持节点故障自动恢复
 - **开发目标**: 2-3 个月完成开发和部署
+
+**性能分析**:
+- 区块时间: 100ms
+- 每区块交易数: 1000
+- 理论 TPS: 10,000 (基础)
+- 通过流水线优化: 20,000-50,000 TPS
+- 通过批处理 + 并行验证: 50,000-100,000 TPS
 
 ### 1.2 方案特点
 
@@ -362,23 +371,33 @@ impl App for SpotApp {
 ```
 
 
-#### 3.3.3 交易执行流程
+#### 3.3.3 交易执行流程（原子性保证）
+
+**交易排序规则**:
+- **确定性排序**: 区块内交易按照以下规则排序
+  1. 时间戳优先（使用区块时间戳，非系统时间）
+  2. Nonce 优先（同一用户的交易按 Nonce 排序）
+  3. 交易哈希字典序（最终 tie-breaking）
+- **防止前置交易**: 所有节点使用相同排序规则，确保执行顺序一致
 
 ```rust
 impl SpotApp {
-    /// 执行单笔交易（三阶段合一）
+    /// 执行单笔交易（三阶段合一 + 原子性）
     fn execute_transaction(&mut self, tx: &SpotTransaction)
         -> Result<AppStateUpdates, ExecutionError>
     {
-        match &tx.data {
+        // 创建临时状态快照用于回滚
+        let snapshot = self.state.snapshot();
+
+        let result = match &tx.data {
             TransactionData::NewOrder(order_data) => {
-                // 阶段 1: 委托处理
+                // 阶段 1: 委托处理（验证 + 冻结余额）
                 let order = self.acquire_order(tx, order_data)?;
 
-                // 阶段 2: 撮合处理
+                // 阶段 2: 撮合处理（匹配订单）
                 let trades = self.match_order(&order)?;
 
-                // 阶段 3: 清算处理
+                // 阶段 3: 清算处理（更新余额）
                 self.settle_trades(&trades)?;
 
                 // 生成状态更新
@@ -393,10 +412,17 @@ impl SpotApp {
             TransactionData::ModifyOrder(modify_data) => {
                 self.execute_modify_order(tx, modify_data)
             }
+        };
+
+        // 如果执行失败，回滚到快照状态
+        if result.is_err() {
+            self.state = snapshot;
         }
+
+        result
     }
 
-    /// 阶段 1: 委托处理
+    /// 阶段 1: 委托处理（验证 + 冻结）
     fn acquire_order(&mut self, tx: &SpotTransaction, data: &NewOrderTxData)
         -> Result<SpotOrder, AcquireError>
     {
@@ -562,9 +588,23 @@ fn select_leader(view: u64, validators: &[ValidatorKey]) -> ValidatorKey {
 }
 ```
 
-#### 4.1.3 View Change
+#### 4.1.3 View Change（超时配置）
 
 ```rust
+/// View Change 配置
+pub struct ViewChangeConfig {
+    /// Prepare 阶段超时
+    prepare_timeout: Duration,      // 200ms
+    /// PreCommit 阶段超时
+    precommit_timeout: Duration,    // 200ms
+    /// Commit 阶段超时
+    commit_timeout: Duration,       // 200ms
+    /// 最大 View Change 重试次数
+    max_view_change_retries: u32,   // 3
+    /// View Change 超时倍增因子
+    timeout_multiplier: f64,        // 1.5
+}
+
 /// View Change 触发条件
 enum ViewChangeTrigger {
     /// 超时（Leader 无响应）
@@ -578,7 +618,7 @@ enum ViewChangeTrigger {
 }
 
 /// View Change 流程
-fn trigger_view_change(&mut self) {
+fn trigger_view_change(&mut self, config: &ViewChangeConfig) {
     // 1. 增加 view 号
     self.current_view += 1;
 
@@ -613,14 +653,14 @@ n = 3f + 1
 
 **定理**: 只要诚实节点 ≥ 2f+1，系统就是安全的
 
-**证明**:
-1. 任何决策需要 2f+1 票
-2. 诚实节点 ≥ 2f+1
-3. 拜占庭节点 ≤ f
-4. 拜占庭节点无法单独达成 2f+1 票
-5. 因此，任何通过的决策都有至少 f+1 个诚实节点支持
-6. 两个冲突的决策至少需要 4f+2 票，但总共只有 3f+1 个节点
-7. 因此，不可能有两个冲突的决策同时通过
+**证明（基于 Quorum 交集）**:
+1. 任何决策需要 2f+1 票（Quorum 大小）
+2. 系统总共有 n = 3f+1 个节点
+3. 两个 Quorum 的交集大小 = (2f+1) + (2f+1) - (3f+1) = f+1
+4. 由于最多有 f 个拜占庭节点，交集中至少有 1 个诚实节点
+5. 诚实节点不会对冲突的决策投票
+6. 因此，不可能有两个冲突的决策同时获得 Quorum
+7. 结论：系统保证安全性
 
 #### 4.2.3 活性保证
 
@@ -657,30 +697,69 @@ fn validate_block(&self, block: &SpotBlock) -> Result<(), ValidationError> {
 #### 4.3.2 防重放攻击
 
 ```rust
-/// Nonce 机制
+/// Nonce 机制（滑动窗口 + 单调递增）
 pub struct NonceManager {
-    /// 已使用的 Nonce
-    used_nonces: HashMap<UserId, HashSet<u64>>,
+    /// 每个用户的最高 Nonce
+    highest_nonces: HashMap<UserId, u64>,
+    /// 最近使用的 Nonce（时间窗口内）
+    recent_nonces: HashMap<UserId, BTreeSet<u64>>,
+    /// Nonce 过期区块数（例如 86400 个区块 = 24 小时）
+    nonce_expiry_blocks: u64,
+    /// 当前区块高度
+    current_height: u64,
 }
 
 impl NonceManager {
-    /// 检查 Nonce 是否已使用
-    fn is_nonce_used(&self, user_id: &UserId, nonce: u64) -> bool {
-        self.used_nonces
-            .get(user_id)
-            .map(|nonces| nonces.contains(&nonce))
-            .unwrap_or(false)
-    }
+    /// 检查并记录 Nonce
+    fn validate_and_record_nonce(
+        &mut self,
+        user_id: &UserId,
+        nonce: u64,
+    ) -> Result<(), ValidationError> {
+        // 1. 检查 Nonce 是否单调递增
+        if let Some(&highest) = self.highest_nonces.get(user_id) {
+            if nonce <= highest {
+                return Err(ValidationError::NonceNotIncreasing);
+            }
+        }
 
-    /// 记录 Nonce
-    fn record_nonce(&mut self, user_id: UserId, nonce: u64) {
-        self.used_nonces
-            .entry(user_id)
+        // 2. 检查是否在最近窗口内重复
+        if let Some(recent) = self.recent_nonces.get(user_id) {
+            if recent.contains(&nonce) {
+                return Err(ValidationError::NonceDuplicate);
+            }
+        }
+
+        // 3. 记录 Nonce
+        self.highest_nonces.insert(user_id.clone(), nonce);
+        self.recent_nonces
+            .entry(user_id.clone())
             .or_default()
             .insert(nonce);
+
+        Ok(())
+    }
+
+    /// 清理过期 Nonce（定期调用）
+    fn cleanup_expired_nonces(&mut self, current_height: u64) {
+        self.current_height = current_height;
+        let expiry_threshold = current_height.saturating_sub(self.nonce_expiry_blocks);
+
+        // 清理逻辑：保留最近 nonce_expiry_blocks 个区块内的 Nonce
+        // 实际实现中需要记录每个 Nonce 的区块高度
+        // 这里简化为定期清空 recent_nonces，只保留 highest_nonces
+        if current_height % self.nonce_expiry_blocks == 0 {
+            self.recent_nonces.clear();
+        }
     }
 }
 ```
+
+**设计要点**:
+- **单调递增**: 每个用户的 Nonce 必须严格递增，防止重放
+- **滑动窗口**: 只保留最近 N 个区块的 Nonce 记录，避免内存无限增长
+- **定期清理**: 每隔一定区块数清理过期 Nonce
+- **内存优化**: `highest_nonces` 永久保留，`recent_nonces` 定期清理
 
 #### 4.3.3 防双花攻击
 
@@ -700,6 +779,67 @@ fn validate_balance(&self, tx: &SpotTransaction, snapshot: &StateSnapshot)
 }
 ```
 
+#### 4.3.4 确定性执行保证
+
+**关键原则**: 所有节点必须以完全相同的方式执行交易，产生相同的状态
+
+```rust
+/// 确定性执行规则
+pub struct DeterministicExecution {
+    /// 使用区块时间戳，禁止系统时间
+    block_timestamp: u64,
+
+    /// 使用确定性随机数生成器
+    rng: DeterministicRng,
+
+    /// 使用 BTreeMap 保证迭代顺序
+    ordered_state: BTreeMap<Key, Value>,
+}
+
+impl DeterministicExecution {
+    /// 禁止使用系统时间
+    fn get_timestamp(&self) -> u64 {
+        // ✅ 使用区块时间戳
+        self.block_timestamp
+
+        // ❌ 禁止使用系统时间
+        // SystemTime::now() // 不同节点时间不同！
+    }
+
+    /// 确定性随机数（基于区块哈希）
+    fn get_random(&mut self, block_hash: &CryptoHash) -> u64 {
+        // 使用区块哈希作为种子
+        self.rng.seed_from_hash(block_hash);
+        self.rng.next_u64()
+    }
+
+    /// 避免浮点运算，使用定点数
+    fn calculate_fee(&self, amount: u64) -> u64 {
+        // ✅ 使用整数运算
+        (amount * FEE_RATE_BASIS_POINTS) / 10000
+
+        // ❌ 禁止浮点运算
+        // (amount as f64 * 0.001) as u64 // 不同平台结果可能不同！
+    }
+
+    /// 保证迭代顺序
+    fn iterate_orders(&self) -> impl Iterator<Item = (&OrderId, &Order)> {
+        // ✅ 使用 BTreeMap 保证顺序
+        self.ordered_state.iter()
+
+        // ❌ 禁止使用 HashMap
+        // self.unordered_state.iter() // 迭代顺序不确定！
+    }
+}
+```
+
+**确定性检查清单**:
+- [ ] 所有时间戳使用区块时间，不使用 `SystemTime::now()`
+- [ ] 随机数使用确定性 PRNG，种子来自区块哈希
+- [ ] 避免浮点运算，使用定点数或整数
+- [ ] 需要顺序的地方使用 `BTreeMap`，不使用 `HashMap`
+- [ ] 避免依赖外部系统状态（网络、文件系统等）
+
 ---
 
 ## 5. 性能优化
@@ -712,46 +852,139 @@ fn validate_balance(&self, tx: &SpotTransaction, snapshot: &StateSnapshot)
 - **异步持久化**: 定期或按需持久化到磁盘
 - **快照机制**: 定期生成状态快照，加速恢复
 
-#### 5.1.2 实现
+#### 5.1.2 实现（Copy-on-Write 优化）
 
 ```rust
-/// 内存化状态存储
+use std::sync::Arc;
+
+/// 内存化状态存储（使用 Arc 实现结构共享）
 pub struct InMemoryStateStore {
-    /// 订单簿（全内存）
-    order_books: HashMap<TradingPair, OrderBook>,
+    /// 订单簿（使用 Arc 实现 CoW）
+    order_books: Arc<HashMap<TradingPair, Arc<OrderBook>>>,
 
-    /// 余额（全内存）
-    balances: HashMap<String, Balance>,
+    /// 余额（使用 Arc 实现 CoW）
+    balances: Arc<HashMap<String, Balance>>,
 
-    /// 活跃订单（全内存）
-    active_orders: HashMap<OrderId, SpotOrder>,
+    /// 活跃订单（使用 Arc 实现 CoW）
+    active_orders: Arc<HashMap<OrderId, SpotOrder>>,
 
-    /// Nonce 记录（全内存）
-    used_nonces: HashMap<UserId, HashSet<u64>>,
+    /// Nonce 管理器
+    nonce_manager: Arc<NonceManager>,
 
     /// 最后持久化高度
     last_persisted_height: u64,
 }
 
 impl InMemoryStateStore {
-    /// 创建状态快照
+    /// 创建状态快照（零拷贝）
     pub fn snapshot(&self) -> StateSnapshot {
         StateSnapshot {
-            order_books: self.order_books.clone(),
-            balances: self.balances.clone(),
-            active_orders: self.active_orders.clone(),
-            used_nonces: self.used_nonces.clone(),
+            order_books: Arc::clone(&self.order_books),
+            balances: Arc::clone(&self.balances),
+            active_orders: Arc::clone(&self.active_orders),
+            nonce_manager: Arc::clone(&self.nonce_manager),
         }
     }
 
-    /// 异步持久化
-    pub async fn persist_async(&self, height: u64) {
-        tokio::spawn(async move {
-            // 持久化到 RocksDB
-            self.persist_to_db(height).await;
-        });
+    /// 修改状态（Copy-on-Write）
+    pub fn update_balance(&mut self, user_id: &str, new_balance: Balance) {
+        // 只在需要修改时才克隆
+        let mut balances = (*self.balances).clone();
+        balances.insert(user_id.to_string(), new_balance);
+        self.balances = Arc::new(balances);
+    }
+
+    /// 批量更新（减少克隆次数）
+    pub fn apply_updates(&mut self, updates: StateUpdates) {
+        // 一次性克隆并应用所有更新
+        if !updates.balance_changes.is_empty() {
+            let mut balances = (*self.balances).clone();
+            for (user_id, balance) in updates.balance_changes {
+                balances.insert(user_id, balance);
+            }
+            self.balances = Arc::new(balances);
+        }
+
+        if !updates.order_changes.is_empty() {
+            let mut active_orders = (*self.active_orders).clone();
+            for (order_id, order) in updates.order_changes {
+                active_orders.insert(order_id, order);
+            }
+            self.active_orders = Arc::new(active_orders);
+        }
     }
 }
+
+/// 异步持久化管理器
+pub struct PersistenceManager {
+    /// 持久化队列
+    persist_queue: Arc<Mutex<VecDeque<PersistTask>>>,
+    /// 最大队列长度
+    max_queue_size: usize,
+    /// 持久化间隔（区块数）
+    persist_interval: u64,
+}
+
+impl PersistenceManager {
+    /// 提交持久化任务
+    pub async fn submit_persist_task(
+        &self,
+        height: u64,
+        snapshot: StateSnapshot,
+    ) -> Result<(), PersistError> {
+        let mut queue = self.persist_queue.lock().await;
+
+        // 检查队列是否已满（背压机制）
+        if queue.len() >= self.max_queue_size {
+            return Err(PersistError::QueueFull);
+        }
+
+        queue.push_back(PersistTask { height, snapshot });
+        Ok(())
+    }
+
+    /// 持久化工作线程
+    pub async fn run_persist_worker(&self) {
+        loop {
+            let task = {
+                let mut queue = self.persist_queue.lock().await;
+                queue.pop_front()
+            };
+
+            if let Some(task) = task {
+                match self.persist_to_db(&task).await {
+                    Ok(_) => {
+                        log::info!("Persisted state at height {}", task.height);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to persist state at height {}: {:?}",
+                                    task.height, e);
+                        // 重试逻辑：将任务重新加入队列
+                        let mut queue = self.persist_queue.lock().await;
+                        queue.push_front(task);
+                    }
+                }
+            } else {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+
+    /// 持久化到数据库
+    async fn persist_to_db(&self, task: &PersistTask) -> Result<(), PersistError> {
+        // 实际持久化逻辑
+        // 1. 序列化状态
+        // 2. 写入 RocksDB
+        // 3. 更新检查点
+        Ok(())
+    }
+}
+
+/// 持久化保证
+/// - **At-least-once**: 每个状态至少持久化一次
+/// - **背压机制**: 队列满时阻止新区块提交
+/// - **失败重试**: 持久化失败时自动重试
+/// - **检查点**: 定期创建检查点，加速恢复
 ```
 
 ### 5.2 批量处理
