@@ -203,7 +203,7 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     if replay_fields.is_empty() {
         // 如果所有字段都跳过，返回简单实现
         quote! {
-            fn replay(&mut self, entry: &diff::ChangeLogEntry) -> Result<(), diff::EntityError> {
+            fn replay(&mut self, entry: &diff::ChangeLog) -> Result<(), diff::EntityError> {
                 if !self.can_replay(entry) {
                     return Err(diff::EntityError::EntityIdMismatch {
                         expected: self.entity_id().to_string(),
@@ -222,7 +222,7 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     } else {
         // 生成完整的 replay 实现
         quote! {
-            fn replay(&mut self, entry: &diff::ChangeLogEntry) -> Result<(), diff::EntityError> {
+            fn replay(&mut self, entry: &diff::ChangeLog) -> Result<(), diff::EntityError> {
                 if !self.can_replay(entry) {
                     return Err(diff::EntityError::EntityIdMismatch {
                         expected: self.entity_id().to_string(),
@@ -375,7 +375,7 @@ fn generate_from_created_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     quote! {
         impl #impl_generics diff::FromCreatedEvent for #name #ty_generics #where_clause {
-            fn from_created_event(entry: &diff::ChangeLogEntry) -> Result<Self, diff::EntityError> {
+            fn from_created_event(entry: &diff::ChangeLog) -> Result<Self, diff::EntityError> {
                 let fields = diff::extract_fields_from_created_event(entry)?;
                 Self::from_field_map(&fields)
             }
