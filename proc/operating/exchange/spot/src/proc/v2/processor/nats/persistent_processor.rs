@@ -6,7 +6,7 @@ use futures::StreamExt;
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::MySqlDbRepo;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
@@ -50,7 +50,7 @@ impl NatsPersistentProcessor {
         })
     }
 
-    fn handle_change_log(&self, log: &ChangeLogEntry) -> Result<(), SpotCmdErrorAny> {
+    fn handle_change_log(&self, log: &ChangeLog) -> Result<(), SpotCmdErrorAny> {
         let entity_type = log.entity_type();
         let entity_id = log.entity_id();
         let sequence = log.sequence();
@@ -111,7 +111,7 @@ impl NatsProcessor for NatsPersistentProcessor {
     }
 
     async fn handle_message(&self, payload: &[u8]) -> Result<(), SpotCmdErrorAny> {
-        let log: ChangeLogEntry = deserialize_change_log(payload)?;
+        let log: ChangeLog = deserialize_change_log(payload)?;
         self.handle_change_log(&log)
     }
 }

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade};
 use base_types::{Price, Quantity, Timestamp};
 use db_repo::MySqlDbRepo;
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -35,9 +35,9 @@ pub struct MatchResult {
     /// 成交列表
     pub trades: Vec<SpotTrade>,
     /// 订单变更日志
-    pub order_logs: Vec<ChangeLogEntry>,
+    pub order_logs: Vec<ChangeLog>,
     /// 成交变更日志（用于触发结算）
-    pub trade_logs: Vec<ChangeLogEntry>,
+    pub trade_logs: Vec<ChangeLog>,
 }
 
 impl MatchResult {
@@ -226,7 +226,7 @@ impl MatchingEngine {
         &self,
         order: &mut SpotOrder,
         filled_quantity: Quantity,
-    ) -> Result<ChangeLogEntry, SpotCmdErrorAny> {
+    ) -> Result<ChangeLog, SpotCmdErrorAny> {
         // TODO: 实现订单状态更新
         todo!("Implement order status update")
     }

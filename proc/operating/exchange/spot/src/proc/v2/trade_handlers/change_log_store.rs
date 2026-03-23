@@ -8,7 +8,7 @@ use std::sync::Arc;
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use db_repo::{CmdRepo, MySqlDbRepo};
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use rocksdb::{DB, Options};
 use serde::de::DeserializeOwned;
 
@@ -36,7 +36,7 @@ impl ChangeLogStore {
         &self,
         entity_type: &str,
         entity_id: &str,
-        log: &ChangeLogEntry,
+        log: &ChangeLog,
     ) -> Result<(), String> {
         let key = format!("{}:{}", entity_type, entity_id);
         let value =
@@ -116,7 +116,7 @@ impl ChangeLogReplay {
     }
 
     /// Replay a change log entry to MySQL based on entity type
-    pub fn replay(&self, log: &ChangeLogEntry) -> Result<(), String> {
+    pub fn replay(&self, log: &ChangeLog) -> Result<(), String> {
         let entity_type = log.entity_type();
 
         match entity_type.as_str() {
@@ -168,12 +168,12 @@ pub trait ChangeLogProcessor: Send + Sync + 'static {
     /// Process a single change log entry
     fn process_change_log(
         &self,
-        log: &ChangeLogEntry,
+        log: &ChangeLog,
     ) -> impl std::future::Future<Output = Result<(), SpotCmdErrorAny>> + Send;
 }
 
 /// Helper function to deserialize change log from bytes
-pub fn deserialize_change_log(bytes: &[u8]) -> Result<ChangeLogEntry, SpotCmdErrorAny> {
+pub fn deserialize_change_log(bytes: &[u8]) -> Result<ChangeLog, SpotCmdErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
         tracing::error!(error = ?e, bytes_len = bytes.len(), "Failed to deserialize change log");
         SpotCmdErrorAny::Common(CommonError::Internal {
@@ -199,7 +199,7 @@ mod tests {
             "field_changes": []
         }"#;
 
-        let result: Result<ChangeLogEntry, _> = serde_json::from_str(json);
+        let result: Result<ChangeLog, _> = serde_json::from_str(json);
         assert!(result.is_ok());
     }
 

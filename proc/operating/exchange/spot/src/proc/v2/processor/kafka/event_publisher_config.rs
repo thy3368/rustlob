@@ -72,12 +72,12 @@ pub fn create_test_publisher() -> Result<Arc<dyn EventPublisher>, String> {
 
 #[cfg(test)]
 mod tests {
-    use diff::{ChangeLogEntry, ChangeType, FieldChange};
+    use diff::{ChangeLog, ChangeType, FieldChange};
 
     use super::*;
 
-    fn create_test_log() -> ChangeLogEntry {
-        ChangeLogEntry::new(
+    fn create_test_log() -> ChangeLog {
+        ChangeLog::new(
             "test-123".to_string(),
             "Order".to_string(),
             ChangeType::Created { fields: Vec::new() },

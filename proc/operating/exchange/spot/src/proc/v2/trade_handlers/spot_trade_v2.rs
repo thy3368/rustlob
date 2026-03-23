@@ -14,7 +14,7 @@ use base_types::mark_data::spot::level_types::OrderDelta;
 use base_types::spot_topic::SpotTopic;
 use base_types::{AccountId, AssetId, OrderId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 use immutable_derive::immutable;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
@@ -112,7 +112,7 @@ impl SpotTradeBehaviorV2Impl {
     }
 
     /// 批量发送变更事件并持久化（优化B：批量发送）
-    fn persist_change_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), SpotCmdErrorAny> {
+    fn persist_change_logs(&self, logs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
         // 1.批量回放到数据库
         for log in logs {
             match log.entity_type().as_str() {
@@ -275,7 +275,7 @@ impl SpotTradeBehaviorV2Impl {
     pub(crate) fn handle_acquiring2(
         &self,
         cmd: NewOrderCmd,
-    ) -> Result<(ChangeLogEntry, ChangeLogEntry), SpotCmdErrorAny> {
+    ) -> Result<(ChangeLog, ChangeLog), SpotCmdErrorAny> {
         // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
         self.validate_order_cmd(&cmd)?;
 
@@ -347,7 +347,7 @@ impl SpotTradeBehaviorV2Impl {
     pub(crate) fn handle_acquiring(
         &self,
         cmd: NewOrderCmd,
-    ) -> Result<(SpotOrder, Vec<ChangeLogEntry>), SpotCmdErrorAny> {
+    ) -> Result<(SpotOrder, Vec<ChangeLog>), SpotCmdErrorAny> {
         // 优化D: 参数验证前置（在创建订单前验证，避免无效资源分配）
         self.validate_order_cmd(&cmd)?;
 
@@ -420,7 +420,7 @@ impl SpotTradeBehaviorV2Impl {
         &self,
         balance: &mut Balance,
         order: &mut SpotOrder,
-    ) -> Result<(ChangeLogEntry, ChangeLogEntry), BalanceError> {
+    ) -> Result<(ChangeLog, ChangeLog), BalanceError> {
         let (balance_change_log, order_change_log) = match order.side() {
             OrderSide::Buy => {
                 let frozen_amount = order.total_quote_qty;
@@ -1066,7 +1066,7 @@ impl SpotTradeBehaviorV2Impl {
     pub(crate) fn handle_match2(
         &self,
         order_id: OrderId,
-    ) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+    ) -> Result<Vec<ChangeLog>, SpotCmdErrorAny> {
         // 1. 从订单仓库查询订单
         let order_id_str = order_id.to_string();
         let mut order = match self.order_repo.find_by_id(&order_id_str) {
@@ -1101,12 +1101,12 @@ impl SpotTradeBehaviorV2Impl {
         let trades = self.handle_match(&mut order);
 
         // 4. 生成变更日志
-        let mut all_change_logs: Vec<ChangeLogEntry> = Vec::new();
+        let mut all_change_logs: Vec<ChangeLog> = Vec::new();
 
         // 生成trade的changelog
         for trade in &trades {
             // 手动创建 ChangeLogEntry（因为 SpotTrade 没有实现 Entity trait）
-            let trade_log = ChangeLogEntry::new(
+            let trade_log = ChangeLog::new(
                 trade.trade_id.to_string(),
                 "SpotTrade".to_string(),
                 diff::ChangeType::Created { fields: Vec::new() },
@@ -1119,7 +1119,7 @@ impl SpotTradeBehaviorV2Impl {
         // 生成order更新的changelog（如果有成交）
         if !trades.is_empty() {
             // 手动创建 order 更新的 ChangeLogEntry
-            let order_log = ChangeLogEntry::new(
+            let order_log = ChangeLog::new(
                 order.order_id.to_string(),
                 "SpotOrder".to_string(),
                 diff::ChangeType::Updated {
@@ -1169,8 +1169,8 @@ impl SpotTradeBehaviorV2Impl {
     /// - `Err(SpotCmdErrorAny)`: 失败时返回错误
     pub(crate) fn handle_match3(
         &self,
-        order_log: ChangeLogEntry,
-    ) -> Result<(Option<Vec<ChangeLogEntry>>, Option<Vec<ChangeLogEntry>>), SpotCmdErrorAny> {
+        order_log: ChangeLog,
+    ) -> Result<(Option<Vec<ChangeLog>>, Option<Vec<ChangeLog>>), SpotCmdErrorAny> {
         // 1. 从 order_log 中提取订单ID
         let order_id_str = order_log.entity_id().to_string();
 
@@ -1208,13 +1208,13 @@ impl SpotTradeBehaviorV2Impl {
         let trades = self.handle_match(&mut order);
 
         // 5. 生成变更日志
-        let mut order_change_logs: Vec<ChangeLogEntry> = Vec::new();
-        let mut trade_change_logs: Vec<ChangeLogEntry> = Vec::new();
+        let mut order_change_logs: Vec<ChangeLog> = Vec::new();
+        let mut trade_change_logs: Vec<ChangeLog> = Vec::new();
 
         // 生成trade的changelog
         for trade in &trades {
             // 手动创建 ChangeLogEntry（因为 SpotTrade 没有实现 Entity trait）
-            let trade_log = ChangeLogEntry::new(
+            let trade_log = ChangeLog::new(
                 trade.trade_id.to_string(),
                 "SpotTrade".to_string(),
                 diff::ChangeType::Created { fields: Vec::new() },
@@ -1227,7 +1227,7 @@ impl SpotTradeBehaviorV2Impl {
         // 生成order更新的changelog（如果有成交）
         if !trades.is_empty() {
             // 手动创建 order 更新的 ChangeLogEntry
-            let order_update_log = ChangeLogEntry::new(
+            let order_update_log = ChangeLog::new(
                 order.order_id.to_string(),
                 "SpotOrder".to_string(),
                 diff::ChangeType::Updated {
@@ -1275,7 +1275,7 @@ impl SpotTradeBehaviorV2Impl {
     /// 处理交易的清算操作
     ///
     /// 根据成交记录更新双方账户余额、扣除手续费、生成变更日志
-    fn handle_settlement(&self, trades: Vec<SpotTrade>) -> Vec<ChangeLogEntry> {
+    fn handle_settlement(&self, trades: Vec<SpotTrade>) -> Vec<ChangeLog> {
         let mut balance_change_logs = Vec::new();
 
         // 使用第一笔交易的交易对（所有交易应该属于同一交易对）
@@ -1467,7 +1467,7 @@ impl SpotTradeBehaviorV2Impl {
     pub(crate) fn handle_settlement2(
         &self,
         trade_id: u64,
-    ) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+    ) -> Result<Vec<ChangeLog>, SpotCmdErrorAny> {
         // 1. 从交易仓库查询交易
         let trade_id_str = trade_id.to_string();
         let trade = match self.trade_repo.find_by_id(&trade_id_str) {
@@ -1562,7 +1562,7 @@ impl SpotTradeBehaviorV2Impl {
     fn route_order_to_market(
         &self,
         symbol: TradingPair,
-        order_log: ChangeLogEntry,
+        order_log: ChangeLog,
     ) -> Result<(), SpotCmdErrorAny> {
         tracing::trace!(
             symbol = ?symbol,

@@ -14,7 +14,7 @@ use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
 use base_types::exchange::spot::spot_types::{OrderSide, OrderType, SpotOrder, SpotTrade};
 use base_types::{AccountId, AssetId, Quantity, Timestamp, TradingPair};
 use db_repo::MySqlDbRepo;
-use diff::{ChangeLogEntry, ChangeType, Entity};
+use diff::{ChangeLog, ChangeType, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -132,7 +132,7 @@ impl OrderHandler {
     fn frozen_balance(
         &self,
         internal_order: &SpotOrder,
-    ) -> Result<ChangeLogEntry, SpotCmdErrorAny> {
+    ) -> Result<ChangeLog, SpotCmdErrorAny> {
         // 1. 确定需要冻结的资产
         let frozen_asset_id = internal_order.frozen_asset_id();
 
@@ -161,7 +161,7 @@ impl OrderHandler {
         &self,
         balance: &mut Balance,
         order: &SpotOrder,
-    ) -> Result<ChangeLogEntry, SpotCmdErrorAny> {
+    ) -> Result<ChangeLog, SpotCmdErrorAny> {
         // 1. 计算需要冻结的金额
         let frozen_amount = self.calculate_frozen_amount(order);
 
@@ -258,7 +258,7 @@ impl OrderHandler {
     /// # 说明
     /// 发送失败只记录错误日志，不影响主流程
     #[inline]
-    fn publish_logs(&self, order_log: &ChangeLogEntry, balance_log: Option<&ChangeLogEntry>) {
+    fn publish_logs(&self, order_log: &ChangeLog, balance_log: Option<&ChangeLog>) {
         // 发送余额日志
         if let Some(log) = balance_log {
             if let Err(e) = self.event_publisher.publish_balance_log(log) {
@@ -334,7 +334,7 @@ impl OrderHandler {
     fn handle_order_accepted(
         &self,
         order: SpotOrder,
-        balance_log: ChangeLogEntry,
+        balance_log: ChangeLog,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 1. 生成订单日志
         let order_log = order.track_create();
@@ -461,7 +461,7 @@ impl OrderHandler {
         let order_id = order_next_id() as u64;
         let timestamp = Timestamp::now_as_nanos();
 
-        let cmd_log = ChangeLogEntry::new(
+        let cmd_log = ChangeLog::new(
             order_id.to_string(),
             "NewOrderCmd".to_string(),
             ChangeType::Created { fields: Vec::new() },
@@ -508,7 +508,7 @@ impl OrderHandler {
         Ok(internal_order)
     }
 
-    fn persist_change_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), SpotCmdErrorAny> {
+    fn persist_change_logs(&self, logs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
         // TODO: 实现持久化逻辑
         Ok(())
     }
@@ -555,7 +555,7 @@ mod tests {
             }
         }
 
-        fn publish_order_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+        fn publish_order_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
             self.published.store(true, Ordering::SeqCst);
             if self.error_on_publish.load(Ordering::SeqCst) {
                 Err(PublishError::BackendUnavailable("mock error".into()))
@@ -564,23 +564,23 @@ mod tests {
             }
         }
 
-        fn publish_balance_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+        fn publish_balance_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
             Ok(())
         }
 
-        fn publish_trade_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+        fn publish_trade_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
             Ok(())
         }
 
-        fn publish_order_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+        fn publish_order_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
             Ok(())
         }
 
-        fn publish_balance_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+        fn publish_balance_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
             Ok(())
         }
 
-        fn publish_trade_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+        fn publish_trade_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
             Ok(())
         }
     }
@@ -605,7 +605,7 @@ mod tests {
             _price: Price,
             _quantity: Quantity,
         ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            (None, Quantity::ZERO)
+            (None, Decimal::from(0))
         }
 
         fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {

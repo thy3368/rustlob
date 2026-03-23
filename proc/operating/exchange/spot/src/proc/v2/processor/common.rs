@@ -4,19 +4,19 @@ use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::SpotTrade;
 use base_types::{AccountId, AssetId};
 use db_repo::MySqlDbRepo;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 
 #[derive(Debug, Clone)]
 pub struct SettlementResult {
-    pub balance_logs: Vec<ChangeLogEntry>,
+    pub balance_logs: Vec<ChangeLog>,
     pub success: bool,
 }
 
 impl SettlementResult {
-    pub fn success(balance_logs: Vec<ChangeLogEntry>) -> Self {
+    pub fn success(balance_logs: Vec<ChangeLog>) -> Self {
         Self { balance_logs, success: true }
     }
 
@@ -26,9 +26,9 @@ impl SettlementResult {
 }
 
 pub trait SettlementHandler: Send + Sync {
-    fn reconstruct_trade(&self, trade_log: &ChangeLogEntry) -> Result<SpotTrade, SpotCmdErrorAny>;
+    fn reconstruct_trade(&self, trade_log: &ChangeLog) -> Result<SpotTrade, SpotCmdErrorAny>;
     fn settle_trade(&self, trade: &SpotTrade) -> Result<SettlementResult, SpotCmdErrorAny>;
-    fn publish_balance_logs(&self, logs: &[ChangeLogEntry]);
+    fn publish_balance_logs(&self, logs: &[ChangeLog]);
 }
 
 pub struct DefaultSettlementHandler {
@@ -46,7 +46,7 @@ impl DefaultSettlementHandler {
 }
 
 impl SettlementHandler for DefaultSettlementHandler {
-    fn reconstruct_trade(&self, trade_log: &ChangeLogEntry) -> Result<SpotTrade, SpotCmdErrorAny> {
+    fn reconstruct_trade(&self, trade_log: &ChangeLog) -> Result<SpotTrade, SpotCmdErrorAny> {
         tracing::warn!(entity_id = %trade_log.entity_id(), "Trade reconstruction not implemented yet");
         Err(SpotCmdErrorAny::Common(CommonError::Internal {
             message: "Trade reconstruction not implemented".to_string(),
@@ -72,7 +72,7 @@ impl SettlementHandler for DefaultSettlementHandler {
         Ok(SettlementResult::success(balance_logs))
     }
 
-    fn publish_balance_logs(&self, logs: &[ChangeLogEntry]) {
+    fn publish_balance_logs(&self, logs: &[ChangeLog]) {
         if let Err(e) = self.event_publisher.publish_balance_logs(logs) {
             tracing::error!(error = ?e, "Failed to publish balance logs");
         }
@@ -80,12 +80,12 @@ impl SettlementHandler for DefaultSettlementHandler {
 }
 
 impl DefaultSettlementHandler {
-    fn settle_taker_side(&self, trade: &SpotTrade) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+    fn settle_taker_side(&self, trade: &SpotTrade) -> Result<Vec<ChangeLog>, SpotCmdErrorAny> {
         tracing::warn!("Taker settlement not implemented yet");
         Ok(Vec::new())
     }
 
-    fn settle_maker_side(&self, trade: &SpotTrade) -> Result<Vec<ChangeLogEntry>, SpotCmdErrorAny> {
+    fn settle_maker_side(&self, trade: &SpotTrade) -> Result<Vec<ChangeLog>, SpotCmdErrorAny> {
         tracing::warn!("Maker settlement not implemented yet");
         Ok(Vec::new())
     }

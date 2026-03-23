@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use push::k_line::k_line_service::KLineBehaviorV2Imp;
 use push::push::push_service::PushBehaviorV2Imp;
 
@@ -152,10 +152,10 @@ impl SThreadSpotTradePipeline {
     /// # 返回值
     /// 合并后的变更日志向量
     fn combine_logs(
-        order_change_logs_opt: Option<Vec<ChangeLogEntry>>,
-        trade_change_logs_opt: Option<Vec<ChangeLogEntry>>,
-        balance_change_logs: Vec<ChangeLogEntry>,
-    ) -> Vec<ChangeLogEntry> {
+        order_change_logs_opt: Option<Vec<ChangeLog>>,
+        trade_change_logs_opt: Option<Vec<ChangeLog>>,
+        balance_change_logs: Vec<ChangeLog>,
+    ) -> Vec<ChangeLog> {
         let mut all_logs = Vec::new();
 
         // 添加订单变更日志

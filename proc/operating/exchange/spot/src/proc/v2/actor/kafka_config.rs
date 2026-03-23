@@ -1,4 +1,4 @@
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
 /// Kafka 配置结构体
@@ -29,7 +29,7 @@ impl KafkaConfig {
 pub async fn send_single_log(
     producer: &FutureProducer,
     topic: &str,
-    log: &ChangeLogEntry,
+    log: &ChangeLog,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match serde_json::to_vec(log) {
         Ok(payload) => {
@@ -55,7 +55,7 @@ pub async fn send_single_log(
 }
 
 /// 发送变更日志列表到指定 topic
-pub async fn send_log_batch(producer: &FutureProducer, topic: &str, logs: Vec<ChangeLogEntry>) {
+pub async fn send_log_batch(producer: &FutureProducer, topic: &str, logs: Vec<ChangeLog>) {
     for log in logs {
         if let Err(e) = send_single_log(producer, topic, &log).await {
             tracing::error!("Failed to send log in batch to {}: {}", topic, e);

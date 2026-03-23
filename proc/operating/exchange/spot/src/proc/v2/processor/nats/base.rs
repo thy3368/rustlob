@@ -33,7 +33,7 @@ pub async fn create_nats_client(config: &NatsProcessorConfig) -> Result<Client, 
         .map_err(|e| format!("Failed to connect to NATS at {}: {}", config.nats_url, e))
 }
 
-pub fn deserialize_change_log(bytes: &[u8]) -> Result<diff::ChangeLogEntry, SpotCmdErrorAny> {
+pub fn deserialize_change_log(bytes: &[u8]) -> Result<diff::ChangeLog, SpotCmdErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
         tracing::error!(error = ?e, bytes_len = bytes.len(), "Failed to deserialize change log");
         SpotCmdErrorAny::Common(CommonError::Internal {

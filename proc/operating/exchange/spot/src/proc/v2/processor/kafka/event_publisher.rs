@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use futures::{FutureExt, TryFutureExt};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -74,12 +74,12 @@ impl Default for PublisherConfig {
 pub trait EventPublisher: Send + Sync {
     fn publish_command(&self, log: &SpotTradeCmdOrQuery) -> Result<(), PublishError>;
 
-    fn publish_order_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
-    fn publish_balance_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
-    fn publish_trade_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
-    fn publish_order_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError>;
-    fn publish_balance_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError>;
-    fn publish_trade_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError>;
+    fn publish_order_log(&self, log: &ChangeLog) -> Result<(), PublishError>;
+    fn publish_balance_log(&self, log: &ChangeLog) -> Result<(), PublishError>;
+    fn publish_trade_log(&self, log: &ChangeLog) -> Result<(), PublishError>;
+    fn publish_order_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError>;
+    fn publish_balance_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError>;
+    fn publish_trade_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError>;
 }
 
 pub struct KafkaEventPublisher {
@@ -104,7 +104,7 @@ impl KafkaEventPublisher {
         Ok(serde_json::to_vec(event)?)
     }
 
-    fn send(&self, topic: &str, event: &ChangeLogEntry) -> Result<(), PublishError> {
+    fn send(&self, topic: &str, event: &ChangeLog) -> Result<(), PublishError> {
         let payload = self.serialize(event)?;
         let record = FutureRecord::to(topic).payload(&payload).key(&());
         let future = self
@@ -115,7 +115,7 @@ impl KafkaEventPublisher {
         Ok(())
     }
 
-    fn publish(&self, topic: &str, logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+    fn publish(&self, topic: &str, logs: &[ChangeLog]) -> Result<(), PublishError> {
         if logs.is_empty() {
             return Ok(());
         }
@@ -138,27 +138,27 @@ impl EventPublisher for KafkaEventPublisher {
         Ok(())
     }
 
-    fn publish_order_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError> {
+    fn publish_order_log(&self, log: &ChangeLog) -> Result<(), PublishError> {
         self.send(&self.config.order_log_topic, log)
     }
 
-    fn publish_balance_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError> {
+    fn publish_balance_log(&self, log: &ChangeLog) -> Result<(), PublishError> {
         self.send(&self.config.balance_log_topic, log)
     }
 
-    fn publish_trade_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError> {
+    fn publish_trade_log(&self, log: &ChangeLog) -> Result<(), PublishError> {
         self.send(&self.config.trade_log_topic, log)
     }
 
-    fn publish_order_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+    fn publish_order_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError> {
         self.publish(&self.config.order_log_topic, logs)
     }
 
-    fn publish_balance_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+    fn publish_balance_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError> {
         self.publish(&self.config.balance_log_topic, logs)
     }
 
-    fn publish_trade_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+    fn publish_trade_logs(&self, logs: &[ChangeLog]) -> Result<(), PublishError> {
         self.publish(&self.config.trade_log_topic, logs)
     }
 }
@@ -235,8 +235,8 @@ mod tests {
 
     use super::*;
 
-    fn create_test_log() -> ChangeLogEntry {
-        ChangeLogEntry::new(
+    fn create_test_log() -> ChangeLog {
+        ChangeLog::new(
             "test-123".to_string(),
             "Order".to_string(),
             ChangeType::Created { fields: Vec::new() },

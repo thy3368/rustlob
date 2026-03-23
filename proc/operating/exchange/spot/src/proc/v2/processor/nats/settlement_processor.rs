@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_nats::Client;
 use futures::StreamExt;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::common::{SettlementHandler, SettlementResult};
@@ -53,7 +53,7 @@ impl NatsProcessor for NatsSettlementProcessor {
     }
 
     async fn handle_message(&self, payload: &[u8]) -> Result<(), SpotCmdErrorAny> {
-        let trade_log: ChangeLogEntry = deserialize_change_log(payload)?;
+        let trade_log: ChangeLog = deserialize_change_log(payload)?;
 
         tracing::debug!(
             entity_id = %trade_log.entity_id(),

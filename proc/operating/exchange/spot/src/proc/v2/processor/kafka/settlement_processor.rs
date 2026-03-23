@@ -3,7 +3,7 @@ use std::sync::Arc;
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::SpotTrade;
 use db_repo::MySqlDbRepo;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use rdkafka::consumer::StreamConsumer;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
@@ -62,7 +62,7 @@ impl KafkaProcessor for KafkaSettlementProcessor {
     }
 
     async fn handle_message(&self, payload: &[u8]) -> Result<(), SpotCmdErrorAny> {
-        let trade_log: ChangeLogEntry = deserialize_change_log(payload)?;
+        let trade_log: ChangeLog = deserialize_change_log(payload)?;
 
         tracing::debug!(
             entity_id = %trade_log.entity_id(),

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::SpotOrder;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use rdkafka::consumer::StreamConsumer;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
@@ -62,7 +62,7 @@ impl KafkaProcessor for KafkaMatchingProcessor {
     }
 
     async fn handle_message(&self, payload: &[u8]) -> Result<(), SpotCmdErrorAny> {
-        let order_log: ChangeLogEntry = deserialize_change_log(payload)?;
+        let order_log: ChangeLog = deserialize_change_log(payload)?;
 
         tracing::debug!(
             entity_id = %order_log.entity_id(),
@@ -78,7 +78,7 @@ impl KafkaProcessor for KafkaMatchingProcessor {
 }
 
 impl KafkaMatchingProcessor {
-    fn reconstruct_order(&self, order_log: &ChangeLogEntry) -> Result<SpotOrder, SpotCmdErrorAny> {
+    fn reconstruct_order(&self, order_log: &ChangeLog) -> Result<SpotOrder, SpotCmdErrorAny> {
         tracing::warn!(
             entity_id = %order_log.entity_id(),
             "Order reconstruction not implemented yet"

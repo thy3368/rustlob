@@ -92,7 +92,7 @@ pub fn create_kafka_consumer(config: &KafkaConsumerConfig) -> Result<StreamConsu
 }
 
 #[inline]
-pub fn deserialize_change_log(bytes: &[u8]) -> Result<diff::ChangeLogEntry, SpotCmdErrorAny> {
+pub fn deserialize_change_log(bytes: &[u8]) -> Result<diff::ChangeLog, SpotCmdErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
         tracing::error!(error = ?e, bytes_len = bytes.len(), "Failed to deserialize change log");
         SpotCmdErrorAny::Common(CommonError::Internal {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use push::k_line::k_line_service::KLineBehaviorV2Imp;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -61,7 +61,7 @@ impl ActorX for SpotKLineStage {
                     Ok(msg) => {
                         if let Some(payload) = msg.payload() {
                             // 解析 ChangeLogEntry
-                            let change_log: ChangeLogEntry = match serde_json::from_slice(payload) {
+                            let change_log: ChangeLog = match serde_json::from_slice(payload) {
                                 Ok(log) => log,
                                 Err(e) => {
                                     tracing::error!(

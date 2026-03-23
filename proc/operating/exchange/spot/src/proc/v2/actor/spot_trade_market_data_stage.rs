@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
-use diff::{ChangeLogEntry, ChangeType};
+use diff::{ChangeLog, ChangeType};
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::message::Message;
@@ -47,8 +47,8 @@ impl SpotMarketDataStage {
     /// 发送变更日志到 Kafka
     async fn send_change_logs(
         producer: &FutureProducer,
-        order_change_logs: Vec<ChangeLogEntry>,
-        trade_change_logs: Vec<ChangeLogEntry>,
+        order_change_logs: Vec<ChangeLog>,
+        trade_change_logs: Vec<ChangeLog>,
     ) {
         // 发送订单变更日志到 OrderChangeLog topic
         if !order_change_logs.is_empty() {
@@ -102,7 +102,7 @@ impl ActorX for SpotMarketDataStage {
                     Ok(msg) => {
                         if let Some(payload) = msg.payload() {
                             // 解析 ChangeLogEntry
-                            let change_log: ChangeLogEntry = match serde_json::from_slice(payload) {
+                            let change_log: ChangeLog = match serde_json::from_slice(payload) {
                                 Ok(log) => log,
                                 Err(e) => {
                                     tracing::error!(
@@ -173,14 +173,14 @@ mod tests {
     use super::*;
 
     /// 创建测试用的 ChangeLogEntry
-    fn create_test_change_log(entity_id: &str, entity_type: &str, status: &str) -> ChangeLogEntry {
+    fn create_test_change_log(entity_id: &str, entity_type: &str, status: &str) -> ChangeLog {
         let fields = vec![FieldChange::new(
             Cow::from("status"),
             String::from("Created"),
             String::from(status),
         )];
 
-        ChangeLogEntry::new(
+        ChangeLog::new(
             entity_id.to_string(),
             entity_type.to_string(),
             ChangeType::Updated { changed_fields: fields },
@@ -273,7 +273,7 @@ mod tests {
         assert!(!serialized.is_empty());
 
         // 反序列化
-        let deserialized: ChangeLogEntry =
+        let deserialized: ChangeLog =
             serde_json::from_slice(&serialized).expect("Failed to deserialize");
 
         assert_eq!(change_log.entity_id(), deserialized.entity_id());
