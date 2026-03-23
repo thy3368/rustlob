@@ -17,14 +17,20 @@
 use std::sync::Arc;
 use std::thread;
 
-use base_types::exchange::spot::spot_types::SpotOrder;
 use base_types::TradingPair;
+use base_types::exchange::spot::spot_types::SpotOrder;
 use diff::ChangeLogEntry;
-use disruptor::*;
+use disruptor::{Consumer, Executor, Producer, Reader};
+use num_cpus;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::trade_handlers::matching_engine::{MatchResult, MatchingEngine};
+
+#[allow(dead_code)]
+pub trait EventHandler<E>: Send + Sync {
+    fn on_event(&mut self, event: &E, sequence: i64, end_of_batch: bool);
+}
 
 /// Disruptor 事件：订单变更日志
 ///
@@ -44,11 +50,7 @@ pub struct OrderEvent {
 impl OrderEvent {
     /// 创建空事件（用于初始化 RingBuffer）
     pub fn empty() -> Self {
-        Self {
-            order_log: None,
-            symbol: TradingPair::default(),
-            sequence: 0,
-        }
+        Self { order_log: None, symbol: TradingPair::default(), sequence: 0 }
     }
 
     /// 检查事件是否有效
@@ -289,11 +291,11 @@ pub enum WaitStrategyType {
 ///                         EventPublisher
 /// ```
 pub struct DisruptorMatchingProcessor {
-    /// 生产者（用于发布订单事件）
-    producer: Producer<OrderEvent>,
-    /// 配置
+    #[allow(dead_code)]
+    producer: Box<dyn Producer<OrderEvent>>,
+    #[allow(dead_code)]
     config: DisruptorMatchingConfig,
-    /// 线程句柄
+    #[allow(dead_code)]
     thread_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -314,10 +316,7 @@ impl DisruptorMatchingProcessor {
     ) -> Result<Self, String> {
         // 验证 buffer_size 是 2 的幂
         if !config.buffer_size.is_power_of_two() {
-            return Err(format!(
-                "buffer_size must be power of 2, got {}",
-                config.buffer_size
-            ));
+            return Err(format!("buffer_size must be power of 2, got {}", config.buffer_size));
         }
 
         tracing::info!(
@@ -358,7 +357,9 @@ impl DisruptorMatchingProcessor {
             .spawn(move || {
                 // 设置 CPU 亲和性
                 if let Some(cpu_id) = cpu_affinity {
-                    if let Err(e) = core_affinity::set_for_current(core_affinity::CoreId { id: cpu_id }) {
+                    if let Err(e) =
+                        core_affinity::set_for_current(core_affinity::CoreId { id: cpu_id })
+                    {
                         tracing::warn!(
                             symbol = ?symbol,
                             cpu_id = cpu_id,
@@ -381,11 +382,7 @@ impl DisruptorMatchingProcessor {
             })
             .map_err(|e| format!("Failed to spawn thread: {}", e))?;
 
-        Ok(Self {
-            producer,
-            config,
-            thread_handle: Some(thread_handle),
-        })
+        Ok(Self { producer, config, thread_handle: Some(thread_handle) })
     }
 
     /// 发布订单事件
@@ -461,9 +458,7 @@ impl DisruptorMatchingProcessor {
 
         // 等待线程结束
         if let Some(handle) = self.thread_handle.take() {
-            handle
-                .join()
-                .map_err(|e| format!("Failed to join thread: {:?}", e))?;
+            handle.join().map_err(|e| format!("Failed to join thread: {:?}", e))?;
         }
 
         tracing::info!(symbol = ?self.config.symbol, "Disruptor processor stopped");
@@ -519,19 +514,12 @@ impl DisruptorMatchingProcessorFactory {
                 config.cpu_affinity = Some(idx % num_cpus::get());
             }
 
-            let processor = Self::create(
-                matching_engine.clone(),
-                event_publisher.clone(),
-                config,
-            )?;
+            let processor = Self::create(matching_engine.clone(), event_publisher.clone(), config)?;
 
             processors.push(processor);
         }
 
-        tracing::info!(
-            count = processors.len(),
-            "Created multiple Disruptor processors"
-        );
+        tracing::info!(count = processors.len(), "Created multiple Disruptor processors");
 
         Ok(processors)
     }

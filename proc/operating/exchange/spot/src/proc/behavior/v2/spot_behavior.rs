@@ -4,14 +4,14 @@ use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdOrQuery, SpotTradeResAny};
 use crate::proc::behavior::v2::spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny};
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::{
     SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
 };
 
 pub enum SpotCmdAny {
-    SpotTradeCmdAny(SpotTradeCmdAny),
+    SpotTradeCmdOrQuery(SpotTradeCmdOrQuery),
     SpotUserDataCmdAny(SpotUserDataCmdAny),
     SpotMarketDataCmdAny(SpotMarketDataCmdAny),
     SpotUserDataListenKeyCmdAny(SpotUserDataListenKeyCmdAny),

@@ -9,7 +9,9 @@ use db_repo::MySqlDbRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+    SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
+};
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::trade_handlers::account_handler::AccountHandler;
 use crate::proc::v2::trade_handlers::oco_handler::OcoHandler;
@@ -54,96 +56,94 @@ impl SpotTradeBehaviorV3Impl {
     }
 }
 
-impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV3Impl {
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV3Impl {
     async fn handle(
         &self,
-        cmd: SpotTradeCmdAny,
+        cmd: SpotTradeCmdOrQuery,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        let nonce = 0; // TODO: 从命令元数据中获取
+        let nonce = 0;
 
         match cmd {
             // ========== 订单相关命令 ==========
-            SpotTradeCmdAny::NewOrder(new_order) => self.order_handler.handle_post(new_order),
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOrder(new_order)) => {
+                self.order_handler.handle_post(new_order)
+            }
 
-            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::TestNewOrder(_)) => Ok(CmdResp::new(
                 ResMetadata::new(nonce, false, Timestamp::default()),
                 SpotTradeResAny::TestNewOrderEmpty,
             )),
 
-            SpotTradeCmdAny::CancelOrder(cancel_order) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelOrder(cancel_order)) => {
                 todo!()
-                // self.order_handler.handle_cancel_order(cancel_order)
             }
 
-            SpotTradeCmdAny::CancelAllOpenOrders(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelAllOpenOrders(_)) => {
                 todo!("Implement cancel all open orders")
             }
 
-            SpotTradeCmdAny::CancelReplaceOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelReplaceOrder(_)) => {
                 todo!("Implement cancel replace order")
             }
 
-            SpotTradeCmdAny::QueryOrder(query_order) => {
-                todo!()
-                // self.order_handler.handle_query_order(query_order)
-            }
-
-            SpotTradeCmdAny::CurrentOpenOrders(_) => {
-                todo!("Implement current open orders")
-            }
-
-            SpotTradeCmdAny::AllOrders(_) => {
-                todo!("Implement all orders")
-            }
-
             // ========== OCO 订单相关命令 ==========
-            SpotTradeCmdAny::NewOcoOrder(new_oco) => self.oco_handler.handle_new_oco_order(new_oco),
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOcoOrder(new_oco)) => {
+                self.oco_handler.handle_new_oco_order(new_oco)
+            }
 
-            SpotTradeCmdAny::NewOtoOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOtoOrder(_)) => {
                 todo!("Implement new OTO order")
             }
 
-            SpotTradeCmdAny::NewOtocoOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOtocoOrder(_)) => {
                 todo!("Implement new OTOCO order")
             }
 
-            SpotTradeCmdAny::CancelOcoOrder(cancel_oco) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelOcoOrder(cancel_oco)) => {
                 self.oco_handler.handle_cancel_oco_order(cancel_oco)
             }
 
-            SpotTradeCmdAny::QueryOcoOrder(query_oco) => {
-                self.oco_handler.handle_query_oco_order(query_oco)
-            }
-
-            SpotTradeCmdAny::AllOcoOrders(_) => {
-                todo!("Implement all OCO orders")
-            }
-
-            SpotTradeCmdAny::OpenOcoOrders(_) => {
-                todo!("Implement open OCO orders")
-            }
-
-            // ========== 账户相关命令 ==========
-            SpotTradeCmdAny::Account(account) => self.account_handler.handle_account(account),
-
-            SpotTradeCmdAny::MyTrades(my_trades) => {
-                self.account_handler.handle_my_trades(my_trades)
-            }
-
-            SpotTradeCmdAny::QueryUnfilledOrderCount(unfilled_count) => {
-                self.account_handler.handle_unfilled_order_count(unfilled_count)
-            }
-
-            SpotTradeCmdAny::QueryPreventedMatches(_) => {
-                todo!("Implement query prevented matches")
-            }
-
-            SpotTradeCmdAny::QueryAllocations(_) => {
-                todo!("Implement query allocations")
-            }
-
-            SpotTradeCmdAny::QueryCommissionRates(_) => {
-                todo!("Implement query commission rates")
+            // ========== 查询相关 ==========
+            SpotTradeCmdOrQuery::Query(q) => {
+                use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeQuery;
+                match q {
+                    SpotTradeQuery::QueryOrder(query_order) => {
+                        todo!()
+                    }
+                    SpotTradeQuery::CurrentOpenOrders(_) => {
+                        todo!("Implement current open orders")
+                    }
+                    SpotTradeQuery::AllOrders(_) => {
+                        todo!("Implement all orders")
+                    }
+                    SpotTradeQuery::QueryOcoOrder(query_oco) => {
+                        self.oco_handler.handle_query_oco_order(query_oco)
+                    }
+                    SpotTradeQuery::AllOcoOrders(_) => {
+                        todo!("Implement all OCO orders")
+                    }
+                    SpotTradeQuery::OpenOcoOrders(_) => {
+                        todo!("Implement open OCO orders")
+                    }
+                    SpotTradeQuery::Account(account) => {
+                        self.account_handler.handle_account(account)
+                    }
+                    SpotTradeQuery::MyTrades(my_trades) => {
+                        self.account_handler.handle_my_trades(my_trades)
+                    }
+                    SpotTradeQuery::QueryUnfilledOrderCount(unfilled_count) => {
+                        self.account_handler.handle_unfilled_order_count(unfilled_count)
+                    }
+                    SpotTradeQuery::QueryPreventedMatches(_) => {
+                        todo!("Implement query prevented matches")
+                    }
+                    SpotTradeQuery::QueryAllocations(_) => {
+                        todo!("Implement query allocations")
+                    }
+                    SpotTradeQuery::QueryCommissionRates(_) => {
+                        todo!("Implement query commission rates")
+                    }
+                }
             }
         }
     }

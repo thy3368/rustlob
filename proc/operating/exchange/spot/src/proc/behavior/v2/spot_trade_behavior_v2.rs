@@ -1,4 +1,3 @@
-
 // 参考 Trading endpoints
 // /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md
 // 定义所有 Trading endpoints 接口;用中文注
@@ -10,18 +9,17 @@ use immutable_derive::immutable;
 
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
-/// Spot Trading 命令枚举 - 包含所有交易端点
-#[derive(Debug, Clone)]
+/// Spot Trading 命令枚举 - 仅包含写入操作
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SpotTradeCmdAny {
+#[derive(Debug, Clone)]
+pub enum SpotTradeCmd {
     /// 创建新订单 POST /api/v3/order
     /// Weight: 1
     /// Unfilled Order Count: 1
     NewOrder(NewOrderCmd),
 
     /// 测试下单 POST /api/v3/order/test
-    /// Weight: 1 (不带 computeCommissionRates) 或 20 (带
-    /// computeCommissionRates)
+    /// Weight: 1 (不带 computeCommissionRates) 或 20 (带 computeCommissionRates)
     TestNewOrder(TestNewOrderCmd),
 
     /// 取消订单 DELETE /api/v3/order
@@ -36,18 +34,6 @@ pub enum SpotTradeCmdAny {
     /// Weight: 1
     /// Unfilled Order Count: 1
     CancelReplaceOrder(CancelReplaceOrderCmd),
-
-    /// 查询订单 GET /api/v3/order
-    /// Weight: 4
-    QueryOrder(QueryOrderCmd),
-
-    /// 当前挂单 GET /api/v3/openOrders
-    /// Weight: 6 (单个交易对) 或 80 (所有交易对)
-    CurrentOpenOrders(CurrentOpenOrdersCmd),
-
-    /// 查询所有订单 GET /api/v3/allOrders
-    /// Weight: 20
-    AllOrders(AllOrdersCmd),
 
     /// 创建 OCO 订单 POST /api/v3/orderList/oco
     /// Weight: 1
@@ -67,6 +53,23 @@ pub enum SpotTradeCmdAny {
     /// 取消 OCO 订单 DELETE /api/v3/orderList
     /// Weight: 1
     CancelOcoOrder(CancelOcoOrderCmd),
+}
+
+/// Spot Trading 查询枚举 - 仅包含查询操作
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+pub enum SpotTradeQuery {
+    /// 查询订单 GET /api/v3/order
+    /// Weight: 4
+    QueryOrder(QueryOrderCmd),
+
+    /// 当前挂单 GET /api/v3/openOrders
+    /// Weight: 6 (单个交易对) 或 80 (所有交易对)
+    CurrentOpenOrders(CurrentOpenOrdersCmd),
+
+    /// 查询所有订单 GET /api/v3/allOrders
+    /// Weight: 20
+    AllOrders(AllOrdersCmd),
 
     /// 查询 OCO 订单 GET /api/v3/orderList
     /// Weight: 4
@@ -103,6 +106,28 @@ pub enum SpotTradeCmdAny {
     /// 查询佣金费率 GET /api/v3/account/commission
     /// Weight: 20
     QueryCommissionRates(QueryCommissionRatesCmd),
+}
+
+/// Spot Trading 命令或查询统一枚举 - 用于需要同时支持 cmd 和 query 的场景
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+pub enum SpotTradeCmdOrQuery {
+    /// 命令 (写入操作)
+    Cmd(SpotTradeCmd),
+    /// 查询 (读取操作)
+    Query(SpotTradeQuery),
+}
+
+impl From<SpotTradeCmd> for SpotTradeCmdOrQuery {
+    fn from(cmd: SpotTradeCmd) -> Self {
+        SpotTradeCmdOrQuery::Cmd(cmd)
+    }
+}
+
+impl From<SpotTradeQuery> for SpotTradeCmdOrQuery {
+    fn from(query: SpotTradeQuery) -> Self {
+        SpotTradeCmdOrQuery::Query(query)
+    }
 }
 
 /// 订单响应类型
@@ -303,7 +328,6 @@ pub struct NewOrderCmd {
     peg_offset_value: Option<i32>,
     /// 价格偏移类型
     peg_offset_type: Option<PegOffsetType>,
-
 }
 
 /// 测试下单命令
@@ -1516,4 +1540,7 @@ pub struct Allocation {
 // ==================== 行为接口定义 ====================
 
 /// Spot Trading 行为接口
-pub trait SpotTradeBehaviorV2: Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> {}
+pub trait SpotTradeBehaviorV2:
+    Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny>
+{
+}

@@ -6,7 +6,7 @@ use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::Serialize;
 
-use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeCmdAny;
+use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeCmdOrQuery;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PublishError {
@@ -72,7 +72,7 @@ impl Default for PublisherConfig {
 }
 
 pub trait EventPublisher: Send + Sync {
-    fn publish_command(&self, log: &SpotTradeCmdAny) -> Result<(), PublishError>;
+    fn publish_command(&self, log: &SpotTradeCmdOrQuery) -> Result<(), PublishError>;
 
     fn publish_order_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
     fn publish_balance_log(&self, log: &ChangeLogEntry) -> Result<(), PublishError>;
@@ -127,7 +127,7 @@ impl KafkaEventPublisher {
 }
 
 impl EventPublisher for KafkaEventPublisher {
-    fn publish_command(&self, cmd: &SpotTradeCmdAny) -> Result<(), PublishError> {
+    fn publish_command(&self, cmd: &SpotTradeCmdOrQuery) -> Result<(), PublishError> {
         let payload = serde_json::to_vec(cmd).map_err(|e| PublishError::Serialization(e))?;
         let record = FutureRecord::to(&self.config.order_log_topic).payload(&payload).key(&());
         let future = self

@@ -9,7 +9,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
-    NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny,
+    NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use crate::proc::v2::actor::kafka_config::{send_single_log, KafkaConfig};
 use crate::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
@@ -165,13 +165,15 @@ impl ActorX for SpotAcquiringStage {
     }
 }
 
-impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotAcquiringStage {
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotAcquiringStage {
     async fn handle(
         &self,
-        cmd: SpotTradeCmdAny,
+        cmd: SpotTradeCmdOrQuery,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         match cmd {
-            SpotTradeCmdAny::NewOrder(new_order_cmd) => self.handle_new_order(new_order_cmd).await,
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOrder(new_order_cmd)) => {
+                self.handle_new_order(new_order_cmd).await
+            }
             _ => self.trade_behavior.handle(cmd).await,
         }
     }

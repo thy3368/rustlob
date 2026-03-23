@@ -450,7 +450,7 @@ impl OrderHandler {
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         self.validate_order_cmd(&cmd)?;
 
-        let symbol = cmd.symbol();
+        let symbol = *cmd.symbol();
         if !self.is_symbol_supported(symbol) {
             return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
                 field: "symbol",
@@ -458,12 +458,12 @@ impl OrderHandler {
             }));
         }
 
-        let order_id = order_next_id();
+        let order_id = order_next_id() as u64;
         let timestamp = Timestamp::now_as_nanos();
 
         let cmd_log = ChangeLogEntry::new(
             order_id.to_string(),
-            "NewOrderCmd",
+            "NewOrderCmd".to_string(),
             ChangeType::Created { fields: Vec::new() },
             timestamp.0,
             0,
@@ -480,7 +480,7 @@ impl OrderHandler {
             symbol,
             order_id,
             -1,
-            cmd.new_client_order_id().map(String::from),
+            cmd.new_client_order_id().as_ref().map(|s| s.clone()),
             timestamp,
         );
 
@@ -511,5 +511,329 @@ impl OrderHandler {
     fn persist_change_logs(&self, logs: &[ChangeLogEntry]) -> Result<(), SpotCmdErrorAny> {
         // TODO: 实现持久化逻辑
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use base_types::exchange::spot::spot_types::TimeInForce;
+    use base_types::{Price, TradingPair};
+    use lob_repo::core::repo_snapshot_support::RepoError;
+
+    use super::*;
+    use crate::proc::behavior::spot_trade_behavior::CMetadata;
+    use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeCmdOrQuery;
+    use crate::proc::v2::processor::kafka::event_publisher::PublishError;
+
+    struct MockEventPublisher {
+        published: AtomicBool,
+        error_on_publish: AtomicBool,
+    }
+
+    impl MockEventPublisher {
+        fn new() -> Self {
+            Self { published: AtomicBool::new(false), error_on_publish: AtomicBool::new(false) }
+        }
+        fn with_error() -> Self {
+            Self { published: AtomicBool::new(false), error_on_publish: AtomicBool::new(true) }
+        }
+        fn was_published(&self) -> bool {
+            self.published.load(Ordering::SeqCst)
+        }
+    }
+
+    impl EventPublisher for MockEventPublisher {
+        fn publish_command(&self, _cmd: &SpotTradeCmdOrQuery) -> Result<(), PublishError> {
+            self.published.store(true, Ordering::SeqCst);
+            if self.error_on_publish.load(Ordering::SeqCst) {
+                Err(PublishError::BackendUnavailable("mock error".into()))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn publish_order_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+            self.published.store(true, Ordering::SeqCst);
+            if self.error_on_publish.load(Ordering::SeqCst) {
+                Err(PublishError::BackendUnavailable("mock error".into()))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn publish_balance_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+            Ok(())
+        }
+
+        fn publish_trade_log(&self, _log: &ChangeLogEntry) -> Result<(), PublishError> {
+            Ok(())
+        }
+
+        fn publish_order_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+            Ok(())
+        }
+
+        fn publish_balance_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+            Ok(())
+        }
+
+        fn publish_trade_logs(&self, _logs: &[ChangeLogEntry]) -> Result<(), PublishError> {
+            Ok(())
+        }
+    }
+
+    struct MockLobRepo {
+        supported_symbols: Mutex<Vec<TradingPair>>,
+    }
+
+    impl MockLobRepo {
+        fn new(supported: Vec<TradingPair>) -> Self {
+            Self { supported_symbols: Mutex::new(supported) }
+        }
+    }
+
+    impl MultiSymbolLobRepo for MockLobRepo {
+        type Order = SpotOrder;
+
+        fn match_orders(
+            &self,
+            _symbol: TradingPair,
+            _side: OrderSide,
+            _price: Price,
+            _quantity: Quantity,
+        ) -> (Option<Vec<&Self::Order>>, Quantity) {
+            (None, Quantity::ZERO)
+        }
+
+        fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
+            None
+        }
+
+        fn best_ask(&self, _symbol: TradingPair) -> Option<Price> {
+            None
+        }
+
+        fn contains_symbol(&self, symbol: &TradingPair) -> bool {
+            self.supported_symbols.lock().unwrap().contains(symbol)
+        }
+
+        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), RepoError> {
+            Ok(())
+        }
+
+        fn remove_order(&self, _symbol: TradingPair, _order_id: base_types::OrderId) -> bool {
+            true
+        }
+
+        fn find_order(&self, _p0: TradingPair, _p1: base_types::OrderId) -> Option<&Self::Order> {
+            None
+        }
+
+        fn find_order_mut(
+            &self,
+            _p0: TradingPair,
+            _order_id: base_types::OrderId,
+        ) -> Option<&mut Self::Order> {
+            None
+        }
+
+        fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
+            None
+        }
+
+        fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
+    }
+
+    fn create_test_order_cmd(symbol: TradingPair) -> NewOrderCmd {
+        NewOrderCmd::new(
+            CMetadata::new(
+                "test_order_123".to_string(),
+                Timestamp::now_as_nanos(),
+                None,
+                None,
+                Some("test_user".to_string()),
+                Vec::new(),
+                None,
+            ),
+            symbol,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Some(TimeInForce::GTC),
+            Some(Quantity::from_f64(0.1)),
+            None,
+            Some(Price::from_f64(45000.0)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+
+    fn create_handler(
+        event_publisher: Arc<dyn EventPublisher>,
+        lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
+    ) -> OrderHandler {
+        OrderHandler::new(
+            Arc::new(MySqlDbRepo::default()),
+            Arc::new(MySqlDbRepo::default()),
+            Arc::new(MySqlDbRepo::default()),
+            lob_repo,
+            event_publisher,
+        )
+    }
+
+    #[test]
+    fn test_handle_post_success() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher.clone(), lob_repo);
+
+        let cmd = create_test_order_cmd(TradingPair::BtcUsdt);
+        let result = handler.handle_post(cmd);
+
+        assert!(result.is_ok());
+        assert!(publisher.was_published());
+    }
+
+    #[test]
+    fn test_handle_post_unsupported_symbol() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::EthUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = create_test_order_cmd(TradingPair::BtcUsdt);
+        let result = handler.handle_post(cmd);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            SpotCmdErrorAny::Common(CommonError::InvalidParameter { field, .. }) => {
+                assert_eq!(field, "symbol");
+            }
+            _ => panic!("Expected InvalidParameter error"),
+        }
+    }
+
+    #[test]
+    fn test_handle_post_zero_quantity() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = NewOrderCmd::new(
+            CMetadata::new(
+                "test_order_123".to_string(),
+                Timestamp::now_as_nanos(),
+                None,
+                None,
+                Some("test_user".to_string()),
+                Vec::new(),
+                None,
+            ),
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Some(TimeInForce::GTC),
+            Some(Quantity::default()),
+            None,
+            Some(Price::from_f64(45000.0)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let result = handler.handle_post(cmd);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            SpotCmdErrorAny::Common(CommonError::InvalidParameter { field, .. }) => {
+                assert_eq!(field, "quantity");
+            }
+            _ => panic!("Expected InvalidParameter error"),
+        }
+    }
+
+    #[test]
+    fn test_handle_post_limit_order_without_price() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = NewOrderCmd::new(
+            CMetadata::new(
+                "test_order_456".to_string(),
+                Timestamp::now_as_nanos(),
+                None,
+                None,
+                Some("test_user".to_string()),
+                Vec::new(),
+                None,
+            ),
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Some(TimeInForce::GTC),
+            Some(Quantity::from_f64(0.1)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let result = handler.handle_post(cmd);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            SpotCmdErrorAny::Common(CommonError::InvalidParameter { field, .. }) => {
+                assert_eq!(field, "price");
+            }
+            _ => panic!("Expected InvalidParameter error"),
+        }
+    }
+
+    #[test]
+    fn test_handle_post_publish_error() {
+        let publisher = Arc::new(MockEventPublisher::with_error());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = create_test_order_cmd(TradingPair::BtcUsdt);
+        let result = handler.handle_post(cmd);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            SpotCmdErrorAny::Common(CommonError::Internal { .. }) => {}
+            _ => panic!("Expected Internal error"),
+        }
     }
 }

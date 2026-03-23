@@ -23,7 +23,7 @@ use rand::Rng;
 use crate::proc::behavior::spot_trade_behavior::{CmdResp, CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_market_data_sse_behavior::SpotMarketDataStreamAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
-    NewOrderAck, NewOrderCmd, SpotTradeCmdAny, SpotTradeResAny,
+    NewOrderAck, NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::UserDataStreamEventAny;
 use crate::proc::v2::id_repo::order_next_id;
@@ -1535,22 +1535,9 @@ impl SpotTradeBehaviorV2Impl {
     /// 当前实现检查 LOB 仓储中是否存在该交易对
     /// 生产环境应该从配置或数据库中加载支持的交易对列表
     fn is_symbol_supported(&self, symbol: TradingPair) -> bool {
-        // 方案1: 检查 LOB 仓储中是否存在该交易对
+        // 检查 LOB 仓储中是否存在该交易对
         // 这是一个快速检查，避免路由到不存在的市场
-        match self.lob_repo.get_lob(symbol) {
-            Ok(_) => true,
-            Err(_) => {
-                tracing::warn!(
-                    symbol = ?symbol,
-                    "Trading pair not found in LOB repository"
-                );
-                false
-            }
-        }
-
-        // 方案2: 从配置中检查（更高效，推荐生产环境使用）
-        // TODO: 实现配置驱动的交易对白名单
-        // self.supported_symbols.contains(&symbol)
+        self.lob_repo.contains_symbol(&symbol)
     }
 
     /// 路由订单到对应市场的收单队列
@@ -1686,16 +1673,16 @@ impl SpotTradeBehaviorV2Impl {
     }
 }
 
-impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV2Impl {
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV2Impl {
     async fn handle(
         &self,
-        cmd: SpotTradeCmdAny,
+        cmd: SpotTradeCmdOrQuery,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         // 使用固定的 nonce 值，实际应用中应该从命令元数据中获取
         let nonce = 0;
 
         match cmd {
-            SpotTradeCmdAny::NewOrder(new_order) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOrder(new_order)) => {
                 // 执行订单处理，委托给 OrderHandler
                 let handler = OrderHandler::new(
                     self.balance_repo.clone(),
@@ -1707,66 +1694,48 @@ impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBeh
                 handler.handle_post(new_order)
             }
 
-            SpotTradeCmdAny::TestNewOrder(_) => Ok(CmdResp::new(
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::TestNewOrder(_)) => Ok(CmdResp::new(
                 ResMetadata::new(nonce, false, Timestamp::default()),
                 SpotTradeResAny::TestNewOrderEmpty,
             )),
-            SpotTradeCmdAny::CancelOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::CancelAllOpenOrders(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelAllOpenOrders(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::CancelReplaceOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelReplaceOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::QueryOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOcoOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::CurrentOpenOrders(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOtoOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::AllOrders(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOtocoOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::NewOcoOrder(_) => {
+            SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::CancelOcoOrder(_)) => {
                 todo!()
             }
-            SpotTradeCmdAny::NewOtoOrder(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::NewOtocoOrder(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::CancelOcoOrder(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::QueryOcoOrder(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::AllOcoOrders(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::OpenOcoOrders(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::Account(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::MyTrades(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::QueryUnfilledOrderCount(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::QueryPreventedMatches(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::QueryAllocations(_) => {
-                todo!()
-            }
-            SpotTradeCmdAny::QueryCommissionRates(_) => {
-                todo!()
+            // Query variants
+            SpotTradeCmdOrQuery::Query(q) => {
+                use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeQuery;
+                match q {
+                    SpotTradeQuery::QueryOrder(_) => todo!(),
+                    SpotTradeQuery::CurrentOpenOrders(_) => todo!(),
+                    SpotTradeQuery::AllOrders(_) => todo!(),
+                    SpotTradeQuery::QueryOcoOrder(_) => todo!(),
+                    SpotTradeQuery::AllOcoOrders(_) => todo!(),
+                    SpotTradeQuery::OpenOcoOrders(_) => todo!(),
+                    SpotTradeQuery::Account(_) => todo!(),
+                    SpotTradeQuery::MyTrades(_) => todo!(),
+                    SpotTradeQuery::QueryUnfilledOrderCount(_) => todo!(),
+                    SpotTradeQuery::QueryPreventedMatches(_) => todo!(),
+                    SpotTradeQuery::QueryAllocations(_) => todo!(),
+                    SpotTradeQuery::QueryCommissionRates(_) => todo!(),
+                }
             }
         }
     }
