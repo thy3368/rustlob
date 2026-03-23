@@ -18,6 +18,8 @@ pub mod actor_x;
 pub mod handler;
 pub mod spot_topic;
 
+pub mod operator;
+
 // Re-export all types
 pub use base_types::{
     AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,

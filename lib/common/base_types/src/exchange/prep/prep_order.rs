@@ -332,11 +332,11 @@ impl LobOrder for PrepOrder {
         self.price.unwrap_or_else(|| Price::from_raw(0))
     }
 
-    fn quantity(&self) -> Quantity {
+    fn base_qty(&self) -> Quantity {
         self.quantity
     }
 
-    fn filled_quantity(&self) -> Quantity {
+    fn filled_base_qty(&self) -> Quantity {
         self.filled_quantity
     }
 

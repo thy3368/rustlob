@@ -706,11 +706,11 @@ impl LobOrder for SpotOrder {
         self.price.unwrap_or_default()
     }
 
-    fn quantity(&self) -> Quantity {
+    fn base_qty(&self) -> Quantity {
         self.total_base_qty
     }
 
-    fn filled_quantity(&self) -> Quantity {
+    fn filled_base_qty(&self) -> Quantity {
         self.state.filled_base_qty
     }
 
