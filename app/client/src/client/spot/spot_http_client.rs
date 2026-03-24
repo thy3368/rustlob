@@ -6,7 +6,7 @@ use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-    SpotTradeBehaviorV2, SpotTradeCmdAny, SpotTradeResAny,
+    SpotTradeBehaviorV2, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
     SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataResAny,
@@ -73,10 +73,10 @@ impl SpotHttpClient {
 }
 
 // 实现SpotTradeBehaviorV2
-impl Handler<SpotTradeCmdAny, SpotTradeResAny, SpotCmdErrorAny> for SpotHttpClient {
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotHttpClient {
     async fn handle(
         &self,
-        cmd: SpotTradeCmdAny,
+        cmd: SpotTradeCmdOrQuery,
     ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
         self.send_generic_command(cmd, "v2").await
     }
@@ -131,7 +131,7 @@ mod tests {
     use base_types::exchange::spot::spot_types::OrderType;
     use base_types::{OrderSide, Timestamp, TradingPair};
     use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-        NewOrderCmd, SpotTradeCmdAny, TestNewOrderCmd,
+        NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, TestNewOrderCmd,
     };
 
     use super::*;
@@ -145,7 +145,7 @@ mod tests {
         let client = SpotHttpClient::default();
 
         // 创建测试命令 - 使用 TestNewOrder 命令进行连接测试
-        let test_cmd = SpotTradeCmdAny::TestNewOrder(TestNewOrderCmd::new(
+        let test_cmd = SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::TestNewOrder(TestNewOrderCmd::new(
             NewOrderCmd::new(
                 CMetadata::default(),
                 TradingPair::BtcUsdt,
@@ -168,7 +168,7 @@ mod tests {
                 None, // peg_offset_type
             ),
             None, // compute_commission_rates
-        ));
+        )));
 
         println!("📡 发送测试命令到: http://localhost:3001/api/spot/trade/v2/");
 
