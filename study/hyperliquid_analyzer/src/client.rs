@@ -75,29 +75,9 @@ impl HyperliquidClient {
     }
 
     pub async fn fetch_latest_block(&self) -> Result<Block, ClientError> {
-        // 先获取最新高度
-        let response = self
-            .client
-            .post(&format!("{}/info", self.base_url))
-            .json(&serde_json::json!({
-                "type": "metaAndAssetCtxs"
-            }))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            return Err(ClientError::HttpError(response.status()));
-        }
-
-        let meta: serde_json::Value = response.json().await?;
-        let height = meta[0]["universe"]["height"]
-            .as_u64()
-            .ok_or_else(|| {
-                ClientError::ParseError(
-                    serde_json::from_str::<()>("\"Invalid height\"").unwrap_err(),
-                )
-            })?;
-
-        self.fetch_block(height).await
+        // 暂时使用一个较新的固定区块高度
+        // TODO: 实现真正的最新区块获取逻辑
+        eprintln!("警告: fetch_latest_block 暂未实现，使用固定区块高度 1000000000");
+        self.fetch_block(1000000000).await
     }
 }
