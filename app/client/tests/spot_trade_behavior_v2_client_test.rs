@@ -7,7 +7,7 @@ use base_types::handler::handler::Handler;
 use client::client::spot::spot_http_client::SpotHttpClient;
 use client::client::spot::spot_user_data_subscribe_websocket_client::SpotUserDataWebSocketStreamClient;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
-    NewOrderCmd, NewOrderRespType, SpotTradeCmdAny, TestNewOrderCmd,
+    NewOrderCmd, NewOrderRespType, SpotTradeCmd, SpotTradeCmdOrQuery, TestNewOrderCmd,
 };
 
 #[tokio::test]
@@ -26,7 +26,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
     let mut http_client = SpotHttpClient::new("http://localhost:3001");
 
     // 构建NewOrder命令
-    let new_order_cmd = SpotTradeCmdAny::NewOrder(NewOrderCmd {
+    let new_order_cmd = SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::NewOrder(NewOrderCmd {
         metadata: CMetadata {
             command_id: "test_limit_order_123".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
@@ -55,7 +55,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
         peg_offset_type: None,
         recv_window: None,
         timestamp: chrono::Utc::now().timestamp_millis(),
-    });
+    }));
 
     // 发送命令
     println!("发送NewOrder命令...");
@@ -80,7 +80,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
 
     // 发送测试订单
     println!("发送TestNewOrder命令...");
-    let test_order_cmd = SpotTradeCmdAny::TestNewOrder(TestNewOrderCmd {
+    let test_order_cmd = SpotTradeCmdOrQuery::Cmd(SpotTradeCmd::TestNewOrder(TestNewOrderCmd {
         new_order: NewOrderCmd {
             metadata: CMetadata {
                 command_id: "test_test_order_789".to_string(),
@@ -110,7 +110,7 @@ async fn test_send_limit_order() -> Result<(), Box<dyn Error>> {
             peg_offset_type: None,
             recv_window: None,
             timestamp: chrono::Utc::now().timestamp_millis(),
-        },
+        })),
         compute_commission_rates: Some(false),
     });
 

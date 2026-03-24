@@ -1,6 +1,6 @@
-use base_types::cqrs::cqrs_types::CmdResp;
 use base_types::handler::handler::Handler;
 use reqwest::Client;
+use base_types::cqrs::cqrs_types::CmdResp;
 use spot_behavior::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny,

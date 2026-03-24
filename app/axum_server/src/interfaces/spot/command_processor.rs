@@ -12,7 +12,7 @@ use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
-use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdAny, SpotTradeResAny};
+use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{SpotTradeCmdOrQuery, SpotTradeResAny};
 use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
     SpotUserDataCmdAny, SpotUserDataResAny,
 };
@@ -54,7 +54,7 @@ impl CommandProcessor {
                 post(
                     handle_generic::<
                         SpotTradeBehaviorV2Impl,
-                        SpotTradeCmdAny,
+                        SpotTradeCmdOrQuery,
                         SpotTradeResAny,
                     >,
                 ),
@@ -146,7 +146,7 @@ impl CommandProcessor {
                 post(
                     handle_generic::<
                         SpotAcquiringStage,
-                        SpotTradeCmdAny,
+                        SpotTradeCmdOrQuery,
                         SpotTradeResAny,
                     >,
                 ),
