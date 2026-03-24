@@ -12,6 +12,10 @@ path = "src/lib.rs"
 name = "hl_analyzer"
 path = "src/bin/hl_analyzer.rs"
 
+[[bin]]
+name = "hl_user"
+path = "src/bin/hl_user.rs"
+
 [dependencies]
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
@@ -28,6 +32,9 @@ clap = { version = "4", features = ["derive"] }
 
 # 彩色终端输出
 colored = "2"
+
+# 时间处理
+chrono = "0.4"
 
 # 错误处理
 anyhow = "1"

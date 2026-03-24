@@ -162,3 +162,121 @@ pub struct UpdateLeverageTx {
     pub is_cross: bool,
     pub leverage: u32,
 }
+
+// ============================================================
+// 用户信息类型
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClearinghouseState {
+    #[serde(rename = "assetPositions")]
+    pub asset_positions: Vec<AssetPosition>,
+    #[serde(rename = "crossMarginSummary")]
+    pub cross_margin_summary: MarginSummary,
+    #[serde(rename = "marginSummary")]
+    pub margin_summary: MarginSummary,
+    pub withdrawable: String,
+    #[serde(rename = "crossMaintenanceMarginUsed")]
+    pub cross_maintenance_margin_used: Option<String>,
+    pub time: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssetPosition {
+    #[serde(rename = "type")]
+    pub position_type: String,
+    pub position: Position,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub coin: String,
+    pub sz: String,
+    pub side: String,
+    #[serde(rename = "entryPx")]
+    pub entry_px: String,
+    pub leverage: Leverage,
+    #[serde(rename = "unrealizedPnl")]
+    pub unrealized_pnl: Option<String>,
+    #[serde(rename = "realizedPnl")]
+    pub realized_pnl: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Leverage {
+    pub value: u32,
+    #[serde(rename = "isCross")]
+    pub is_cross: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarginSummary {
+    #[serde(rename = "accountValue")]
+    pub account_value: String,
+    #[serde(rename = "totalNtlPos")]
+    pub total_ntl_pos: String,
+    #[serde(rename = "totalRawUsd")]
+    pub total_raw_usd: String,
+    #[serde(rename = "totalMarginUsed")]
+    pub total_margin_used: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpotClearinghouseState {
+    pub balances: Vec<SpotBalance>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpotBalance {
+    pub coin: String,
+    pub hold: String,
+    pub total: String,
+    pub entry_ntl: Option<String>,
+    pub identifier: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserDetails {
+    pub address: String,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    #[serde(rename = "isRegistered")]
+    pub is_registered: bool,
+    #[serde(rename = "email")]
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenOrdersResponse {
+    #[serde(rename = "type")]
+    pub order_type: String,
+    pub order: OpenOrderInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenOrderInfo {
+    pub coin: String,
+    pub side: String,
+    pub sz: String,
+    pub limit_px: String,
+    pub oid: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserFills {
+    pub fills: Vec<Fill>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Fill {
+    pub coin: String,
+    pub side: String,
+    pub sz: String,
+    pub px: String,
+    pub oid: u64,
+    pub hash: String,
+    pub time: u64,
+    pub fee: String,
+    pub closed_pnl: Option<String>,
+}

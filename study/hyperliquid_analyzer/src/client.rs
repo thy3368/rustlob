@@ -1,4 +1,6 @@
-use crate::types::{Block, BlockResponse};
+use crate::types::{
+    Block, BlockResponse, ClearinghouseState, OpenOrdersResponse, SpotClearinghouseState, UserDetails, UserFills,
+};
 use reqwest::Client;
 use std::time::Duration;
 use thiserror::Error;
@@ -20,7 +22,8 @@ pub enum ClientError {
 
 pub struct HyperliquidClient {
     client: Client,
-    base_url: String,
+    explorer_url: String,
+    info_url: String,
 }
 
 impl HyperliquidClient {
@@ -31,7 +34,8 @@ impl HyperliquidClient {
 
         Ok(Self {
             client,
-            base_url: "https://rpc.hyperliquid.xyz".to_string(),
+            explorer_url: "https://rpc.hyperliquid.xyz/explorer".to_string(),
+            info_url: "https://api.hyperliquid.xyz/info".to_string(),
         })
     }
 
@@ -55,7 +59,7 @@ impl HyperliquidClient {
     async fn fetch_block_once(&self, height: u64) -> Result<Block, ClientError> {
         let response = self
             .client
-            .post(&format!("{}/explorer", self.base_url))
+            .post(&self.explorer_url)
             .json(&serde_json::json!({
                 "type": "blockDetails",
                 "height": height
@@ -77,5 +81,101 @@ impl HyperliquidClient {
     pub async fn fetch_latest_block(&self) -> Result<Block, ClientError> {
         eprintln!("警告: fetch_latest_block 暂未实现，使用固定区块高度 1000000000");
         self.fetch_block(1000000000).await
+    }
+
+    pub async fn fetch_clearinghouse_state(&self, user: &str) -> Result<ClearinghouseState, ClientError> {
+        let response = self
+            .client
+            .post(&self.info_url)
+            .json(&serde_json::json!({
+                "type": "clearinghouseState",
+                "user": user
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        let state = response.json::<ClearinghouseState>().await?;
+        Ok(state)
+    }
+
+    pub async fn fetch_spot_state(&self, user: &str) -> Result<SpotClearinghouseState, ClientError> {
+        let response = self
+            .client
+            .post(&self.info_url)
+            .json(&serde_json::json!({
+                "type": "spotClearinghouseState",
+                "user": user
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        let state = response.json::<SpotClearinghouseState>().await?;
+        Ok(state)
+    }
+
+    pub async fn fetch_user_details(&self, user: &str) -> Result<UserDetails, ClientError> {
+        let response = self
+            .client
+            .post(&self.info_url)
+            .json(&serde_json::json!({
+                "type": "userDetails",
+                "user": user
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        let details = response.json::<UserDetails>().await?;
+        Ok(details)
+    }
+
+    pub async fn fetch_open_orders(&self, user: &str) -> Result<Vec<OpenOrdersResponse>, ClientError> {
+        let response = self
+            .client
+            .post(&self.info_url)
+            .json(&serde_json::json!({
+                "type": "openOrders",
+                "user": user
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        let orders = response.json::<Vec<OpenOrdersResponse>>().await?;
+        Ok(orders)
+    }
+
+    pub async fn fetch_user_fills(&self, user: &str) -> Result<UserFills, ClientError> {
+        let response = self
+            .client
+            .post(&self.info_url)
+            .json(&serde_json::json!({
+                "type": "userFills",
+                "user": user
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        // API returns array directly
+        let fills_vec: Vec<crate::types::Fill> = response.json::<Vec<crate::types::Fill>>().await?;
+        Ok(UserFills { fills: fills_vec })
     }
 }
