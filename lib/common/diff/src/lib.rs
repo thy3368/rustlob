@@ -5,7 +5,7 @@ pub use diff::diff_types;
 // 重新导出核心类型，方便使用
 pub use diff::diff_types::{
     // 核心数据结构
-    ChangeLogEntry,
+    ChangeLog,
     ChangeType,
     // 核心 trait（Entity 现在包含了 Diff, Replayable, Trackable 的所有功能）
     Entity,

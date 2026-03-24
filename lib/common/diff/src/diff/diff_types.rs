@@ -273,7 +273,7 @@ impl std::fmt::Display for TableSchema {
 // 实现文件：entity_change_log
 // - ChangeLogEntryBase: 64字节对齐的单条目结构，完全基于基础类型
 
-pub struct ChangeLogEntry {
+pub struct ChangeLog {
     entity_id: String,
     entity_type: String,
     change_type: ChangeType,
@@ -281,7 +281,33 @@ pub struct ChangeLogEntry {
     sequence: u64,
 }
 
-impl Entity for ChangeLogEntry {
+#[derive(Debug, Clone)]
+pub struct DomainEvent<T> {
+    change_log: ChangeLog,
+    state: T,
+}
+
+impl<T: Clone + Debug> DomainEvent<T> {
+    pub fn new(change_log: ChangeLog, object: T) -> Self {
+        Self { change_log, state: object }
+    }
+
+    pub fn change_log(&self) -> &ChangeLog {
+        &self.change_log
+    }
+
+    pub fn object(&self) -> &T {
+        &self.state
+    }
+
+    pub fn into_parts(self) -> (ChangeLog, T) {
+        (self.change_log, self.state)
+    }
+}
+
+
+
+impl Entity for ChangeLog {
     type Id = String;
 
     fn entity_id(&self) -> Self::Id {
@@ -299,7 +325,7 @@ impl Entity for ChangeLogEntry {
         Vec::new()
     }
 
-    fn replay(&mut self, _entry: &ChangeLogEntry) -> Result<(), EntityError> {
+    fn replay(&mut self, _entry: &ChangeLog) -> Result<(), EntityError> {
         Ok(())
     }
 }
@@ -371,7 +397,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// let order = Order::new(1, "BTCUSDT", 50000.0);
     /// let entry = order.track_create().unwrap();
     /// ```
-    fn track_create(&self) -> Result<ChangeLogEntry, EntityError>
+    fn track_create(&self) -> Result<ChangeLog, EntityError>
     where
         Self: Sized,
     {
@@ -384,7 +410,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// ```ignore
     /// let entry = order.track_delete().unwrap();
     /// ```
-    fn track_delete(&self) -> Result<ChangeLogEntry, EntityError>
+    fn track_delete(&self) -> Result<ChangeLog, EntityError>
     where
         Self: Sized,
     {
@@ -401,7 +427,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     ///     o.quantity = 2.0;
     /// }).unwrap();
     /// ```
-    fn track_update<F>(&mut self, updater: F) -> Result<ChangeLogEntry, EntityError>
+    fn track_update<F>(&mut self, updater: F) -> Result<ChangeLog, EntityError>
     where
         Self: Sized,
         F: FnOnce(&mut Self),
@@ -417,7 +443,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// order.price = 51000.0;
     /// let entry = order.track_update_from(&old_order).unwrap();
     /// ```
-    fn track_update_from(&self, old_state: &Self) -> Result<ChangeLogEntry, EntityError>
+    fn track_update_from(&self, old_state: &Self) -> Result<ChangeLog, EntityError>
     where
         Self: Sized,
     {
@@ -427,7 +453,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
             return Err(EntityError::NoChangesDetected);
         }
 
-        Ok(ChangeLogEntry::new(
+        Ok(ChangeLog::new(
             self.entity_id().to_string(),
             Self::entity_type().parse().unwrap(),
             ChangeType::Updated { changed_fields: field_changes },
@@ -472,10 +498,10 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// - EntityError::EntityTypeMismatch: 实体类型不匹配
     /// - EntityError::FieldParseError: 字段解析失败
     /// - EntityError::CannotReplayOnDeleted: 已删除的实体无法回放
-    fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError>;
+    fn replay(&mut self, entry: &ChangeLog) -> Result<(), EntityError>;
 
     /// 检查是否可以应用此变更日志
-    fn can_replay(&self, entry: &ChangeLogEntry) -> bool {
+    fn can_replay(&self, entry: &ChangeLog) -> bool {
         self.entity_id().to_string() == *entry.entity_id()
             && Self::entity_type() == entry.entity_type()
     }
@@ -526,7 +552,7 @@ pub trait FromCreatedEvent: Sized {
     /// # 错误
     /// - EntityError::EntityTypeMismatch: 事件类型与期望类型不匹配
     /// - EntityError::FieldParseError: 无法解析字段值
-    fn from_created_event(entry: &ChangeLogEntry) -> Result<Self, EntityError>;
+    fn from_created_event(entry: &ChangeLog) -> Result<Self, EntityError>;
 
     /// 从字段映射表构造实体（内部方法，可选重写）
     ///
@@ -549,11 +575,11 @@ pub enum TrackingResult {
     /// 无变更
     NoChange,
     /// 有变更（包含变更日志）
-    Changed(ChangeLogEntry),
+    Changed(ChangeLog),
     /// 实体创建
-    Created(ChangeLogEntry),
+    Created(ChangeLog),
     /// 实体删除
-    Deleted(ChangeLogEntry),
+    Deleted(ChangeLog),
 }
 
 impl TrackingResult {
@@ -563,7 +589,7 @@ impl TrackingResult {
     }
 
     /// 获取变更日志条目
-    pub fn entry(&self) -> Option<&ChangeLogEntry> {
+    pub fn entry(&self) -> Option<&ChangeLog> {
         match self {
             TrackingResult::NoChange => None,
             TrackingResult::Changed(entry)
@@ -598,7 +624,7 @@ pub enum Operation {
 
 /// 追踪实体操作（Create/Delete）
 #[inline]
-pub fn track<T>(entity: &T, operation: Operation) -> Result<ChangeLogEntry, EntityError>
+pub fn track<T>(entity: &T, operation: Operation) -> Result<ChangeLog, EntityError>
 where
     T: Entity + 'static,
 {
@@ -607,7 +633,7 @@ where
         Operation::Delete => ChangeType::Deleted,
     };
 
-    Ok(ChangeLogEntry::new(
+    Ok(ChangeLog::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
         change_type,
@@ -621,7 +647,7 @@ where
 pub fn track_batch<T>(
     entities: &[T],
     operation: Operation,
-) -> Result<Vec<ChangeLogEntry>, EntityError>
+) -> Result<Vec<ChangeLog>, EntityError>
 where
     T: Entity + 'static,
 {
@@ -634,7 +660,7 @@ where
     let mut entries = Vec::with_capacity(entities.len());
 
     for entity in entities {
-        entries.push(ChangeLogEntry::new(
+        entries.push(ChangeLog::new(
             entity.entity_id().to_string(),
             T::entity_type().parse().unwrap(),
             change_type.clone(),
@@ -648,7 +674,7 @@ where
 
 /// 追踪实体更新操作（带自动 diff）
 #[inline]
-pub fn track_update<T, F>(entity: &mut T, updater: F) -> Result<ChangeLogEntry, EntityError>
+pub fn track_update<T, F>(entity: &mut T, updater: F) -> Result<ChangeLog, EntityError>
 where
     T: Entity + Clone + 'static,
     F: FnOnce(&mut T),
@@ -661,7 +687,7 @@ where
         return Err(EntityError::NoChangesDetected);
     }
 
-    Ok(ChangeLogEntry::new(
+    Ok(ChangeLog::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
         ChangeType::Updated { changed_fields: field_changes },
@@ -685,7 +711,7 @@ where
 /// # 错误
 /// - 如果事件不是 Created 类型，返回错误
 pub fn extract_fields_from_created_event(
-    entry: &ChangeLogEntry,
+    entry: &ChangeLog,
 ) -> Result<std::collections::HashMap<String, String>, EntityError> {
     match entry.change_type() {
         ChangeType::Created { fields } => {
@@ -771,7 +797,7 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
 /// })?;
 /// ```
 pub fn reconstruct_from_created<T, F>(
-    entry: &ChangeLogEntry,
+    entry: &ChangeLog,
     constructor: F,
 ) -> Result<T, EntityError>
 where
@@ -793,7 +819,7 @@ where
 /// let entry = track_create(&order).unwrap();
 /// ```
 #[inline]
-pub fn track_create<T>(entity: &T) -> Result<ChangeLogEntry, EntityError>
+pub fn track_create<T>(entity: &T) -> Result<ChangeLog, EntityError>
 where
     T: Entity + 'static,
 {
@@ -808,7 +834,7 @@ where
 /// let entry = track_delete(&order).unwrap();
 /// ```
 #[inline]
-pub fn track_delete<T>(entity: &T) -> Result<ChangeLogEntry, EntityError>
+pub fn track_delete<T>(entity: &T) -> Result<ChangeLog, EntityError>
 where
     T: Entity + 'static,
 {
@@ -848,7 +874,7 @@ mod tests {
             changes
         }
 
-        fn replay(&mut self, entry: &ChangeLogEntry) -> Result<(), EntityError> {
+        fn replay(&mut self, entry: &ChangeLog) -> Result<(), EntityError> {
             if !self.can_replay(entry) {
                 return Err(EntityError::EntityIdMismatch {
                     expected: self.entity_id().to_string(),
