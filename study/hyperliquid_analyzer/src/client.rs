@@ -1,4 +1,4 @@
-use crate::types::Block;
+use crate::types::{Block, BlockResponse};
 use reqwest::Client;
 use std::time::Duration;
 use thiserror::Error;
@@ -31,7 +31,7 @@ impl HyperliquidClient {
 
         Ok(Self {
             client,
-            base_url: "https://api.hyperliquid.xyz".to_string(),
+            base_url: "https://rpc.hyperliquid.xyz".to_string(),
         })
     }
 
@@ -55,10 +55,10 @@ impl HyperliquidClient {
     async fn fetch_block_once(&self, height: u64) -> Result<Block, ClientError> {
         let response = self
             .client
-            .post(&format!("{}/info", self.base_url))
+            .post(&format!("{}/explorer", self.base_url))
             .json(&serde_json::json!({
                 "type": "blockDetails",
-                "block": height
+                "height": height
             }))
             .send()
             .await?;
@@ -70,13 +70,11 @@ impl HyperliquidClient {
             return Err(ClientError::HttpError(response.status()));
         }
 
-        let block = response.json::<Block>().await?;
-        Ok(block)
+        let block_response = response.json::<BlockResponse>().await?;
+        Ok(block_response.block_details)
     }
 
     pub async fn fetch_latest_block(&self) -> Result<Block, ClientError> {
-        // 暂时使用一个较新的固定区块高度
-        // TODO: 实现真正的最新区块获取逻辑
         eprintln!("警告: fetch_latest_block 暂未实现，使用固定区块高度 1000000000");
         self.fetch_block(1000000000).await
     }

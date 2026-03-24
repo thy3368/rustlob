@@ -1,130 +1,136 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockResponse {
+    #[serde(rename = "type")]
+    pub response_type: String,
+    #[serde(rename = "blockDetails")]
+    pub block_details: Block,
+}
 
 /// 完整区块
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
-    #[serde(flatten)]
-    pub header: BlockHeader,
+    pub height: u64,
+    #[serde(rename = "blockTime")]
+    pub block_time: u64,
+    pub hash: String,
+    pub proposer: String,
+    #[serde(rename = "numTxs")]
+    pub num_txs: u64,
     #[serde(rename = "txs")]
     pub transactions: Vec<Transaction>,
-}
-
-/// 区块头
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockHeader {
-    pub hash: String,
-    #[serde(rename = "parentHash")]
-    pub parent_hash: String,
-    pub height: u64,
-    pub time: u64,
-    pub proposer: String,
-    #[serde(rename = "stateRoot")]
-    pub state_root: String,
-    #[serde(rename = "txsRoot")]
-    pub transactions_root: String,
-    #[serde(rename = "receiptsRoot")]
-    pub receipts_root: String,
 }
 
 /// 交易
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    #[serde(rename = "txIdx")]
-    pub tx_index: u32,
-    #[serde(rename = "user")]
-    pub user_address: String,
-    #[serde(rename = "hash")]
-    pub tx_hash: String,
-    pub nonce: u64,
-    #[serde(flatten)]
-    pub data: TransactionData,
-    #[serde(default)]
-    pub status: TxStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: u64,
+    pub user: String,
+    pub action: TransactionAction,
+    pub block: u64,
+    pub hash: String,
     pub error: Option<String>,
 }
 
-/// 交易数据枚举
+/// 交易动作
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum TransactionData {
+pub enum TransactionAction {
     #[serde(rename = "order")]
-    Order(OrderTx),
+    Order(OrderAction),
     #[serde(rename = "cancel")]
     Cancel(CancelTx),
     #[serde(rename = "cancelByCloid")]
     CancelByCloid(CancelByCloidTx),
     #[serde(rename = "noop")]
-    Noop(NoopTx),
+    Noop,
     #[serde(rename = "batchModify")]
     BatchModify(BatchModifyTx),
-    // 其他类型用通用结构
-    #[serde(untagged)]
-    Unknown {
-        #[serde(rename = "type")]
-        tx_type: String,
-        #[serde(flatten)]
-        data: serde_json::Value,
-    },
+    #[serde(rename = "modify")]
+    Modify(ModifyAction),
+    #[serde(rename = "scheduleCancel")]
+    ScheduleCancel(ScheduleCancelTx),
+    #[serde(rename = "updateLeverage")]
+    UpdateLeverage(UpdateLeverageTx),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderAction {
+    pub orders: Vec<OrderTx>,
+    pub grouping: Option<String>,
 }
 
 /// Order 交易
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderTx {
+    #[serde(rename = "a")]
     pub asset: u32,
-    #[serde(rename = "isBuy")]
+    #[serde(rename = "b")]
     pub is_buy: bool,
-    #[serde(rename = "limitPx")]
+    #[serde(rename = "p")]
     pub limit_px: String,
+    #[serde(rename = "s")]
     pub sz: String,
-    #[serde(rename = "reduceOnly")]
+    #[serde(rename = "r")]
     pub reduce_only: bool,
-    #[serde(rename = "orderType")]
+    #[serde(rename = "t")]
     pub order_type: OrderType,
+    #[serde(rename = "c")]
     pub cloid: Option<String>,
 }
 
 /// 订单类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum OrderType {
+pub struct OrderType {
     #[serde(rename = "limit")]
-    Limit { tif: TimeInForce },
+    pub limit: Option<LimitOrder>,
     #[serde(rename = "trigger")]
-    Trigger {
-        #[serde(rename = "triggerPx")]
-        trigger_px: String,
-        #[serde(rename = "isMarket")]
-        is_market: bool,
-        tpsl: String,
-    },
+    pub trigger: Option<TriggerOrder>,
 }
 
-/// 时间有效性
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TimeInForce {
-    Gtc,
-    Ioc,
-    Alo,
+pub struct LimitOrder {
+    pub tif: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerOrder {
+    #[serde(rename = "triggerPx")]
+    pub trigger_px: String,
+    #[serde(rename = "isMarket")]
+    pub is_market: bool,
+    pub tpsl: String,
 }
 
 /// Cancel 交易
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelTx {
+    #[serde(rename = "cancels")]
+    pub cancels: Vec<CancelItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelItem {
+    #[serde(rename = "a")]
     pub asset: u32,
-    pub oid: u64,
+    #[serde(rename = "o")]
+    pub oid: JsonValue,
 }
 
 /// CancelByCloid 交易
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelByCloidTx {
+    #[serde(rename = "cancels")]
+    pub cancels: Vec<CancelByCloidItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelByCloidItem {
     pub asset: u32,
     pub cloid: String,
 }
-
-/// Noop 交易
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NoopTx {}
 
 /// BatchModify 交易
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,15 +140,25 @@ pub struct BatchModifyTx {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModifyOrder {
-    pub oid: u64,
+    #[serde(rename = "oid")]
+    pub oid: JsonValue,
     pub order: OrderTx,
 }
 
-/// 交易状态
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum TxStatus {
-    #[default]
-    Success,
-    Error,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModifyAction {
+    #[serde(rename = "oid")]
+    pub oid: String,
+    pub order: OrderTx,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleCancelTx {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateLeverageTx {
+    pub asset: u32,
+    #[serde(rename = "isCross")]
+    pub is_cross: bool,
+    pub leverage: u32,
 }

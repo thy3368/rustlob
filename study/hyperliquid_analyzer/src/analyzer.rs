@@ -1,5 +1,6 @@
-use crate::types::{Block, TransactionData, TxStatus};
 use std::collections::HashMap;
+
+use crate::types::{Block, TransactionAction};
 
 #[derive(Debug, Clone)]
 pub struct BlockAnalysis {
@@ -43,32 +44,33 @@ pub fn analyze_block(block: &Block) -> BlockAnalysis {
     let mut assets: HashMap<u32, usize> = HashMap::new();
 
     for tx in &block.transactions {
-        match tx.status {
-            TxStatus::Success => analysis.success_txs += 1,
-            TxStatus::Error => {
-                analysis.error_txs += 1;
-                if let Some(err) = &tx.error {
-                    *errors.entry(err.clone()).or_insert(0) += 1;
-                }
+        if tx.error.is_none() {
+            analysis.success_txs += 1;
+        } else {
+            analysis.error_txs += 1;
+            if let Some(err) = &tx.error {
+                *errors.entry(err.clone()).or_insert(0) += 1;
             }
         }
 
-        *user_tx_count
-            .entry(tx.user_address.clone())
-            .or_insert(0) += 1;
+        *user_tx_count.entry(tx.user.clone()).or_insert(0) += 1;
 
-        let tx_type = match &tx.data {
-            TransactionData::Order(_) => "Order",
-            TransactionData::Cancel(_) => "Cancel",
-            TransactionData::CancelByCloid(_) => "CancelByCloid",
-            TransactionData::Noop(_) => "Noop",
-            TransactionData::BatchModify(_) => "BatchModify",
-            TransactionData::Unknown { tx_type, .. } => tx_type.as_str(),
+        let tx_type = match &tx.action {
+            TransactionAction::Order(_) => "Order",
+            TransactionAction::Cancel(_) => "Cancel",
+            TransactionAction::CancelByCloid(_) => "CancelByCloid",
+            TransactionAction::Noop => "Noop",
+            TransactionAction::BatchModify(_) => "BatchModify",
+            TransactionAction::Modify(_) => "Modify",
+            TransactionAction::ScheduleCancel(_) => "ScheduleCancel",
+            TransactionAction::UpdateLeverage(_) => "UpdateLeverage",
         };
         *tx_types.entry(tx_type.to_string()).or_insert(0) += 1;
 
-        if let TransactionData::Order(order) = &tx.data {
-            *assets.entry(order.asset).or_insert(0) += 1;
+        if let TransactionAction::Order(action) = &tx.action {
+            for order in &action.orders {
+                *assets.entry(order.asset).or_insert(0) += 1;
+            }
         }
     }
 

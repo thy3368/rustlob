@@ -1,6 +1,7 @@
-use crate::analyzer::BlockAnalysis;
-use crate::types::{Block, TransactionData};
 use colored::*;
+
+use crate::analyzer::BlockAnalysis;
+use crate::types::{Block, TransactionAction};
 
 pub fn format_block_report(block: &Block, analysis: &BlockAnalysis) -> String {
     let mut output = String::new();
@@ -29,14 +30,15 @@ fn format_header(block: &Block) -> String {
     format!(
         "\n{}\n{}\n{}\n\n{}\n{}\n  区块高度:     {}\n  区块哈希:     {}\n  时间戳:       {}\n  提议者:       {}\n  总交易数:     {}\n\n",
         "╔══════════════════════════════════════════════════════════╗".bright_blue(),
-        format!("║        区块 #{} 完整分析                          ║", block.header.height).bright_blue(),
+        format!("║        区块 #{} 完整分析                          ║", block.height)
+            .bright_blue(),
         "╚══════════════════════════════════════════════════════════╝".bright_blue(),
         "📦 区块头信息".bright_cyan().bold(),
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black(),
-        format!("{}", block.header.height).yellow(),
-        truncate_hash(&block.header.hash).yellow(),
-        format_timestamp(block.header.time),
-        truncate_hash(&block.header.proposer).yellow(),
+        format!("{}", block.height).yellow(),
+        truncate_hash(&block.hash).yellow(),
+        format_timestamp(block.block_time),
+        truncate_hash(&block.proposer).yellow(),
         format!("{}", block.transactions.len()).yellow(),
     )
 }
@@ -101,32 +103,35 @@ fn format_transaction_list(block: &Block, limit: usize) -> String {
         "{}\n{}\n{:<6} {:<20} {:<20} {:<10} {}\n{}\n",
         format!("📝 交易明细 (前 {} 笔)", limit).bright_cyan().bold(),
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black(),
-        "#", "类型", "用户地址", "状态", "详情",
+        "#",
+        "类型",
+        "用户地址",
+        "状态",
+        "详情",
         "──────────────────────────────────────────────────────────────".bright_black(),
     );
 
     for (i, tx) in block.transactions.iter().take(limit).enumerate() {
-        let tx_type = match &tx.data {
-            TransactionData::Order(_) => "Order",
-            TransactionData::Cancel(_) => "Cancel",
-            TransactionData::CancelByCloid(_) => "CancelByCloid",
-            TransactionData::Noop(_) => "Noop",
-            TransactionData::BatchModify(_) => "BatchModify",
-            TransactionData::Unknown { tx_type, .. } => tx_type.as_str(),
+        let tx_type = match &tx.action {
+            TransactionAction::Order(_) => "Order",
+            TransactionAction::Cancel(_) => "Cancel",
+            TransactionAction::CancelByCloid(_) => "CancelByCloid",
+            TransactionAction::Noop => "Noop",
+            TransactionAction::BatchModify(_) => "BatchModify",
+            TransactionAction::Modify(_) => "Modify",
+            TransactionAction::ScheduleCancel(_) => "ScheduleCancel",
+            TransactionAction::UpdateLeverage(_) => "UpdateLeverage",
         };
 
-        let status = match tx.status {
-            crate::types::TxStatus::Success => "✓".green(),
-            crate::types::TxStatus::Error => "✗".red(),
-        };
+        let status = if tx.error.is_none() { "✓".green() } else { "✗".red() };
 
-        let details = format_tx_details(&tx.data);
+        let details = format_tx_details(&tx.action);
 
         output.push_str(&format!(
             "{:<6} {:<20} {:<20} {:<10} {}\n",
             format!("{}", i + 1).bright_black(),
             tx_type.bright_white(),
-            truncate_hash(&tx.user_address).yellow(),
+            truncate_hash(&tx.user).yellow(),
             status,
             details,
         ));
@@ -245,7 +250,7 @@ fn truncate_hash(hash: &str) -> String {
 
 fn format_timestamp(timestamp: u64) -> String {
     use std::time::{Duration, UNIX_EPOCH};
-    let d = UNIX_EPOCH + Duration::from_nanos(timestamp);
+    let d = UNIX_EPOCH + Duration::from_millis(timestamp);
     format!("{:?}", d).yellow().to_string()
 }
 
@@ -254,27 +259,45 @@ fn create_bar(percentage: f64, width: usize) -> String {
     "█".repeat(filled) + &"░".repeat(width.saturating_sub(filled))
 }
 
-fn format_tx_details(data: &TransactionData) -> String {
-    match data {
-        TransactionData::Order(order) => {
-            let side = if order.is_buy { "Buy" } else { "Sell" };
-            format!(
-                "Asset {} {} {} @ {}",
-                order.asset, side, order.sz, order.limit_px
-            )
+fn format_tx_details(action: &TransactionAction) -> String {
+    match action {
+        TransactionAction::Order(order_action) => {
+            let details: Vec<String> = order_action
+                .orders
+                .iter()
+                .map(|order| {
+                    let side = if order.is_buy { "Buy" } else { "Sell" };
+                    format!("Asset {} {} {} @ {}", order.asset, side, order.sz, order.limit_px)
+                })
+                .collect();
+            details.join("; ")
         }
-        TransactionData::Cancel(cancel) => {
-            format!("Asset {} OID {}", cancel.asset, cancel.oid)
+        TransactionAction::Cancel(cancel) => {
+            let items: Vec<String> =
+                cancel.cancels.iter().map(|c| format!("Asset {} OID {}", c.asset, c.oid)).collect();
+            items.join("; ")
         }
-        TransactionData::CancelByCloid(cancel) => {
-            format!("Asset {} CLOID {}", cancel.asset, cancel.cloid)
+        TransactionAction::CancelByCloid(cancel) => {
+            let items: Vec<String> = cancel
+                .cancels
+                .iter()
+                .map(|c| format!("Asset {} CLOID {}", c.asset, c.cloid))
+                .collect();
+            items.join("; ")
         }
-        TransactionData::Noop(_) => "No operation".to_string(),
-        TransactionData::BatchModify(batch) => {
+        TransactionAction::Noop => "No operation".to_string(),
+        TransactionAction::BatchModify(batch) => {
             format!("{} orders", batch.modifies.len())
         }
-        TransactionData::Unknown { tx_type, .. } => {
-            format!("Type: {}", tx_type)
+        TransactionAction::Modify(modify) => {
+            format!(
+                "Modify OID {} Asset {} @ {}",
+                modify.oid, modify.order.asset, modify.order.limit_px
+            )
+        }
+        TransactionAction::ScheduleCancel(_) => "ScheduleCancel".to_string(),
+        TransactionAction::UpdateLeverage(lev) => {
+            format!("Asset {} leverage {} (cross: {})", lev.asset, lev.leverage, lev.is_cross)
         }
     }
 }
