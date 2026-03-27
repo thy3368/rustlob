@@ -6,8 +6,6 @@
 //! - 使用 trait 定义统一接口
 //! - 支持独立测试和组合
 
-use base_types::cqrs::cqrs_types::CmdResp;
-
 pub mod account_handler;
 pub mod oco_handler;
 pub mod order_handler;
@@ -20,10 +18,5 @@ pub mod spot_trade_v2;
 pub mod change_log_store;
 
 // 撮合相关模块
-pub mod matching_engine;
-
-/// Command Handler trait
-#[async_trait::async_trait]
-pub trait CommandHandler<Cmd, Res, Err>: Send + Sync {
-    async fn handle(&self, cmd: Cmd) -> Result<CmdResp<Res>, Err>;
-}
+pub mod matching_handler;
+pub mod settlement_handler;

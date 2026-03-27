@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use base_types::account::balance::Balance;
-use base_types::exchange::spot::spot_types::SpotTrade;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
+use base_types::handler::handler::CmdHandler;
 use base_types::{AccountId, AssetId};
 use db_repo::MySqlDbRepo;
 use diff::ChangeLog;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
+use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 #[derive(Debug, Clone)]
 pub struct SettlementResult {
@@ -76,6 +78,12 @@ impl SettlementHandler for DefaultSettlementHandler {
         if let Err(e) = self.event_publisher.publish_balance_logs(logs) {
             tracing::error!(error = ?e, "Failed to publish balance logs");
         }
+    }
+}
+
+impl CmdHandler<&SpotTrade, SettlementResult, SpotCmdErrorAny> for DefaultSettlementHandler {
+    fn handle(&self, trade: &SpotTrade) -> Result<SettlementResult, SpotCmdErrorAny> {
+        return self.settle_trade(trade);
     }
 }
 

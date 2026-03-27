@@ -6,11 +6,11 @@ use diff::ChangeLog;
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::processor::nats::base::{create_nats_client, deserialize_change_log, NatsProcessor, NatsProcessorConfig};
-use crate::proc::v2::trade_handlers::matching_engine::{MatchResult, MatchingEngine};
+use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 pub struct NatsMatchingProcessor {
     client: Arc<async_nats::Client>,
-    matching_engine: Arc<MatchingEngine>,
+    matching_engine: Arc<MatchingHandler>,
     event_publisher: Arc<dyn EventPublisher>,
     config: NatsProcessorConfig,
     subject: String,
@@ -18,7 +18,7 @@ pub struct NatsMatchingProcessor {
 
 impl NatsMatchingProcessor {
     pub fn new(
-        matching_engine: Arc<MatchingEngine>,
+        matching_engine: Arc<MatchingHandler>,
         event_publisher: Arc<dyn EventPublisher>,
         config: NatsProcessorConfig,
         subject: String,
@@ -103,7 +103,7 @@ pub struct NatsMatchingProcessorFactory;
 
 impl NatsMatchingProcessorFactory {
     pub fn create_and_start(
-        matching_engine: Arc<MatchingEngine>,
+        matching_engine: Arc<MatchingHandler>,
         event_publisher: Arc<dyn EventPublisher>,
         config: NatsProcessorConfig,
         subject: String,

@@ -5,7 +5,7 @@ use futures::StreamExt;
 use diff::ChangeLog;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::v2::processor::common::{SettlementHandler, SettlementResult};
+use crate::proc::v2::trade_handlers::settlement_handler::{SettlementHandler, SettlementResult};
 use crate::proc::v2::processor::nats::base::{NatsProcessor, NatsProcessorConfig};
 use crate::proc::v2::trade_handlers::change_log_store::deserialize_change_log;
 

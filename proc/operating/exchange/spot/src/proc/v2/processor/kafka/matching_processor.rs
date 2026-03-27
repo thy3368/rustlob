@@ -7,11 +7,11 @@ use rdkafka::consumer::StreamConsumer;
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::processor::kafka::base::{create_kafka_consumer, deserialize_change_log, KafkaConsumerConfig, KafkaProcessor, KafkaProcessorConfig};
-use crate::proc::v2::trade_handlers::matching_engine::{MatchResult, MatchingEngine};
+use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 pub struct KafkaMatchingProcessor {
     consumer: Arc<StreamConsumer>,
-    matching_engine: Arc<MatchingEngine>,
+    matching_engine: Arc<MatchingHandler>,
     event_publisher: Arc<dyn EventPublisher>,
     config: KafkaProcessorConfig,
     topic: String,
@@ -19,7 +19,7 @@ pub struct KafkaMatchingProcessor {
 
 impl KafkaMatchingProcessor {
     pub fn new(
-        matching_engine: Arc<MatchingEngine>,
+        matching_engine: Arc<MatchingHandler>,
         event_publisher: Arc<dyn EventPublisher>,
         config: KafkaProcessorConfig,
         topic: String,
@@ -120,7 +120,7 @@ pub struct KafkaMatchingProcessorFactory;
 
 impl KafkaMatchingProcessorFactory {
     pub fn create_and_start(
-        matching_engine: Arc<MatchingEngine>,
+        matching_engine: Arc<MatchingHandler>,
         event_publisher: Arc<dyn EventPublisher>,
         config: KafkaProcessorConfig,
         topic: String,

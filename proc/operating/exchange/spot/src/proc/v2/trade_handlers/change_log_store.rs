@@ -7,12 +7,20 @@ use std::sync::Arc;
 
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
+use base_types::handler::handler::CmdHandler;
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::ChangeLog;
-use rocksdb::{DB, Options};
+use rocksdb::{Options, DB};
 use serde::de::DeserializeOwned;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
+
+fn internal_error(message: impl Into<String>) -> SpotCmdErrorAny {
+    SpotCmdErrorAny::Common(CommonError::Internal {
+        message: message.into(),
+    })
+}
 
 /// Key-value store for persisting change logs
 pub struct ChangeLogStore {
@@ -21,12 +29,12 @@ pub struct ChangeLogStore {
 
 impl ChangeLogStore {
     /// Open or create a RocksDB database at the given path
-    pub fn new(db_path: &str) -> Result<Self, String> {
+    pub fn new(db_path: &str) -> Result<Self, SpotCmdErrorAny> {
         let mut db_options = Options::default();
         db_options.create_if_missing(true);
 
         let db = DB::open(&db_options, db_path)
-            .map_err(|e| format!("Failed to open RocksDB at {}: {}", db_path, e))?;
+            .map_err(|e| internal_error(format!("Failed to open RocksDB at {}: {}", db_path, e)))?;
 
         Ok(Self { db: Arc::new(db) })
     }
@@ -37,14 +45,14 @@ impl ChangeLogStore {
         entity_type: &str,
         entity_id: &str,
         log: &ChangeLog,
-    ) -> Result<(), String> {
+    ) -> Result<(), SpotCmdErrorAny> {
         let key = format!("{}:{}", entity_type, entity_id);
-        let value =
-            serde_json::to_vec(log).map_err(|e| format!("Failed to serialize log: {}", e))?;
+        let value = serde_json::to_vec(log)
+            .map_err(|e| internal_error(format!("Failed to serialize log: {}", e)))?;
 
         self.db
             .put(key.as_bytes(), value.as_slice())
-            .map_err(|e| format!("Failed to persist to RocksDB: {}", e))
+            .map_err(|e| internal_error(format!("Failed to persist to RocksDB: {}", e)))
     }
 
     /// Retrieve a change log entry by entity type and ID
@@ -82,14 +90,14 @@ impl ChangeLogStore {
     }
 
     /// Set the latest sequence number
-    pub fn set_latest_sequence(&self, sequence: u64) -> Result<(), String> {
+    pub fn set_latest_sequence(&self, sequence: u64) -> Result<(), SpotCmdErrorAny> {
         self.db
             .put("meta:latest_sequence", sequence.to_string().as_bytes())
-            .map_err(|e| format!("Failed to update sequence: {}", e))
+            .map_err(|e| internal_error(format!("Failed to update sequence: {}", e)))
     }
 
     /// Update sequence number only if the new sequence is higher
-    pub fn update_sequence_if_higher(&self, new_sequence: u64) -> Result<(), String> {
+    pub fn update_sequence_if_higher(&self, new_sequence: u64) -> Result<(), SpotCmdErrorAny> {
         let current_seq = self.get_latest_sequence().unwrap_or(0);
         if new_sequence > current_seq {
             self.set_latest_sequence(new_sequence)?;
@@ -116,24 +124,24 @@ impl ChangeLogReplay {
     }
 
     /// Replay a change log entry to MySQL based on entity type
-    pub fn replay(&self, log: &ChangeLog) -> Result<(), String> {
+    pub fn replay(&self, log: &ChangeLog) -> Result<(), SpotCmdErrorAny> {
         let entity_type = log.entity_type();
 
         match entity_type.as_str() {
             "SpotOrder" | "Order" => {
                 self.order_repo
                     .replay_event(log)
-                    .map_err(|e| format!("Failed to replay order to MySQL: {}", e))?;
+                    .map_err(|e| internal_error(format!("Failed to replay order to MySQL: {}", e)))?;
             }
             "SpotTrade" | "Trade" => {
                 self.trade_repo
                     .replay_event(log)
-                    .map_err(|e| format!("Failed to replay trade to MySQL: {}", e))?;
+                    .map_err(|e| internal_error(format!("Failed to replay trade to MySQL: {}", e)))?;
             }
             "Balance" => {
                 self.balance_repo
                     .replay_event(log)
-                    .map_err(|e| format!("Failed to replay balance to MySQL: {}", e))?;
+                    .map_err(|e| internal_error(format!("Failed to replay balance to MySQL: {}", e)))?;
             }
             _ => {
                 tracing::warn!(entity_type = %entity_type, "Unknown entity type, skipping MySQL replay");
@@ -144,22 +152,9 @@ impl ChangeLogReplay {
     }
 }
 
-/// Common error type for persistence operations
-#[derive(Debug, thiserror::Error)]
-pub enum PersistenceError {
-    #[error("RocksDB error: {0}")]
-    RocksDb(String),
-
-    #[error("MySQL replay error: {0}")]
-    MySqlReplay(String),
-
-    #[error("Serialization error: {0}")]
-    Serialization(String),
-}
-
-impl From<PersistenceError> for SpotCmdErrorAny {
-    fn from(e: PersistenceError) -> Self {
-        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+impl CmdHandler<&ChangeLog, (), SpotCmdErrorAny> for ChangeLogReplay {
+    fn handle(&self, cmd: &ChangeLog) -> Result<(), SpotCmdErrorAny> {
+        self.replay(cmd)
     }
 }
 
@@ -176,9 +171,7 @@ pub trait ChangeLogProcessor: Send + Sync + 'static {
 pub fn deserialize_change_log(bytes: &[u8]) -> Result<ChangeLog, SpotCmdErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
         tracing::error!(error = ?e, bytes_len = bytes.len(), "Failed to deserialize change log");
-        SpotCmdErrorAny::Common(CommonError::Internal {
-            message: format!("Deserialization error: {}", e),
-        })
+        internal_error(format!("Deserialization error: {}", e))
     })
 }
 

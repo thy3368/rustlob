@@ -67,19 +67,17 @@ impl NatsPersistentProcessor {
             .persist(&entity_type, &entity_id, log)
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to persist to RocksDB");
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e })
+                e
             })?;
 
         self.replay
             .replay(log)
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to replay to MySQL");
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e })
+                e
             })?;
 
-        self.store
-            .update_sequence_if_higher(*sequence)
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e }))?;
+        self.store.update_sequence_if_higher(*sequence)?;
 
         Ok(())
     }

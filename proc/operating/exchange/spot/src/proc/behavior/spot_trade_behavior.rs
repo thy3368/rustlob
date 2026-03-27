@@ -24,6 +24,7 @@ use base_types::{AccountId, OrderId, OrderSide, Price, Quantity, TradingPair};
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
+// 领域错误 面向的是直接用户，就是给你的用户传达什么信息
 pub enum CommonError {
     /// 账户余额不足
     InsufficientBalance { required: u64, available: u64 },

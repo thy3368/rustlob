@@ -8,17 +8,15 @@
 use std::sync::Arc;
 
 use base_types::account::balance::Balance;
-use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
+use base_types::cqrs::cqrs_types::CmdResp;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use base_types::Timestamp;
+use base_types::handler::handler::CmdHandler;
 use db_repo::MySqlDbRepo;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     AccountCmd, MyTradesCmd, QueryUnfilledOrderCountCmd, SpotTradeResAny,
 };
-
-use super::CommandHandler;
 
 /// 账户查询处理器
 pub struct AccountHandler {
@@ -33,11 +31,7 @@ impl AccountHandler {
         trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
         order_repo: Arc<MySqlDbRepo<SpotOrder>>,
     ) -> Self {
-        Self {
-            balance_repo,
-            trade_repo,
-            order_repo,
-        }
+        Self { balance_repo, trade_repo, order_repo }
     }
 
     /// 处理账户信息查询
@@ -69,11 +63,10 @@ impl AccountHandler {
 }
 
 #[async_trait::async_trait]
-impl CommandHandler<AccountCmd, SpotTradeResAny, SpotCmdErrorAny> for AccountHandler {
-    async fn handle(
-        &self,
-        cmd: AccountCmd,
-    ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
-        self.handle_account(cmd)
+impl CmdHandler<AccountCmd, SpotTradeResAny, SpotCmdErrorAny> for AccountHandler {
+    fn handle(&self, cmd: AccountCmd) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
+        self.handle_account(cmd);
+
+        todo!()
     }
 }

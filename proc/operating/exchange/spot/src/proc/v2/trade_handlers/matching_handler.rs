@@ -19,12 +19,14 @@
 use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade};
+use base_types::handler::handler::CmdHandler;
 use base_types::{Price, Quantity, Timestamp};
 use db_repo::MySqlDbRepo;
 use diff::{ChangeLog, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd};
 
 /// 撮合结果
 ///
@@ -68,7 +70,7 @@ impl MatchResult {
 /// # 不负责
 /// - 余额更新（由 SettlementProcessor 处理）
 /// - 资金冻结（由 OrderHandler 处理）
-pub struct MatchingEngine {
+pub struct MatchingHandler {
     /// 订单簿仓储
     lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
     /// 订单仓储
@@ -77,7 +79,7 @@ pub struct MatchingEngine {
     trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
 }
 
-impl MatchingEngine {
+impl MatchingHandler {
     /// 创建新的撮合引擎
     ///
     /// # 参数
@@ -229,6 +231,12 @@ impl MatchingEngine {
     ) -> Result<ChangeLog, SpotCmdErrorAny> {
         // TODO: 实现订单状态更新
         todo!("Implement order status update")
+    }
+}
+
+impl CmdHandler<SpotOrder, MatchResult, SpotCmdErrorAny> for MatchingHandler {
+    fn handle(&self, order: SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
+        return self.match_order(order);
     }
 }
 
