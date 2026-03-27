@@ -5,13 +5,16 @@ use diff::ChangeLog;
 use rdkafka::consumer::StreamConsumer;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
+use crate::proc::v2::processor::kafka::base::{
+    create_kafka_consumer, deserialize_change_log, KafkaConsumerConfig, KafkaProcessor,
+    KafkaProcessorConfig,
+};
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
-use crate::proc::v2::processor::kafka::base::{create_kafka_consumer, deserialize_change_log, KafkaConsumerConfig, KafkaProcessor, KafkaProcessorConfig};
 use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 pub struct KafkaMatchingProcessor {
     consumer: Arc<StreamConsumer>,
-    matching_engine: Arc<MatchingHandler>,
+    matching_handler: Arc<MatchingHandler>,
     event_publisher: Arc<dyn EventPublisher>,
     config: KafkaProcessorConfig,
     topic: String,
@@ -24,19 +27,16 @@ impl KafkaMatchingProcessor {
         config: KafkaProcessorConfig,
         topic: String,
     ) -> Result<Self, String> {
-        let kafka_config = KafkaConsumerConfig::new(
-            &config.kafka_brokers,
-            &topic,
-            &config.group_id,
-        )
-        .with_session_timeout(config.session_timeout_ms)
-        .with_auto_commit_interval(config.auto_commit_interval_ms);
+        let kafka_config =
+            KafkaConsumerConfig::new(&config.kafka_brokers, &topic, &config.group_id)
+                .with_session_timeout(config.session_timeout_ms)
+                .with_auto_commit_interval(config.auto_commit_interval_ms);
 
         let consumer = create_kafka_consumer(&kafka_config)?;
 
         Ok(Self {
             consumer: Arc::new(consumer),
-            matching_engine,
+            matching_handler: matching_engine,
             event_publisher,
             config,
             topic,
@@ -61,6 +61,7 @@ impl KafkaProcessor for KafkaMatchingProcessor {
         &self.config.kafka_brokers
     }
 
+    //todo  inbound handler
     async fn handle_message(&self, payload: &[u8]) -> Result<(), SpotCmdErrorAny> {
         let order_log: ChangeLog = deserialize_change_log(payload)?;
 
@@ -71,7 +72,7 @@ impl KafkaProcessor for KafkaMatchingProcessor {
         );
 
         let order = self.reconstruct_order(&order_log)?;
-        let match_result = self.matching_engine.match_order(order)?;
+        let match_result = self.matching_handler.match_order(order)?;
 
         self.publish_match_result(match_result).await
     }
