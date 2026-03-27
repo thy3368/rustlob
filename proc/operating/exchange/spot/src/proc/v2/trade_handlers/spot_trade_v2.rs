@@ -1597,6 +1597,12 @@ impl SpotTradeBehaviorV2Impl {
         let (mut internal_order, _logs) = self.handle_acquiring(cmd)?;
 
         match internal_order.state.status {
+            OrderStatus::New => {
+                log::info!(
+                    "Order {} is new, waiting for downstream async processing",
+                    internal_order.order_id
+                );
+            }
             OrderStatus::ConditionalPending => {
                 // 条件单未触发，资金已冻结，等待后续触发
                 // 直接返回确认，不进行撮合

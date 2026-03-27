@@ -13,7 +13,7 @@ use base_types::account::error::BalanceError;
 use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
 use base_types::exchange::spot::spot_types::{OrderSide, OrderType, SpotOrder, SpotTrade};
 use base_types::{AccountId, AssetId, Quantity, Timestamp, TradingPair};
-use db_repo::MySqlDbRepo;
+use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::{ChangeLog, ChangeType, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
@@ -487,6 +487,114 @@ impl OrderHandler {
         Ok(CmdResp::new(ResMetadata::new(0, false, timestamp), SpotTradeResAny::NewOrderAck(ack)))
     }
 
+    /// 同步接受新订单
+    ///
+    /// # 流程
+    /// 1. 参数校验
+    /// 2. 交易对校验
+    /// 3. 生成订单 ID 和时间戳
+    /// 4. 构造初始订单（状态为 New）
+    /// 5. 同步写入 MySQL
+    /// 6. 发布 Kafka 事件
+    /// 7. 返回 NewOrderAck
+    ///
+    /// # 参数
+    /// - `cmd`: 新订单命令
+    ///
+    /// # 返回
+    /// - `Ok(NewOrderAck)`: 订单接受成功
+    /// - `Err(SpotCmdErrorAny)`: 订单接受失败（参数错误、交易对不支持、持久化失败等）
+    ///
+    /// # 注意
+    /// - 冻结资金由异步线程处理
+    /// - 撮合由异步线程处理
+    pub fn accept_new_order(
+        &self,
+        cmd: NewOrderCmd,
+    ) -> Result<NewOrderAck, SpotCmdErrorAny> {
+        // 1. 参数校验
+        self.validate_order_cmd(&cmd)?;
+
+        // 2. 交易对校验
+        let symbol = *cmd.symbol();
+        if !self.is_symbol_supported(symbol) {
+            return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                field: "symbol",
+                reason: "trading pair not supported",
+            }));
+        }
+
+        // 3. 生成订单 ID 和时间戳
+        let order_id = order_next_id() as u64;
+        let timestamp = Timestamp::now_as_nanos();
+
+        // 4. 构造初始订单
+        let mut order = SpotOrder::from(cmd.clone());
+        order.state.status = base_types::exchange::spot::spot_types::OrderStatus::New;
+        order.state.last_updated = timestamp;
+
+        // 5. 生成变更日志
+        let order_log = order.track_create().map_err(|e| {
+            tracing::error!(
+                order_id = %order_id,
+                error = ?e,
+                "Failed to track order creation"
+            );
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to track order creation: {}", e),
+            })
+        })?;
+
+        // 6. 同步写入 MySQL
+        self.order_repo.replay_event(&order_log).map_err(|e| {
+            tracing::error!(
+                order_id = %order_id,
+                error = ?e,
+                "Failed to persist order to MySQL"
+            );
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to persist order: {}", e),
+            })
+        })?;
+
+        // 7. 发布 Kafka 事件
+        if let Err(e) = self.event_publisher.publish_order_log(&order_log) {
+            tracing::error!(
+                order_id = %order_id,
+                error = ?e,
+                "Failed to publish order log to Kafka, attempting rollback"
+            );
+
+            // 尝试回滚：删除刚写入的订单
+            if let Err(rollback_err) = self.order_repo.replay_event(&ChangeLog::new(
+                order_id.to_string(),
+                "SpotOrder".to_string(),
+                ChangeType::Deleted,
+                timestamp.0,
+                1,
+            )) {
+                tracing::error!(
+                    order_id = %order_id,
+                    error = ?rollback_err,
+                    "Failed to rollback order after Kafka publish failure"
+                );
+            }
+
+            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to publish order log: {}", e),
+            }));
+        }
+
+        // 8. 返回 ACK
+        Ok(NewOrderAck::new(
+            symbol,
+            order_id,
+            -1,
+            cmd.new_client_order_id().clone(),
+            timestamp,
+        ))
+    }
+
     /// 验证命令并转换为内部订单
     ///
     /// # 参数
@@ -520,7 +628,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use base_types::exchange::spot::spot_types::TimeInForce;
-    use base_types::{Price, TradingPair};
+    use base_types::{Decimal, Price, TradingPair};
     use lob_repo::core::repo_snapshot_support::RepoError;
 
     use super::*;
@@ -605,7 +713,7 @@ mod tests {
             _price: Price,
             _quantity: Quantity,
         ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            (None, Decimal::from(0))
+            (None, Decimal::default())
         }
 
         fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
@@ -758,7 +866,6 @@ mod tests {
             None,
             None,
             None,
-            None,
         );
 
         let result = handler.handle_post(cmd);
@@ -795,6 +902,7 @@ mod tests {
             Some(TimeInForce::GTC),
             Some(Quantity::from_f64(0.1)),
             None,
+            None, // price 缺失，应该触发错误
             None,
             None,
             None,
@@ -834,6 +942,79 @@ mod tests {
         match err {
             SpotCmdErrorAny::Common(CommonError::Internal { .. }) => {}
             _ => panic!("Expected Internal error"),
+        }
+    }
+
+    #[test]
+    fn test_accept_new_order_success() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher.clone(), lob_repo);
+
+        let cmd = create_test_order_cmd(TradingPair::BtcUsdt);
+        let result = handler.accept_new_order(cmd);
+
+        assert!(result.is_ok());
+        let ack = result.unwrap();
+        assert_eq!(*ack.symbol(), TradingPair::BtcUsdt);
+        assert!(publisher.was_published());
+    }
+
+    #[test]
+    fn test_accept_new_order_invalid_params() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::BtcUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = NewOrderCmd::new(
+            CMetadata::new(
+                "test_order_123".to_string(),
+                Timestamp::now_as_nanos(),
+                None,
+                None,
+                Some("test_user".to_string()),
+                Vec::new(),
+                None,
+            ),
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Some(TimeInForce::GTC),
+            Some(Quantity::default()), // 零数量
+            None,
+            Some(Price::from_f64(45000.0)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let result = handler.accept_new_order(cmd);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_accept_new_order_unsupported_symbol() {
+        let publisher = Arc::new(MockEventPublisher::new());
+        let lob_repo = Arc::new(MockLobRepo::new(vec![TradingPair::EthUsdt]));
+        let handler = create_handler(publisher, lob_repo);
+
+        let cmd = create_test_order_cmd(TradingPair::BtcUsdt);
+        let result = handler.accept_new_order(cmd);
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SpotCmdErrorAny::Common(CommonError::InvalidParameter { field, .. }) => {
+                assert_eq!(field, "symbol");
+            }
+            _ => panic!("Expected InvalidParameter error for symbol"),
         }
     }
 }

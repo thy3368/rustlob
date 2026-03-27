@@ -12,6 +12,9 @@ pub mod account_handler;
 pub mod oco_handler;
 pub mod order_handler;
 pub mod spot_trade_v3;
+
+pub mod spot_trade_v4;
+
 pub mod spot_trade_v2;
 
 pub mod change_log_store;

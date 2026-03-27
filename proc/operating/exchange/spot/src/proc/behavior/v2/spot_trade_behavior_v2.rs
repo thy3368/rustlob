@@ -10,8 +10,9 @@ use immutable_derive::immutable;
 use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
 /// Spot Trading 命令枚举 - 仅包含写入操作
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotTradeCmd {
     /// 创建新订单 POST /api/v3/order
     /// Weight: 1
@@ -56,8 +57,9 @@ pub enum SpotTradeCmd {
 }
 
 /// Spot Trading 查询枚举 - 仅包含查询操作
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum SpotTradeQuery {
     /// 查询订单 GET /api/v3/order
     /// Weight: 4

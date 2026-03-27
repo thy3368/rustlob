@@ -128,7 +128,7 @@ impl KafkaEventPublisher {
 
 impl EventPublisher for KafkaEventPublisher {
     fn publish_command(&self, cmd: &SpotTradeCmdOrQuery) -> Result<(), PublishError> {
-        let payload = serde_json::to_vec(cmd).map_err(|e| PublishError::Serialization(e))?;
+        let payload = format!("{:?}", cmd).into_bytes();
         let record = FutureRecord::to(&self.config.order_log_topic).payload(&payload).key(&());
         let future = self
             .producer
