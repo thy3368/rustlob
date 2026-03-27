@@ -12,12 +12,10 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
 };
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::trade_handlers::account_handler::AccountHandler;
-use crate::proc::v2::trade_handlers::oco_handler::OcoHandler;
 use crate::proc::v2::trade_handlers::order_handler::OrderHandler;
 
 pub struct SpotTradeBehaviorV4Impl {
     order_handler: Arc<OrderHandler>,
-    oco_handler: Arc<OcoHandler>,
     account_handler: Arc<AccountHandler>,
 }
 
@@ -37,20 +35,13 @@ impl SpotTradeBehaviorV4Impl {
             event_publisher.clone(),
         ));
 
-        let oco_handler = Arc::new(OcoHandler::new(
-            balance_repo.clone(),
-            trade_repo.clone(),
-            order_repo.clone(),
-            lob_repo.clone(),
-        ));
-
         let account_handler = Arc::new(AccountHandler::new(
             balance_repo.clone(),
             trade_repo.clone(),
             order_repo.clone(),
         ));
 
-        Self { order_handler, oco_handler, account_handler }
+        Self { order_handler, account_handler }
     }
 }
 
@@ -64,7 +55,10 @@ impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotT
         match cmd {
             SpotTradeCmdOrQuery::Cmd(cmd) => match cmd {
                 SpotTradeCmd::NewOrder(cmd) => {
-                    let ack = <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny>>::handle(self, cmd)?;
+                    let ack =
+                        <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny>>::handle(
+                            self, cmd,
+                        )?;
                     Ok(SpotTradeResAny::NewOrderAck(ack))
                 }
                 SpotTradeCmd::TestNewOrder(_) => todo!(),

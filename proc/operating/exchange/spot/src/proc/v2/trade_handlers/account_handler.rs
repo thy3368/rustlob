@@ -66,7 +66,5 @@ impl AccountHandler {
 impl CmdHandler<AccountCmd, SpotTradeResAny, SpotCmdErrorAny> for AccountHandler {
     fn handle(&self, cmd: AccountCmd) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
         self.handle_account(cmd);
-
-        todo!()
     }
 }

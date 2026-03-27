@@ -28,6 +28,7 @@ impl SettlementResult {
 }
 
 pub trait SettlementHandler: Send + Sync {
+    //todo 这个方法 不需要的
     fn reconstruct_trade(&self, trade_log: &ChangeLog) -> Result<SpotTrade, SpotCmdErrorAny>;
     fn settle_trade(&self, trade: &SpotTrade) -> Result<SettlementResult, SpotCmdErrorAny>;
     fn publish_balance_logs(&self, logs: &[ChangeLog]);
