@@ -461,6 +461,8 @@ pub enum OrderStatus {
     /// - TakeProfitLimit: 价格上涨到止盈价时触发
     ConditionalPending = 0,
 
+    New = 100,
+
     /// **待成交 (Pending)**
     ///
     /// 订单已成功提交到系统，正在订单簿中等待匹配成交。
@@ -567,6 +569,7 @@ impl Default for OrderStatus {
 impl fmt::Display for OrderStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            OrderStatus::New => write!(f, "NEW"),
             OrderStatus::Pending => write!(f, "PENDING"),
             OrderStatus::PartiallyFilled => write!(f, "PARTIALLY_FILLED"),
             OrderStatus::Filled => write!(f, "FILLED"),
