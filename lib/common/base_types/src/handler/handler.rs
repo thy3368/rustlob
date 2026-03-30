@@ -10,4 +10,6 @@ pub trait CmdHandler<C, R, E>: Send + Sync {
 
     //todo 1. queue state; 2. cal changelog for state; 3. publish changelog
     //todo 持久化分两类， 1，先存changelog, 通过异步回放实现state变更，发布changelog; 2,发布changelog, 异步回放changelog
+    // 计算场景 可能涉及soa+simd的场景
+
 }
