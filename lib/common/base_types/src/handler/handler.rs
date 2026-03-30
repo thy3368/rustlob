@@ -1,15 +1,19 @@
 use crate::cqrs::cqrs_types::CmdResp;
+// =============================================================================
+// CORE TRAIT: Handler 基础接口
+// =============================================================================
+
 
 pub trait Handler<C, R, E>: Send + Sync {
     async fn handle(&self, cmd: C) -> Result<CmdResp<R>, E>;
 }
 
-// 业务功能 里面包含 取数，计算changelog,持久化，发消息等能力
+
+
+// =============================================================================
+// CMDHANDLER: 同步命令处理器
+// =============================================================================
+
 pub trait CmdHandler<C, R, E>: Send + Sync {
-    fn handle(&self, cmd: C) -> Result<R, E>;
-
-    //todo 1. queue state; 2. cal changelog for state; 3. publish changelog
-    //todo 持久化分两类， 1，先存changelog, 通过异步回放实现state变更，发布changelog; 2,发布changelog, 异步回放changelog
-    // 计算场景 可能涉及soa+simd的场景
-
+    fn cmd_handle(&self, cmd: C) -> Result<R, E>;
 }

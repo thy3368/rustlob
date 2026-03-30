@@ -121,6 +121,15 @@
 //! - 发布失败是否影响主事务结果
 //! - 是否需要 outbox / retry / 补偿机制
 //!
+//! `publish_changelog` 并不要求只能做进程内同步调用，
+//! 也可以把 changelog / domain event 发布到异步通道，例如：
+//! - 内存队列
+//! - channel / ring buffer
+//! - Kafka / NATS / Redis Stream 等消息系统
+//!
+//! 在这种模式下，EventHandler 通常位于这些通道的消费侧，
+//! 负责消费 changelog / event，再映射成下游 command 并驱动下一个 CommandHandler。
+//!
 //! 默认建议先明确 changelog 持久化与回放边界，再定义 publish 行为，避免副作用顺序不清。
 //!
 //! ## 10. 返回值职责
@@ -176,311 +185,414 @@
 //! - [ ] 没有混入 QueryHandler/read model 逻辑
 //! - [ ] 热路径没有无意义分配或冗余步骤
 
-/// CmdHandler 职责规范占位类型。
-pub struct CmdTemplateSpec;
-
-/// 一次命令执行产生的变更集合。
-///
-/// 适用于撮合、清算、批量更新等“一次命令依赖多个状态、影响多个实体、产出多个 changelog”的场景。
-pub struct ChangeSet<W, L> {
-    pub writes: W,
-    pub changelogs: Vec<L>,
-}
-
-/// 撮合场景的示例状态集合。
-///
-/// 一次撮合命令在计算前，可能需要同时读取：
-/// - taker order
-/// - maker orders
-/// - balances
-/// - positions
-/// - orderbook snapshot / level view
-pub struct MatchStateSet<O, B, P, OB> {
-    pub taker_order: O,
-    pub maker_orders: Vec<O>,
-    pub balances: Vec<B>,
-    pub positions: Vec<P>,
-    pub orderbook: OB,
-}
-
-/// 撮合场景的示例写集结构。
-///
-/// 一次撮合命令可能同时影响：
-/// - taker / maker orders
-/// - trades
-/// - balances
-/// - positions
-pub struct MatchWrites<O, T, B, P> {
-    pub orders: Vec<O>,
-    pub trades: Vec<T>,
-    pub balances: Vec<B>,
-    pub positions: Vec<P>,
-}
-
-/// 示例依赖：create 场景，构建初始 state set，一般不需要加锁。
-pub trait BuildInitialStateSet<C, S, E> {
-    fn build_initial_state_set(&self, cmd: &C) -> Result<S, E>;
-}
-
-/// 示例依赖：update 场景，锁外快速预检查。
-pub trait PreCheckCommand<C, E> {
-    fn pre_check_command(&self, cmd: &C) -> Result<(), E>;
-}
-
-/// 示例依赖：update 场景，加锁读取参与更新的 state set。
-pub trait LoadStateSetForUpdate<C, S, E> {
-    fn load_state_set_for_update(&self, cmd: &C) -> Result<S, E>;
-}
-
-/// 示例依赖：single-thread 场景，无锁读取 state set。
-pub trait LoadStateSetInSingleThread<C, S, E> {
-    fn load_state_set_in_single_thread(&self, cmd: &C) -> Result<S, E>;
-}
-
-/// 示例依赖：create 或通用场景的命令校验。
-pub trait ValidateCommand<C, S, E> {
-    fn validate_command(&self, cmd: &C, state_set: &S) -> Result<(), E>;
-}
-
-/// 示例依赖：update 场景的锁内二判。
-pub trait ValidateCommandInLock<C, S, E> {
-    fn validate_command_in_lock(&self, cmd: &C, state_set: &S) -> Result<(), E>;
-}
-
-/// 示例依赖：将业务状态更新与 changelog 收集合并为一个步骤。
-///
-/// 注意：这里输入的是 state set，返回的是 ChangeSet，
-/// 以支持一次命令依赖多个状态并产出多实体写入、多条 changelog 的情况。
-///
-/// 例如撮合场景里：
-/// - S 可以是 `MatchStateSet<OrderState, BalanceState, PositionState, OrderBookView>`
-/// - W 可以是 `MatchWrites<OrderWrite, TradeWrite, BalanceWrite, PositionWrite>`。
-pub trait ApplyCommandAndCollectChanges<C, S, W, L, E> {
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &C,
-        state_set: S,
-    ) -> Result<ChangeSet<W, L>, E>;
-}
-
-/// 示例依赖：先持久化 changelog。
-pub trait PersistChangeLogs<L, E> {
-    fn persist_changelogs(&self, changelogs: &[L]) -> Result<(), E>;
-}
-
-/// 示例依赖：通过回放 changelog 更新 state。
-pub trait ReplayChangeLogsToState<L, E> {
-    fn replay_changelogs_to_state(&self, changelogs: &[L]) -> Result<(), E>;
-}
-
-/// 示例依赖：发布 changelog / event / message。
-pub trait PublishChangeLog<L, E> {
-    fn publish_changelog(&self, changelogs: &[L]) -> Result<(), E>;
-}
-
-/// create new state set 的模板示例。
-///
-/// 主链路：build initial state set -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
-pub struct CreateStateSetCmdTemplate<Builder, Validator, Applier, LogPersister, Replayer, Publisher> {
-    pub builder: Builder,
-    pub validator: Validator,
-    pub applier: Applier,
-    pub log_persister: LogPersister,
-    pub replayer: Replayer,
-    pub publisher: Publisher,
-}
-
-impl<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
-    CreateStateSetCmdTemplate<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
-{
-    pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
-    where
-        Builder: BuildInitialStateSet<C, S, E>,
-        Validator: ValidateCommand<C, S, E>,
-        Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
-        LogPersister: PersistChangeLogs<L, E>,
-        Replayer: ReplayChangeLogsToState<L, E>,
-        Publisher: PublishChangeLog<L, E>,
-        F: FnOnce(&W, &[L]) -> R,
-    {
-        let state_set = self.builder.build_initial_state_set(&cmd)?;
-        self.validator.validate_command(&cmd, &state_set)?;
-
-        let changes = self
-            .applier
-            .apply_command_and_collect_changes(&cmd, state_set)?;
-
-        self.log_persister
-            .persist_changelogs(&changes.changelogs)?;
-        self.replayer
-            .replay_changelogs_to_state(&changes.changelogs)?;
-        self.publisher.publish_changelog(&changes.changelogs)?;
-
-        Ok(result_mapper(&changes.writes, &changes.changelogs))
-    }
-}
-
-/// single-thread state set 的模板示例。
-///
-/// 主链路：load state set in single thread -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
-pub struct SingleThreadStateSetCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer, Publisher> {
-    pub loader: Loader,
-    pub validator: Validator,
-    pub applier: Applier,
-    pub log_persister: LogPersister,
-    pub replayer: Replayer,
-    pub publisher: Publisher,
-}
-
-impl<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
-    SingleThreadStateSetCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
-{
-    pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
-    where
-        Loader: LoadStateSetInSingleThread<C, S, E>,
-        Validator: ValidateCommand<C, S, E>,
-        Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
-        LogPersister: PersistChangeLogs<L, E>,
-        Replayer: ReplayChangeLogsToState<L, E>,
-        Publisher: PublishChangeLog<L, E>,
-        F: FnOnce(&W, &[L]) -> R,
-    {
-        let state_set = self.loader.load_state_set_in_single_thread(&cmd)?;
-        self.validator.validate_command(&cmd, &state_set)?;
-
-        let changes = self
-            .applier
-            .apply_command_and_collect_changes(&cmd, state_set)?;
-
-        self.log_persister
-            .persist_changelogs(&changes.changelogs)?;
-        self.replayer
-            .replay_changelogs_to_state(&changes.changelogs)?;
-        self.publisher.publish_changelog(&changes.changelogs)?;
-
-        Ok(result_mapper(&changes.writes, &changes.changelogs))
-    }
-}
-
-/// update existing state set 的模板示例。
-///
-/// 主链路：零预判 -> 一锁 -> 二判 -> 三更新并产出 changeset -> persist changelog -> replay state -> publish -> return result。
-pub struct UpdateStateSetCmdTemplate<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher> {
-    pub pre_checker: PreChecker,
-    pub loader: Loader,
-    pub in_lock_validator: InLockValidator,
-    pub applier: Applier,
-    pub log_persister: LogPersister,
-    pub replayer: Replayer,
-    pub publisher: Publisher,
-}
-
-impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
-    UpdateStateSetCmdTemplate<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
-{
-    pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
-    where
-        PreChecker: PreCheckCommand<C, E>,
-        Loader: LoadStateSetForUpdate<C, S, E>,
-        InLockValidator: ValidateCommandInLock<C, S, E>,
-        Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
-        LogPersister: PersistChangeLogs<L, E>,
-        Replayer: ReplayChangeLogsToState<L, E>,
-        Publisher: PublishChangeLog<L, E>,
-        F: FnOnce(&W, &[L]) -> R,
-    {
-        // 零预判：锁外快速失败，减少锁持有时间
-        self.pre_checker.pre_check_command(&cmd)?;
-
-        // 一锁：先锁定参与本次更新的关键 state set
-        let state_set = self.loader.load_state_set_for_update(&cmd)?;
-
-        // 二判：在锁内重新判断当前状态是否仍可更新
-        self.in_lock_validator
-            .validate_command_in_lock(&cmd, &state_set)?;
-
-        // 三更新：执行更新逻辑，并同步产出 changeset
-        let changes = self
-            .applier
-            .apply_command_and_collect_changes(&cmd, state_set)?;
-
-        self.log_persister
-            .persist_changelogs(&changes.changelogs)?;
-        self.replayer
-            .replay_changelogs_to_state(&changes.changelogs)?;
-        self.publisher.publish_changelog(&changes.changelogs)?;
-
-        Ok(result_mapper(&changes.writes, &changes.changelogs))
-    }
-}
-
-/// 完整撮合场景模板示例。
-///
-/// 这个例子展示：
-/// - 输入是 `MatchStateSet`
-/// - 输出是 `ChangeSet<MatchWrites<...>, L>`
-/// - 流程遵循并发更新场景的“零预判 + 一锁二判三更新”
-/// - 落库阶段拆成“persist changelog”与“replay changelog to state”
-pub struct MatchCmdTemplateExample<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher> {
-    pub pre_checker: PreChecker,
-    pub loader: Loader,
-    pub in_lock_validator: InLockValidator,
-    pub applier: Applier,
-    pub log_persister: LogPersister,
-    pub replayer: Replayer,
-    pub publisher: Publisher,
-}
-
-impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
-    MatchCmdTemplateExample<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
-{
-    pub fn handle<C, O, T, B, P, OB, L, R, E, F>(
-        &self,
-        cmd: C,
-        result_mapper: F,
-    ) -> Result<R, E>
-    where
-        PreChecker: PreCheckCommand<C, E>,
-        Loader: LoadStateSetForUpdate<C, MatchStateSet<O, B, P, OB>, E>,
-        InLockValidator: ValidateCommandInLock<C, MatchStateSet<O, B, P, OB>, E>,
-        Applier: ApplyCommandAndCollectChanges<
-            C,
-            MatchStateSet<O, B, P, OB>,
-            MatchWrites<O, T, B, P>,
-            L,
-            E,
-        >,
-        LogPersister: PersistChangeLogs<L, E>,
-        Replayer: ReplayChangeLogsToState<L, E>,
-        Publisher: PublishChangeLog<L, E>,
-        F: FnOnce(&MatchWrites<O, T, B, P>, &[L]) -> R,
-    {
-        // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查
-        self.pre_checker.pre_check_command(&cmd)?;
-
-        // 一锁：读取并锁定本次撮合需要参与计算的状态集合
-        let state_set = self.loader.load_state_set_for_update(&cmd)?;
-
-        // 二判：锁内再次确认订单、余额、仓位、簿状态仍满足撮合条件
-        self.in_lock_validator
-            .validate_command_in_lock(&cmd, &state_set)?;
-
-        // 三更新：执行撮合计算，同时产出订单、成交、余额、仓位等写集及 changelog
-        let changes = self
-            .applier
-            .apply_command_and_collect_changes(&cmd, state_set)?;
-
-        // 先持久化 changelog
-        self.log_persister
-            .persist_changelogs(&changes.changelogs)?;
-
-        // 再回放 changelog，实现 state 更新
-        self.replayer
-            .replay_changelogs_to_state(&changes.changelogs)?;
-
-        // 最后发布 changelog / event
-        self.publisher.publish_changelog(&changes.changelogs)?;
-
-        Ok(result_mapper(&changes.writes, &changes.changelogs))
-    }
-}
+// use crate::handler::handler::{
+//     ApplyCommandAndCollectChanges, BuildInitialStateSet, LoadStateSetForUpdate,
+//     LoadStateSetInSingleThread, PersistChangeLogs, PreCheckCommand, PublishChangeLog,
+//     ReplayChangeLogsToState, ValidateCommand, ValidateCommandInLock,
+// };
+//
+// /// CmdHandler 职责规范占位类型。
+// pub struct CmdTemplateSpec;
+//
+// /// 撮合场景的示例状态集合。
+// ///
+// /// 一次撮合命令在计算前，可能需要同时读取：
+// /// - taker order
+// /// - maker orders
+// /// - balances
+// /// - positions
+// /// - orderbook snapshot / level view
+// pub struct MatchStateSet<O, B, P, OB> {
+//     pub taker_order: O,
+//     pub maker_orders: Vec<O>,
+//     pub balances: Vec<B>,
+//     pub positions: Vec<P>,
+//     pub orderbook: OB,
+// }
+//
+// /// 一次命令执行产生的变更集合。
+// ///
+// /// 适用于撮合、清算、批量更新等“一次命令依赖多个状态、影响多个实体、产出多个 changelog”的场景。
+// pub struct ChangeSet<W, L> {
+//     pub writes: W,
+//     pub changelogs: Vec<L>,
+// }
+//
+// /// 撮合场景的示例写集结构。
+// ///
+// /// 一次撮合命令可能同时影响：
+// /// - taker / maker orders
+// /// - trades
+// /// - balances
+// /// - positions
+// pub struct MatchWrites<O, T, B, P> {
+//     pub orders: Vec<O>,
+//     pub trades: Vec<T>,
+//     pub balances: Vec<B>,
+//     pub positions: Vec<P>,
+// }
+//
+// /// create new state set 的模板示例。
+// ///
+// /// 主链路：build initial state set -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
+// pub struct CreateStateSetCmdTemplate<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
+// {
+//     pub builder: Builder,
+//     pub validator: Validator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+//     pub publisher: Publisher,
+// }
+//
+// impl<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
+//     CreateStateSetCmdTemplate<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         Builder: BuildInitialStateSet<C, S, E>,
+//         Validator: ValidateCommand<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         Publisher: PublishChangeLog<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         let state_set = self.builder.build_initial_state_set(&cmd)?;
+//         self.validator.validate_command(&cmd, &state_set)?;
+//
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//         self.publisher.publish_changelog(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// single-thread state set 的模板示例。
+// ///
+// /// 主链路：load state set in single thread -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
+// pub struct SingleThreadStateSetCmdTemplate<
+//     Loader,
+//     Validator,
+//     Applier,
+//     LogPersister,
+//     Replayer,
+//     Publisher,
+// > {
+//     pub loader: Loader,
+//     pub validator: Validator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+//     pub publisher: Publisher,
+// }
+//
+// impl<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
+//     SingleThreadStateSetCmdTemplate<
+//         Loader,
+//         Validator,
+//         Applier,
+//         LogPersister,
+//         Replayer,
+//         Publisher,
+//     >
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         Loader: LoadStateSetInSingleThread<C, S, E>,
+//         Validator: ValidateCommand<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         Publisher: PublishChangeLog<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         let state_set = self.loader.load_state_set_in_single_thread(&cmd)?;
+//         self.validator.validate_command(&cmd, &state_set)?;
+//
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//         self.publisher.publish_changelog(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// update existing state set 的模板示例。
+// ///
+// /// 主链路：零预判 -> 一锁 -> 二判 -> 三更新并产出 changeset -> persist changelog -> replay state -> publish -> return result。
+// pub struct UpdateStateSetCmdTemplate<
+//     PreChecker,
+//     Loader,
+//     InLockValidator,
+//     Applier,
+//     LogPersister,
+//     Replayer,
+//     Publisher,
+// > {
+//     pub pre_checker: PreChecker,
+//     pub loader: Loader,
+//     pub in_lock_validator: InLockValidator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+//     pub publisher: Publisher,
+// }
+//
+// impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
+//     UpdateStateSetCmdTemplate<
+//         PreChecker,
+//         Loader,
+//         InLockValidator,
+//         Applier,
+//         LogPersister,
+//         Replayer,
+//         Publisher,
+//     >
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         PreChecker: PreCheckCommand<C, E>,
+//         Loader: LoadStateSetForUpdate<C, S, E>,
+//         InLockValidator: ValidateCommandInLock<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         Publisher: PublishChangeLog<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         // 零预判：锁外快速失败，减少锁持有时间
+//         self.pre_checker.pre_check_command(&cmd)?;
+//
+//         // 一锁：先锁定参与本次更新的关键 state set
+//         let state_set = self.loader.load_state_set_for_update(&cmd)?;
+//
+//         // 二判：在锁内重新判断当前状态是否仍可更新
+//         self.in_lock_validator
+//             .validate_command_in_lock(&cmd, &state_set)?;
+//
+//         // 三更新：执行更新逻辑，并同步产出 changeset
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//         self.publisher.publish_changelog(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// 完整撮合场景模板示例。
+// ///
+// /// 这个例子展示：
+// /// - 输入是 `MatchStateSet`
+// /// - 输出是 `ChangeSet<MatchWrites<...>, L>`
+// /// - 流程遵循并发更新场景的“零预判 + 一锁二判三更新”
+// /// - 落库阶段拆成“persist changelog”与“replay changelog to state”
+// pub struct MatchCmdTemplateExample<
+//     PreChecker,
+//     Loader,
+//     InLockValidator,
+//     Applier,
+//     LogPersister,
+//     Replayer,
+//     Publisher,
+// > {
+//     pub pre_checker: PreChecker,
+//     pub loader: Loader,
+//     pub in_lock_validator: InLockValidator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+//     pub publisher: Publisher,
+// }
+//
+// impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
+//     MatchCmdTemplateExample<
+//         PreChecker,
+//         Loader,
+//         InLockValidator,
+//         Applier,
+//         LogPersister,
+//         Replayer,
+//         Publisher,
+//     >
+// {
+//     pub fn handle<C, O, T, B, P, OB, L, R, E, F>(
+//         &self,
+//         cmd: C,
+//         result_mapper: F,
+//     ) -> Result<R, E>
+//     where
+//         PreChecker: PreCheckCommand<C, E>,
+//         Loader: LoadStateSetForUpdate<C, MatchStateSet<O, B, P, OB>, E>,
+//         InLockValidator: ValidateCommandInLock<C, MatchStateSet<O, B, P, OB>, E>,
+//         Applier: ApplyCommandAndCollectChanges<
+//             C,
+//             MatchStateSet<O, B, P, OB>,
+//             MatchWrites<O, T, B, P>,
+//             L,
+//             E,
+//         >,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         Publisher: PublishChangeLog<L, E>,
+//         F: FnOnce(&MatchWrites<O, T, B, P>, &[L]) -> R,
+//     {
+//         // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查
+//         self.pre_checker.pre_check_command(&cmd)?;
+//
+//         // 一锁：读取并锁定本次撮合需要参与计算的状态集合
+//         let state_set = self.loader.load_state_set_for_update(&cmd)?;
+//
+//         // 二判：锁内再次确认订单、余额、仓位、簿状态仍满足撮合条件
+//         self.in_lock_validator
+//             .validate_command_in_lock(&cmd, &state_set)?;
+//
+//         // 三更新：执行撮合计算，同时产出订单、成交、余额、仓位等写集及 changelog
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         // 先持久化 changelog
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//
+//         // 再回放 changelog，实现 state 更新
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//
+//         // 最后发布 changelog / event
+//         self.publisher.publish_changelog(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// 执行模式 1：低时延热路径。
+// ///
+// /// 同步只做：
+// /// - apply and collect changes
+// /// - persist changelog
+// ///
+// /// 异步处理：
+// /// - replay changelog to state
+// /// - publish changelog
+// pub struct HotPathPersistOnlyCmdTemplate<Loader, Validator, Applier, LogPersister> {
+//     pub loader: Loader,
+//     pub validator: Validator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+// }
+//
+// impl<Loader, Validator, Applier, LogPersister>
+//     HotPathPersistOnlyCmdTemplate<Loader, Validator, Applier, LogPersister>
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         Loader: LoadStateSetInSingleThread<C, S, E>,
+//         Validator: ValidateCommand<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         let state_set = self.loader.load_state_set_in_single_thread(&cmd)?;
+//         self.validator.validate_command(&cmd, &state_set)?;
+//
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// 执行模式 2：强一致当前态路径。
+// ///
+// /// 同步做：
+// /// - persist changelog
+// /// - replay changelog to state
+// ///
+// /// publish 可异步，也可由调用方自行决定。
+// pub struct StrongConsistencyCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer> {
+//     pub loader: Loader,
+//     pub validator: Validator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+// }
+//
+// impl<Loader, Validator, Applier, LogPersister, Replayer>
+//     StrongConsistencyCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer>
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         Loader: LoadStateSetInSingleThread<C, S, E>,
+//         Validator: ValidateCommand<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         let state_set = self.loader.load_state_set_in_single_thread(&cmd)?;
+//         self.validator.validate_command(&cmd, &state_set)?;
+//
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
+//
+// /// 执行模式 3：完整闭环路径。
+// ///
+// /// 同步做：
+// /// - persist changelog
+// /// - replay changelog to state
+// /// - publish changelog
+// ///
+// /// 适合低频、管理类、或需要完整同步闭环的场景。
+// pub struct FullPipelineCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
+// {
+//     pub loader: Loader,
+//     pub validator: Validator,
+//     pub applier: Applier,
+//     pub log_persister: LogPersister,
+//     pub replayer: Replayer,
+//     pub publisher: Publisher,
+// }
+//
+// impl<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
+//     FullPipelineCmdTemplate<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
+// {
+//     pub fn handle<C, S, W, L, R, E, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
+//     where
+//         Loader: LoadStateSetInSingleThread<C, S, E>,
+//         Validator: ValidateCommand<C, S, E>,
+//         Applier: ApplyCommandAndCollectChanges<C, S, W, L, E>,
+//         LogPersister: PersistChangeLogs<L, E>,
+//         Replayer: ReplayChangeLogsToState<L, E>,
+//         Publisher: PublishChangeLog<L, E>,
+//         F: FnOnce(&W, &[L]) -> R,
+//     {
+//         let state_set = self.loader.load_state_set_in_single_thread(&cmd)?;
+//         self.validator.validate_command(&cmd, &state_set)?;
+//
+//         let changes = self.applier.apply_command_and_collect_changes(&cmd, state_set)?;
+//
+//         self.log_persister.persist_changelogs(&changes.changelogs)?;
+//         self.replayer
+//             .replay_changelogs_to_state(&changes.changelogs)?;
+//         self.publisher.publish_changelog(&changes.changelogs)?;
+//
+//         Ok(result_mapper(&changes.writes, &changes.changelogs))
+//     }
+// }
