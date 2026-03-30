@@ -1,6 +1,8 @@
 //! Settlement CommandHandler 示例实现。
 
-use crate::handler::exmaple::cmd_handler::example_types::{AccountBalance, BalanceChange, HandlerError, Trade};
+use crate::handler::exmaple::cmd_handler::example_types::{
+    AccountBalance, BalanceChange, HandlerError, Trade,
+};
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
 pub struct SettlementCmd {
@@ -33,8 +35,15 @@ impl SettlementHandler {
     }
 }
 
-impl CmdHandlerForUpdate<SettlementCmd, SettlementState, SettlementResult, SettlementLog, SettlementResult, HandlerError>
-    for SettlementHandler
+impl
+    CmdHandlerForUpdate<
+        SettlementCmd,
+        SettlementState,
+        SettlementResult,
+        SettlementLog,
+        SettlementResult,
+        HandlerError,
+    > for SettlementHandler
 {
     fn pre_check_command(&self, _cmd: &SettlementCmd) -> Result<(), HandlerError> {
         Ok(())

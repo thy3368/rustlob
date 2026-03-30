@@ -1,7 +1,7 @@
 //! PlaceOrder CommandHandler 示例实现。
 
 use crate::handler::exmaple::cmd_handler::example_types::{
-    AccountBalance, BalanceChange, HandlerError, OrderBookSnapshot, Order, OrderStatus,
+    AccountBalance, BalanceChange, HandlerError, Order, OrderBookSnapshot, OrderStatus,
 };
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
@@ -73,8 +73,15 @@ impl PlaceOrderHandler {
     }
 }
 
-impl CmdHandlerForUpdate<PlaceOrderCmd, PlaceOrderState, PlaceOrderOutput, PlaceOrderLog, PlaceOrderOutput, HandlerError>
-    for PlaceOrderHandler
+impl
+    CmdHandlerForUpdate<
+        PlaceOrderCmd,
+        PlaceOrderState,
+        PlaceOrderOutput,
+        PlaceOrderLog,
+        PlaceOrderOutput,
+        HandlerError,
+    > for PlaceOrderHandler
 {
     fn pre_check_command(&self, _cmd: &PlaceOrderCmd) -> Result<(), HandlerError> {
         Ok(())

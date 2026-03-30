@@ -1,7 +1,7 @@
 //! Match CommandHandler 示例实现。
 
 use crate::handler::exmaple::cmd_handler::example_types::{
-    AccountBalance, HandlerError, OrderBookSnapshot, Order, OrderStatus, Trade,
+    AccountBalance, HandlerError, Order, OrderBookSnapshot, OrderStatus, Trade,
 };
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
@@ -160,9 +160,11 @@ mod tests {
                 .events
                 .iter()
                 .map(|event| match event {
-                    MatchEvent::TradeCreated(event) => MatchEvent::TradeCreated(TradeCreatedEvent {
-                        trade_id: event.trade_id.clone(),
-                    }),
+                    MatchEvent::TradeCreated(event) => {
+                        MatchEvent::TradeCreated(TradeCreatedEvent {
+                            trade_id: event.trade_id.clone(),
+                        })
+                    }
                 })
                 .collect(),
         });
