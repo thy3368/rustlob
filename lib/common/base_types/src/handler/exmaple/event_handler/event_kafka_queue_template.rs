@@ -13,16 +13,16 @@
 use std::collections::VecDeque;
 
 use crate::handler::event_handler::EventHandler;
-use crate::handler::exmaple::event_template::{
+use crate::handler::exmaple::event_handler::event_template::{
     emit_place_order_event, emit_trade_created_event, EventHandlerError, PlaceOrderEventHandler,
     TradeEventHandler,
 };
-use crate::handler::exmaple::match_handler::MatchOutput;
-use crate::handler::exmaple::place_order_handler::{
+use crate::handler::exmaple::cmd_handler::match_handler::MatchOutput;
+use crate::handler::exmaple::cmd_handler::place_order_handler::{
     OrderSide, OrderType, PlaceOrderAcceptedEvent, PlaceOrderCmd, PlaceOrderEvent,
     PlaceOrderHandler, PlaceOrderOutput, PlaceOrderResult,
 };
-use crate::handler::exmaple::settlement_handler::{SettlementHandler, SettlementResult};
+use crate::handler::exmaple::cmd_handler::settlement_handler::{SettlementHandler, SettlementResult};
 use crate::handler::handler_update::CmdHandlerForUpdate;
 
 pub const TOPIC_ORDER_ACCEPTED: &str = "orders.accepted";
@@ -30,7 +30,7 @@ pub const TOPIC_TRADE_CREATED: &str = "trades.created";
 
 pub enum KafkaPayload {
     PlaceOrderAccepted(PlaceOrderAcceptedEvent),
-    TradeCreated(crate::handler::exmaple::match_handler::TradeCreatedEvent),
+    TradeCreated(crate::handler::exmaple::cmd_handler::match_handler::TradeCreatedEvent),
 }
 
 pub struct KafkaRecord {
@@ -60,7 +60,7 @@ impl MockKafkaBroker {
 pub fn run_full_event_chain_via_kafka_queue() -> Result<SettlementResult, EventHandlerError> {
     let place_order_handler = PlaceOrderHandler::new();
     let place_order_event_handler =
-        PlaceOrderEventHandler::new(crate::handler::exmaple::match_handler::MatchHandler::new());
+        PlaceOrderEventHandler::new(crate::handler::exmaple::cmd_handler::match_handler::MatchHandler::new());
     let trade_event_handler = TradeEventHandler::new(SettlementHandler::new());
 
     let cmd = PlaceOrderCmd {
@@ -78,7 +78,7 @@ pub fn run_full_event_chain_via_kafka_queue() -> Result<SettlementResult, EventH
         .cmd_handle(cmd, |writes, _| PlaceOrderOutput {
             result: PlaceOrderResult {
                 order_id: writes.result.order_id.clone(),
-                status: crate::handler::exmaple::example_types::OrderStatus::Open,
+                status: crate::handler::exmaple::cmd_handler::example_types::OrderStatus::Open,
                 balance_change: None,
             },
             events: writes

@@ -1,6 +1,6 @@
 //! Match CommandHandler 示例实现。
 
-use crate::handler::exmaple::example_types::{
+use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, HandlerError, OrderBookSnapshot, Order, OrderStatus, Trade,
 };
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};

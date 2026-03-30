@@ -1,6 +1,6 @@
 //! PlaceOrder CommandHandler 示例实现。
 
-use crate::handler::exmaple::example_types::{
+use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, BalanceChange, HandlerError, OrderBookSnapshot, Order, OrderStatus,
 };
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};

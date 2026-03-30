@@ -1,6 +1,6 @@
 //! Settlement CommandHandler 示例实现。
 
-use crate::handler::exmaple::example_types::{AccountBalance, BalanceChange, HandlerError, Trade};
+use crate::handler::exmaple::cmd_handler::example_types::{AccountBalance, BalanceChange, HandlerError, Trade};
 use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
 pub struct SettlementCmd {

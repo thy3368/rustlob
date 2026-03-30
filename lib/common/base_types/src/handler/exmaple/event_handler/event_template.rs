@@ -7,14 +7,14 @@
 //! - EventHandler 接收成交事件并调用 SettlementHandler
 
 use crate::handler::event_handler::EventHandler;
-use crate::handler::exmaple::match_handler::{
+use crate::handler::exmaple::cmd_handler::match_handler::{
     MatchCmd, MatchEvent, MatchHandler, MatchOutput, MatchResult, TradeCreatedEvent,
 };
-use crate::handler::exmaple::place_order_handler::{
+use crate::handler::exmaple::cmd_handler::place_order_handler::{
     PlaceOrderAcceptedEvent, PlaceOrderCmd, PlaceOrderEvent, PlaceOrderHandler, PlaceOrderOutput,
     PlaceOrderResult,
 };
-use crate::handler::exmaple::settlement_handler::{
+use crate::handler::exmaple::cmd_handler::settlement_handler::{
     SettlementCmd, SettlementHandler, SettlementResult,
 };
 use crate::handler::handler_update::CmdHandlerForUpdate;
@@ -46,7 +46,7 @@ impl EventHandler<PlaceOrderAcceptedEvent, MatchOutput, EventHandlerError> for P
                         .result
                         .trades
                         .iter()
-                        .map(|trade| crate::handler::exmaple::example_types::Trade {
+                        .map(|trade| crate::handler::exmaple::cmd_handler::example_types::Trade {
                             trade_id: trade.trade_id.clone(),
                             taker_order_id: trade.taker_order_id.clone(),
                             maker_order_id: trade.maker_order_id.clone(),
@@ -92,7 +92,7 @@ impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for Tr
                 balance_changes: writes
                     .balance_changes
                     .iter()
-                    .map(|change| crate::handler::exmaple::example_types::BalanceChange {
+                    .map(|change| crate::handler::exmaple::cmd_handler::example_types::BalanceChange {
                         user_id: change.user_id.clone(),
                         asset: change.asset.clone(),
                         change: change.change,
@@ -129,7 +129,7 @@ pub fn run_full_event_chain(
         .cmd_handle(cmd, |writes, _| PlaceOrderOutput {
             result: PlaceOrderResult {
                 order_id: writes.result.order_id.clone(),
-                status: crate::handler::exmaple::example_types::OrderStatus::Open,
+                status: crate::handler::exmaple::cmd_handler::example_types::OrderStatus::Open,
                 balance_change: None,
             },
             events: writes
@@ -158,9 +158,9 @@ pub fn run_full_event_chain(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::exmaple::match_handler::MatchHandler;
-    use crate::handler::exmaple::place_order_handler::{OrderSide, OrderType};
-    use crate::handler::exmaple::settlement_handler::SettlementHandler;
+    use crate::handler::exmaple::cmd_handler::match_handler::MatchHandler;
+    use crate::handler::exmaple::cmd_handler::place_order_handler::{OrderSide, OrderType};
+    use crate::handler::exmaple::cmd_handler::settlement_handler::SettlementHandler;
 
     #[test]
     fn test_place_order_event_handler_invokes_match_handler() {
