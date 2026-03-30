@@ -7,7 +7,7 @@ use std::time::{Duration, UNIX_EPOCH};
 #[command(name = "hl_user")]
 #[command(about = "Hyperliquid 用户信息查询工具", long_about = None)]
 struct Cli {
-    #[arg(value_name = "ADDRESS")]
+    #[arg(value_name = "ADDRESS", default_value = "0x7839e2f2c375dd2935193f2736167514efff9916")]
     address: String,
 }
 

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 
 /// 分页参数
 ///
@@ -261,7 +261,7 @@ pub trait CmdRepo: Send + Sync {
     ///
     /// lob_repo.replay_event(&event)?;
     /// ```
-    fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError>;
+    fn replay_event(&self, event: &ChangeLog) -> Result<(), RepoError>;
 
     /// 批量回放多个事件
     ///
@@ -295,7 +295,7 @@ pub trait CmdRepo: Send + Sync {
     ///
     /// lob_repo.replay_events(&events)?;
     /// ```
-    fn replay_events(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError> {
+    fn replay_events(&self, events: &[ChangeLog]) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }
@@ -341,7 +341,7 @@ pub trait CmdRepo: Send + Sync {
     /// ```
     fn replay_from_sequence(
         &self,
-        events: &[ChangeLogEntry],
+        events: &[ChangeLog],
         from_sequence: u64,
     ) -> Result<(), RepoError> {
         for event in events {

@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use diff::{ChangeLogEntry, ChangeType, Entity, FromCreatedEvent};
+use diff::{ChangeLog, ChangeType, Entity, FromCreatedEvent};
 use immutable_derive::immutable;
 use mysql::prelude::*;
 
@@ -90,7 +90,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// # 返回
     /// - `Ok(())`: 所有事件回放成功
     /// - `Err(RepoError)`: 任何一个事件回放失败时返回错误
-    pub fn replay(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError>
+    pub fn replay(&self, events: &[ChangeLog]) -> Result<(), RepoError>
     where
         E: FromCreatedEvent,
     {
@@ -111,7 +111,7 @@ impl<E: Entity + FromCreatedEvent> CmdRepo for MySqlDbRepo<E> {
     type E = E;
 
     //todo 增加replay_events 批量回放
-    fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
+    fn replay_event(&self, event: &ChangeLog) -> Result<(), RepoError> {
         // 验证事件的实体类型是否匹配
         if event.entity_type() != E::entity_type() {
             return Err(RepoError::DeserializationFailed(format!(
@@ -230,7 +230,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// INSERT INTO entities (entity_id, entity_type, data, timestamp, sequence)
     /// VALUES (?, ?, ?, ?, ?)
     /// ```
-    fn insert_entity(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
+    fn insert_entity(&self, event: &ChangeLog) -> Result<(), RepoError> {
         // For mock instance, return immediately
         if self.connection.lock().unwrap().is_none() {
             return Ok(());
@@ -248,7 +248,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     /// 根据字段信息生成 INSERT SQL
     ///
     /// 生成格式: INSERT INTO [entity_type] (entity_id, entity_type, timestamp, sequence, [fields...]) VALUES (...)
-    fn generate_insert_sql(&self, event: &ChangeLogEntry) -> Result<String, RepoError> {
+    fn generate_insert_sql(&self, event: &ChangeLog) -> Result<String, RepoError> {
         let table_name = event.entity_type().clone();
 
         // 构建列名和值 - 包含基础元数据列
@@ -366,7 +366,7 @@ impl<E: Entity> MySqlDbRepo<E> {
         entity_id: &str,
         entity_type: &str,
         _entity: &E,
-        event: &ChangeLogEntry,
+        event: &ChangeLog,
         changed_fields: &[diff::FieldChange],
     ) -> Result<(), RepoError> {
         // For mock instance, return immediately
@@ -384,7 +384,7 @@ impl<E: Entity> MySqlDbRepo<E> {
     }
 
     /// 根据变更的字段生成 UPDATE SQL
-    fn generate_update_sql(&self, event: &ChangeLogEntry) -> Result<String, RepoError> {
+    fn generate_update_sql(&self, event: &ChangeLog) -> Result<String, RepoError> {
         let table_name = event.entity_type().clone();
 
         // 构建 SET 子句

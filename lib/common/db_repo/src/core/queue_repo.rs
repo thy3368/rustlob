@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 
 use crate::RepoError;
 
@@ -9,12 +9,12 @@ pub trait ChangeLogQueueRepo {
     /// 仓储中存储的实体类型
     // type E: Entity;
 
-    fn send(&self, event: &ChangeLogEntry) -> Result<RecordMetadata, RepoError>;
+    fn send(&self, event: &ChangeLog) -> Result<RecordMetadata, RepoError>;
 
-    fn send_batch(&self, records: &Vec<ChangeLogEntry>) -> Result<Vec<RecordMetadata>, RepoError>;
+    fn send_batch(&self, records: &Vec<ChangeLog>) -> Result<Vec<RecordMetadata>, RepoError>;
 
     /// 拉取消息
-    fn poll(&self, timeout: Duration) -> Result<Vec<ChangeLogEntry>, RepoError>;
+    fn poll(&self, timeout: Duration) -> Result<Vec<ChangeLog>, RepoError>;
 
     // todo 定义接口 poll with callback 条件过lu
 }

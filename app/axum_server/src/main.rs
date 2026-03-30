@@ -10,6 +10,11 @@ pub mod interfaces {
 
         pub mod http {}
 
+        pub mod event_handler {
+            pub mod md_controller;
+        }
+
+
         pub mod websocket {
             pub mod md_sse_controller;
             pub mod ud_sse_controller;

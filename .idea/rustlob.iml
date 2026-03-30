@@ -114,6 +114,12 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe_zerocopy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/diff/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
@@ -124,6 +130,7 @@
       <excludeFolder url="file://$MODULE_DIR$/app/websocket_sockudo/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/client/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/promptline-rust/target" />
+      <excludeFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

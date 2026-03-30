@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use rust_queue::queue::queue::{Queue, ToBytes};
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 
@@ -34,7 +34,7 @@ impl KLineBehaviorV2Imp {
     }
 
     /// 处理单个交易变更日志
-    pub fn handle_event(&self, change_log: ChangeLogEntry) {
+    pub fn handle_event(&self, change_log: ChangeLog) {
         if let Some((timestamp, price, volume)) = Self::extract_trade_data(&change_log) {
             let mut agg = self.aggregator.lock().unwrap();
             if let Err(e) = agg.process_trade(timestamp, price, volume) {
@@ -44,7 +44,7 @@ impl KLineBehaviorV2Imp {
     }
 
     /// 批量处理交易变更日志（性能优化）
-    pub fn handle_events(&self, change_logs: &[ChangeLogEntry]) {
+    pub fn handle_events(&self, change_logs: &[ChangeLog]) {
         let trades: Vec<(u64, f64, f64)> = change_logs
             .iter()
             .filter_map(|log| Self::extract_trade_data(log))
@@ -63,7 +63,7 @@ impl KLineBehaviorV2Imp {
     }
 
     /// 从 ChangeLogEntry 提取交易数据 (timestamp, price, volume)
-    fn extract_trade_data(change_log: &ChangeLogEntry) -> Option<(u64, f64, f64)> {
+    fn extract_trade_data(change_log: &ChangeLog) -> Option<(u64, f64, f64)> {
         let fields_map: std::collections::HashMap<&str, &str> = match change_log.change_type() {
             diff::ChangeType::Created { fields } | diff::ChangeType::Updated { changed_fields: fields } => {
                 fields.iter().map(|f| (f.field_name.as_ref(), f.new_value.as_str())).collect()
@@ -94,7 +94,7 @@ impl ActorX for KLineBehaviorV2Imp {
         tokio::spawn(async move {
             while let Ok(msg) = receiver.recv().await {
 
-                let trade_change_log = match serde_json::from_slice::<ChangeLogEntry>(&msg) {
+                let trade_change_log = match serde_json::from_slice::<ChangeLog>(&msg) {
                     Ok(log) =>{
 
                         log},

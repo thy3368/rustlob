@@ -4,5 +4,7 @@
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/design/other/binance-spot-api-docs" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/design/other/binance_derivatives_api" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/common/hotstuff_rs" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/study/hyperliquid_analyzer/scripts/hyperliquid-node" vcs="Git" />
   </component>
 </project>

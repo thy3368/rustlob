@@ -1,14 +1,15 @@
 //! ComplexOrder - 用于benchmark测试的复杂订单结构
 
-use sbe::sbe_types::{Decimal, Timestamp};
 use sbe::codec::codec::{SbeDecode, SbeDecoder, SbeEncode, SbeEncoder};
-use serde::{Deserialize, Serialize};
+use sbe::sbe_types::{Decimal, Timestamp};
 
 // ============================================================================
 // Composite 类型 - PriceQuantity
 // ============================================================================
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct PriceQuantity {
     pub price: Decimal,
     pub quantity: Decimal,
@@ -40,7 +41,9 @@ impl SbeDecode for PriceQuantity {
 // Set 类型 - OrderFlags
 // ============================================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct OrderFlags(pub u8);
 
 impl OrderFlags {
@@ -71,7 +74,9 @@ impl SbeDecode for OrderFlags {
 // Repeating Group - Fill
 // ============================================================================
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Fill {
     pub fill_id: u64,
     pub price: Decimal,
@@ -109,7 +114,8 @@ impl SbeDecode for Fill {
 // Enum 类型
 // ============================================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum OrderSide {
     Buy = 0,
@@ -132,7 +138,8 @@ impl SbeDecode for OrderSide {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PositionSide {
     Both = 0,
@@ -161,7 +168,9 @@ impl SbeDecode for PositionSide {
 // ComplexOrder - 完整的订单结构
 // ============================================================================
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ComplexOrder {
     // 基本类型
     pub order_id: u64,
@@ -291,7 +300,10 @@ impl ComplexOrder {
     /// 原地更新解码 - 零分配优化
     ///
     /// 复用现有对象的内存，避免创建新对象
-    pub fn decode_into<'de, D: SbeDecoder<'de>>(&mut self, decoder: &mut D) -> Result<(), D::Error> {
+    pub fn decode_into<'de, D: SbeDecoder<'de>>(
+        &mut self,
+        decoder: &mut D,
+    ) -> Result<(), D::Error> {
         // 固定字段 - 直接赋值
         self.order_id = decoder.decode_u64()?;
         self.user_id = decoder.decode_u32()?;

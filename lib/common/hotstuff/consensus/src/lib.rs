@@ -13,7 +13,7 @@ mod synchronizer;
 mod timer;
 
 #[cfg(test)]
-#[path = "tests/common.rs"]
+#[path = "tests/settlement_handler"]
 mod common;
 
 pub use crate::config::{Committee, Parameters};

@@ -5,7 +5,7 @@ mod reliable_sender;
 mod simple_sender;
 
 #[cfg(test)]
-#[path = "tests/common.rs"]
+#[path = "tests/settlement_handler"]
 pub mod common;
 
 pub use crate::receiver::{MessageHandler, Receiver, Writer};

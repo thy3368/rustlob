@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
-use diff::ChangeLogEntry;
+use diff::ChangeLog;
 use immutable_derive::immutable;
 use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
@@ -62,7 +62,7 @@ impl PushBehaviorV2Imp {
     /// 处理变更日志事件字节流
     async fn process_change_log_event(&self, event: bytes::Bytes) {
         // 将字节转换为 entity_change_log
-        let entity_change_log = match serde_json::from_slice::<ChangeLogEntry>(&event) {
+        let entity_change_log = match serde_json::from_slice::<ChangeLog>(&event) {
             Ok(log) => log,
             Err(e) => {
                 tracing::error!("Failed to deserialize event to ChangeLogEntry: {:?}", e);
@@ -74,12 +74,12 @@ impl PushBehaviorV2Imp {
     }
 
     /// 处理单个变更日志事件
-    pub fn handle_event(&self, entity_change_log: ChangeLogEntry) {
+    pub fn handle_event(&self, entity_change_log: ChangeLog) {
         self.handle_events(&[entity_change_log]);
     }
 
     /// 批量处理变更日志事件（性能优化）
-    pub fn handle_events(&self, entity_change_logs: &[ChangeLogEntry]) {
+    pub fn handle_events(&self, entity_change_logs: &[ChangeLog]) {
         if entity_change_logs.is_empty() {
             return;
         }
@@ -138,7 +138,7 @@ impl PushBehaviorV2Imp {
     }
 
     /// 序列化单个事件为 JSON
-    fn serialize_event(&self, entity_change_log: &ChangeLogEntry) -> Result<String, serde_json::Error> {
+    fn serialize_event(&self, entity_change_log: &ChangeLog) -> Result<String, serde_json::Error> {
         serde_json::to_string(&json!({
             "stream_type": "user_data",
             "data": {

@@ -6,7 +6,7 @@ use hyperliquid_analyzer::{analyze_block, format_block_report, HyperliquidClient
 #[command(about = "Hyperliquid 区块分析器", long_about = None)]
 struct Cli {
     /// 区块高度，或 "latest" 获取最新区块
-    #[arg(value_name = "HEIGHT")]
+    #[arg(value_name = "HEIGHT", default_value = "932387680")]
     height: String,
 
     /// 显示所有交易详情

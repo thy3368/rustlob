@@ -18,6 +18,12 @@ pub enum ClientError {
 
     #[error("Parse error: {0}")]
     ParseError(#[from] serde_json::Error),
+
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String),
+
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 pub struct HyperliquidClient {
@@ -67,20 +73,54 @@ impl HyperliquidClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            if response.status() == reqwest::StatusCode::NOT_FOUND {
+        let status = response.status();
+        let raw_text = response.text().await?;
+
+        let filename = format!("block_{}_{}.json", height, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+        std::fs::write(&filename, &raw_text)?;
+        eprintln!("[DEBUG] Saved to {}", filename);
+        if !status.is_success() {
+            if status == reqwest::StatusCode::NOT_FOUND {
                 return Err(ClientError::BlockNotFound(height));
             }
-            return Err(ClientError::HttpError(response.status()));
+            return Err(ClientError::HttpError(status));
         }
 
-        let block_response = response.json::<BlockResponse>().await?;
+        let block_response = serde_json::from_str::<BlockResponse>(&raw_text)?;
         Ok(block_response.block_details)
     }
 
     pub async fn fetch_latest_block(&self) -> Result<Block, ClientError> {
-        eprintln!("警告: fetch_latest_block 暂未实现，使用固定区块高度 1000000000");
-        self.fetch_block(1000000000).await
+        let response = self
+            .client
+            .post(&self.evm_url())
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "eth_blockNumber",
+                "params": [],
+                "id": 1
+            }))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(ClientError::HttpError(response.status()));
+        }
+
+        let result: serde_json::Value = response.json().await?;
+        let block_num_hex = match result["result"].as_str() {
+            Some(s) => s,
+            None => return Err(ClientError::InvalidResponse("missing result in eth_blockNumber response".to_string())),
+        };
+
+        let block_num = u64::from_str_radix(block_num_hex.trim_start_matches("0x"), 16)
+            .map_err(|_| ClientError::InvalidResponse(format!("invalid hex value: {}", block_num_hex)))?;
+
+        self.fetch_block(block_num).await
+    }
+
+    fn evm_url(&self) -> String {
+        format!("{}/evm", self.explorer_url.replace("/explorer", ""))
     }
 
     pub async fn fetch_clearinghouse_state(&self, user: &str) -> Result<ClearinghouseState, ClientError> {

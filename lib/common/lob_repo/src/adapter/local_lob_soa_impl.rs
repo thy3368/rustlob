@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
-use diff::{ChangeLogEntry, FromCreatedEvent};
+use diff::{ChangeLog, FromCreatedEvent};
 
 use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
 use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
@@ -103,7 +103,7 @@ impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
 }
 
 impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
-    type Event = ChangeLogEntry;
+    type Event = ChangeLog;
 
     fn replay_event(&mut self, event: &Self::Event) -> Result<(), RepoError> {
         // 根据变更类型处理事件

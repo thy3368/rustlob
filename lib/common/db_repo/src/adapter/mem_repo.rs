@@ -1,4 +1,4 @@
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 use immutable_derive::immutable;
 
 use crate::{CmdRepo, PageRequest, PageResult, QueryRepo, RepoError};
@@ -13,17 +13,17 @@ pub struct MemRepo<E: Entity> {
 impl<E: Entity> CmdRepo for MemRepo<E> {
     type E = E;
 
-    fn replay_event(&self, event: &ChangeLogEntry) -> Result<(), RepoError> {
+    fn replay_event(&self, event: &ChangeLog) -> Result<(), RepoError> {
         todo!()
     }
 
-    fn replay_events(&self, events: &[ChangeLogEntry]) -> Result<(), RepoError> {
+    fn replay_events(&self, events: &[ChangeLog]) -> Result<(), RepoError> {
         todo!()
     }
 
     fn replay_from_sequence(
         &self,
-        events: &[ChangeLogEntry],
+        events: &[ChangeLog],
         from_sequence: u64,
     ) -> Result<(), RepoError> {
         todo!()

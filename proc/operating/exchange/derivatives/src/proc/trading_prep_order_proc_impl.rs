@@ -10,7 +10,7 @@ use base_types::{
 };
 use db_repo::{CmdRepo, MySqlDbRepo, QueryRepo};
 // Event Sourcing: Entity trait for track_update
-use diff::{ChangeLogEntry, Entity};
+use diff::{ChangeLog, Entity};
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 // LOB 仓储接口
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
@@ -110,7 +110,7 @@ impl PrepMatchingService {
         &self,
         amount: Price,
         now: Timestamp,
-    ) -> Result<diff::ChangeLogEntry, PrepCmdError> {
+    ) -> Result<diff::ChangeLog, PrepCmdError> {
         // TODO: 从数据库获取当前余额并验证充足
         // 然后生成变更事件
         // let event = diff::ChangeLogEntry::new(
@@ -364,7 +364,7 @@ impl PrepMatchingService {
         }
 
         // 所有数据持久化操作
-        let mut all_events: Vec<ChangeLogEntry> = Vec::new();
+        let mut all_events: Vec<ChangeLog> = Vec::new();
 
         // 3. 一次性回放所有事件到数据库
         if !all_events.is_empty() {
