@@ -3,30 +3,31 @@ pub struct ChangeSet<W, L> {
     pub changelogs: Vec<L>,
 }
 
+// cpu操作，如果是soa则可以simd优化
 pub trait CmdHandlerForUpdate<C, S, W, L, R, E>: Send + Sync {
     fn cmd_handle<F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
     where
         F: FnOnce(&W, &[L]) -> R,
     {
-        // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查
+        // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查:cpu操作
         self.pre_check_command(&cmd)?;
 
-        // 一锁：读取并锁定本次更新需要参与计算的状态集合
+        // 一锁：读取并锁定本次更新需要参与计算的状态集合：io操作
         let state_set = self.load_state_set_for_update(&cmd)?;
 
-        // 二判：锁内再次确认当前状态仍满足更新条件
+        // 二判：锁内再次确认当前状态仍满足更新条件：cpu操作
         self.validate_command_in_lock(&cmd, &state_set)?;
 
-        // 三更新：执行更新计算，同时产出写集及 changelog
+        // 三更新：执行更新计算，同时产出写集及 changelog：cpu操作
         let changes = self.apply_command_and_collect_changes(&cmd, state_set)?;
 
-        // 先持久化 changelog
+        // 先持久化 changelog：io操作
         self.persist_changelogs(&changes.changelogs)?;
 
-        // 再回放 changelog，实现 state 更新
+        // 再回放 changelog，实现 state 更新：io操作
         self.replay_changelogs_to_state(&changes.changelogs)?;
 
-        // 最后发布 changelog / event
+        // 最后发布 changelog / event：io操作
         self.publish_changelog(&changes.changelogs)?;
 
         Ok(result_mapper(&changes.writes, &changes.changelogs))
