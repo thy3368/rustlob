@@ -78,6 +78,10 @@ pub struct ActorError(pub String);
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
     use super::*;
 
     struct TestEvent {
@@ -104,5 +108,36 @@ mod tests {
 
         assert_eq!(actor.name(), "test");
         assert_eq!(actor.state(), ActorState::Starting);
+    }
+
+    #[test]
+    fn test_actor_thread_example() {
+        // 1. 创建 Channel
+        let (tx, rx) = mpsc::channel::<TestEvent>();
+
+        // 2. 创建 Actor
+        let _actor = Actor::<TestEvent>::new("event_actor".to_string());
+
+        // 3. 在线程中运行
+        let handle = thread::spawn(move || {
+            // 模拟事件处理
+            let mut events_received = 0;
+
+            while let Ok(event) = rx.recv_timeout(Duration::from_millis(100)) {
+                events_received += 1;
+                // 处理事件...
+                assert_eq!(event.data, "hello");
+            }
+
+            events_received
+        });
+
+        // 4. 发送事件
+        tx.send(TestEvent { data: "hello".to_string() }).unwrap();
+        drop(tx); // 关闭 sender
+
+        // 5. 等待线程结束
+        let count = handle.join().unwrap();
+        assert_eq!(count, 1);
     }
 }
