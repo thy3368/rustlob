@@ -83,7 +83,7 @@ impl SettlementHandler for DefaultSettlementHandler {
 }
 
 impl CmdHandler<&SpotTrade, SettlementResult, SpotCmdErrorAny> for DefaultSettlementHandler {
-    fn handle(&self, trade: &SpotTrade) -> Result<SettlementResult, SpotCmdErrorAny> {
+    fn cmd_handle(&self, trade: &SpotTrade) -> Result<SettlementResult, SpotCmdErrorAny> {
         return self.settle_trade(trade);
     }
 }

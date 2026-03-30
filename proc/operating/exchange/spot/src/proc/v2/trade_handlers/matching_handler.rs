@@ -235,7 +235,7 @@ impl MatchingHandler {
 }
 
 impl CmdHandler<SpotOrder, MatchResult, SpotCmdErrorAny> for MatchingHandler {
-    fn handle(&self, order: SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
+    fn cmd_handle(&self, order: SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
         return self.match_order(order);
     }
 }

@@ -64,7 +64,7 @@ impl AccountHandler {
 
 #[async_trait::async_trait]
 impl CmdHandler<AccountCmd, SpotTradeResAny, SpotCmdErrorAny> for AccountHandler {
-    fn handle(&self, cmd: AccountCmd) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
+    fn cmd_handle(&self, cmd: AccountCmd) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
         self.handle_account(cmd);
     }
 }

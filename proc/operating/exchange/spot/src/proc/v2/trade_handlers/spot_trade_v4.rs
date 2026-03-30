@@ -46,17 +46,17 @@ impl SpotTradeBehaviorV4Impl {
 }
 
 impl CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
-    fn handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotCmdErrorAny> {
+    fn cmd_handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotCmdErrorAny> {
         self.order_handler.accept_new_order(cmd)
     }
 }
 impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
-    fn handle(&self, cmd: SpotTradeCmdOrQuery) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
+    fn cmd_handle(&self, cmd: SpotTradeCmdOrQuery) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
         match cmd {
             SpotTradeCmdOrQuery::Cmd(cmd) => match cmd {
                 SpotTradeCmd::NewOrder(cmd) => {
                     let ack =
-                        <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny>>::handle(
+                        <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny>>::cmd_handle(
                             self, cmd,
                         )?;
                     Ok(SpotTradeResAny::NewOrderAck(ack))

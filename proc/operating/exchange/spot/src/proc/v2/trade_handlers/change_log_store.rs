@@ -153,7 +153,7 @@ impl ChangeLogReplay {
 }
 
 impl CmdHandler<&ChangeLog, (), SpotCmdErrorAny> for ChangeLogReplay {
-    fn handle(&self, cmd: &ChangeLog) -> Result<(), SpotCmdErrorAny> {
+    fn cmd_handle(&self, cmd: &ChangeLog) -> Result<(), SpotCmdErrorAny> {
         self.replay(cmd)
     }
 }
