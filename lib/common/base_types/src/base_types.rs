@@ -2,6 +2,8 @@
 //!
 //! 包含价格、数量等核心数值类型
 
+// 结束: 用new type/ pod类型等，方面simd优化
+
 use std::{default, fmt};
 
 use decimal::Decimal;
@@ -277,12 +279,7 @@ impl TradingPair {
 
     /// 获取所有 TradingPair 变体的数组
     pub const fn all() -> &'static [TradingPair] {
-        &[
-            TradingPair::BtcUsdt,
-            TradingPair::EthUsdt,
-            TradingPair::BtcEth,
-            TradingPair::UsdtUsdt,
-        ]
+        &[TradingPair::BtcUsdt, TradingPair::EthUsdt, TradingPair::BtcEth, TradingPair::UsdtUsdt]
     }
 
     /// 从交易对符号字符串创建 TradingPair
