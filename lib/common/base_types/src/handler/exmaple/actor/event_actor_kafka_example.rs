@@ -8,7 +8,7 @@ use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
 use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
 use crate::handler::exmaple::cmd_handler::settlement_handler::{SettlementHandler, SettlementResult};
-use crate::handler::exmaple::event_actor_example_shared::build_first_place_order_event;
+use crate::handler::exmaple::actor::event_actor_example_shared::build_first_place_order_event;
 use crate::handler::exmaple::event_handler::event_template::{
     emit_trade_created_event, EventHandlerError, PlaceOrderEventHandler, TradeEventHandler,
 };
