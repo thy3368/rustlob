@@ -14,7 +14,7 @@ impl NatsMatchingEventActor {
         subject: String,
         handler: std::sync::Arc<NewOrderPlaceEventHandler>,
     ) -> Result<Self, String> {
-        Self::new(
+        NatsEventActor::new(
             config,
             subject,
             handler,

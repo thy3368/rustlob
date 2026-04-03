@@ -41,7 +41,6 @@ impl
         SettlementState,
         SettlementResult,
         SettlementLog,
-        SettlementResult,
         HandlerError,
     > for SettlementHandler
 {

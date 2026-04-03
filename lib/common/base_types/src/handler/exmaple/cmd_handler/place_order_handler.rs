@@ -79,7 +79,6 @@ impl
         PlaceOrderState,
         PlaceOrderOutput,
         PlaceOrderLog,
-        PlaceOrderOutput,
         HandlerError,
     > for PlaceOrderHandler
 {

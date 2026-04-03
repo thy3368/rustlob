@@ -64,7 +64,7 @@ impl MatchHandler {
     }
 }
 
-impl CmdHandlerForUpdate<MatchCmd, MatchState, MatchOutput, MatchLog, MatchOutput, HandlerError>
+impl CmdHandlerForUpdate<MatchCmd, MatchState, MatchOutput, MatchLog, HandlerError>
     for MatchHandler
 {
     fn pre_check_command(&self, _cmd: &MatchCmd) -> Result<(), HandlerError> {

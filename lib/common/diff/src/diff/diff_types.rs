@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::LazyLock;
 
 use immutable_derive::immutable;
 // ============================================================================
@@ -282,6 +282,8 @@ pub struct ChangeLog {
 }
 
 #[derive(Debug, Clone)]
+#[derive(PartialEq, serde::Serialize, serde::Deserialize)]
+
 pub struct DomainEvent<T> {
     change_log: ChangeLog,
     state: T,
@@ -304,8 +306,6 @@ impl<T: Clone + Debug> DomainEvent<T> {
         (self.change_log, self.state)
     }
 }
-
-
 
 impl Entity for ChangeLog {
     type Id = String;
@@ -644,10 +644,7 @@ where
 
 /// 批量追踪实体操作
 #[inline]
-pub fn track_batch<T>(
-    entities: &[T],
-    operation: Operation,
-) -> Result<Vec<ChangeLog>, EntityError>
+pub fn track_batch<T>(entities: &[T], operation: Operation) -> Result<Vec<ChangeLog>, EntityError>
 where
     T: Entity + 'static,
 {
@@ -796,10 +793,7 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
 ///     Ok(Order { id, symbol })
 /// })?;
 /// ```
-pub fn reconstruct_from_created<T, F>(
-    entry: &ChangeLog,
-    constructor: F,
-) -> Result<T, EntityError>
+pub fn reconstruct_from_created<T, F>(entry: &ChangeLog, constructor: F) -> Result<T, EntityError>
 where
     F: Fn(&std::collections::HashMap<String, String>) -> Result<T, EntityError>,
 {
