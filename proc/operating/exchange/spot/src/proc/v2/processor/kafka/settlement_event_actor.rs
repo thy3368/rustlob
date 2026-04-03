@@ -13,14 +13,14 @@ use crate::proc::v2::processor::kafka::base::{
 };
 use crate::proc::v2::trade_event_handlers::new_trade_event_handler::NewTradeEventHandler;
 
-pub struct SettlementEventActor {
+pub struct KafkaSettlementEventActor {
     consumer: StreamConsumer,
     handler: Arc<NewTradeEventHandler>,
     config: KafkaProcessorConfig,
     topic: String,
 }
 
-impl SettlementEventActor {
+impl KafkaSettlementEventActor {
     pub fn new(
         handler: Arc<NewTradeEventHandler>,
         config: KafkaProcessorConfig,
@@ -59,7 +59,7 @@ impl SettlementEventActor {
     }
 }
 
-impl EventActor<DomainEvent<SpotTrade>, SpotCmdErrorAny> for SettlementEventActor {
+impl EventActor<DomainEvent<SpotTrade>, SpotCmdErrorAny> for KafkaSettlementEventActor {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotCmdErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))

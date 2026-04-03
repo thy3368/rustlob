@@ -3,10 +3,10 @@ use std::sync::Arc;
 use base_types::handler::event_actor::EventActor;
 
 use crate::proc::v2::processor::kafka::base::KafkaProcessorConfig;
-use crate::proc::v2::processor::kafka::matching_event_actor::MatchingEventActor;
+use crate::proc::v2::processor::kafka::matching_event_actor::KafkaMatchingEventActor;
 use crate::proc::v2::trade_event_handlers::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
-/// 在独立线程中启动 MatchingEventActor 的示例。
+/// 在独立线程中启动 KafkaMatchingEventActor 的示例。
 ///
 /// 调用方负责准备 `order_repo` 和 `matching_handler` 依赖。
 /// actor 线程启动后会持续阻塞消费 Kafka 消息。
@@ -15,7 +15,7 @@ pub fn start_matching_event_actor_in_thread(
     config: KafkaProcessorConfig,
     topic: String,
 ) -> Result<std::thread::JoinHandle<()>, String> {
-    let actor = MatchingEventActor::new(event_handler, config, topic)?;
+    let actor = KafkaMatchingEventActor::new(event_handler, config, topic)?;
 
     std::thread::Builder::new()
         .name("matching-event-actor".to_string())

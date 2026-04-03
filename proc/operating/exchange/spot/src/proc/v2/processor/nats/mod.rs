@@ -1,9 +1,3 @@
-
-pub mod base;
-pub mod matching_processor;
-pub mod settlement_processor;
-
-pub mod persistent_processor;
-
-pub mod acquiring_processor;
-
+pub mod matching_event_actor;
+pub mod nats_event_actor;
+pub mod settlement_event_actor;

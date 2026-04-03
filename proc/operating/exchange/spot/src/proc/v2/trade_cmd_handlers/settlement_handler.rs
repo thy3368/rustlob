@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::SpotTrade;
-use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use base_types::handler::handler_update::{
+    ChangeSet, CmdHandlerForUpdate, HandlerLatencyMetrics,
+};
 use db_repo::MySqlDbRepo;
 use diff::ChangeLog;
 
@@ -120,6 +122,21 @@ impl CmdHandlerForUpdate<SettlementCmd, (), SettlementResult, ChangeLog, SpotCmd
     fn publish_changelog(&self, changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
         self.publish_balance_logs(changelogs);
         Ok(())
+    }
+
+    fn observe_latency(&self, metrics: &HandlerLatencyMetrics) {
+        tracing::debug!(
+            total_ns = metrics.total_ns,
+            pre_check_ns = metrics.pre_check_ns,
+            load_state_ns = metrics.load_state_ns,
+            validate_in_lock_ns = metrics.validate_in_lock_ns,
+            apply_changes_ns = metrics.apply_changes_ns,
+            persist_changelogs_ns = metrics.persist_changelogs_ns,
+            replay_changelogs_ns = metrics.replay_changelogs_ns,
+            publish_changelog_ns = metrics.publish_changelog_ns,
+            changelog_count = metrics.changelog_count,
+            "settlement handler latency"
+        );
     }
 }
 
