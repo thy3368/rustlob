@@ -1,11 +1,5 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
-use rdkafka::message::Message;
-
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
 #[derive(Debug, Clone)]
 pub struct KafkaConsumerConfig {
@@ -89,66 +83,4 @@ pub fn create_kafka_consumer(config: &KafkaConsumerConfig) -> Result<StreamConsu
         .map_err(|e| format!("Failed to subscribe to topic: {}", e))?;
 
     Ok(consumer)
-}
-
-#[inline]
-pub fn deserialize_change_log(bytes: &[u8]) -> Result<diff::ChangeLog, SpotCmdErrorAny> {
-    serde_json::from_slice(bytes).map_err(|e| {
-        tracing::error!(error = ?e, bytes_len = bytes.len(), "Failed to deserialize change log");
-        SpotCmdErrorAny::Common(CommonError::Internal {
-            message: format!("Deserialization error: {}", e),
-        })
-    })
-}
-
-pub trait KafkaProcessor: Send + Sync {
-    fn consumer(&self) -> &StreamConsumer;
-    fn topic(&self) -> &str;
-    fn group_id(&self) -> &str;
-    fn kafka_brokers(&self) -> &str;
-
-    fn handle_message(&self, payload: &[u8]) -> impl std::future::Future<Output = Result<(), SpotCmdErrorAny>>;
-
-    async fn start(&self) {
-        tracing::info!(
-            kafka_brokers = %self.kafka_brokers(),
-            topic = %self.topic(),
-            group_id = %self.group_id(),
-            "Starting Kafka processor"
-        );
-
-        loop {
-            match self.consumer().recv().await {
-                Ok(message) => {
-                    if let Some(payload) = message.payload() {
-                        if let Err(e) = self.handle_message(payload).await {
-                            tracing::error!(
-                                error = ?e,
-                                offset = message.offset(),
-                                partition = message.partition(),
-                                "Failed to handle message"
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error = ?e, "Failed to receive message from Kafka");
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            }
-        }
-    }
-
-    fn start_background(self: Arc<Self>) -> tokio::task::JoinHandle<()>
-    where
-        Self: 'static,
-    {
-        // Use spawn_blocking since rdkafka's StreamConsumer is not Send
-        tokio::task::spawn_blocking(move || {
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(async move {
-                self.start().await;
-            });
-        })
-    }
 }
