@@ -14,7 +14,9 @@ pub mod id_repo;
 pub mod test;
 
 
-pub mod trade_handlers;
+pub mod trade_cmd_handlers;
+
+pub mod trade_event_handlers;
 
 pub mod order_conversion;
 

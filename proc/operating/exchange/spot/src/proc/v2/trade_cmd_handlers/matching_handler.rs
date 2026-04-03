@@ -19,14 +19,17 @@
 use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade};
-use base_types::handler::handler::CmdHandler;
-use base_types::{Price, Quantity, Timestamp};
+use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use base_types::{Price, Quantity};
 use db_repo::MySqlDbRepo;
-use diff::{ChangeLog, Entity};
+use diff::ChangeLog;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOrderAck, NewOrderCmd};
+
+pub struct MatchCmd {
+    pub taker_order: SpotOrder,
+}
 
 /// 撮合结果
 ///
@@ -125,13 +128,9 @@ impl MatchingHandler {
             "Starting order matching"
         );
 
-        // 1. 插入订单到订单簿
         self.insert_order_to_lob(&order)?;
-
-        // 2. 尝试撮合
         let match_result = self.try_match(&mut order)?;
 
-        // 3. 记录撮合结果
         if match_result.has_trades() {
             tracing::info!(
                 order_id = %order.order_id,
@@ -148,14 +147,6 @@ impl MatchingHandler {
         Ok(match_result)
     }
 
-    /// 将订单插入订单簿
-    ///
-    /// # 参数
-    /// - `order`: 订单引用
-    ///
-    /// # 返回
-    /// - `Ok(())`: 插入成功
-    /// - `Err(SpotCmdErrorAny)`: 插入失败
     fn insert_order_to_lob(&self, order: &SpotOrder) -> Result<(), SpotCmdErrorAny> {
         self.lob_repo.add_order(order.trading_pair, order.clone()).map_err(|e| {
             tracing::error!(
@@ -170,73 +161,82 @@ impl MatchingHandler {
         })
     }
 
-    /// 尝试撮合订单
-    ///
-    /// # 参数
-    /// - `order`: 可变订单引用
-    ///
-    /// # 返回
-    /// - `Ok(MatchResult)`: 撮合结果
-    /// - `Err(SpotCmdErrorAny)`: 撮合失败
-    ///
-    /// # 说明
-    /// 只负责撮合和生成成交，不处理余额更新
-    fn try_match(&self, order: &mut SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
-        // TODO: 实现完整的撮合逻辑
-        // 1. 从订单簿获取对手方订单
-        // 2. 价格匹配检查
-        // 3. 生成成交
-        // 4. 更新订单状态
-        // 5. 生成变更日志
-
-        // 当前返回空结果（占位实现）
+    fn try_match(&self, _order: &mut SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
         Ok(MatchResult::empty())
     }
 
-    /// 生成成交记录
-    ///
-    /// # 参数
-    /// - `taker_order`: Taker 订单
-    /// - `maker_order`: Maker 订单
-    /// - `match_price`: 成交价格
-    /// - `match_quantity`: 成交数量
-    ///
-    /// # 返回
-    /// 成交记录
     #[allow(dead_code)]
     fn create_trade(
         &self,
-        taker_order: &SpotOrder,
-        maker_order: &SpotOrder,
-        match_price: Price,
-        match_quantity: Quantity,
+        _taker_order: &SpotOrder,
+        _maker_order: &SpotOrder,
+        _match_price: Price,
+        _match_quantity: Quantity,
     ) -> SpotTrade {
-        // TODO: 实现成交记录生成
         todo!("Implement trade creation")
     }
 
-    /// 更新订单状态
-    ///
-    /// # 参数
-    /// - `order`: 可变订单引用
-    /// - `filled_quantity`: 已成交数量
-    ///
-    /// # 返回
-    /// 订单变更日志
     #[allow(dead_code)]
     fn update_order_status(
         &self,
-        order: &mut SpotOrder,
-        filled_quantity: Quantity,
+        _order: &mut SpotOrder,
+        _filled_quantity: Quantity,
     ) -> Result<ChangeLog, SpotCmdErrorAny> {
-        // TODO: 实现订单状态更新
         todo!("Implement order status update")
     }
 }
 
-impl CmdHandler<SpotOrder, MatchResult, SpotCmdErrorAny> for MatchingHandler {
-    fn cmd_handle(&self, order: SpotOrder) -> Result<MatchResult, SpotCmdErrorAny> {
-        return self.match_order(order);
+//todo 实现撮合命令handler
+// CmdHandlerForUpdate 里面应该用match cmd 代替 SpotOrder
+impl CmdHandlerForUpdate<MatchCmd, (), MatchResult, ChangeLog, SpotCmdErrorAny>
+    for MatchingHandler
+{
+    fn pre_check_command(&self, _cmd: &MatchCmd) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
+    }
+
+    fn load_state_set_for_update(&self, _cmd: &MatchCmd) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
+    }
+
+    fn validate_command_in_lock(
+        &self,
+        cmd: &MatchCmd,
+        _state_set: &(),
+    ) -> Result<(), SpotCmdErrorAny> {
+        if cmd.taker_order.state.status
+            != base_types::exchange::spot::spot_types::OrderStatus::Pending
+        {
+            return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
+                field: "taker_order.status",
+                reason: "must be pending before matching",
+            }));
+        }
+        Ok(())
+    }
+
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &MatchCmd,
+        _state_set: (),
+    ) -> Result<ChangeSet<MatchResult, ChangeLog>, SpotCmdErrorAny> {
+        let result = self.match_order(cmd.taker_order.clone())?;
+        let mut changelogs = Vec::with_capacity(result.order_logs.len() + result.trade_logs.len());
+        changelogs.extend(result.order_logs.iter().cloned());
+        changelogs.extend(result.trade_logs.iter().cloned());
+        Ok(ChangeSet { writes: result, changelogs })
+    }
+
+    fn persist_changelogs(&self, _changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
+    }
+
+    fn replay_changelogs_to_state(&self, _changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
+    }
+
+    fn publish_changelog(&self, _changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
     }
 }
 

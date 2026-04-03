@@ -11,7 +11,7 @@ use diff::ChangeLog;
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
 use crate::proc::v2::processor::nats::base::{NatsProcessor, NatsProcessorConfig};
-use crate::proc::v2::trade_handlers::change_log_store::{deserialize_change_log, ChangeLogReplay, ChangeLogStore};
+use crate::proc::v2::trade_cmd_handlers::change_log_store::{deserialize_change_log, ChangeLogReplay, ChangeLogStore};
 
 pub struct NatsPersistentProcessor {
     client: Arc<Client>,

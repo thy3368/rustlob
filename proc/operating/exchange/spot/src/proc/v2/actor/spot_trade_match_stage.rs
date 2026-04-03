@@ -9,7 +9,7 @@ use rdkafka::message::Message;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
 use crate::proc::v2::actor::kafka_config::{send_log_batch, KafkaConfig};
-use crate::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use crate::proc::v2::trade_cmd_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 
 pub struct SpotMatchStage {
     trade_behavior: Arc<SpotTradeBehaviorV2Impl>,

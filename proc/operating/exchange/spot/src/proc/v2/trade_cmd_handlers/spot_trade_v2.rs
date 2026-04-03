@@ -28,7 +28,7 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::UserDataStreamEventAny;
 use crate::proc::v2::id_repo::order_next_id;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
-use crate::proc::v2::trade_handlers::order_handler::OrderHandler;
+use crate::proc::v2::trade_cmd_handlers::order_handler::OrderHandler;
 
 // 导入 NewOrderCmd -> SpotOrder 转换实现
 

@@ -6,7 +6,7 @@ use diff::ChangeLog;
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
 use crate::proc::v2::processor::nats::base::{create_nats_client, deserialize_change_log, NatsProcessor, NatsProcessorConfig};
-use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
+use crate::proc::v2::trade_cmd_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 pub struct NatsMatchingProcessor {
     client: Arc<async_nats::Client>,

@@ -11,12 +11,10 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderAck, NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
-use crate::proc::v2::trade_handlers::account_handler::AccountHandler;
-use crate::proc::v2::trade_handlers::order_handler::OrderHandler;
+use crate::proc::v2::trade_cmd_handlers::order_handler::OrderHandler;
 
 pub struct SpotTradeBehaviorV4Impl {
     order_handler: Arc<OrderHandler>,
-    account_handler: Arc<AccountHandler>,
 }
 
 impl SpotTradeBehaviorV4Impl {
@@ -35,13 +33,9 @@ impl SpotTradeBehaviorV4Impl {
             event_publisher.clone(),
         ));
 
-        let account_handler = Arc::new(AccountHandler::new(
-            balance_repo.clone(),
-            trade_repo.clone(),
-            order_repo.clone(),
-        ));
 
-        Self { order_handler, account_handler }
+
+        Self { order_handler }
     }
 }
 

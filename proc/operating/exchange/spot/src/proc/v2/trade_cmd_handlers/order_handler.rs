@@ -23,6 +23,9 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
 };
 use crate::proc::v2::id_repo::order_next_id;
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
+use crate::proc::v2::trade_cmd_handlers::place_order_handler::{
+    is_symbol_supported as shared_is_symbol_supported, validate_order_cmd as shared_validate_order_cmd,
+};
 
 /// 订单处理器
 pub struct OrderHandler {
@@ -381,49 +384,7 @@ impl OrderHandler {
 
     /// 验证订单命令参数（优化D：参数验证前置）
     fn validate_order_cmd(&self, cmd: &NewOrderCmd) -> Result<(), SpotCmdErrorAny> {
-        // 验证数量必须大于0
-        if let Some(qty) = cmd.quantity() {
-            if qty.is_zero() {
-                return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                    field: "quantity",
-                    reason: "must be greater than 0",
-                }));
-            }
-        }
-
-        // 验证价格（限价单必须提供价格）
-        match cmd.order_type() {
-            OrderType::Limit
-            | OrderType::StopLossLimit
-            | OrderType::TakeProfitLimit
-            | OrderType::LimitMaker => {
-                if cmd.price().is_none() {
-                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                        field: "price",
-                        reason: "required for limit orders",
-                    }));
-                }
-            }
-            _ => {} // 市价单不需要价格
-        }
-
-        // 验证止损/止盈价格（条件单必须提供）
-        match cmd.order_type() {
-            OrderType::StopLoss
-            | OrderType::StopLossLimit
-            | OrderType::TakeProfit
-            | OrderType::TakeProfitLimit => {
-                if cmd.stop_price().is_none() {
-                    return Err(SpotCmdErrorAny::Common(CommonError::InvalidParameter {
-                        field: "stop_price",
-                        reason: "required for conditional orders",
-                    }));
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
+        shared_validate_order_cmd(cmd)
     }
 
     /// 验证交易对是否支持
@@ -440,7 +401,7 @@ impl OrderHandler {
     /// 生产环境应该从配置或数据库中加载支持的交易对列表
     #[inline]
     fn is_symbol_supported(&self, symbol: TradingPair) -> bool {
-        self.lob_repo.contains_symbol(&symbol)
+        shared_is_symbol_supported(self.lob_repo.as_ref(), symbol)
     }
 
     #[inline]

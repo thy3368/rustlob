@@ -10,7 +10,7 @@ use crate::proc::v2::processor::kafka::base::{
     KafkaProcessorConfig,
 };
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
-use crate::proc::v2::trade_handlers::matching_handler::{MatchResult, MatchingHandler};
+use crate::proc::v2::trade_cmd_handlers::matching_handler::{MatchResult, MatchingHandler};
 
 pub struct KafkaMatchingProcessor {
     consumer: Arc<StreamConsumer>,

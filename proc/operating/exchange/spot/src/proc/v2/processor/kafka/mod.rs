@@ -6,3 +6,6 @@ pub mod persistent_processor;
 pub mod settlement_processor;
 
 pub mod acquiring_processor;
+
+
+pub mod matching_event_actor;
