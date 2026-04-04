@@ -22,7 +22,7 @@ use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
-use spot_behavior::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
 

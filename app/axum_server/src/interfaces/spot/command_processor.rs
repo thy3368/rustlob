@@ -22,7 +22,7 @@ use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
 use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig;
 use spot_behavior::proc::v2::actor::spot_trade_acquiring_stage::SpotAcquiringStage;
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
-use spot_behavior::proc::v2::trade_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
 

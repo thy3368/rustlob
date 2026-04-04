@@ -770,6 +770,7 @@ pub struct ExecutionState {
 /// - 明确的可变/不可变边界
 #[repr(align(64))]
 #[derive(Debug, Clone, Entity)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[entity(id = "order_id")]
 pub struct SpotOrder {
     // ==================== 不可变字段区域 ====================
