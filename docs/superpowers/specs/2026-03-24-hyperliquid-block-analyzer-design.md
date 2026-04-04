@@ -609,7 +609,7 @@ fn bench_parse_large_block(b: &mut Bencher) {
 - [Hyperliquid 官方文档](https://hyperliquid.gitbook.io/hyperliquid-docs/)
 - [Hyperliquid API 文档](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api)
 - [HypurrScan 区块浏览器](https://hypurrscan.io/)
-- [区块结构分析文档](../../../design/竞品分析/hyperliquid-block-structure.md)
+- [区块结构分析文档](../../../proc/operating/dex/竞品分析/hyperliquid-block-structure.md)
 
 ---
 

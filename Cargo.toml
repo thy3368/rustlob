@@ -38,15 +38,15 @@ members = [
     "app/xdp_libbpf",
     
     # proc
-    "proc/operating/exchange/spot",
-    "proc/operating/exchange/derivatives",
-    "proc/operating/exchange/wallet",
-    "proc/operating/exchange/spot_market_data",
-    "proc/operating/push/push",
+    "proc/operating/cex/exchange/spot",
+    "proc/operating/cex/exchange/derivatives",
+    "proc/operating/cex/exchange/wallet",
+    "proc/operating/cex/exchange/spot_market_data",
+    "proc/operating/cex/push/push",
     
     # study
     "study/web3",
-    "study/hyperliquid_analyzer",
+    "study/hyperliquid_analyzer", "proc/operating/dex/dex",
 ]
 
 resolver = "2"

@@ -21,9 +21,9 @@ async-trait = "0.1.89"
 clap = "4.5.4"
 
 # Spot 订单处理依赖
-spot_behavior = { path = "../../proc/operating/exchange/spot", features = ["serde"] }
+spot_behavior = { path = "../../proc/operating/cex/exchange/spot", features = ["serde"] }
 
-derivatives_behavior = { path = "../../proc/operating/exchange/derivatives", features = ["serde"] }
+derivatives_behavior = { path = "../../proc/operating/cex/exchange/derivatives", features = ["serde"] }
 
 base_types = { path = "../../lib/common/base_types", features = ["serde"] }
 
