@@ -21,12 +21,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/core/settlement/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/id_generator/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/market_data/spot_market_data/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/spot_market_data/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/account/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/base_types/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff/src" isTestSource="false" />
@@ -36,7 +31,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/diff_tracker/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/prep_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/db_repo/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/entity_derive/examples" isTestSource="false" />
@@ -76,9 +70,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/algo/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/derivatives/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/client/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/client/tests" isTestSource="true" />
@@ -93,15 +84,12 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/immutable_derive/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/push/push/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/common/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/push/push/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_queue/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_thread_overhead/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/exchange/wallet/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sbe-derive/tests" isTestSource="true" />
@@ -120,6 +108,20 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/prep_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/wallet/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/push/push/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/push/push/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/dex/dex/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/proc/operating/dex/dex/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
