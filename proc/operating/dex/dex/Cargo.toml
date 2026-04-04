@@ -1,0 +1,9 @@
+[package]
+name = "dex"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+base_types = { path = "../../../../lib/common/base_types" }
