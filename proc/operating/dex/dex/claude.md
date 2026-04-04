@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 目标
+
+对hyperliquid进行逆向工程+清洁室重写, 文档在 proc/operating/dex/hyperliquid
+
 ## Scope
 
 This CLAUDE.md applies only to the `proc/operating/dex/dex` crate.
@@ -95,7 +99,7 @@ Because the crate is early-stage, prefer documenting only behavior that is visib
 
 ## 逆向回构参考文档
 
-如果当前任务是在做 Hyperliquid 风格的逆向回构，请优先阅读：
+如果当前任务是在做 Hyperliquid 风格的逆向工程+清洁室重写，文档在proc/operating/dex/hyperliquid 请优先阅读：
 
 - `docs/hyperliquid_reverse_usecases.md`：按用例域拆分的交易/行情分析
 - `docs/hyperliquid_file_design.md`：建议的文件级演进结构

@@ -5,11 +5,67 @@ pub enum OrderSide {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotSide {
+    Buy,
+    Sell,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PerpSide {
+    Buy,
+    Sell,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OptionSide {
+    Buy,
+    Sell,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OptionKind {
+    Call,
+    Put,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceOrderCmd {
     pub trader_id: u64,
     pub market: String,
     pub side: OrderSide,
     pub price: u64,
+    pub quantity: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotPlaceOrderCmd {
+    pub trader_id: u64,
+    pub market: String,
+    pub side: SpotSide,
+    pub price: u64,
+    pub quantity: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PerpPlaceOrderCmd {
+    pub trader_id: u64,
+    pub market: String,
+    pub side: PerpSide,
+    pub price: u64,
+    pub quantity: u64,
+    pub leverage: u32,
+    pub reduce_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptionPlaceOrderCmd {
+    pub trader_id: u64,
+    pub underlying: String,
+    pub expiry_ts: u64,
+    pub strike_price: u64,
+    pub kind: OptionKind,
+    pub side: OptionSide,
+    pub premium: u64,
     pub quantity: u64,
 }
 
@@ -28,7 +84,25 @@ pub struct AmendOrderCmd {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotCommand {
+    PlaceOrder(SpotPlaceOrderCmd),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PerpCommand {
+    PlaceOrder(PerpPlaceOrderCmd),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OptionCommand {
+    PlaceOrder(OptionPlaceOrderCmd),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TradingCommand {
+    Spot(SpotCommand),
+    Perp(PerpCommand),
+    Option(OptionCommand),
     PlaceOrder(PlaceOrderCmd),
     CancelOrder(CancelOrderCmd),
     AmendOrder(AmendOrderCmd),

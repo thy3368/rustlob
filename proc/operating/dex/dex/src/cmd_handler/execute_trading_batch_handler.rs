@@ -1,8 +1,8 @@
 use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
 use super::trading_command::{
-    AmendOrderCmd, CancelOrderCmd, OrderSide, PlaceOrderCmd, TradingCommand,
-    TradingCommandEnvelope,
+    AmendOrderCmd, CancelOrderCmd, OptionCommand, OrderSide, PerpCommand, PlaceOrderCmd,
+    SpotCommand, TradingCommand, TradingCommandEnvelope,
 };
 
 type ExecuteTradingBatchError = String;
@@ -79,6 +79,9 @@ impl CmdHandlerForUpdate<
 
         for envelope in cmd {
             match &envelope.command {
+                TradingCommand::Spot(SpotCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
+                TradingCommand::Perp(PerpCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
+                TradingCommand::Option(OptionCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
                 TradingCommand::PlaceOrder(_) => writes.place_order_commands += 1,
                 TradingCommand::CancelOrder(_) => writes.cancel_order_commands += 1,
                 TradingCommand::AmendOrder(_) => writes.amend_order_commands += 1,
