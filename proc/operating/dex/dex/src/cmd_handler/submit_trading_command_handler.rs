@@ -158,7 +158,7 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::cmd_handler::{
-        ExchangeCommand, OrderSide, PerpAmendOrderCmd, PerpCommand, PlaceOrderCmd,
+        ExchangeCommand, PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide,
         SpotCancelOrderCmd, SpotCommand, TradingCommand,
     };
 
@@ -168,14 +168,16 @@ mod tests {
             trader_id: 1,
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
-            command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
-                PlaceOrderCmd {
+            command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
+                PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                     trader_id: 1,
                     market: "BTC-PERP".into(),
-                    side: OrderSide::Buy,
+                    side: PerpSide::Buy,
                     price: 100_000,
                     quantity: 2,
-                },
+                    leverage: 1,
+                    reduce_only: false,
+                }),
             )),
         }
     }
@@ -242,7 +244,7 @@ mod tests {
         assert_eq!(handler.pending_len(), 1);
         assert!(matches!(
             batch[0].command,
-            ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(_))
+            ExchangeCommand::TradingCommand(TradingCommand::Perp(PerpCommand::PlaceOrder(_)))
                 | ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(_)))
         ));
         assert!(matches!(

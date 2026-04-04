@@ -2,8 +2,8 @@ use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, OptionAmendOrderCmd,
     OptionCancelOrderCmd, OptionCommand, OptionKind, OptionPlaceOrderCmd, OptionSide,
-    OrderSide, PerpAmendOrderCmd, PerpCancelOrderCmd, PerpCommand, PerpPlaceOrderCmd,
-    PerpSide, PlaceOrderCmd, SpotCancelOrderCmd, SpotCommand, TradingCommand,
+    PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide, SpotCancelOrderCmd,
+    SpotCommand, SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
 #[test]
@@ -18,14 +18,14 @@ fn execute_trading_batch_counts_each_command_kind() {
                     trader_id: 1,
                     nonce: 1,
                     timestamp_ns: 1_000,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
-                        PlaceOrderCmd {
+                    command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+                        SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
                             trader_id: 1,
                             market: "BTC-PERP".into(),
-                            side: OrderSide::Buy,
+                            side: SpotSide::Buy,
                             price: 100_000,
                             quantity: 1,
-                        },
+                        }),
                     )),
                 },
                 ExchangeCommandEnvelope {
@@ -119,6 +119,8 @@ fn execute_trading_batch_counts_each_command_kind() {
             |writes, _| writes.clone(),
         )
         .unwrap();
+
+    //todo 怎么验证状态 会有一个现货委托单 和成交单？
 
     assert_eq!(result.total_commands, 7);
     assert_eq!(result.place_order_commands, 3);

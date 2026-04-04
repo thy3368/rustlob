@@ -7,11 +7,22 @@ use super::trading_command::{
 type ExecuteTradingBatchError = String;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TradeExecutionResult {
+    pub market: String,
+    pub maker_order_id: u64,
+    pub taker_order_id: u64,
+    pub price: u64,
+    pub quantity: u64,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BatchExecutionResult {
     pub total_commands: usize,
     pub place_order_commands: usize,
     pub cancel_order_commands: usize,
     pub amend_order_commands: usize,
+    pub trade_execution_commands: usize,
+    pub trades_executed: Vec<TradeExecutionResult>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -20,7 +31,14 @@ pub struct ExecuteTradingBatchState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecuteTradingBatchLog {
+pub enum TradeExecutionLog {
+    TradeExecuted {
+        market: String,
+        maker_order_id: u64,
+        taker_order_id: u64,
+        price: u64,
+        quantity: u64,
+    },
     BatchExecuted { batch_size: usize },
 }
 
@@ -37,7 +55,7 @@ impl CmdHandlerForUpdate<
     Vec<ExchangeCommandEnvelope>,
     ExecuteTradingBatchState,
     BatchExecutionResult,
-    ExecuteTradingBatchLog,
+    TradeExecutionLog,
     ExecuteTradingBatchError,
 > for ExecuteTradingBatchHandler
 {
@@ -69,12 +87,14 @@ impl CmdHandlerForUpdate<
         &self,
         cmd: &Vec<ExchangeCommandEnvelope>,
         state_set: ExecuteTradingBatchState,
-    ) -> Result<ChangeSet<BatchExecutionResult, ExecuteTradingBatchLog>, ExecuteTradingBatchError>
+    ) -> Result<ChangeSet<BatchExecutionResult, TradeExecutionLog>, ExecuteTradingBatchError>
     {
         let mut writes = BatchExecutionResult {
             total_commands: state_set.batch_size,
             ..BatchExecutionResult::default()
         };
+
+        let mut changelogs = Vec::new();
 
         for envelope in cmd {
             match &envelope.command {
@@ -97,6 +117,23 @@ impl CmdHandlerForUpdate<
                     super::trading_command::TradingCommand::Perp(PerpCommand::AmendOrder(_)) => {
                         writes.amend_order_commands += 1
                     }
+                    super::trading_command::TradingCommand::Perp(PerpCommand::ExecuteTrade(cmd)) => {
+                        writes.trade_execution_commands += 1;
+                        writes.trades_executed.push(TradeExecutionResult {
+                            market: cmd.market.clone(),
+                            maker_order_id: cmd.maker_order_id,
+                            taker_order_id: cmd.taker_order_id,
+                            price: cmd.price,
+                            quantity: cmd.quantity,
+                        });
+                        changelogs.push(TradeExecutionLog::TradeExecuted {
+                            market: cmd.market.clone(),
+                            maker_order_id: cmd.maker_order_id,
+                            taker_order_id: cmd.taker_order_id,
+                            price: cmd.price,
+                            quantity: cmd.quantity,
+                        });
+                    }
                     super::trading_command::TradingCommand::Perp(
                         PerpCommand::SettleFunding(_) | PerpCommand::LiquidatePosition(_),
                     ) => {}
@@ -109,39 +146,38 @@ impl CmdHandlerForUpdate<
                     super::trading_command::TradingCommand::Option(OptionCommand::AmendOrder(_)) => {
                         writes.amend_order_commands += 1
                     }
-                    super::trading_command::TradingCommand::PlaceOrder(_) => {
-                        writes.place_order_commands += 1
-                    }
                 },
                 ExchangeCommand::TreasuryCommand(_) => {}
             }
         }
 
+        changelogs.push(TradeExecutionLog::BatchExecuted {
+            batch_size: state_set.batch_size,
+        });
+
         Ok(ChangeSet {
             writes,
-            changelogs: vec![ExecuteTradingBatchLog::BatchExecuted {
-                batch_size: state_set.batch_size,
-            }],
+            changelogs,
         })
     }
 
     fn persist_changelogs(
         &self,
-        _changelogs: &[ExecuteTradingBatchLog],
+        _changelogs: &[TradeExecutionLog],
     ) -> Result<(), ExecuteTradingBatchError> {
         Ok(())
     }
 
     fn replay_changelogs_to_state(
         &self,
-        _changelogs: &[ExecuteTradingBatchLog],
+        _changelogs: &[TradeExecutionLog],
     ) -> Result<(), ExecuteTradingBatchError> {
         Ok(())
     }
 
     fn publish_changelog(
         &self,
-        _changelogs: &[ExecuteTradingBatchLog],
+        _changelogs: &[TradeExecutionLog],
     ) -> Result<(), ExecuteTradingBatchError> {
         Ok(())
     }
@@ -151,7 +187,7 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::cmd_handler::{
-        ExchangeCommand, OrderSide, PerpAmendOrderCmd, PerpCommand, PlaceOrderCmd,
+        ExchangeCommand, PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide,
         SpotCancelOrderCmd, SpotCommand, TradingCommand,
     };
 
@@ -161,14 +197,16 @@ mod tests {
             trader_id,
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
-            command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
-                PlaceOrderCmd {
+            command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
+                PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                     trader_id,
                     market: "BTC-PERP".into(),
-                    side: OrderSide::Buy,
+                    side: PerpSide::Buy,
                     price: 100_000,
                     quantity: 2,
-                },
+                    leverage: 1,
+                    reduce_only: false,
+                }),
             )),
         }
     }
@@ -211,14 +249,16 @@ mod tests {
                     trader_id: 2,
                     nonce: 4,
                     timestamp_ns: 1_004,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
-                        PlaceOrderCmd {
+                    command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
+                        PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                             trader_id: 2,
                             market: "ETH-PERP".into(),
-                            side: OrderSide::Sell,
+                            side: PerpSide::Sell,
                             price: 3_000,
                             quantity: 5,
-                        },
+                            leverage: 1,
+                            reduce_only: false,
+                        }),
                     )),
                 },
             ],
@@ -247,7 +287,7 @@ mod tests {
         assert_eq!(changelogs.len(), 1);
         assert_eq!(
             changelogs[0],
-            ExecuteTradingBatchLog::BatchExecuted { batch_size: 1 }
+            TradeExecutionLog::BatchExecuted { batch_size: 1 }
         );
     }
 }
