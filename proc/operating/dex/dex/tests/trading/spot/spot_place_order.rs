@@ -1,25 +1,27 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    SpotCommand, SpotPlaceOrderCmd, SpotSide, SubmitTradingCommandHandler, TradingCommand,
-    TradingCommandEnvelope,
+    ExchangeCommand, ExchangeCommandEnvelope, SpotCommand, SpotPlaceOrderCmd, SpotSide,
+    SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
 fn spot_place_order_command_is_accepted_into_pending_queue() {
     let handler = SubmitTradingCommandHandler::new();
 
-    let cmd = TradingCommandEnvelope {
+    let cmd = ExchangeCommandEnvelope {
         command_id: 100,
         trader_id: 42,
         nonce: 1,
         timestamp_ns: 10_000,
-        command: TradingCommand::Spot(SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
-            trader_id: 42,
-            market: "BTC-USDC".into(),
-            side: SpotSide::Buy,
-            price: 100_000,
-            quantity: 2,
-        })),
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(
+            SpotPlaceOrderCmd {
+                trader_id: 42,
+                market: "BTC-USDC".into(),
+                side: SpotSide::Buy,
+                price: 100_000,
+                quantity: 2,
+            },
+        ))),
     };
 
     let result = handler.cmd_handle(cmd, |writes, _| writes.clone()).unwrap();

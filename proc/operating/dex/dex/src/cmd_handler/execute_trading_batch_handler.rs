@@ -1,8 +1,7 @@
 use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
 use super::trading_command::{
-    AmendOrderCmd, CancelOrderCmd, OptionCommand, OrderSide, PerpCommand, PlaceOrderCmd,
-    SpotCommand, TradingCommand, TradingCommandEnvelope,
+    ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, PerpCommand, SpotCommand,
 };
 
 type ExecuteTradingBatchError = String;
@@ -35,7 +34,7 @@ impl ExecuteTradingBatchHandler {
 }
 
 impl CmdHandlerForUpdate<
-    Vec<TradingCommandEnvelope>,
+    Vec<ExchangeCommandEnvelope>,
     ExecuteTradingBatchState,
     BatchExecutionResult,
     ExecuteTradingBatchLog,
@@ -44,14 +43,14 @@ impl CmdHandlerForUpdate<
 {
     fn pre_check_command(
         &self,
-        _cmd: &Vec<TradingCommandEnvelope>,
+        _cmd: &Vec<ExchangeCommandEnvelope>,
     ) -> Result<(), ExecuteTradingBatchError> {
         Ok(())
     }
 
     fn load_state_set_for_update(
         &self,
-        cmd: &Vec<TradingCommandEnvelope>,
+        cmd: &Vec<ExchangeCommandEnvelope>,
     ) -> Result<ExecuteTradingBatchState, ExecuteTradingBatchError> {
         Ok(ExecuteTradingBatchState {
             batch_size: cmd.len(),
@@ -60,7 +59,7 @@ impl CmdHandlerForUpdate<
 
     fn validate_command_in_lock(
         &self,
-        _cmd: &Vec<TradingCommandEnvelope>,
+        _cmd: &Vec<ExchangeCommandEnvelope>,
         _state_set: &ExecuteTradingBatchState,
     ) -> Result<(), ExecuteTradingBatchError> {
         Ok(())
@@ -68,7 +67,7 @@ impl CmdHandlerForUpdate<
 
     fn apply_command_and_collect_changes(
         &self,
-        cmd: &Vec<TradingCommandEnvelope>,
+        cmd: &Vec<ExchangeCommandEnvelope>,
         state_set: ExecuteTradingBatchState,
     ) -> Result<ChangeSet<BatchExecutionResult, ExecuteTradingBatchLog>, ExecuteTradingBatchError>
     {
@@ -79,12 +78,27 @@ impl CmdHandlerForUpdate<
 
         for envelope in cmd {
             match &envelope.command {
-                TradingCommand::Spot(SpotCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
-                TradingCommand::Perp(PerpCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
-                TradingCommand::Option(OptionCommand::PlaceOrder(_)) => writes.place_order_commands += 1,
-                TradingCommand::PlaceOrder(_) => writes.place_order_commands += 1,
-                TradingCommand::CancelOrder(_) => writes.cancel_order_commands += 1,
-                TradingCommand::AmendOrder(_) => writes.amend_order_commands += 1,
+                ExchangeCommand::TradingCommand(trading_command) => match trading_command {
+                    super::trading_command::TradingCommand::Spot(SpotCommand::PlaceOrder(_)) => {
+                        writes.place_order_commands += 1
+                    }
+                    super::trading_command::TradingCommand::Perp(PerpCommand::PlaceOrder(_)) => {
+                        writes.place_order_commands += 1
+                    }
+                    super::trading_command::TradingCommand::Option(OptionCommand::PlaceOrder(_)) => {
+                        writes.place_order_commands += 1
+                    }
+                    super::trading_command::TradingCommand::PlaceOrder(_) => {
+                        writes.place_order_commands += 1
+                    }
+                    super::trading_command::TradingCommand::CancelOrder(_) => {
+                        writes.cancel_order_commands += 1
+                    }
+                    super::trading_command::TradingCommand::AmendOrder(_) => {
+                        writes.amend_order_commands += 1
+                    }
+                },
+                ExchangeCommand::TreasuryCommand(_) => {}
             }
         }
 
@@ -121,20 +135,26 @@ impl CmdHandlerForUpdate<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cmd_handler::{
+        AmendOrderCmd, CancelOrderCmd, ExchangeCommand, OrderSide, PlaceOrderCmd,
+        TradingCommand,
+    };
 
-    fn place_order_envelope(command_id: u64, trader_id: u64) -> TradingCommandEnvelope {
-        TradingCommandEnvelope {
+    fn place_order_envelope(command_id: u64, trader_id: u64) -> ExchangeCommandEnvelope {
+        ExchangeCommandEnvelope {
             command_id,
             trader_id,
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
-            command: TradingCommand::PlaceOrder(PlaceOrderCmd {
-                trader_id,
-                market: "BTC-PERP".into(),
-                side: OrderSide::Buy,
-                price: 100_000,
-                quantity: 2,
-            }),
+            command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
+                PlaceOrderCmd {
+                    trader_id,
+                    market: "BTC-PERP".into(),
+                    side: OrderSide::Buy,
+                    price: 100_000,
+                    quantity: 2,
+                },
+            )),
         }
     }
 
@@ -145,40 +165,46 @@ mod tests {
         let result = handler.cmd_handle(
             vec![
                 place_order_envelope(1, 1),
-                TradingCommandEnvelope {
+                ExchangeCommandEnvelope {
                     command_id: 2,
                     trader_id: 1,
                     nonce: 2,
                     timestamp_ns: 1_002,
-                    command: TradingCommand::CancelOrder(CancelOrderCmd {
-                        trader_id: 1,
-                        order_id: 42,
-                    }),
+                    command: ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(
+                        CancelOrderCmd {
+                            trader_id: 1,
+                            order_id: 42,
+                        },
+                    )),
                 },
-                TradingCommandEnvelope {
+                ExchangeCommandEnvelope {
                     command_id: 3,
                     trader_id: 1,
                     nonce: 3,
                     timestamp_ns: 1_003,
-                    command: TradingCommand::AmendOrder(AmendOrderCmd {
-                        trader_id: 1,
-                        order_id: 42,
-                        new_price: Some(101_000),
-                        new_quantity: Some(3),
-                    }),
+                    command: ExchangeCommand::TradingCommand(TradingCommand::AmendOrder(
+                        AmendOrderCmd {
+                            trader_id: 1,
+                            order_id: 42,
+                            new_price: Some(101_000),
+                            new_quantity: Some(3),
+                        },
+                    )),
                 },
-                TradingCommandEnvelope {
+                ExchangeCommandEnvelope {
                     command_id: 4,
                     trader_id: 2,
                     nonce: 4,
                     timestamp_ns: 1_004,
-                    command: TradingCommand::PlaceOrder(PlaceOrderCmd {
-                        trader_id: 2,
-                        market: "ETH-PERP".into(),
-                        side: OrderSide::Sell,
-                        price: 3_000,
-                        quantity: 5,
-                    }),
+                    command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
+                        PlaceOrderCmd {
+                            trader_id: 2,
+                            market: "ETH-PERP".into(),
+                            side: OrderSide::Sell,
+                            price: 3_000,
+                            quantity: 5,
+                        },
+                    )),
                 },
             ],
             |writes, _| writes.clone(),

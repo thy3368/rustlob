@@ -99,6 +99,15 @@ pub enum OptionCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TreasuryCommand {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExchangeCommand {
+    TradingCommand(TradingCommand),
+    TreasuryCommand(TreasuryCommand),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TradingCommand {
     Spot(SpotCommand),
     Perp(PerpCommand),
@@ -109,10 +118,10 @@ pub enum TradingCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TradingCommandEnvelope {
+pub struct ExchangeCommandEnvelope {
     pub command_id: u64,
     pub trader_id: u64,
     pub nonce: u64,
     pub timestamp_ns: u64,
-    pub command: TradingCommand,
+    pub command: ExchangeCommand,
 }

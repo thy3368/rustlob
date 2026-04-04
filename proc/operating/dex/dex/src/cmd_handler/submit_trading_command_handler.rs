@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Mutex};
 
 use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
-use super::trading_command::TradingCommandEnvelope;
+use super::trading_command::ExchangeCommandEnvelope;
 
 type SubmitTradingCommandError = String;
 
@@ -37,7 +37,7 @@ pub enum SubmitTradingCommandLog {
 
 #[derive(Debug, Default)]
 pub struct SubmitTradingCommandHandler {
-    pending_commands: Mutex<VecDeque<TradingCommandEnvelope>>,
+    pending_commands: Mutex<VecDeque<ExchangeCommandEnvelope>>,
 }
 
 impl SubmitTradingCommandHandler {
@@ -50,7 +50,7 @@ impl SubmitTradingCommandHandler {
         pending_len + 1
     }
 
-    pub fn drain_pending_commands(&self, max_batch_size: usize) -> Vec<TradingCommandEnvelope> {
+    pub fn drain_pending_commands(&self, max_batch_size: usize) -> Vec<ExchangeCommandEnvelope> {
         let mut pending_commands = self.pending_commands.lock().unwrap();
         let batch_size = max_batch_size.min(pending_commands.len());
         pending_commands.drain(..batch_size).collect()
@@ -62,7 +62,7 @@ impl SubmitTradingCommandHandler {
 }
 
 impl CmdHandlerForUpdate<
-    TradingCommandEnvelope,
+    ExchangeCommandEnvelope,
     SubmitTradingCommandState,
     SubmitCommandResult,
     SubmitTradingCommandLog,
@@ -71,14 +71,14 @@ impl CmdHandlerForUpdate<
 {
     fn pre_check_command(
         &self,
-        _cmd: &TradingCommandEnvelope,
+        _cmd: &ExchangeCommandEnvelope,
     ) -> Result<(), SubmitTradingCommandError> {
         Ok(())
     }
 
     fn load_state_set_for_update(
         &self,
-        _cmd: &TradingCommandEnvelope,
+        _cmd: &ExchangeCommandEnvelope,
     ) -> Result<SubmitTradingCommandState, SubmitTradingCommandError> {
         Ok(SubmitTradingCommandState {
             pending_len: self.pending_commands.lock().unwrap().len(),
@@ -87,7 +87,7 @@ impl CmdHandlerForUpdate<
 
     fn validate_command_in_lock(
         &self,
-        _cmd: &TradingCommandEnvelope,
+        _cmd: &ExchangeCommandEnvelope,
         _state_set: &SubmitTradingCommandState,
     ) -> Result<(), SubmitTradingCommandError> {
         Ok(())
@@ -95,7 +95,7 @@ impl CmdHandlerForUpdate<
 
     fn apply_command_and_collect_changes(
         &self,
-        cmd: &TradingCommandEnvelope,
+        cmd: &ExchangeCommandEnvelope,
         state_set: SubmitTradingCommandState,
     ) -> Result<ChangeSet<SubmitCommandResult, SubmitTradingCommandLog>, SubmitTradingCommandError>
     {
@@ -133,7 +133,7 @@ impl CmdHandlerForUpdate<
 
     fn cmd_handle<R, F>(
         &self,
-        cmd: TradingCommandEnvelope,
+        cmd: ExchangeCommandEnvelope,
         result_mapper: F,
     ) -> Result<R, SubmitTradingCommandError>
     where
@@ -158,22 +158,25 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::cmd_handler::{
-        AmendOrderCmd, CancelOrderCmd, OrderSide, PlaceOrderCmd, TradingCommand,
+        AmendOrderCmd, CancelOrderCmd, ExchangeCommand, OrderSide, PlaceOrderCmd,
+        TradingCommand,
     };
 
-    fn place_order_envelope(command_id: u64) -> TradingCommandEnvelope {
-        TradingCommandEnvelope {
+    fn place_order_envelope(command_id: u64) -> ExchangeCommandEnvelope {
+        ExchangeCommandEnvelope {
             command_id,
             trader_id: 1,
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
-            command: TradingCommand::PlaceOrder(PlaceOrderCmd {
-                trader_id: 1,
-                market: "BTC-PERP".into(),
-                side: OrderSide::Buy,
-                price: 100_000,
-                quantity: 2,
-            }),
+            command: ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(
+                PlaceOrderCmd {
+                    trader_id: 1,
+                    market: "BTC-PERP".into(),
+                    side: OrderSide::Buy,
+                    price: 100_000,
+                    quantity: 2,
+                },
+            )),
         }
     }
 
@@ -198,32 +201,36 @@ mod tests {
             .unwrap();
         handler
             .cmd_handle(
-                TradingCommandEnvelope {
+                ExchangeCommandEnvelope {
                     command_id: 2,
                     trader_id: 1,
                     nonce: 2,
                     timestamp_ns: 1_002,
-                    command: TradingCommand::CancelOrder(CancelOrderCmd {
-                        trader_id: 1,
-                        order_id: 42,
-                    }),
+                    command: ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(
+                        CancelOrderCmd {
+                            trader_id: 1,
+                            order_id: 42,
+                        },
+                    )),
                 },
                 |writes, _| writes.clone(),
             )
             .unwrap();
         handler
             .cmd_handle(
-                TradingCommandEnvelope {
+                ExchangeCommandEnvelope {
                     command_id: 3,
                     trader_id: 1,
                     nonce: 3,
                     timestamp_ns: 1_003,
-                    command: TradingCommand::AmendOrder(AmendOrderCmd {
-                        trader_id: 1,
-                        order_id: 42,
-                        new_price: Some(101_000),
-                        new_quantity: Some(3),
-                    }),
+                    command: ExchangeCommand::TradingCommand(TradingCommand::AmendOrder(
+                        AmendOrderCmd {
+                            trader_id: 1,
+                            order_id: 42,
+                            new_price: Some(101_000),
+                            new_quantity: Some(3),
+                        },
+                    )),
                 },
                 |writes, _| writes.clone(),
             )
@@ -233,8 +240,14 @@ mod tests {
 
         assert_eq!(batch.len(), 2);
         assert_eq!(handler.pending_len(), 1);
-        assert!(matches!(batch[0].command, TradingCommand::PlaceOrder(_)));
-        assert!(matches!(batch[1].command, TradingCommand::CancelOrder(_)));
+        assert!(matches!(
+            batch[0].command,
+            ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(_))
+        ));
+        assert!(matches!(
+            batch[1].command,
+            ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(_))
+        ));
     }
 
     #[test]
