@@ -4,7 +4,7 @@
 **文档版本**: 1.0.0
 **发布日期**: 2025-12-23
 **维护者**: 产品与技术团队
-**相关文档**: [PREP_ORDER_STATE_MACHINE.md](./PREP_ORDER_STATE_MACHINE.md)
+**相关文档**: [PREP_ORDER_STATE_MACHINE.md](PREP_ORDER_STATE_MACHINE.md)
 
 ---
 
@@ -1419,8 +1419,8 @@ pub fn transition_order_state(
 ## 参考资源
 
 ### 相关文档
-- [PREP_ORDER_STATE_MACHINE.md](./PREP_ORDER_STATE_MACHINE.md) - 详细的状态机文档
-- [PREP_ORDER_IMPLEMENTATION.md](./OPEN_POSITION_IMPLEMENTATION.md) - 实现细节
+- [PREP_ORDER_STATE_MACHINE.md](PREP_ORDER_STATE_MACHINE.md) - 详细的状态机文档
+- [PREP_ORDER_IMPLEMENTATION.md](OPEN_POSITION_IMPLEMENTATION.md) - 实现细节
 
 ### 竞品官方资源
 - [Binance 永续合约 API](https://developers.binance.com/docs/derivatives/usds-futures/general-info)

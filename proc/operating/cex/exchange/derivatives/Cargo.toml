@@ -21,16 +21,16 @@ rand = "0.8"
 # Clean Architecture 依赖
 
 # LOB 仓储依赖
-lob_repo = { path = "../../../../lib/common/lob_repo" }
-base_types = { path = "../../../../lib/common/base_types" }
+lob_repo = { path = "../../../../../lib/common/lob_repo" }
+base_types = { path = "../../../../../lib/common/base_types" }
 
 # Diff tracking
-diff = { path = "../../../../lib/common/diff" }
-entity_derive = { path = "../../../../lib/common/entity_derive" }
+diff = { path = "../../../../../lib/common/diff" }
+entity_derive = { path = "../../../../../lib/common/entity_derive" }
 # Diff tracking
-immutable_derive = { path = "../../../../lib/common/immutable_derive" }
+immutable_derive = { path = "../../../../../lib/common/immutable_derive" }
 # Database repository
-db_repo = { path = "../../../../lib/common/db_repo" }
+db_repo = { path = "../../../../../lib/common/db_repo" }
 
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full", "test-util"] }

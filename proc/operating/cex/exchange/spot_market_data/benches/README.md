@@ -13,7 +13,7 @@
    - 常用命令和模式
    - 常见陷阱和解决方案
 
-2. **[Criterion 完整教程](./CRITERION_TUTORIAL.md)**
+2. **[Criterion 完整教程](CRITERION_TUTORIAL.md)**
    - 从零开始的详细教程
    - 基础概念深入讲解
    - 实战案例和最佳实践
@@ -130,7 +130,7 @@ cat benches/OPTIMIZATION_RESULTS.md
 
 ### 进阶路径
 
-1. 完整阅读 [Criterion 教程](./CRITERION_TUTORIAL.md)
+1. 完整阅读 [Criterion 教程](CRITERION_TUTORIAL.md)
 2. 学习 [性能分析](./PERFORMANCE_ANALYSIS.md)
 3. 研究 [优化方案](./ORDERDELTA_OPTIMIZATION.md)
 4. 运行优化对比测试
@@ -232,7 +232,7 @@ cargo asm --bench orderbook_delta_allocation create_orderbook_delta
 ### 教程和指南
 
 - [CRITERION_CHEATSHEET.md](./CRITERION_CHEATSHEET.md) - Criterion 速查表
-- [CRITERION_TUTORIAL.md](./CRITERION_TUTORIAL.md) - Criterion 完整教程
+- [CRITERION_TUTORIAL.md](CRITERION_TUTORIAL.md) - Criterion 完整教程
 
 ### 性能分析
 
@@ -272,7 +272,7 @@ examples/
 ## 🎯 下一步
 
 1. **新手**: 从 [速查表](./CRITERION_CHEATSHEET.md) 开始
-2. **学习**: 阅读 [完整教程](./CRITERION_TUTORIAL.md)
+2. **学习**: 阅读 [完整教程](CRITERION_TUTORIAL.md)
 3. **实践**: 运行基准测试，修改代码
 4. **优化**: 应用到自己的项目
 5. **分享**: 贡献你的经验

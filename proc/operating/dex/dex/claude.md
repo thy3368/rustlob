@@ -88,5 +88,20 @@ When extending this crate, preserve the current separation of responsibilities:
 - Keep command submission concerns in `SubmitTradingCommandHandler`.
 - Keep batch processing / execution concerns in `ExecuteTradingBatchHandler`.
 - Avoid collapsing ingestion and execution into one handler unless the crate is explicitly being redesigned.
+- Model each business use case as a clear command or query.
+- Validate use cases primarily by testing the corresponding command or query.
 
 Because the crate is early-stage, prefer documenting only behavior that is visible in code today. Do not describe matching, persistence, consensus, settlement, or Hyperliquid protocol support as implemented unless the code actually exists in this crate.
+
+## 逆向回构参考文档
+
+如果当前任务是在做 Hyperliquid 风格的逆向回构，请优先阅读：
+
+- `docs/hyperliquid_reverse_usecases.md`：按用例域拆分的交易/行情分析
+- `docs/hyperliquid_file_design.md`：建议的文件级演进结构
+
+使用方式：
+- 想理解“应该支持哪些业务动作”时，先看用例分析文档
+- 想决定“新代码应该落在哪些模块”时，先看文件级设计文档
+
+注意：这些文档描述的是当前 crate 的目标演进方向，不代表这些能力已经在代码中实现。

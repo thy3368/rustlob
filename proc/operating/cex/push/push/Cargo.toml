@@ -10,16 +10,16 @@ axum = { version = "0.8.8", features = ["ws", "macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
-immutable_derive = { path = "../../../../lib/common/immutable_derive" }
-base_types = { path = "../../../../lib/common/base_types" }
+immutable_derive = { path = "../../../../../lib/common/immutable_derive" }
+base_types = { path = "../../../../../lib/common/base_types" }
 chrono = "0.4.43"
 # Database repository
-db_repo = { path = "../../../../lib/common/db_repo" }
-rust_queue = { path = "../../../../lib/common/rust_queue" }
+db_repo = { path = "../../../../../lib/common/db_repo" }
+rust_queue = { path = "../../../../../lib/common/rust_queue" }
 serde_json = "1.0.149"
 rand = "0.9.2"
-entity_derive = { path = "../../../../lib/common/entity_derive" }
-diff = { path = "../../../../lib/common/diff" }
+entity_derive = { path = "../../../../../lib/common/entity_derive" }
+diff = { path = "../../../../../lib/common/diff" }
 crossbeam-channel = "0.5.15"
 parking_lot = "0.12.5"
 prefetch = "0.2.0"
