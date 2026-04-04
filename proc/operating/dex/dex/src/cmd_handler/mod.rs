@@ -11,9 +11,10 @@ pub use submit_trading_command_handler::{
     SubmitTradingCommandState,
 };
 pub use trading_command::{
-    ExchangeCommand, ExchangeCommandEnvelope, OptionAmendOrderCmd, OptionCancelOrderCmd,
-    OptionCommand, OptionKind, OptionPlaceOrderCmd, OptionSide, OrderSide,
-    PerpAmendOrderCmd, PerpCancelOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide,
-    PlaceOrderCmd, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand, SpotPlaceOrderCmd,
-    SpotSide, TradingCommand, TreasuryCommand,
+    DepositCmd, ExchangeCommand, ExchangeCommandEnvelope, LiquidatePositionCmd,
+    OptionAmendOrderCmd, OptionCancelOrderCmd, OptionCommand, OptionKind,
+    OptionPlaceOrderCmd, OptionSide, OrderSide, PerpAmendOrderCmd, PerpCancelOrderCmd,
+    PerpCommand, PerpPlaceOrderCmd, PerpSide, PlaceOrderCmd, SettleFundingCmd,
+    SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand, SpotPlaceOrderCmd, SpotSide,
+    TradingCommand, TransferCmd, TreasuryCommand, WithdrawCmd,
 };

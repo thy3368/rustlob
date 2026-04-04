@@ -97,6 +97,9 @@ impl CmdHandlerForUpdate<
                     super::trading_command::TradingCommand::Perp(PerpCommand::AmendOrder(_)) => {
                         writes.amend_order_commands += 1
                     }
+                    super::trading_command::TradingCommand::Perp(
+                        PerpCommand::SettleFunding(_) | PerpCommand::LiquidatePosition(_),
+                    ) => {}
                     super::trading_command::TradingCommand::Option(OptionCommand::PlaceOrder(_)) => {
                         writes.place_order_commands += 1
                     }

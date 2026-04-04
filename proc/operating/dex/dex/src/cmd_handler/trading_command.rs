@@ -112,6 +112,45 @@ pub struct OptionAmendOrderCmd {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleFundingCmd {
+    pub trader_id: u64,
+    pub market: String,
+    pub funding_index: u64,
+    pub amount_delta: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DepositCmd {
+    pub trader_id: u64,
+    pub asset: String,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WithdrawCmd {
+    pub trader_id: u64,
+    pub asset: String,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransferCmd {
+    pub trader_id: u64,
+    pub asset: String,
+    pub amount: u64,
+    pub from_account: String,
+    pub to_account: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiquidatePositionCmd {
+    pub liquidator_trader_id: u64,
+    pub liquidated_trader_id: u64,
+    pub market: String,
+    pub quantity: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelOrderCmd {
     pub trader_id: u64,
     pub order_id: u64,
@@ -137,6 +176,8 @@ pub enum PerpCommand {
     PlaceOrder(PerpPlaceOrderCmd),
     CancelOrder(PerpCancelOrderCmd),
     AmendOrder(PerpAmendOrderCmd),
+    SettleFunding(SettleFundingCmd),
+    LiquidatePosition(LiquidatePositionCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,7 +188,11 @@ pub enum OptionCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TreasuryCommand {}
+pub enum TreasuryCommand {
+    Deposit(DepositCmd),
+    Withdraw(WithdrawCmd),
+    Transfer(TransferCmd),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExchangeCommand {
