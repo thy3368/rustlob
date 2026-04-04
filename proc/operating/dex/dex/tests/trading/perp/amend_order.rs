@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    AmendOrderCmd, ExchangeCommand, ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd,
-    PerpSide, SubmitTradingCommandHandler, TradingCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, PerpAmendOrderCmd, PerpCommand,
+    PerpPlaceOrderCmd, PerpSide, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -36,12 +36,14 @@ fn perp_amend_order_command_can_enter_pending_queue() {
         trader_id: 7,
         nonce: 2,
         timestamp_ns: 20_001,
-        command: ExchangeCommand::TradingCommand(TradingCommand::AmendOrder(AmendOrderCmd {
-            trader_id: 7,
-            order_id: 200,
-            new_price: Some(100_900),
-            new_quantity: Some(4),
-        })),
+        command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
+            PerpCommand::AmendOrder(PerpAmendOrderCmd {
+                trader_id: 7,
+                order_id: 200,
+                new_price: Some(100_900),
+                new_quantity: Some(4),
+            }),
+        )),
     };
 
     let result = handler.cmd_handle(cmd, |writes, _| writes.clone()).unwrap();

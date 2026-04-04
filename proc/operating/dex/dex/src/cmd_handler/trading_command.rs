@@ -47,6 +47,20 @@ pub struct SpotPlaceOrderCmd {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotCancelOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotAmendOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+    pub new_price: Option<u64>,
+    pub new_quantity: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpPlaceOrderCmd {
     pub trader_id: u64,
     pub market: String,
@@ -55,6 +69,20 @@ pub struct PerpPlaceOrderCmd {
     pub quantity: u64,
     pub leverage: u32,
     pub reduce_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PerpCancelOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PerpAmendOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+    pub new_price: Option<u64>,
+    pub new_quantity: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +95,20 @@ pub struct OptionPlaceOrderCmd {
     pub side: OptionSide,
     pub premium: u64,
     pub quantity: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptionCancelOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptionAmendOrderCmd {
+    pub trader_id: u64,
+    pub order_id: u64,
+    pub new_price: Option<u64>,
+    pub new_quantity: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,16 +128,22 @@ pub struct AmendOrderCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotCommand {
     PlaceOrder(SpotPlaceOrderCmd),
+    CancelOrder(SpotCancelOrderCmd),
+    AmendOrder(SpotAmendOrderCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PerpCommand {
     PlaceOrder(PerpPlaceOrderCmd),
+    CancelOrder(PerpCancelOrderCmd),
+    AmendOrder(PerpAmendOrderCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OptionCommand {
     PlaceOrder(OptionPlaceOrderCmd),
+    CancelOrder(OptionCancelOrderCmd),
+    AmendOrder(OptionAmendOrderCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,8 +161,6 @@ pub enum TradingCommand {
     Perp(PerpCommand),
     Option(OptionCommand),
     PlaceOrder(PlaceOrderCmd),
-    CancelOrder(CancelOrderCmd),
-    AmendOrder(AmendOrderCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

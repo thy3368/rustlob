@@ -1,6 +1,6 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    CancelOrderCmd, ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, OptionKind,
+    ExchangeCommand, ExchangeCommandEnvelope, OptionCancelOrderCmd, OptionCommand, OptionKind,
     OptionPlaceOrderCmd, OptionSide, SubmitTradingCommandHandler, TradingCommand,
 };
 
@@ -37,10 +37,12 @@ fn option_cancel_order_command_can_enter_pending_queue() {
         trader_id: 99,
         nonce: 2,
         timestamp_ns: 30_001,
-        command: ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(CancelOrderCmd {
-            trader_id: 99,
-            order_id: 300,
-        })),
+        command: ExchangeCommand::TradingCommand(TradingCommand::Option(
+            OptionCommand::CancelOrder(OptionCancelOrderCmd {
+                trader_id: 99,
+                order_id: 300,
+            }),
+        )),
     };
 
     let result = handler.cmd_handle(cmd, |writes, _| writes.clone()).unwrap();

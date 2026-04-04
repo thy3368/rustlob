@@ -158,8 +158,8 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::cmd_handler::{
-        AmendOrderCmd, CancelOrderCmd, ExchangeCommand, OrderSide, PlaceOrderCmd,
-        TradingCommand,
+        ExchangeCommand, OrderSide, PerpAmendOrderCmd, PerpCommand, PlaceOrderCmd,
+        SpotCancelOrderCmd, SpotCommand, TradingCommand,
     };
 
     fn place_order_envelope(command_id: u64) -> ExchangeCommandEnvelope {
@@ -206,11 +206,11 @@ mod tests {
                     trader_id: 1,
                     nonce: 2,
                     timestamp_ns: 1_002,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(
-                        CancelOrderCmd {
+                    command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+                        SpotCommand::CancelOrder(SpotCancelOrderCmd {
                             trader_id: 1,
                             order_id: 42,
-                        },
+                        }),
                     )),
                 },
                 |writes, _| writes.clone(),
@@ -223,13 +223,13 @@ mod tests {
                     trader_id: 1,
                     nonce: 3,
                     timestamp_ns: 1_003,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::AmendOrder(
-                        AmendOrderCmd {
+                    command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
+                        PerpCommand::AmendOrder(PerpAmendOrderCmd {
                             trader_id: 1,
                             order_id: 42,
                             new_price: Some(101_000),
                             new_quantity: Some(3),
-                        },
+                        }),
                     )),
                 },
                 |writes, _| writes.clone(),
@@ -243,10 +243,11 @@ mod tests {
         assert!(matches!(
             batch[0].command,
             ExchangeCommand::TradingCommand(TradingCommand::PlaceOrder(_))
+                | ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(_)))
         ));
         assert!(matches!(
             batch[1].command,
-            ExchangeCommand::TradingCommand(TradingCommand::CancelOrder(_))
+            ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::CancelOrder(_)))
         ));
     }
 
