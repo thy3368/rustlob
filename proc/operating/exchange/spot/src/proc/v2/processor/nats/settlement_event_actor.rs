@@ -9,7 +9,7 @@ pub type NatsSettlementEventActor =
     NatsEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler>;
 
 impl NatsSettlementEventActor {
-    pub fn new(
+    pub fn from_parts(
         config: NatsProcessorConfig,
         subject: String,
         handler: std::sync::Arc<NewTradeEventHandler>,

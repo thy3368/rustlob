@@ -9,7 +9,7 @@ pub type NatsMatchingEventActor =
     NatsEventActor<DomainEvent<SpotOrder>, NewOrderPlaceEventHandler>;
 
 impl NatsMatchingEventActor {
-    pub fn new(
+    pub fn from_parts(
         config: NatsProcessorConfig,
         subject: String,
         handler: std::sync::Arc<NewOrderPlaceEventHandler>,

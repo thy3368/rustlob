@@ -57,7 +57,7 @@ impl NatsSubscription {
     ) -> Result<async_nats::Message, SpotCmdErrorAny> {
         runtime
             .block_on(self.subscriber.next())
-            .ok_or_else(|| NatsEventActor::<E, H>::into_closed_subscription_error(subject))
+            .ok_or_else(|| NatsEventActor::<(), ()>::into_closed_subscription_error(subject))
     }
 }
 
@@ -115,10 +115,10 @@ impl<E, H> NatsEventActor<E, H> {
     }
 }
 
-impl<E, H, R> EventActor<E, SpotCmdErrorAny> for NatsEventActor<E, H>
+impl<E, H> EventActor<E, SpotCmdErrorAny> for NatsEventActor<E, H>
 where
     E: Send + Sync + 'static,
-    H: EventHandler<E, R, SpotCmdErrorAny> + Send + Sync + 'static,
+    H: EventHandler<E, (), SpotCmdErrorAny> + Send + Sync + 'static,
 {
     fn recv_event(&mut self) -> Result<Option<E>, SpotCmdErrorAny> {
         let message = self.subscription.recv(&self.runtime, &self.subject)?;
@@ -143,5 +143,39 @@ where
 
         self.handler.event_handle(event)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use base_types::handler::event_handler::EventHandler;
+
+    use super::*;
+
+    struct NoopHandler;
+
+    impl EventHandler<(), (), SpotCmdErrorAny> for NoopHandler {
+        fn event_handle(&self, _event: ()) -> Result<(), SpotCmdErrorAny> {
+            Ok(())
+        }
+    }
+
+    fn deserialize_unit(_bytes: &[u8]) -> Result<(), SpotCmdErrorAny> {
+        Ok(())
+    }
+
+    #[test]
+    fn nats_event_actor_type_checks() {
+        let _ctor: fn(
+            NatsProcessorConfig,
+            String,
+            Arc<NoopHandler>,
+            &'static str,
+            fn(&[u8]) -> Result<(), SpotCmdErrorAny>,
+        ) -> Result<NatsEventActor<(), NoopHandler>, String> = NatsEventActor::new;
+
+        let _deserialize = deserialize_unit as fn(&[u8]) -> Result<(), SpotCmdErrorAny>;
     }
 }

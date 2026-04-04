@@ -33,10 +33,10 @@ impl<E, H> InprocEventActor<E, H> {
     }
 }
 
-impl<E, H, R> EventActor<E, SpotCmdErrorAny> for InprocEventActor<E, H>
+impl<E, H> EventActor<E, SpotCmdErrorAny> for InprocEventActor<E, H>
 where
     E: Send + Sync + 'static,
-    H: EventHandler<E, R, SpotCmdErrorAny> + Send + Sync + 'static,
+    H: EventHandler<E, (), SpotCmdErrorAny> + Send + Sync + 'static,
 {
     fn recv_event(&mut self) -> Result<Option<E>, SpotCmdErrorAny> {
         let event = self.receiver.recv().map_err(|e| {

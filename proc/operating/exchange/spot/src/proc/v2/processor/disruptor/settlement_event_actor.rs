@@ -9,10 +9,10 @@ pub type DisruptorSettlementEventActor =
     InprocEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler>;
 
 impl DisruptorSettlementEventActor {
-    pub fn new(
+    pub fn from_parts(
         receiver: Receiver<DomainEvent<SpotTrade>>,
         handler: std::sync::Arc<NewTradeEventHandler>,
     ) -> Self {
-        Self::new(receiver, handler, "disruptor-settlement-event-actor")
+        InprocEventActor::new(receiver, handler, "disruptor-settlement-event-actor")
     }
 }

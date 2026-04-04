@@ -9,10 +9,10 @@ pub type DisruptorMatchingEventActor =
     InprocEventActor<DomainEvent<SpotOrder>, NewOrderPlaceEventHandler>;
 
 impl DisruptorMatchingEventActor {
-    pub fn new(
+    pub fn from_parts(
         receiver: Receiver<DomainEvent<SpotOrder>>,
         handler: std::sync::Arc<NewOrderPlaceEventHandler>,
     ) -> Self {
-        Self::new(receiver, handler, "disruptor-matching-event-actor")
+        InprocEventActor::new(receiver, handler, "disruptor-matching-event-actor")
     }
 }
