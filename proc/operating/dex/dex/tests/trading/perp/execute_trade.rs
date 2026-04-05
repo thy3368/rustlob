@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExecuteTradingBatchHandler, ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradeCmd,
-    PerpCommand, PerpPlaceOrderCmd, PerpSide, TradeExecutionLog, TradeExecutionResult,
+    ExecuteTradeCmd, ExecuteTradingBatchHandler, ExecutedTrade, ExchangeCommand,
+    ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd, PerpSide, TradeExecutionLog,
     TradingCommand,
 };
 
@@ -55,16 +55,16 @@ fn execute_trade_command_returns_single_trade_execution() {
     assert_eq!(writes.summary.orders_created, 0);
     assert_eq!(writes.summary.trades_executed, 1);
     assert_eq!(writes.trades.len(), 1);
-    assert_eq!(
-        writes.trades[0],
-        TradeExecutionResult {
-            market: "BTC-PERP".into(),
-            maker_order_id: 1,
-            taker_order_id: 2,
-            price: 100_000,
-            quantity: 2,
+    match writes.trades[0] {
+        ExecutedTrade::SpotTrade(_) => panic!("expected perp trade result"),
+        ExecutedTrade::PrepTrade(trade) => {
+            assert_eq!(trade.market, "BTC-PERP");
+            assert_eq!(trade.maker_order_id, 1);
+            assert_eq!(trade.taker_order_id, 2);
+            assert_eq!(trade.price, 100_000);
+            assert_eq!(trade.quantity, 2);
         }
-    );
+    }
     assert_eq!(
         changelogs,
         vec![

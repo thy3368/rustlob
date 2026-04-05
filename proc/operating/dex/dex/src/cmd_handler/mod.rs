@@ -1,11 +1,11 @@
 pub mod execute_trading_batch_handler;
+pub(crate) mod execute_trading_batch;
 pub mod submit_trading_command_handler;
 pub mod trading_command;
 
 pub use execute_trading_batch_handler::{
     BalanceDelta, BatchExecutionSummary, ExecuteTradingBatchHandler, ExecuteTradingBatchState,
-    ExecutedBatchBlock, ExecutedSpotOrder, OrderStatus, TradeExecutionLog,
-    TradeExecutionResult,
+    ExecutedBatchBlock, ExecutedOrder, ExecutedTrade, OrderStatus, TradeExecutionLog,
 };
 pub use submit_trading_command_handler::{
     SubmitCommandResult, SubmitTradingCommandHandler, SubmitTradingCommandLog,

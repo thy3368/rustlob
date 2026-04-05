@@ -6,22 +6,18 @@ use std::{
     },
 };
 
+use base_types::{OrderId, OrderSide, Price, Quantity, TraderId, TradingPair};
+use base_types::exchange::prep::perp_types::PrepTrade;
+use base_types::exchange::prep::prep_order::PrepOrder;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
 use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
-
+use super::execute_trading_batch::context::ExecuteTradingBatchContext;
 use super::trading_command::{
-    ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, PerpCommand, SpotCommand, SpotSide,
+    ExchangeCommand, ExchangeCommandEnvelope, SpotSide, TradingCommand,
 };
 
 type ExecuteTradingBatchError = String;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct TradeExecutionResult {
-    pub market: String,
-    pub maker_order_id: u64,
-    pub taker_order_id: u64,
-    pub price: u64,
-    pub quantity: u64,
-}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BatchExecutionSummary {
@@ -41,16 +37,18 @@ pub enum OrderStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutedSpotOrder {
-    pub order_id: u64,
-    pub trader_id: u64,
-    pub market: String,
-    pub side: SpotSide,
-    pub price: u64,
-    pub original_quantity: u64,
-    pub remaining_quantity: u64,
-    pub status: OrderStatus,
+pub enum ExecutedOrder {
+    SpotOrder(SpotOrder),
+    PrepOrder(PrepOrder),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutedTrade {
+    SpotTrade(SpotTrade),
+    PrepTrade(PrepTrade),
+}
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BalanceDelta {
@@ -62,8 +60,8 @@ pub struct BalanceDelta {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ExecutedBatchBlock {
     pub summary: BatchExecutionSummary,
-    pub orders: Vec<ExecutedSpotOrder>,
-    pub trades: Vec<TradeExecutionResult>,
+    pub orders: Vec<ExecutedOrder>,
+    pub trades: Vec<ExecutedTrade>,
     pub balance_deltas: Vec<BalanceDelta>,
 }
 
@@ -95,7 +93,7 @@ struct RestingSpotOrder {
     remaining_quantity: u64,
 }
 
-type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;
+pub(crate) type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;
 
 #[derive(Debug, Default)]
 pub struct ExecuteTradingBatchHandler {
@@ -114,8 +112,186 @@ impl ExecuteTradingBatchHandler {
     fn next_order_id(&self) -> u64 {
         self.next_order_id.fetch_add(1, Ordering::Relaxed)
     }
+
+    fn split_spot_market(market: &str) -> Result<TradingPair, ExecuteTradingBatchError> {
+        TradingPair::from_symbol_str(market)
+            .ok_or_else(|| format!("invalid spot market: {market}"))
+    }
+
+    fn match_spot_order(
+        spot_order_book: &mut SpotOrderBook,
+        order: &mut RestingSpotOrder,
+        writes: &mut ExecutedBatchBlock,
+        changelogs: &mut Vec<TradeExecutionLog>,
+    ) -> Result<(), ExecuteTradingBatchError> {
+        let Some(resting_orders) = spot_order_book.get_mut(&order.market) else {
+            return Ok(());
+        };
+
+        let trading_pair = Self::split_spot_market(&order.market)?;
+        let opposite_side = match order.side {
+            SpotSide::Buy => SpotSide::Sell,
+            SpotSide::Sell => SpotSide::Buy,
+        };
+
+        let mut resting_index = 0;
+        while order.remaining_quantity > 0 && resting_index < resting_orders.len() {
+            if resting_orders[resting_index].side != opposite_side {
+                resting_index += 1;
+                continue;
+            }
+
+            let crosses = match order.side {
+                SpotSide::Buy => order.price >= resting_orders[resting_index].price,
+                SpotSide::Sell => order.price <= resting_orders[resting_index].price,
+            };
+            if !crosses {
+                resting_index += 1;
+                continue;
+            }
+
+            let maker = &mut resting_orders[resting_index];
+            let trade_quantity = order.remaining_quantity.min(maker.remaining_quantity);
+            let trade_price = maker.price;
+
+            order.remaining_quantity -= trade_quantity;
+            maker.remaining_quantity -= trade_quantity;
+
+            writes.summary.trades_executed += 1;
+            writes.trades.push(ExecutedTrade::SpotTrade(SpotTrade::new(
+                self.next_order_id(),
+                trading_pair,
+                OrderId::from(order.order_id),
+                OrderId::from(maker.order_id),
+                base_types::Timestamp::now_as_nanos(),
+                Price::from_raw(trade_price),
+                Quantity::from_raw(trade_quantity),
+                match order.side {
+                    SpotSide::Buy => OrderSide::Buy,
+                    SpotSide::Sell => OrderSide::Sell,
+                },
+                Quantity::default(),
+                Quantity::default(),
+                trading_pair.quote_asset(),
+                0,
+                0,
+            )));
+            changelogs.push(TradeExecutionLog::TradeExecuted {
+                market: order.market.clone(),
+                maker_order_id: maker.order_id,
+                taker_order_id: order.order_id,
+                price: trade_price,
+                quantity: trade_quantity,
+            });
+
+            let quote_delta = (trade_price * trade_quantity) as i64;
+            match order.side {
+                SpotSide::Buy => {
+                    writes.balance_deltas.extend([
+                        BalanceDelta {
+                            trader_id: order.trader_id,
+                            asset: trading_pair.base_asset().as_str().to_string(),
+                            delta: trade_quantity as i64,
+                        },
+                        BalanceDelta {
+                            trader_id: order.trader_id,
+                            asset: trading_pair.quote_asset().as_str().to_string(),
+                            delta: -quote_delta,
+                        },
+                        BalanceDelta {
+                            trader_id: maker.trader_id,
+                            asset: trading_pair.base_asset().as_str().to_string(),
+                            delta: -(trade_quantity as i64),
+                        },
+                        BalanceDelta {
+                            trader_id: maker.trader_id,
+                            asset: trading_pair.quote_asset().as_str().to_string(),
+                            delta: quote_delta,
+                        },
+                    ]);
+                }
+                SpotSide::Sell => {
+                    writes.balance_deltas.extend([
+                        BalanceDelta {
+                            trader_id: order.trader_id,
+                            asset: trading_pair.base_asset().as_str().to_string(),
+                            delta: -(trade_quantity as i64),
+                        },
+                        BalanceDelta {
+                            trader_id: order.trader_id,
+                            asset: trading_pair.quote_asset().as_str().to_string(),
+                            delta: quote_delta,
+                        },
+                        BalanceDelta {
+                            trader_id: maker.trader_id,
+                            asset: trading_pair.base_asset().as_str().to_string(),
+                            delta: trade_quantity as i64,
+                        },
+                        BalanceDelta {
+                            trader_id: maker.trader_id,
+                            asset: trading_pair.quote_asset().as_str().to_string(),
+                            delta: -quote_delta,
+                        },
+                    ]);
+                }
+            }
+
+            if maker.remaining_quantity == 0 {
+                resting_orders.remove(resting_index);
+            } else {
+                resting_index += 1;
+            }
+        }
+
+        Ok(())
+    }
+    fn handle_envelope(
+        &self,
+        envelope: &ExchangeCommandEnvelope,
+        ctx: &mut ExecuteTradingBatchContext<'_>,
+    ) -> Result<(), ExecuteTradingBatchError> {
+        match &envelope.command {
+            ExchangeCommand::TradingCommand(command) => {
+                self.handle_trading_command(envelope, command, ctx)
+            }
+            ExchangeCommand::TreasuryCommand(command) => {
+                super::execute_trading_batch::treasury::handle_treasury_command(
+                    self,
+                    envelope,
+                    command,
+                    ctx,
+                )
+            }
+        }
+    }
+
+    fn handle_trading_command(
+        &self,
+        envelope: &ExchangeCommandEnvelope,
+        command: &TradingCommand,
+        ctx: &mut ExecuteTradingBatchContext<'_>,
+    ) -> Result<(), ExecuteTradingBatchError> {
+        match command {
+            TradingCommand::Spot(command) => {
+                super::execute_trading_batch::spot::handle_spot_command(self, envelope, command, ctx)
+            }
+            TradingCommand::Perp(command) => {
+                super::execute_trading_batch::perp::handle_perp_command(self, envelope, command, ctx)
+            }
+            TradingCommand::Option(command) => {
+                super::execute_trading_batch::option::handle_option_command(
+                    self,
+                    envelope,
+                    command,
+                    ctx,
+                )
+            }
+        }
+    }
 }
 
+
+//todo CmdHandlerForUpdate里对 ExchangeCommandEnvelope里面的子command 非常多，怎么做个每个子command的处理 提取到一个单独文件中方便维护？
 impl CmdHandlerForUpdate<
     Vec<ExchangeCommandEnvelope>,
     ExecuteTradingBatchState,
@@ -165,82 +341,14 @@ impl CmdHandlerForUpdate<
         let mut spot_order_book = self.spot_order_book.lock().unwrap();
 
         for envelope in cmd {
-            match &envelope.command {
-                ExchangeCommand::TradingCommand(trading_command) => match trading_command {
-                    super::trading_command::TradingCommand::Spot(SpotCommand::PlaceOrder(place_cmd)) => {
-                        let order_id = self.next_order_id();
-                        let order = RestingSpotOrder {
-                            order_id,
-                            trader_id: place_cmd.trader_id,
-                            market: place_cmd.market.clone(),
-                            side: place_cmd.side.clone(),
-                            price: place_cmd.price,
-                            original_quantity: place_cmd.quantity,
-                            remaining_quantity: place_cmd.quantity,
-                        };
-
-                        writes.summary.accepted_commands += 1;
-                        writes.summary.orders_created += 1;
-                        writes.orders.push(ExecutedSpotOrder {
-                            order_id,
-                            trader_id: order.trader_id,
-                            market: order.market.clone(),
-                            side: order.side.clone(),
-                            price: order.price,
-                            original_quantity: order.original_quantity,
-                            remaining_quantity: order.remaining_quantity,
-                            status: OrderStatus::Open,
-                        });
-
-                        spot_order_book
-                            .entry(order.market.clone())
-                            .or_default()
-                            .push(order);
-                    }
-                    super::trading_command::TradingCommand::Spot(
-                        SpotCommand::CancelOrder(_) | SpotCommand::AmendOrder(_),
-                    ) => {
-                        writes.summary.accepted_commands += 1;
-                    }
-                    super::trading_command::TradingCommand::Perp(
-                        PerpCommand::PlaceOrder(_)
-                        | PerpCommand::CancelOrder(_)
-                        | PerpCommand::AmendOrder(_)
-                        | PerpCommand::SettleFunding(_)
-                        | PerpCommand::LiquidatePosition(_),
-                    ) => {
-                        writes.summary.accepted_commands += 1;
-                    }
-                    super::trading_command::TradingCommand::Perp(PerpCommand::ExecuteTrade(cmd)) => {
-                        writes.summary.accepted_commands += 1;
-                        writes.summary.trades_executed += 1;
-                        writes.trades.push(TradeExecutionResult {
-                            market: cmd.market.clone(),
-                            maker_order_id: cmd.maker_order_id,
-                            taker_order_id: cmd.taker_order_id,
-                            price: cmd.price,
-                            quantity: cmd.quantity,
-                        });
-                        changelogs.push(TradeExecutionLog::TradeExecuted {
-                            market: cmd.market.clone(),
-                            maker_order_id: cmd.maker_order_id,
-                            taker_order_id: cmd.taker_order_id,
-                            price: cmd.price,
-                            quantity: cmd.quantity,
-                        });
-                    }
-                    super::trading_command::TradingCommand::Option(
-                        OptionCommand::PlaceOrder(_)
-                        | OptionCommand::CancelOrder(_)
-                        | OptionCommand::AmendOrder(_),
-                    ) => {
-                        writes.summary.accepted_commands += 1;
-                    }
+            self.handle_envelope(
+                envelope,
+                &mut ExecuteTradingBatchContext {
+                    writes: &mut writes,
+                    changelogs: &mut changelogs,
+                    spot_order_book: &mut spot_order_book,
                 },
-                ExchangeCommand::TreasuryCommand(_) => {
-                    writes.summary.accepted_commands += 1;
-                }
-            }
+            )?;
         }
 
         writes.summary.balance_updates = writes.balance_deltas.len();

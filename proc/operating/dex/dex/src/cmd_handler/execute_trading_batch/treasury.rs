@@ -1,0 +1,14 @@
+use crate::cmd_handler::{
+    execute_trading_batch::context::ExecuteTradingBatchContext,
+    execute_trading_batch_handler::{ExecuteTradingBatchError, ExecuteTradingBatchHandler},
+    ExchangeCommandEnvelope, TreasuryCommand,
+};
+
+pub fn handle_treasury_command(
+    _handler: &ExecuteTradingBatchHandler,
+    _envelope: &ExchangeCommandEnvelope,
+    _command: &TreasuryCommand,
+    _ctx: &mut ExecuteTradingBatchContext<'_>,
+) -> Result<(), ExecuteTradingBatchError> {
+    todo!()
+}
