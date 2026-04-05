@@ -1,4 +1,4 @@
-use base_types::handler::handler_update::CmdHandlerForUpdate;
+use base_types::handler::handler_update::{ApplyCommandChanges, CmdHandlerForUpdate};
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
     ExecutedTrade, OrderStatus, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
@@ -220,4 +220,21 @@ fn spot_cancel_and_amend_commands_are_still_accepted_after_extraction() {
     assert_eq!(result.summary.accepted_commands, 2);
     assert_eq!(result.summary.orders_created, 0);
     assert_eq!(result.summary.trades_executed, 0);
+}
+
+#[test]
+fn execute_trading_batch_handler_still_implements_apply_command_changes() {
+    fn assert_impl<T>()
+    where
+        T: ApplyCommandChanges<
+            Vec<ExchangeCommandEnvelope>,
+            dex::cmd_handler::ExecuteTradingBatchState,
+            dex::cmd_handler::ExecutedBatchBlock,
+            dex::cmd_handler::TradeExecutionLog,
+            String,
+        >,
+    {
+    }
+
+    assert_impl::<ExecuteTradingBatchHandler>();
 }

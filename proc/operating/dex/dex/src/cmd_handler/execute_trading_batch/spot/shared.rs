@@ -1,110 +1,25 @@
-use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
-use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
+use base_types::base_types::TraderId;
+use base_types::{Price, Quantity, TradingPair};
+use base_types::exchange::spot::spot_types::SpotTrade;
+use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
 
-use crate::cmd_handler::{
-    execute_trading_batch::context::ExecuteTradingBatchContext,
-    execute_trading_batch_handler::{
-        BalanceDelta, ExecuteTradingBatchError, ExecuteTradingBatchHandler, ExecutedOrder,
-        ExecutedTrade, RestingSpotOrder, TradeExecutionLog,
-    },
-    ExchangeCommandEnvelope, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
-    SpotPlaceOrderCmd, SpotSide,
+use crate::cmd_handler::execute_trading_batch::{
+    ExecuteTradingBatchError, RestingSpotOrder, SpotOrderBook,
 };
+use crate::cmd_handler::execute_trading_batch_handler::{
+    BalanceDelta, ExecuteTradingBatchHandler, ExecutedBatchBlock, ExecutedTrade, TradeExecutionLog,
+};
+use crate::cmd_handler::SpotSide;
 
-pub fn handle_spot_command(
-    handler: &ExecuteTradingBatchHandler,
-    envelope: &ExchangeCommandEnvelope,
-    command: &SpotCommand,
-    ctx: &mut ExecuteTradingBatchContext<'_>,
-) -> Result<(), ExecuteTradingBatchError> {
-    match command {
-        //todo 每个 子command  实现 自己的 ApplyCommandChanges，放在单独的文件
-        SpotCommand::PlaceOrder(command) => handle_place_order(handler, envelope, command, ctx),
-        SpotCommand::CancelOrder(command) => handle_cancel_order(command, ctx),
-        SpotCommand::AmendOrder(command) => handle_amend_order(command, ctx),
-    }
-}
-
-fn handle_place_order(
-    handler: &ExecuteTradingBatchHandler,
-    envelope: &ExchangeCommandEnvelope,
-    command: &SpotPlaceOrderCmd,
-    ctx: &mut ExecuteTradingBatchContext<'_>,
-) -> Result<(), ExecuteTradingBatchError> {
-    let trading_pair = split_spot_market(&command.market)?;
-    let mut resting_order = RestingSpotOrder {
-        order_id: envelope.command_id,
-        trader_id: envelope.trader_id,
-        market: command.market.clone(),
-        side: command.side.clone(),
-        price: command.price,
-        original_quantity: command.quantity,
-        remaining_quantity: command.quantity,
-    };
-
-    match_spot_order(handler, ctx.spot_order_book, &mut resting_order, ctx.writes, ctx.changelogs)?;
-
-    let side = match command.side {
-        SpotSide::Buy => OrderSide::Buy,
-        SpotSide::Sell => OrderSide::Sell,
-    };
-
-    let filled_quantity = resting_order.original_quantity - resting_order.remaining_quantity;
-    let mut spot_order = SpotOrder::create_order(
-        resting_order.order_id,
-        envelope.trader_id,
-        trading_pair,
-        side,
-        Price::from_raw(command.price),
-        Quantity::from_raw(command.quantity),
-        TimeInForce::GTC,
-        None,
-        Quantity::default(),
-    );
-    spot_order.state.filled_base_qty = Quantity::from_raw(filled_quantity);
-    if resting_order.remaining_quantity == 0 {
-        spot_order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Filled;
-    }
-
-    ctx.writes.summary.accepted_commands += 1;
-    ctx.writes.summary.orders_created += 1;
-    ctx.writes.orders.push(ExecutedOrder::SpotOrder(spot_order));
-
-    if resting_order.remaining_quantity > 0 {
-        ctx.spot_order_book
-            .entry(command.market.clone())
-            .or_default()
-            .push(resting_order);
-    }
-
-    Ok(())
-}
-
-fn handle_cancel_order(
-    _command: &SpotCancelOrderCmd,
-    ctx: &mut ExecuteTradingBatchContext<'_>,
-) -> Result<(), ExecuteTradingBatchError> {
-    ctx.writes.summary.accepted_commands += 1;
-    Ok(())
-}
-
-fn handle_amend_order(
-    _command: &SpotAmendOrderCmd,
-    ctx: &mut ExecuteTradingBatchContext<'_>,
-) -> Result<(), ExecuteTradingBatchError> {
-    ctx.writes.summary.accepted_commands += 1;
-    Ok(())
-}
-
-fn split_spot_market(market: &str) -> Result<TradingPair, ExecuteTradingBatchError> {
+pub(super) fn split_spot_market(market: &str) -> Result<TradingPair, ExecuteTradingBatchError> {
     TradingPair::from_symbol_str(market).ok_or_else(|| format!("invalid spot market: {market}"))
 }
 
-fn match_spot_order(
+pub(super) fn match_spot_order(
     handler: &ExecuteTradingBatchHandler,
-    spot_order_book: &mut crate::cmd_handler::SpotOrderBook,
+    spot_order_book: &mut SpotOrderBook,
     order: &mut RestingSpotOrder,
-    writes: &mut crate::cmd_handler::ExecutedBatchBlock,
+    writes: &mut ExecutedBatchBlock,
     changelogs: &mut Vec<TradeExecutionLog>,
 ) -> Result<(), ExecuteTradingBatchError> {
     let Some(resting_orders) = spot_order_book.get_mut(&order.market) else {
@@ -147,11 +62,11 @@ fn match_spot_order(
             order.order_id,
             maker.order_id,
             base_types::Timestamp::now_as_nanos(),
-            Price::from_raw(trade_price),
-            Quantity::from_raw(trade_quantity),
+            Price::from_raw(trade_price as i64),
+            Quantity::from_raw(trade_quantity as i64),
             match order.side {
-                SpotSide::Buy => OrderSide::Buy,
-                SpotSide::Sell => OrderSide::Sell,
+                SpotSide::Buy => base_types::OrderSide::Buy,
+                SpotSide::Sell => base_types::OrderSide::Sell,
             },
             Quantity::default(),
             Quantity::default(),
@@ -227,4 +142,35 @@ fn match_spot_order(
     }
 
     Ok(())
+}
+
+pub(super) fn build_spot_order(
+    envelope: &crate::cmd_handler::ExchangeCommandEnvelope,
+    command: &crate::cmd_handler::SpotPlaceOrderCmd,
+    resting_order: &RestingSpotOrder,
+) -> Result<SpotOrder, ExecuteTradingBatchError> {
+    let trading_pair = split_spot_market(&command.market)?;
+    let side = match command.side {
+        SpotSide::Buy => base_types::OrderSide::Buy,
+        SpotSide::Sell => base_types::OrderSide::Sell,
+    };
+
+    let filled_quantity = resting_order.original_quantity - resting_order.remaining_quantity;
+    let mut spot_order = SpotOrder::create_order(
+        resting_order.order_id,
+        TraderId::new(envelope.trader_id.to_le_bytes()),
+        trading_pair,
+        side,
+        Price::from_raw(command.price as i64),
+        Quantity::from_raw(command.quantity as i64),
+        TimeInForce::GTC,
+        None,
+        Quantity::default(),
+    );
+    spot_order.state.filled_base_qty = Quantity::from_raw(filled_quantity as i64);
+    if resting_order.remaining_quantity == 0 {
+        spot_order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Filled;
+    }
+
+    Ok(spot_order)
 }

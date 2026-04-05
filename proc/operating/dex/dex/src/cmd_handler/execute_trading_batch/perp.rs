@@ -1,6 +1,6 @@
 use crate::cmd_handler::{
-    execute_trading_batch::context::ExecuteTradingBatchContext,
-    execute_trading_batch_handler::{ExecuteTradingBatchError, ExecuteTradingBatchHandler},
+    execute_trading_batch::{context::ExecuteTradingBatchContext, ExecuteTradingBatchError},
+    execute_trading_batch_handler::ExecuteTradingBatchHandler,
     ExchangeCommandEnvelope, PerpCommand,
 };
 

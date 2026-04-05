@@ -13,9 +13,8 @@ use base_types::handler::handler_update::{
     ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
 };
 use super::execute_trading_batch::context::ExecuteTradingBatchContext;
+use super::execute_trading_batch::{ExecuteTradingBatchError, SpotOrderBook};
 use super::trading_command::{ExchangeCommand, ExchangeCommandEnvelope, TradingCommand};
-
-pub(crate) type ExecuteTradingBatchError = String;
 
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -41,7 +40,7 @@ pub enum ExecutedOrder {
     PrepOrder(PrepOrder),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ExecutedTrade {
     SpotTrade(SpotTrade),
     PrepTrade(PrepTrade),
@@ -56,7 +55,7 @@ pub struct BalanceDelta {
     pub delta: i64,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone)]
 pub struct ExecutedBatchBlock {
     pub summary: BatchExecutionSummary,
     pub orders: Vec<ExecutedOrder>,
@@ -81,18 +80,6 @@ pub enum TradeExecutionLog {
     BatchExecuted { batch_size: usize },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RestingSpotOrder {
-    order_id: u64,
-    trader_id: u64,
-    market: String,
-    side: SpotSide,
-    price: u64,
-    original_quantity: u64,
-    remaining_quantity: u64,
-}
-
-pub(crate) type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;
 
 #[derive(Debug, Default)]
 pub struct ExecuteTradingBatchHandler {
@@ -108,7 +95,7 @@ impl ExecuteTradingBatchHandler {
         }
     }
 
-    fn next_order_id(&self) -> u64 {
+    pub(crate) fn next_order_id(&self) -> u64 {
         self.next_order_id.fetch_add(1, Ordering::Relaxed)
     }
     fn handle_envelope(
