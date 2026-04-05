@@ -12,7 +12,9 @@ use crate::cmd_handler::execute_trading_batch_handler::{
 use crate::cmd_handler::SpotSide;
 
 pub(super) fn split_spot_market(market: &str) -> Result<TradingPair, ExecuteTradingBatchError> {
-    TradingPair::from_symbol_str(market).ok_or_else(|| format!("invalid spot market: {market}"))
+    TradingPair::from_symbol_str(market)
+        .or_else(|| TradingPair::from_symbol_str(&market.replace('-', "")))
+        .ok_or_else(|| format!("invalid spot market: {market}"))
 }
 
 pub(super) fn match_spot_order(

@@ -5,7 +5,7 @@ pub mod trading_command;
 
 pub use execute_trading_batch_handler::{
     BalanceDelta, BatchExecutionSummary, ExecuteTradingBatchHandler, ExecuteTradingBatchState,
-    ExecutedBatchBlock, ExecutedOrder, ExecutedTrade, OrderStatus, TradeExecutionLog,
+    ExecutedBatchBlock, ExecutedOrder, ExecutedTrade, TradeExecutionLog,
 };
 pub use submit_trading_command_handler::{
     SubmitCommandResult, SubmitTradingCommandHandler, SubmitTradingCommandLog,

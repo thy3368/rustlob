@@ -16,7 +16,7 @@ fn spot_place_order_command_is_accepted_into_pending_queue() {
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(
             SpotPlaceOrderCmd {
                 trader_id: 42,
-                market: "BTC-USDC".into(),
+                market: "BTC-USDT".into(),
                 side: SpotSide::Buy,
                 price: 100_000,
                 quantity: 2,

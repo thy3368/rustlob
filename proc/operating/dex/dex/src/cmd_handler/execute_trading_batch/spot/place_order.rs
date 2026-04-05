@@ -21,7 +21,7 @@ impl<'a> ApplyCommandChanges<
     fn apply_command_and_collect_changes(
         &self,
         command: &SpotPlaceOrderCmd,
-        mut state: SpotCommandState<'a>,
+        state: SpotCommandState<'a>,
     ) -> Result<SpotCommandChangeSet, ExecuteTradingBatchError> {
         let mut writes = ExecutedBatchBlock {
             summary: crate::cmd_handler::BatchExecutionSummary {

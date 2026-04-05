@@ -1,8 +1,10 @@
+use base_types::base_types::Price;
+use base_types::exchange::spot::spot_types::OrderStatus;
 use base_types::handler::handler_update::{ApplyCommandChanges, CmdHandlerForUpdate};
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
-    ExecutedTrade, OrderStatus, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
-    SpotPlaceOrderCmd, SpotSide, TradingCommand,
+    ExecutedTrade, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand, SpotPlaceOrderCmd,
+    SpotSide, TradingCommand,
 };
 
 fn spot_place_order(
@@ -20,7 +22,7 @@ fn spot_place_order(
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
             SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
                 trader_id,
-                market: "BTC-USDC".into(),
+                market: "BTC-USDT".into(),
                 side,
                 price,
                 quantity,
@@ -95,35 +97,35 @@ fn five_spot_orders_without_counterparty_create_five_open_resting_orders() {
     match &result.orders[0] {
         ExecutedOrder::SpotOrder(order) => {
             assert_eq!(order.state.status, OrderStatus::Pending);
-            assert_eq!(order.unfilled_qty().to_f64(), 1.0);
+            assert_eq!(order.unfilled_qty(), Price::from_raw(1));
         }
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
     match &result.orders[1] {
         ExecutedOrder::SpotOrder(order) => {
             assert_eq!(order.state.status, OrderStatus::Pending);
-            assert_eq!(order.unfilled_qty().to_f64(), 2.0);
+            assert_eq!(order.unfilled_qty(), Price::from_raw(2));
         }
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
     match &result.orders[2] {
         ExecutedOrder::SpotOrder(order) => {
             assert_eq!(order.state.status, OrderStatus::Pending);
-            assert_eq!(order.unfilled_qty().to_f64(), 3.0);
+            assert_eq!(order.unfilled_qty(), Price::from_raw(3));
         }
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
     match &result.orders[3] {
         ExecutedOrder::SpotOrder(order) => {
             assert_eq!(order.state.status, OrderStatus::Pending);
-            assert_eq!(order.unfilled_qty().to_f64(), 4.0);
+            assert_eq!(order.unfilled_qty(), Price::from_raw(4));
         }
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
     match &result.orders[4] {
         ExecutedOrder::SpotOrder(order) => {
             assert_eq!(order.state.status, OrderStatus::Pending);
-            assert_eq!(order.unfilled_qty().to_f64(), 5.0);
+            assert_eq!(order.unfilled_qty(), Price::from_raw(5));
         }
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
@@ -175,30 +177,30 @@ fn five_spot_orders_with_counterparty_each_execute_a_trade() {
         match order {
             ExecutedOrder::SpotOrder(order) => {
                 assert_eq!(order.state.status, OrderStatus::Filled);
-                assert_eq!(order.unfilled_qty().to_f64(), 0.0);
+                assert_eq!(order.unfilled_qty(), Price::from_raw(0));
             }
             ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
         }
     }
 
     match &result.trades[0] {
-        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price.to_f64(), 100_000.0),
+        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price, Price::from_raw(100_000)),
         ExecutedTrade::PrepTrade(_) => panic!("expected spot trade result"),
     }
     match &result.trades[1] {
-        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price.to_f64(), 99_000.0),
+        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price, Price::from_raw(99_000)),
         ExecutedTrade::PrepTrade(_) => panic!("expected spot trade result"),
     }
     match &result.trades[2] {
-        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price.to_f64(), 98_000.0),
+        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price, Price::from_raw(98_000)),
         ExecutedTrade::PrepTrade(_) => panic!("expected spot trade result"),
     }
     match &result.trades[3] {
-        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price.to_f64(), 97_000.0),
+        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price, Price::from_raw(97_000)),
         ExecutedTrade::PrepTrade(_) => panic!("expected spot trade result"),
     }
     match &result.trades[4] {
-        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price.to_f64(), 96_000.0),
+        ExecutedTrade::SpotTrade(trade) => assert_eq!(trade.price, Price::from_raw(96_000)),
         ExecutedTrade::PrepTrade(_) => panic!("expected spot trade result"),
     }
 }

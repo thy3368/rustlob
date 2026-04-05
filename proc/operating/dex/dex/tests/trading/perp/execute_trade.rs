@@ -1,3 +1,4 @@
+use base_types::base_types::Price;
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExecuteTradeCmd, ExecuteTradingBatchHandler, ExecutedTrade, ExchangeCommand,
@@ -55,14 +56,14 @@ fn execute_trade_command_returns_single_trade_execution() {
     assert_eq!(writes.summary.orders_created, 0);
     assert_eq!(writes.summary.trades_executed, 1);
     assert_eq!(writes.trades.len(), 1);
-    match writes.trades[0] {
+    match &writes.trades[0] {
         ExecutedTrade::SpotTrade(_) => panic!("expected perp trade result"),
         ExecutedTrade::PrepTrade(trade) => {
-            assert_eq!(trade.market, "BTC-PERP");
+            assert_eq!(trade.trading_pair.to_symbol_string(), "BTC-PERP");
             assert_eq!(trade.maker_order_id, 1);
             assert_eq!(trade.taker_order_id, 2);
-            assert_eq!(trade.price, 100_000);
-            assert_eq!(trade.quantity, 2);
+            assert_eq!(trade.price, Price::from_raw(100_000));
+            assert_eq!(trade.quantity, Price::from_raw(2));
         }
     }
     assert_eq!(

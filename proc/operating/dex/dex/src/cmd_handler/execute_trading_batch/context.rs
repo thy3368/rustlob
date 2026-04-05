@@ -12,7 +12,6 @@ pub struct ExecuteTradingBatchContext<'a> {
     pub spot_order_book: &'a mut SpotOrderBook,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotCommandState<'a> {
     pub handler: &'a ExecuteTradingBatchHandler,
     pub envelope: &'a ExchangeCommandEnvelope,

@@ -8,7 +8,7 @@ use std::{
 
 use base_types::exchange::prep::perp_types::PrepTrade;
 use base_types::exchange::prep::prep_order::PrepOrder;
-use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
+use base_types::exchange::spot::spot_types::{OrderStatus, SpotOrder, SpotTrade};
 use base_types::handler::handler_update::{
     ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
 };
@@ -25,13 +25,6 @@ pub struct BatchExecutionSummary {
     pub orders_created: usize,
     pub trades_executed: usize,
     pub balance_updates: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OrderStatus {
-    Open,
-    PartiallyFilled,
-    Filled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
