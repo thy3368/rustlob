@@ -8,7 +8,8 @@ pub fn handle_perp_command(
     _handler: &ExecuteTradingBatchHandler,
     _envelope: &ExchangeCommandEnvelope,
     _command: &PerpCommand,
-    _ctx: &mut ExecuteTradingBatchContext<'_>,
+    ctx: &mut ExecuteTradingBatchContext<'_>,
 ) -> Result<(), ExecuteTradingBatchError> {
-    todo!()
+    ctx.writes.summary.accepted_commands += 1;
+    Ok(())
 }

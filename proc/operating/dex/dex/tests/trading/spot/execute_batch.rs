@@ -1,7 +1,8 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
-    ExecutedTrade, OrderStatus, SpotCommand, SpotPlaceOrderCmd, SpotSide, TradingCommand,
+    ExecutedTrade, OrderStatus, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
+    SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
 fn spot_place_order(
@@ -23,6 +24,41 @@ fn spot_place_order(
                 side,
                 price,
                 quantity,
+            }),
+        )),
+    }
+}
+
+fn spot_cancel_order(command_id: u64, trader_id: u64, order_id: u64) -> ExchangeCommandEnvelope {
+    ExchangeCommandEnvelope {
+        command_id,
+        trader_id,
+        nonce: command_id,
+        timestamp_ns: 1_000 + command_id,
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+            SpotCommand::CancelOrder(SpotCancelOrderCmd { trader_id, order_id }),
+        )),
+    }
+}
+
+fn spot_amend_order(
+    command_id: u64,
+    trader_id: u64,
+    order_id: u64,
+    new_price: Option<u64>,
+    new_quantity: Option<u64>,
+) -> ExchangeCommandEnvelope {
+    ExchangeCommandEnvelope {
+        command_id,
+        trader_id,
+        nonce: command_id,
+        timestamp_ns: 1_000 + command_id,
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+            SpotCommand::AmendOrder(SpotAmendOrderCmd {
+                trader_id,
+                order_id,
+                new_price,
+                new_quantity,
             }),
         )),
     }
@@ -168,12 +204,20 @@ fn five_spot_orders_with_counterparty_each_execute_a_trade() {
 }
 
 #[test]
-#[should_panic(expected = "not yet implemented: spot command extraction")]
-fn extracted_spot_module_dispatch_is_used_for_spot_commands() {
+fn spot_cancel_and_amend_commands_are_still_accepted_after_extraction() {
     let handler = ExecuteTradingBatchHandler::new();
 
-    let _ = handler.cmd_handle(
-        vec![spot_place_order(100, 999, SpotSide::Buy, 100_000, 1)],
-        |writes, _| writes.clone(),
-    );
+    let result = handler
+        .cmd_handle(
+            vec![
+                spot_cancel_order(200, 999, 1),
+                spot_amend_order(201, 999, 1, Some(101_000), Some(2)),
+            ],
+            |writes, _| writes.clone(),
+        )
+        .unwrap();
+
+    assert_eq!(result.summary.accepted_commands, 2);
+    assert_eq!(result.summary.orders_created, 0);
+    assert_eq!(result.summary.trades_executed, 0);
 }

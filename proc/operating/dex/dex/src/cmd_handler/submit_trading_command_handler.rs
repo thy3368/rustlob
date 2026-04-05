@@ -1,6 +1,8 @@
 use std::{collections::VecDeque, sync::Mutex};
 
-use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use base_types::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 
 use super::trading_command::ExchangeCommandEnvelope;
 
@@ -61,6 +63,32 @@ impl SubmitTradingCommandHandler {
     }
 }
 
+impl ApplyCommandChanges<
+    ExchangeCommandEnvelope,
+    SubmitTradingCommandState,
+    SubmitCommandResult,
+    SubmitTradingCommandLog,
+    SubmitTradingCommandError,
+> for SubmitTradingCommandHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &ExchangeCommandEnvelope,
+        state_set: SubmitTradingCommandState,
+    ) -> Result<ChangeSet<SubmitCommandResult, SubmitTradingCommandLog>, SubmitTradingCommandError>
+    {
+        let queue_len = Self::next_queue_len(state_set.pending_len);
+
+        Ok(ChangeSet {
+            writes: SubmitCommandResult::accepted(queue_len),
+            changelogs: vec![SubmitTradingCommandLog::CommandQueued {
+                command_id: cmd.command_id,
+                queue_len,
+            }],
+        })
+    }
+}
+
 impl CmdHandlerForUpdate<
     ExchangeCommandEnvelope,
     SubmitTradingCommandState,
@@ -91,23 +119,6 @@ impl CmdHandlerForUpdate<
         _state_set: &SubmitTradingCommandState,
     ) -> Result<(), SubmitTradingCommandError> {
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &ExchangeCommandEnvelope,
-        state_set: SubmitTradingCommandState,
-    ) -> Result<ChangeSet<SubmitCommandResult, SubmitTradingCommandLog>, SubmitTradingCommandError>
-    {
-        let queue_len = Self::next_queue_len(state_set.pending_len);
-
-        Ok(ChangeSet {
-            writes: SubmitCommandResult::accepted(queue_len),
-            changelogs: vec![SubmitTradingCommandLog::CommandQueued {
-                command_id: cmd.command_id,
-                queue_len,
-            }],
-        })
     }
 
     fn persist_changelogs(

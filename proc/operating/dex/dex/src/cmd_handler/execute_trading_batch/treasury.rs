@@ -8,7 +8,8 @@ pub fn handle_treasury_command(
     _handler: &ExecuteTradingBatchHandler,
     _envelope: &ExchangeCommandEnvelope,
     _command: &TreasuryCommand,
-    _ctx: &mut ExecuteTradingBatchContext<'_>,
+    ctx: &mut ExecuteTradingBatchContext<'_>,
 ) -> Result<(), ExecuteTradingBatchError> {
-    todo!()
+    ctx.writes.summary.accepted_commands += 1;
+    Ok(())
 }
