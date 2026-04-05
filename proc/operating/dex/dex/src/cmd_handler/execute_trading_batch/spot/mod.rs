@@ -22,17 +22,23 @@ pub(crate) fn handle_spot_command(
     command: &SpotCommand,
     ctx: &mut ExecuteTradingBatchContext<'_>,
 ) -> Result<(), ExecuteTradingBatchError> {
+    let state = SpotCommandState {
+        handler,
+        envelope,
+        spot_order_book: ctx.spot_order_book,
+    };
+
     match command {
         SpotCommand::PlaceOrder(command) => {
-            let changes = PlaceOrderApplier.apply_command_and_collect_changes(command, SpotCommandState)?;
+            let changes = PlaceOrderApplier.apply_command_and_collect_changes(command, state)?;
             apply_changeset(changes, ctx)
         }
         SpotCommand::CancelOrder(command) => {
-            let changes = CancelOrderApplier.apply_command_and_collect_changes(command, SpotCommandState)?;
+            let changes = CancelOrderApplier.apply_command_and_collect_changes(command, state)?;
             apply_changeset(changes, ctx)
         }
         SpotCommand::AmendOrder(command) => {
-            let changes = AmendOrderApplier.apply_command_and_collect_changes(command, SpotCommandState)?;
+            let changes = AmendOrderApplier.apply_command_and_collect_changes(command, state)?;
             apply_changeset(changes, ctx)
         }
     }

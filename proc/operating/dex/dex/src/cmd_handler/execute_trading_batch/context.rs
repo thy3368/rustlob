@@ -1,7 +1,10 @@
 use base_types::handler::handler_update::ChangeSet;
 
 use crate::cmd_handler::execute_trading_batch::SpotOrderBook;
-use crate::cmd_handler::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::cmd_handler::execute_trading_batch_handler::{
+    ExecutedBatchBlock, ExecuteTradingBatchHandler, TradeExecutionLog,
+};
+use crate::cmd_handler::ExchangeCommandEnvelope;
 
 pub struct ExecuteTradingBatchContext<'a> {
     pub writes: &'a mut ExecutedBatchBlock,
@@ -9,7 +12,11 @@ pub struct ExecuteTradingBatchContext<'a> {
     pub spot_order_book: &'a mut SpotOrderBook,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct SpotCommandState;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotCommandState<'a> {
+    pub handler: &'a ExecuteTradingBatchHandler,
+    pub envelope: &'a ExchangeCommandEnvelope,
+    pub spot_order_book: &'a mut SpotOrderBook,
+}
 
 pub type SpotCommandChangeSet = ChangeSet<ExecutedBatchBlock, TradeExecutionLog>;

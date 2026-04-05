@@ -7,9 +7,9 @@ use crate::cmd_handler::SpotCancelOrderCmd;
 
 pub(super) struct CancelOrderApplier;
 
-impl ApplyCommandChanges<
+impl<'a> ApplyCommandChanges<
     SpotCancelOrderCmd,
-    SpotCommandState,
+    SpotCommandState<'a>,
     ExecutedBatchBlock,
     crate::cmd_handler::TradeExecutionLog,
     ExecuteTradingBatchError,
@@ -18,7 +18,7 @@ impl ApplyCommandChanges<
     fn apply_command_and_collect_changes(
         &self,
         _cmd: &SpotCancelOrderCmd,
-        _state_set: SpotCommandState,
+        _state_set: SpotCommandState<'a>,
     ) -> Result<SpotCommandChangeSet, ExecuteTradingBatchError> {
         Ok(SpotCommandChangeSet {
             writes: ExecutedBatchBlock {

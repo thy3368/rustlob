@@ -3,7 +3,7 @@ use std::sync::Arc;
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::SpotTrade;
 use base_types::handler::handler_update::{
-    ChangeSet, CmdHandlerForUpdate, HandlerLatencyMetrics,
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate, HandlerLatencyMetrics,
 };
 use db_repo::MySqlDbRepo;
 use diff::ChangeLog;
@@ -75,6 +75,27 @@ impl DefaultSettlementHandler {
     }
 }
 
+impl ApplyCommandChanges<SettlementCmd, (), SettlementResult, ChangeLog, SpotCmdErrorAny>
+    for DefaultSettlementHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &SettlementCmd,
+        _state_set: (),
+    ) -> Result<ChangeSet<SettlementResult, ChangeLog>, SpotCmdErrorAny> {
+        let mut balance_logs = Vec::new();
+        for trade in &cmd.trades {
+            let result = self.settle_trade(trade)?;
+            balance_logs.extend(result.balance_logs);
+        }
+
+        Ok(ChangeSet {
+            writes: SettlementResult::success(balance_logs.clone()),
+            changelogs: balance_logs,
+        })
+    }
+}
+
 impl CmdHandlerForUpdate<SettlementCmd, (), SettlementResult, ChangeLog, SpotCmdErrorAny>
     for DefaultSettlementHandler
 {
@@ -92,23 +113,6 @@ impl CmdHandlerForUpdate<SettlementCmd, (), SettlementResult, ChangeLog, SpotCmd
         _state_set: &(),
     ) -> Result<(), SpotCmdErrorAny> {
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &SettlementCmd,
-        _state_set: (),
-    ) -> Result<ChangeSet<SettlementResult, ChangeLog>, SpotCmdErrorAny> {
-        let mut balance_logs = Vec::new();
-        for trade in &cmd.trades {
-            let result = self.settle_trade(trade)?;
-            balance_logs.extend(result.balance_logs);
-        }
-
-        Ok(ChangeSet {
-            writes: SettlementResult::success(balance_logs.clone()),
-            changelogs: balance_logs,
-        })
     }
 
     fn persist_changelogs(&self, _changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {

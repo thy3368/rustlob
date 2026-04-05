@@ -19,7 +19,9 @@
 use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade};
-use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use base_types::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 use base_types::{Price, Quantity};
 use db_repo::MySqlDbRepo;
 use diff::ChangeLog;
@@ -186,6 +188,22 @@ impl MatchingHandler {
     }
 }
 
+impl ApplyCommandChanges<MatchCmd, (), MatchResult, ChangeLog, SpotCmdErrorAny>
+    for MatchingHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &MatchCmd,
+        _state_set: (),
+    ) -> Result<ChangeSet<MatchResult, ChangeLog>, SpotCmdErrorAny> {
+        let result = self.match_order(cmd.taker_order.clone())?;
+        let mut changelogs = Vec::with_capacity(result.order_logs.len() + result.trade_logs.len());
+        changelogs.extend(result.order_logs.iter().cloned());
+        changelogs.extend(result.trade_logs.iter().cloned());
+        Ok(ChangeSet { writes: result, changelogs })
+    }
+}
+
 //todo 实现撮合命令handler
 // CmdHandlerForUpdate 里面应该用match cmd 代替 SpotOrder
 impl CmdHandlerForUpdate<MatchCmd, (), MatchResult, ChangeLog, SpotCmdErrorAny>
@@ -213,18 +231,6 @@ impl CmdHandlerForUpdate<MatchCmd, (), MatchResult, ChangeLog, SpotCmdErrorAny>
             }));
         }
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &MatchCmd,
-        _state_set: (),
-    ) -> Result<ChangeSet<MatchResult, ChangeLog>, SpotCmdErrorAny> {
-        let result = self.match_order(cmd.taker_order.clone())?;
-        let mut changelogs = Vec::with_capacity(result.order_logs.len() + result.trade_logs.len());
-        changelogs.extend(result.order_logs.iter().cloned());
-        changelogs.extend(result.trade_logs.iter().cloned());
-        Ok(ChangeSet { writes: result, changelogs })
     }
 
     fn persist_changelogs(&self, _changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {

@@ -223,6 +223,30 @@ fn spot_cancel_and_amend_commands_are_still_accepted_after_extraction() {
 }
 
 #[test]
+fn place_order_batches_assign_envelope_command_ids() {
+    let handler = ExecuteTradingBatchHandler::new();
+
+    let result = handler
+        .cmd_handle(
+            vec![
+                spot_place_order(301, 41, SpotSide::Buy, 100_000, 1),
+                spot_place_order(302, 42, SpotSide::Buy, 99_000, 1),
+            ],
+            |writes, _| writes.clone(),
+        )
+        .unwrap();
+
+    match &result.orders[0] {
+        ExecutedOrder::SpotOrder(order) => assert_eq!(order.order_id, 301),
+        ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
+    }
+    match &result.orders[1] {
+        ExecutedOrder::SpotOrder(order) => assert_eq!(order.order_id, 302),
+        ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
+    }
+}
+
+#[test]
 fn execute_trading_batch_handler_still_implements_apply_command_changes() {
     fn assert_impl<T>()
     where

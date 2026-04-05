@@ -1,5 +1,7 @@
 use base_types::exchange::spot::spot_types::{OrderType, SpotOrder};
-use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use base_types::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 use base_types::{Timestamp, TradingPair};
 use db_repo::{CmdRepo, MySqlDbRepo};
 use diff::diff::diff_types::ChangeLog;
@@ -84,6 +86,38 @@ impl PlaceOrderHandler {
     }
 }
 
+impl ApplyCommandChanges<NewOrderCmd, PlaceOrderState, NewOrderAck, ChangeLog, SpotCmdErrorAny>
+    for PlaceOrderHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &NewOrderCmd,
+        state_set: PlaceOrderState,
+    ) -> Result<ChangeSet<NewOrderAck, ChangeLog>, SpotCmdErrorAny> {
+        let mut order = SpotOrder::from(cmd.clone());
+        order.order_id = state_set.order_id;
+        order.trading_pair = state_set.symbol;
+        order.state.status = base_types::exchange::spot::spot_types::OrderStatus::New;
+        order.state.last_updated = state_set.timestamp;
+
+        let order_log = order.track_create().map_err(|e| {
+            SpotCmdErrorAny::Common(CommonError::Internal {
+                message: format!("Failed to track order creation: {}", e),
+            })
+        })?;
+
+        let ack = NewOrderAck::new(
+            state_set.symbol,
+            state_set.order_id,
+            -1,
+            cmd.new_client_order_id().clone(),
+            state_set.timestamp,
+        );
+
+        Ok(ChangeSet { writes: ack, changelogs: vec![order_log] })
+    }
+}
+
 //todo 完善收单命令，不作余额冻结操作
 impl CmdHandlerForUpdate<NewOrderCmd, PlaceOrderState, NewOrderAck, ChangeLog, SpotCmdErrorAny>
     for PlaceOrderHandler
@@ -117,34 +151,6 @@ impl CmdHandlerForUpdate<NewOrderCmd, PlaceOrderState, NewOrderAck, ChangeLog, S
         _state_set: &PlaceOrderState,
     ) -> Result<(), SpotCmdErrorAny> {
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &NewOrderCmd,
-        state_set: PlaceOrderState,
-    ) -> Result<ChangeSet<NewOrderAck, ChangeLog>, SpotCmdErrorAny> {
-        let mut order = SpotOrder::from(cmd.clone());
-        order.order_id = state_set.order_id;
-        order.trading_pair = state_set.symbol;
-        order.state.status = base_types::exchange::spot::spot_types::OrderStatus::New;
-        order.state.last_updated = state_set.timestamp;
-
-        let order_log = order.track_create().map_err(|e| {
-            SpotCmdErrorAny::Common(CommonError::Internal {
-                message: format!("Failed to track order creation: {}", e),
-            })
-        })?;
-
-        let ack = NewOrderAck::new(
-            state_set.symbol,
-            state_set.order_id,
-            -1,
-            cmd.new_client_order_id().clone(),
-            state_set.timestamp,
-        );
-
-        Ok(ChangeSet { writes: ack, changelogs: vec![order_log] })
     }
 
     fn persist_changelogs(&self, changelogs: &[ChangeLog]) -> Result<(), SpotCmdErrorAny> {
