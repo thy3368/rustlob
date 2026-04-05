@@ -116,7 +116,7 @@ impl Default for FutureOrderStatus {
 }
 
 /// 内部订单状态（扩展字段用于撮合引擎）
-#[derive(Debug, Clone, entity_derive::Entity)]
+#[derive(Debug, Clone, entity_derive::Entity, Eq, PartialEq)]
 #[entity(id = "order_id")]
 // 参考竞口 永续合约order都有哪些字段？
 pub struct PrepOrder {

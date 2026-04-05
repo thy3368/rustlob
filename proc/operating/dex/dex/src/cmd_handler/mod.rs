@@ -3,6 +3,8 @@ pub(crate) mod execute_trading_batch;
 pub mod submit_trading_command_handler;
 pub mod trading_command;
 
+pub use crate::types::ProductType;
+
 pub use execute_trading_batch_handler::{
     BalanceDelta, BatchExecutionSummary, ExecuteTradingBatchHandler, ExecuteTradingBatchState,
     ExecutedBatchBlock, ExecutedOrder, ExecutedTrade, TradeExecutionLog,

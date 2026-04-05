@@ -3,7 +3,9 @@
 use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, HandlerError, Order, OrderBookSnapshot, OrderStatus, Trade,
 };
-use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use crate::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 
 pub struct MatchCmd {
     pub match_id: String,
@@ -64,31 +66,9 @@ impl MatchHandler {
     }
 }
 
-impl CmdHandlerForUpdate<MatchCmd, MatchState, MatchOutput, MatchLog, HandlerError>
+impl ApplyCommandChanges<MatchCmd, MatchState, MatchOutput, MatchLog, HandlerError>
     for MatchHandler
 {
-    fn pre_check_command(&self, _cmd: &MatchCmd) -> Result<(), HandlerError> {
-        Ok(())
-    }
-
-    fn load_state_set_for_update(&self, _cmd: &MatchCmd) -> Result<MatchState, HandlerError> {
-        Ok(MatchState {
-            taker_order: Order::default(),
-            maker_orders: vec![],
-            taker_balance: AccountBalance::default(),
-            maker_balances: vec![],
-            orderbook: OrderBookSnapshot::default(),
-        })
-    }
-
-    fn validate_command_in_lock(
-        &self,
-        _cmd: &MatchCmd,
-        _state_set: &MatchState,
-    ) -> Result<(), HandlerError> {
-        Ok(())
-    }
-
     fn apply_command_and_collect_changes(
         &self,
         cmd: &MatchCmd,
@@ -116,6 +96,32 @@ impl CmdHandlerForUpdate<MatchCmd, MatchState, MatchOutput, MatchLog, HandlerErr
             writes: output,
             changelogs: vec![MatchLog::TradeCreated(TradeCreated { trade_id })],
         })
+    }
+}
+
+impl CmdHandlerForUpdate<MatchCmd, MatchState, MatchOutput, MatchLog, HandlerError>
+    for MatchHandler
+{
+    fn pre_check_command(&self, _cmd: &MatchCmd) -> Result<(), HandlerError> {
+        Ok(())
+    }
+
+    fn load_state_set_for_update(&self, _cmd: &MatchCmd) -> Result<MatchState, HandlerError> {
+        Ok(MatchState {
+            taker_order: Order::default(),
+            maker_orders: vec![],
+            taker_balance: AccountBalance::default(),
+            maker_balances: vec![],
+            orderbook: OrderBookSnapshot::default(),
+        })
+    }
+
+    fn validate_command_in_lock(
+        &self,
+        _cmd: &MatchCmd,
+        _state_set: &MatchState,
+    ) -> Result<(), HandlerError> {
+        Ok(())
     }
 
     fn persist_changelogs(&self, _changelogs: &[MatchLog]) -> Result<(), HandlerError> {

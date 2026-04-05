@@ -1,6 +1,5 @@
 use std::fmt;
 
-use arrayvec::ArrayString;
 use entity_derive::Entity;
 
 use crate::account::balance::Balance;
@@ -739,7 +738,7 @@ impl LobOrder for SpotOrder {
 /// - unfilled_qty: 通过 total_qty - filled_qty 计算
 /// - frozen_qty: 通过 unfilled_qty 和 side 计算（买单=unfilled_qty*price，卖单=unfilled_qty）
 #[repr(C)]
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExecutionState {
     // ===== 订单状态 =====
@@ -769,7 +768,7 @@ pub struct ExecutionState {
 /// - 可变状态集中，缓存友好
 /// - 明确的可变/不可变边界
 #[repr(align(64))]
-#[derive(Debug, Clone, Entity)]
+#[derive(Debug, Clone, Entity, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[entity(id = "order_id")]
 pub struct SpotOrder {
@@ -778,7 +777,7 @@ pub struct SpotOrder {
 
     // ===== 核心标识字段（24字节）=====
     pub order_id: OrderId,         // 订单ID (u64)
-    pub trader_id: TraderId,       // 交易员ID ([u8; 8])
+    pub trader_id: TraderId,       // 交易员ID ([u8; 8]) todo 也可能是象 eth的address
     pub trading_pair: TradingPair, // 交易对 (u64)
     pub timestamp: Timestamp,      // 创建时间戳 (ms)
 
@@ -790,7 +789,7 @@ pub struct SpotOrder {
     pub time_in_force: TimeInForce, // 有效期 (GTC/IOC/FOK/GTX/GTD) (1字节)
 
     // ===== 订单属性字段 =====
-    pub client_order_id: Option<String>, // 客户订单ID
+    pub client_order_id: Option<String>,            // 客户订单ID
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System) (1字节)
     pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...) //todo remove
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
@@ -1253,6 +1252,12 @@ impl SpotTrade {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn execution_state_implements_eq() {
+        fn assert_eq_impl<T: Eq>() {}
+        assert_eq_impl::<ExecutionState>();
+    }
 
     fn create_test_trading_pair() -> TradingPair {
         TradingPair::BtcUsdt

@@ -16,8 +16,18 @@ pub struct HandlerLatencyMetrics {
     pub changelog_count: usize,
 }
 
+pub trait ApplyCommandChanges<C, S, W, L, E>: Send + Sync {
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &C,
+        state_set: S,
+    ) -> Result<ChangeSet<W, L>, E>;
+}
+
 // cpu操作，如果是soa则可以simd优化
-pub trait CmdHandlerForUpdate<C, S, W, L, E>: Send + Sync {
+pub trait CmdHandlerForUpdate<C, S, W, L, E>:
+    ApplyCommandChanges<C, S, W, L, E> + Send + Sync
+{
     fn cmd_handle<R, F>(&self, cmd: C, result_mapper: F) -> Result<R, E>
     where
         F: FnOnce(&W, &[L]) -> R,
@@ -81,12 +91,6 @@ pub trait CmdHandlerForUpdate<C, S, W, L, E>: Send + Sync {
     fn load_state_set_for_update(&self, cmd: &C) -> Result<S, E>;
 
     fn validate_command_in_lock(&self, cmd: &C, state_set: &S) -> Result<(), E>;
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &C,
-        state_set: S,
-    ) -> Result<ChangeSet<W, L>, E>;
 
     fn persist_changelogs(&self, changelogs: &[L]) -> Result<(), E>;
 

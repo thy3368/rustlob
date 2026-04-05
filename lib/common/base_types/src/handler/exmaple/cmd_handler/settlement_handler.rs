@@ -3,7 +3,9 @@
 use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, BalanceChange, HandlerError, Trade,
 };
-use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use crate::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 
 pub struct SettlementCmd {
     pub settlement_id: String,
@@ -36,6 +38,25 @@ impl SettlementHandler {
 }
 
 impl
+    ApplyCommandChanges<
+        SettlementCmd,
+        SettlementState,
+        SettlementResult,
+        SettlementLog,
+        HandlerError,
+    > for SettlementHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        _cmd: &SettlementCmd,
+        _state_set: SettlementState,
+    ) -> Result<ChangeSet<SettlementResult, SettlementLog>, HandlerError> {
+        let result = SettlementResult { balance_changes: vec![] };
+        Ok(ChangeSet { writes: result, changelogs: vec![] })
+    }
+}
+
+impl
     CmdHandlerForUpdate<
         SettlementCmd,
         SettlementState,
@@ -61,15 +82,6 @@ impl
         _state_set: &SettlementState,
     ) -> Result<(), HandlerError> {
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        _cmd: &SettlementCmd,
-        _state_set: SettlementState,
-    ) -> Result<ChangeSet<SettlementResult, SettlementLog>, HandlerError> {
-        let result = SettlementResult { balance_changes: vec![] };
-        Ok(ChangeSet { writes: result, changelogs: vec![] })
     }
 
     fn persist_changelogs(&self, _changelogs: &[SettlementLog]) -> Result<(), HandlerError> {

@@ -3,7 +3,9 @@
 use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, BalanceChange, HandlerError, Order, OrderBookSnapshot, OrderStatus,
 };
-use crate::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
+use crate::handler::handler_update::{
+    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
+};
 
 pub struct PlaceOrderCmd {
     pub cmd_id: String,
@@ -74,6 +76,44 @@ impl PlaceOrderHandler {
 }
 
 impl
+    ApplyCommandChanges<
+        PlaceOrderCmd,
+        PlaceOrderState,
+        PlaceOrderOutput,
+        PlaceOrderLog,
+        HandlerError,
+    > for PlaceOrderHandler
+{
+    fn apply_command_and_collect_changes(
+        &self,
+        cmd: &PlaceOrderCmd,
+        _state_set: PlaceOrderState,
+    ) -> Result<ChangeSet<PlaceOrderOutput, PlaceOrderLog>, HandlerError> {
+        let order_id = format!("order_{}", cmd.cmd_id);
+        let result = PlaceOrderResult {
+            order_id: order_id.clone(),
+            status: OrderStatus::Open,
+            balance_change: Some(BalanceChange {
+                user_id: cmd.user_id.clone(),
+                asset: "USDT".into(),
+                change: -(cmd.price.unwrap_or(0) * cmd.quantity),
+            }),
+        };
+        let output = PlaceOrderOutput {
+            result,
+            events: vec![PlaceOrderEvent::Accepted(PlaceOrderAcceptedEvent {
+                order_id: order_id.clone(),
+            })],
+        };
+
+        Ok(ChangeSet {
+            writes: output,
+            changelogs: vec![PlaceOrderLog::OrderCreated(OrderCreated { order_id })],
+        })
+    }
+}
+
+impl
     CmdHandlerForUpdate<
         PlaceOrderCmd,
         PlaceOrderState,
@@ -103,34 +143,6 @@ impl
         _state_set: &PlaceOrderState,
     ) -> Result<(), HandlerError> {
         Ok(())
-    }
-
-    fn apply_command_and_collect_changes(
-        &self,
-        cmd: &PlaceOrderCmd,
-        _state_set: PlaceOrderState,
-    ) -> Result<ChangeSet<PlaceOrderOutput, PlaceOrderLog>, HandlerError> {
-        let order_id = format!("order_{}", cmd.cmd_id);
-        let result = PlaceOrderResult {
-            order_id: order_id.clone(),
-            status: OrderStatus::Open,
-            balance_change: Some(BalanceChange {
-                user_id: cmd.user_id.clone(),
-                asset: "USDT".into(),
-                change: -(cmd.price.unwrap_or(0) * cmd.quantity),
-            }),
-        };
-        let output = PlaceOrderOutput {
-            result,
-            events: vec![PlaceOrderEvent::Accepted(PlaceOrderAcceptedEvent {
-                order_id: order_id.clone(),
-            })],
-        };
-
-        Ok(ChangeSet {
-            writes: output,
-            changelogs: vec![PlaceOrderLog::OrderCreated(OrderCreated { order_id })],
-        })
     }
 
     fn persist_changelogs(&self, _changelogs: &[PlaceOrderLog]) -> Result<(), HandlerError> {
