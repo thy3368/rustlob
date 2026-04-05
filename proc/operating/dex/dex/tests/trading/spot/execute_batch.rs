@@ -1,129 +1,71 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, OptionAmendOrderCmd,
-    OptionCancelOrderCmd, OptionCommand, OptionKind, OptionPlaceOrderCmd, OptionSide,
-    PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide, SpotCancelOrderCmd,
+    ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, OrderStatus,
     SpotCommand, SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
+fn spot_place_order(
+    command_id: u64,
+    trader_id: u64,
+    side: SpotSide,
+    price: u64,
+    quantity: u64,
+) -> ExchangeCommandEnvelope {
+    ExchangeCommandEnvelope {
+        command_id,
+        trader_id,
+        nonce: command_id,
+        timestamp_ns: 1_000 + command_id,
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+            SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
+                trader_id,
+                market: "BTC-USDC".into(),
+                side,
+                price,
+                quantity,
+            }),
+        )),
+    }
+}
+
 #[test]
-fn execute_trading_batch_counts_each_command_kind() {
+fn five_spot_orders_without_counterparty_create_five_open_resting_orders() {
     let handler = ExecuteTradingBatchHandler::new();
 
     let result = handler
         .cmd_handle(
             vec![
-                ExchangeCommandEnvelope {
-                    command_id: 1,
-                    trader_id: 1,
-                    nonce: 1,
-                    timestamp_ns: 1_000,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-                        SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
-                            trader_id: 1,
-                            market: "BTC-PERP".into(),
-                            side: SpotSide::Buy,
-                            price: 100_000,
-                            quantity: 1,
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 2,
-                    trader_id: 1,
-                    nonce: 2,
-                    timestamp_ns: 1_001,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-                        SpotCommand::CancelOrder(SpotCancelOrderCmd {
-                            trader_id: 1,
-                            order_id: 88,
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 3,
-                    trader_id: 1,
-                    nonce: 3,
-                    timestamp_ns: 1_002,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
-                        PerpCommand::AmendOrder(PerpAmendOrderCmd {
-                            trader_id: 1,
-                            order_id: 88,
-                            new_price: Some(100_100),
-                            new_quantity: Some(2),
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 4,
-                    trader_id: 1,
-                    nonce: 4,
-                    timestamp_ns: 1_003,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Option(
-                        OptionCommand::CancelOrder(OptionCancelOrderCmd {
-                            trader_id: 1,
-                            order_id: 77,
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 5,
-                    trader_id: 1,
-                    nonce: 5,
-                    timestamp_ns: 1_004,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Option(
-                        OptionCommand::AmendOrder(OptionAmendOrderCmd {
-                            trader_id: 1,
-                            order_id: 77,
-                            new_price: Some(2_200),
-                            new_quantity: Some(3),
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 6,
-                    trader_id: 1,
-                    nonce: 6,
-                    timestamp_ns: 1_005,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
-                        PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
-                            trader_id: 1,
-                            market: "BTC-PERP".into(),
-                            side: PerpSide::Sell,
-                            price: 101_000,
-                            quantity: 3,
-                            leverage: 5,
-                            reduce_only: false,
-                        }),
-                    )),
-                },
-                ExchangeCommandEnvelope {
-                    command_id: 7,
-                    trader_id: 1,
-                    nonce: 7,
-                    timestamp_ns: 1_006,
-                    command: ExchangeCommand::TradingCommand(TradingCommand::Option(
-                        OptionCommand::PlaceOrder(OptionPlaceOrderCmd {
-                            trader_id: 1,
-                            underlying: "BTC".into(),
-                            expiry_ts: 1_750_000_000,
-                            strike_price: 110_000,
-                            kind: OptionKind::Call,
-                            side: OptionSide::Buy,
-                            premium: 2_000,
-                            quantity: 1,
-                        }),
-                    )),
-                },
+                spot_place_order(1, 11, SpotSide::Buy, 100_000, 1),
+                spot_place_order(2, 12, SpotSide::Buy, 99_000, 2),
+                spot_place_order(3, 13, SpotSide::Buy, 98_000, 3),
+                spot_place_order(4, 14, SpotSide::Buy, 97_000, 4),
+                spot_place_order(5, 15, SpotSide::Buy, 96_000, 5),
             ],
             |writes, _| writes.clone(),
         )
         .unwrap();
 
-    //todo 怎么验证状态 会有一个现货委托单 和成交单？
+    assert_eq!(result.summary.total_commands, 5);
+    assert_eq!(result.summary.accepted_commands, 5);
+    assert_eq!(result.summary.rejected_commands, 0);
+    assert_eq!(result.summary.orders_created, 5);
+    assert_eq!(result.summary.trades_executed, 0);
+    assert_eq!(result.summary.balance_updates, 0);
 
-    assert_eq!(result.total_commands, 7);
-    assert_eq!(result.place_order_commands, 3);
-    assert_eq!(result.cancel_order_commands, 2);
-    assert_eq!(result.amend_order_commands, 2);
+    assert_eq!(result.orders.len(), 5);
+    assert_eq!(result.trades.len(), 0);
+    assert_eq!(result.balance_deltas.len(), 0);
+
+    assert_eq!(result.orders[0].status, OrderStatus::Open);
+    assert_eq!(result.orders[0].remaining_quantity, 1);
+    assert_eq!(result.orders[1].status, OrderStatus::Open);
+    assert_eq!(result.orders[1].remaining_quantity, 2);
+    assert_eq!(result.orders[2].status, OrderStatus::Open);
+    assert_eq!(result.orders[2].remaining_quantity, 3);
+    assert_eq!(result.orders[3].status, OrderStatus::Open);
+    assert_eq!(result.orders[3].remaining_quantity, 4);
+    assert_eq!(result.orders[4].status, OrderStatus::Open);
+    assert_eq!(result.orders[4].remaining_quantity, 5);
 }
+
+//todo 增加场景2 5条spot order, 都有对手单

@@ -50,12 +50,13 @@ fn execute_trade_command_returns_single_trade_execution() {
         .unwrap();
 
     let (writes, changelogs) = result;
-    assert_eq!(writes.total_commands, 2);
-    assert_eq!(writes.place_order_commands, 1);
-    assert_eq!(writes.trade_execution_commands, 1);
-    assert_eq!(writes.trades_executed.len(), 1);
+    assert_eq!(writes.summary.total_commands, 2);
+    assert_eq!(writes.summary.accepted_commands, 2);
+    assert_eq!(writes.summary.orders_created, 0);
+    assert_eq!(writes.summary.trades_executed, 1);
+    assert_eq!(writes.trades.len(), 1);
     assert_eq!(
-        writes.trades_executed[0],
+        writes.trades[0],
         TradeExecutionResult {
             market: "BTC-PERP".into(),
             maker_order_id: 1,

@@ -1,7 +1,15 @@
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+};
+
 use base_types::handler::handler_update::{ChangeSet, CmdHandlerForUpdate};
 
 use super::trading_command::{
-    ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, PerpCommand, SpotCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, PerpCommand, SpotCommand, SpotSide,
 };
 
 type ExecuteTradingBatchError = String;
@@ -16,13 +24,47 @@ pub struct TradeExecutionResult {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BatchExecutionResult {
+pub struct BatchExecutionSummary {
     pub total_commands: usize,
-    pub place_order_commands: usize,
-    pub cancel_order_commands: usize,
-    pub amend_order_commands: usize,
-    pub trade_execution_commands: usize,
-    pub trades_executed: Vec<TradeExecutionResult>,
+    pub accepted_commands: usize,
+    pub rejected_commands: usize,
+    pub orders_created: usize,
+    pub trades_executed: usize,
+    pub balance_updates: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OrderStatus {
+    Open,
+    PartiallyFilled,
+    Filled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutedSpotOrder {
+    pub order_id: u64,
+    pub trader_id: u64,
+    pub market: String,
+    pub side: SpotSide,
+    pub price: u64,
+    pub original_quantity: u64,
+    pub remaining_quantity: u64,
+    pub status: OrderStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BalanceDelta {
+    pub trader_id: u64,
+    pub asset: String,
+    pub delta: i64,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ExecutedBatchBlock {
+    pub summary: BatchExecutionSummary,
+    pub orders: Vec<ExecutedSpotOrder>,
+    pub trades: Vec<TradeExecutionResult>,
+    pub balance_deltas: Vec<BalanceDelta>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -42,19 +84,42 @@ pub enum TradeExecutionLog {
     BatchExecuted { batch_size: usize },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RestingSpotOrder {
+    order_id: u64,
+    trader_id: u64,
+    market: String,
+    side: SpotSide,
+    price: u64,
+    original_quantity: u64,
+    remaining_quantity: u64,
+}
+
+type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;
+
 #[derive(Debug, Default)]
-pub struct ExecuteTradingBatchHandler;
+pub struct ExecuteTradingBatchHandler {
+    spot_order_book: Mutex<SpotOrderBook>,
+    next_order_id: AtomicU64,
+}
 
 impl ExecuteTradingBatchHandler {
     pub fn new() -> Self {
-        Self
+        Self {
+            spot_order_book: Mutex::new(BTreeMap::new()),
+            next_order_id: AtomicU64::new(1),
+        }
+    }
+
+    fn next_order_id(&self) -> u64 {
+        self.next_order_id.fetch_add(1, Ordering::Relaxed)
     }
 }
 
 impl CmdHandlerForUpdate<
     Vec<ExchangeCommandEnvelope>,
     ExecuteTradingBatchState,
-    BatchExecutionResult,
+    ExecutedBatchBlock,
     TradeExecutionLog,
     ExecuteTradingBatchError,
 > for ExecuteTradingBatchHandler
@@ -87,39 +152,69 @@ impl CmdHandlerForUpdate<
         &self,
         cmd: &Vec<ExchangeCommandEnvelope>,
         state_set: ExecuteTradingBatchState,
-    ) -> Result<ChangeSet<BatchExecutionResult, TradeExecutionLog>, ExecuteTradingBatchError>
-    {
-        let mut writes = BatchExecutionResult {
-            total_commands: state_set.batch_size,
-            ..BatchExecutionResult::default()
+    ) -> Result<ChangeSet<ExecutedBatchBlock, TradeExecutionLog>, ExecuteTradingBatchError> {
+        let mut writes = ExecutedBatchBlock {
+            summary: BatchExecutionSummary {
+                total_commands: state_set.batch_size,
+                ..BatchExecutionSummary::default()
+            },
+            ..ExecutedBatchBlock::default()
         };
 
         let mut changelogs = Vec::new();
+        let mut spot_order_book = self.spot_order_book.lock().unwrap();
 
         for envelope in cmd {
             match &envelope.command {
                 ExchangeCommand::TradingCommand(trading_command) => match trading_command {
-                    super::trading_command::TradingCommand::Spot(SpotCommand::PlaceOrder(_)) => {
-                        writes.place_order_commands += 1
+                    super::trading_command::TradingCommand::Spot(SpotCommand::PlaceOrder(place_cmd)) => {
+                        let order_id = self.next_order_id();
+                        let order = RestingSpotOrder {
+                            order_id,
+                            trader_id: place_cmd.trader_id,
+                            market: place_cmd.market.clone(),
+                            side: place_cmd.side.clone(),
+                            price: place_cmd.price,
+                            original_quantity: place_cmd.quantity,
+                            remaining_quantity: place_cmd.quantity,
+                        };
+
+                        writes.summary.accepted_commands += 1;
+                        writes.summary.orders_created += 1;
+                        writes.orders.push(ExecutedSpotOrder {
+                            order_id,
+                            trader_id: order.trader_id,
+                            market: order.market.clone(),
+                            side: order.side.clone(),
+                            price: order.price,
+                            original_quantity: order.original_quantity,
+                            remaining_quantity: order.remaining_quantity,
+                            status: OrderStatus::Open,
+                        });
+
+                        spot_order_book
+                            .entry(order.market.clone())
+                            .or_default()
+                            .push(order);
                     }
-                    super::trading_command::TradingCommand::Spot(SpotCommand::CancelOrder(_)) => {
-                        writes.cancel_order_commands += 1
+                    super::trading_command::TradingCommand::Spot(
+                        SpotCommand::CancelOrder(_) | SpotCommand::AmendOrder(_),
+                    ) => {
+                        writes.summary.accepted_commands += 1;
                     }
-                    super::trading_command::TradingCommand::Spot(SpotCommand::AmendOrder(_)) => {
-                        writes.amend_order_commands += 1
-                    }
-                    super::trading_command::TradingCommand::Perp(PerpCommand::PlaceOrder(_)) => {
-                        writes.place_order_commands += 1
-                    }
-                    super::trading_command::TradingCommand::Perp(PerpCommand::CancelOrder(_)) => {
-                        writes.cancel_order_commands += 1
-                    }
-                    super::trading_command::TradingCommand::Perp(PerpCommand::AmendOrder(_)) => {
-                        writes.amend_order_commands += 1
+                    super::trading_command::TradingCommand::Perp(
+                        PerpCommand::PlaceOrder(_)
+                        | PerpCommand::CancelOrder(_)
+                        | PerpCommand::AmendOrder(_)
+                        | PerpCommand::SettleFunding(_)
+                        | PerpCommand::LiquidatePosition(_),
+                    ) => {
+                        writes.summary.accepted_commands += 1;
                     }
                     super::trading_command::TradingCommand::Perp(PerpCommand::ExecuteTrade(cmd)) => {
-                        writes.trade_execution_commands += 1;
-                        writes.trades_executed.push(TradeExecutionResult {
+                        writes.summary.accepted_commands += 1;
+                        writes.summary.trades_executed += 1;
+                        writes.trades.push(TradeExecutionResult {
                             market: cmd.market.clone(),
                             maker_order_id: cmd.maker_order_id,
                             taker_order_id: cmd.taker_order_id,
@@ -134,31 +229,27 @@ impl CmdHandlerForUpdate<
                             quantity: cmd.quantity,
                         });
                     }
-                    super::trading_command::TradingCommand::Perp(
-                        PerpCommand::SettleFunding(_) | PerpCommand::LiquidatePosition(_),
-                    ) => {}
-                    super::trading_command::TradingCommand::Option(OptionCommand::PlaceOrder(_)) => {
-                        writes.place_order_commands += 1
-                    }
-                    super::trading_command::TradingCommand::Option(OptionCommand::CancelOrder(_)) => {
-                        writes.cancel_order_commands += 1
-                    }
-                    super::trading_command::TradingCommand::Option(OptionCommand::AmendOrder(_)) => {
-                        writes.amend_order_commands += 1
+                    super::trading_command::TradingCommand::Option(
+                        OptionCommand::PlaceOrder(_)
+                        | OptionCommand::CancelOrder(_)
+                        | OptionCommand::AmendOrder(_),
+                    ) => {
+                        writes.summary.accepted_commands += 1;
                     }
                 },
-                ExchangeCommand::TreasuryCommand(_) => {}
+                ExchangeCommand::TreasuryCommand(_) => {
+                    writes.summary.accepted_commands += 1;
+                }
             }
         }
 
+        writes.summary.balance_updates = writes.balance_deltas.len();
+
         changelogs.push(TradeExecutionLog::BatchExecuted {
-            batch_size: state_set.batch_size,
+            batch_size: writes.summary.total_commands,
         });
 
-        Ok(ChangeSet {
-            writes,
-            changelogs,
-        })
+        Ok(ChangeSet { writes, changelogs })
     }
 
     fn persist_changelogs(
@@ -267,10 +358,10 @@ mod tests {
 
         assert!(result.is_ok());
         let writes = result.unwrap();
-        assert_eq!(writes.total_commands, 4);
-        assert_eq!(writes.place_order_commands, 2);
-        assert_eq!(writes.cancel_order_commands, 1);
-        assert_eq!(writes.amend_order_commands, 1);
+        assert_eq!(writes.summary.total_commands, 4);
+        assert_eq!(writes.summary.accepted_commands, 4);
+        assert_eq!(writes.summary.orders_created, 0);
+        assert_eq!(writes.summary.trades_executed, 0);
     }
 
     #[test]
@@ -283,7 +374,7 @@ mod tests {
 
         assert!(result.is_ok());
         let (writes, changelogs) = result.unwrap();
-        assert_eq!(writes.total_commands, 1);
+        assert_eq!(writes.summary.total_commands, 1);
         assert_eq!(changelogs.len(), 1);
         assert_eq!(
             changelogs[0],

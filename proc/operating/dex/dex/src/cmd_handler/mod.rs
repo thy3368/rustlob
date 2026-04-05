@@ -3,7 +3,8 @@ pub mod submit_trading_command_handler;
 pub mod trading_command;
 
 pub use execute_trading_batch_handler::{
-    BatchExecutionResult, ExecuteTradingBatchHandler, ExecuteTradingBatchState, TradeExecutionLog,
+    BalanceDelta, BatchExecutionSummary, ExecuteTradingBatchHandler, ExecuteTradingBatchState,
+    ExecutedBatchBlock, ExecutedSpotOrder, OrderStatus, TradeExecutionLog,
     TradeExecutionResult,
 };
 pub use submit_trading_command_handler::{
