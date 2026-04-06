@@ -3,8 +3,8 @@ use base_types::exchange::spot::spot_types::OrderStatus;
 use base_types::handler::handler_update::{ApplyCommandChanges, CmdHandlerForUpdate};
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
-    ExecutedTrade, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand, SpotPlaceOrderCmd,
-    SpotSide, TradingCommand,
+    ExecutedTrade, ProductType, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
+    SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
 fn spot_place_order(
@@ -19,6 +19,7 @@ fn spot_place_order(
         trader_id,
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
+        product_type: ProductType::Spot,
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
             SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
                 trader_id,
@@ -37,6 +38,7 @@ fn spot_cancel_order(command_id: u64, trader_id: u64, order_id: u64) -> Exchange
         trader_id,
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
+        product_type: ProductType::Spot,
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
             SpotCommand::CancelOrder(SpotCancelOrderCmd { trader_id, order_id }),
         )),
@@ -55,6 +57,7 @@ fn spot_amend_order(
         trader_id,
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
+        product_type: ProductType::Spot,
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
             SpotCommand::AmendOrder(SpotAmendOrderCmd {
                 trader_id,

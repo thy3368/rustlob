@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, SpotCommand, SpotPlaceOrderCmd, SpotSide,
-    SubmitTradingCommandHandler, TradingCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, ProductType, SpotCommand, SpotPlaceOrderCmd,
+    SpotSide, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn spot_place_order_command_is_accepted_into_pending_queue() {
         trader_id: 42,
         nonce: 1,
         timestamp_ns: 10_000,
+        product_type: ProductType::Spot,
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(
             SpotPlaceOrderCmd {
                 trader_id: 42,

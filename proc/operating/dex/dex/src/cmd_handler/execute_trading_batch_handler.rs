@@ -242,7 +242,7 @@ mod tests {
     use super::*;
     use crate::cmd_handler::{
         ExchangeCommand, PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide,
-        SpotCancelOrderCmd, SpotCommand, TradingCommand,
+        ProductType, SpotCancelOrderCmd, SpotCommand, TradingCommand,
     };
 
     fn place_order_envelope(command_id: u64, trader_id: u64) -> ExchangeCommandEnvelope {
@@ -251,6 +251,7 @@ mod tests {
             trader_id,
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
+            product_type: ProductType::Perp,
             command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
                 PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                     trader_id,

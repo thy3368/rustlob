@@ -1,6 +1,6 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, SpotCancelOrderCmd, SpotCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, ProductType, SpotCancelOrderCmd, SpotCommand,
     SpotPlaceOrderCmd, SpotSide, SubmitTradingCommandHandler, TradingCommand,
 };
 
@@ -15,6 +15,7 @@ fn spot_cancel_order_command_can_enter_pending_queue() {
                 trader_id: 42,
                 nonce: 1,
                 timestamp_ns: 10_000,
+                product_type: ProductType::Spot,
                 command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
                     SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
                         trader_id: 42,
@@ -34,6 +35,7 @@ fn spot_cancel_order_command_can_enter_pending_queue() {
         trader_id: 42,
         nonce: 2,
         timestamp_ns: 10_001,
+        product_type: ProductType::Spot,
         command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
             SpotCommand::CancelOrder(SpotCancelOrderCmd {
                 trader_id: 42,

@@ -1,6 +1,6 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, LiquidatePositionCmd, PerpCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, LiquidatePositionCmd, PerpCommand, ProductType,
     SubmitTradingCommandHandler, TradingCommand,
 };
 
@@ -13,6 +13,7 @@ fn perp_liquidate_position_command_can_enter_pending_queue() {
         trader_id: 9,
         nonce: 1,
         timestamp_ns: 30_000,
+        product_type: ProductType::Perp,
         command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
             PerpCommand::LiquidatePosition(LiquidatePositionCmd {
                 liquidator_trader_id: 9,

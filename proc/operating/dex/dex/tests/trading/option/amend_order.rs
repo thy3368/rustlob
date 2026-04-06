@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, OptionAmendOrderCmd, OptionCommand, OptionKind,
-    OptionPlaceOrderCmd, OptionSide, SubmitTradingCommandHandler, TradingCommand,
+    OptionPlaceOrderCmd, OptionSide, ProductType, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -15,6 +15,7 @@ fn option_amend_order_command_can_enter_pending_queue() {
                 trader_id: 99,
                 nonce: 1,
                 timestamp_ns: 30_000,
+                product_type: ProductType::Option,
                 command: ExchangeCommand::TradingCommand(TradingCommand::Option(
                     OptionCommand::PlaceOrder(OptionPlaceOrderCmd {
                         trader_id: 99,
@@ -37,6 +38,7 @@ fn option_amend_order_command_can_enter_pending_queue() {
         trader_id: 99,
         nonce: 2,
         timestamp_ns: 30_001,
+        product_type: ProductType::Option,
         command: ExchangeCommand::TradingCommand(TradingCommand::Option(
             OptionCommand::AmendOrder(OptionAmendOrderCmd {
                 trader_id: 99,

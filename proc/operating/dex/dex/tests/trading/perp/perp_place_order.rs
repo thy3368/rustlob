@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd, PerpSide,
-    SubmitTradingCommandHandler, TradingCommand,
+    ProductType, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn perp_place_order_command_is_accepted_into_pending_queue() {
         trader_id: 7,
         nonce: 1,
         timestamp_ns: 20_000,
+        product_type: ProductType::Perp,
         command: ExchangeCommand::TradingCommand(TradingCommand::Perp(PerpCommand::PlaceOrder(
             PerpPlaceOrderCmd {
                 trader_id: 7,

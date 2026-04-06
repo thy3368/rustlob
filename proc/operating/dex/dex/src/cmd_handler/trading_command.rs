@@ -4,6 +4,8 @@
 //     Sell,
 // }
 
+use crate::types::ProductType;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotSide {
     Buy,
@@ -230,5 +232,6 @@ pub struct ExchangeCommandEnvelope {
     pub trader_id: u64,
     pub nonce: u64,
     pub timestamp_ns: u64,
+    pub product_type: ProductType,
     pub command: ExchangeCommand,
 }

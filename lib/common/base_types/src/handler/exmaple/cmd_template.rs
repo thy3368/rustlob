@@ -185,11 +185,7 @@
 //! - [ ] 没有混入 QueryHandler/read model 逻辑
 //! - [ ] 热路径没有无意义分配或冗余步骤
 
-// use crate::handler::handler::{
-//     ApplyCommandAndCollectChanges, BuildInitialStateSet, LoadStateSetForUpdate,
-//     LoadStateSetInSingleThread, PersistChangeLogs, PreCheckCommand, PublishChangeLog,
-//     ReplayChangeLogsToState, ValidateCommand, ValidateCommandInLock,
-// };
+// use crate::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate};
 //
 // /// CmdHandler 职责规范占位类型。
 // pub struct CmdTemplateSpec;

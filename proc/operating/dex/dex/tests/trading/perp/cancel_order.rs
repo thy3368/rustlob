@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, PerpCancelOrderCmd, PerpCommand,
-    PerpPlaceOrderCmd, PerpSide, SubmitTradingCommandHandler, TradingCommand,
+    PerpPlaceOrderCmd, PerpSide, ProductType, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -15,6 +15,7 @@ fn perp_cancel_order_command_can_enter_pending_queue() {
                 trader_id: 7,
                 nonce: 1,
                 timestamp_ns: 20_000,
+                product_type: ProductType::Perp,
                 command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
                     PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                         trader_id: 7,
@@ -36,6 +37,7 @@ fn perp_cancel_order_command_can_enter_pending_queue() {
         trader_id: 7,
         nonce: 2,
         timestamp_ns: 20_001,
+        product_type: ProductType::Perp,
         command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
             PerpCommand::CancelOrder(PerpCancelOrderCmd {
                 trader_id: 7,

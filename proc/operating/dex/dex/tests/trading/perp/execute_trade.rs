@@ -2,8 +2,8 @@ use base_types::base_types::Price;
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExecuteTradeCmd, ExecuteTradingBatchHandler, ExecutedTrade, ExchangeCommand,
-    ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd, PerpSide, TradeExecutionLog,
-    TradingCommand,
+    ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd, PerpSide, ProductType,
+    TradeExecutionLog, TradingCommand,
 };
 
 #[test]
@@ -18,6 +18,7 @@ fn execute_trade_command_returns_single_trade_execution() {
                     trader_id: 11,
                     nonce: 1,
                     timestamp_ns: 50_000,
+                    product_type: ProductType::Perp,
                     command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
                         PerpCommand::PlaceOrder(PerpPlaceOrderCmd {
                             trader_id: 11,
@@ -35,6 +36,7 @@ fn execute_trade_command_returns_single_trade_execution() {
                     trader_id: 12,
                     nonce: 1,
                     timestamp_ns: 50_001,
+                    product_type: ProductType::Perp,
                     command: ExchangeCommand::TradingCommand(TradingCommand::Perp(
                         PerpCommand::ExecuteTrade(ExecuteTradeCmd {
                             market: "BTC-PERP".into(),

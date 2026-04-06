@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, SubmitTradingCommandHandler, TransferCmd,
-    TreasuryCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, ProductType, SubmitTradingCommandHandler,
+    TransferCmd, TreasuryCommand,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn treasury_transfer_command_can_enter_pending_queue() {
         trader_id: 21,
         nonce: 3,
         timestamp_ns: 40_002,
+        product_type: ProductType::Treasury,
         command: ExchangeCommand::TreasuryCommand(TreasuryCommand::Transfer(TransferCmd {
             trader_id: 21,
             asset: "USDC".into(),
