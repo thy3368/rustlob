@@ -51,6 +51,7 @@ impl Default for BalanceId {
 //todo 用基础类型生成Balance，simd友好
 
 pub struct Balance {
+    //todo add     pub trader_id; key(trader_id,asset_id)
     /// 余额ID（复合键）
     pub id: BalanceId,
     /// 账户ID
