@@ -377,11 +377,6 @@ pub trait CmdRepo2: Send + Sync {
 /// - 可测试性优先：支持 mock 实现用于单元测试
 /// - 单一职责：分离返回单条和多条数据的方法
 pub trait QueryRepo2: Send + Sync {
-    /// 仓储中存储的实体类型
-
-    //todo 把 type E: Entity 泛型变成方法级
-    type E: Entity;
-
     /// 按序列号查询单个实体
     ///
     /// 用于查询特定序列号的实体，常用于事件重放场景
@@ -404,14 +399,14 @@ pub trait QueryRepo2: Send + Sync {
     ///
     /// # 示例
     /// ```ignore
-    /// let repo: Arc<dyn DBQueryRepo<E=Order>> = ...;
+    /// let repo: Arc<dyn QueryRepo2> = ...;
     ///
-    /// match repo.find_by_sequence(100)? {
+    /// match repo.find_by_sequence::<Order>(100)? {
     ///     Some(order) => println!("找到订单: {:?}", order),
     ///     None => println!("序列号 100 的订单不存在"),
     /// }
     /// ```
-    fn find_by_sequence(&self, sequence: u64) -> Result<Option<Self::E>, RepoError>;
+    fn find_by_sequence<E: Entity>(&self, sequence: u64) -> Result<Option<E>, RepoError>;
 
     /// 按条件查询单个实体
     ///
@@ -451,9 +446,9 @@ pub trait QueryRepo2: Send + Sync {
     /// }
     ///
     /// let query = OrderQuery { order_id: "123".parse()? };
-    /// let order = repo.find_one_by_condition(query)?;
+    /// let order = repo.find_one_by_condition::<Order>(query)?;
     /// ```
-    fn find_one_by_condition(&self, condition: Self::E) -> Result<Option<Self::E>, RepoError>;
+    fn find_one_by_condition<E: Entity>(&self, condition: E) -> Result<Option<E>, RepoError>;
 
     /// 按条件查询所有匹配的实体
     ///
@@ -489,10 +484,10 @@ pub trait QueryRepo2: Send + Sync {
     /// }
     ///
     /// let query = SymbolQuery { symbol: "BTCUSDT".parse()? };
-    /// let orders = repo.find_all_by_condition(query)?;
+    /// let orders = repo.find_all_by_condition::<Order>(query)?;
     /// println!("找到 {} 个订单", orders.len());
     /// ```
-    fn find_all_by_condition(&self, condition: Self::E) -> Result<Vec<Self::E>, RepoError>;
+    fn find_all_by_condition<E: Entity>(&self, condition: E) -> Result<Vec<E>, RepoError>;
 
     /// 按实体ID查询单个实体
     ///
@@ -513,14 +508,14 @@ pub trait QueryRepo2: Send + Sync {
     ///
     /// # 示例
     /// ```ignore
-    /// let repo: Arc<dyn DBQueryRepo<E=Order>> = ...;
+    /// let repo: Arc<dyn QueryRepo2> = ...;
     ///
-    /// match repo.find_by_id("order_123")? {
+    /// match repo.find_by_id::<Order>("order_123")? {
     ///     Some(order) => println!("订单状态: {:?}", order),
     ///     None => println!("订单不存在"),
     /// }
     /// ```
-    fn find_by_id(&self, entity_id: &str) -> Result<Option<Self::E>, RepoError> {
+    fn find_by_id<E: Entity>(&self, entity_id: &str) -> Result<Option<E>, RepoError> {
         // 默认实现：返回未实现
         // 具体实现应提供高性能的ID查询
         Err(RepoError::OrderNotFound)
@@ -556,11 +551,11 @@ pub trait QueryRepo2: Send + Sync {
     /// let entities = repo.find_range_by_sequence(100, 200)?;
     /// println!("找到 {} 个实体", entities.len());
     /// ```
-    fn find_range_by_sequence(
+    fn find_range_by_sequence<E: Entity>(
         &self,
         from_sequence: u64,
         to_sequence: u64,
-    ) -> Result<Vec<Self::E>, RepoError> {
+    ) -> Result<Vec<E>, RepoError> {
         // 默认实现：返回空向量
         // 具体实现应支持范围查询
         Ok(Vec::new())
@@ -613,8 +608,8 @@ pub trait QueryRepo2: Send + Sync {
     ///     println!("订单不存在，准备创建");
     /// }
     /// ```
-    fn exists(&self, entity_id: &str) -> Result<bool, RepoError> {
-        match self.find_by_id(entity_id) {
+    fn exists<E: Entity>(&self, entity_id: &str) -> Result<bool, RepoError> {
+        match self.find_by_id::<E>(entity_id) {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(_) => Ok(false),
@@ -661,11 +656,11 @@ pub trait QueryRepo2: Send + Sync {
     ///     println!("订单: {:?}", order);
     /// }
     /// ```
-    fn find_all_by_condition_paginated(
+    fn find_all_by_condition_paginated<E: Entity>(
         &self,
-        condition: Self::E,
+        condition: E,
         page_req: PageRequest,
-    ) -> Result<PageResult<Self::E>, RepoError>;
+    ) -> Result<PageResult<E>, RepoError>;
 
     /// 按序列号范围分页查询实体
     ///
@@ -692,12 +687,12 @@ pub trait QueryRepo2: Send + Sync {
     /// let result = repo.find_range_by_sequence_paginated(1000, 2000, page_req)?;
     /// println!("序列号 1000-2000 范围内有 {} 条记录", result.total_elements);
     /// ```
-    fn find_range_by_sequence_paginated(
+    fn find_range_by_sequence_paginated<E: Entity>(
         &self,
         from_sequence: u64,
         to_sequence: u64,
         page_req: PageRequest,
-    ) -> Result<PageResult<Self::E>, RepoError> {
+    ) -> Result<PageResult<E>, RepoError> {
         // 默认实现：返回空结果
         Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
@@ -745,19 +740,20 @@ pub trait QueryRepo2: Send + Sync {
     ///     true
     /// )?;
     /// ```
-    fn find_by_cursor(
+    fn find_by_cursor<E: Entity>(
         &self,
-        condition: Self::E,
+        condition: E,
         cursor: Option<String>,
         limit: u64,
         forward: bool,
-    ) -> Result<(Vec<Self::E>, Option<String>), RepoError> {
+    ) -> Result<(Vec<E>, Option<String>), RepoError> {
         // 默认实现：返回空结果
         Ok((Vec::new(), None))
     }
 }
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
+//todo 用this error定义
 pub enum RepoError {
     /// 容量已满
     CapacityExceeded,
