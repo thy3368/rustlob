@@ -46,7 +46,7 @@ members = [
     
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "proc/operating/dex/dex",
+    "study/hyperliquid_analyzer", "proc/operating/dex/dex", "lib/common/mdbx",
 ]
 
 resolver = "2"

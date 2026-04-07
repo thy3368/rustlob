@@ -108,6 +108,8 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/mdbx/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/mdbx/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/tests" isTestSource="true" />
