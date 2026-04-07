@@ -1,7 +1,7 @@
 use std::fmt;
 
+use diff::Entity;
 use diff::diff_types::DomainEvent;
-use diff::{ChangeLog, Entity};
 
 /// 分页参数
 ///
@@ -77,6 +77,12 @@ impl PageRequest {
         } else {
             None
         }
+    }
+}
+
+impl Default for PageRequest {
+    fn default() -> Self {
+        Self { page: 0, page_size: 20 }
     }
 }
 
@@ -753,7 +759,6 @@ pub trait QueryRepo2: Send + Sync {
 }
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
-//todo 用this error定义
 pub enum RepoError {
     /// 容量已满
     CapacityExceeded,
