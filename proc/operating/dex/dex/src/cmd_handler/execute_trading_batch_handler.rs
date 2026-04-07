@@ -91,6 +91,7 @@ impl ExecuteTradingBatchHandler {
     pub(crate) fn next_order_id(&self) -> u64 {
         self.next_order_id.fetch_add(1, Ordering::Relaxed)
     }
+
     fn handle_envelope(
         &self,
         envelope: &ExchangeCommandEnvelope,
@@ -134,6 +135,28 @@ impl ExecuteTradingBatchHandler {
             }
         }
     }
+
+    fn delegate_batch_commands(
+        &self,
+        envelopes: &[ExchangeCommandEnvelope],
+        writes: &mut ExecutedBatchBlock,
+        changelogs: &mut Vec<TradeExecutionLog>,
+    ) -> Result<(), ExecuteTradingBatchError> {
+        let mut spot_order_book = self.spot_order_book.lock().unwrap();
+
+        for envelope in envelopes {
+            self.handle_envelope(
+                envelope,
+                &mut ExecuteTradingBatchContext {
+                    writes,
+                    changelogs,
+                    spot_order_book: &mut spot_order_book,
+                },
+            )?;
+        }
+
+        Ok(())
+    }
 }
 
 
@@ -160,18 +183,7 @@ impl ApplyCommandChanges<
         };
 
         let mut changelogs = Vec::new();
-        let mut spot_order_book = self.spot_order_book.lock().unwrap();
-
-        for envelope in cmd {
-            self.handle_envelope(
-                envelope,
-                &mut ExecuteTradingBatchContext {
-                    writes: &mut writes,
-                    changelogs: &mut changelogs,
-                    spot_order_book: &mut spot_order_book,
-                },
-            )?;
-        }
+        self.delegate_batch_commands(cmd, &mut writes, &mut changelogs)?;
 
         writes.summary.balance_updates = writes.balance_deltas.len();
 
@@ -195,6 +207,7 @@ impl CmdHandlerForUpdate<
         &self,
         _cmd: &Vec<ExchangeCommandEnvelope>,
     ) -> Result<(), ExecuteTradingBatchError> {
+        //todo 委派给子command
         Ok(())
     }
 
@@ -202,6 +215,8 @@ impl CmdHandlerForUpdate<
         &self,
         cmd: &Vec<ExchangeCommandEnvelope>,
     ) -> Result<ExecuteTradingBatchState, ExecuteTradingBatchError> {
+        //todo 委派给子command
+
         Ok(ExecuteTradingBatchState {
             batch_size: cmd.len(),
         })
