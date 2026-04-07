@@ -40,6 +40,8 @@ pub enum CommonError {
     TradingPairNotFound { symbol: String },
     /// 系统内部错误
     Internal { message: String },
+    /// 其他错误
+    Other(String),
 }
 
 impl CommonError {
@@ -89,6 +91,9 @@ impl std::fmt::Display for CommonError {
             }
             Self::Internal { message } => {
                 write!(f, "Internal error: {}", message)
+            }
+            Self::Other(msg) => {
+                write!(f, "Other error: {}", msg)
             }
         }
     }
