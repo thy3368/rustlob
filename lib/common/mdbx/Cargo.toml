@@ -1,0 +1,12 @@
+[package]
+name = "mdbx"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1"
+libmdbx = "0.6"
+rkyv = { version = "0.8", features = ["std"] }
+rocksdb = "0.24"
