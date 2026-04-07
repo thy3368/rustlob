@@ -6,7 +6,7 @@ use base_types::handler::handler_update2::{
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOtoOrderCmd;
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOtoOrderCmd, OtoOrderResult};
 
 #[derive(Debug, Clone)]
 pub struct NewOtoOrderStateSet {
@@ -43,6 +43,7 @@ impl NewOtoOrderCmdHandler {
 
 impl ApplyCommandChanges2 for NewOtoOrderCmdHandler {
     type Command = NewOtoOrderCmd;
+    type Reply = OtoOrderResult;
     type StateSet = NewOtoOrderStateSet;
     type StateChangedSet = NewOtoOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
@@ -52,6 +53,10 @@ impl ApplyCommandChanges2 for NewOtoOrderCmdHandler {
         cmd: &Self::Command,
         state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error> {
+        todo!()
+    }
+
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
         todo!()
     }
 }

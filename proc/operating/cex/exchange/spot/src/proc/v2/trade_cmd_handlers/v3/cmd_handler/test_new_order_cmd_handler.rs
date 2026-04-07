@@ -6,7 +6,7 @@ use base_types::handler::handler_update2::{
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::TestNewOrderCmd;
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{CommissionRates, TestNewOrderCmd};
 
 #[derive(Debug, Clone)]
 pub struct TestNewOrderStateSet {
@@ -46,6 +46,7 @@ impl TestNewOrderCmdHandler {
 
 impl ApplyCommandChanges2 for TestNewOrderCmdHandler {
     type Command = TestNewOrderCmd;
+    type Reply = CommissionRates;
     type StateSet = TestNewOrderStateSet;
     type StateChangedSet = TestNewOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
@@ -55,6 +56,10 @@ impl ApplyCommandChanges2 for TestNewOrderCmdHandler {
         cmd: &Self::Command,
         state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error> {
+        todo!()
+    }
+
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
         todo!()
     }
 }

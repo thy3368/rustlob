@@ -6,7 +6,9 @@ use base_types::handler::handler_update2::{
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::CancelAllOpenOrdersCmd;
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+    CancelAllOpenOrdersCmd, CancelOrderResult,
+};
 
 #[derive(Debug, Clone)]
 pub struct CancelAllOpenOrdersStateSet {
@@ -43,6 +45,7 @@ impl CancelAllOpenOrdersCmdHandler {
 
 impl ApplyCommandChanges2 for CancelAllOpenOrdersCmdHandler {
     type Command = CancelAllOpenOrdersCmd;
+    type Reply = Vec<CancelOrderResult>;
     type StateSet = CancelAllOpenOrdersStateSet;
     type StateChangedSet = CancelAllOpenOrdersStateChangedSet;
     type Error = SpotCmdErrorAny;
@@ -52,6 +55,10 @@ impl ApplyCommandChanges2 for CancelAllOpenOrdersCmdHandler {
         cmd: &Self::Command,
         state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error> {
+        todo!()
+    }
+
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
         todo!()
     }
 }

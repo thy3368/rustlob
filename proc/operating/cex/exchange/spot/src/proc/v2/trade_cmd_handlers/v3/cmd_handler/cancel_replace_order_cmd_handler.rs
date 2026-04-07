@@ -6,7 +6,9 @@ use base_types::handler::handler_update2::{
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::CancelReplaceOrderCmd;
+use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+    CancelReplaceOrderCmd, CancelReplaceResult,
+};
 
 #[derive(Debug, Clone)]
 pub struct CancelReplaceOrderStateSet {
@@ -50,6 +52,7 @@ impl CancelReplaceOrderCmdHandler {
 
 impl ApplyCommandChanges2 for CancelReplaceOrderCmdHandler {
     type Command = CancelReplaceOrderCmd;
+    type Reply = CancelReplaceResult;
     type StateSet = CancelReplaceOrderStateSet;
     type StateChangedSet = CancelReplaceOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
@@ -59,6 +62,10 @@ impl ApplyCommandChanges2 for CancelReplaceOrderCmdHandler {
         cmd: &Self::Command,
         state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error> {
+        todo!()
+    }
+
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
         todo!()
     }
 }
