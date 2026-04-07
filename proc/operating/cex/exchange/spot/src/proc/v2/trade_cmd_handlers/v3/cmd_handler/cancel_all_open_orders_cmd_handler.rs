@@ -6,26 +6,23 @@ use base_types::handler::handler_update2::{
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOrderCmd, NewOrderFull};
+use crate::proc::behavior::v2::spot_trade_behavior_v2::CancelAllOpenOrdersCmd;
 
 #[derive(Debug, Clone)]
-pub struct PlaceOrderStateSet {
-    pub order_id: u64,
+pub struct CancelAllOpenOrdersStateSet {
+    pub symbol: base_types::TradingPair,
 }
 
-pub struct PlaceOrderStateChangedSet {
-    pub order: Option<DomainEvent<SpotOrder>>,
+pub struct CancelAllOpenOrdersStateChangedSet {
+    pub orders: Vec<DomainEvent<SpotOrder>>,
     pub trades: Option<Vec<DomainEvent<SpotTrade>>>,
     pub balances: Option<Vec<DomainEvent<Balance>>>,
 }
 
-impl DomainEventSet for PlaceOrderStateChangedSet {
+impl DomainEventSet for CancelAllOpenOrdersStateChangedSet {
     #[inline]
     fn domain_event_count(&self) -> usize {
-        let mut count = 0;
-        if self.order.is_some() {
-            count += 1;
-        }
+        let mut count = self.orders.len();
         if let Some(ref trades) = self.trades {
             count += trades.len();
         }
@@ -36,19 +33,18 @@ impl DomainEventSet for PlaceOrderStateChangedSet {
     }
 }
 
-pub struct PlaceOrderCmdHandler;
+pub struct CancelAllOpenOrdersCmdHandler;
 
-impl PlaceOrderCmdHandler {
+impl CancelAllOpenOrdersCmdHandler {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl ApplyCommandChanges2 for PlaceOrderCmdHandler {
-    type Command = NewOrderCmd;
-    type Reply = NewOrderFull;
-    type StateSet = PlaceOrderStateSet;
-    type StateChangedSet = PlaceOrderStateChangedSet;
+impl ApplyCommandChanges2 for CancelAllOpenOrdersCmdHandler {
+    type Command = CancelAllOpenOrdersCmd;
+    type StateSet = CancelAllOpenOrdersStateSet;
+    type StateChangedSet = CancelAllOpenOrdersStateChangedSet;
     type Error = SpotCmdErrorAny;
 
     fn apply_command_and_collect_changes(
@@ -58,13 +54,9 @@ impl ApplyCommandChanges2 for PlaceOrderCmdHandler {
     ) -> Result<Self::StateChangedSet, Self::Error> {
         todo!()
     }
-
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
-        todo!()
-    }
 }
 
-impl CmdHandlerForUpdate2 for PlaceOrderCmdHandler {
+impl CmdHandlerForUpdate2 for CancelAllOpenOrdersCmdHandler {
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         todo!()
     }
