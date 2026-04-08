@@ -4,9 +4,9 @@ use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLog, FromCreatedEvent};
 
+use crate::LobError;
 use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
 use crate::core::symbol_lob_repo::SymbolLob;
-use crate::LobError;
 
 /// 价格点结构
 ///
@@ -77,11 +77,7 @@ pub struct LocalLob<O: LobOrder> {
 impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
     type Snapshot = LocalLob<O>;
 
-    fn create_snapshot(
-        &self,
-        _timestamp: u64,
-        _sequence: u64,
-    ) -> Result<Self::Snapshot, LobError> {
+    fn create_snapshot(&self, _timestamp: u64, _sequence: u64) -> Result<Self::Snapshot, LobError> {
         // 直接克隆当前 LocalLob 作为快照
         Ok(self.clone())
     }

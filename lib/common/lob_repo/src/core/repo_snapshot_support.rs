@@ -12,7 +12,7 @@
 
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RepoError {
+pub enum LobError {
     CapacityExceeded,
     OrderAlreadyExists,
     OrderNotFound,
@@ -23,7 +23,7 @@ pub enum RepoError {
     SerializationFailed(String),
 }
 
-pub type LobError = RepoError;
+// pub type LobError = RepoError;
 
 /// 仓储快照能力 Trait
 ///

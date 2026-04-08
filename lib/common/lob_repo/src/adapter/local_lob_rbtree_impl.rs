@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 
-use crate::core::symbol_lob_repo::SymbolLob;
 use crate::LobError;
+use crate::core::symbol_lob_repo::SymbolLob;
 
 /// 价格点结构
 ///

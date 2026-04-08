@@ -4,8 +4,9 @@ use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLog, FromCreatedEvent};
 
-use crate::core::repo_snapshot_support::{EventReplay, RepoError, RepoSnapshot};
+use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
 use crate::core::symbol_lob_repo::SymbolLob;
+use crate::LobError;
 
 /// 价格点结构
 ///
@@ -81,12 +82,12 @@ impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
         &self,
         _timestamp: u64,
         _sequence: u64,
-    ) -> Result<Self::Snapshot, RepoError> {
+    ) -> Result<Self::Snapshot, LobError> {
         // 直接克隆当前 LocalLob 作为快照
         Ok(self.clone())
     }
 
-    fn restore_from_snapshot(&mut self, snapshot: &Self::Snapshot) -> Result<(), RepoError> {
+    fn restore_from_snapshot(&mut self, snapshot: &Self::Snapshot) -> Result<(), LobError> {
         // 从快照恢复：将快照中的状态复制到当前 LOB
         self.symbol = snapshot.symbol;
         self.tick_size = snapshot.tick_size;
@@ -105,7 +106,7 @@ impl<O: LobOrder + Clone> RepoSnapshot for LocalLob<O> {
 impl<O: LobOrder + FromCreatedEvent> EventReplay for LocalLob<O> {
     type Event = ChangeLog;
 
-    fn replay_event(&mut self, event: &Self::Event) -> Result<(), RepoError> {
+    fn replay_event(&mut self, event: &Self::Event) -> Result<(), LobError> {
         // 根据变更类型处理事件
         use diff::ChangeType;
 
@@ -435,23 +436,23 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
         if matched_orders.is_empty() { (None, quantity) } else { (Some(matched_orders), remaining) }
     }
 
-    fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
+    fn add_order(&mut self, order: Self::Order) -> Result<(), LobError> {
         let order_id = order.order_id();
         let price = order.price();
         let side = order.side();
 
         // === 1. 前置验证（不分配资源）===
         if self.order_index.contains_key(&order_id) {
-            return Err(RepoError::OrderAlreadyExists);
+            return Err(LobError::OrderAlreadyExists);
         }
         if self.get_price_point(price, side).is_none() {
-            return Err(RepoError::PriceOutOfRange);
+            return Err(LobError::PriceOutOfRange);
         }
 
         // === 2. 分配槽位 ===
         let idx = self.next_slot;
         if idx >= self.orders.capacity() {
-            return Err(RepoError::CapacityExceeded);
+            return Err(LobError::CapacityExceeded);
         }
 
         // === 3. 存储订单 ===
