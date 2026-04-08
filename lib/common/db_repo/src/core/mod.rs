@@ -3,3 +3,4 @@ pub mod kv_store;
 
 pub mod queue_repo;
 pub mod db_repo2;
+pub mod event_publish;
