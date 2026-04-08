@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use base_types::account::balance::Balance as AccountBalance;
+use base_types::account::balance::{Balance as AccountBalance, Balance};
 use base_types::exchange::spot::spot_types::SpotTrade;
 use base_types::handler::handler_update2::{
     ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
@@ -10,7 +10,6 @@ use db_repo::core::event_publish::EventPublisher;
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::spot_user_data_behavior::Balance;
 
 #[derive(Debug, Clone)]
 pub struct SettStateSet {
@@ -125,9 +124,7 @@ impl<R: CmdRepo2, P: EventPublisher> CmdHandlerForUpdate2 for SettOrderCmdHandle
 
 #[cfg(test)]
 mod tests {
-    use base_types::cqrs::cqrs_types::CMetadata;
-    use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
-    use base_types::{Price, Quantity};
+    use base_types::exchange::spot::spot_types::SpotTrade;
     use db_repo::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
     use diff::diff_types::DomainEvent;
     use diff::Entity;
@@ -233,27 +230,7 @@ mod tests {
     #[test]
     fn test_settlement_apply_returns_no_balance_events_for_now() {
         let handler = SettOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher);
-        let cmd = NewOrderCmd::new(
-            CMetadata::default(),
-            TradingPair::BtcUsdt,
-            OrderSide::Buy,
-            OrderType::Limit,
-            Some(TimeInForce::GTC),
-            Some(Quantity::from_f64(1.0)),
-            None,
-            Some(Price::from_f64(50000.0)),
-            Some("test_sett_001".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
 
         let state = handler
             .load_state_set_for_update(&cmd)

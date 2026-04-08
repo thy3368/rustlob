@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::SpotTrade;
 use base_types::handler::event_actor::EventActor;
-use base_types::handler::event_handler::EventHandler;
+use base_types::handler::event_handler::{EventHandler, EventHandler2};
 use diff::diff_types::DomainEvent;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
