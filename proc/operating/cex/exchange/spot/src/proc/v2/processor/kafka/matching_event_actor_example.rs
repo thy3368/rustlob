@@ -1,17 +1,21 @@
 use std::sync::Arc;
 
+use base_types::exchange::spot::spot_types::SpotOrder;
 use base_types::handler::event_actor::EventRecvActor;
+use db_repo::core::db_repo2::CmdRepo2;
+use db_repo::core::event_publish::EventPublisher2;
+use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::v2::processor::kafka::base::KafkaProcessorConfig;
 use crate::proc::v2::processor::kafka::matching_event_actor::KafkaMatchingEventActor;
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
-/// 在独立线程中启动 KafkaMatchingEventActor 的示例。
-///
-/// 调用方负责准备 `order_repo` 和 `matching_handler` 依赖。
-/// actor 线程启动后会持续阻塞消费 Kafka 消息。
-pub fn start_matching_event_actor_in_thread(
-    event_handler: Arc<NewOrderPlaceEventHandler>,
+pub fn start_matching_event_actor_in_thread<
+    R: CmdRepo2,
+    P: EventPublisher2,
+    L: MultiSymbolLobRepo<Order = SpotOrder>,
+>(
+    event_handler: Arc<NewOrderPlaceEventHandler<R, P, L>>,
     config: KafkaProcessorConfig,
     topic: String,
 ) -> Result<std::thread::JoinHandle<()>, String> {
