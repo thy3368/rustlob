@@ -590,7 +590,7 @@ mod tests {
 
     use base_types::exchange::spot::spot_types::TimeInForce;
     use base_types::{Decimal, Price, TradingPair};
-    use lob_repo::core::repo_snapshot_support::RepoError;
+    use lob_repo::core::repo_snapshot_support::LobError;
 
     use super::*;
     use crate::proc::behavior::spot_trade_behavior::CMetadata;
@@ -689,7 +689,7 @@ mod tests {
             self.supported_symbols.lock().unwrap().contains(symbol)
         }
 
-        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), RepoError> {
+        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), LobError> {
             Ok(())
         }
 

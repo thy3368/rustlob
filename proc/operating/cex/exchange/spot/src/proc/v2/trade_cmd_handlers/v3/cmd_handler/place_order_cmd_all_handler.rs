@@ -198,11 +198,12 @@ impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {
         //从lob加载makers
         //从repo查所有的balance
 
-        Ok(PlaceOrderStateSetAll {
-            place_order_state_set: PlaceOrderStateSet { order_id: self.generate_order_id() },
-            match_order_state_set: xx,
-            sett_state_set: xxx,
-        })
+        todo!()
+        // Ok(PlaceOrderStateSetAll {
+        //     place_order_state_set: PlaceOrderStateSet { order_id: self.generate_order_id() },
+        //     match_order_state_set: xx,
+        //     sett_state_set: xxx,
+        // })
     }
 
     fn validate_command_in_lock(
