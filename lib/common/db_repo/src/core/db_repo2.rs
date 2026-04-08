@@ -1,7 +1,7 @@
 use std::fmt;
 
-use diff::Entity;
 use diff::diff_types::DomainEvent;
+use diff::Entity;
 
 /// 分页参数
 ///
@@ -208,7 +208,7 @@ impl<T: fmt::Display> fmt::Display for PageResult<T> {
 /// - 快照支持：通过 RepoSnapshot trait 实现
 /// - 事件回放：通过 EventReplay trait 实现
 /// - 批量操作：支持高效的批量操作
-pub trait CmdRepo2: Send + Sync {
+pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     /// 仓储中存储的实体类型
     /// 从事件日志中回放单个事件
     ///
@@ -521,11 +521,7 @@ pub trait QueryRepo2: Send + Sync {
     ///     None => println!("订单不存在"),
     /// }
     /// ```
-    fn find_by_id<E: Entity>(&self, entity_id: &str) -> Result<Option<E>, RepoError> {
-        // 默认实现：返回未实现
-        // 具体实现应提供高性能的ID查询
-        Err(RepoError::OrderNotFound)
-    }
+    fn find_by_id<E: Entity>(&self, entity_id: &str) -> Result<Option<E>, RepoError>;
 
     /// 按范围查询多个实体
     ///
@@ -561,11 +557,7 @@ pub trait QueryRepo2: Send + Sync {
         &self,
         from_sequence: u64,
         to_sequence: u64,
-    ) -> Result<Vec<E>, RepoError> {
-        // 默认实现：返回空向量
-        // 具体实现应支持范围查询
-        Ok(Vec::new())
-    }
+    ) -> Result<Vec<E>, RepoError>;
 
     /// 获取仓储中的实体总数
     ///
@@ -584,9 +576,7 @@ pub trait QueryRepo2: Send + Sync {
     /// let count = repo.count()?;
     /// println!("仓储中有 {} 个实体", count);
     /// ```
-    fn count(&self) -> Result<u64, RepoError> {
-        Ok(0)
-    }
+    fn count(&self) -> Result<u64, RepoError>;
 
     /// 检查仓储是否包含指定ID的实体
     ///
@@ -698,10 +688,7 @@ pub trait QueryRepo2: Send + Sync {
         from_sequence: u64,
         to_sequence: u64,
         page_req: PageRequest,
-    ) -> Result<PageResult<E>, RepoError> {
-        // 默认实现：返回空结果
-        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
-    }
+    ) -> Result<PageResult<E>, RepoError>;
 
     /// 基于游标的分页查询（可选优化）
     ///
@@ -752,13 +739,11 @@ pub trait QueryRepo2: Send + Sync {
         cursor: Option<String>,
         limit: u64,
         forward: bool,
-    ) -> Result<(Vec<E>, Option<String>), RepoError> {
-        // 默认实现：返回空结果
-        Ok((Vec::new(), None))
-    }
+    ) -> Result<(Vec<E>, Option<String>), RepoError>;
 }
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
+//todo 变成this error
 pub enum RepoError {
     /// 容量已满
     CapacityExceeded,
