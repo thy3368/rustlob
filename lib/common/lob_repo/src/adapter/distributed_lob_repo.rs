@@ -4,9 +4,8 @@ use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 
 use crate::adapter::remote_lob_impl::RemoteLob;
-use crate::core::repo_snapshot_support::RepoError;
+use crate::core::repo_snapshot_support::LobError;
 use crate::core::symbol_lob_repo::MultiSymbolLobRepo;
-
 // todo 用type 代码范型
 
 #[allow(dead_code)]
@@ -54,7 +53,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         todo!()
     }
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), RepoError> {
+    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
         todo!()
     }
 

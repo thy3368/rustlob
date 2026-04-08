@@ -4,8 +4,8 @@ use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLog, FromCreatedEvent};
 
-use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
-use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
+use crate::core::repo_snapshot_support::{EventReplay, RepoError, RepoSnapshot};
+use crate::core::symbol_lob_repo::SymbolLob;
 
 /// 价格点结构
 ///
@@ -432,11 +432,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
         }
 
         // 返回匹配结果和剩余未匹配数量
-        if matched_orders.is_empty() {
-            (None, quantity)
-        } else {
-            (Some(matched_orders), remaining)
-        }
+        if matched_orders.is_empty() { (None, quantity) } else { (Some(matched_orders), remaining) }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {

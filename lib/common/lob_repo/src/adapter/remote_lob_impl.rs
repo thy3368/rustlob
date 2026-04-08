@@ -1,7 +1,8 @@
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 
-use crate::core::symbol_lob_repo::{RepoError, SymbolLob};
+use crate::core::repo_snapshot_support::LobError;
+use crate::core::symbol_lob_repo::SymbolLob;
 
 // todo 通过rpc连接远程的lob
 //todo 用type 代码范型
@@ -32,7 +33,7 @@ impl<O: LobOrder> SymbolLob for RemoteLob<O> {
         todo!()
     }
 
-    fn add_order(&mut self, order: Self::Order) -> Result<(), RepoError> {
+    fn add_order(&mut self, order: Self::Order) -> Result<(), LobError> {
         todo!()
     }
 

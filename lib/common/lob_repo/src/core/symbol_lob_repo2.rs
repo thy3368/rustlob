@@ -1,53 +1,13 @@
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
-use parking_lot::RwLock;
 
-pub(crate) use crate::core::repo_snapshot_support::LobError;
-
-/// LOB 快照数据
-///
-/// 用于保存 LOB 某个时间点的完整状态，支持事件溯源和状态重建
-#[derive(Debug, Clone)]
-pub struct LobSnapshot {
-    /// 交易对符号
-    pub symbol: TradingPair,
-    /// 快照时间戳（纳秒）
-    pub timestamp: u64,
-    /// 快照序列号
-    pub sequence: u64,
-    /// 序列化的 LOB 状态数据
-    pub data: Vec<u8>,
-    /// 最佳买价（快照时）
-    pub best_bid: Option<Price>,
-    /// 最佳卖价（快照时）
-    pub best_ask: Option<Price>,
-    /// 最后成交价（快照时）
-    pub last_price: Option<Price>,
-}
-
-impl LobSnapshot {
-    /// 创建 LOB 快照
-    pub fn new(
-        symbol: TradingPair,
-        timestamp: u64,
-        sequence: u64,
-        data: Vec<u8>,
-        best_bid: Option<Price>,
-        best_ask: Option<Price>,
-        last_price: Option<Price>,
-    ) -> Self {
-        Self { symbol, timestamp, sequence, data, best_bid, best_ask, last_price }
-    }
-}
+pub use crate::core::repo_snapshot_support::LobError;
 
 /// 订单仓储接口
 ///
 /// 定义订单数据的存储和检索操作
 /// 仅暴露业务层需要的操作，内部实现细节（如链表遍历、价格点管理）由具体实现封装
-pub trait SymbolLob {
-    /// 订单类型关联类型
-    type Order: LobOrder;
-
+pub trait SymbolLob2 {
     /// 匹配订单，返回匹配到的订单引用列表和剩余未匹配数量
     ///
     /// # 参数
@@ -60,12 +20,12 @@ pub trait SymbolLob {
     ///   - `remaining`: 0 表示全部匹配（全成交）
     ///   - `remaining` > 0 表示部分匹配（部分成交）
     /// - `(None, quantity)`: 无法匹配，返回原始数量
-    fn match_orders(
+    fn match_orders<O: LobOrder>(
         &self,
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> (Option<Vec<&Self::Order>>, Quantity);
+    ) -> (Option<Vec<&O>>, Quantity);
 
     /// 添加订单到仓储
     ///
@@ -83,7 +43,7 @@ pub trait SymbolLob {
     /// - `order.order_id()` - 订单ID
     /// - `order.side()` - 订单方向
     /// - `order.price()` - 价格
-    fn add_order(&mut self, order: Self::Order) -> Result<(), LobError>;
+    fn add_order<O: LobOrder>(&mut self, order: O) -> Result<(), LobError>;
 
     /// 取消订单
     ///
@@ -98,10 +58,10 @@ pub trait SymbolLob {
     // === 核心读操作 ===
 
     /// 根据订单ID查找订单
-    fn find_order(&self, order_id: OrderId) -> Option<&Self::Order>;
+    fn find_order<O: LobOrder>(&self, order_id: OrderId) -> Option<&O>;
 
     /// 根据订单ID查找订单（可变引用）
-    fn find_order_mut(&mut self, order_id: OrderId) -> Option<&mut Self::Order>;
+    fn find_order_mut<O: LobOrder>(&mut self, order_id: OrderId) -> Option<&mut O>;
 
     // === 市场数据查询 ===
 
@@ -132,37 +92,11 @@ pub trait SymbolLob {
     fn update_last_price(&mut self, price: Price);
 }
 
-//todo 用this error
-impl std::fmt::Display for LobError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LobError::CapacityExceeded => write!(f, "订单容量已满"),
-            LobError::OrderAlreadyExists => write!(f, "订单已存在"),
-            LobError::OrderNotFound => write!(f, "订单未找到"),
-            LobError::PriceOutOfRange => write!(f, "价格超出范围"),
-            LobError::SnapshotNotSupported => write!(f, "不支持快照功能"),
-            LobError::DeserializationFailed(msg) => write!(f, "反序列化失败: {}", msg),
-            LobError::SymbolMismatch { expected, actual } => {
-                write!(f, "交易对不匹配: 期望 {}, 实际 {}", expected, actual)
-            }
-            LobError::SerializationFailed(msg) => write!(f, "序列化失败: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for LobError {}
-
 /// 多 LOB 仓储接口
 ///
 /// 定义多个交易对的 LOB 管理和订单匹配操作
 /// 遵循 Clean Architecture 的依赖倒置原则，业务层依赖此抽象接口
-///
-/// # 关联类型
-/// - `Order`: 实现了 Order trait 的订单类型
-pub trait MultiSymbolLobRepo: Send + Sync {
-    /// 订单类型关联类型
-    type Order: LobOrder;
-
+pub trait MultiSymbolLobRepo2: Send + Sync {
     /// 匹配订单
     ///
     /// 根据交易对 symbol 查找对应的 LOB 并进行订单匹配
@@ -182,13 +116,13 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 性能要求
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
-    fn match_orders(
+    fn match_orders<O: LobOrder>(
         &self,
         symbol: TradingPair,
         side: OrderSide,
         price: Price,
         quantity: Quantity,
-    ) -> (Option<Vec<&Self::Order>>, Quantity);
+    ) -> (Option<Vec<&O>>, Quantity);
 
     /// 获取指定交易对的最佳买价
     ///
@@ -220,7 +154,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `false`: LOB 不存在
     fn contains_symbol(&self, symbol: &TradingPair) -> bool;
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError>;
+    fn add_order<O: LobOrder>(&self, symbol: TradingPair, order: O) -> Result<(), LobError>;
 
     /// 取消订单
     ///
@@ -232,67 +166,13 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `false`: 订单不存在
     fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool;
 
-    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order>;
+    fn find_order<O: LobOrder>(&self, p0: TradingPair, p1: OrderId) -> Option<&O>;
 
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order>;
+    fn find_order_mut<O: LobOrder>(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut O>;
 
     /// 获取指定交易对的最后一笔成交价
     fn last_price(&self, symbol: TradingPair) -> Option<Price>;
 
     /// 更新指定交易对的最后一笔成交价
     fn update_last_price(&self, symbol: TradingPair, price: Price);
-}
-
-/// 为 Arc<L> 实现 MultiSymbolLobRepo trait
-impl<L> MultiSymbolLobRepo for std::sync::Arc<L>
-where
-    L: MultiSymbolLobRepo + ?Sized,
-{
-    type Order = L::Order;
-
-    fn match_orders(
-        &self,
-        symbol: TradingPair,
-        side: OrderSide,
-        price: Price,
-        quantity: Quantity,
-    ) -> (Option<Vec<&Self::Order>>, Quantity) {
-        (**self).match_orders(symbol, side, price, quantity)
-    }
-
-    fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).best_bid(symbol)
-    }
-
-    fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).best_ask(symbol)
-    }
-
-    fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-        (**self).contains_symbol(symbol)
-    }
-
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
-        (**self).add_order(symbol, order)
-    }
-
-    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
-        (**self).remove_order(symbol, order_id)
-    }
-
-    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
-        (**self).find_order(p0, p1)
-    }
-
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
-        (**self).find_order_mut(p0, order_id)
-    }
-
-    fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).last_price(symbol)
-    }
-
-    fn update_last_price(&self, symbol: TradingPair, price: Price) {
-        (**self).update_last_price(symbol, price)
-    }
 }

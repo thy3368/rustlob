@@ -5,7 +5,7 @@ use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use parking_lot::RwLock;
 
 use crate::adapter::local_lob_impl::LocalLob;
-use crate::core::repo_snapshot_support::RepoError;
+use crate::core::repo_snapshot_support::LobError;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob};
 
 #[allow(dead_code)]
@@ -48,7 +48,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
         self.lobs.read().contains_key(symbol)
     }
 
-    fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), RepoError> {
+    fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), LobError> {
         todo!()
     }
 

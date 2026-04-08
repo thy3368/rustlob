@@ -13,23 +13,17 @@
 /// 仓储错误类型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepoError {
-    /// 容量已满
     CapacityExceeded,
-    /// 订单已存在
     OrderAlreadyExists,
-    /// 订单未找到
     OrderNotFound,
-    /// 价格超出范围
     PriceOutOfRange,
-    /// 不支持快照功能
     SnapshotNotSupported,
-    /// 反序列化失败
     DeserializationFailed(String),
-    /// 交易对不匹配
     SymbolMismatch { expected: String, actual: String },
-    /// 序列化失败
     SerializationFailed(String),
 }
+
+pub type LobError = RepoError;
 
 /// 仓储快照能力 Trait
 ///
@@ -92,7 +86,7 @@ pub trait RepoSnapshot {
     /// # 说明
     /// 快照应包含仓储在指定时间点的完整状态，
     /// 包括所有必要的数据以便完全恢复仓储状态
-    fn create_snapshot(&self, timestamp: u64, sequence: u64) -> Result<Self::Snapshot, RepoError>;
+    fn create_snapshot(&self, timestamp: u64, sequence: u64) -> Result<Self::Snapshot, LobError>;
 
     /// 从快照恢复仓储状态
     ///
@@ -106,7 +100,7 @@ pub trait RepoSnapshot {
     /// # 说明
     /// 此方法会清空当前状态并从快照中完全恢复
     /// 实现时应注意验证快照的有效性
-    fn restore_from_snapshot(&mut self, snapshot: &Self::Snapshot) -> Result<(), RepoError>;
+    fn restore_from_snapshot(&mut self, snapshot: &Self::Snapshot) -> Result<(), LobError>;
 }
 
 /// 事件回放能力 Trait
@@ -170,7 +164,7 @@ pub trait EventReplay {
     ///
     /// # 说明
     /// 将事件应用到仓储状态，更新相应的数据
-    fn replay_event(&mut self, event: &Self::Event) -> Result<(), RepoError>;
+    fn replay_event(&mut self, event: &Self::Event) -> Result<(), LobError>;
 
     /// 批量回放事件列表
     ///
@@ -184,7 +178,7 @@ pub trait EventReplay {
     /// # 说明
     /// 默认实现按顺序逐个回放事件
     /// 具体实现可以覆盖此方法进行批量优化
-    fn replay_events(&mut self, events: &[Self::Event]) -> Result<(), RepoError> {
+    fn replay_events(&mut self, events: &[Self::Event]) -> Result<(), LobError> {
         for event in events {
             self.replay_event(event)?;
         }
@@ -208,7 +202,7 @@ pub trait EventReplay {
         &mut self,
         events: &[Self::Event],
         from_sequence: u64,
-    ) -> Result<(), RepoError>
+    ) -> Result<(), LobError>
     where
         Self::Event: HasSequence,
     {

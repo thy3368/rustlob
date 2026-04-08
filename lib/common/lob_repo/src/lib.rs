@@ -1,6 +1,8 @@
 pub mod adapter;
 pub mod core;
 
+pub use core::repo_snapshot_support::LobError;
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
