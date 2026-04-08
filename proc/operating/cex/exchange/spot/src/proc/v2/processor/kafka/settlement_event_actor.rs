@@ -58,7 +58,9 @@ impl<R: CmdRepo2, P: EventPublisher2> KafkaSettlementEventActor<R, P> {
     }
 }
 
-impl EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny> for KafkaSettlementEventActor {
+impl<R: CmdRepo2, P: EventPublisher2> EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny>
+    for KafkaSettlementEventActor<R, P>
+{
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotCmdErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))
