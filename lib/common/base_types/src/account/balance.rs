@@ -10,6 +10,8 @@ use crate::{AccountId, AssetId, OrderId, Price, Quantity, Timestamp};
 
 /// 余额ID（复合键：account_id:asset_id）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct BalanceId {
     pub account_id: AccountId,
     pub asset_id: AssetId,
@@ -49,6 +51,7 @@ impl Default for BalanceId {
 #[derive(Debug, Clone, Entity)]
 #[repr(align(64))]
 //todo 用基础类型生成Balance，simd友好
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
 pub struct Balance {
     //todo add     pub trader_id; key(trader_id,asset_id)
