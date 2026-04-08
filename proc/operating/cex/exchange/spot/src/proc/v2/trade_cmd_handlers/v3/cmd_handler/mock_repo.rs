@@ -1,5 +1,5 @@
 use db_repo::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
-use db_repo::core::event_publish::EventPublisher;
+use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use diff::Entity;
 
@@ -84,7 +84,7 @@ impl CmdRepo2 for MockMySqlRepo {
 
 pub struct MockEventPublisher;
 
-impl EventPublisher for MockEventPublisher {
+impl EventPublisher2 for MockEventPublisher {
     fn publish<E>(
         &self,
         _event: &DomainEvent<E>,

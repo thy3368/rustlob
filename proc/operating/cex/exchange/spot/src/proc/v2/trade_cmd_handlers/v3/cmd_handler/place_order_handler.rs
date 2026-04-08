@@ -5,7 +5,7 @@ use base_types::handler::handler_update2::{
 };
 use base_types::Quantity;
 use db_repo::core::db_repo2::CmdRepo2;
-use db_repo::core::event_publish::EventPublisher;
+use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::{track_create, DomainEvent};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -27,12 +27,12 @@ impl DomainEventSet for PlaceOrderStateChangedSet {
     }
 }
 
-pub struct PlaceOrderCmdHandler<R: CmdRepo2, P: EventPublisher> {
+pub struct PlaceOrderCmdHandler<R: CmdRepo2, P: EventPublisher2> {
     pub repo: R,
     pub publisher: P,
 }
 
-impl<R: CmdRepo2, P: EventPublisher> PlaceOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> PlaceOrderCmdHandler<R, P> {
     pub fn new(repo: R, publisher: P) -> Self {
         Self { repo, publisher }
     }
@@ -43,7 +43,7 @@ impl<R: CmdRepo2, P: EventPublisher> PlaceOrderCmdHandler<R, P> {
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher> ApplyCommandChanges2 for PlaceOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R, P> {
     type Command = NewOrderCmd;
     type Reply = DomainEvent<SpotOrder>;
     type StateSet = PlaceOrderStateSet;
@@ -90,7 +90,7 @@ impl<R: CmdRepo2, P: EventPublisher> ApplyCommandChanges2 for PlaceOrderCmdHandl
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }

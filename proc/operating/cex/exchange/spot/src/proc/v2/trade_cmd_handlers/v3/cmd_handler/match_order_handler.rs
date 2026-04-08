@@ -7,7 +7,7 @@ use base_types::handler::handler_update2::{
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
-use db_repo::core::event_publish::EventPublisher;
+use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
@@ -36,7 +36,7 @@ pub struct MatchCmd {
 
 pub struct MatchOrderCmdHandler<
     R: CmdRepo2,
-    P: EventPublisher,
+    P: EventPublisher2,
     L: MultiSymbolLobRepo<Order = SpotOrder>,
 > {
     pub repo: R,
@@ -44,7 +44,7 @@ pub struct MatchOrderCmdHandler<
     pub lob: L,
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>>
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
     MatchOrderCmdHandler<R, P, L>
 {
     pub fn new(repo: R, publisher: P, lob: L) -> Self {
@@ -52,7 +52,7 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>>
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>> ApplyCommandChanges2
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> ApplyCommandChanges2
     for MatchOrderCmdHandler<R, P, L>
 {
     type Command = MatchCmd;
@@ -75,7 +75,7 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>> A
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
     for MatchOrderCmdHandler<R, P, L>
 {
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
@@ -165,7 +165,7 @@ mod tests {
 
     struct MockEventPublisher;
 
-    impl EventPublisher for MockEventPublisher {
+    impl EventPublisher2 for MockEventPublisher {
         fn publish<E>(
             &self,
             _event: &DomainEvent<E>,

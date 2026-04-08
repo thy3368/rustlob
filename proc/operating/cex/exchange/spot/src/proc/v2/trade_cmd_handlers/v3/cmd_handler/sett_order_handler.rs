@@ -6,7 +6,7 @@ use base_types::handler::handler_update2::{
     ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
 };
 use db_repo::core::db_repo2::CmdRepo2;
-use db_repo::core::event_publish::EventPublisher;
+use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -28,12 +28,12 @@ impl DomainEventSet for SettStateChangedSet {
     }
 }
 
-pub struct SettOrderCmdHandler<R: CmdRepo2, P: EventPublisher> {
+pub struct SettOrderCmdHandler<R: CmdRepo2, P: EventPublisher2> {
     pub repo: R,
     pub publisher: P,
 }
 
-impl<R: CmdRepo2, P: EventPublisher> SettOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> SettOrderCmdHandler<R, P> {
     pub fn new(repo: R, publisher: P) -> Self {
         Self { repo, publisher }
     }
@@ -45,7 +45,7 @@ pub struct SettlementCmd {
     pub trades: Vec<SpotTrade>,
 }
 
-impl<R: CmdRepo2, P: EventPublisher> ApplyCommandChanges2 for SettOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandler<R, P> {
     type Command = SettlementCmd;
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
     type StateSet = SettStateSet;
@@ -65,7 +65,7 @@ impl<R: CmdRepo2, P: EventPublisher> ApplyCommandChanges2 for SettOrderCmdHandle
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher> CmdHandlerForUpdate2 for SettOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandler<R, P> {
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -211,7 +211,7 @@ mod tests {
 
     struct MockEventPublisher;
 
-    impl EventPublisher for MockEventPublisher {
+    impl EventPublisher2 for MockEventPublisher {
         fn publish<E>(
             &self,
             _event: &DomainEvent<E>,
