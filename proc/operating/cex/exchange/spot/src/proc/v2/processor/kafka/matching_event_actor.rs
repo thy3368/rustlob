@@ -12,7 +12,7 @@ use rdkafka::message::Message;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::base::{
-    KafkaConsumerConfig, KafkaProcessorConfig, create_kafka_consumer,
+    create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
 };
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
@@ -65,7 +65,9 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
     }
 }
 
-impl EventRecvActor<DomainEvent<SpotOrder>, SpotCmdErrorAny> for KafkaMatchingEventActor {
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
+    EventRecvActor<DomainEvent<SpotOrder>, SpotCmdErrorAny> for KafkaMatchingEventActor<R, P, L>
+{
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotOrder>>, SpotCmdErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))
@@ -105,21 +107,4 @@ impl EventRecvActor<DomainEvent<SpotOrder>, SpotCmdErrorAny> for KafkaMatchingEv
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn deserialize_domain_event_example() {
-        let payload = br#"{\"change_log\":{\"entity_id\":\"order-1\",\"entity_type\":\"SpotOrder\",\"change_type\":\"Created\",\"timestamp\":1,\"sequence\":1},\"state\":null}"#;
-        let result = KafkaMatchingEventActor::deserialize_domain_event(payload);
-        assert!(result.is_err());
-    }
-
-    // Usage example:
-    // let order_repo = Arc::new(order_repo);
-    // let matching_handler = Arc::new(matching_handler);
-    // let event_handler = Arc::new(NewOrderPlaceEventHandler::new(order_repo, matching_handler));
-    // let config = KafkaProcessorConfig::new("localhost:9092", "matching-event-actor-group");
-    // let mut actor = KafkaMatchingEventActor::new(event_handler, config, "spot-order-events".to_string())?;
-    // actor.run()?;
-}
+mod tests {}

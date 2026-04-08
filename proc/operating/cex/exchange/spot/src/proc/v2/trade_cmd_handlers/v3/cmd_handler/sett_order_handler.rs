@@ -149,7 +149,28 @@ mod tests {
 
     #[test]
     fn test_settlement_apply_returns_no_balance_events_for_now() {
-        let handler = SettOrderCmdHandler::new(MySqlRepo, MockEventPublisher);
+        use db_repo::MySqlRepo;
+
+        struct MockPublisher;
+        impl EventPublisher2 for MockPublisher {
+            fn publish<E: serde::Serialize>(
+                &self,
+                _event: &DomainEvent<E>,
+            ) -> Result<(), db_repo::core::event_publish::PublishError> {
+                Ok(())
+            }
+            fn publish_batch<E: serde::Serialize>(
+                &self,
+                _events: &[DomainEvent<E>],
+            ) -> Result<(), db_repo::core::event_publish::PublishError> {
+                Ok(())
+            }
+        }
+
+        let handler = SettOrderCmdHandler::<MySqlRepo, MockPublisher>::new(
+            MySqlRepo::new_mock(),
+            MockPublisher,
+        );
         let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
 
         let state = handler
