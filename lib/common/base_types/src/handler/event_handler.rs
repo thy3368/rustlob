@@ -25,3 +25,8 @@
 pub trait EventHandler<C, R, E>: Send + Sync {
     fn event_handle(&self, event: C) -> Result<R, E>;
 }
+
+pub trait EventHandler2<C, E>: Send + Sync {
+    fn event_handle(&self, event: C) -> Result<(), E>;
+}
+

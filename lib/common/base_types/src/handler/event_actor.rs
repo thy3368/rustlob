@@ -10,7 +10,7 @@
 //! - 具体 actor 自己决定如何处理事件
 //! - 队列 / broker client 细节由具体 EventActor 实现持有
 
-pub trait EventActor<Ev, Err>: Send {
+pub trait EventRecvActor<Ev, Err>: Send {
     /// 从底层队列拉取一个事件。
     ///
     /// - 返回 `Ok(Some(event))` 表示成功取到事件

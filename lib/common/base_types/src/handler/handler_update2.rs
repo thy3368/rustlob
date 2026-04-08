@@ -17,20 +17,24 @@ pub trait DomainEventSet {
 
 pub trait ApplyCommandChanges2: Send + Sync {
     type Command;
+    type Reply;
     type StateSet;
     type StateChangedSet: DomainEventSet;
     type Error;
 
+    //这个方法需要重点单测
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
         state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error>;
+
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply;
 }
 
 // cpu操作，如果是soa则可以simd优化
 pub trait CmdHandlerForUpdate2: ApplyCommandChanges2 + Send + Sync {
-    fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::StateChangedSet, Self::Error> {
+    fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::Reply, Self::Error> {
         let total_start = std::time::Instant::now();
 
         // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查:cpu操作
@@ -82,7 +86,7 @@ pub trait CmdHandlerForUpdate2: ApplyCommandChanges2 + Send + Sync {
 
         self.observe_latency(&metrics);
 
-        Ok(changes)
+        Ok(self.state_changed_set_to_reply(changes))
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;

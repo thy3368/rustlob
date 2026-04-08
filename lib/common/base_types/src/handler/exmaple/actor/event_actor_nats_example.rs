@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::thread;
 
-use crate::handler::event_actor::EventActor;
+use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
 use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
@@ -98,7 +98,7 @@ impl NatsEventActor {
     }
 }
 
-impl EventActor<NatsMessage, EventHandlerError> for NatsEventActor {
+impl EventRecvActor<NatsMessage, EventHandlerError> for NatsEventActor {
     fn handle_event(&self, message: NatsMessage) -> Result<(), EventHandlerError> {
         self.dispatcher.event_handle(message)
     }

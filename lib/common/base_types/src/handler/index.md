@@ -18,7 +18,10 @@
 - actor---->command_handler， 如http_command_actor 直接调用command_handler
 
 ##
+
 - 定义所有的command/query
 - 定义command_handler 里的state,changed_state
 - 定义command_handler的pipe line
 - 用单测验收command_handler
+
+## command-handler 之间通过事件进行通信

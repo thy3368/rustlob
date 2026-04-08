@@ -3,7 +3,7 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use crate::handler::event_actor::EventActor;
+use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
 use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
@@ -87,7 +87,7 @@ impl InProcMatchStageActor {
     }
 }
 
-impl EventActor<PlaceOrderAcceptedEvent, EventHandlerError> for InProcMatchStageActor {
+impl EventRecvActor<PlaceOrderAcceptedEvent, EventHandlerError> for InProcMatchStageActor {
     fn handle_event(&self, event: PlaceOrderAcceptedEvent) -> Result<(), EventHandlerError> {
         self.dispatcher.event_handle(event)
     }
@@ -117,7 +117,7 @@ impl InProcSettlementStageActor {
     }
 }
 
-impl EventActor<TradeCreatedEvent, EventHandlerError> for InProcSettlementStageActor {
+impl EventRecvActor<TradeCreatedEvent, EventHandlerError> for InProcSettlementStageActor {
     fn handle_event(&self, event: TradeCreatedEvent) -> Result<(), EventHandlerError> {
         self.dispatcher.event_handle(event)
     }

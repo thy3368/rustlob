@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::thread;
 
-use crate::handler::event_actor::EventActor;
+use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
 use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
@@ -98,7 +98,7 @@ impl KafkaEventActor {
     }
 }
 
-impl EventActor<KafkaRecord, EventHandlerError> for KafkaEventActor {
+impl EventRecvActor<KafkaRecord, EventHandlerError> for KafkaEventActor {
     fn handle_event(&self, record: KafkaRecord) -> Result<(), EventHandlerError> {
         self.dispatcher.event_handle(record)
     }
