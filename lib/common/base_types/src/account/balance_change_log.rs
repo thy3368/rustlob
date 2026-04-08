@@ -320,11 +320,7 @@ impl BalanceChangeLog {
             available_after: Quantity::from_raw(self.available_after),
             frozen_before: Quantity::from_raw(self.frozen_before),
             frozen_after: Quantity::from_raw(self.frozen_after),
-            order_id: if self.order_id == u64::MAX {
-                None
-            } else {
-                Some(self.order_id)
-            },
+            order_id: if self.order_id == u64::MAX { None } else { Some(self.order_id) },
             timestamp: Timestamp(self.timestamp),
             balance_version: self.balance_version,
         })
@@ -361,9 +357,7 @@ impl BalanceChangeLog {
     /// 零拷贝：转换为字节切片
     #[inline]
     pub fn as_bytes_slice(slice: &[Self]) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * 128)
-        }
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * 128) }
     }
 }
 
@@ -499,13 +493,7 @@ impl BalanceChangePodLog {
         self.timestamps[..len]
             .iter()
             .enumerate()
-            .filter_map(|(idx, &ts)| {
-                if ts >= start && ts <= end {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(idx, &ts)| if ts >= start && ts <= end { Some(idx) } else { None })
             .collect()
     }
 
@@ -538,15 +526,8 @@ mod tests {
 
     #[test]
     fn test_pod_deposit() {
-        let change = BalanceChangeLog::deposit(
-            1,
-            100,
-            1,
-            1000_00000000,
-            500_00000000,
-            1234567890,
-            1,
-        );
+        let change =
+            BalanceChangeLog::deposit(1, 100, 1, 1000_00000000, 500_00000000, 1234567890, 1);
 
         assert_eq!(change.sequence_id, 1);
         assert_eq!(change.account_id, 100);
@@ -557,17 +538,8 @@ mod tests {
 
     #[test]
     fn test_pod_freeze() {
-        let change = BalanceChangeLog::freeze(
-            2,
-            100,
-            1,
-            100_00000000,
-            500_00000000,
-            0,
-            1,
-            1234567890,
-            2,
-        );
+        let change =
+            BalanceChangeLog::freeze(2, 100, 1, 100_00000000, 500_00000000, 0, 1, 1234567890, 2);
 
         assert_eq!(change.change_type, BalanceChangeType::Freeze as u8);
         assert_eq!(change.available_after, 400_00000000);
@@ -579,29 +551,13 @@ mod tests {
     #[test]
     fn test_pod_total_balance_delta() {
         // 充值：总余额增加
-        let deposit = BalanceChangeLog::deposit(
-            1,
-            100,
-            1,
-            1000_00000000,
-            500_00000000,
-            1234567890,
-            1,
-        );
+        let deposit =
+            BalanceChangeLog::deposit(1, 100, 1, 1000_00000000, 500_00000000, 1234567890, 1);
         assert_eq!(deposit.total_balance_delta(), 1000_00000000);
 
         // 冻结：总余额不变
-        let freeze = BalanceChangeLog::freeze(
-            2,
-            100,
-            1,
-            100_00000000,
-            500_00000000,
-            0,
-            1,
-            1234567890,
-            2,
-        );
+        let freeze =
+            BalanceChangeLog::freeze(2, 100, 1, 100_00000000, 500_00000000, 0, 1, 1234567890, 2);
         assert_eq!(freeze.total_balance_delta(), 0);
 
         // 成交：总余额减少
@@ -621,15 +577,8 @@ mod tests {
 
     #[test]
     fn test_pod_zero_copy() {
-        let change = BalanceChangeLog::deposit(
-            1,
-            100,
-            1,
-            1000_00000000,
-            500_00000000,
-            1234567890,
-            1,
-        );
+        let change =
+            BalanceChangeLog::deposit(1, 100, 1, 1000_00000000, 500_00000000, 1234567890, 1);
 
         // 转换为字节数组
         let bytes = change.as_bytes();
@@ -644,27 +593,10 @@ mod tests {
     fn test_pod_log() {
         let mut log = BalanceChangePodLog::new();
 
-        let change1 = BalanceChangeLog::deposit(
-            1,
-            100,
-            1,
-            1000_00000000,
-            0,
-            1234567890,
-            1,
-        );
+        let change1 = BalanceChangeLog::deposit(1, 100, 1, 1000_00000000, 0, 1234567890, 1);
 
-        let change2 = BalanceChangeLog::freeze(
-            2,
-            100,
-            1,
-            100_00000000,
-            1000_00000000,
-            0,
-            1,
-            1234567891,
-            2,
-        );
+        let change2 =
+            BalanceChangeLog::freeze(2, 100, 1, 100_00000000, 1000_00000000, 0, 1, 1234567891, 2);
 
         log.push(&change1).unwrap();
         log.push(&change2).unwrap();

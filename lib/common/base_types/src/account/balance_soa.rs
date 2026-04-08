@@ -142,10 +142,7 @@ impl BalanceSoa {
     /// 批量计算总余额（SIMD优化）
     #[inline]
     pub fn batch_total(&self, indices: &[usize]) -> Vec<i64> {
-        indices
-            .iter()
-            .map(|&idx| self.availables[idx] + self.frozens[idx])
-            .collect()
+        indices.iter().map(|&idx| self.availables[idx] + self.frozens[idx]).collect()
     }
 
     /// 批量检查可用余额是否充足
@@ -173,10 +170,10 @@ impl Default for BalanceSoa {
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 pub mod simd_x86 {
-    use super::*;
-
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
+
+    use super::*;
 
     impl BalanceSoa {
         /// AVX2批量计算总余额（一次处理4个i64）
@@ -221,8 +218,7 @@ pub mod simd_x86 {
             let mut i = 0;
             while i + 4 <= len {
                 let avail = _mm256_loadu_si256(self.availables.as_ptr().add(i) as *const __m256i);
-                let required =
-                    _mm256_loadu_si256(amounts.as_ptr().add(i) as *const __m256i);
+                let required = _mm256_loadu_si256(amounts.as_ptr().add(i) as *const __m256i);
                 let cmp = _mm256_cmpgt_epi64(avail, required);
 
                 let mask = _mm256_movemask_pd(_mm256_castsi256_pd(cmp));
@@ -250,10 +246,10 @@ pub mod simd_x86 {
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub mod simd_arm {
-    use super::*;
-
     #[cfg(target_arch = "aarch64")]
     use std::arch::aarch64::*;
+
+    use super::*;
 
     impl BalanceSoa {
         /// NEON批量计算总余额（一次处理2个i64）

@@ -7,6 +7,7 @@
 use std::{default, fmt};
 
 use decimal::Decimal;
+
 // ============================================================================
 // 类型别名：为了语义清晰，保留 Price 和 Quantity 作为类型别名
 // ============================================================================
@@ -46,8 +47,12 @@ impl default::Default for Timestamp {
 }
 
 /// 订单ID
-/// todo 要改
 pub type OrderId = u64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct _OrderId(pub u64);
 
 /// 用户ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

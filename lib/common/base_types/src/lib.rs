@@ -3,6 +3,9 @@
 //! 提供交易系统的核心基础类型，供所有模块共享使用
 //! 遵循 Clean Architecture 原则，将共享的基础类型提取到独立模块
 
+extern crate core;
+extern crate decimal;
+
 pub mod account;
 pub mod base_types;
 pub mod exchange;
