@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 use std::sync::Mutex;
 
-use diff::diff_types::DomainEvent;
 use diff::Entity;
+use diff::diff_types::DomainEvent;
 use immutable_derive::immutable;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
@@ -123,9 +123,8 @@ impl CmdRepo2 for MySqlRepo {
 
 #[cfg(test)]
 mod tests {
-    use diff::ChangeLog;
     use diff::diff_types::DomainEvent;
-    use diff::{ChangeType, Entity, FieldChange};
+    use diff::{ChangeLog, ChangeType, Entity, FieldChange};
 
     use super::*;
 
@@ -170,9 +169,7 @@ mod tests {
         let created = ChangeLog::new(
             "entity-1".to_string(),
             TestEntity::entity_type().to_string(),
-            ChangeType::Created {
-                fields: vec![FieldChange::new("value", "", "alpha")],
-            },
+            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
             1,
             1,
         );
@@ -192,9 +189,7 @@ mod tests {
             ChangeLog::new(
                 "entity-1".to_string(),
                 TestEntity::entity_type().to_string(),
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "alpha")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
                 1,
                 1,
             ),
@@ -204,9 +199,7 @@ mod tests {
             ChangeLog::new(
                 "entity-2".to_string(),
                 TestEntity::entity_type().to_string(),
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "beta")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "beta")] },
                 2,
                 2,
             ),
@@ -223,18 +216,13 @@ mod tests {
             ChangeLog::new(
                 "entity-1".to_string(),
                 "OtherEntity".to_string(),
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "alpha")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
                 1,
                 1,
             ),
             TestEntity { id: "entity-1".to_string(), value: "alpha".to_string() },
         );
 
-        assert!(matches!(
-            repo.replay_event(&event),
-            Err(RepoError::DeserializationFailed(_))
-        ));
+        assert!(matches!(repo.replay_event(&event), Err(RepoError::DeserializationFailed(_))));
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 
-use diff::diff_types::DomainEvent;
 use diff::Entity;
+use diff::diff_types::DomainEvent;
 
 /// 分页参数
 ///

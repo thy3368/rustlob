@@ -1,12 +1,10 @@
 use bytecheck::CheckBytes;
 use rancor::Strategy;
-use rkyv::{
-    api::high::{HighSerializer, HighValidator, from_bytes, to_bytes},
-    de::Pool,
-    rancor::Error,
-    ser::allocator::ArenaHandle,
-    Archive, Deserialize, Serialize,
-};
+use rkyv::api::high::{HighSerializer, HighValidator, from_bytes, to_bytes};
+use rkyv::de::Pool;
+use rkyv::rancor::Error;
+use rkyv::ser::allocator::ArenaHandle;
+use rkyv::{Archive, Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 pub type StorageSource = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -57,25 +55,23 @@ pub trait RkyvKvStoreExt: KvStore {
     where
         T: for<'a> Serialize<HighSerializer<rkyv::util::AlignedVec, ArenaHandle<'a>, Error>>,
     {
-        let bytes = to_bytes::<Error>(value).map_err(|e| StorageError::Codec {
-            source: Box::new(e),
-        })?;
+        let bytes =
+            to_bytes::<Error>(value).map_err(|e| StorageError::Codec { source: Box::new(e) })?;
         self.put(key, bytes.as_slice())
     }
 
     fn get_obj<T>(&self, key: &[u8]) -> Result<Option<T>, StorageError>
     where
         T: Archive,
-        T::Archived: for<'a> CheckBytes<HighValidator<'a, Error>>
-            + Deserialize<T, Strategy<Pool, Error>>,
+        T::Archived:
+            for<'a> CheckBytes<HighValidator<'a, Error>> + Deserialize<T, Strategy<Pool, Error>>,
     {
         let Some(bytes) = self.get(key)? else {
             return Ok(None);
         };
 
-        let value = from_bytes::<T, Error>(&bytes).map_err(|e| StorageError::Codec {
-            source: Box::new(e),
-        })?;
+        let value = from_bytes::<T, Error>(&bytes)
+            .map_err(|e| StorageError::Codec { source: Box::new(e) })?;
         Ok(Some(value))
     }
 }

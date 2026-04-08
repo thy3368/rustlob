@@ -7,6 +7,7 @@ pub use core::kv_store::{KvStore, RkyvKvStoreExt, StorageError};
 
 // 导出适配器实现
 pub use adapter::mysql_db_repo::MySqlDbRepo;
+pub use adapter::mysql_repo::MySqlRepo;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
