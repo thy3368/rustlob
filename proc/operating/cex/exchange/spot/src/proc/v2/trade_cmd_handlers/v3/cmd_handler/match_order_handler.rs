@@ -9,10 +9,9 @@ use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher;
 use diff::diff_types::DomainEvent;
-use lob_repo::core::symbol_lob_repo2::MultiSymbolLobRepo2;
+use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
 
 #[derive(Debug, Clone)]
 pub struct MatchOrderStateSet {
@@ -31,22 +30,32 @@ impl DomainEventSet for MatchOrderStateChangedSet {
     }
 }
 
-pub struct MatchOrderCmdHandler<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> {
+pub struct MatchCmd {
+    pub taker_order: SpotOrder,
+}
+
+pub struct MatchOrderCmdHandler<
+    R: CmdRepo2,
+    P: EventPublisher,
+    L: MultiSymbolLobRepo<Order = SpotOrder>,
+> {
     pub repo: R,
     pub publisher: P,
     pub lob: L,
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> MatchOrderCmdHandler<R, P, L> {
+impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>>
+    MatchOrderCmdHandler<R, P, L>
+{
     pub fn new(repo: R, publisher: P, lob: L) -> Self {
         Self { repo, publisher, lob }
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> ApplyCommandChanges2
+impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>> ApplyCommandChanges2
     for MatchOrderCmdHandler<R, P, L>
 {
-    type Command = NewOrderCmd;
+    type Command = MatchCmd;
     type Reply = Option<Vec<DomainEvent<SpotTrade>>>;
     type StateSet = MatchOrderStateSet;
     type StateChangedSet = MatchOrderStateChangedSet;
@@ -57,6 +66,7 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> ApplyCommandChanges
         _cmd: &Self::Command,
         _state_set: Self::StateSet,
     ) -> Result<Self::StateChangedSet, Self::Error> {
+        //todo 根据撮合 生成trade
         Ok(MatchOrderStateChangedSet { trades: None })
     }
 
@@ -65,7 +75,7 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> ApplyCommandChanges
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> CmdHandlerForUpdate2
+impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
     for MatchOrderCmdHandler<R, P, L>
 {
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
@@ -88,8 +98,14 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> CmdHandlerForUpdate
             None,
             Quantity::default(),
         );
-        //todo 完善
-        let makers: Vec<SpotOrder> = self.lob.match_orders();
+        let (matched, _) = self.lob.match_orders(
+            TradingPair::BtcUsdt,
+            OrderSide::Buy,
+            Price::default(),
+            Quantity::default(),
+        );
+        let makers: Vec<SpotOrder> =
+            matched.map(|v| v.into_iter().map(|o| o.clone()).collect()).unwrap_or_default();
 
         Ok(MatchOrderStateSet { taker, makers })
     }
@@ -140,92 +156,12 @@ impl<R: CmdRepo2, P: EventPublisher, L: MultiSymbolLobRepo2> CmdHandlerForUpdate
 
 #[cfg(test)]
 mod tests {
-    use base_types::cqrs::cqrs_types::CMetadata;
-    use base_types::exchange::spot::spot_types::{OrderType, TradingPair};
-    use db_repo::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2};
+    use base_types::exchange::spot::spot_types::TradingPair;
     use diff::diff_types::DomainEvent;
-    use diff::Entity;
-    use lob_repo::core::symbol_lob_repo2::{LobError, MultiSymbolLobRepo2};
+    use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 
     use super::*;
-
-    #[derive(Clone)]
-    struct MockMySqlRepo;
-
-    impl QueryRepo2 for MockMySqlRepo {
-        fn find_by_sequence<E: Entity>(&self, _sequence: u64) -> Result<Option<E>, LobError> {
-            todo!()
-        }
-
-        fn find_one_by_condition<E: Entity>(&self, _condition: E) -> Result<Option<E>, LobError> {
-            todo!()
-        }
-
-        fn find_all_by_condition<E: Entity>(&self, _condition: E) -> Result<Vec<E>, LobError> {
-            todo!()
-        }
-
-        fn find_by_id<E: Entity>(&self, _entity_id: &str) -> Result<Option<E>, LobError> {
-            todo!()
-        }
-
-        fn find_range_by_sequence<E: Entity>(
-            &self,
-            _from_sequence: u64,
-            _to_sequence: u64,
-        ) -> Result<Vec<E>, LobError> {
-            todo!()
-        }
-
-        fn count(&self) -> Result<u64, LobError> {
-            todo!()
-        }
-
-        fn find_all_by_condition_paginated<E: Entity>(
-            &self,
-            _condition: E,
-            _page_req: PageRequest,
-        ) -> Result<PageResult<E>, LobError> {
-            todo!()
-        }
-
-        fn find_range_by_sequence_paginated<E: Entity>(
-            &self,
-            _from_sequence: u64,
-            _to_sequence: u64,
-            _page_req: PageRequest,
-        ) -> Result<PageResult<E>, LobError> {
-            todo!()
-        }
-
-        fn find_by_cursor<E: Entity>(
-            &self,
-            _condition: E,
-            _cursor: Option<String>,
-            _limit: u64,
-            _forward: bool,
-        ) -> Result<(Vec<E>, Option<String>), LobError> {
-            todo!()
-        }
-    }
-
-    impl CmdRepo2 for MockMySqlRepo {
-        fn replay_event<E>(&self, _event: &DomainEvent<E>) -> Result<(), LobError> {
-            Ok(())
-        }
-
-        fn replay_events<E>(&self, _events: &[DomainEvent<E>]) -> Result<(), LobError> {
-            Ok(())
-        }
-
-        fn replay_from_sequence<E: Clone + std::fmt::Debug>(
-            &self,
-            _events: &[DomainEvent<E>],
-            _from_sequence: u64,
-        ) -> Result<(), LobError> {
-            Ok(())
-        }
-    }
+    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockMySqlRepo;
 
     struct MockEventPublisher;
 
@@ -245,91 +181,26 @@ mod tests {
         }
     }
 
-    #[derive(Clone)]
-    struct MockLobRepo;
-
-    impl MultiSymbolLobRepo2 for MockLobRepo {
-        fn match_orders<O: base_types::lob::lob::LobOrder>(
-            &self,
-            _symbol: TradingPair,
-            _side: OrderSide,
-            _price: Price,
-            quantity: Quantity,
-        ) -> (Option<Vec<&O>>, Quantity) {
-            (None, quantity)
-        }
-
-        fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn best_ask(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn contains_symbol(&self, _symbol: &TradingPair) -> bool {
-            false
-        }
-
-        fn add_order<O: base_types::lob::lob::LobOrder>(
-            &self,
-            _symbol: TradingPair,
-            _order: O,
-        ) -> Result<(), LobError> {
-            Ok(())
-        }
-
-        fn remove_order(&self, _symbol: TradingPair, _order_id: base_types::OrderId) -> bool {
-            false
-        }
-
-        fn find_order<O: base_types::lob::lob::LobOrder>(
-            &self,
-            _p0: TradingPair,
-            _p1: base_types::OrderId,
-        ) -> Option<&O> {
-            None
-        }
-
-        fn find_order_mut<O: base_types::lob::lob::LobOrder>(
-            &self,
-            _p0: TradingPair,
-            _order_id: base_types::OrderId,
-        ) -> Option<&mut O> {
-            None
-        }
-
-        fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
-    }
-
     #[test]
     fn test_match_order_apply_returns_no_trades_for_now() {
-        let handler = MatchOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher, MockLobRepo);
-        let cmd = NewOrderCmd::new(
-            CMetadata::default(),
-            TradingPair::BtcUsdt,
-            OrderSide::Buy,
-            OrderType::Limit,
-            Some(TimeInForce::GTC),
-            Some(Quantity::from_f64(1.0)),
-            None,
-            Some(Price::from_f64(50000.0)),
-            Some("test_match_001".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+        let handler = MatchOrderCmdHandler::new(
+            MockMySqlRepo,
+            MockEventPublisher,
+            EmbeddedLobRepo::<SpotOrder>::new(Vec::new()),
         );
+        let cmd = MatchCmd {
+            taker_order: SpotOrder::create_order(
+                1u64.into(),
+                TraderId::new([0u8; 8]),
+                TradingPair::BtcUsdt,
+                OrderSide::Buy,
+                Price::from_f64(50000.0),
+                Quantity::from_f64(1.0),
+                TimeInForce::GTC,
+                Some("test_match_001".to_string()),
+                Quantity::default(),
+            ),
+        };
 
         let state = handler
             .load_state_set_for_update(&cmd)

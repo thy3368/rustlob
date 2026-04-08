@@ -3,7 +3,7 @@ use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
 use crate::proc::v2::processor::nats::nats_event_actor::{NatsEventActor, NatsProcessorConfig};
-use crate::proc::v2::trade_event_handlers::new_trade_event_handler::NewTradeEventHandler;
+use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
 pub type NatsSettlementEventActor =
     NatsEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler>;

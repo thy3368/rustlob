@@ -14,11 +14,8 @@ pub mod spot_trade_v4;
 
 pub mod spot_trade_v2;
 
-pub mod change_log_store;
 
 // 撮合相关模块
-pub mod matching_handler;
-pub mod settlement_handler;
 
 
 pub mod v3;

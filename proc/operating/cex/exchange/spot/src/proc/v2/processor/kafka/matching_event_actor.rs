@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::SpotOrder;
 use base_types::handler::event_actor::EventActor;
-use base_types::handler::event_handler::EventHandler;
+use base_types::handler::event_handler::{EventHandler, EventHandler2};
 use diff::diff_types::DomainEvent;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
@@ -11,7 +11,7 @@ use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
 };
-use crate::proc::v2::trade_event_handlers::new_order_place_event_handler::NewOrderPlaceEventHandler;
+use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
 pub struct KafkaMatchingEventActor {
     consumer: StreamConsumer,

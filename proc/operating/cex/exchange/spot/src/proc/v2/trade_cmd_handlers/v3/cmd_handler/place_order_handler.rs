@@ -143,27 +143,12 @@ mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{Price, Quantity};
-    use diff::diff_types::DomainEvent;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockMySqlRepo;
+
     use super::*;
+    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::{
+        MockEventPublisher, MockMySqlRepo,
+    };
 
-    struct MockEventPublisher;
-
-    impl EventPublisher for MockEventPublisher {
-        fn publish<E>(
-            &self,
-            _event: &DomainEvent<E>,
-        ) -> Result<(), db_repo::core::event_publish::PublishError> {
-            Ok(())
-        }
-
-        fn publish_batch<E>(
-            &self,
-            _events: &[DomainEvent<E>],
-        ) -> Result<(), db_repo::core::event_publish::PublishError> {
-            Ok(())
-        }
-    }
 
     #[test]
     fn test_apply_command_and_collect_changes_builds_order_event() {
@@ -195,7 +180,7 @@ mod tests {
             .expect("apply should succeed");
 
         let order = changes.order.object();
-        assert_eq!(order.order_id, 42u64.into());
+        assert_eq!(order.order_id, 42u64);
         assert_eq!(order.trading_pair, TradingPair::BtcUsdt);
         assert_eq!(order.side, OrderSide::Buy);
         assert_eq!(order.price, Some(Price::from_f64(50000.0)));
@@ -204,6 +189,4 @@ mod tests {
         assert_eq!(order.client_order_id.as_deref(), Some("test_order_001"));
         assert_eq!(changes.domain_event_count(), 1);
     }
-
-
 }

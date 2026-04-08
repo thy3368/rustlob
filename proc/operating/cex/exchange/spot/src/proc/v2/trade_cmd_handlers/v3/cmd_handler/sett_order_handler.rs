@@ -10,8 +10,7 @@ use db_repo::core::event_publish::EventPublisher;
 use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
-use crate::proc::behavior::v2::spot_user_data_behavior::Balance;
+use crate::proc::behavior::spot_user_data_behavior::Balance;
 
 #[derive(Debug, Clone)]
 pub struct SettStateSet {
@@ -41,8 +40,14 @@ impl<R: CmdRepo2, P: EventPublisher> SettOrderCmdHandler<R, P> {
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub struct SettlementCmd {
+    pub trades: Vec<SpotTrade>,
+}
+
 impl<R: CmdRepo2, P: EventPublisher> ApplyCommandChanges2 for SettOrderCmdHandler<R, P> {
-    type Command = NewOrderCmd;
+    type Command = SettlementCmd;
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
     type StateSet = SettStateSet;
     type StateChangedSet = SettStateChangedSet;

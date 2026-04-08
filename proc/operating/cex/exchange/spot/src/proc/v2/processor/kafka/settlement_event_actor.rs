@@ -11,7 +11,7 @@ use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
 };
-use crate::proc::v2::trade_event_handlers::new_trade_event_handler::NewTradeEventHandler;
+use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
 pub struct KafkaSettlementEventActor {
     consumer: StreamConsumer,

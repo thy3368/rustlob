@@ -3,7 +3,7 @@ use crossbeam_channel::Receiver;
 use diff::diff_types::DomainEvent;
 
 use crate::proc::v2::processor::disruptor::inproc_event_actor::InprocEventActor;
-use crate::proc::v2::trade_event_handlers::new_trade_event_handler::NewTradeEventHandler;
+use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
 pub type DisruptorSettlementEventActor =
     InprocEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler>;
