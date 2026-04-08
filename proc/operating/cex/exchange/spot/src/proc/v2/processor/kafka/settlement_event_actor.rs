@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use base_types::exchange::spot::spot_types::SpotTrade;
-use base_types::handler::event_actor::EventActor;
+use base_types::handler::event_actor::EventRecvActor;
 use base_types::handler::event_handler::{EventHandler, EventHandler2};
 use diff::diff_types::DomainEvent;
 use rdkafka::consumer::StreamConsumer;
@@ -59,7 +59,7 @@ impl KafkaSettlementEventActor {
     }
 }
 
-impl EventActor<DomainEvent<SpotTrade>, SpotCmdErrorAny> for KafkaSettlementEventActor {
+impl EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny> for KafkaSettlementEventActor {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotCmdErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))

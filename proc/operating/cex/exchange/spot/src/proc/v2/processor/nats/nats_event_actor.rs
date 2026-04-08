@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_nats::{Client, Subscriber};
-use base_types::handler::event_actor::EventActor;
+use base_types::handler::event_actor::EventRecvActor;
 use base_types::handler::event_handler::EventHandler;
 use futures::StreamExt;
 use tokio::runtime::Runtime;
@@ -115,7 +115,7 @@ impl<E, H> NatsEventActor<E, H> {
     }
 }
 
-impl<E, H> EventActor<E, SpotCmdErrorAny> for NatsEventActor<E, H>
+impl<E, H> EventRecvActor<E, SpotCmdErrorAny> for NatsEventActor<E, H>
 where
     E: Send + Sync + 'static,
     H: EventHandler<E, (), SpotCmdErrorAny> + Send + Sync + 'static,

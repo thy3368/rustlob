@@ -5,3 +5,5 @@ pub mod settlement_event_actor;
 
 pub mod matching_event_actor;
 pub mod matching_event_actor_example;
+
+pub mod kafka_producer;

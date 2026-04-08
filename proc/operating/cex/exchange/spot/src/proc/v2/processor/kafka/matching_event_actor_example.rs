@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use base_types::handler::event_actor::EventActor;
+use base_types::handler::event_actor::EventRecvActor;
 
 use crate::proc::v2::processor::kafka::base::KafkaProcessorConfig;
 use crate::proc::v2::processor::kafka::matching_event_actor::KafkaMatchingEventActor;
