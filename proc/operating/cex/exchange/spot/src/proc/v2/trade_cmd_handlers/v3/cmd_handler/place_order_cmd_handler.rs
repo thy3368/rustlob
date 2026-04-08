@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::collections::HashMap;
 
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{OrderType, SpotOrder, SpotTrade, TimeInForce};
@@ -7,16 +7,36 @@ use base_types::handler::handler_update2::{
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
-use diff::diff_types::{ChangeLog, DomainEvent, track_create};
+use diff::diff_types::{track_create, DomainEvent};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     Fill, NewOrderCmd, NewOrderFull, NewOrderResult, SelfTradePreventionMode,
 };
+use crate::proc::behavior::v2::spot_user_data_behavior::Balance;
+
+#[derive(Debug, Clone)]
+pub struct PlaceOrderStateSetAll {
+    pub place_order_state_set: PlaceOrderStateSet,
+    pub match_order_state_set: MatchOrderStateSet,
+    pub sett_state_set: SettStateSet,
+}
 
 #[derive(Debug, Clone)]
 pub struct PlaceOrderStateSet {
     pub order_id: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchOrderStateSet {
+    pub taker: SpotOrder,
+    pub makers: Vec<SpotOrder>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SettStateSet {
+    pub trades: Vec<SpotTrade>,
+    pub map: HashMap<u64, Balance>,
 }
 
 pub struct PlaceOrderStateChangedSet {
@@ -60,7 +80,7 @@ impl<R: CmdRepo2> PlaceOrderCmdHandler<R> {
 impl<R: CmdRepo2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R> {
     type Command = NewOrderCmd;
     type Reply = NewOrderFull;
-    type StateSet = PlaceOrderStateSet;
+    type StateSet = PlaceOrderStateSetAll;
     type StateChangedSet = PlaceOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
 
@@ -83,7 +103,7 @@ impl<R: CmdRepo2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R> {
         trader_id_bytes[..len].copy_from_slice(&actor_bytes[..len]);
 
         let order = SpotOrder::create_order(
-            state_set.order_id.into(),
+            state_set.place_order_state_set.order_id.into(),
             TraderId::new(trader_id_bytes),
             symbol,
             side,
@@ -174,7 +194,15 @@ impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {
         &self,
         cmd: &Self::Command,
     ) -> Result<Self::StateSet, Self::Error> {
-        Ok(PlaceOrderStateSet { order_id: self.generate_order_id() })
+        // self.repo.find_by_id();
+        //从lob加载makers
+        //从repo查所有的balance
+
+        Ok(PlaceOrderStateSetAll {
+            place_order_state_set: PlaceOrderStateSet { order_id: self.generate_order_id() },
+            match_order_state_set: xx,
+            sett_state_set: xxx,
+        })
     }
 
     fn validate_command_in_lock(
@@ -196,6 +224,7 @@ impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {
         &self,
         domain_events: &Self::StateChangedSet,
     ) -> Result<(), Self::Error> {
+        //todo 需要事务
         if let Some(ref order_event) = domain_events.order {
             self.repo.replay_event::<SpotOrder>(order_event).map_err(|e| {
                 SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
@@ -233,12 +262,70 @@ mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{Price, Quantity};
-    use db_repo::core::db_repo2::{CmdRepo2, RepoError};
+    use db_repo::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
     use diff::diff_types::DomainEvent;
+    use diff::Entity;
 
     use super::*;
 
     struct MockMySqlRepo;
+
+    impl QueryRepo2 for MockMySqlRepo {
+        fn find_by_sequence<E: Entity>(&self, sequence: u64) -> Result<Option<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_one_by_condition<E: Entity>(&self, condition: E) -> Result<Option<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_all_by_condition<E: Entity>(&self, condition: E) -> Result<Vec<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_by_id<E: Entity>(&self, entity_id: &str) -> Result<Option<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_range_by_sequence<E: Entity>(
+            &self,
+            from_sequence: u64,
+            to_sequence: u64,
+        ) -> Result<Vec<E>, RepoError> {
+            todo!()
+        }
+
+        fn count(&self) -> Result<u64, RepoError> {
+            todo!()
+        }
+
+        fn find_all_by_condition_paginated<E: Entity>(
+            &self,
+            condition: E,
+            page_req: PageRequest,
+        ) -> Result<PageResult<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_range_by_sequence_paginated<E: Entity>(
+            &self,
+            from_sequence: u64,
+            to_sequence: u64,
+            page_req: PageRequest,
+        ) -> Result<PageResult<E>, RepoError> {
+            todo!()
+        }
+
+        fn find_by_cursor<E: Entity>(
+            &self,
+            condition: E,
+            cursor: Option<String>,
+            limit: u64,
+            forward: bool,
+        ) -> Result<(Vec<E>, Option<String>), RepoError> {
+            todo!()
+        }
+    }
 
     impl CmdRepo2 for MockMySqlRepo {
         fn replay_event<E>(&self, _event: &DomainEvent<E>) -> Result<(), RepoError> {
