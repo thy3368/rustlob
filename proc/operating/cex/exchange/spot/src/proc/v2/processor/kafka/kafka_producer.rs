@@ -30,7 +30,7 @@ impl KafkaProducer {
 impl EventPublisher2 for KafkaProducer {
     fn publish<E: Serialize>(&self, event: &DomainEvent<E>) -> Result<(), PublishError> {
         let payload = serde_json::to_vec(event)?;
-        let record: FutureRecord<'_, (), [u8]> =
+        let record: FutureRecord<'_, (), Vec<u8>> =
             FutureRecord::to(&self.topic).payload(&payload).key(&());
 
         block_on(self.producer.send(record, std::time::Duration::from_secs(5)))
@@ -72,10 +72,10 @@ mod tests {
     fn test_create_producer_with_valid_brokers() {
         let producer = KafkaProducer::new("localhost:9092", "test-topic");
 
-        let event= create_test_event();
-        
+        let event = create_test_event();
+
         //fix error
-        producer.publish(event);
+        producer.publish(&event);
         assert_eq!(producer.topic, "test-topic");
     }
 
