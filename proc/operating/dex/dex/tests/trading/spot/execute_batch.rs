@@ -3,7 +3,7 @@ use base_types::exchange::spot::spot_types::OrderStatus;
 use base_types::handler::handler_update::{ApplyCommandChanges, CmdHandlerForUpdate};
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
-    ExecutedTrade, ProductType, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
+    ExecutedTrade, OrderType, ProductType, SpotAmendOrderCmd, SpotCancelOrderCmd, SpotCommand,
     SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
@@ -20,15 +20,16 @@ fn spot_place_order(
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
         product_type: ProductType::Spot,
-        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-            SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(
+            SpotPlaceOrderCmd {
                 trader_id,
                 market: "BTC-USDT".into(),
                 side,
                 price,
                 quantity,
-            }),
-        )),
+                order_type: OrderType::Limit,
+            },
+        ))),
     }
 }
 
@@ -39,9 +40,9 @@ fn spot_cancel_order(command_id: u64, trader_id: u64, order_id: u64) -> Exchange
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
         product_type: ProductType::Spot,
-        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-            SpotCommand::CancelOrder(SpotCancelOrderCmd { trader_id, order_id }),
-        )),
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::CancelOrder(
+            SpotCancelOrderCmd { trader_id, order_id },
+        ))),
     }
 }
 
@@ -58,14 +59,9 @@ fn spot_amend_order(
         nonce: command_id,
         timestamp_ns: 1_000 + command_id,
         product_type: ProductType::Spot,
-        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-            SpotCommand::AmendOrder(SpotAmendOrderCmd {
-                trader_id,
-                order_id,
-                new_price,
-                new_quantity,
-            }),
-        )),
+        command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::AmendOrder(
+            SpotAmendOrderCmd { trader_id, order_id, new_price, new_quantity },
+        ))),
     }
 }
 
@@ -133,7 +129,6 @@ fn five_spot_orders_without_counterparty_create_five_open_resting_orders() {
         ExecutedOrder::PrepOrder(_) => panic!("expected spot order result"),
     }
 }
-
 
 #[test]
 fn five_spot_orders_with_counterparty_each_execute_a_trade() {
@@ -256,12 +251,12 @@ fn execute_trading_batch_handler_still_implements_apply_command_changes() {
     fn assert_impl<T>()
     where
         T: ApplyCommandChanges<
-            Vec<ExchangeCommandEnvelope>,
-            dex::cmd_handler::ExecuteTradingBatchState,
-            dex::cmd_handler::ExecutedBatchBlock,
-            dex::cmd_handler::TradeExecutionLog,
-            String,
-        >,
+                Vec<ExchangeCommandEnvelope>,
+                dex::cmd_handler::ExecuteTradingBatchState,
+                dex::cmd_handler::ExecutedBatchBlock,
+                dex::cmd_handler::TradeExecutionLog,
+                String,
+            >,
     {
     }
 

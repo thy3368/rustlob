@@ -6,4 +6,5 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+alloy-primitives = "0.8"
 base_types = { path = "../../../../lib/common/base_types" }
