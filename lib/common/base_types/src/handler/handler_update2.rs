@@ -18,18 +18,18 @@ pub trait DomainEventSet {
 pub trait ApplyCommandChanges2: Send + Sync {
     type Command;
     type Reply;
-    type StateSet;
-    type StateChangedSet: DomainEventSet;
+    type GivenStateSet;
+    type ThenStateSet: DomainEventSet;
     type Error;
 
     //这个方法需要重点单测
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
-        state_set: Self::StateSet,
-    ) -> Result<Self::StateChangedSet, Self::Error>;
+        state_set: Self::GivenStateSet,
+    ) -> Result<Self::ThenStateSet, Self::Error>;
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply;
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply;
 }
 
 // cpu操作，如果是soa则可以simd优化
@@ -92,27 +92,27 @@ pub trait CmdHandlerForUpdate2: ApplyCommandChanges2 + Send + Sync {
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
 
     fn load_state_set_for_update(&self, cmd: &Self::Command)
-    -> Result<Self::StateSet, Self::Error>;
+    -> Result<Self::GivenStateSet, Self::Error>;
 
     fn validate_command_in_lock(
         &self,
         cmd: &Self::Command,
-        state_set: &Self::StateSet,
+        state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error>;
 
     fn persist_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error>;
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error>;
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error>;
 
     fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
