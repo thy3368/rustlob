@@ -8,7 +8,6 @@ pub mod new_oto_order_cmd_handler;
 pub mod new_otoco_order_cmd_handler;
 pub mod place_order_cmd_all_handler;
 pub mod place_order_handler;
-pub mod place_order_pipeline_handler;
 pub mod sett_order_handler;
 pub mod test_new_order_cmd_handler;
 

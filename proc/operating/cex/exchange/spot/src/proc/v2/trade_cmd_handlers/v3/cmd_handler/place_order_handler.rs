@@ -46,15 +46,15 @@ impl<R: CmdRepo2, P: EventPublisher2> PlaceOrderCmdHandler<R, P> {
 impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R, P> {
     type Command = NewOrderCmd;
     type Reply = DomainEvent<SpotOrder>;
-    type StateSet = PlaceOrderStateSet;
-    type StateChangedSet = PlaceOrderStateChangedSet;
+    type GivenStateSet = PlaceOrderStateSet;
+    type ThenStateSet = PlaceOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
-        state_set: Self::StateSet,
-    ) -> Result<Self::StateChangedSet, Self::Error> {
+        state_set: Self::GivenStateSet,
+    ) -> Result<Self::ThenStateSet, Self::Error> {
         let symbol = cmd.symbol().clone();
         let side = *cmd.side();
         let quantity = cmd.quantity().clone().unwrap_or_default();
@@ -85,7 +85,7 @@ impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for PlaceOrderCmdHand
         Ok(PlaceOrderStateChangedSet { order: DomainEvent::new(change_log, order) })
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.order
     }
 }
@@ -98,28 +98,28 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHand
     fn load_state_set_for_update(
         &self,
         _cmd: &Self::Command,
-    ) -> Result<Self::StateSet, Self::Error> {
+    ) -> Result<Self::GivenStateSet, Self::Error> {
         Ok(PlaceOrderStateSet { order_id: self.generate_order_id() })
     }
 
     fn validate_command_in_lock(
         &self,
         _cmd: &Self::Command,
-        _state_set: &Self::StateSet,
+        _state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn persist_domain_events(
         &self,
-        _domain_events: &Self::StateChangedSet,
+        _domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         self.repo
             .replay_event::<SpotOrder>(&domain_events.order)
@@ -128,7 +128,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHand
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         self.publisher.publish(&domain_events.order).map_err(|_e| {
             SpotCmdErrorAny::Common(CommonError::Internal {

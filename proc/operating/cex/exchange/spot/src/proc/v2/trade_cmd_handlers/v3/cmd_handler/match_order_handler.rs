@@ -1,14 +1,12 @@
 use base_types::base_types::TraderId;
-use base_types::exchange::spot::spot_types::{
-    OrderSide, SpotOrder, SpotTrade, TimeInForce, TradingPair,
-};
+use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade, TimeInForce};
 use base_types::handler::handler_update2::{
     ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::diff_types::DomainEvent;
+use diff::{diff_types::DomainEvent, Entity};
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -57,20 +55,43 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
 {
     type Command = MatchCmd;
     type Reply = Option<Vec<DomainEvent<SpotTrade>>>;
-    type StateSet = MatchOrderStateSet;
-    type StateChangedSet = MatchOrderStateChangedSet;
+    type GivenStateSet = MatchOrderStateSet;
+    type ThenStateSet = MatchOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,
         _cmd: &Self::Command,
-        _state_set: Self::StateSet,
-    ) -> Result<Self::StateChangedSet, Self::Error> {
-        //todo 根据撮合 生成trade
-        Ok(MatchOrderStateChangedSet { trades: None })
+        state_set: Self::GivenStateSet,
+    ) -> Result<Self::ThenStateSet, Self::Error> {
+        let Some(maker) = state_set.makers.first() else {
+            return Ok(MatchOrderStateChangedSet { trades: None });
+        };
+
+        let trade = SpotTrade::new(
+            state_set.taker.order_id,
+            state_set.taker.trading_pair,
+            state_set.taker.order_id,
+            maker.order_id,
+            state_set.taker.timestamp,
+            maker.price.expect("maker limit order should have price"),
+            state_set.taker.unfilled_qty().min(maker.unfilled_qty()),
+            state_set.taker.side,
+            Quantity::default(),
+            Quantity::default(),
+            state_set.taker.frozen_asset(),
+            0,
+            0,
+        );
+        let trade_event =
+            DomainEvent::new(trade.track_create().map_err(|e| {
+                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+            })?, trade);
+
+        Ok(MatchOrderStateChangedSet { trades: Some(vec![trade_event]) })
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.trades
     }
 }
@@ -84,28 +105,18 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
 
     fn load_state_set_for_update(
         &self,
-        _cmd: &Self::Command,
-    ) -> Result<Self::StateSet, Self::Error> {
-        // 从lob加载taker和makers
-        let taker = SpotOrder::create_order(
-            0u64.into(),
-            TraderId::new([0u8; 8]),
-            TradingPair::BtcUsdt,
-            OrderSide::Buy,
-            Price::default(),
-            Quantity::default(),
-            TimeInForce::GTC,
-            None,
-            Quantity::default(),
-        );
+        cmd: &Self::Command,
+    ) -> Result<Self::GivenStateSet, Self::Error> {
+        let taker = cmd.taker_order.clone();
+        let taker_price = taker.price.unwrap_or_default();
         let (matched, _) = self.lob.match_orders(
-            TradingPair::BtcUsdt,
-            OrderSide::Buy,
-            Price::default(),
-            Quantity::default(),
+            taker.trading_pair,
+            taker.side,
+            taker_price,
+            taker.unfilled_qty(),
         );
         let makers: Vec<SpotOrder> =
-            matched.map(|v| v.into_iter().map(|o| o.clone()).collect()).unwrap_or_default();
+            matched.map(|v| v.into_iter().cloned().collect()).unwrap_or_default();
 
         Ok(MatchOrderStateSet { taker, makers })
     }
@@ -113,21 +124,21 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     fn validate_command_in_lock(
         &self,
         _cmd: &Self::Command,
-        _state_set: &Self::StateSet,
+        _state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn persist_domain_events(
         &self,
-        _domain_events: &Self::StateChangedSet,
+        _domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
             for trade_event in trades {
@@ -141,7 +152,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
             self.publisher.publish_batch(trades).map_err(|_e| {

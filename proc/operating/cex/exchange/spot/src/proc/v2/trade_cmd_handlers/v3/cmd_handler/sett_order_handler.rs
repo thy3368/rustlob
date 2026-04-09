@@ -7,7 +7,7 @@ use base_types::handler::handler_update2::{
 };
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::diff_types::DomainEvent;
+use diff::{diff_types::DomainEvent, Entity};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
@@ -47,19 +47,45 @@ pub struct SettlementCmd {
 impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandler<R, P> {
     type Command = SettlementCmd;
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
-    type StateSet = SettStateSet;
-    type StateChangedSet = SettStateChangedSet;
+    type GivenStateSet = SettStateSet;
+    type ThenStateSet = SettStateChangedSet;
     type Error = SpotCmdErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,
         _cmd: &Self::Command,
-        _state_set: Self::StateSet,
-    ) -> Result<Self::StateChangedSet, Self::Error> {
-        Ok(SettStateChangedSet { balances: None })
+        state_set: Self::GivenStateSet,
+    ) -> Result<Self::ThenStateSet, Self::Error> {
+        let Some(trade) = state_set.trades.first() else {
+            return Ok(SettStateChangedSet { balances: None });
+        };
+
+        let mut taker_quote_balance = AccountBalance::new(
+            trade.taker_order_id.into(),
+            trade.trading_pair.quote_asset(),
+            trade.timestamp,
+        );
+        taker_quote_balance.add_balance(trade.quote_qty, trade.timestamp);
+        let taker_quote_balance_event = DomainEvent::new(taker_quote_balance.track_create().map_err(
+            |e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }),
+        )?, taker_quote_balance);
+
+        let mut maker_base_balance = AccountBalance::new(
+            trade.maker_order_id.into(),
+            trade.trading_pair.base_asset(),
+            trade.timestamp,
+        );
+        maker_base_balance.add_balance(trade.base_qty, trade.timestamp);
+        let maker_base_balance_event = DomainEvent::new(maker_base_balance.track_create().map_err(
+            |e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }),
+        )?, maker_base_balance);
+
+        Ok(SettStateChangedSet {
+            balances: Some(vec![taker_quote_balance_event, maker_base_balance_event]),
+        })
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.balances
     }
 }
@@ -71,30 +97,29 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
 
     fn load_state_set_for_update(
         &self,
-        _cmd: &Self::Command,
-    ) -> Result<Self::StateSet, Self::Error> {
-        // 从repo查所有balance和trade
-        Ok(SettStateSet { trades: vec![], map: HashMap::new() })
+        cmd: &Self::Command,
+    ) -> Result<Self::GivenStateSet, Self::Error> {
+        Ok(SettStateSet { trades: cmd.trades.clone(), map: HashMap::new() })
     }
 
     fn validate_command_in_lock(
         &self,
         _cmd: &Self::Command,
-        _state_set: &Self::StateSet,
+        _state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn persist_domain_events(
         &self,
-        _domain_events: &Self::StateChangedSet,
+        _domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             for balance_event in balances {
@@ -108,7 +133,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             self.publisher.publish_batch(balances).map_err(|_e| {

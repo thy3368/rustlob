@@ -46,19 +46,19 @@ impl CancelAllOpenOrdersCmdHandler {
 impl ApplyCommandChanges2 for CancelAllOpenOrdersCmdHandler {
     type Command = CancelAllOpenOrdersCmd;
     type Reply = Vec<CancelOrderResult>;
-    type StateSet = CancelAllOpenOrdersStateSet;
-    type StateChangedSet = CancelAllOpenOrdersStateChangedSet;
+    type GivenStateSet = CancelAllOpenOrdersStateSet;
+    type ThenStateSet = CancelAllOpenOrdersStateChangedSet;
     type Error = SpotCmdErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
-        state_set: Self::StateSet,
-    ) -> Result<Self::StateChangedSet, Self::Error> {
+        state_set: Self::GivenStateSet,
+    ) -> Result<Self::ThenStateSet, Self::Error> {
         todo!()
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::StateChangedSet) -> Self::Reply {
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         todo!()
     }
 }
@@ -71,35 +71,35 @@ impl CmdHandlerForUpdate2 for CancelAllOpenOrdersCmdHandler {
     fn load_state_set_for_update(
         &self,
         cmd: &Self::Command,
-    ) -> Result<Self::StateSet, Self::Error> {
+    ) -> Result<Self::GivenStateSet, Self::Error> {
         todo!()
     }
 
     fn validate_command_in_lock(
         &self,
         cmd: &Self::Command,
-        state_set: &Self::StateSet,
+        state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn persist_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::StateChangedSet,
+        domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
