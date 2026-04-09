@@ -31,9 +31,9 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
         _symbol: TradingPair,
         _side: OrderSide,
         _price: Price,
-        _quantity: Quantity,
+        quantity: Quantity,
     ) -> (Option<Vec<&Self::Order>>, Quantity) {
-        todo!()
+        (None, quantity)
     }
 
     fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
@@ -48,8 +48,13 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
         self.lobs.read().contains_key(symbol)
     }
 
-    fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), LobError> {
-        todo!()
+    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
+        let mut lobs = self.lobs.write();
+        let lob = lobs.get_mut(&symbol).ok_or(LobError::SymbolMismatch {
+            expected: symbol.to_string(),
+            actual: order.symbol().to_string(),
+        })?;
+        lob.add_order(order)
     }
 
     fn remove_order(&self, _symbol: TradingPair, _order_id: OrderId) -> bool {
