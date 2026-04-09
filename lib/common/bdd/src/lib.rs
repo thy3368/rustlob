@@ -26,7 +26,7 @@ pub fn bdd_test(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let feature = metadata.0.clone();
     let scenario = metadata.1.clone();
-    let when = metadata.2.clone();
+    let when_str = metadata.2.clone();
     let given_str = metadata.3.join(", ");
     let then_str = metadata.4.join(", ");
     let tags_str = metadata.5.join(", ");
@@ -42,7 +42,7 @@ pub fn bdd_test(attr: TokenStream, item: TokenStream) -> TokenStream {
             println!("║  Scenario: {}                     ║", #scenario);
             println!("╠══════════════════════════════════════════════════════╣");
             println!("║  Given: {}", #given_str);
-            println!("║  When:  {}", #when);
+            println!("║  When:  {}", #when_str);
             println!("║  Then:  {}", #then_str);
             println!("╠══════════════════════════════════════════════════════╣");
             println!("║  Tags: {}                                    ║", #tags_str);
@@ -74,112 +74,63 @@ fn parse_bdd_metadata(attr: &AttributeArgs) -> Result<BddMeta, syn::Error> {
     let mut priority = 3u8;
 
     for arg in attr {
-        let ident = match arg {
-            syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, .. })) => path.get_ident(),
-            _ => continue,
-        };
-
-        if let Some(key) = ident {
-            let key_str = key.to_string();
-            match key_str.as_str() {
-                "feature" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            feature = s.value();
-                        }
-                    }
-                }
-                "scenario" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            scenario = s.value();
-                        }
-                    }
-                }
-                "when" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            when = s.value();
-                        }
-                    }
-                }
-                "priority" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            priority = s.value().parse().unwrap_or(3);
-                        }
-                    }
-                }
-                "given" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            let val = s.value();
-                            if val.starts_with('[') {
-                                given = parse_string_array(&val);
+        match arg {
+            syn::NestedMeta::Meta(Meta::List(list)) => {
+                let key_str = list.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+                if key_str == "given" {
+                    given = list
+                        .nested
+                        .iter()
+                        .filter_map(|n| {
+                            if let syn::NestedMeta::Meta(Meta::Path(p)) = n {
+                                p.get_ident().map(|i| i.to_string())
                             } else {
-                                given = vec![val];
+                                None
                             }
-                        }
-                    }
-                }
-                "then" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            let val = s.value();
-                            if val.starts_with('[') {
-                                then = parse_string_array(&val);
+                        })
+                        .collect();
+                } else if key_str == "then" {
+                    then = list
+                        .nested
+                        .iter()
+                        .filter_map(|n| {
+                            if let syn::NestedMeta::Meta(Meta::Path(p)) = n {
+                                p.get_ident().map(|i| i.to_string())
                             } else {
-                                then = vec![val];
+                                None
                             }
-                        }
-                    }
-                }
-                "tags" => {
-                    if let syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { lit, .. })) = arg {
-                        if let syn::Lit::Str(s) = lit {
-                            let val = s.value();
-                            if val.starts_with('[') {
-                                tags = parse_string_array(&val);
+                        })
+                        .collect();
+                } else if key_str == "tags" {
+                    tags = list
+                        .nested
+                        .iter()
+                        .filter_map(|n| {
+                            if let syn::NestedMeta::Meta(Meta::Path(p)) = n {
+                                p.get_ident().map(|i| i.to_string())
                             } else {
-                                tags = vec![val];
+                                None
                             }
-                        }
-                    }
+                        })
+                        .collect();
                 }
-                _ => {}
             }
+            syn::NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, lit, .. })) => {
+                let key_str = path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+                if let syn::Lit::Str(s) = lit {
+                    let val = s.value();
+                    match key_str.as_str() {
+                        "feature" => feature = val,
+                        "scenario" => scenario = val,
+                        "when" => when = val,
+                        "priority" => priority = val.parse().unwrap_or(3),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
     Ok((feature, scenario, when, given, then, tags, priority))
-}
-
-fn parse_string_array(s: &str) -> Vec<String> {
-    let s = s.trim();
-    if !s.starts_with('[') || !s.ends_with(']') {
-        return vec![s.to_string()];
-    }
-    let inner = &s[1..s.len() - 1];
-    inner
-        .split(',')
-        .map(|s| s.trim().trim_matches('"').to_string())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_string_array() {
-        let result = parse_string_array(r#"["item1", "item2"]"#);
-        assert_eq!(result, vec!["item1", "item2"]);
-    }
-
-    #[test]
-    fn test_parse_string_array_single() {
-        let result = parse_string_array("single");
-        assert_eq!(result, vec!["single"]);
-    }
 }
