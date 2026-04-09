@@ -1,12 +1,13 @@
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade, TimeInForce};
 use base_types::handler::handler_update2::{
-    ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
+    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::{diff_types::DomainEvent, Entity};
+use diff::diff_types::DomainEvent;
+use diff::Entity;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
@@ -50,7 +51,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> ApplyCommandChanges2
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerInternal
     for MatchOrderCmdHandler<R, P, L>
 {
     type Command = MatchCmd;
@@ -83,10 +84,12 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
             0,
             0,
         );
-        let trade_event =
-            DomainEvent::new(trade.track_create().map_err(|e| {
+        let trade_event = DomainEvent::new(
+            trade.track_create().map_err(|e| {
                 SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
-            })?, trade);
+            })?,
+            trade,
+        );
 
         Ok(MatchOrderStateChangedSet { trades: Some(vec![trade_event]) })
     }
@@ -94,11 +97,6 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.trades
     }
-}
-
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
-    for MatchOrderCmdHandler<R, P, L>
-{
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -150,10 +148,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
         Ok(())
     }
 
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error> {
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
             self.publisher.publish_batch(trades).map_err(|_e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
@@ -163,6 +158,11 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
         }
         Ok(())
     }
+}
+
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
+    for MatchOrderCmdHandler<R, P, L>
+{
 }
 
 #[cfg(test)]

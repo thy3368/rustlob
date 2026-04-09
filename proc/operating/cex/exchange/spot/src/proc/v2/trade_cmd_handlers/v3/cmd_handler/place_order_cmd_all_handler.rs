@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{OrderType, SpotOrder, SpotTrade, TimeInForce};
 use base_types::handler::handler_update2::{
-    ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
+    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
@@ -77,7 +77,7 @@ impl<R: CmdRepo2> PlaceOrderCmdHandler<R> {
     }
 }
 
-impl<R: CmdRepo2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R> {
+impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
     type Command = NewOrderCmd;
     type Reply = NewOrderFull;
     type GivenStateSet = PlaceOrderStateSetAll;
@@ -183,9 +183,7 @@ impl<R: CmdRepo2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R> {
 
         NewOrderFull::new(base, fills)
     }
-}
 
-impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -257,6 +255,8 @@ impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {
         Ok(())
     }
 }
+
+impl<R: CmdRepo2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R> {}
 
 #[cfg(test)]
 mod tests {

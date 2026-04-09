@@ -1,7 +1,7 @@
 use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use base_types::handler::handler_update2::{
-    ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
+    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
 };
 use diff::diff_types::DomainEvent;
 
@@ -44,7 +44,7 @@ impl CancelOrderCmdHandler {
     }
 }
 
-impl ApplyCommandChanges2 for CancelOrderCmdHandler {
+impl CmdHandlerInternal for CancelOrderCmdHandler {
     type Command = CancelOrderCmd;
     type Reply = OrderInfo;
     type GivenStateSet = CancelOrderStateSet;
@@ -62,9 +62,6 @@ impl ApplyCommandChanges2 for CancelOrderCmdHandler {
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         todo!()
     }
-}
-
-impl CmdHandlerForUpdate2 for CancelOrderCmdHandler {
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         todo!()
     }
@@ -84,10 +81,7 @@ impl CmdHandlerForUpdate2 for CancelOrderCmdHandler {
         todo!()
     }
 
-    fn persist_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error> {
+    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
         todo!()
     }
 
@@ -98,10 +92,9 @@ impl CmdHandlerForUpdate2 for CancelOrderCmdHandler {
         todo!()
     }
 
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error> {
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
         todo!()
     }
 }
+
+impl CmdHandlerForUpdate2 for CancelOrderCmdHandler {}

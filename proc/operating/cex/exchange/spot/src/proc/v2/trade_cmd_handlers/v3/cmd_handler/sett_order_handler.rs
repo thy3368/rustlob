@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use base_types::account::balance::{Balance as AccountBalance, Balance};
 use base_types::exchange::spot::spot_types::SpotTrade;
 use base_types::handler::handler_update2::{
-    ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
+    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
 };
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::{diff_types::DomainEvent, Entity};
+use diff::diff_types::DomainEvent;
+use diff::Entity;
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
@@ -44,7 +45,7 @@ pub struct SettlementCmd {
     pub trades: Vec<SpotTrade>,
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler<R, P> {
     type Command = SettlementCmd;
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
     type GivenStateSet = SettStateSet;
@@ -66,9 +67,12 @@ impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandl
             trade.timestamp,
         );
         taker_quote_balance.add_balance(trade.quote_qty, trade.timestamp);
-        let taker_quote_balance_event = DomainEvent::new(taker_quote_balance.track_create().map_err(
-            |e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }),
-        )?, taker_quote_balance);
+        let taker_quote_balance_event = DomainEvent::new(
+            taker_quote_balance.track_create().map_err(|e| {
+                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+            })?,
+            taker_quote_balance,
+        );
 
         let mut maker_base_balance = AccountBalance::new(
             trade.maker_order_id.into(),
@@ -76,9 +80,12 @@ impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandl
             trade.timestamp,
         );
         maker_base_balance.add_balance(trade.base_qty, trade.timestamp);
-        let maker_base_balance_event = DomainEvent::new(maker_base_balance.track_create().map_err(
-            |e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }),
-        )?, maker_base_balance);
+        let maker_base_balance_event = DomainEvent::new(
+            maker_base_balance.track_create().map_err(|e| {
+                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+            })?,
+            maker_base_balance,
+        );
 
         Ok(SettStateChangedSet {
             balances: Some(vec![taker_quote_balance_event, maker_base_balance_event]),
@@ -88,11 +95,8 @@ impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for SettOrderCmdHandl
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.balances
     }
-}
-
-impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandler<R, P> {
-    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        Ok(())
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        todo!()
     }
 
     fn load_state_set_for_update(
@@ -131,10 +135,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
         Ok(())
     }
 
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error> {
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             self.publisher.publish_batch(balances).map_err(|_e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
@@ -145,6 +146,8 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
         Ok(())
     }
 }
+
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandler<R, P> {}
 
 #[cfg(test)]
 mod tests {

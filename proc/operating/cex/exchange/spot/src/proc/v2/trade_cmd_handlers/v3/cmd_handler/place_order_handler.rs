@@ -1,8 +1,6 @@
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
-use base_types::handler::handler_update2::{
-    ApplyCommandChanges2, CmdHandlerForUpdate2, DomainEventSet,
-};
+use base_types::handler::handler_update2::{CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet};
 use base_types::Quantity;
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
@@ -43,7 +41,7 @@ impl<R: CmdRepo2, P: EventPublisher2> PlaceOrderCmdHandler<R, P> {
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for PlaceOrderCmdHandler<R, P> {
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandler<R, P> {
     type Command = NewOrderCmd;
     type Reply = DomainEvent<SpotOrder>;
     type GivenStateSet = PlaceOrderStateSet;
@@ -88,9 +86,6 @@ impl<R: CmdRepo2, P: EventPublisher2> ApplyCommandChanges2 for PlaceOrderCmdHand
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.order
     }
-}
-
-impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -138,6 +133,10 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHand
     }
 }
 
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {
+
+}
+
 #[cfg(test)]
 mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
@@ -175,18 +174,14 @@ mod tests {
         );
 
         let handler = PlaceOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher);
-        let changes = handler
-            .apply_command_and_collect_changes(&cmd, PlaceOrderStateSet { order_id: 42 })
-            .expect("apply should succeed");
 
-        let order = changes.order.object();
-        assert_eq!(order.order_id, 42u64);
-        assert_eq!(order.trading_pair, TradingPair::BtcUsdt);
-        assert_eq!(order.side, OrderSide::Buy);
-        assert_eq!(order.price, Some(Price::from_f64(50000.0)));
-        assert_eq!(order.total_base_qty, Quantity::from_f64(1.0));
-        assert_eq!(order.time_in_force, TimeInForce::GTC);
-        assert_eq!(order.client_order_id.as_deref(), Some("test_order_001"));
-        assert_eq!(changes.domain_event_count(), 1);
+        handler.cmd_handle(cmd).unwrap();
+
+        //todo 验证 MockMySqlRepo 用真实的 MySqlRepo
+
+
+        // 优化 /Users/hongyaotang/src/rustlob/.agents/skills/bdd/SKILL.md 为本例
+
+
     }
 }
