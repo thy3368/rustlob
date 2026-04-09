@@ -15,7 +15,8 @@ pub trait DomainEventSet {
     fn domain_event_count(&self) -> usize;
 }
 
-pub trait ApplyCommandChanges2: Send + Sync {
+#[doc(hidden)]
+pub trait CmdHandlerInternal: Send + Sync {
     type Command;
     type Reply;
     type GivenStateSet;
@@ -30,10 +31,38 @@ pub trait ApplyCommandChanges2: Send + Sync {
     ) -> Result<Self::ThenStateSet, Self::Error>;
 
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply;
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
+
+    fn load_state_set_for_update(&self, cmd: &Self::Command)
+                                 -> Result<Self::GivenStateSet, Self::Error>;
+
+    fn validate_command_in_lock(
+        &self,
+        cmd: &Self::Command,
+        state_set: &Self::GivenStateSet,
+    ) -> Result<(), Self::Error>;
+
+    fn persist_domain_events(
+        &self,
+        domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error>;
+
+    fn replay_domain_events_to_state(
+        &self,
+        domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error>;
+
+    fn publish_domain_events(
+        &self,
+        domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error>;
+
+    fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
 }
 
 // cpu操作，如果是soa则可以simd优化
-pub trait CmdHandlerForUpdate2: ApplyCommandChanges2 + Send + Sync {
+pub trait CmdHandlerForUpdate2: CmdHandlerInternal + Send + Sync {
     fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::Reply, Self::Error> {
         let total_start = std::time::Instant::now();
 
@@ -89,31 +118,4 @@ pub trait CmdHandlerForUpdate2: ApplyCommandChanges2 + Send + Sync {
         Ok(self.state_changed_set_to_reply(changes))
     }
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
-
-    fn load_state_set_for_update(&self, cmd: &Self::Command)
-    -> Result<Self::GivenStateSet, Self::Error>;
-
-    fn validate_command_in_lock(
-        &self,
-        cmd: &Self::Command,
-        state_set: &Self::GivenStateSet,
-    ) -> Result<(), Self::Error>;
-
-    fn persist_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
-
-    fn replay_domain_events_to_state(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
-
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
-
-    fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
 }
