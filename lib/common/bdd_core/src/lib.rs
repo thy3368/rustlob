@@ -38,30 +38,47 @@ pub struct BddResult {
 }
 
 impl BddResult {
-    pub fn new(metadata: &BddMetadata, passed: bool, duration_ms: u64) -> Self {
+    pub fn new(
+        given: &[String],
+        when: &str,
+        then: &[String],
+        passed: bool,
+        duration_ms: u64,
+    ) -> Self {
         Self {
-            feature: metadata.feature.clone(),
-            scenario: metadata.scenario.clone(),
-            given: metadata.given.clone(),
-            when: metadata.when.clone(),
-            then: metadata.then.clone(),
+            feature: String::new(),
+            scenario: String::new(),
+            given: given.to_vec(),
+            when: when.to_string(),
+            then: then.to_vec(),
             passed,
             duration_ms,
             error: None,
         }
     }
 
-    pub fn with_error(metadata: &BddMetadata, error: String, duration_ms: u64) -> Self {
+    pub fn with_error(
+        given: &[String],
+        when: &str,
+        then: &[String],
+        error: String,
+        duration_ms: u64,
+    ) -> Self {
         Self {
-            feature: metadata.feature.clone(),
-            scenario: metadata.scenario.clone(),
-            given: metadata.given.clone(),
-            when: metadata.when.clone(),
-            then: metadata.then.clone(),
+            feature: String::new(),
+            scenario: String::new(),
+            given: given.to_vec(),
+            when: when.to_string(),
+            then: then.to_vec(),
             passed: false,
             duration_ms,
             error: Some(error),
         }
+    }
+
+    pub fn set_context(&mut self, feature: &str, scenario: &str) {
+        self.feature = feature.to_string();
+        self.scenario = scenario.to_string();
     }
 }
 
