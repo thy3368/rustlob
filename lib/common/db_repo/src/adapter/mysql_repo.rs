@@ -1,28 +1,34 @@
 use std::fmt::Debug;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 use diff::Entity;
-use diff::diff_types::DomainEvent;
+use diff::diff_types::{ChangeType, DomainEvent};
 use immutable_derive::immutable;
+use sqlx::{MySql, Pool};
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
 
 #[immutable]
 pub struct MySqlRepo {
-    connection: Mutex<bool>,
+    pool: Option<Arc<Pool<MySql>>>,
 }
 
 impl MySqlRepo {
-    pub fn new2(_url: &str) -> Result<Self, RepoError> {
-        Ok(Self { connection: Mutex::new(true) })
+    pub fn new(url: &str) -> Result<Self, RepoError> {
+        let pool = Pool::<MySql>::connect(url).map_err(|e| {
+            RepoError::DeserializationFailed(format!("Failed to connect to MySQL: {}", e))
+        })?;
+        Ok(Self { pool: Some(Arc::new(pool)) })
     }
 
     pub fn new_mock() -> Self {
-        Self { connection: Mutex::new(false) }
+        Self { pool: None }
     }
 
-    fn has_connection(&self) -> bool {
-        *self.connection.lock().unwrap()
+    fn pool(&self) -> Result<&Arc<Pool<MySql>>, RepoError> {
+        self.pool.as_ref().ok_or(RepoError::DeserializationFailed(
+            "MySQL connection pool not initialized".to_string(),
+        ))
     }
 
     fn empty_page<E>(page_req: PageRequest) -> PageResult<E> {
@@ -94,9 +100,53 @@ impl QueryRepo2 for MySqlRepo {
 }
 
 impl CmdRepo2 for MySqlRepo {
-    fn replay_event<E>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
-        let _ = self.has_connection();
-        let _ = event;
+    fn replay_event<E: Clone + Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
+        let pool = match &self.pool {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let change_log = event.change_log();
+        let entity_id = change_log.entity_id();
+        let entity_type = change_log.entity_type();
+
+        match change_log.change_type() {
+            ChangeType::Created { fields } => {
+                let sql = format!(
+                    "INSERT INTO {} (entity_id, data, timestamp, sequence) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)",
+                    entity_type
+                );
+                let data = serde_json::to_string(&fields).unwrap_or_default();
+                sqlx::query(&sql)
+                    .bind(entity_id)
+                    .bind(&data)
+                    .bind(change_log.timestamp() as i64)
+                    .bind(change_log.sequence() as i64)
+                    .execute(pool.as_ref())
+                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+            }
+            ChangeType::Updated { changed_fields } => {
+                let sql = format!(
+                    "UPDATE {} SET data = ?, timestamp = ?, sequence = ? WHERE entity_id = ?",
+                    entity_type
+                );
+                let data = serde_json::to_string(&changed_fields).unwrap_or_default();
+                sqlx::query(&sql)
+                    .bind(&data)
+                    .bind(change_log.timestamp() as i64)
+                    .bind(change_log.sequence() as i64)
+                    .bind(entity_id)
+                    .execute(pool.as_ref())
+                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+            }
+            ChangeType::Deleted => {
+                let sql = format!("DELETE FROM {} WHERE entity_id = ?", entity_type);
+                sqlx::query(&sql)
+                    .bind(entity_id)
+                    .execute(pool.as_ref())
+                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+            }
+        }
         Ok(())
     }
 
@@ -124,7 +174,7 @@ impl CmdRepo2 for MySqlRepo {
 #[cfg(test)]
 mod tests {
     use diff::diff_types::DomainEvent;
-    use diff::{ChangeLog, ChangeType, Entity, FieldChange};
+    use diff::{ChangeLog, ChangeType, Entity, EntityError, FieldChange};
 
     use super::*;
 
@@ -154,9 +204,11 @@ mod tests {
         }
 
         fn replay(&mut self, entry: &ChangeLog) -> Result<(), EntityError> {
-            for field in entry.changed_fields() {
-                if field.field_name() == "value" {
-                    self.value = field.new_value().to_string();
+            if let ChangeType::Updated { changed_fields } = entry.change_type() {
+                for field in changed_fields {
+                    if field.field_name() == "value" {
+                        self.value = field.new_value().clone();
+                    }
                 }
             }
             Ok(())
