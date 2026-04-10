@@ -169,10 +169,11 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
 mod tests {
     use base_types::exchange::spot::spot_types::TradingPair;
     use diff::diff_types::DomainEvent;
+    use db_repo::adapter::v2::memdb_repo::MemdbRepo;
+    use db_repo::core::db_repo2::QueryRepo2;
     use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 
     use super::*;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockMySqlRepo;
 
     struct MockEventPublisher;
 
@@ -194,8 +195,9 @@ mod tests {
 
     #[test]
     fn test_match_order_apply_returns_no_trades_for_now() {
+        let repo = MemdbRepo::default();
         let handler = MatchOrderCmdHandler::new(
-            MockMySqlRepo,
+            repo.clone(),
             MockEventPublisher,
             EmbeddedLobRepo::<SpotOrder>::new(Vec::new()),
         );
@@ -221,5 +223,6 @@ mod tests {
 
         assert!(changes.trades.is_none());
         assert_eq!(changes.domain_event_count(), 0);
+        assert_eq!(repo.count().unwrap(), 0);
     }
 }

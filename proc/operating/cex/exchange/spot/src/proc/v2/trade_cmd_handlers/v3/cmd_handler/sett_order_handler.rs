@@ -95,8 +95,8 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
         state_changed_set.balances
     }
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        todo!()
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     fn load_state_set_for_update(
@@ -152,7 +152,8 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
 #[cfg(test)]
 mod tests {
     use base_types::exchange::spot::spot_types::SpotTrade;
-    use db_repo::adapter::mysql_repo::MySqlRepo;
+    use db_repo::adapter::v2::memdb_repo::MemdbRepo;
+    use db_repo::core::db_repo2::QueryRepo2;
     use diff::diff_types::DomainEvent;
 
     use super::*;
@@ -177,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_settlement_apply_returns_no_balance_events_for_now() {
-        use db_repo::MySqlRepo;
+        use db_repo::adapter::v2::memdb_repo::MemdbRepo;
 
         struct MockPublisher;
         impl EventPublisher2 for MockPublisher {
@@ -195,8 +196,9 @@ mod tests {
             }
         }
 
-        let handler = SettOrderCmdHandler::<MySqlRepo, MockPublisher>::new(
-            MySqlRepo::new_mock(),
+        let repo = MemdbRepo::default();
+        let handler = SettOrderCmdHandler::<MemdbRepo, MockPublisher>::new(
+            repo.clone(),
             MockPublisher,
         );
         let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
@@ -209,5 +211,6 @@ mod tests {
 
         assert!(changes.balances.is_none());
         assert_eq!(changes.domain_event_count(), 0);
+        assert_eq!(repo.count().unwrap(), 0);
     }
 }

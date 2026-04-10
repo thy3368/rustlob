@@ -1,10 +1,12 @@
+use base_types::Quantity;
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
-use base_types::handler::handler_update2::{CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet};
-use base_types::Quantity;
+use base_types::handler::handler_update2::{
+    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
+};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::diff_types::{track_create, DomainEvent};
+use diff::diff_types::{DomainEvent, track_create};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
@@ -121,10 +123,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
             .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }))
     }
 
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error> {
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
         self.publisher.publish(&domain_events.order).map_err(|_e| {
             SpotCmdErrorAny::Common(CommonError::Internal {
                 message: "publish place order event failed".to_string(),
@@ -133,21 +132,18 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {
-
-}
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {}
 
 #[cfg(test)]
 mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{Price, Quantity};
+    use db_repo::adapter::v2::memdb_repo::MemdbRepo;
+    use db_repo::core::db_repo2::QueryRepo2;
 
     use super::*;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::{
-        MockEventPublisher, MockMySqlRepo,
-    };
-
+    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
 
     #[test]
     fn test_apply_command_and_collect_changes_builds_order_event() {
@@ -173,15 +169,18 @@ mod tests {
             None,
         );
 
-        let handler = PlaceOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher);
+        let repo = MemdbRepo::default();
+        let handler = PlaceOrderCmdHandler::new(repo.clone(), MockEventPublisher);
 
-        handler.cmd_handle(cmd).unwrap();
+        let result = handler.cmd_handle(cmd);
 
-        //todo 验证 MockMySqlRepo 用真实的 MySqlRepo
-
-
-        // 优化 /Users/hongyaotang/src/rustlob/.agents/skills/bdd/SKILL.md 为本例
-
-
+        assert!(result.is_ok(), "order should be placed successfully: {:?}", result.err());
+        let order_event = result.unwrap();
+        let stored = repo
+            .find_by_id::<SpotOrder>(&order_event.object().order_id.to_string())
+            .expect("repo query should succeed")
+            .expect("stored order should exist");
+        assert_eq!(stored.order_id, order_event.object().order_id);
+        assert_eq!(stored.trading_pair, TradingPair::BtcUsdt);
     }
 }

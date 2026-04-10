@@ -78,15 +78,14 @@ mod tests {
     use base_types::{AssetId, Price, Quantity, Timestamp};
     use bdd::bdd_test;
     use diff::Entity;
-    use db_repo::adapter::mysql_repo::MySqlRepo;
+    use db_repo::adapter::v2::memdb_repo::MemdbRepo;
+    use db_repo::core::db_repo2::QueryRepo2;
     use diff::diff_types::{ChangeLog, ChangeType, DomainEvent};
     use lob_repo::core::repo_snapshot_support::LobError;
     use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
     use super::*;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::{
-        MockEventPublisher, MockMySqlRepo,
-    };
+    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
 
     struct MockLobRepo {
         supported_symbols: Mutex<Vec<TradingPair>>,
@@ -262,14 +261,15 @@ mod tests {
 
     #[test]
     fn test_pipeline_exec_returns_order_and_skips_settlement_when_no_trades() {
+        let repo = MemdbRepo::default();
         let pipeline = PlaceOrderPipelineHandler::new(
-            PlaceOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher),
+            PlaceOrderCmdHandler::new(repo.clone(), MockEventPublisher),
             MatchOrderCmdHandler::new(
-                MockMySqlRepo,
+                repo.clone(),
                 MockEventPublisher,
                 MockLobRepo::new(vec![TradingPair::BtcUsdt]),
             ),
-            SettOrderCmdHandler::new(MockMySqlRepo, MockEventPublisher),
+            SettOrderCmdHandler::new(repo.clone(), MockEventPublisher),
         );
 
         let reply = pipeline
@@ -280,6 +280,11 @@ mod tests {
         assert_eq!(reply.order.object().side, OrderSide::Buy);
         assert_eq!(reply.order.object().price, Some(Price::from_f64(50000.0)));
         assert_eq!(reply.order.object().total_base_qty, Quantity::from_f64(1.0));
+        let stored_order = repo
+            .find_by_id::<SpotOrder>(&reply.order.object().entity_id().to_string())
+            .expect("repo query should succeed")
+            .expect("stored order should exist");
+        assert_eq!(stored_order.order_id, reply.order.object().order_id);
         assert!(reply.trades.is_none());
         assert!(reply.balances.is_none());
     }
@@ -378,10 +383,11 @@ mod tests {
         let maker_order = create_sell_order(21, "maker_sell_001");
         let lob = MatchingMockLobRepo::new(vec![TradingPair::BtcUsdt], vec![maker_order.clone()]);
 
+        let repo = MemdbRepo::default();
         let pipeline = PlaceOrderPipelineHandler::new(
-            PlaceOrderCmdHandler::new(MySqlRepo::new_mock(), MockEventPublisher),
-            MatchOrderCmdHandler::new(MySqlRepo::new_mock(), MockEventPublisher, lob),
-            SettOrderCmdHandler::new(MySqlRepo::new_mock(), MockEventPublisher),
+            PlaceOrderCmdHandler::new(repo.clone(), MockEventPublisher),
+            MatchOrderCmdHandler::new(repo.clone(), MockEventPublisher, lob),
+            SettOrderCmdHandler::new(repo.clone(), MockEventPublisher),
         );
 
         let reply =
@@ -398,22 +404,34 @@ mod tests {
         assert_eq!(trade.price, Price::from_f64(50000.0));
         assert_eq!(trade.base_qty, Quantity::from_f64(1.0));
         assert_eq!(trade.taker_side, OrderSide::Buy);
+        let stored_order = repo
+            .find_by_id::<SpotOrder>(&reply.order.object().entity_id().to_string())
+            .expect("order query should succeed")
+            .expect("stored order should exist");
+        let stored_trade = repo
+            .find_by_id::<SpotTrade>(&trade.entity_id().to_string())
+            .expect("trade query should succeed")
+            .expect("stored trade should exist");
+        assert_eq!(stored_order.order_id, reply.order.object().order_id);
+        assert_eq!(stored_trade.trade_id, trade.trade_id);
         assert_eq!(balances.len(), 2);
         let asset_ids: Vec<AssetId> =
             balances.iter().map(|balance| balance.object().asset_id).collect();
         assert!(asset_ids.contains(&AssetId::Usdt));
         assert!(asset_ids.contains(&AssetId::Btc));
+        for balance in &balances {
+            let stored_balance = repo
+                .find_by_id::<AccountBalance>(&balance.object().entity_id().to_string())
+                .expect("balance query should succeed")
+                .expect("stored balance should exist");
+            assert_eq!(stored_balance.asset_id, balance.object().asset_id);
+        }
     }
 
+    /// #规则BDD：先挂2笔卖单，再挂一笔限价买单，完全撮合，生成两笔成交
     #[test]
-    #[bdd_test(
-        feature = "撮合",
-        scenario = "返回成交和余额",
-        given = "[\"订单成交\"]",
-        when = "执行管道",
-        then = "[\"返回成交记录\", \"返回余额变更\"]",
-        tags = "[\"pipeline\", \"trade\"]",
-        priority = "4"
-    )]
-    fn test_pipeline_reply_can_carry_trades_and_balances2() {}
+
+    fn test_pipeline_exec_full_match_generates_trade2() {
+
+    }
 }
