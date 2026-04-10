@@ -9,7 +9,7 @@ use crate::core::repo_snapshot_support::LobError;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob};
 
 #[allow(dead_code)]
-///规则：BDD必须用EmbeddedLobRepo
+///规则：BDD必须用EmbeddedLobRepo,Lob都必须单线程访问无须锁
 pub struct EmbeddedLobRepo<O: LobOrder> {
     lobs: RwLock<HashMap<TradingPair, LocalLob<O>>>,
 }
