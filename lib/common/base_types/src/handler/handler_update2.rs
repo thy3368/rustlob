@@ -34,8 +34,10 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
 
-    fn load_state_set_for_update(&self, cmd: &Self::Command)
-                                 -> Result<Self::GivenStateSet, Self::Error>;
+    fn load_state_set_for_update(
+        &self,
+        cmd: &Self::Command,
+    ) -> Result<Self::GivenStateSet, Self::Error>;
 
     fn validate_command_in_lock(
         &self,
@@ -43,27 +45,21 @@ pub trait CmdHandlerInternal: Send + Sync {
         state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error>;
 
-    fn persist_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
+    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error>;
 
     fn replay_domain_events_to_state(
         &self,
         domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error>;
 
-    fn publish_domain_events(
-        &self,
-        domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error>;
 
     fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
 }
 
 // cpu操作，如果是soa则可以simd优化
 pub trait CmdHandlerForUpdate2: CmdHandlerInternal + Send + Sync {
-    fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::Reply, Self::Error> {
+    fn cmd_handle_state(&self, cmd: Self::Command) -> Result<Self::ThenStateSet, Self::Error> {
         let total_start = std::time::Instant::now();
 
         // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查:cpu操作
@@ -114,8 +110,11 @@ pub trait CmdHandlerForUpdate2: CmdHandlerInternal + Send + Sync {
         };
 
         self.observe_latency(&metrics);
-
-        Ok(self.state_changed_set_to_reply(changes))
+        Ok(changes)
     }
 
+    fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::Reply, Self::Error> {
+        let changes = self.cmd_handle_state(cmd)?;
+        Ok(self.state_changed_set_to_reply(changes))
+    }
 }
