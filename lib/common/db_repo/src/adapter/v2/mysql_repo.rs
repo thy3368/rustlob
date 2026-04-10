@@ -4,18 +4,21 @@ use std::sync::Arc;
 use diff::Entity;
 use diff::diff_types::{ChangeType, DomainEvent};
 use immutable_derive::immutable;
-use sqlx::{MySql, Pool};
+use sqlx::MySql;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
 
 #[immutable]
 pub struct MySqlRepo {
-    pool: Option<Arc<Pool<MySql>>>,
+    pool: Option<Arc<sqlx::Pool<MySql>>>,
 }
 
 impl MySqlRepo {
-    pub fn new(url: &str) -> Result<Self, RepoError> {
-        let pool = Pool::<MySql>::connect(url).map_err(|e| {
+    pub fn create(url: &str) -> Result<Self, RepoError> {
+        let rt = tokio::runtime::Handle::current();
+        let pool = rt.block_on(async {
+            sqlx::Pool::<MySql>::connect(url).await
+        }).map_err(|e| {
             RepoError::DeserializationFailed(format!("Failed to connect to MySQL: {}", e))
         })?;
         Ok(Self { pool: Some(Arc::new(pool)) })
@@ -25,14 +28,36 @@ impl MySqlRepo {
         Self { pool: None }
     }
 
-    fn pool(&self) -> Result<&Arc<Pool<MySql>>, RepoError> {
-        self.pool.as_ref().ok_or(RepoError::DeserializationFailed(
-            "MySQL connection pool not initialized".to_string(),
-        ))
+    fn has_pool(&self) -> bool {
+        self.pool.is_some()
     }
 
     fn empty_page<E>(page_req: PageRequest) -> PageResult<E> {
         PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size)
+    }
+
+    fn execute_in_transaction<F, T>(&self, f: F) -> Result<T, RepoError>
+    where
+        F: FnOnce(&sqlx::Pool<MySql>) -> Result<T, RepoError>,
+    {
+        let pool = self.pool.as_ref().ok_or_else(|| {
+            RepoError::DeserializationFailed("MySQL pool not initialized".to_string())
+        })?;
+
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            let mut tx = pool.begin().await.map_err(|e| {
+                RepoError::DeserializationFailed(format!("Transaction failed: {}", e))
+            })?;
+
+            let result = f(pool);
+            if result.is_ok() {
+                tx.commit().await.map_err(|e| {
+                    RepoError::DeserializationFailed(format!("Commit failed: {}", e))
+                })?;
+            }
+            result
+        })
     }
 }
 
@@ -100,64 +125,83 @@ impl QueryRepo2 for MySqlRepo {
 }
 
 impl CmdRepo2 for MySqlRepo {
-    fn replay_event<E: Clone + Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
+    fn replay_event<E: Entity + Clone + Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
+        let change_log = event.change_log();
+        if change_log.entity_type() != <E as Entity>::entity_type() {
+            return Err(RepoError::DeserializationFailed(format!(
+                "Entity type mismatch: expected {}, got {}",
+                <E as Entity>::entity_type(),
+                change_log.entity_type()
+            )));
+        }
+
         let pool = match &self.pool {
-            Some(p) => p,
+            Some(p) => p.clone(),
             None => return Ok(()),
         };
 
-        let change_log = event.change_log();
-        let entity_id = change_log.entity_id();
-        let entity_type = change_log.entity_type();
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            let entity_id = change_log.entity_id().clone();
+            let entity_type = change_log.entity_type().to_string();
+            let timestamp = *change_log.timestamp();
+            let sequence = *change_log.sequence();
 
-        match change_log.change_type() {
-            ChangeType::Created { fields } => {
-                let sql = format!(
-                    "INSERT INTO {} (entity_id, data, timestamp, sequence) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)",
-                    entity_type
-                );
-                let data = serde_json::to_string(&fields).unwrap_or_default();
-                sqlx::query(&sql)
-                    .bind(entity_id)
-                    .bind(&data)
-                    .bind(change_log.timestamp() as i64)
-                    .bind(change_log.sequence() as i64)
-                    .execute(pool.as_ref())
-                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+            match change_log.change_type() {
+                ChangeType::Created { fields } => {
+                    let table_name = format!("entity_{}", entity_type.to_lowercase());
+                    let data = serde_json::to_string(&fields).unwrap_or_default();
+                    let sql = format!(
+                        "INSERT INTO {} (entity_id, data, timestamp, sequence) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data), timestamp = VALUES(timestamp), sequence = VALUES(sequence)",
+                        table_name
+                    );
+                    sqlx::query(&sql)
+                        .bind(&entity_id)
+                        .bind(&data)
+                        .bind(timestamp as i64)
+                        .bind(sequence as i64)
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+                }
+                ChangeType::Updated { changed_fields } => {
+                    let table_name = format!("entity_{}", entity_type.to_lowercase());
+                    let data = serde_json::to_string(&changed_fields).unwrap_or_default();
+                    let sql = format!(
+                        "UPDATE {} SET data = ?, timestamp = ?, sequence = ? WHERE entity_id = ?",
+                        table_name
+                    );
+                    sqlx::query(&sql)
+                        .bind(&data)
+                        .bind(timestamp as i64)
+                        .bind(sequence as i64)
+                        .bind(&entity_id)
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+                }
+                ChangeType::Deleted => {
+                    let table_name = format!("entity_{}", entity_type.to_lowercase());
+                    let sql = format!("DELETE FROM {} WHERE entity_id = ?", table_name);
+                    sqlx::query(&sql)
+                        .bind(&entity_id)
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
+                }
             }
-            ChangeType::Updated { changed_fields } => {
-                let sql = format!(
-                    "UPDATE {} SET data = ?, timestamp = ?, sequence = ? WHERE entity_id = ?",
-                    entity_type
-                );
-                let data = serde_json::to_string(&changed_fields).unwrap_or_default();
-                sqlx::query(&sql)
-                    .bind(&data)
-                    .bind(change_log.timestamp() as i64)
-                    .bind(change_log.sequence() as i64)
-                    .bind(entity_id)
-                    .execute(pool.as_ref())
-                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
-            }
-            ChangeType::Deleted => {
-                let sql = format!("DELETE FROM {} WHERE entity_id = ?", entity_type);
-                sqlx::query(&sql)
-                    .bind(entity_id)
-                    .execute(pool.as_ref())
-                    .map_err(|e| RepoError::DeserializationFailed(e.to_string()))?;
-            }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
-    fn replay_events<E>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
+    fn replay_events<E: Entity + Clone + Debug>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }
         Ok(())
     }
 
-    fn replay_from_sequence<E: Clone + Debug>(
+    fn replay_from_sequence<E: Entity + Clone + Debug>(
         &self,
         events: &[DomainEvent<E>],
         from_sequence: u64,
@@ -206,8 +250,8 @@ mod tests {
         fn replay(&mut self, entry: &ChangeLog) -> Result<(), EntityError> {
             if let ChangeType::Updated { changed_fields } = entry.change_type() {
                 for field in changed_fields {
-                    if field.field_name() == "value" {
-                        self.value = field.new_value().clone();
+                    if field.field_name == "value" {
+                        self.value = field.new_value.clone();
                     }
                 }
             }

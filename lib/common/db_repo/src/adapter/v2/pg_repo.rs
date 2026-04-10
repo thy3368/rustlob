@@ -65,15 +65,15 @@ impl QueryRepo2 for PgRepo {
 }
 
 impl CmdRepo2 for PgRepo {
-    fn replay_event<E>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
+    fn replay_event<E: Entity + Clone + Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
         todo!()
     }
 
-    fn replay_events<E>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
+    fn replay_events<E: Entity + Clone + Debug>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
         todo!()
     }
 
-    fn replay_from_sequence<E: Clone + Debug>(
+    fn replay_from_sequence<E: Entity + Clone + Debug>(
         &self,
         events: &[DomainEvent<E>],
         from_sequence: u64,
