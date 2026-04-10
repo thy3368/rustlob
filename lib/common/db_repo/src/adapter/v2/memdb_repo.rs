@@ -65,7 +65,7 @@ impl TypeStore {
     }
 }
 
-///规则：内存版的repo,主要用来给bdd test
+///规则：内存版的repo,bdd test必须用他
 #[immutable]
 pub struct MemdbRepo {
     stores: Arc<RwLock<HashMap<&'static str, TypeStore>>>,
