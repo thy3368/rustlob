@@ -57,39 +57,50 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         _cmd: &Self::Command,
         state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenStateSet, Self::Error> {
-        let Some(trade) = state_set.trades.first() else {
+        if state_set.trades.is_empty() {
             return Ok(SettStateChangedSet { balances: None });
-        };
+        }
 
-        let mut taker_quote_balance = AccountBalance::new(
-            trade.taker_order_id.into(),
-            trade.trading_pair.quote_asset(),
-            trade.timestamp,
-        );
-        taker_quote_balance.add_balance(trade.quote_qty, trade.timestamp);
-        let taker_quote_balance_event = DomainEvent::new(
-            taker_quote_balance.track_create().map_err(|e| {
+        let mut balance_map: HashMap<String, AccountBalance> = HashMap::new();
+
+        for trade in &state_set.trades {
+            let (taker_asset, taker_qty, maker_asset, maker_qty) = match trade.taker_side {
+                base_types::exchange::spot::spot_types::OrderSide::Buy => (
+                    trade.trading_pair.base_asset(),
+                    trade.base_qty,
+                    trade.trading_pair.quote_asset(),
+                    trade.quote_qty,
+                ),
+                base_types::exchange::spot::spot_types::OrderSide::Sell => (
+                    trade.trading_pair.quote_asset(),
+                    trade.quote_qty,
+                    trade.trading_pair.base_asset(),
+                    trade.base_qty,
+                ),
+            };
+
+            let taker_key = format!("{}:{}", trade.taker_order_id, u32::from(taker_asset));
+            let taker_balance = balance_map.entry(taker_key).or_insert_with(|| {
+                AccountBalance::new(trade.taker_order_id.into(), taker_asset, trade.timestamp)
+            });
+            taker_balance.add_balance(taker_qty, trade.timestamp);
+
+            let maker_key = format!("{}:{}", trade.maker_order_id, u32::from(maker_asset));
+            let maker_balance = balance_map.entry(maker_key).or_insert_with(|| {
+                AccountBalance::new(trade.maker_order_id.into(), maker_asset, trade.timestamp)
+            });
+            maker_balance.add_balance(maker_qty, trade.timestamp);
+        }
+
+        let mut balance_events = Vec::with_capacity(balance_map.len());
+        for balance in balance_map.into_values() {
+            let change_log = balance.track_create().map_err(|e| {
                 SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
-            })?,
-            taker_quote_balance,
-        );
+            })?;
+            balance_events.push(DomainEvent::new(change_log, balance));
+        }
 
-        let mut maker_base_balance = AccountBalance::new(
-            trade.maker_order_id.into(),
-            trade.trading_pair.base_asset(),
-            trade.timestamp,
-        );
-        maker_base_balance.add_balance(trade.base_qty, trade.timestamp);
-        let maker_base_balance_event = DomainEvent::new(
-            maker_base_balance.track_create().map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
-            })?,
-            maker_base_balance,
-        );
-
-        Ok(SettStateChangedSet {
-            balances: Some(vec![taker_quote_balance_event, maker_base_balance_event]),
-        })
+        Ok(SettStateChangedSet { balances: Some(balance_events) })
     }
 
     fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
@@ -151,12 +162,30 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandl
 
 #[cfg(test)]
 mod tests {
-    use base_types::exchange::spot::spot_types::SpotTrade;
+    use base_types::{AssetId, Price, Quantity, Timestamp, TradingPair};
     use db_repo::adapter::v2::memdb_repo::MemdbRepo;
     use db_repo::core::db_repo2::QueryRepo2;
     use diff::diff_types::DomainEvent;
 
     use super::*;
+
+    fn create_trade(trade_id: u64, taker_order_id: u64, maker_order_id: u64) -> SpotTrade {
+        SpotTrade::new(
+            trade_id,
+            TradingPair::BtcUsdt,
+            taker_order_id,
+            maker_order_id,
+            Timestamp::default(),
+            Price::from_f64(50000.0),
+            Quantity::from_f64(1.0),
+            base_types::exchange::spot::spot_types::OrderSide::Buy,
+            Quantity::default(),
+            Quantity::default(),
+            AssetId::Usdt,
+            0,
+            0,
+        )
+    }
 
     struct MockEventPublisher;
 
@@ -177,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_settlement_apply_returns_no_balance_events_for_now() {
+    fn test_settlement_apply_returns_no_balance_events_for_empty_trades() {
         use db_repo::adapter::v2::memdb_repo::MemdbRepo;
 
         struct MockPublisher;
@@ -212,5 +241,39 @@ mod tests {
         assert!(changes.balances.is_none());
         assert_eq!(changes.domain_event_count(), 0);
         assert_eq!(repo.count().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_settlement_apply_aggregates_balances_for_two_trades() {
+        let repo = MemdbRepo::default();
+        let handler = SettOrderCmdHandler::new(repo.clone(), MockEventPublisher);
+        let balances = handler
+            .cmd_handle(SettlementCmd {
+                trades: vec![create_trade(1, 101, 201), create_trade(2, 101, 202)],
+            })
+            .expect("settlement should succeed")
+            .expect("balances should exist");
+
+        assert_eq!(balances.len(), 3);
+
+        let taker_btc = repo
+            .find_by_id::<AccountBalance>("101:2")
+            .expect("query taker btc should succeed")
+            .expect("taker btc balance should exist");
+        let maker_one_usdt = repo
+            .find_by_id::<AccountBalance>("201:1")
+            .expect("query first maker usdt should succeed")
+            .expect("first maker usdt balance should exist");
+        let maker_two_usdt = repo
+            .find_by_id::<AccountBalance>("202:1")
+            .expect("query second maker usdt should succeed")
+            .expect("second maker usdt balance should exist");
+
+        assert_eq!(taker_btc.asset_id, AssetId::Btc);
+        assert_eq!(taker_btc.available, Quantity::from_f64(2.0));
+        assert_eq!(maker_one_usdt.asset_id, AssetId::Usdt);
+        assert_eq!(maker_one_usdt.available, Quantity::from_f64(50000.0));
+        assert_eq!(maker_two_usdt.asset_id, AssetId::Usdt);
+        assert_eq!(maker_two_usdt.available, Quantity::from_f64(50000.0));
     }
 }

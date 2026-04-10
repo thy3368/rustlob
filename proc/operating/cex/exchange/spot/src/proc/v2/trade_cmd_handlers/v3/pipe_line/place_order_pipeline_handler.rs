@@ -221,14 +221,14 @@ mod tests {
         fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
     }
 
-    fn create_test_cmd(client_order_id: &str) -> NewOrderCmd {
+    fn create_test_cmd_with_quantity(client_order_id: &str, quantity: f64) -> NewOrderCmd {
         NewOrderCmd::new(
             CMetadata::default(),
             TradingPair::BtcUsdt,
             OrderSide::Buy,
             OrderType::Limit,
             Some(TimeInForce::GTC),
-            Some(Quantity::from_f64(1.0)),
+            Some(Quantity::from_f64(quantity)),
             None,
             Some(Price::from_f64(50000.0)),
             Some(client_order_id.to_string()),
@@ -245,14 +245,26 @@ mod tests {
         )
     }
 
+    fn create_test_cmd(client_order_id: &str) -> NewOrderCmd {
+        create_test_cmd_with_quantity(client_order_id, 1.0)
+    }
+
     fn create_sell_order(order_id: u64, client_order_id: &str) -> SpotOrder {
+        create_sell_order_with_quantity(order_id, client_order_id, 1.0)
+    }
+
+    fn create_sell_order_with_quantity(
+        order_id: u64,
+        client_order_id: &str,
+        quantity: f64,
+    ) -> SpotOrder {
         SpotOrder::create_order(
             order_id,
             TraderId::new([1u8; 8]),
             TradingPair::BtcUsdt,
             OrderSide::Sell,
             Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Quantity::from_f64(quantity),
             TimeInForce::GTC,
             Some(client_order_id.to_string()),
             Quantity::default(),
@@ -430,8 +442,70 @@ mod tests {
 
     /// #规则BDD：先挂2笔卖单，再挂一笔限价买单，完全撮合，生成两笔成交
     #[test]
-
     fn test_pipeline_exec_full_match_generates_trade2() {
+        let maker_order_one = create_sell_order_with_quantity(31, "maker_sell_002", 1.0);
+        let maker_order_two = create_sell_order_with_quantity(32, "maker_sell_003", 1.0);
+        //todo MatchingMockLobRepo 换成 EmbeddedLobRepo
+        let lob = MatchingMockLobRepo::new(
+            vec![TradingPair::BtcUsdt],
+            vec![maker_order_one.clone(), maker_order_two.clone()],
+        );
 
+        let repo = MemdbRepo::default();
+        let pipeline = PlaceOrderPipelineHandler::new(
+            PlaceOrderCmdHandler::new(repo.clone(), MockEventPublisher),
+            MatchOrderCmdHandler::new(repo.clone(), MockEventPublisher, lob),
+            SettOrderCmdHandler::new(repo.clone(), MockEventPublisher),
+        );
+
+        let reply = pipeline
+            .exec(create_test_cmd_with_quantity("taker_buy_002", 2.0))
+            .expect("pipeline exec should succeed");
+
+        let trades = reply.trades.expect("full match should generate two trades");
+        let balances = reply.balances.expect("full match should generate balances");
+
+        assert_eq!(trades.len(), 2);
+        assert_ne!(trades[0].object().trade_id, trades[1].object().trade_id);
+        let maker_order_ids: Vec<_> = trades.iter().map(|trade| trade.object().maker_order_id).collect();
+        assert!(maker_order_ids.contains(&maker_order_one.order_id));
+        assert!(maker_order_ids.contains(&maker_order_two.order_id));
+        for trade in &trades {
+            assert_eq!(trade.object().taker_order_id, reply.order.object().order_id);
+            assert_eq!(trade.object().price, Price::from_f64(50000.0));
+            assert_eq!(trade.object().base_qty, Quantity::from_f64(1.0));
+        }
+        let total_base_qty = trades
+            .iter()
+            .fold(Quantity::default(), |acc, trade| acc + trade.object().base_qty);
+        assert_eq!(total_base_qty, Quantity::from_f64(2.0));
+
+        let stored_first_trade = repo
+            .find_by_id::<SpotTrade>(&trades[0].object().entity_id().to_string())
+            .expect("first trade query should succeed")
+            .expect("first trade should exist");
+        let stored_second_trade = repo
+            .find_by_id::<SpotTrade>(&trades[1].object().entity_id().to_string())
+            .expect("second trade query should succeed")
+            .expect("second trade should exist");
+        assert_eq!(stored_first_trade.trade_id, trades[0].object().trade_id);
+        assert_eq!(stored_second_trade.trade_id, trades[1].object().trade_id);
+
+        assert_eq!(balances.len(), 3);
+        let taker_btc = repo
+            .find_by_id::<AccountBalance>(&format!("{}:{}", reply.order.object().order_id, u32::from(AssetId::Btc)))
+            .expect("taker btc query should succeed")
+            .expect("taker btc balance should exist");
+        let maker_one_usdt = repo
+            .find_by_id::<AccountBalance>(&format!("{}:{}", maker_order_one.order_id, u32::from(AssetId::Usdt)))
+            .expect("maker one usdt query should succeed")
+            .expect("maker one usdt balance should exist");
+        let maker_two_usdt = repo
+            .find_by_id::<AccountBalance>(&format!("{}:{}", maker_order_two.order_id, u32::from(AssetId::Usdt)))
+            .expect("maker two usdt query should succeed")
+            .expect("maker two usdt balance should exist");
+        assert_eq!(taker_btc.available, Quantity::from_f64(2.0));
+        assert_eq!(maker_one_usdt.available, Quantity::from_f64(50000.0));
+        assert_eq!(maker_two_usdt.available, Quantity::from_f64(50000.0));
     }
 }
