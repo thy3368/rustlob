@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use diff::diff_types::{ChangeType, DomainEvent};
 use diff::Entity;
@@ -68,7 +68,7 @@ impl TypeStore {
 ///规则：内存版的repo,主要用来给bdd test
 #[immutable]
 pub struct MemdbRepo {
-    stores: RwLock<HashMap<&'static str, TypeStore>>,
+    stores: Arc<RwLock<HashMap<&'static str, TypeStore>>>,
 }
 
 impl MemdbRepo {
@@ -120,9 +120,15 @@ impl MemdbRepo {
     }
 }
 
+impl Clone for MemdbRepo {
+    fn clone(&self) -> Self {
+        Self { stores: Arc::clone(&self.stores) }
+    }
+}
+
 impl Default for MemdbRepo {
     fn default() -> Self {
-        Self { stores: RwLock::new(HashMap::new()) }
+        Self { stores: Arc::new(RwLock::new(HashMap::new())) }
     }
 }
 
