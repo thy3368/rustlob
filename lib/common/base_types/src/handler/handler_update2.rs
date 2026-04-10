@@ -15,6 +15,10 @@ pub trait DomainEventSet {
     fn domain_event_count(&self) -> usize;
 }
 
+// pub trait ThenStateTrait {
+//     fn domain_event_count(&self) -> Result<DomainEvent<>, Self::Error> {;
+// }
+
 #[doc(hidden)]
 pub trait CmdHandlerInternal: Send + Sync {
     type Command;
@@ -23,7 +27,9 @@ pub trait CmdHandlerInternal: Send + Sync {
     type ThenStateSet: DomainEventSet;
     type Error;
 
-    //这个方法需要重点单测
+    /// 可能要定义 repo,event_publisher
+
+    /// 规则：这个方法需要重点单测
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
@@ -45,55 +51,68 @@ pub trait CmdHandlerInternal: Send + Sync {
         state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error>;
 
-    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error>;
+    ///repo怎么从外面传进来？
+    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+        todo!()
+    }
 
+    ///repo怎么从外面传进来？
     fn replay_domain_events_to_state(
         &self,
         domain_events: &Self::ThenStateSet,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::Error> {
+        todo!()
+    }
+    ///event_publisher怎么从外面传进来？
+    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+        todo!()
+    }
 
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error>;
-
-    fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
+    fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {
+        todo!()
+    }
 }
 
 // cpu操作，如果是soa则可以simd优化
 pub trait CmdHandlerForUpdate2: CmdHandlerInternal + Send + Sync {
+    ///规则：用于BDD测试
     fn cmd_handle_state(&self, cmd: Self::Command) -> Result<Self::ThenStateSet, Self::Error> {
-        let total_start = std::time::Instant::now();
+        use minstant::Instant;
+
+        let total_start = Instant::now();
 
         // 零预判：锁外快速失败，例如基本参数、时间窗、路由合法性检查:cpu操作
-        let pre_check_start = std::time::Instant::now();
+        let pre_check_start = Instant::now();
         self.pre_check_command(&cmd)?;
         let pre_check_ns = pre_check_start.elapsed().as_nanos();
 
         // 一锁：读取并锁定本次更新需要参与计算的状态集合：io操作
-        let load_state_start = std::time::Instant::now();
+        let load_state_start = Instant::now();
         let state_set = self.load_state_set_for_update(&cmd)?;
         let load_state_ns = load_state_start.elapsed().as_nanos();
 
         // 二判：锁内再次确认当前状态仍满足更新条件：cpu操作
-        let validate_start = std::time::Instant::now();
+        let validate_start = Instant::now();
         self.validate_command_in_lock(&cmd, &state_set)?;
         let validate_in_lock_ns = validate_start.elapsed().as_nanos();
 
         // 三更新：执行更新计算，同时产出刷新后的状态及 domain event：cpu操作
-        let apply_changes_start = std::time::Instant::now();
+        let apply_changes_start = Instant::now();
         let changes = self.apply_command_and_collect_changes(&cmd, state_set)?;
         let apply_changes_ns = apply_changes_start.elapsed().as_nanos();
 
         // 先持久化 domain event：io操作
-        let persist_start = std::time::Instant::now();
+        let persist_start = Instant::now();
         self.persist_domain_events(&changes)?;
         let persist_domain_events_ns = persist_start.elapsed().as_nanos();
 
         // 再回放 domain event，实现 state 更新：io操作
-        let replay_start = std::time::Instant::now();
+        let replay_start = Instant::now();
         self.replay_domain_events_to_state(&changes)?;
         let replay_domain_events_ns = replay_start.elapsed().as_nanos();
 
         // 最后发布 domain event：io操作
-        let publish_start = std::time::Instant::now();
+        let publish_start = Instant::now();
         self.publish_domain_events(&changes)?;
         let publish_domain_events_ns = publish_start.elapsed().as_nanos();
 
@@ -113,6 +132,7 @@ pub trait CmdHandlerForUpdate2: CmdHandlerInternal + Send + Sync {
         Ok(changes)
     }
 
+    /// 另一种方式，直接在这里传入repo和publisher
     fn cmd_handle(&self, cmd: Self::Command) -> Result<Self::Reply, Self::Error> {
         let changes = self.cmd_handle_state(cmd)?;
         Ok(self.state_changed_set_to_reply(changes))
