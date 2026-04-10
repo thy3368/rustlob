@@ -267,7 +267,7 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     ///
     /// lob_repo.replay_event(&event)?;
     /// ```
-    fn replay_event<E>(&self, event: &DomainEvent<E>) -> Result<(), RepoError>;
+    fn replay_event<E: Entity + Clone + fmt::Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError>;
 
     /// 批量回放多个事件
     ///
@@ -301,7 +301,7 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     ///
     /// lob_repo.replay_events(&events)?;
     /// ```
-    fn replay_events<E>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
+    fn replay_events<E: Entity + Clone + fmt::Debug>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }
@@ -345,7 +345,7 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     /// lob_repo.replay_from_sequence(&events, snapshot.sequence + 1)?;
     /// // 只会应用 sequence >= 5001 的事件
     /// ```
-    fn replay_from_sequence<E: Clone + std::fmt::Debug>(
+    fn replay_from_sequence<E: Entity + Clone + fmt::Debug>(
         &self,
         events: &[DomainEvent<E>],
         from_sequence: u64,
