@@ -7,7 +7,7 @@ use base_types::handler::handler_update2::{
 };
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
-use diff::diff_types::{track_create, DomainEvent};
+use diff::diff_types::{DomainEvent, track_create};
 
 use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior_v2::{
@@ -142,7 +142,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
             Price::default(),
             order.state.status,
             order.time_in_force,
-            order.order_type,
+            order.order_type(),
             order.side,
             order.timestamp,
             SelfTradePreventionMode::EXPIRE_TAKER,
@@ -264,8 +264,8 @@ mod tests {
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{Price, Quantity};
     use db_repo::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
-    use diff::diff_types::DomainEvent;
     use diff::Entity;
+    use diff::diff_types::DomainEvent;
 
     use super::*;
 

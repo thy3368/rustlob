@@ -24,7 +24,7 @@ impl From<NewOrderCmd> for SpotOrder {
         match order_type {
             OrderType::Limit => {
                 // 限价单 - 直接使用命令字段创建 SpotOrder，零拷贝
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -35,14 +35,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
 
                 order
             }
             OrderType::Market => {
                 // 市价单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -53,15 +51,13 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.execution_method = ExecutionMethod::Market;
-                order.state.status = base_types::exchange::spot::spot_types::OrderStatus::Pending;
-                order.price = None; // 市价单价格为None
+
+                // OrderType::Market => execution_method = Market
                 order
             }
             OrderType::StopLoss => {
                 // 止损单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -72,18 +68,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::StopLoss;
-                order.stop_price = *cmd.stop_price();
-                order.execution_method = ExecutionMethod::Market;
-                order.price = None;
-                order.state.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
+
                 order
             }
             OrderType::StopLossLimit => {
                 // 止损限价单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -94,17 +84,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::StopLoss;
-                order.execution_method = ExecutionMethod::Limit;
-                order.stop_price = *cmd.stop_price();
-                order.state.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
+
                 order
             }
             OrderType::TakeProfit => {
                 // 止盈单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -115,18 +100,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::TakeProfit;
-                order.stop_price = *cmd.stop_price();
-                order.execution_method = ExecutionMethod::Market;
-                order.price = None;
-                order.state.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
+
                 order
             }
             OrderType::TakeProfitLimit => {
                 // 止盈限价单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
@@ -137,28 +116,23 @@ impl From<NewOrderCmd> for SpotOrder {
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
-                order.conditional_type = ConditionalType::TakeProfit;
-                order.execution_method = ExecutionMethod::Limit;
-                order.stop_price = *cmd.stop_price();
-                order.state.status =
-                    base_types::exchange::spot::spot_types::OrderStatus::ConditionalPending;
+
                 order
             }
             OrderType::LimitMaker => {
                 // 限价只挂单
-                let mut order = SpotOrder::create_order(
+                let order = SpotOrder::create_order(
                     order_id,
                     trader_id,
                     trading_pair,
                     cmd.side().clone(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
-                    TimeInForce::GTX, // GTX = PostOnly
+                    TimeInForce::GTX,
                     cmd.new_client_order_id().clone(),
                     cmd.quote_order_qty().unwrap_or_default().clone(),
                 );
-                order.order_type = order_type;
+
                 order
             }
         }
