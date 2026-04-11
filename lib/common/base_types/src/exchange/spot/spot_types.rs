@@ -791,7 +791,6 @@ pub struct SpotOrder {
     // ===== 订单属性字段 =====
     pub client_order_id: Option<String>,            // 客户订单ID
     pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System) (1字节)
-    pub order_type: OrderType, // 订单类型 (Limit/Market/StopLoss/...) //todo remove
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
     pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
@@ -1066,7 +1065,6 @@ impl SpotOrder {
             price: Some(price),
             total_quote_qty: quote_order_qty,
             side,
-            order_type: OrderType::Limit,
             execution_method: ExecutionMethod::Limit,
             conditional_type: ConditionalType::None,
             algorithm_strategy: AlgorithmStrategy::None,
@@ -1157,6 +1155,35 @@ impl SpotOrder {
     pub fn with_stop_price(mut self, price: Price) -> Self {
         self.stop_price = Some(price);
         self
+    }
+
+    #[inline]
+    pub fn order_type(&self) -> OrderType {
+        match (self.execution_method, self.conditional_type, self.time_in_force) {
+            (ExecutionMethod::Market, ConditionalType::None, TimeInForce::IOC) => OrderType::Market,
+            (ExecutionMethod::Market, ConditionalType::StopLoss, _) => OrderType::StopLoss,
+            (ExecutionMethod::Market, ConditionalType::TakeProfit, _) => OrderType::TakeProfit,
+            (ExecutionMethod::Limit, ConditionalType::None, TimeInForce::GTX) => {
+                OrderType::LimitMaker
+            }
+            (ExecutionMethod::Limit, ConditionalType::StopLoss, _) => OrderType::StopLossLimit,
+            (ExecutionMethod::Limit, ConditionalType::TakeProfit, _) => OrderType::TakeProfitLimit,
+            _ => OrderType::Limit,
+        }
+    }
+
+    #[inline]
+    pub fn is_iceberg(&self) -> bool {
+        self.iceberg_qty.map(|q| q < self.total_base_qty).unwrap_or(false)
+    }
+
+    #[inline]
+    pub fn iceberg_visible_qty(&self) -> Quantity {
+        if self.is_iceberg() {
+            self.unfilled_qty().min(self.iceberg_qty.unwrap_or(self.total_base_qty))
+        } else {
+            self.unfilled_qty()
+        }
     }
 }
 
