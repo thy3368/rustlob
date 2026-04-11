@@ -31,7 +31,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
     type Order = O;
 
     fn match_orders(
-        &self,
+        &mut self,
         symbol: TradingPair,
         side: OrderSide,
         price: Price,
@@ -53,11 +53,11 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         todo!()
     }
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
+    fn add_order(&mut self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
         todo!()
     }
 
-    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
+    fn remove_order(&mut self, symbol: TradingPair, order_id: OrderId) -> bool {
         todo!()
     }
 
@@ -65,7 +65,7 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         todo!()
     }
 
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
+    fn find_order_mut(&mut self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
         todo!()
     }
 
@@ -73,5 +73,5 @@ impl<O: LobOrder> MultiSymbolLobRepo for DistributedLobRepo<O> {
         None
     }
 
-    fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
+    fn update_last_price(&mut self, _symbol: TradingPair, _price: Price) {}
 }

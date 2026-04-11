@@ -2,16 +2,14 @@ use std::collections::HashMap;
 
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
-use parking_lot::RwLock;
-
 use crate::adapter::local_lob_impl::LocalLob;
-use crate::core::repo_snapshot_support::LobError;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob};
+use crate::LobError;
 
 #[allow(dead_code)]
 ///规则：BDD必须用EmbeddedLobRepo,Lob都必须单线程访问无须锁
 pub struct EmbeddedLobRepo<O: LobOrder> {
-    lobs: RwLock<HashMap<TradingPair, LocalLob<O>>>,
+    lobs: HashMap<TradingPair, LocalLob<O>>,
 }
 
 impl<O: LobOrder> EmbeddedLobRepo<O> {
@@ -20,7 +18,7 @@ impl<O: LobOrder> EmbeddedLobRepo<O> {
         for lob in lobs {
             map.insert(*lob.symbol(), lob);
         }
-        Self { lobs: RwLock::new(map) }
+        Self { lobs: map }
     }
 }
 
@@ -28,37 +26,39 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
     type Order = O;
 
     fn match_orders(
-        &self,
-        _symbol: TradingPair,
-        _side: OrderSide,
-        _price: Price,
+        &mut self,
+        symbol: TradingPair,
+        side: OrderSide,
+        price: Price,
         quantity: Quantity,
     ) -> (Option<Vec<&Self::Order>>, Quantity) {
-        (None, quantity)
+        self.lobs
+            .get_mut(&symbol)
+            .map(|lob| lob.match_orders(side, price, quantity))
+            .unwrap_or((None, quantity))
     }
 
     fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
-        self.lobs.read().get(&symbol)?.best_bid()
+        self.lobs.get(&symbol)?.best_bid()
     }
 
     fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
-        self.lobs.read().get(&symbol)?.best_ask()
+        self.lobs.get(&symbol)?.best_ask()
     }
 
     fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-        self.lobs.read().contains_key(symbol)
+        self.lobs.contains_key(symbol)
     }
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
-        let mut lobs = self.lobs.write();
-        let lob = lobs.get_mut(&symbol).ok_or(LobError::SymbolMismatch {
+    fn add_order(&mut self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
+        let lob = self.lobs.get_mut(&symbol).ok_or(LobError::SymbolMismatch {
             expected: symbol.to_string(),
             actual: order.symbol().to_string(),
         })?;
         lob.add_order(order)
     }
 
-    fn remove_order(&self, _symbol: TradingPair, _order_id: OrderId) -> bool {
+    fn remove_order(&mut self, _symbol: TradingPair, _order_id: OrderId) -> bool {
         todo!()
     }
 
@@ -66,16 +66,16 @@ impl<O: LobOrder> MultiSymbolLobRepo for EmbeddedLobRepo<O> {
         todo!()
     }
 
-    fn find_order_mut(&self, _p0: TradingPair, _order_id: OrderId) -> Option<&mut Self::Order> {
+    fn find_order_mut(&mut self, _p0: TradingPair, _order_id: OrderId) -> Option<&mut Self::Order> {
         todo!()
     }
 
     fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-        self.lobs.read().get(&symbol)?.last_price()
+        self.lobs.get(&symbol)?.last_price()
     }
 
-    fn update_last_price(&self, symbol: TradingPair, price: Price) {
-        if let Some(lob) = self.lobs.write().get_mut(&symbol) {
+    fn update_last_price(&mut self, symbol: TradingPair, price: Price) {
+        if let Some(lob) = self.lobs.get_mut(&symbol) {
             lob.update_last_price(price);
         }
     }
