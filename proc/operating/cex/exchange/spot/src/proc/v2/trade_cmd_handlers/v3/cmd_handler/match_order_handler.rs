@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade, TimeInForce};
 use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet};
@@ -17,6 +19,8 @@ pub struct MatchOrderStateSet {
 }
 
 pub struct MatchOrderStateChangedSet {
+    pub taker: DomainEvent<SpotOrder>,
+    pub makers: Option<Vec<DomainEvent<SpotOrder>>>,
     pub trades: Option<Vec<DomainEvent<SpotTrade>>>,
 }
 
@@ -34,22 +38,22 @@ pub struct MatchCmd {
 pub struct MatchOrderCmdHandler<
     R: CmdRepo2,
     P: EventPublisher2,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > {
     pub repo: R,
     pub publisher: P,
-    pub lob: L,
+    pub lob: Mutex<L>,
 }
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
     MatchOrderCmdHandler<R, P, L>
 {
     pub fn new(repo: R, publisher: P, lob: L) -> Self {
-        Self { repo, publisher, lob }
+        Self { repo, publisher, lob: Mutex::new(lob) }
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerInternal
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> + Send> CmdHandlerInternal
     for MatchOrderCmdHandler<R, P, L>
 {
     type Command = MatchCmd;
@@ -67,7 +71,16 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
         state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenStateSet, Self::Error> {
         if state_set.makers.is_empty() {
-            return Ok(MatchOrderStateChangedSet { trades: None });
+            return Ok(MatchOrderStateChangedSet {
+                taker: DomainEvent::new(
+                    state_set.taker.track_create().map_err(|e| {
+                        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    })?,
+                    state_set.taker,
+                ),
+                makers: None,
+                trades: None,
+            });
         }
 
         let mut remaining_qty = state_set.taker.unfilled_qty();
@@ -108,10 +121,38 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
             remaining_qty -= fill_qty;
         }
 
+        let taker_event = DomainEvent::new(
+            state_set.taker.track_create().map_err(|e| {
+                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+            })?,
+            state_set.taker,
+        );
+        let maker_events: Result<Vec<_>, Self::Error> = state_set
+            .makers
+            .into_iter()
+            .map(|maker| {
+                Ok(DomainEvent::new(
+                    maker.track_create().map_err(|e| {
+                        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    })?,
+                    maker,
+                ))
+            })
+            .collect();
+        let maker_events = maker_events?;
+
         if trade_events.is_empty() {
-            Ok(MatchOrderStateChangedSet { trades: None })
+            Ok(MatchOrderStateChangedSet {
+                taker: taker_event,
+                makers: Some(maker_events),
+                trades: None,
+            })
         } else {
-            Ok(MatchOrderStateChangedSet { trades: Some(trade_events) })
+            Ok(MatchOrderStateChangedSet {
+                taker: taker_event,
+                makers: Some(maker_events),
+                trades: Some(trade_events),
+            })
         }
     }
 
@@ -129,7 +170,8 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     ) -> Result<Self::GivenStateSet, Self::Error> {
         let taker = cmd.taker_order.clone();
         let taker_price = taker.price.unwrap_or_default();
-        let (matched, _) = self.lob.match_orders(
+        let mut lob = self.lob.lock().expect("match lob lock poisoned");
+        let (matched, _) = lob.match_orders(
             taker.trading_pair,
             taker.side,
             taker_price,
@@ -188,8 +230,8 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate3
-    for MatchOrderCmdHandler<R, P, L>
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
+    CmdHandlerForUpdate3 for MatchOrderCmdHandler<R, P, L>
 {
 }
 
@@ -203,71 +245,6 @@ mod tests {
     use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
     use super::*;
-
-    struct TestLobRepo {
-        makers: Vec<SpotOrder>,
-    }
-
-    impl TestLobRepo {
-        fn new(makers: Vec<SpotOrder>) -> Self {
-            Self { makers }
-        }
-    }
-
-    impl MultiSymbolLobRepo for TestLobRepo {
-        type Order = SpotOrder;
-
-        fn match_orders(
-            &self,
-            _symbol: TradingPair,
-            _side: OrderSide,
-            _price: Price,
-            quantity: Quantity,
-        ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            if self.makers.is_empty() {
-                return (None, quantity);
-            }
-            (Some(self.makers.iter().collect()), Quantity::default())
-        }
-
-        fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn best_ask(&self, _symbol: TradingPair) -> Option<Price> {
-            self.makers.first().and_then(|order| order.price)
-        }
-
-        fn contains_symbol(&self, _symbol: &TradingPair) -> bool {
-            true
-        }
-
-        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), lob_repo::core::repo_snapshot_support::LobError> {
-            Ok(())
-        }
-
-        fn remove_order(&self, _symbol: TradingPair, _order_id: base_types::OrderId) -> bool {
-            true
-        }
-
-        fn find_order(&self, _p0: TradingPair, _p1: base_types::OrderId) -> Option<&Self::Order> {
-            None
-        }
-
-        fn find_order_mut(
-            &self,
-            _p0: TradingPair,
-            _order_id: base_types::OrderId,
-        ) -> Option<&mut Self::Order> {
-            None
-        }
-
-        fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
-    }
 
     fn create_order(order_id: u64, side: OrderSide, quantity: f64) -> SpotOrder {
         SpotOrder::create_order(
@@ -325,14 +302,14 @@ mod tests {
     #[test]
     fn test_match_order_apply_generates_two_trades_for_two_makers() {
         let repo = MemdbRepo::default();
-        let handler = MatchOrderCmdHandler::new(
-            repo.clone(),
-            MockEventPublisher,
-            TestLobRepo::new(vec![
-                create_order(11, OrderSide::Sell, 1.0),
-                create_order(12, OrderSide::Sell, 1.0),
-            ]),
-        );
+        let mut lob = EmbeddedLobRepo::new(vec![lob_repo::adapter::local_lob_impl::LocalLob::new(
+            TradingPair::BtcUsdt,
+        )]);
+        lob.add_order(TradingPair::BtcUsdt, create_order(11, OrderSide::Sell, 1.0))
+            .expect("add first maker order should succeed");
+        lob.add_order(TradingPair::BtcUsdt, create_order(12, OrderSide::Sell, 1.0))
+            .expect("add second maker order should succeed");
+        let handler = MatchOrderCmdHandler::new(repo.clone(), MockEventPublisher, lob);
         let cmd = MatchCmd { taker_order: create_order(21, OrderSide::Buy, 2.0) };
 
         let trades = handler
@@ -359,5 +336,11 @@ mod tests {
             .expect("second trade should exist");
         assert_eq!(stored_first.trade_id, trades[0].object().trade_id);
         assert_eq!(stored_second.trade_id, trades[1].object().trade_id);
+    }
+
+    #[test]
+    /// bdd: 挂一笔卖单5，再挂一笔买单3，检查卖单应该只余2
+    fn test_match_order_apply_generates_two_trades_for_two_makers2() {
+
     }
 }

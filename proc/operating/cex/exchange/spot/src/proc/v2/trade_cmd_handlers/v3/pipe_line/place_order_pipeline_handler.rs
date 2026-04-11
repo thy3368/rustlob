@@ -26,7 +26,7 @@ pub struct PlaceOrderPipelineReply {
 pub struct PlaceOrderPipelineHandler<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > {
     place_order_handler: PlaceOrderCmdHandler<R, P>,
     match_order_handler: MatchOrderCmdHandler<R, P, L>,
@@ -35,7 +35,7 @@ pub struct PlaceOrderPipelineHandler<
 impl<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > PlaceOrderPipelineHandler<R, P, L>
 {
     pub fn new(
@@ -81,246 +81,22 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
     use base_types::account::balance::Balance as AccountBalance;
-    use base_types::lob::lob::LobOrder;
     use base_types::base_types::TraderId;
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{AssetId, Price, Quantity, Timestamp};
     use bdd::bdd_test;
-    use diff::Entity;
     use db_repo::adapter::v2::memdb_repo::MemdbRepo;
     use db_repo::core::db_repo2::QueryRepo2;
     use diff::diff_types::{ChangeLog, ChangeType, DomainEvent};
+    use diff::Entity;
     use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
     use lob_repo::adapter::local_lob_impl::LocalLob;
-    use lob_repo::core::repo_snapshot_support::LobError;
     use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
     use super::*;
     use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
-
-    struct MockLobRepo {
-        supported_symbols: Mutex<Vec<TradingPair>>,
-    }
-
-    impl MockLobRepo {
-        fn new(supported_symbols: Vec<TradingPair>) -> Self {
-            Self { supported_symbols: Mutex::new(supported_symbols) }
-        }
-    }
-
-    impl MultiSymbolLobRepo for MockLobRepo {
-        type Order = SpotOrder;
-
-        fn match_orders(
-            &self,
-            _symbol: TradingPair,
-            _side: OrderSide,
-            _price: Price,
-            _quantity: Quantity,
-        ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            (None, Quantity::default())
-        }
-
-        fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn best_ask(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-            self.supported_symbols.lock().unwrap().contains(symbol)
-        }
-
-        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), LobError> {
-            Ok(())
-        }
-
-        fn remove_order(&self, _symbol: TradingPair, _order_id: base_types::OrderId) -> bool {
-            true
-        }
-
-        fn find_order(&self, _p0: TradingPair, _p1: base_types::OrderId) -> Option<&Self::Order> {
-            None
-        }
-
-        fn find_order_mut(
-            &self,
-            _p0: TradingPair,
-            _order_id: base_types::OrderId,
-        ) -> Option<&mut Self::Order> {
-            None
-        }
-
-        fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
-    }
-
-    struct EmbeddedMatchingLobRepo {
-        inner: EmbeddedLobRepo<SpotOrder>,
-        makers: Arc<Vec<SpotOrder>>,
-    }
-
-    impl EmbeddedMatchingLobRepo {
-        fn new(symbol: TradingPair, maker_orders: Vec<SpotOrder>) -> Self {
-            let inner = EmbeddedLobRepo::new(vec![LocalLob::new(symbol)]);
-            for order in &maker_orders {
-                inner
-                    .add_order(symbol, order.clone())
-                    .expect("add maker order to embedded lob should succeed");
-            }
-            Self { inner, makers: Arc::new(maker_orders) }
-        }
-    }
-
-    impl MultiSymbolLobRepo for EmbeddedMatchingLobRepo {
-        type Order = SpotOrder;
-
-        fn match_orders(
-            &self,
-            symbol: TradingPair,
-            side: OrderSide,
-            price: Price,
-            quantity: Quantity,
-        ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            if !self.inner.contains_symbol(&symbol) {
-                return (None, quantity);
-            }
-            let (matched, remaining) = self.inner.best_ask(symbol).map_or((None, quantity), |_| {
-                let makers: Vec<&SpotOrder> = self
-                    .makers
-                    .iter()
-                    .filter(|order| {
-                        order.symbol() == symbol
-                            && order.side() == side.opposite()
-                            && order.price() <= price
-                    })
-                    .collect();
-                if makers.is_empty() { (None, quantity) } else { (Some(makers), Quantity::default()) }
-            });
-            (matched, remaining)
-        }
-
-        fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
-            self.inner.best_bid(symbol)
-        }
-
-        fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
-            self.inner.best_ask(symbol)
-        }
-
-        fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-            self.inner.contains_symbol(symbol)
-        }
-
-        fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
-            self.inner.add_order(symbol, order)
-        }
-
-        fn remove_order(&self, symbol: TradingPair, order_id: base_types::OrderId) -> bool {
-            self.inner.remove_order(symbol, order_id)
-        }
-
-        fn find_order(&self, p0: TradingPair, p1: base_types::OrderId) -> Option<&Self::Order> {
-            self.inner.find_order(p0, p1)
-        }
-
-        fn find_order_mut(
-            &self,
-            p0: TradingPair,
-            order_id: base_types::OrderId,
-        ) -> Option<&mut Self::Order> {
-            self.inner.find_order_mut(p0, order_id)
-        }
-
-        fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-            self.inner.last_price(symbol)
-        }
-
-        fn update_last_price(&self, symbol: TradingPair, price: Price) {
-            self.inner.update_last_price(symbol, price)
-        }
-    }
-
-    struct MatchingMockLobRepo {
-        supported_symbols: Mutex<Vec<TradingPair>>,
-        maker_orders: Arc<Vec<SpotOrder>>,
-    }
-
-    impl MatchingMockLobRepo {
-        fn new(supported_symbols: Vec<TradingPair>, maker_orders: Vec<SpotOrder>) -> Self {
-            Self {
-                supported_symbols: Mutex::new(supported_symbols),
-                maker_orders: Arc::new(maker_orders),
-            }
-        }
-    }
-
-    impl MultiSymbolLobRepo for MatchingMockLobRepo {
-        type Order = SpotOrder;
-
-        fn match_orders(
-            &self,
-            symbol: TradingPair,
-            _side: OrderSide,
-            _price: Price,
-            quantity: Quantity,
-        ) -> (Option<Vec<&Self::Order>>, Quantity) {
-            if !self.supported_symbols.lock().unwrap().contains(&symbol) {
-                return (None, quantity);
-            }
-            if self.maker_orders.is_empty() {
-                return (None, quantity);
-            }
-            (Some(self.maker_orders.iter().collect()), Quantity::default())
-        }
-
-        fn best_bid(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn best_ask(&self, _symbol: TradingPair) -> Option<Price> {
-            self.maker_orders.first().and_then(|order| order.price)
-        }
-
-        fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-            self.supported_symbols.lock().unwrap().contains(symbol)
-        }
-
-        fn add_order(&self, _symbol: TradingPair, _order: Self::Order) -> Result<(), LobError> {
-            Ok(())
-        }
-
-        fn remove_order(&self, _symbol: TradingPair, _order_id: base_types::OrderId) -> bool {
-            true
-        }
-
-        fn find_order(&self, _p0: TradingPair, _p1: base_types::OrderId) -> Option<&Self::Order> {
-            None
-        }
-
-        fn find_order_mut(
-            &self,
-            _p0: TradingPair,
-            _order_id: base_types::OrderId,
-        ) -> Option<&mut Self::Order> {
-            None
-        }
-
-        fn last_price(&self, _symbol: TradingPair) -> Option<Price> {
-            None
-        }
-
-        fn update_last_price(&self, _symbol: TradingPair, _price: Price) {}
-    }
 
     fn create_test_cmd_with_quantity(client_order_id: &str, quantity: f64) -> NewOrderCmd {
         NewOrderCmd::new(
@@ -372,6 +148,15 @@ mod tests {
         )
     }
 
+    fn create_embedded_lob(maker_orders: Vec<SpotOrder>) -> EmbeddedLobRepo<SpotOrder> {
+        let mut lob = EmbeddedLobRepo::new(vec![LocalLob::new(TradingPair::BtcUsdt)]);
+        for maker_order in maker_orders {
+            lob.add_order(TradingPair::BtcUsdt, maker_order)
+                .expect("add maker order should succeed");
+        }
+        lob
+    }
+
     #[test]
     fn test_pipeline_exec_returns_order_and_skips_settlement_when_no_trades() {
         let repo = MemdbRepo::default();
@@ -380,7 +165,7 @@ mod tests {
             MatchOrderCmdHandler::new(
                 repo.clone(),
                 MockEventPublisher,
-                MockLobRepo::new(vec![TradingPair::BtcUsdt]),
+                create_embedded_lob(Vec::new()),
             ),
             SettOrderCmdHandler::new(repo.clone(), MockEventPublisher),
         );
@@ -491,10 +276,9 @@ mod tests {
     /// -lob 使用 EmbeddedLobRepo
     /// -repo 不使用MockMySqlRepo 使用/Users/hongyaotang/src/rustlob/lib/common/db_repo/src/adapter/mysql_repo.rs 下的MySqlRepo
     #[test]
-
     fn test_pipeline_exec_full_match_generates_trade() {
         let maker_order = create_sell_order(21, "maker_sell_001");
-        let lob = MatchingMockLobRepo::new(vec![TradingPair::BtcUsdt], vec![maker_order.clone()]);
+        let lob = create_embedded_lob(vec![maker_order.clone()]);
 
         let repo = MemdbRepo::default();
         let pipeline = PlaceOrderPipelineHandler::new(
@@ -546,10 +330,7 @@ mod tests {
     fn test_pipeline_exec_full_match_generates_trade2() {
         let maker_order_one = create_sell_order_with_quantity(31, "maker_sell_002", 1.0);
         let maker_order_two = create_sell_order_with_quantity(32, "maker_sell_003", 1.0);
-        let lob = EmbeddedMatchingLobRepo::new(
-            TradingPair::BtcUsdt,
-            vec![maker_order_one.clone(), maker_order_two.clone()],
-        );
+        let lob = create_embedded_lob(vec![maker_order_one.clone(), maker_order_two.clone()]);
 
         let repo = MemdbRepo::default();
         let pipeline = PlaceOrderPipelineHandler::new(

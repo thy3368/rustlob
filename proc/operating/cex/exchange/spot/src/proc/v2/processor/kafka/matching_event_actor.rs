@@ -19,7 +19,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_even
 pub struct KafkaMatchingEventActor<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > {
     consumer: StreamConsumer,
     handler: Arc<NewOrderPlaceEventHandler<R, P, L>>,
@@ -27,7 +27,7 @@ pub struct KafkaMatchingEventActor<
     topic: String,
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder>>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
     KafkaMatchingEventActor<R, P, L>
 {
     pub fn new(
@@ -65,7 +65,7 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Orde
     }
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder>>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
     EventRecvActor<DomainEvent<SpotOrder>, SpotCmdErrorAny> for KafkaMatchingEventActor<R, P, L>
 {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotOrder>>, SpotCmdErrorAny> {

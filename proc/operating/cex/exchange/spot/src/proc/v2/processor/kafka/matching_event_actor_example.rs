@@ -13,7 +13,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_even
 pub fn start_matching_event_actor_in_thread<
     R: CmdRepo2 + Clone + 'static,
     P: EventPublisher2 + Clone + 'static,
-    L: MultiSymbolLobRepo<Order = SpotOrder> + 'static,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send + 'static,
 >(
     event_handler: Arc<NewOrderPlaceEventHandler<R, P, L>>,
     config: KafkaProcessorConfig,

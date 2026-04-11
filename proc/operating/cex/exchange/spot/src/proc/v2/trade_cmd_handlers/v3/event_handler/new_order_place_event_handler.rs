@@ -16,7 +16,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
 pub struct NewOrderPlaceEventHandler<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > {
     matching_handler: Arc<MatchOrderCmdHandler<R, P, L>>,
 }
@@ -24,7 +24,7 @@ pub struct NewOrderPlaceEventHandler<
 impl<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > NewOrderPlaceEventHandler<R, P, L>
 {
     pub fn new(matching_handler: Arc<MatchOrderCmdHandler<R, P, L>>) -> Self {
@@ -35,7 +35,7 @@ impl<
 impl<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
-    L: MultiSymbolLobRepo<Order = SpotOrder>,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
 > EventHandler2<DomainEvent<SpotOrder>, SpotCmdErrorAny> for NewOrderPlaceEventHandler<R, P, L>
 {
     fn event_handle(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotCmdErrorAny> {

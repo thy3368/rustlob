@@ -11,11 +11,8 @@ use crate::proc::behavior::v2::spot_trade_behavior_v2::{
     NewOrderAck, NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;
-use crate::proc::v2::trade_cmd_handlers::order_handler::OrderHandler;
 
-pub struct SpotTradeBehaviorV4Impl {
-    order_handler: Arc<OrderHandler>,
-}
+pub struct SpotTradeBehaviorV4Impl {}
 
 impl SpotTradeBehaviorV4Impl {
     pub fn new(
@@ -25,23 +22,13 @@ impl SpotTradeBehaviorV4Impl {
         lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
         event_publisher: Arc<dyn EventPublisher>,
     ) -> Self {
-        let order_handler = Arc::new(OrderHandler::new(
-            balance_repo.clone(),
-            trade_repo.clone(),
-            order_repo.clone(),
-            lob_repo.clone(),
-            event_publisher.clone(),
-        ));
-
-
-
-        Self { order_handler }
+        Self {}
     }
 }
 
 impl CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
     fn cmd_handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotCmdErrorAny> {
-        self.order_handler.accept_new_order(cmd)
+        todo!()
     }
 }
 impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
