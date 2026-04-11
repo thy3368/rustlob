@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use base_types::account::balance::{Balance as AccountBalance, Balance};
 use base_types::exchange::spot::spot_types::SpotTrade;
-use base_types::handler::handler_update2::{
-    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
-};
+use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
@@ -51,6 +49,9 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     type GivenStateSet = SettStateSet;
     type ThenStateSet = SettStateChangedSet;
     type Error = SpotCmdErrorAny;
+
+    type Repo = R;
+    type Publisher = P;
 
     fn apply_command_and_collect_changes(
         &self,
@@ -113,6 +114,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     fn load_state_set_for_update(
         &self,
         cmd: &Self::Command,
+        _repo: &Self::Repo,
     ) -> Result<Self::GivenStateSet, Self::Error> {
         Ok(SettStateSet { trades: cmd.trades.clone(), map: HashMap::new() })
     }
@@ -128,6 +130,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     fn persist_domain_events(
         &self,
         _domain_events: &Self::ThenStateSet,
+        _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -135,10 +138,11 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     fn replay_domain_events_to_state(
         &self,
         domain_events: &Self::ThenStateSet,
+        repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             for balance_event in balances {
-                self.repo.replay_event::<AccountBalance>(balance_event).map_err(|e| {
+                repo.replay_event::<AccountBalance>(balance_event).map_err(|e| {
                     SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
@@ -146,9 +150,13 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         Ok(())
     }
 
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn publish_domain_events(
+        &self,
+        domain_events: &Self::ThenStateSet,
+        publisher: Self::Publisher,
+    ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
-            self.publisher.publish_batch(balances).map_err(|_e| {
+            publisher.publish_batch(balances).map_err(|_e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
                     message: "publish settlement events failed".to_string(),
                 })
@@ -158,7 +166,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for SettOrderCmdHandler<R, P> {}
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate3 for SettOrderCmdHandler<R, P> {}
 
 #[cfg(test)]
 mod tests {
@@ -233,7 +241,7 @@ mod tests {
         let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
 
         let state = handler
-            .load_state_set_for_update(&cmd)
+            .load_state_set_for_update(&cmd, &repo)
             .expect("load_state_set_for_update should succeed");
         let changes =
             handler.apply_command_and_collect_changes(&cmd, state).expect("apply should succeed");
@@ -248,9 +256,13 @@ mod tests {
         let repo = MemdbRepo::default();
         let handler = SettOrderCmdHandler::new(repo.clone(), MockEventPublisher);
         let balances = handler
-            .cmd_handle(SettlementCmd {
-                trades: vec![create_trade(1, 101, 201), create_trade(2, 101, 202)],
-            })
+            .cmd_handle(
+                SettlementCmd {
+                    trades: vec![create_trade(1, 101, 201), create_trade(2, 101, 202)],
+                },
+                repo.clone(),
+                MockEventPublisher,
+            )
             .expect("settlement should succeed")
             .expect("balances should exist");
 

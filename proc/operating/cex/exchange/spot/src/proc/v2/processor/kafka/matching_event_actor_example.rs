@@ -11,8 +11,8 @@ use crate::proc::v2::processor::kafka::matching_event_actor::KafkaMatchingEventA
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
 pub fn start_matching_event_actor_in_thread<
-    R: CmdRepo2 + 'static,
-    P: EventPublisher2 + 'static,
+    R: CmdRepo2 + Clone + 'static,
+    P: EventPublisher2 + Clone + 'static,
     L: MultiSymbolLobRepo<Order = SpotOrder> + 'static,
 >(
     event_handler: Arc<NewOrderPlaceEventHandler<R, P, L>>,

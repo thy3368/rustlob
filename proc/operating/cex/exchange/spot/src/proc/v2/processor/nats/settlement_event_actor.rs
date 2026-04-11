@@ -10,7 +10,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_hand
 pub type NatsSettlementEventActor<R, P> =
     NatsEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler<R, P>>;
 
-impl<R: CmdRepo2, P: EventPublisher2> NatsSettlementEventActor<R, P> {
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> NatsSettlementEventActor<R, P> {
     pub fn from_parts(
         config: NatsProcessorConfig,
         subject: String,

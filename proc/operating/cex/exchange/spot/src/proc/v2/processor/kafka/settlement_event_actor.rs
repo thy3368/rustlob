@@ -15,14 +15,14 @@ use crate::proc::v2::processor::kafka::base::{
 };
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
-pub struct KafkaSettlementEventActor<R: CmdRepo2, P: EventPublisher2> {
+pub struct KafkaSettlementEventActor<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> {
     consumer: StreamConsumer,
     handler: Arc<NewTradeEventHandler<R, P>>,
     config: KafkaProcessorConfig,
     topic: String,
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> KafkaSettlementEventActor<R, P> {
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> KafkaSettlementEventActor<R, P> {
     pub fn new(
         handler: Arc<NewTradeEventHandler<R, P>>,
         config: KafkaProcessorConfig,
@@ -58,7 +58,7 @@ impl<R: CmdRepo2, P: EventPublisher2> KafkaSettlementEventActor<R, P> {
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny>
     for KafkaSettlementEventActor<R, P>
 {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotCmdErrorAny> {

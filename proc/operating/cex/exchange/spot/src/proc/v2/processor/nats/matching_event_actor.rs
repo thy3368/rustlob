@@ -12,7 +12,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_even
 pub type NatsMatchingEventActor<R, P, L> =
     NatsEventActor<DomainEvent<SpotOrder>, NewOrderPlaceEventHandler<R, P, L>>;
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder>>
     NatsMatchingEventActor<R, P, L>
 {
     pub fn from_parts(

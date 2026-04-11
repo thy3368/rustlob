@@ -37,6 +37,7 @@ push = { path = "../../push/push" }
 
 # Logging
 log = "0.4"
+cmd_handler = { path = "../../../../../lib/common/cmd_handler" }
 
 async-trait = "0.1.89"
 tokio = "1.48.0"

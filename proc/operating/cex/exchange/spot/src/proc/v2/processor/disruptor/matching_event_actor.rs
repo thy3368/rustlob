@@ -14,8 +14,8 @@ pub type DisruptorMatchingEventActor<R, P, L> =
 
 impl<R, P, L> DisruptorMatchingEventActor<R, P, L>
 where
-    R: CmdRepo2 + Send + Sync + 'static,
-    P: EventPublisher2 + Send + Sync + 'static,
+    R: CmdRepo2 + Clone + Send + Sync + 'static,
+    P: EventPublisher2 + Clone + Send + Sync + 'static,
     L: MultiSymbolLobRepo<Order = SpotOrder> + Send + Sync + 'static,
 {
     pub fn from_parts(

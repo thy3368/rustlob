@@ -1,9 +1,7 @@
 use base_types::Quantity;
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
-use base_types::handler::handler_update2::{
-    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
-};
+use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::{DomainEvent, track_create};
@@ -50,6 +48,9 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     type ThenStateSet = PlaceOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
 
+    type Repo = R;
+    type Publisher = P;
+
     fn apply_command_and_collect_changes(
         &self,
         cmd: &Self::Command,
@@ -95,6 +96,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     fn load_state_set_for_update(
         &self,
         _cmd: &Self::Command,
+        _repo: &Self::Repo,
     ) -> Result<Self::GivenStateSet, Self::Error> {
         Ok(PlaceOrderStateSet { order_id: self.generate_order_id() })
     }
@@ -110,6 +112,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     fn persist_domain_events(
         &self,
         _domain_events: &Self::ThenStateSet,
+        _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -117,14 +120,18 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     fn replay_domain_events_to_state(
         &self,
         domain_events: &Self::ThenStateSet,
+        repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
-        self.repo
-            .replay_event::<SpotOrder>(&domain_events.order)
+        repo.replay_event::<SpotOrder>(&domain_events.order)
             .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }))
     }
 
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
-        self.publisher.publish(&domain_events.order).map_err(|_e| {
+    fn publish_domain_events(
+        &self,
+        domain_events: &Self::ThenStateSet,
+        publisher: Self::Publisher,
+    ) -> Result<(), Self::Error> {
+        publisher.publish(&domain_events.order).map_err(|_e| {
             SpotCmdErrorAny::Common(CommonError::Internal {
                 message: "publish place order event failed".to_string(),
             })
@@ -132,7 +139,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate2 for PlaceOrderCmdHandler<R, P> {}
+impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerForUpdate3 for PlaceOrderCmdHandler<R, P> {}
 
 #[cfg(test)]
 mod tests {
@@ -172,7 +179,7 @@ mod tests {
         let repo = MemdbRepo::default();
         let handler = PlaceOrderCmdHandler::new(repo.clone(), MockEventPublisher);
 
-        let result = handler.cmd_handle(cmd);
+        let result = handler.cmd_handle(cmd, repo.clone(), MockEventPublisher);
 
         assert!(result.is_ok(), "order should be placed successfully: {:?}", result.err());
         let order_event = result.unwrap();

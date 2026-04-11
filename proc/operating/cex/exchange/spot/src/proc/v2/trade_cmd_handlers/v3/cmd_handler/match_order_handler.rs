@@ -1,8 +1,6 @@
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade, TimeInForce};
-use base_types::handler::handler_update2::{
-    CmdHandlerForUpdate2, CmdHandlerInternal, DomainEventSet,
-};
+use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet};
 use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
@@ -59,6 +57,9 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     type GivenStateSet = MatchOrderStateSet;
     type ThenStateSet = MatchOrderStateChangedSet;
     type Error = SpotCmdErrorAny;
+
+    type Repo = R;
+    type Publisher = P;
 
     fn apply_command_and_collect_changes(
         &self,
@@ -124,6 +125,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     fn load_state_set_for_update(
         &self,
         cmd: &Self::Command,
+        _repo: &Self::Repo,
     ) -> Result<Self::GivenStateSet, Self::Error> {
         let taker = cmd.taker_order.clone();
         let taker_price = taker.price.unwrap_or_default();
@@ -150,6 +152,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     fn persist_domain_events(
         &self,
         _domain_events: &Self::ThenStateSet,
+        _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -157,10 +160,11 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     fn replay_domain_events_to_state(
         &self,
         domain_events: &Self::ThenStateSet,
+        repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
             for trade_event in trades {
-                self.repo.replay_event::<SpotTrade>(trade_event).map_err(|e| {
+                repo.replay_event::<SpotTrade>(trade_event).map_err(|e| {
                     SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
@@ -168,9 +172,13 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
         Ok(())
     }
 
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn publish_domain_events(
+        &self,
+        domain_events: &Self::ThenStateSet,
+        publisher: Self::Publisher,
+    ) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
-            self.publisher.publish_batch(trades).map_err(|_e| {
+            publisher.publish_batch(trades).map_err(|_e| {
                 SpotCmdErrorAny::Common(CommonError::Internal {
                     message: "publish match order events failed".to_string(),
                 })
@@ -180,7 +188,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> 
     }
 }
 
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate2
+impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>> CmdHandlerForUpdate3
     for MatchOrderCmdHandler<R, P, L>
 {
 }
@@ -304,7 +312,7 @@ mod tests {
         let cmd = MatchCmd { taker_order: create_order(1, OrderSide::Buy, 1.0) };
 
         let state = handler
-            .load_state_set_for_update(&cmd)
+            .load_state_set_for_update(&cmd, &repo)
             .expect("load_state_set_for_update should succeed");
         let changes =
             handler.apply_command_and_collect_changes(&cmd, state).expect("apply should succeed");
@@ -327,7 +335,10 @@ mod tests {
         );
         let cmd = MatchCmd { taker_order: create_order(21, OrderSide::Buy, 2.0) };
 
-        let trades = handler.cmd_handle(cmd).expect("match should succeed").expect("trades should exist");
+        let trades = handler
+            .cmd_handle(cmd, repo.clone(), MockEventPublisher)
+            .expect("match should succeed")
+            .expect("trades should exist");
 
         assert_eq!(trades.len(), 2);
         assert_ne!(trades[0].object().trade_id, trades[1].object().trade_id);

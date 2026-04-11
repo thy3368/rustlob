@@ -10,7 +10,7 @@ use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_hand
 pub type DisruptorSettlementEventActor<R, P> =
     InprocEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler<R, P>>;
 
-impl<R: CmdRepo2, P: EventPublisher2> DisruptorSettlementEventActor<R, P> {
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> DisruptorSettlementEventActor<R, P> {
     pub fn from_parts(
         receiver: Receiver<DomainEvent<SpotTrade>>,
         handler: std::sync::Arc<NewTradeEventHandler<R, P>>,

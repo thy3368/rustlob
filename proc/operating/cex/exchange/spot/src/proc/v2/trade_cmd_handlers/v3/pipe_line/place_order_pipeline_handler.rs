@@ -1,6 +1,6 @@
 use base_types::account::balance::Balance as AccountBalance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use base_types::handler::handler_update2::CmdHandlerForUpdate2;
+use cmd_handler::CmdHandlerForUpdate3;
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
@@ -24,16 +24,19 @@ pub struct PlaceOrderPipelineReply {
 }
 
 pub struct PlaceOrderPipelineHandler<
-    R: CmdRepo2,
-    P: EventPublisher2,
+    R: CmdRepo2 + Clone,
+    P: EventPublisher2 + Clone,
     L: MultiSymbolLobRepo<Order = SpotOrder>,
 > {
     place_order_handler: PlaceOrderCmdHandler<R, P>,
     match_order_handler: MatchOrderCmdHandler<R, P, L>,
     sett_order_handler: SettOrderCmdHandler<R, P>,
 }
-impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
-    PlaceOrderPipelineHandler<R, P, L>
+impl<
+    R: CmdRepo2 + Clone,
+    P: EventPublisher2 + Clone,
+    L: MultiSymbolLobRepo<Order = SpotOrder>,
+> PlaceOrderPipelineHandler<R, P, L>
 {
     pub fn new(
         place_order_handler: PlaceOrderCmdHandler<R, P>,
@@ -45,24 +48,33 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder>>
 
     // 规则：place/match/settlement 分阶段串联，后一阶段必须消费前一阶段输出
     pub fn exec(&self, cmd: NewOrderCmd) -> Result<PlaceOrderPipelineReply, SpotCmdErrorAny> {
-        let order = self.place_order_handler.cmd_handle(cmd)?;
-        let trades = self
-            .match_order_handler
-            .cmd_handle(MatchCmd { taker_order: order.object().clone() })?;
+        let order = self.place_order_handler.cmd_handle(
+            cmd,
+            self.place_order_handler.repo.clone(),
+            self.place_order_handler.publisher.clone(),
+        )?;
+        let trades = self.match_order_handler.cmd_handle(
+            MatchCmd { taker_order: order.object().clone() },
+            self.match_order_handler.repo.clone(),
+            self.match_order_handler.publisher.clone(),
+        )?;
 
         let balances = if let Some(ref trade_events) = trades {
             if trade_events.is_empty() {
                 None
             } else {
-                self.sett_order_handler.cmd_handle(SettlementCmd {
-                    trades: trade_events.iter().map(|trade| trade.object().clone()).collect(),
-                })?
+                self.sett_order_handler.cmd_handle(
+                    SettlementCmd {
+                        trades: trade_events.iter().map(|trade| trade.object().clone()).collect(),
+                    },
+                    self.sett_order_handler.repo.clone(),
+                    self.sett_order_handler.publisher.clone(),
+                )?
             }
         } else {
             None
         };
 
-        //todo NewOrderFull
         Ok(PlaceOrderPipelineReply { order, trades, balances })
     }
 }
