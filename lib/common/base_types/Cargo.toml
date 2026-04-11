@@ -22,3 +22,5 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 sealed = "0.6.0"
 arrayvec = "0.7"
 zerocopy = { version = "0.8.42", features = ["derive"] }
+minstant = "0.1"
+# db_repo = { path = "../db_repo" }  # 循环依赖
