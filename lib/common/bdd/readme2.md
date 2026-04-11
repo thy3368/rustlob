@@ -1,23 +1,33 @@
 
 1， 定义use case 签名 define_use_case, 
 
-用
+
+用 /Users/hongyaotang/src/rustlob/lib/common/base_types/src/handler/handler_update2.rs 的CmdHandlerForUpdate2 定义command handler
 
 
 2，定义bdd验收用例 define_bdd_case_4_use_case
 
-一个use case的
-bdd 应该是一个矩阵
 
 
-scenario 对应 use case
+规则：
 
-given 对应pre state
+- scenario 对应 handler name
 
-when 对应指定的特定的command
+- given 对应GivenStateSet
+
+- when 对应指定的特定的command
+
+- then 对应ThenStateSet
+
+- bdd_case 覆盖  given穷举与 when的穷举的交集。
 
 
-case 覆盖  given 穷举与 when的交集。
+    type Command;
+    type Reply;
+    type GivenStateSet;
+    type ThenStateSet: DomainEventSet;
+    type Error;
+
 
 
 

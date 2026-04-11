@@ -159,7 +159,7 @@ impl std::error::Error for LobError {}
 ///
 /// # 关联类型
 /// - `Order`: 实现了 Order trait 的订单类型
-pub trait MultiSymbolLobRepo: Send + Sync {
+pub trait MultiSymbolLobRepo {
     /// 订单类型关联类型
     type Order: LobOrder;
 
@@ -183,7 +183,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - 查找 LOB: O(1) 时间复杂度
     /// - 匹配订单: O(k) 时间复杂度，其中 k 是匹配的订单数量
     fn match_orders(
-        &self,
+        &mut self,
         symbol: TradingPair,
         side: OrderSide,
         price: Price,
@@ -220,7 +220,7 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// - `false`: LOB 不存在
     fn contains_symbol(&self, symbol: &TradingPair) -> bool;
 
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError>;
+    fn add_order(&mut self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError>;
 
     /// 取消订单
     ///
@@ -230,69 +230,16 @@ pub trait MultiSymbolLobRepo: Send + Sync {
     /// # 返回
     /// - `true`: 成功取消订单
     /// - `false`: 订单不存在
-    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool;
+    fn remove_order(&mut self, symbol: TradingPair, order_id: OrderId) -> bool;
 
     fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order>;
 
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order>;
+    fn find_order_mut(&mut self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order>;
 
     /// 获取指定交易对的最后一笔成交价
     fn last_price(&self, symbol: TradingPair) -> Option<Price>;
 
     /// 更新指定交易对的最后一笔成交价
-    fn update_last_price(&self, symbol: TradingPair, price: Price);
+    fn update_last_price(&mut self, symbol: TradingPair, price: Price);
 }
 
-/// 为 Arc<L> 实现 MultiSymbolLobRepo trait
-impl<L> MultiSymbolLobRepo for std::sync::Arc<L>
-where
-    L: MultiSymbolLobRepo + ?Sized,
-{
-    type Order = L::Order;
-
-    fn match_orders(
-        &self,
-        symbol: TradingPair,
-        side: OrderSide,
-        price: Price,
-        quantity: Quantity,
-    ) -> (Option<Vec<&Self::Order>>, Quantity) {
-        (**self).match_orders(symbol, side, price, quantity)
-    }
-
-    fn best_bid(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).best_bid(symbol)
-    }
-
-    fn best_ask(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).best_ask(symbol)
-    }
-
-    fn contains_symbol(&self, symbol: &TradingPair) -> bool {
-        (**self).contains_symbol(symbol)
-    }
-
-    fn add_order(&self, symbol: TradingPair, order: Self::Order) -> Result<(), LobError> {
-        (**self).add_order(symbol, order)
-    }
-
-    fn remove_order(&self, symbol: TradingPair, order_id: OrderId) -> bool {
-        (**self).remove_order(symbol, order_id)
-    }
-
-    fn find_order(&self, p0: TradingPair, p1: OrderId) -> Option<&Self::Order> {
-        (**self).find_order(p0, p1)
-    }
-
-    fn find_order_mut(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut Self::Order> {
-        (**self).find_order_mut(p0, order_id)
-    }
-
-    fn last_price(&self, symbol: TradingPair) -> Option<Price> {
-        (**self).last_price(symbol)
-    }
-
-    fn update_last_price(&self, symbol: TradingPair, price: Price) {
-        (**self).update_last_price(symbol, price)
-    }
-}

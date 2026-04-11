@@ -7,6 +7,7 @@ members = [
     "lib/common/base_types",
     "lib/common/cache_analyzer_derive",
     "lib/common/cache_analyzer_types",
+    "lib/common/cmd_handler",
     "lib/common/cqrs",
     "lib/common/db_repo",
     "lib/common/decimal",
@@ -46,7 +47,7 @@ members = [
     
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "proc/operating/dex/dex", "lib/common/mdbx",
+    "study/hyperliquid_analyzer", "proc/operating/dex/dex", "lib/common/mdbx", "lib/common/bdd",
 ]
 
 resolver = "2"
