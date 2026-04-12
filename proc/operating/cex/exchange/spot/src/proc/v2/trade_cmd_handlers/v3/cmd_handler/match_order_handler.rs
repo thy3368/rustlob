@@ -65,7 +65,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
     type Repo = R;
     type Publisher = P;
 
-    fn apply_command_and_collect_changes(
+    fn then(
         &self,
         _cmd: &Self::Command,
         state_set: Self::GivenStateSet,
@@ -163,7 +163,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
         Ok(())
     }
 
-    fn load_state_set_for_update(
+    fn give(
         &self,
         cmd: &Self::Command,
         _repo: &Self::Repo,
@@ -289,10 +289,10 @@ mod tests {
         let cmd = MatchCmd { taker_order: create_order(1, OrderSide::Buy, 1.0) };
 
         let state = handler
-            .load_state_set_for_update(&cmd, &repo)
+            .give(&cmd, &repo)
             .expect("load_state_set_for_update should succeed");
         let changes =
-            handler.apply_command_and_collect_changes(&cmd, state).expect("apply should succeed");
+            handler.then(&cmd, state).expect("apply should succeed");
 
         assert!(changes.trades.is_none());
         assert_eq!(changes.domain_event_count(), 0);

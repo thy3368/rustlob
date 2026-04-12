@@ -53,7 +53,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     type Repo = R;
     type Publisher = P;
 
-    fn apply_command_and_collect_changes(
+    fn then(
         &self,
         _cmd: &Self::Command,
         state_set: Self::GivenStateSet,
@@ -111,7 +111,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         Ok(())
     }
 
-    fn load_state_set_for_update(
+    fn give(
         &self,
         cmd: &Self::Command,
         _repo: &Self::Repo,
@@ -241,10 +241,10 @@ mod tests {
         let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
 
         let state = handler
-            .load_state_set_for_update(&cmd, &repo)
+            .give(&cmd, &repo)
             .expect("load_state_set_for_update should succeed");
         let changes =
-            handler.apply_command_and_collect_changes(&cmd, state).expect("apply should succeed");
+            handler.then(&cmd, state).expect("apply should succeed");
 
         assert!(changes.balances.is_none());
         assert_eq!(changes.domain_event_count(), 0);

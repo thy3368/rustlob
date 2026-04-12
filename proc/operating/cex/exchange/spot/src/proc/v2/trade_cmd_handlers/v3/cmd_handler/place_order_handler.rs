@@ -51,7 +51,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     type Repo = R;
     type Publisher = P;
 
-    fn apply_command_and_collect_changes(
+    fn then(
         &self,
         cmd: &Self::Command,
         state_set: Self::GivenStateSet,
@@ -93,7 +93,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         Ok(())
     }
 
-    fn load_state_set_for_update(
+    fn give(
         &self,
         _cmd: &Self::Command,
         _repo: &Self::Repo,
