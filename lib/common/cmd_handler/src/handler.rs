@@ -1,6 +1,4 @@
 use db_repo::{CmdRepo2, EventPublisher2};
-use diff::ChangeLog;
-use diff::diff_types::DomainEvent;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HandlerLatencyMetrics {
@@ -30,7 +28,7 @@ pub trait CmdHandlerInternal: Send + Sync {
     type Repo: CmdRepo2;
     type Publisher: EventPublisher2;
 
-    fn apply_command_and_collect_changes(
+    fn then(
         &self,
         cmd: &Self::Command,
         state_set: Self::GivenStateSet,
@@ -40,7 +38,7 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
 
-    fn load_state_set_for_update(
+    fn give(
         &self,
         cmd: &Self::Command,
         repo: &Self::Repo,
@@ -65,7 +63,6 @@ pub trait CmdHandlerInternal: Send + Sync {
         domain_events: &Self::ThenStateSet,
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
-
         //todo 在这里回放
         // repo.replay_event::<SpotOrder>(&domain_events.events)
         //     .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }))
@@ -100,7 +97,7 @@ pub trait CmdHandlerForUpdate3: CmdHandlerInternal + Send + Sync {
         let pre_check_ns = pre_check_start.elapsed().as_nanos();
 
         let load_state_start = Instant::now();
-        let state_set = self.load_state_set_for_update(&cmd, &repo)?;
+        let state_set = self.give(&cmd, &repo)?;
         let load_state_ns = load_state_start.elapsed().as_nanos();
 
         let validate_start = Instant::now();
@@ -108,7 +105,7 @@ pub trait CmdHandlerForUpdate3: CmdHandlerInternal + Send + Sync {
         let validate_in_lock_ns = validate_start.elapsed().as_nanos();
 
         let apply_changes_start = Instant::now();
-        let changes = self.apply_command_and_collect_changes(&cmd, state_set)?;
+        let changes = self.then(&cmd, state_set)?;
         let apply_changes_ns = apply_changes_start.elapsed().as_nanos();
 
         let persist_start = Instant::now();
