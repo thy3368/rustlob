@@ -1,4 +1,3 @@
-use base_types::handler::handler_update2::DomainEventSet;
 use cmd_handler::DomainEventSet;
 
 pub use cmd::auto_cancel_all_open_orders_handler::AutoCancelAllOpenOrdersCmdHandler;

@@ -2,7 +2,8 @@ use base_types::Timestamp;
 use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
 use cmd_handler::CmdHandlerForUpdate3;
 use db_repo::adapter::v2::memdb_repo::MemdbRepo;
-use db_repo::core::event_publish::EventPublisher2;
+use db_repo::core::event_publish::{EventPublisher2, PublishError};
+use serde::Serialize;
 
 use crate::proc::usds_m_future::behavior::trade_behavior::{
     CountdownResponse, LeverageResponse, MarginResponse, MarginTypeResponse, OrderResponse,
@@ -22,17 +23,17 @@ use crate::proc::usds_m_future::handler::trade_handler::{
 struct NoopEventPublisher;
 
 impl EventPublisher2 for NoopEventPublisher {
-    fn publish<E: serde::Serialize>(
+    fn publish<E: Serialize>(
         &self,
         _event: &diff::diff_types::DomainEvent<E>,
-    ) -> Result<(), db_repo::core::event_publish::PublishError> {
+    ) -> Result<(), PublishError> {
         Ok(())
     }
 
-    fn publish_batch<E: serde::Serialize>(
+    fn publish_batch<E: Serialize>(
         &self,
         _events: &[diff::diff_types::DomainEvent<E>],
-    ) -> Result<(), db_repo::core::event_publish::PublishError> {
+    ) -> Result<(), PublishError> {
         Ok(())
     }
 }
@@ -60,7 +61,7 @@ impl UsdsMFutureTradeBehaviorImpl {
             order_type: crate::proc::usds_m_future::behavior::trade_behavior::OrderType::LIMIT,
             reduce_only: false,
             close_position: false,
-            side: base_types::OrderSide::BUY,
+            side: base_types::OrderSide::Buy,
             position_side: crate::proc::usds_m_future::behavior::trade_behavior::PositionSide::BOTH,
             stop_price: None,
             working_type: crate::proc::usds_m_future::behavior::trade_behavior::WorkingType::MARK_PRICE,
