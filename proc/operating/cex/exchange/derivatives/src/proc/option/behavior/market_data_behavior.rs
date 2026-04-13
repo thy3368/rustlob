@@ -1,9 +1,8 @@
 
 //根据 /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/option/trade 下面的文档， 定义 所有 option trade 接口
 
-
-
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
+use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
@@ -38,6 +37,7 @@ pub trait SpotUserDataStreamBehavior: Send + Sync {
     fn handle(
         &mut self,
         cmd: SpotUserDataCmdAny,
-    ) -> Result<CmdResp<SpotUserDataRes>, SpotCmdErrorAny>;
+    ) -> Result<CmdResp<SpotUserDataRes>, OptionCmdErrorAny>;
 }
 
+//todo 生成 OptionCmdErrorAny

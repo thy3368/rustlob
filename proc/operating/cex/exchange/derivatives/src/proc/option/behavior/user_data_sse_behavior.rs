@@ -1,5 +1,5 @@
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
-
+use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 // ============================================================================
 // REST API Commands - User Data Stream Management
 // ============================================================================
@@ -337,7 +337,7 @@ pub trait OptionUserDataStreamBehavior: Send + Sync {
     fn handle(
         &mut self,
         cmd: OptionUserDataStreamCmdAny,
-    ) -> Result<CmdResp<OptionUserDataStreamRes>, SpotCmdErrorAny>;
+    ) -> Result<CmdResp<OptionUserDataStreamRes>, OptionCmdErrorAny>;
 
     /// 处理 WebSocket 事件（可选实现）
     fn handle_event(&mut self, event: OptionUserDataStreamEvent) {

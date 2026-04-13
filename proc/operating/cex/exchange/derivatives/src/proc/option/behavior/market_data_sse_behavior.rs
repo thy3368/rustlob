@@ -9,6 +9,7 @@
 // ============================================================================
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
+use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 
 /// Market Data Stream 事件枚举
 #[derive(Debug, Clone)]
@@ -482,7 +483,7 @@ pub trait OptionMarketDataStreamBehavior: Send + Sync {
     fn handle(
         &mut self,
         cmd: OptionMarketDataCmd,
-    ) -> Result<CmdResp<OptionMarketDataRes>, SpotCmdErrorAny>;
+    ) -> Result<CmdResp<OptionMarketDataRes>, OptionCmdErrorAny>;
 
     /// 处理接收到的市场数据事件
     fn on_event(&mut self, event: OptionMarketDataEvent);

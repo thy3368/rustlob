@@ -53,7 +53,7 @@ use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
 use base_types::{OrderSide, Price, Quantity, Timestamp};
 use immutable_derive::immutable;
-
+use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 // use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 
 /// Option Trade 命令枚举 - 包含所有期权交易端点
@@ -882,6 +882,6 @@ pub struct ExerciseRecordRes {
 
 /// Option Trade 行为接口
 pub trait OptionTradeBehavior:
-    Handler<OptionTradeCmdAny, OptionTradeResAny, SpotCmdErrorAny>
+    Handler<OptionTradeCmdAny, OptionTradeResAny, OptionCmdErrorAny>
 {
 }
