@@ -8,7 +8,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
     MatchCmd, MatchOrderCmdHandler,
 };
@@ -36,9 +36,9 @@ impl<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
     L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
-> EventHandler2<DomainEvent<SpotOrder>, SpotCmdErrorAny> for NewOrderPlaceEventHandler<R, P, L>
+> EventHandler2<DomainEvent<SpotOrder>, SpotApiErrorAny> for NewOrderPlaceEventHandler<R, P, L>
 {
-    fn event_handle(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotCmdErrorAny> {
+    fn event_handle(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotApiErrorAny> {
         let cmd = MatchCmd {
             taker_order: event.object().clone(),
         };
