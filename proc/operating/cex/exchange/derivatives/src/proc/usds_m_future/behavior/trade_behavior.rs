@@ -125,13 +125,13 @@ pub enum MarginType {
 }
 
 // ============================================================================
-// Trade 命令枚举
+// Trade 命令/查询枚举
 // ============================================================================
 
 /// USDS-M期货交易命令枚举
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum UsdsMFutureTradeCmdAny {
+pub enum UsdsMFutureTradeCmd {
     /// 下单 POST /fapi/v1/order
     /// Weight: 0 (IP), 1 (10s order), 1 (1m order)
     NewOrder(NewOrderCmd),
@@ -143,10 +143,6 @@ pub enum UsdsMFutureTradeCmdAny {
     /// 批量下单 POST /fapi/v1/batchOrders
     /// Weight: 5 (IP), 5 (10s order), 1 (1m order)
     PlaceMultipleOrders(PlaceMultipleOrdersCmd),
-
-    /// 查询订单 GET /fapi/v1/order
-    /// Weight: 1
-    QueryOrder(QueryOrderCmd),
 
     /// 撤销订单 DELETE /fapi/v1/order
     /// Weight: 1
@@ -170,6 +166,34 @@ pub enum UsdsMFutureTradeCmdAny {
     /// 自动撤销全部订单 POST /fapi/v1/countdownCancelAll
     AutoCancelAllOpenOrders(AutoCancelAllOpenOrdersCmd),
 
+    /// 调整杠杆倍数 POST /fapi/v1/leverage
+    /// Weight: 1
+    ChangeInitialLeverage(ChangeInitialLeverageCmd),
+
+    /// 变换保证金模式 POST /fapi/v1/marginType
+    /// Weight: 1
+    ChangeMarginType(ChangeMarginTypeCmd),
+
+    /// 调整逐仓保证金 POST /fapi/v1/positionMargin
+    ModifyIsolatedPositionMargin(ModifyIsolatedPositionMarginCmd),
+
+    /// 切换持仓模式 POST /fapi/v1/positionSide/dual
+    /// Weight: 1
+    ChangePositionMode(ChangePositionModeCmd),
+
+    /// 切换联合保证金模式 POST /fapi/v1/multiAssetsMargin
+    /// Weight: 1
+    ChangeMultiAssetsMode(ChangeMultiAssetsModeCmd),
+}
+
+/// USDS-M期货交易查询枚举
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum UsdsMFutureTradeQuery {
+    /// 查询订单 GET /fapi/v1/order
+    /// Weight: 1
+    QueryOrder(QueryOrderCmd),
+
     /// 查询当前挂单 GET /fapi/v1/openOrders
     /// Weight: 1 (single), 40 (all)
     CurrentAllOpenOrders(CurrentAllOpenOrdersCmd),
@@ -187,17 +211,6 @@ pub enum UsdsMFutureTradeCmdAny {
 
     /// 查询订单修改历史 GET /fapi/v1/orderAmendment
     GetOrderModifyHistory(GetOrderModifyHistoryCmd),
-
-    /// 调整杠杆倍数 POST /fapi/v1/leverage
-    /// Weight: 1
-    ChangeInitialLeverage(ChangeInitialLeverageCmd),
-
-    /// 变换保证金模式 POST /fapi/v1/marginType
-    /// Weight: 1
-    ChangeMarginType(ChangeMarginTypeCmd),
-
-    /// 调整逐仓保证金 POST /fapi/v1/positionMargin
-    ModifyIsolatedPositionMargin(ModifyIsolatedPositionMarginCmd),
 
     /// 查询保证金变动历史 GET /fapi/v1/positionMargin/history
     /// Weight: 1
@@ -218,14 +231,26 @@ pub enum UsdsMFutureTradeCmdAny {
     /// 持仓ADL队列估算 GET /fapi/v1/adlQuantile
     /// Weight: 5
     PositionADLQuantileEstimation(PositionADLQuantileEstimationCmd),
+}
 
-    /// 切换持仓模式 POST /fapi/v1/positionSide/dual
-    /// Weight: 1
-    ChangePositionMode(ChangePositionModeCmd),
+/// USDS-M期货交易命令或查询统一枚举
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum UsdsMFutureTradeCmdOrQuery {
+    Cmd(UsdsMFutureTradeCmd),
+    Query(UsdsMFutureTradeQuery),
+}
 
-    /// 切换联合保证金模式 POST /fapi/v1/multiAssetsMargin
-    /// Weight: 1
-    ChangeMultiAssetsMode(ChangeMultiAssetsModeCmd),
+impl From<UsdsMFutureTradeCmd> for UsdsMFutureTradeCmdOrQuery {
+    fn from(cmd: UsdsMFutureTradeCmd) -> Self {
+        Self::Cmd(cmd)
+    }
+}
+
+impl From<UsdsMFutureTradeQuery> for UsdsMFutureTradeCmdOrQuery {
+    fn from(query: UsdsMFutureTradeQuery) -> Self {
+        Self::Query(query)
+    }
 }
 
 // ============================================================================
@@ -1035,6 +1060,6 @@ pub trait UsdsMFutureTradeBehavior: Send + Sync {
     /// 处理交易命令
     fn handle(
         &mut self,
-        cmd: UsdsMFutureTradeCmdAny,
+        cmd: UsdsMFutureTradeCmdOrQuery,
     ) -> Result<CmdResp<UsdsMFutureTradeRes>, UsdsMFutureTradeCmdError>;
 }
