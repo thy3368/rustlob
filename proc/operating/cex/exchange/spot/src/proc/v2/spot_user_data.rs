@@ -1,18 +1,18 @@
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::v2::spot_trade_error::{CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CmdResp, SpotApiErrorAny};
 use crate::proc::behavior::v2::spot_user_data_behavior::{SpotUserDataCmdAny, SpotUserDataResAny};
 
 #[immutable]
 
 pub struct SpotUserDataImpl {}
 
-impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny> for SpotUserDataImpl {
+impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotApiErrorAny> for SpotUserDataImpl {
     async fn handle(
         &self,
         cmd: SpotUserDataCmdAny,
-    ) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotUserDataResAny>, SpotApiErrorAny> {
         match cmd {
             SpotUserDataCmdAny::Account(_) => {
                 todo!()
