@@ -6,7 +6,7 @@ use base_types::handler::handler::CmdHandler;
 use db_repo::MySqlDbRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior::{
     NewOrderAck, NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
@@ -26,18 +26,18 @@ impl SpotTradeBehaviorV4Impl {
     }
 }
 
-impl CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
-    fn cmd_handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotCmdErrorAny> {
+impl CmdHandler<NewOrderCmd, NewOrderAck, SpotApiErrorAny> for SpotTradeBehaviorV4Impl {
+    fn cmd_handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotApiErrorAny> {
         todo!()
     }
 }
-impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotTradeBehaviorV4Impl {
-    fn cmd_handle(&self, cmd: SpotTradeCmdOrQuery) -> Result<SpotTradeResAny, SpotCmdErrorAny> {
+impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny> for SpotTradeBehaviorV4Impl {
+    fn cmd_handle(&self, cmd: SpotTradeCmdOrQuery) -> Result<SpotTradeResAny, SpotApiErrorAny> {
         match cmd {
             SpotTradeCmdOrQuery::Cmd(cmd) => match cmd {
                 SpotTradeCmd::NewOrder(cmd) => {
                     let ack =
-                        <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotCmdErrorAny>>::cmd_handle(
+                        <Self as CmdHandler<NewOrderCmd, NewOrderAck, SpotApiErrorAny>>::cmd_handle(
                             self, cmd,
                         )?;
                     Ok(SpotTradeResAny::NewOrderAck(ack))
