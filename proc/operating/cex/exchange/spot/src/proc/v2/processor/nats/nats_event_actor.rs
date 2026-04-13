@@ -6,7 +6,7 @@ use base_types::handler::event_handler::EventHandler;
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
 
 #[derive(Debug, Clone)]
 pub struct NatsProcessorConfig {

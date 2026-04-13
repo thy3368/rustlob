@@ -5,8 +5,8 @@ use base_types::handler::handler_update2::{
 };
 use diff::diff_types::DomainEvent;
 
-use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{NewOtocoOrderCmd, OtocoOrderResult};
+use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_behavior::{NewOtocoOrderCmd, OtocoOrderResult};
 
 #[derive(Debug, Clone)]
 pub struct NewOtocoOrderStateSet {

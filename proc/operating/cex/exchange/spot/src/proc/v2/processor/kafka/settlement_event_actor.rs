@@ -9,7 +9,7 @@ use diff::diff_types::DomainEvent;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     KafkaConsumerConfig, KafkaProcessorConfig, create_kafka_consumer,
 };

@@ -9,8 +9,8 @@ use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use diff::diff_types::{DomainEvent, track_create};
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_behavior::{
     Fill, NewOrderCmd, NewOrderFull, NewOrderResult, SelfTradePreventionMode,
 };
 use crate::proc::behavior::v2::spot_user_data_behavior::Balance;

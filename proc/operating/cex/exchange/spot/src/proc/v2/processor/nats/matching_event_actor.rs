@@ -5,7 +5,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
 use crate::proc::v2::processor::nats::nats_event_actor::{NatsEventActor, NatsProcessorConfig};
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
@@ -37,7 +37,7 @@ fn deserialize_matching_domain_event(
     bytes: &[u8],
 ) -> Result<DomainEvent<SpotOrder>, SpotCmdErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
-        SpotCmdErrorAny::Common(crate::proc::behavior::spot_trade_behavior::CommonError::Internal {
+        SpotCmdErrorAny::Common(crate::proc::behavior::v2::spot_trade_error::CommonError::Internal {
             message: format!("Deserialization error: {}", e),
         })
     })

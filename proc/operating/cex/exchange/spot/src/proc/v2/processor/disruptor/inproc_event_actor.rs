@@ -4,7 +4,7 @@ use base_types::handler::event_actor::EventRecvActor;
 use base_types::handler::event_handler::EventHandler2;
 use crossbeam_channel::Receiver;
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
 
 pub struct InprocEventActor<E, H> {
     receiver: Receiver<E>,

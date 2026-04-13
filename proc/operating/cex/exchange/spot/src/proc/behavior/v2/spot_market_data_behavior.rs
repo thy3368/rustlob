@@ -5,7 +5,7 @@
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_behavior::{SpotCmdAny, SpotResAny};
 
 /// Market Data 命令枚举

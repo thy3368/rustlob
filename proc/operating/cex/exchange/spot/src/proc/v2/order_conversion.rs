@@ -8,7 +8,7 @@ use base_types::exchange::spot::spot_types::{
 };
 use base_types::{Price, Quantity};
 
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
+use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
 use crate::proc::v2::id_repo::order_next_id;
 
 impl From<NewOrderCmd> for SpotOrder {

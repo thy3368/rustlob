@@ -8,7 +8,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use diff::Entity;
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
 
 #[derive(Debug, Clone)]
 pub struct SettStateSet {

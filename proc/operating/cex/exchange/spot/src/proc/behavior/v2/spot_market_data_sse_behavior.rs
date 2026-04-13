@@ -3,7 +3,7 @@
 
 use entity_derive::Entity;
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotCmdErrorAny};
 
 /// Market Data Stream 消息枚举
 #[derive(Debug, Clone)]

@@ -1,7 +1,7 @@
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::spot_trade_behavior::{CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CmdResp, SpotCmdErrorAny};
 use crate::proc::behavior::v2::spot_user_data_sse_behavior::{
     SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
 };

@@ -6,8 +6,8 @@ use base_types::handler::handler::CmdHandler;
 use db_repo::MySqlDbRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::{
+use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_behavior::{
     NewOrderAck, NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
 use crate::proc::v2::processor::kafka::event_publisher::EventPublisher;

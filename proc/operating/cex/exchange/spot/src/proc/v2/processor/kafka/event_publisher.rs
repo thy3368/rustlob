@@ -6,7 +6,7 @@ use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::Serialize;
 
-use crate::proc::behavior::v2::spot_trade_behavior_v2::SpotTradeCmdOrQuery;
+use crate::proc::behavior::v2::spot_trade_behavior::SpotTradeCmdOrQuery;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PublishError {

@@ -6,8 +6,8 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior_v2::NewOrderCmd;
+use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
 use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
     MatchCmd, MatchOrderCmdHandler,
 };

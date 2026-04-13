@@ -3,7 +3,7 @@ use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::spot_trade_behavior::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
 use crate::proc::behavior::v2::spot_market_data_behavior::{
     AvgPriceData, OrderBookData, SpotMarketDataCmdAny, SpotMarketDataResAny,
 };

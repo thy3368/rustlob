@@ -10,7 +10,7 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
 
-use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
 };

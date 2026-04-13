@@ -6,7 +6,7 @@ use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotCmdErrorAny};
 // ==================== User Data Stream 事件枚举 ====================
 
 /// User Data Stream 事件类型（WebSocket 推送）

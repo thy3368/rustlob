@@ -4,7 +4,7 @@
 
 use base_types::handler::handler::Handler;
 
-use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotCmdErrorAny};
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
