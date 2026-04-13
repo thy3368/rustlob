@@ -1,6 +1,6 @@
 use base_types::handler::handler::Handler;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
@@ -25,4 +25,4 @@ pub enum SpotResAny {
 }
 
 /// Spot Trading 行为接口
-pub trait SpotBehavior: Send + Sync + Handler<SpotCmdAny, SpotResAny, SpotCmdErrorAny> {}
+pub trait SpotBehavior: Send + Sync + Handler<SpotCmdAny, SpotResAny, SpotApiErrorAny> {}

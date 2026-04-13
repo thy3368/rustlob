@@ -105,7 +105,8 @@ impl std::error::Error for CommonError {}
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 
-pub enum SpotCmdErrorAny {
+///设计思路：直接返回给用户的，要用anyhow,哪些应该反回给用户，哪些应该应该返回内部错误，怎么分类更合适？ 用户分为api用户(如客户端开发者）和交易用户(trader), 不同用户关注点不一样
+pub enum SpotApiErrorAny {
     /// 通用错误
     Common(CommonError),
     /// FOK订单无法全部成交被拒绝
@@ -118,7 +119,7 @@ pub enum SpotCmdErrorAny {
     QuantityOutOfRange { quantity: Quantity, min: Quantity, max: Quantity },
 }
 
-impl std::fmt::Display for SpotCmdErrorAny {
+impl std::fmt::Display for SpotApiErrorAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
@@ -138,9 +139,9 @@ impl std::fmt::Display for SpotCmdErrorAny {
     }
 }
 
-impl std::error::Error for SpotCmdErrorAny {}
+impl std::error::Error for SpotApiErrorAny {}
 
-impl From<CommonError> for SpotCmdErrorAny {
+impl From<CommonError> for SpotApiErrorAny {
     fn from(e: CommonError) -> Self {
         Self::Common(e)
     }

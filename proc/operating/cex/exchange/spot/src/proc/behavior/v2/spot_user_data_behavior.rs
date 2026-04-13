@@ -4,7 +4,7 @@
 
 use base_types::handler::handler::Handler;
 
-use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotApiErrorAny};
 
 /// User Data 命令枚举
 #[derive(Debug, Clone)]
@@ -82,17 +82,17 @@ pub struct AccountCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrderCmd {
-    metadata: CMetadata,
+   pub metadata: CMetadata,
     /// 交易对
-    symbol: String,
+    pub symbol: String,
     /// 订单ID（与 orig_client_order_id 二选一）
-    order_id: Option<i64>,
+    pub order_id: Option<i64>,
     /// 客户端订单ID（与 order_id 二选一）
-    orig_client_order_id: Option<String>,
-    /// 接收窗口
-    recv_window: Option<u64>,
-    /// 时间戳
-    timestamp: i64,
+    pub orig_client_order_id: Option<String>,
+    // /// 接收窗口
+    // pub  recv_window: Option<u64>,
+    // /// 时间戳
+    // pub timestamp: i64,
 }
 
 /// 当前挂单查询命令
@@ -598,6 +598,6 @@ pub struct AllocationInfo {
 
 /// User Data 行为接口
 pub trait SpotUserDataBehavior:
-    Send + Sync + Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny>
+    Send + Sync + Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotApiErrorAny>
 {
 }

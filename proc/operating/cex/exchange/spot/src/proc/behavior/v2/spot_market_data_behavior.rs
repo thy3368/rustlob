@@ -5,7 +5,7 @@
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotApiErrorAny};
 use crate::proc::behavior::v2::spot_behavior::{SpotCmdAny, SpotResAny};
 
 /// Market Data 命令枚举
@@ -569,6 +569,6 @@ pub struct RollingWindowTickerData {
 
 /// Market Data 行为接口
 pub trait SpotMarketDataBehavior:
-    Send + Sync + Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny>
+    Send + Sync + Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotApiErrorAny>
 {
 }

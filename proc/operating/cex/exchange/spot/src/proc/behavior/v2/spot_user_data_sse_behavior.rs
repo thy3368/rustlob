@@ -6,7 +6,7 @@ use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
 use immutable_derive::immutable;
 
-use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotApiErrorAny};
 // ==================== User Data Stream 事件枚举 ====================
 
 /// User Data Stream 事件类型（WebSocket 推送）
@@ -613,6 +613,6 @@ const USAGE_GUIDE: () = ();
 
 /// User Data Stream 行为接口
 pub trait SpotUserDataListenKeyBehavior:
-    Send + Sync + Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny>
+    Send + Sync + Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotApiErrorAny>
 {
 }

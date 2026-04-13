@@ -3,7 +3,7 @@
 
 use entity_derive::Entity;
 
-use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotApiErrorAny};
 
 /// Market Data Stream 消息枚举
 #[derive(Debug, Clone)]
@@ -706,7 +706,7 @@ pub trait SpotMarketDataSubscriptionBehavior: Send + Sync {
     fn handle_subscription(
         &mut self,
         cmd: MarketDataSubscriptionCmdAny,
-    ) -> Result<CmdResp<SubscriptionResponse>, SpotCmdErrorAny>;
+    ) -> Result<CmdResp<SubscriptionResponse>, SpotApiErrorAny>;
 }
 
 pub trait SpotMarketDataPublishBehavior: Send + Sync {

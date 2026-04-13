@@ -7,7 +7,7 @@ use base_types::handler::handler::Handler;
 use base_types::{AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair};
 use immutable_derive::immutable;
 
-use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotApiErrorAny};
 
 /// Spot Trading 命令枚举 - 仅包含写入操作
 #[derive(Debug, Clone)]
@@ -1543,6 +1543,6 @@ pub struct Allocation {
 
 /// Spot Trading 行为接口
 pub trait SpotTradeBehaviorV2:
-    Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny>
+    Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny>
 {
 }
