@@ -5,7 +5,7 @@ use base_types::handler::handler_update2::{
 };
 use diff::diff_types::DomainEvent;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior::{NewOcoOrderCmd, OcoOrderResult};
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ impl CmdHandlerInternal for NewOcoOrderCmdHandler {
     type Reply = OcoOrderResult;
     type GivenStateSet = NewOcoOrderStateSet;
     type ThenStateSet = NewOcoOrderStateChangedSet;
-    type Error = SpotCmdErrorAny;
+    type Error = SpotApiErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,

@@ -9,7 +9,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use diff::Entity;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 // use crate::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 
 #[derive(Debug, Clone)]
@@ -60,7 +60,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
     type Reply = Option<Vec<DomainEvent<SpotTrade>>>;
     type GivenStateSet = MatchOrderStateSet;
     type ThenStateSet = MatchOrderStateChangedSet;
-    type Error = SpotCmdErrorAny;
+    type Error = SpotApiErrorAny;
 
     type Repo = R;
     type Publisher = P;
@@ -74,7 +74,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             return Ok(MatchOrderStateChangedSet {
                 taker: DomainEvent::new(
                     state_set.taker.track_create().map_err(|e| {
-                        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                        SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                     })?,
                     state_set.taker,
                 ),
@@ -113,7 +113,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             );
             let trade_event = DomainEvent::new(
                 trade.track_create().map_err(|e| {
-                    SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?,
                 trade,
             );
@@ -123,7 +123,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
 
         let taker_event = DomainEvent::new(
             state_set.taker.track_create().map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
             })?,
             state_set.taker,
         );
@@ -133,7 +133,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             .map(|maker| {
                 Ok(DomainEvent::new(
                     maker.track_create().map_err(|e| {
-                        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                        SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                     })?,
                     maker,
                 ))
@@ -207,7 +207,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
         if let Some(ref trades) = domain_events.trades {
             for trade_event in trades {
                 repo.replay_event::<SpotTrade>(trade_event).map_err(|e| {
-                    SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
         }
@@ -221,7 +221,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
     ) -> Result<(), Self::Error> {
         if let Some(ref trades) = domain_events.trades {
             publisher.publish_batch(trades).map_err(|_e| {
-                SpotCmdErrorAny::Common(CommonError::Internal {
+                SpotApiErrorAny::Common(CommonError::Internal {
                     message: "publish match order events failed".to_string(),
                 })
             })?;

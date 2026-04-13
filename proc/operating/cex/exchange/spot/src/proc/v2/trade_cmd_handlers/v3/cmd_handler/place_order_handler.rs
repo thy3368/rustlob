@@ -6,7 +6,7 @@ use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::{DomainEvent, track_create};
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
     type Reply = DomainEvent<SpotOrder>;
     type GivenStateSet = PlaceOrderStateSet;
     type ThenStateSet = PlaceOrderStateChangedSet;
-    type Error = SpotCmdErrorAny;
+    type Error = SpotApiErrorAny;
 
     type Repo = R;
     type Publisher = P;
@@ -81,7 +81,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         );
 
         let change_log = track_create(&order)
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Other(format!("{}", e))))?;
+            .map_err(|e| SpotApiErrorAny::Common(CommonError::Other(format!("{}", e))))?;
 
         Ok(PlaceOrderStateChangedSet { order: DomainEvent::new(change_log, order) })
     }
@@ -123,7 +123,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         repo.replay_event::<SpotOrder>(&domain_events.order)
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }))
+            .map_err(|e| SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() }))
     }
 
     fn publish_domain_events(
@@ -132,7 +132,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         publisher: Self::Publisher,
     ) -> Result<(), Self::Error> {
         publisher.publish(&domain_events.order).map_err(|_e| {
-            SpotCmdErrorAny::Common(CommonError::Internal {
+            SpotApiErrorAny::Common(CommonError::Internal {
                 message: "publish place order event failed".to_string(),
             })
         })

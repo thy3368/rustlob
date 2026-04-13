@@ -9,7 +9,7 @@ use base_types::{Price, Quantity};
 use db_repo::core::db_repo2::CmdRepo2;
 use diff::diff_types::{DomainEvent, track_create};
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::behavior::v2::spot_trade_behavior::{
     Fill, NewOrderCmd, NewOrderFull, NewOrderResult, SelfTradePreventionMode,
 };
@@ -82,7 +82,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
     type Reply = NewOrderFull;
     type GivenStateSet = PlaceOrderStateSetAll;
     type ThenStateSet = PlaceOrderStateChangedSet;
-    type Error = SpotCmdErrorAny;
+    type Error = SpotApiErrorAny;
 
     fn apply_command_and_collect_changes(
         &self,
@@ -115,7 +115,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
         );
 
         let change_log = track_create(&order)
-            .map_err(|e| SpotCmdErrorAny::Common(CommonError::Other(format!("{}", e))))?;
+            .map_err(|e| SpotApiErrorAny::Common(CommonError::Other(format!("{}", e))))?;
 
         let order_event = DomainEvent::new(change_log, order);
 
@@ -226,13 +226,13 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
         //todo 需要事务
         if let Some(ref order_event) = domain_events.order {
             self.repo.replay_event::<SpotOrder>(order_event).map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
             })?;
         }
         if let Some(ref trades) = domain_events.trades {
             for trade_event in trades {
                 self.repo.replay_event::<SpotTrade>(trade_event).map_err(|e| {
-                    SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
         }
@@ -241,7 +241,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
                 self.repo
                     .replay_event::<base_types::account::balance::Balance>(balance_event)
                     .map_err(|e| {
-                        SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                        SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                     })?;
             }
         }

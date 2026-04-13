@@ -8,7 +8,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use diff::Entity;
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 
 #[derive(Debug, Clone)]
 pub struct SettStateSet {
@@ -48,7 +48,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
     type GivenStateSet = SettStateSet;
     type ThenStateSet = SettStateChangedSet;
-    type Error = SpotCmdErrorAny;
+    type Error = SpotApiErrorAny;
 
     type Repo = R;
     type Publisher = P;
@@ -96,7 +96,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         let mut balance_events = Vec::with_capacity(balance_map.len());
         for balance in balance_map.into_values() {
             let change_log = balance.track_create().map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
             })?;
             balance_events.push(DomainEvent::new(change_log, balance));
         }
@@ -143,7 +143,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         if let Some(ref balances) = domain_events.balances {
             for balance_event in balances {
                 repo.replay_event::<AccountBalance>(balance_event).map_err(|e| {
-                    SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
         }
@@ -157,7 +157,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             publisher.publish_batch(balances).map_err(|_e| {
-                SpotCmdErrorAny::Common(CommonError::Internal {
+                SpotApiErrorAny::Common(CommonError::Internal {
                     message: "publish settlement events failed".to_string(),
                 })
             })?;
