@@ -6,7 +6,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
 use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
     MatchCmd, MatchOrderCmdHandler,
@@ -47,7 +47,7 @@ impl<
     }
 
     // 规则：place/match/settlement 分阶段串联，后一阶段必须消费前一阶段输出
-    pub fn exec(&self, cmd: NewOrderCmd) -> Result<PlaceOrderPipelineReply, SpotCmdErrorAny> {
+    pub fn exec(&self, cmd: NewOrderCmd) -> Result<PlaceOrderPipelineReply, SpotApiErrorAny> {
         let order = self.place_order_handler.cmd_handle(
             cmd,
             self.place_order_handler.repo.clone(),
