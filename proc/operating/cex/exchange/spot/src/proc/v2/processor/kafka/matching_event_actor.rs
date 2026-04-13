@@ -10,7 +10,7 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
 };
@@ -46,12 +46,12 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Orde
     }
 
     #[inline]
-    fn into_internal_error(message: impl Into<String>) -> SpotCmdErrorAny {
-        SpotCmdErrorAny::Common(CommonError::Internal { message: message.into() })
+    fn into_internal_error(message: impl Into<String>) -> SpotApiErrorAny {
+        SpotApiErrorAny::Common(CommonError::Internal { message: message.into() })
     }
 
     #[inline]
-    fn deserialize_domain_event(bytes: &[u8]) -> Result<DomainEvent<SpotOrder>, SpotCmdErrorAny> {
+    fn deserialize_domain_event(bytes: &[u8]) -> Result<DomainEvent<SpotOrder>, SpotApiErrorAny> {
         serde_json::from_slice(bytes)
             .map_err(|e| Self::into_internal_error(format!("Deserialization error: {}", e)))
     }
@@ -66,9 +66,9 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Orde
 }
 
 impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
-    EventRecvActor<DomainEvent<SpotOrder>, SpotCmdErrorAny> for KafkaMatchingEventActor<R, P, L>
+    EventRecvActor<DomainEvent<SpotOrder>, SpotApiErrorAny> for KafkaMatchingEventActor<R, P, L>
 {
-    fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotOrder>>, SpotCmdErrorAny> {
+    fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotOrder>>, SpotApiErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))
         })?;
@@ -100,7 +100,7 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Orde
         Ok(Some(event))
     }
 
-    fn handle_event(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotCmdErrorAny> {
+    fn handle_event(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotApiErrorAny> {
         self.handler.event_handle(event)?;
         Ok(())
     }

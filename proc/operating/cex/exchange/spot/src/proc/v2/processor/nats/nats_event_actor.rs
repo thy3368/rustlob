@@ -6,7 +6,7 @@ use base_types::handler::event_handler::EventHandler;
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 
 #[derive(Debug, Clone)]
 pub struct NatsProcessorConfig {
@@ -54,7 +54,7 @@ impl NatsSubscription {
         &mut self,
         runtime: &Runtime,
         subject: &str,
-    ) -> Result<async_nats::Message, SpotCmdErrorAny> {
+    ) -> Result<async_nats::Message, SpotApiErrorAny> {
         runtime
             .block_on(self.subscriber.next())
             .ok_or_else(|| NatsEventActor::<(), ()>::into_closed_subscription_error(subject))
@@ -67,7 +67,7 @@ pub struct NatsEventActor<E, H> {
     subject: String,
     handler: Arc<H>,
     actor_name: &'static str,
-    deserialize: fn(&[u8]) -> Result<E, SpotCmdErrorAny>,
+    deserialize: fn(&[u8]) -> Result<E, SpotApiErrorAny>,
 }
 
 impl<E, H> NatsEventActor<E, H> {
@@ -76,7 +76,7 @@ impl<E, H> NatsEventActor<E, H> {
         subject: String,
         handler: Arc<H>,
         actor_name: &'static str,
-        deserialize: fn(&[u8]) -> Result<E, SpotCmdErrorAny>,
+        deserialize: fn(&[u8]) -> Result<E, SpotApiErrorAny>,
     ) -> Result<Self, String> {
         let runtime = Self::build_runtime()?;
         let subscription = NatsSubscription::connect(&runtime, &config.nats_url, &subject)?;
@@ -100,8 +100,8 @@ impl<E, H> NatsEventActor<E, H> {
     }
 
     #[inline]
-    fn into_closed_subscription_error(subject: &str) -> SpotCmdErrorAny {
-        SpotCmdErrorAny::Common(CommonError::Internal {
+    fn into_closed_subscription_error(subject: &str) -> SpotApiErrorAny {
+        SpotApiErrorAny::Common(CommonError::Internal {
             message: format!("NATS subscription closed for subject {}", subject),
         })
     }
@@ -115,12 +115,12 @@ impl<E, H> NatsEventActor<E, H> {
     }
 }
 
-impl<E, H> EventRecvActor<E, SpotCmdErrorAny> for NatsEventActor<E, H>
+impl<E, H> EventRecvActor<E, SpotApiErrorAny> for NatsEventActor<E, H>
 where
     E: Send + Sync + 'static,
-    H: EventHandler<E, (), SpotCmdErrorAny> + Send + Sync + 'static,
+    H: EventHandler<E, (), SpotApiErrorAny> + Send + Sync + 'static,
 {
-    fn recv_event(&mut self) -> Result<Option<E>, SpotCmdErrorAny> {
+    fn recv_event(&mut self) -> Result<Option<E>, SpotApiErrorAny> {
         let message = self.subscription.recv(&self.runtime, &self.subject)?;
 
         tracing::info!(
@@ -134,7 +134,7 @@ where
         Ok(Some(event))
     }
 
-    fn handle_event(&self, event: E) -> Result<(), SpotCmdErrorAny> {
+    fn handle_event(&self, event: E) -> Result<(), SpotApiErrorAny> {
         tracing::info!(
             actor = self.actor_name,
             subject = %self.subject,
@@ -156,13 +156,13 @@ mod tests {
 
     struct NoopHandler;
 
-    impl EventHandler<(), (), SpotCmdErrorAny> for NoopHandler {
-        fn event_handle(&self, _event: ()) -> Result<(), SpotCmdErrorAny> {
+    impl EventHandler<(), (), SpotApiErrorAny> for NoopHandler {
+        fn event_handle(&self, _event: ()) -> Result<(), SpotApiErrorAny> {
             Ok(())
         }
     }
 
-    fn deserialize_unit(_bytes: &[u8]) -> Result<(), SpotCmdErrorAny> {
+    fn deserialize_unit(_bytes: &[u8]) -> Result<(), SpotApiErrorAny> {
         Ok(())
     }
 
@@ -173,9 +173,9 @@ mod tests {
             String,
             Arc<NoopHandler>,
             &'static str,
-            fn(&[u8]) -> Result<(), SpotCmdErrorAny>,
+            fn(&[u8]) -> Result<(), SpotApiErrorAny>,
         ) -> Result<NatsEventActor<(), NoopHandler>, String> = NatsEventActor::new;
 
-        let _deserialize = deserialize_unit as fn(&[u8]) -> Result<(), SpotCmdErrorAny>;
+        let _deserialize = deserialize_unit as fn(&[u8]) -> Result<(), SpotApiErrorAny>;
     }
 }

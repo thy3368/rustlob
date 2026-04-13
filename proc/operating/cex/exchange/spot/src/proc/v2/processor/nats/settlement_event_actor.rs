@@ -3,7 +3,7 @@ use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotCmdErrorAny;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::v2::processor::nats::nats_event_actor::{NatsEventActor, NatsProcessorConfig};
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
@@ -28,9 +28,9 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> NatsSettlementEventActor<R
 
 fn deserialize_settlement_domain_event(
     bytes: &[u8],
-) -> Result<DomainEvent<SpotTrade>, SpotCmdErrorAny> {
+) -> Result<DomainEvent<SpotTrade>, SpotApiErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
-        SpotCmdErrorAny::Common(crate::proc::behavior::v2::spot_trade_error::CommonError::Internal {
+        SpotApiErrorAny::Common(crate::proc::behavior::v2::spot_trade_error::CommonError::Internal {
             message: format!("Deserialization error: {}", e),
         })
     })

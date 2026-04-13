@@ -9,7 +9,7 @@ use diff::diff_types::DomainEvent;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message;
 
-use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotCmdErrorAny};
+use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     KafkaConsumerConfig, KafkaProcessorConfig, create_kafka_consumer,
 };
@@ -39,12 +39,12 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> KafkaSettlementEventActor<
     }
 
     #[inline]
-    fn into_internal_error(message: impl Into<String>) -> SpotCmdErrorAny {
-        SpotCmdErrorAny::Common(CommonError::Internal { message: message.into() })
+    fn into_internal_error(message: impl Into<String>) -> SpotApiErrorAny {
+        SpotApiErrorAny::Common(CommonError::Internal { message: message.into() })
     }
 
     #[inline]
-    fn deserialize_domain_event(bytes: &[u8]) -> Result<DomainEvent<SpotTrade>, SpotCmdErrorAny> {
+    fn deserialize_domain_event(bytes: &[u8]) -> Result<DomainEvent<SpotTrade>, SpotApiErrorAny> {
         serde_json::from_slice(bytes)
             .map_err(|e| Self::into_internal_error(format!("Deserialization error: {}", e)))
     }
@@ -58,10 +58,10 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> KafkaSettlementEventActor<
     }
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> EventRecvActor<DomainEvent<SpotTrade>, SpotCmdErrorAny>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> EventRecvActor<DomainEvent<SpotTrade>, SpotApiErrorAny>
     for KafkaSettlementEventActor<R, P>
 {
-    fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotCmdErrorAny> {
+    fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotApiErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
             Self::into_internal_error(format!("Failed to create Tokio runtime: {}", e))
         })?;
@@ -93,7 +93,7 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> EventRecvActor<DomainEvent
         Ok(Some(event))
     }
 
-    fn handle_event(&self, event: DomainEvent<SpotTrade>) -> Result<(), SpotCmdErrorAny> {
+    fn handle_event(&self, event: DomainEvent<SpotTrade>) -> Result<(), SpotApiErrorAny> {
         self.handler.event_handle(event)?;
         Ok(())
     }
