@@ -6,6 +6,7 @@ pub mod spot_user_data_sse_behavior;
 
 pub mod spot_behavior;
 pub mod spot_trade_error;
+pub mod spot_trade_api_error;
 // SOA (Structure of Arrays) 优化
 
 // SOA 转换示例

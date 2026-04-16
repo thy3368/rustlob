@@ -82,7 +82,7 @@ pub struct AccountCmd {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QueryOrderCmd {
-   pub metadata: CMetadata,
+    pub metadata: CMetadata,
     /// 交易对
     pub symbol: String,
     /// 订单ID（与 orig_client_order_id 二选一）
@@ -413,45 +413,45 @@ pub struct Balance {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrderInfo {
     /// 交易对
-    symbol: String,
+    pub symbol: String,
     /// 订单ID
-    order_id: i64,
+    pub order_id: i64,
     /// 订单列表ID（-1表示不属于订单列表）
-    order_list_id: i64,
+    pub order_list_id: i64,
     /// 客户端订单ID
-    client_order_id: String,
+    pub client_order_id: String,
     /// 价格
-    price: String,
+    pub price: String,
     /// 原始数量
-    orig_qty: String,
+    pub orig_qty: String,
     /// 已执行数量
-    executed_qty: String,
+    pub executed_qty: String,
     /// 累计成交金额
-    cummulative_quote_qty: String,
+    pub cummulative_quote_qty: String,
     /// 订单状态
-    status: String,
+    pub status: String,
     /// 有效期类型
-    time_in_force: String,
+    pub time_in_force: String,
     /// 订单类型
-    order_type: String,
+    pub order_type: String,
     /// 买卖方向
-    side: String,
+    pub side: String,
     /// 止损价格
-    stop_price: Option<String>,
+    pub stop_price: Option<String>,
     /// 冰山数量
-    iceberg_qty: Option<String>,
+    pub iceberg_qty: Option<String>,
     /// 订单创建时间
-    time: i64,
+    pub time: i64,
     /// 订单更新时间
-    update_time: i64,
+    pub update_time: i64,
     /// 是否工作中
-    is_working: bool,
+    pub is_working: bool,
     /// 工作时间
-    working_time: i64,
+    pub working_time: i64,
     /// 原始报价订单数量
-    orig_quote_order_qty: String,
+    pub orig_quote_order_qty: String,
     /// 自成交防护模式
-    self_trade_prevention_mode: String,
+    pub self_trade_prevention_mode: String,
 }
 
 /// 订单列表信息

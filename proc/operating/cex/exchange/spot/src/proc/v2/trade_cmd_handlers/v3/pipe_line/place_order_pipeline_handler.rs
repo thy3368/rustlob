@@ -1,6 +1,7 @@
 use base_types::account::balance::Balance as AccountBalance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use cmd_handler::CmdHandlerForUpdate3;
+use cmd_handler::pipe_line_handler::CmdPipeLineHandler;
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
@@ -79,6 +80,19 @@ impl<
     }
 }
 
+impl<
+    R: CmdRepo2 + Clone,
+    P: EventPublisher2 + Clone,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
+> CmdPipeLineHandler for PlaceOrderPipelineHandler<R, P, L> {
+    type Command = NewOrderCmd;
+    type Reply = PlaceOrderPipelineReply;
+    type Error = SpotApiErrorAny;
+
+    fn do_handle(&self, cmd: &Self::Command) -> Result<Self::Reply, Self::Error> {
+        self.exec(cmd.clone())
+    }
+}
 #[cfg(test)]
 mod tests {
     use base_types::account::balance::Balance as AccountBalance;

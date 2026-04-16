@@ -462,20 +462,19 @@ pub struct CancelReplaceOrderCmd {
 /// Data Source: Memory => Database
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 
 pub struct QueryOrderCmd {
-    metadata: CMetadata,
+    pub metadata: CMetadata,
     /// 交易对
-    symbol: TradingPair,
+    pub symbol: TradingPair,
     /// 订单 ID
-    order_id: Option<u64>,
+    pub order_id: Option<u64>,
     /// 用户自定义订单 ID
-    orig_client_order_id: Option<String>,
+    pub orig_client_order_id: Option<String>,
     /// 接收窗口（微秒精度），不超过 60000
-    recv_window: Option<u64>,
+    pub recv_window: Option<u64>,
     /// 时间戳
-    timestamp: Timestamp,
+    pub timestamp: Timestamp,
 }
 
 /// 当前挂单查询命令
