@@ -1,0 +1,125 @@
+product: spot
+use_cases:
+  main_flow:
+    - name: 开通现货账户
+      priority: P0
+      command_handler: OpenSpotAccountCmdHandler
+      given_state: [User, Account]
+      then_state: [Account]
+
+    - name: 充值
+      priority: P0
+      command_handler: DepositSpotCmdHandler
+      given_state: [Account, Balance]
+      then_state: [Balance, DepositRecord]
+      acceptance_case_file: spot/deposit.yaml
+
+    - name: 提现
+      priority: P0
+      command_handler: WithdrawSpotCmdHandler
+      given_state: [Account, Balance]
+      then_state: [Balance, TransferRecord]
+
+    - name: 划转转入
+      priority: P0
+      command_handler: TransferInSpotCmdHandler
+      given_state: [Account, Balance, TransferRecord]
+      then_state: [Balance, TransferRecord]
+
+    - name: 划转转出
+      priority: P0
+      command_handler: TransferOutSpotCmdHandler
+      given_state: [Account, Balance, TransferRecord]
+      then_state: [Balance, TransferRecord]
+
+    - name: 下买单
+      priority: P0
+      command_handler: PlaceSpotBuyOrderCmdHandler
+      given_state: [Account, Balance]
+      then_state: [SpotOrder, Balance]
+
+    - name: 下卖单
+      priority: P0
+      command_handler: PlaceSpotSellOrderCmdHandler
+      given_state: [Account, Balance]
+      then_state: [SpotOrder, Balance]
+
+    - name: 撤单
+      priority: P0
+      command_handler: CancelSpotOrderCmdHandler
+      given_state: [SpotOrder, Balance]
+      then_state: [SpotOrder, Balance]
+
+    - name: 撮合成交
+      priority: P0
+      command_handler: MatchOrderCmdHandler
+      given_state: [SpotOrder, LOB]
+      then_state: [SpotTrade, SpotOrder]
+
+    - name: 成交结算
+      priority: P0
+      command_handler: SettOrderCmdHandler
+      given_state: [SpotTrade, Balance]
+      then_state: [Balance]
+
+  market_data_flow:
+    - name: 查询交易对行情
+      priority: P0
+      command_handler: QuerySpotMarketHandler
+      given_state: [TradingPair, OrderBookSnapshot, Ticker]
+      then_state: []
+
+    - name: 查询盘口深度
+      priority: P0
+      command_handler: QuerySpotOrderBookHandler
+      given_state: [LOB, OrderBookSnapshot]
+      then_state: []
+
+    - name: 查询最新成交
+      priority: P0
+      command_handler: QuerySpotRecentTradesHandler
+      given_state: [SpotTrade]
+      then_state: []
+
+    - name: 生成Ticker
+      priority: P1
+      command_handler: BuildSpotTickerCmdHandler
+      given_state: [SpotTrade, OrderBookSnapshot]
+      then_state: [Ticker]
+
+    - name: 生成K线
+      priority: P1
+      command_handler: BuildSpotKlineCmdHandler
+      given_state: [SpotTrade]
+      then_state: [Kline]
+
+    - name: 发布行情
+      priority: P1
+      command_handler: PublishSpotMarketDataCmdHandler
+      given_state: [Ticker, OrderBookSnapshot, Kline, SpotTrade]
+      then_state: []
+
+  control_query_flow:
+    - name: 冻结现货账户
+      priority: P1
+      command_handler: FreezeSpotAccountCmdHandler
+      given_state: [Account]
+      then_state: [Account]
+
+    - name: 解冻现货账户
+      priority: P1
+      command_handler: UnfreezeSpotAccountCmdHandler
+      given_state: [Account]
+      then_state: [Account]
+
+    - name: 手续费结算
+      priority: P1
+      command_handler: SettleSpotFeeCmdHandler
+      given_state: [SpotTrade, Balance]
+      then_state: [Balance]
+
+    - name: 查询资产 / 订单 / 成交
+      priority: P2
+      command_handler: QuerySpotAccountHandler
+      given_state: [Balance, SpotOrder, SpotTrade]
+      then_state: []

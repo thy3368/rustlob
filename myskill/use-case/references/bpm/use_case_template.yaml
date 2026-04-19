@@ -1,0 +1,109 @@
+template_name: product_use_case_template
+version: 1
+
+description: >
+  通用产品 use case 模板。其它产品（futures / options / margin / earn / fiat）
+  按同一结构补充 use case，保持字段和分组一致。
+
+product: <product_name>
+
+use_cases:
+  main_flow:
+    - name: <use_case_name>
+      priority: P0
+      command_handler: <CommandHandlerName>
+      given_state: [<EntityA>, <EntityB>]
+      then_state: [<EntityC>]
+
+  market_data_flow:
+    - name: <use_case_name>
+      priority: P0
+      command_handler: <CommandHandlerName>
+      given_state: [<EntityA>, <EntityB>]
+      then_state: []
+
+  control_query_flow:
+    - name: <use_case_name>
+      priority: P1
+      command_handler: <CommandHandlerName>
+      given_state: [<EntityA>]
+      then_state: [<EntityB>]
+
+field_rules:
+  product:
+    required: true
+    desc: 产品名，如 spot / futures / options / margin / earn / fiat
+
+  use_cases:
+    required: true
+    desc: 按链路分组的 use case 列表
+
+  main_flow:
+    desc: 核心交易 / 资金主链路
+
+  market_data_flow:
+    desc: 行情查询、行情生成、行情发布链路；如果产品没有行情链路，可保留空数组
+
+  control_query_flow:
+    desc: 冻结 / 解冻 / 风控 / 查询等辅助链路
+
+  name:
+    required: true
+    desc: 业务用例名
+
+  priority:
+    required: true
+    desc: P0 / P1 / P2
+
+  command_handler:
+    required: true
+    desc: 对应 command handler 名称；查询类也统一放这里
+
+  given_state:
+    required: true
+    desc: 执行该 use case 前需要读取的状态实体
+
+  then_state:
+    required: true
+    desc: >
+      执行该 use case 后实际变更的实体。
+      查询类 use case 使用 []，不要写 '-'
+
+conventions:
+  - 每个 command_handler 对应一个业务 use case
+  - given_state 只写实体名，不展开字段
+  - then_state 只写真正会持久化 / 回放 / 发布 DomainEvent 的实体
+  - 查询类 use case 使用 then_state: []
+  - 分组优先保持 main_flow / market_data_flow / control_query_flow 三段
+  - 如果某产品没有某段链路，保留空数组即可，不要改字段名
+
+example:
+  product: futures
+  use_cases:
+    main_flow:
+      - name: 划入保证金
+        priority: P0
+        command_handler: TransferToFuturesCmdHandler
+        given_state: [Account, Balance]
+        then_state: [Balance, TransferRecord]
+
+      - name: 合约开仓
+        priority: P0
+        command_handler: OpenPositionCmdHandler
+        given_state: [Account, Balance, Position]
+        then_state: [Position, Balance]
+
+    market_data_flow: []
+
+    control_query_flow:
+      - name: 风险检查
+        priority: P1
+        command_handler: ObserveRiskCmdHandler
+        given_state: [Balance, RiskPosition]
+        then_state: [RiskAccount]
+
+      - name: 查询仓位 / 资产 / 风险
+        priority: P2
+        command_handler: QueryFuturesAccountHandler
+        given_state: [Balance, Position, RiskAccount]
+        then_state: []
