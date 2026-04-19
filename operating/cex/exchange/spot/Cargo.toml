@@ -14,30 +14,30 @@ serde = ["base_types/serde", "dep:uuid"]
 # Clean Architecture 依赖
 
 # LOB 仓储依赖
-lob_repo = { path = "../../../../../lib/common/lob_repo" }
-rust_queue = { path = "../../../../../lib/common/rust_queue" }
+lob_repo = { path = "../../../../lib/common/lob_repo" }
+rust_queue = { path = "../../../../lib/common/rust_queue" }
 
-cqrs = { path = "../../../../../lib/common/cqrs" }
+cqrs = { path = "../../../../lib/common/cqrs" }
 
-base_types = { path = "../../../../../lib/common/base_types", features = ["serde"] }
+base_types = { path = "../../../../lib/common/base_types", features = ["serde"] }
 
 # Diff tracking
-diff = { path = "../../../../../lib/common/diff" }
-entity_derive = { path = "../../../../../lib/common/entity_derive" }
-immutable_derive = { path = "../../../../../lib/common/immutable_derive" }
+diff = { path = "../../../../lib/common/diff" }
+entity_derive = { path = "../../../../lib/common/entity_derive" }
+immutable_derive = { path = "../../../../lib/common/immutable_derive" }
 
 # Database repository
-db_repo = { path = "../../../../../lib/common/db_repo" }
+db_repo = { path = "../../../../lib/common/db_repo" }
 
 # ID generator
-id_generator = { path = "../../../../../lib/common/id_generator" }
+id_generator = { path = "../../../../lib/common/id_generator" }
 
 # Push service
 push = { path = "../../push/push" }
 
 # Logging
 log = "0.4"
-cmd_handler = { path = "../../../../../lib/common/cmd_handler" }
+cmd_handler = { path = "../../../../lib/common/cmd_handler" }
 
 async-trait = "0.1.89"
 tokio = "1.48.0"
@@ -63,7 +63,7 @@ anyhow = "1.0.102"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
 chrono = "0.4"
 tracing-subscriber = "0.3"
-bdd = { path = "../../../../../lib/common/bdd" }
+bdd = { path = "../../../../lib/common/bdd" }
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]

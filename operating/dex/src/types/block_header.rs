@@ -37,7 +37,7 @@ pub struct Account {
 
 // 收据结构
 pub struct Receipt {
-    pub tx_type: TxType,           // 交易类型
+    // pub tx_type: TxType,           // 交易类型
     pub success: bool,             // 执行是否成功
     pub cumulative_gas_used: u64,  // 累计Gas使用
     pub logs: Vec<Log>,            // 事件日志
