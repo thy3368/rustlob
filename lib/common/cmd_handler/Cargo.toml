@@ -9,3 +9,4 @@ license.workspace = true
 minstant = "0.1"
 db_repo = { path = "../db_repo" }
 diff = { path = "../diff" }
+tracing = "0.1"

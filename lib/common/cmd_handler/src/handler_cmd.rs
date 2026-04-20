@@ -18,6 +18,10 @@ pub trait DomainEventSet {
     // fn events(&self) -> &[ChangeLog];
 }
 
+
+
+
+
 pub trait CmdHandlerInternal: Send + Sync {
     type Command;
     type Reply;
