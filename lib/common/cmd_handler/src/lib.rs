@@ -5,7 +5,8 @@
 pub mod handler_cmd;
 pub mod handler_query;
 pub mod pipe_line_handler;
-pub mod use_case_draft;
+pub mod use_case_def;
+pub mod use_case_example;
 
 pub use handler_cmd::{
     CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet, HandlerLatencyMetrics,
