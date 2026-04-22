@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexBlockProcessingPackage"
+         Name="DEX Block Processing Split Overview"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>区块处理已拆分为区块执行流程与 HotStuff 共识流程。本文件仅保留拆分说明，避免继续把两个流程域混成一个 WorkflowProcess。</Description>
+    <Documentation>
+      Split overview:
+      - BlockExecutionProcess -> operating/dex/design/flow/dex_block_execution_flow.xpdl
+      - HotStuffConsensusProcess -> operating/dex/design/flow/dex_hotstuff_consensus_flow.xpdl
+      - TradingFlowProcess produces inputs for BlockExecutionProcess
+      - BlockExecutionProcess produces execution proposals for HotStuffConsensusProcess
+    </Documentation>
+  </PackageHeader>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="BlockProcessingSplitOverview" Name="Block Processing Split Overview">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="replaced_by" Value="BlockExecutionProcess, HotStuffConsensusProcess"/>
+        <ExtendedAttribute Name="trading_source_process" Value="TradingFlowProcess"/>
+        <ExtendedAttribute Name="block_execution_file" Value="dex_block_execution_flow.xpdl"/>
+        <ExtendedAttribute Name="consensus_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+      </ExtendedAttributes>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

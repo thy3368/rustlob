@@ -4,7 +4,7 @@
 //     Sell,
 // }
 
-use crate::types::ProductType;
+use crate::entity::ProductType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotSide {

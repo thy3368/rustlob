@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexEndToEndFlowPackage"
+         Name="DEX End-to-End Flow Overview"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>DEX 端到端流程总览。只表达 Trading Flow、Block Execution、HotStuff Consensus 三个流程域之间的组织关系，不替代各流程域自己的 XPDL。</Description>
+    <Documentation>
+      Package-level grouping:
+      - TradingFlowProcess -> produces AcceptedOrderIntents, Trades, ClearingEvents
+      - BlockExecutionProcess -> consumes trading outputs and produces ExecutionProposal, ValidationEvents
+      - HotStuffConsensusProcess -> consumes execution proposal and produces QuorumCertificate, CommittedBlock
+      - Detailed files: dex_trading_flow.xpdl, dex_block_execution_flow.xpdl, dex_hotstuff_consensus_flow.xpdl
+    </Documentation>
+  </PackageHeader>
+
+  <TypeDeclarations>
+    <TypeDeclaration Id="AcceptedOrderIntents" Name="Accepted Order Intents">
+      <BasicType Type="STRING"/>
+      <Description>Trading Flow 接受的订单意图集合摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="Trades" Name="Trades">
+      <BasicType Type="STRING"/>
+      <Description>撮合流程产出的成交集合摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ClearingEvents" Name="Clearing Events">
+      <BasicType Type="STRING"/>
+      <Description>清算流程产出的账户、余额、仓位状态变化事件摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionProposal" Name="Execution Proposal">
+      <BasicType Type="STRING"/>
+      <Description>Block Execution 形成、可进入 HotStuff Consensus 的区块执行提案摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ValidationEvents" Name="Validation Events">
+      <BasicType Type="STRING"/>
+      <Description>验证者对候选区块执行结果的重放验证事件摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="QuorumCertificate" Name="Quorum Certificate">
+      <BasicType Type="STRING"/>
+      <Description>HotStuff 共识达到阈值后形成的认证摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="CommittedBlock" Name="Committed Block">
+      <BasicType Type="STRING"/>
+      <Description>HotStuff 共识提交后的最终确认区块摘要。</Description>
+    </TypeDeclaration>
+  </TypeDeclarations>
+
+  <DataFields>
+    <DataField Id="TradingOutputs" Name="Trading Outputs" IsArray="false">
+      <DataType><BasicType Type="STRING"/></DataType>
+      <Description>AcceptedOrderIntents, Trades, ClearingEvents。</Description>
+    </DataField>
+    <DataField Id="BlockExecutionOutputs" Name="Block Execution Outputs" IsArray="false">
+      <DataType><BasicType Type="STRING"/></DataType>
+      <Description>ExecutionProposal, ValidationEvents。</Description>
+    </DataField>
+    <DataField Id="ConsensusOutputs" Name="Consensus Outputs" IsArray="false">
+      <DataType><BasicType Type="STRING"/></DataType>
+      <Description>QuorumCertificate, CommittedBlock。</Description>
+    </DataField>
+  </DataFields>
+
+  <Participants>
+    <Participant Id="TradingDomain" Name="TradingDomain">
+      <ParticipantType Type="ROLE"/>
+      <Description>Spot/Perp 交易流程域，包含下单、撮合、清算业务活动。</Description>
+    </Participant>
+    <Participant Id="BlockExecutionDomain" Name="BlockExecutionDomain">
+      <ParticipantType Type="ROLE"/>
+      <Description>区块执行流程域，包含候选区块构建与执行验证业务活动。</Description>
+    </Participant>
+    <Participant Id="ConsensusDomain" Name="ConsensusDomain">
+      <ParticipantType Type="ROLE"/>
+      <Description>HotStuff 共识流程域，包含提案、投票、QC 与提交业务活动。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="DexEndToEndFlowOverview" Name="DEX End-to-End Flow Overview">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="level" Value="package_overview"/>
+        <ExtendedAttribute Name="contains" Value="TradingFlowProcess, BlockExecutionProcess, HotStuffConsensusProcess"/>
+        <ExtendedAttribute Name="trading_file" Value="dex_trading_flow.xpdl"/>
+        <ExtendedAttribute Name="block_execution_file" Value="dex_block_execution_flow.xpdl"/>
+        <ExtendedAttribute Name="consensus_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="TradingFlowProcessRef" Name="TradingFlowProcess">
+          <Performer>TradingDomain</Performer>
+          <Description>交易流程域引用。详见 dex_trading_flow.xpdl。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="TradingFlowProcess"/>
+            <ExtendedAttribute Name="source_file" Value="dex_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="produces" Value="AcceptedOrderIntents, Trades, ClearingEvents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="BlockExecutionProcessRef" Name="BlockExecutionProcess">
+          <Performer>BlockExecutionDomain</Performer>
+          <Description>区块执行流程域引用。详见 dex_block_execution_flow.xpdl。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="BlockExecutionProcess"/>
+            <ExtendedAttribute Name="source_file" Value="dex_block_execution_flow.xpdl"/>
+            <ExtendedAttribute Name="consumes" Value="AcceptedOrderIntents, Trades, ClearingEvents"/>
+            <ExtendedAttribute Name="produces" Value="ExecutionProposal, ValidationEvents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="HotStuffConsensusProcessRef" Name="HotStuffConsensusProcess">
+          <Performer>ConsensusDomain</Performer>
+          <Description>HotStuff 共识流程域引用。详见 dex_hotstuff_consensus_flow.xpdl。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="HotStuffConsensusProcess"/>
+            <ExtendedAttribute Name="source_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+            <ExtendedAttribute Name="consumes" Value="ExecutionProposal, ValidationEvents"/>
+            <ExtendedAttribute Name="produces" Value="QuorumCertificate, CommittedBlock"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="TradingFlowProcessRef" Name="trade"/>
+        <Transition Id="T2" From="TradingFlowProcessRef" To="BlockExecutionProcessRef" Name="trading_outputs_ready"/>
+        <Transition Id="T3" From="BlockExecutionProcessRef" To="HotStuffConsensusProcessRef" Name="execution_proposal_ready"/>
+        <Transition Id="T4" From="HotStuffConsensusProcessRef" To="End" Name="block_committed"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

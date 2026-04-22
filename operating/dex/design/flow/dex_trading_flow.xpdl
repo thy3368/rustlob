@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexTradingFlowPackage"
+         Name="DEX Trading Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>Spot/Perp 交易处理流程域。聚焦下单、撮合、清算三个核心 use case。</Description>
+    <Documentation>
+      XPDL-style process grouping:
+      - Package: DexTradingFlowPackage
+      - WorkflowProcess: TradingFlowProcess
+      - Activity: PlaceOrdersUseCase, MatchOrdersUseCase, ClearTradesUseCase
+      - Performer: Trader, Matching, Clearing
+      - Transition: place -> match -> clear
+    </Documentation>
+  </PackageHeader>
+
+  <Participants>
+    <Participant Id="Trader" Name="Trader">
+      <ParticipantType Type="ROLE"/>
+      <Description>提交订单意图的业务参与者。</Description>
+    </Participant>
+    <Participant Id="Matching" Name="Matching">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担订单撮合职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Clearing" Name="Clearing">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担成交清算与账户状态更新职责的业务角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="TradingFlowProcess" Name="Trading Flow Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="bounded_context" Value="Trading Flow Domain"/>
+        <ExtendedAttribute Name="produces" Value="AcceptedOrderIntents, Trades, ClearingEvents"/>
+        <ExtendedAttribute Name="consumed_by" Value="BlockExecutionProcess"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="PlaceOrdersUseCase" Name="PlaceOrdersUseCase">
+          <Performer>Trader</Performer>
+          <Description>交易者提交 spot/perp 订单意图。订单可接受性校验属于该 use case 内部规则，而不是独立 use case。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="Account, Balance, Position, Market, ProductMetadata, PermissionState"/>
+            <ExtendedAttribute Name="outputs" Value="AcceptedOrderIntents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="MatchOrdersUseCase" Name="MatchOrdersUseCase">
+          <Performer>Matching</Performer>
+          <Description>对进入订单簿的订单执行撮合，生成成交结果与订单状态变化。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="OrderBook, MarketState, MatchingRules"/>
+            <ExtendedAttribute Name="outputs" Value="Trades, OrderStateChanges"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ClearTradesUseCase" Name="ClearTradesUseCase">
+          <Performer>Clearing</Performer>
+          <Description>根据成交结果更新资金、仓位和订单状态，产出清算事件。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="TradeSet, AccountState, PositionState, OrderState"/>
+            <ExtendedAttribute Name="outputs" Value="ClearingEvents, BalanceChanges, PositionChanges"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="PlaceOrdersUseCase" Name="submit"/>
+        <Transition Id="T2" From="PlaceOrdersUseCase" To="MatchOrdersUseCase" Name="accepted_for_matching"/>
+        <Transition Id="T3" From="MatchOrdersUseCase" To="ClearTradesUseCase" Name="matched"/>
+        <Transition Id="T4" From="ClearTradesUseCase" To="End" Name="cleared"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

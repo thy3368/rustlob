@@ -1,5 +1,9 @@
 pub mod cmd_handler;
-pub mod types;
+pub mod entity;
+
+
+pub mod use_case;
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }

@@ -133,6 +133,10 @@ impl CommandUseCase for HyperliquidPlaceOrdersUseCase {
     type Error = HyperliquidPlaceOrdersError;
     type LoadPort = dyn HyperliquidPlaceOrdersLoadPort;
 
+    fn actor(&self) -> &'static str {
+        "OrderCheckingEngine"
+    }
+
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.orders.is_empty() {
             return Err(HyperliquidPlaceOrdersError::EmptyOrders);

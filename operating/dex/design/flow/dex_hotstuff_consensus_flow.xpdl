@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexHotStuffConsensusPackage"
+         Name="DEX HotStuff Consensus Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>HotStuff 共识流程域。聚焦新区块提案、投票、形成 quorum certificate 与提交已认证区块。</Description>
+    <Documentation>
+      XPDL-style process grouping:
+      - Package: DexHotStuffConsensusPackage
+      - WorkflowProcess: HotStuffConsensusProcess
+      - Activity: EnterNewViewUseCase, ProposeConsensusBlockUseCase, VoteOnProposalUseCase, FormQuorumCertificateUseCase, CommitCertifiedBlockUseCase
+      - Performer: ConsensusLeader, ValidatorReplica, ValidatorQuorum
+      - Transition: new_view -> propose -> vote -> certify -> commit
+    </Documentation>
+  </PackageHeader>
+
+  <TypeDeclarations>
+    <TypeDeclaration Id="ExecutionProposal" Name="Execution Proposal">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="candidate_hash" Type="STRING"/>
+        <Member Name="state_root" Type="STRING"/>
+        <Member Name="proposal_round" Type="INTEGER"/>
+      </RecordType>
+      <Description>区块执行流程输出、等待进入 HotStuff 共识的区块提案。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ConsensusView" Name="Consensus View">
+      <RecordType>
+        <Member Name="view_number" Type="INTEGER"/>
+        <Member Name="leader" Type="STRING"/>
+        <Member Name="high_qc_hash" Type="STRING"/>
+      </RecordType>
+      <Description>HotStuff 当前视图状态，用于驱动 leader 轮转与提案资格。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ProposalVote" Name="Proposal Vote">
+      <RecordType>
+        <Member Name="validator" Type="STRING"/>
+        <Member Name="proposal_hash" Type="STRING"/>
+        <Member Name="view_number" Type="INTEGER"/>
+      </RecordType>
+      <Description>ValidatorReplica 对提案区块发出的投票。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="QuorumCertificate" Name="Quorum Certificate">
+      <RecordType>
+        <Member Name="proposal_hash" Type="STRING"/>
+        <Member Name="view_number" Type="INTEGER"/>
+        <Member Name="threshold" Type="STRING"/>
+      </RecordType>
+      <Description>达到法定阈值投票后形成的 quorum certificate。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="CertifiedBlock" Name="Certified Block">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="proposal_hash" Type="STRING"/>
+        <Member Name="state_root" Type="STRING"/>
+        <Member Name="certificate_hash" Type="STRING"/>
+      </RecordType>
+      <Description>已获得 quorum certificate、可进入提交阶段的认证区块。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="CommittedBlock" Name="Committed Block">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="state_root" Type="STRING"/>
+        <Member Name="committed_at" Type="DATETIME"/>
+      </RecordType>
+      <Description>通过 HotStuff 共识提交后的最终确认区块。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ChainState" Name="Chain State">
+      <RecordType>
+        <Member Name="height" Type="INTEGER"/>
+        <Member Name="state_root" Type="STRING"/>
+      </RecordType>
+      <Description>共识提交前后的链状态视图。</Description>
+    </TypeDeclaration>
+  </TypeDeclarations>
+
+  <DataFields>
+    <DataField Id="ExecutionProposal" Name="Execution Proposal" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionProposal"/></DataType>
+    </DataField>
+    <DataField Id="ConsensusView" Name="Consensus View" IsArray="false">
+      <DataType><DeclaredType Id="ConsensusView"/></DataType>
+    </DataField>
+    <DataField Id="ProposalVotes" Name="Proposal Votes" IsArray="true">
+      <DataType><DeclaredType Id="ProposalVote"/></DataType>
+    </DataField>
+    <DataField Id="QuorumCertificate" Name="Quorum Certificate" IsArray="false">
+      <DataType><DeclaredType Id="QuorumCertificate"/></DataType>
+    </DataField>
+    <DataField Id="CertifiedBlock" Name="Certified Block" IsArray="false">
+      <DataType><DeclaredType Id="CertifiedBlock"/></DataType>
+    </DataField>
+    <DataField Id="CommittedBlock" Name="Committed Block" IsArray="false">
+      <DataType><DeclaredType Id="CommittedBlock"/></DataType>
+    </DataField>
+    <DataField Id="ChainState" Name="Chain State" IsArray="false">
+      <DataType><DeclaredType Id="ChainState"/></DataType>
+    </DataField>
+  </DataFields>
+
+  <Participants>
+    <Participant Id="ConsensusLeader" Name="ConsensusLeader">
+      <ParticipantType Type="ROLE"/>
+      <Description>当前 HotStuff 视图中负责发起区块提案的业务角色。</Description>
+    </Participant>
+    <Participant Id="ValidatorReplica" Name="ValidatorReplica">
+      <ParticipantType Type="ROLE"/>
+      <Description>对提案区块执行投票并维护本地共识视图的验证者副本角色。</Description>
+    </Participant>
+    <Participant Id="ValidatorQuorum" Name="ValidatorQuorum">
+      <ParticipantType Type="ROLE"/>
+      <Description>达到法定阈值后形成 quorum certificate 并推动最终提交的验证者集合。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="HotStuffConsensusProcess" Name="HotStuff Consensus Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="bounded_context" Value="Consensus Domain"/>
+        <ExtendedAttribute Name="consumes" Value="ExecutionProposal, ValidationEvents"/>
+        <ExtendedAttribute Name="source_process" Value="BlockExecutionProcess"/>
+        <ExtendedAttribute Name="produces" Value="QuorumCertificate, CommittedBlock"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="EnterNewViewUseCase" Name="EnterNewViewUseCase">
+          <Performer>ValidatorReplica</Performer>
+          <Description>进入新的 HotStuff 视图，确认 leader、high QC 与当前共识轮次。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="ConsensusView, QuorumCertificate"/>
+            <ExtendedAttribute Name="outputs" Value="ConsensusView"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ProposeConsensusBlockUseCase" Name="ProposeConsensusBlockUseCase">
+          <Performer>ConsensusLeader</Performer>
+          <Description>当前视图 leader 基于 execution proposal 发起 HotStuff 提案。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="ExecutionProposal, ConsensusView"/>
+            <ExtendedAttribute Name="outputs" Value="CertifiedBlock"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="VoteOnProposalUseCase" Name="VoteOnProposalUseCase">
+          <Performer>ValidatorReplica</Performer>
+          <Description>验证者副本根据 HotStuff 锁规则与本地视图对提案区块投票。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="CertifiedBlock, ConsensusView"/>
+            <ExtendedAttribute Name="outputs" Value="ProposalVotes"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="FormQuorumCertificateUseCase" Name="FormQuorumCertificateUseCase">
+          <Performer>ValidatorQuorum</Performer>
+          <Description>聚合达到阈值的投票，形成 quorum certificate。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="ProposalVotes, ConsensusView"/>
+            <ExtendedAttribute Name="outputs" Value="QuorumCertificate, CertifiedBlock"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="CommitCertifiedBlockUseCase" Name="CommitCertifiedBlockUseCase">
+          <Performer>ValidatorQuorum</Performer>
+          <Description>在 HotStuff 提交条件满足后确认认证区块，并推进链状态。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="CertifiedBlock, QuorumCertificate, ChainState"/>
+            <ExtendedAttribute Name="outputs" Value="CommittedBlock, ChainStateAdvance"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="EnterNewViewUseCase" Name="new_view"/>
+        <Transition Id="T2" From="EnterNewViewUseCase" To="ProposeConsensusBlockUseCase" Name="leader_ready"/>
+        <Transition Id="T3" From="ProposeConsensusBlockUseCase" To="VoteOnProposalUseCase" Name="proposal_broadcast"/>
+        <Transition Id="T4" From="VoteOnProposalUseCase" To="FormQuorumCertificateUseCase" Name="votes_collected"/>
+        <Transition Id="T5" From="FormQuorumCertificateUseCase" To="CommitCertifiedBlockUseCase" Name="qc_formed"/>
+        <Transition Id="T6" From="CommitCertifiedBlockUseCase" To="End" Name="committed"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>
