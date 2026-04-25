@@ -8,6 +8,8 @@ description: >
   识别过度设计、代码解耦、边界划分、模块组织。
 ---
 
+//todo 突出use case的第一优先级 user case+ entity是 core，是一个系统人灵魂
+
 # Clean Architecture Response Rules
 
 When answering architecture questions, use Clean Architecture terminology first, then map it to implementation patterns.
