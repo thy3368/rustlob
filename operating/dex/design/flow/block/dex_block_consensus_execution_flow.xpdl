@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexBlockConsensusExecutionPackage"
+         Name="DEX Block Consensus Execution Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-25</Created>
+    <Description>出块与共识执行流程域。聚焦候选区块构建、验证者重放与发布进入 HotStuff 共识的执行提案边界。</Description>
+    <Documentation>
+      XPDL-style process grouping:
+      - Package: DexBlockConsensusExecutionPackage
+      - WorkflowProcess: BlockConsensusExecutionProcess
+      - Activity: ReceiveAndAdmitTransactionsUseCase, BuildCandidateBlockUseCase, ValidateBlockExecutionUseCase, PublishExecutionProposalUseCase
+      - Performer: IngressGateway, BlockProposer, Validator, ConsensusBridge
+      - Transition: transactions_received -> requests_admitted -> candidate_built -> execution_validated -> execution_proposal_ready
+    </Documentation>
+  </PackageHeader>
+
+  <TypeDeclarations>
+    <TypeDeclaration Id="SignedTransactionRequest" Name="Signed Transaction Request">
+      <RecordType>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="account" Type="STRING"/>
+        <Member Name="nonce" Type="STRING"/>
+        <Member Name="expires_at" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+        <Member Name="signature_hash" Type="STRING"/>
+      </RecordType>
+      <Description>进入执行域前的已签名交易请求引用，可表达 order、cancel、modify、noop 等动作。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="IngressDecision" Name="Ingress Decision">
+      <EnumerationType>
+        <EnumerationValue Name="ADMIT">准入</EnumerationValue>
+        <EnumerationValue Name="REJECT">拒绝</EnumerationValue>
+      </EnumerationType>
+      <Description>入口准入对签名、nonce、过期时间、账户和资产基础约束的判断结果。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="PendingRequest" Name="Pending Request">
+      <RecordType>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="performer" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+      </RecordType>
+      <Description>已通过入口准入、等待进入候选区块构建的请求引用；不展开网络广播、mempool 存储或 API server 实现。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionResult" Name="Execution Result">
+      <RecordType>
+        <Member Name="result_id" Type="STRING"/>
+        <Member Name="source_process" Type="STRING"/>
+        <Member Name="events_hash" Type="STRING"/>
+      </RecordType>
+      <Description>交易流程域产出的可提交执行结果，例如订单接受、成交、清算事件摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="OrderedBlockInput" Name="Ordered Block Input">
+      <RecordType>
+        <Member Name="sequence" Type="INTEGER"/>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+        <Member Name="source_process" Type="STRING"/>
+      </RecordType>
+      <Description>按确定性执行规则排序后的候选区块输入。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="StateRoot" Name="State Root">
+      <BasicType Type="STRING"/>
+      <Description>确定性执行后的状态根，用于提议者产出与验证者重放结果比对。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ChainState" Name="Chain State">
+      <RecordType>
+        <Member Name="height" Type="INTEGER"/>
+        <Member Name="state_root" Type="StateRoot"/>
+      </RecordType>
+      <Description>区块执行前后的链状态视图。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionRuleSet" Name="Execution Rule Set">
+      <RecordType>
+        <Member Name="version" Type="STRING"/>
+        <Member Name="rule_hash" Type="STRING"/>
+      </RecordType>
+      <Description>构建和验证候选区块时使用的确定性执行规则集合。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionTrace" Name="Execution Trace">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="input_root" Type="STRING"/>
+        <Member Name="events_hash" Type="STRING"/>
+        <Member Name="state_diff_hash" Type="STRING"/>
+      </RecordType>
+      <Description>候选区块执行轨迹摘要，用于验证者重放审计。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="StateDiff" Name="State Diff">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="order_book_delta_hash" Type="STRING"/>
+        <Member Name="position_delta_hash" Type="STRING"/>
+        <Member Name="balance_delta_hash" Type="STRING"/>
+        <Member Name="margin_delta_hash" Type="STRING"/>
+      </RecordType>
+      <Description>订单簿、仓位、余额和保证金状态变更摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="CandidateBlock" Name="Candidate Block">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="parent_state_root" Type="StateRoot"/>
+        <Member Name="input_root" Type="STRING"/>
+        <Member Name="state_root" Type="StateRoot"/>
+        <Member Name="execution_trace_hash" Type="STRING"/>
+        <Member Name="state_diff_hash" Type="STRING"/>
+        <Member Name="proposer" Type="STRING"/>
+      </RecordType>
+      <Description>由 BlockProposer 排序并执行后形成的候选区块，等待验证者独立重放验证。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionProposal" Name="Execution Proposal">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="candidate_hash" Type="STRING"/>
+        <Member Name="state_root" Type="StateRoot"/>
+        <Member Name="proposal_round" Type="INTEGER"/>
+      </RecordType>
+      <Description>通过执行验证后，可交给 HotStuff 共识流程处理的区块提案。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ValidationDecision" Name="Validation Decision">
+      <EnumerationType>
+        <EnumerationValue Name="ACCEPT">验证通过</EnumerationValue>
+        <EnumerationValue Name="REJECT">验证拒绝</EnumerationValue>
+      </EnumerationType>
+      <Description>Validator 对候选区块执行结果的业务验证决策。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ValidationEvent" Name="Validation Event">
+      <RecordType>
+        <Member Name="validator" Type="STRING"/>
+        <Member Name="decision" Type="ValidationDecision"/>
+        <Member Name="observed_state_root" Type="StateRoot"/>
+        <Member Name="observed_execution_trace_hash" Type="STRING"/>
+        <Member Name="observed_state_diff_hash" Type="STRING"/>
+      </RecordType>
+      <Description>验证者对候选区块重放后的审计事件。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionProposalReady" Name="Execution Proposal Ready">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="candidate_hash" Type="STRING"/>
+        <Member Name="validation_events_hash" Type="STRING"/>
+      </RecordType>
+      <Description>执行提案已完成验证、可进入 HotStuff 共识流程的边界事件。</Description>
+    </TypeDeclaration>
+  </TypeDeclarations>
+
+  <DataFields>
+    <DataField Id="SignedTransactionRequests" Name="Signed Transaction Requests" IsArray="true">
+      <DataType><DeclaredType Id="SignedTransactionRequest"/></DataType>
+    </DataField>
+    <DataField Id="IngressDecisions" Name="Ingress Decisions" IsArray="true">
+      <DataType><DeclaredType Id="IngressDecision"/></DataType>
+    </DataField>
+    <DataField Id="PendingRequests" Name="Pending Requests" IsArray="true">
+      <DataType><DeclaredType Id="PendingRequest"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionResults" Name="Execution Results" IsArray="true">
+      <DataType><DeclaredType Id="ExecutionResult"/></DataType>
+    </DataField>
+    <DataField Id="OrderedBlockInputs" Name="Ordered Block Inputs" IsArray="true">
+      <DataType><DeclaredType Id="OrderedBlockInput"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionTrace" Name="Execution Trace" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionTrace"/></DataType>
+    </DataField>
+    <DataField Id="StateDiff" Name="State Diff" IsArray="false">
+      <DataType><DeclaredType Id="StateDiff"/></DataType>
+    </DataField>
+    <DataField Id="CandidateBlock" Name="Candidate Block" IsArray="false">
+      <DataType><DeclaredType Id="CandidateBlock"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionProposal" Name="Execution Proposal" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionProposal"/></DataType>
+    </DataField>
+    <DataField Id="ChainState" Name="Chain State" IsArray="false">
+      <DataType><DeclaredType Id="ChainState"/></DataType>
+    </DataField>
+    <DataField Id="LocalChainState" Name="Local Chain State" IsArray="false">
+      <DataType><DeclaredType Id="ChainState"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionRules" Name="Execution Rules" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionRuleSet"/></DataType>
+    </DataField>
+    <DataField Id="ValidationEvents" Name="Validation Events" IsArray="true">
+      <DataType><DeclaredType Id="ValidationEvent"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionProposalReady" Name="Execution Proposal Ready" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionProposalReady"/></DataType>
+    </DataField>
+  </DataFields>
+
+  <Participants>
+    <Participant Id="IngressGateway" Name="IngressGateway">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担签名交易请求接收、准入校验与归一化职责的入口边界角色。</Description>
+    </Participant>
+    <Participant Id="BlockProposer" Name="BlockProposer">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担候选区块确定性排序、执行和组装职责的出块角色。</Description>
+    </Participant>
+    <Participant Id="Validator" Name="Validator">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担候选区块独立重放与执行验证职责的验证角色。</Description>
+    </Participant>
+    <Participant Id="ConsensusBridge" Name="ConsensusBridge">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担把验证后的 execution proposal 发布到 HotStuff 共识流程边界的角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="BlockConsensusExecutionProcess" Name="Block Consensus Execution Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="bounded_context" Value="Block Execution Domain"/>
+        <ExtendedAttribute Name="execution_mode" Value="consensus"/>
+        <ExtendedAttribute Name="consumes" Value="SignedTransactionRequests, AcceptedOrderIntents, Trades, ClearingEvents"/>
+        <ExtendedAttribute Name="source_process" Value="TradingFlowProcess"/>
+        <ExtendedAttribute Name="produces" Value="ExecutionProposal, ValidationEvents, ExecutionProposalReady"/>
+        <ExtendedAttribute Name="consumed_by" Value="HotStuffConsensusProcess"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="ReceiveAndAdmitTransactionsUseCase" Name="ReceiveAndAdmitTransactionsUseCase">
+          <Performer>IngressGateway</Performer>
+          <Description>接收已签名交易请求，校验 signature、nonce、expires_at、账户、资产和请求类型约束，并归一化为可进入候选区块构建的 pending requests；不展开 HTTP、WebSocket、mempool 或 network broadcast 实现。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="SignedTransactionRequests, ChainState"/>
+            <ExtendedAttribute Name="outputs" Value="PendingRequests, IngressDecisions"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="BuildCandidateBlockUseCase" Name="BuildCandidateBlockUseCase">
+          <Performer>BlockProposer</Performer>
+          <Description>对 pending requests 做确定性排序，执行区块输入，应用撮合、成交、清算事件，在关键点重检保证金，生成 execution trace、state diff 与 state root，并组装 candidate block 和 execution proposal。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="PendingRequests, ExecutionResults, ChainState, ExecutionRules"/>
+            <ExtendedAttribute Name="internal_steps" Value="order_block_inputs, execute_transactions, produce_state_diff, calculate_state_root, build_candidate_block, build_execution_proposal"/>
+            <ExtendedAttribute Name="outputs" Value="CandidateBlock, ExecutionProposal, OrderedBlockInputs, ExecutionTrace, StateDiff, StateRoot"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ValidateBlockExecutionUseCase" Name="ValidateBlockExecutionUseCase">
+          <Performer>Validator</Performer>
+          <Description>独立重放候选区块，比较 state root、execution trace hash 和 state diff hash，并决定该 execution proposal 是否可进入共识流程。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="CandidateBlock, OrderedBlockInputs, LocalChainState, ExecutionRules"/>
+            <ExtendedAttribute Name="outputs" Value="ValidationDecision, ValidationEvents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="PublishExecutionProposalUseCase" Name="PublishExecutionProposalUseCase">
+          <Performer>ConsensusBridge</Performer>
+          <Description>仅在验证通过后发布 execution_proposal_ready 边界事件，把 ExecutionProposal 和 ValidationEvents 交给 HotStuffConsensusProcess 消费；不展开 HotStuff propose、vote、QC 或 commit 细节。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="ExecutionProposal, ValidationEvents"/>
+            <ExtendedAttribute Name="outputs" Value="ExecutionProposalReady"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="ReceiveAndAdmitTransactionsUseCase" Name="transactions_received"/>
+        <Transition Id="T2" From="ReceiveAndAdmitTransactionsUseCase" To="BuildCandidateBlockUseCase" Name="requests_admitted"/>
+        <Transition Id="T3" From="BuildCandidateBlockUseCase" To="ValidateBlockExecutionUseCase" Name="candidate_built"/>
+        <Transition Id="T4" From="ValidateBlockExecutionUseCase" To="PublishExecutionProposalUseCase" Name="execution_validated"/>
+        <Transition Id="T5" From="PublishExecutionProposalUseCase" To="End" Name="execution_proposal_ready"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

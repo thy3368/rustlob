@@ -14,8 +14,8 @@
     <Description>区块处理已拆分为区块执行流程与 HotStuff 共识流程。本文件仅保留拆分说明，避免继续把两个流程域混成一个 WorkflowProcess。</Description>
     <Documentation>
       Split overview:
-      - BlockExecutionProcess -> operating/dex/design/flow/dex_block_execution_flow.xpdl
-      - HotStuffConsensusProcess -> operating/dex/design/flow/dex_hotstuff_consensus_flow.xpdl
+      - BlockExecutionProcess -> operating/dex/design/flow/block/dex_block_execution_flow.xpdl
+      - HotStuffConsensusProcess -> operating/dex/design/flow/consensus/dex_hotstuff_consensus_flow.xpdl
       - TradingFlowProcess produces inputs for BlockExecutionProcess
       - BlockExecutionProcess produces execution proposals for HotStuffConsensusProcess
     </Documentation>
@@ -28,8 +28,8 @@
       <ExtendedAttributes>
         <ExtendedAttribute Name="replaced_by" Value="BlockExecutionProcess, HotStuffConsensusProcess"/>
         <ExtendedAttribute Name="trading_source_process" Value="TradingFlowProcess"/>
-        <ExtendedAttribute Name="block_execution_file" Value="dex_block_execution_flow.xpdl"/>
-        <ExtendedAttribute Name="consensus_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+        <ExtendedAttribute Name="block_execution_file" Value="block/dex_block_execution_flow.xpdl"/>
+        <ExtendedAttribute Name="consensus_file" Value="consensus/dex_hotstuff_consensus_flow.xpdl"/>
       </ExtendedAttributes>
     </WorkflowProcess>
   </WorkflowProcesses>

@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexBlockExecutionPackage"
+         Name="DEX Block Execution Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>单节点区块执行流程域。聚焦交易请求准入、确定性区块执行、本地状态提交与事件发布。</Description>
+    <Documentation>
+      XPDL-style process grouping:
+      - Package: DexBlockExecutionPackage
+      - WorkflowProcess: SingleNodeBlockExecutionProcess
+      - Activity: ReceiveAndAdmitTransactionsUseCase, ExecuteAndCommitBlockUseCase
+      - Performer: IngressGateway, BlockExecutor
+      - Transition: transactions_received -> requests_admitted -> block_committed
+    </Documentation>
+  </PackageHeader>
+
+  <TypeDeclarations>
+    <TypeDeclaration Id="SignedTransactionRequest" Name="Signed Transaction Request">
+      <RecordType>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="account" Type="STRING"/>
+        <Member Name="nonce" Type="STRING"/>
+        <Member Name="expires_at" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+        <Member Name="signature_hash" Type="STRING"/>
+      </RecordType>
+      <Description>进入执行域前的已签名交易请求引用，可表达 order、cancel、modify、noop 等动作。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="IngressDecision" Name="Ingress Decision">
+      <EnumerationType>
+        <EnumerationValue Name="ADMIT">准入</EnumerationValue>
+        <EnumerationValue Name="REJECT">拒绝</EnumerationValue>
+      </EnumerationType>
+      <Description>入口准入对签名、nonce、过期时间、账户和资产基础约束的判断结果。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="PendingRequest" Name="Pending Request">
+      <RecordType>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="performer" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+      </RecordType>
+      <Description>已通过入口准入、等待进入区块执行域的请求引用；不展开网络广播、mempool 存储或 API server 实现。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionResult" Name="Execution Result">
+      <RecordType>
+        <Member Name="result_id" Type="STRING"/>
+        <Member Name="source_process" Type="STRING"/>
+        <Member Name="events_hash" Type="STRING"/>
+      </RecordType>
+      <Description>交易流程域产出的可提交执行结果，例如订单接受、成交、清算事件摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="OrderedBlockInput" Name="Ordered Block Input">
+      <RecordType>
+        <Member Name="sequence" Type="INTEGER"/>
+        <Member Name="request_id" Type="STRING"/>
+        <Member Name="action_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+        <Member Name="source_process" Type="STRING"/>
+      </RecordType>
+      <Description>按确定性执行规则排序后的区块输入。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="StateRoot" Name="State Root">
+      <BasicType Type="STRING"/>
+      <Description>确定性执行后的状态根。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ChainState" Name="Chain State">
+      <RecordType>
+        <Member Name="height" Type="INTEGER"/>
+        <Member Name="state_root" Type="StateRoot"/>
+      </RecordType>
+      <Description>区块执行前后的链状态视图。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionRuleSet" Name="Execution Rule Set">
+      <RecordType>
+        <Member Name="version" Type="STRING"/>
+        <Member Name="rule_hash" Type="STRING"/>
+      </RecordType>
+      <Description>区块执行时使用的确定性执行规则集合。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="ExecutionTrace" Name="Execution Trace">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="input_root" Type="STRING"/>
+        <Member Name="events_hash" Type="STRING"/>
+        <Member Name="state_diff_hash" Type="STRING"/>
+      </RecordType>
+      <Description>区块执行轨迹摘要，用于审计确定性排序、交易执行和状态变更。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="StateDiff" Name="State Diff">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="order_book_delta_hash" Type="STRING"/>
+        <Member Name="position_delta_hash" Type="STRING"/>
+        <Member Name="balance_delta_hash" Type="STRING"/>
+        <Member Name="margin_delta_hash" Type="STRING"/>
+      </RecordType>
+      <Description>订单簿、仓位、余额和保证金状态变更摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="CommittedBlock" Name="Committed Block">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="input_root" Type="STRING"/>
+        <Member Name="state_root" Type="StateRoot"/>
+        <Member Name="execution_trace_hash" Type="STRING"/>
+        <Member Name="state_diff_hash" Type="STRING"/>
+      </RecordType>
+      <Description>单节点模式下已直接提交为 canonical local state 的区块。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="BlockEvent" Name="Block Event">
+      <RecordType>
+        <Member Name="event_id" Type="STRING"/>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="event_type" Type="STRING"/>
+        <Member Name="payload_hash" Type="STRING"/>
+      </RecordType>
+      <Description>对外发布的订单、成交、账户或区块执行事件摘要。</Description>
+    </TypeDeclaration>
+
+    <TypeDeclaration Id="NodeStateUpdate" Name="Node State Update">
+      <RecordType>
+        <Member Name="block_height" Type="INTEGER"/>
+        <Member Name="state_root" Type="StateRoot"/>
+        <Member Name="update_hash" Type="STRING"/>
+      </RecordType>
+      <Description>供节点本地状态流消费的执行输出摘要。</Description>
+    </TypeDeclaration>
+  </TypeDeclarations>
+
+  <DataFields>
+    <DataField Id="SignedTransactionRequests" Name="Signed Transaction Requests" IsArray="true">
+      <DataType><DeclaredType Id="SignedTransactionRequest"/></DataType>
+    </DataField>
+    <DataField Id="IngressDecisions" Name="Ingress Decisions" IsArray="true">
+      <DataType><DeclaredType Id="IngressDecision"/></DataType>
+    </DataField>
+    <DataField Id="PendingRequests" Name="Pending Requests" IsArray="true">
+      <DataType><DeclaredType Id="PendingRequest"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionResults" Name="Execution Results" IsArray="true">
+      <DataType><DeclaredType Id="ExecutionResult"/></DataType>
+    </DataField>
+    <DataField Id="OrderedBlockInputs" Name="Ordered Block Inputs" IsArray="true">
+      <DataType><DeclaredType Id="OrderedBlockInput"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionTrace" Name="Execution Trace" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionTrace"/></DataType>
+    </DataField>
+    <DataField Id="StateDiff" Name="State Diff" IsArray="false">
+      <DataType><DeclaredType Id="StateDiff"/></DataType>
+    </DataField>
+    <DataField Id="CommittedBlock" Name="Committed Block" IsArray="false">
+      <DataType><DeclaredType Id="CommittedBlock"/></DataType>
+    </DataField>
+    <DataField Id="BlockEvents" Name="Block Events" IsArray="true">
+      <DataType><DeclaredType Id="BlockEvent"/></DataType>
+    </DataField>
+    <DataField Id="NodeStateUpdates" Name="Node State Updates" IsArray="true">
+      <DataType><DeclaredType Id="NodeStateUpdate"/></DataType>
+    </DataField>
+    <DataField Id="ChainState" Name="Chain State" IsArray="false">
+      <DataType><DeclaredType Id="ChainState"/></DataType>
+    </DataField>
+    <DataField Id="ExecutionRules" Name="Execution Rules" IsArray="false">
+      <DataType><DeclaredType Id="ExecutionRuleSet"/></DataType>
+    </DataField>
+  </DataFields>
+
+  <Participants>
+    <Participant Id="IngressGateway" Name="IngressGateway">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担签名交易请求接收、准入校验与归一化职责的入口边界角色。</Description>
+    </Participant>
+    <Participant Id="BlockExecutor" Name="BlockExecutor">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担单节点确定性排序、区块执行、本地状态提交与事件发布职责的执行角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="SingleNodeBlockExecutionProcess" Name="Single Node Block Execution Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="bounded_context" Value="Block Execution Domain"/>
+        <ExtendedAttribute Name="execution_mode" Value="single_node"/>
+        <ExtendedAttribute Name="consumes" Value="SignedTransactionRequests, AcceptedOrderIntents, Trades, ClearingEvents"/>
+        <ExtendedAttribute Name="source_process" Value="TradingFlowProcess"/>
+        <ExtendedAttribute Name="produces" Value="CommittedBlock, BlockEvents, NodeStateUpdates"/>
+        <ExtendedAttribute Name="future_extension" Value="DexBlockConsensusExecutionPackage"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="ReceiveAndAdmitTransactionsUseCase" Name="ReceiveAndAdmitTransactionsUseCase">
+          <Performer>IngressGateway</Performer>
+          <Description>接收已签名交易请求，校验 signature、nonce、expires_at、账户、资产和请求类型约束，并归一化为可进入执行域的 pending requests；不展开 HTTP、WebSocket、mempool 或 network broadcast 实现。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="SignedTransactionRequests, ChainState"/>
+            <ExtendedAttribute Name="outputs" Value="PendingRequests, IngressDecisions"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ExecuteAndCommitBlockUseCase" Name="ExecuteAndCommitBlockUseCase">
+          <Performer>BlockExecutor</Performer>
+          <Description>对 pending requests 做确定性排序，执行 order、cancel、modify、noop 等区块输入，应用撮合、成交、清算事件，在关键点重检保证金，更新订单簿、仓位、余额和保证金状态，生成 execution trace、state diff 与 state root，并直接提交为单节点 canonical local state 后发布区块事件。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="given_state" Value="PendingRequests, ExecutionResults, ChainState, ExecutionRules"/>
+            <ExtendedAttribute Name="internal_steps" Value="order_block_inputs, execute_transactions, produce_state_diff, calculate_state_root, commit_local_state, publish_block_events"/>
+            <ExtendedAttribute Name="outputs" Value="CommittedBlock, OrderedBlockInputs, ExecutionTrace, StateDiff, StateRoot, BlockEvents, NodeStateUpdates"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="T1" From="Start" To="ReceiveAndAdmitTransactionsUseCase" Name="transactions_received"/>
+        <Transition Id="T2" From="ReceiveAndAdmitTransactionsUseCase" To="ExecuteAndCommitBlockUseCase" Name="requests_admitted"/>
+        <Transition Id="T3" From="ExecuteAndCommitBlockUseCase" To="End" Name="block_committed"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

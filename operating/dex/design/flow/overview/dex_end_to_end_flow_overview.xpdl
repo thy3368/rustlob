@@ -17,7 +17,7 @@
       - TradingFlowProcess -> produces AcceptedOrderIntents, Trades, ClearingEvents
       - BlockExecutionProcess -> consumes trading outputs and produces ExecutionProposal, ValidationEvents
       - HotStuffConsensusProcess -> consumes execution proposal and produces QuorumCertificate, CommittedBlock
-      - Detailed files: dex_trading_flow.xpdl, dex_block_execution_flow.xpdl, dex_hotstuff_consensus_flow.xpdl
+      - Detailed files: trading/dex_trading_flow.xpdl, block/dex_block_execution_flow.xpdl, consensus/dex_hotstuff_consensus_flow.xpdl
     </Documentation>
   </PackageHeader>
 
@@ -95,9 +95,9 @@
       <ExtendedAttributes>
         <ExtendedAttribute Name="level" Value="package_overview"/>
         <ExtendedAttribute Name="contains" Value="TradingFlowProcess, BlockExecutionProcess, HotStuffConsensusProcess"/>
-        <ExtendedAttribute Name="trading_file" Value="dex_trading_flow.xpdl"/>
-        <ExtendedAttribute Name="block_execution_file" Value="dex_block_execution_flow.xpdl"/>
-        <ExtendedAttribute Name="consensus_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+        <ExtendedAttribute Name="trading_file" Value="trading/dex_trading_flow.xpdl"/>
+        <ExtendedAttribute Name="block_execution_file" Value="block/dex_block_execution_flow.xpdl"/>
+        <ExtendedAttribute Name="consensus_file" Value="consensus/dex_hotstuff_consensus_flow.xpdl"/>
       </ExtendedAttributes>
 
       <Activities>
@@ -107,20 +107,20 @@
 
         <Activity Id="TradingFlowProcessRef" Name="TradingFlowProcess">
           <Performer>TradingDomain</Performer>
-          <Description>交易流程域引用。详见 dex_trading_flow.xpdl。</Description>
+          <Description>交易流程域引用。详见 trading/dex_trading_flow.xpdl。</Description>
           <ExtendedAttributes>
             <ExtendedAttribute Name="process_ref" Value="TradingFlowProcess"/>
-            <ExtendedAttribute Name="source_file" Value="dex_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="source_file" Value="trading/dex_trading_flow.xpdl"/>
             <ExtendedAttribute Name="produces" Value="AcceptedOrderIntents, Trades, ClearingEvents"/>
           </ExtendedAttributes>
         </Activity>
 
         <Activity Id="BlockExecutionProcessRef" Name="BlockExecutionProcess">
           <Performer>BlockExecutionDomain</Performer>
-          <Description>区块执行流程域引用。详见 dex_block_execution_flow.xpdl。</Description>
+          <Description>区块执行流程域引用。详见 block/dex_block_execution_flow.xpdl。</Description>
           <ExtendedAttributes>
             <ExtendedAttribute Name="process_ref" Value="BlockExecutionProcess"/>
-            <ExtendedAttribute Name="source_file" Value="dex_block_execution_flow.xpdl"/>
+            <ExtendedAttribute Name="source_file" Value="block/dex_block_execution_flow.xpdl"/>
             <ExtendedAttribute Name="consumes" Value="AcceptedOrderIntents, Trades, ClearingEvents"/>
             <ExtendedAttribute Name="produces" Value="ExecutionProposal, ValidationEvents"/>
           </ExtendedAttributes>
@@ -128,10 +128,10 @@
 
         <Activity Id="HotStuffConsensusProcessRef" Name="HotStuffConsensusProcess">
           <Performer>ConsensusDomain</Performer>
-          <Description>HotStuff 共识流程域引用。详见 dex_hotstuff_consensus_flow.xpdl。</Description>
+          <Description>HotStuff 共识流程域引用。详见 consensus/dex_hotstuff_consensus_flow.xpdl。</Description>
           <ExtendedAttributes>
             <ExtendedAttribute Name="process_ref" Value="HotStuffConsensusProcess"/>
-            <ExtendedAttribute Name="source_file" Value="dex_hotstuff_consensus_flow.xpdl"/>
+            <ExtendedAttribute Name="source_file" Value="consensus/dex_hotstuff_consensus_flow.xpdl"/>
             <ExtendedAttribute Name="consumes" Value="ExecutionProposal, ValidationEvents"/>
             <ExtendedAttribute Name="produces" Value="QuorumCertificate, CommittedBlock"/>
           </ExtendedAttributes>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexPerpetualFuturesTradingFlowPackage"
+         Name="DEX Perpetual Futures Trading Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>DEX 永续/交割合约交易 L3 流程。覆盖合约下单、撮合、保证金、资金费率、交割和强平相关清算。</Description>
+    <Documentation>
+      Product trading flow split from DexTradingFlowPackage.
+      - Source group: trading/dex_trading_flow.xpdl
+      - WorkflowProcess: PerpetualFuturesTradingFlowProcess
+      - Common capabilities: PlaceOrders, MatchOrders, ClearTrades
+    </Documentation>
+  </PackageHeader>
+
+  <Participants>
+    <Participant Id="Trader" Name="Trader">
+      <ParticipantType Type="ROLE"/>
+      <Description>提交订单意图的业务参与者。</Description>
+    </Participant>
+    <Participant Id="Matching" Name="Matching">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担订单撮合职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Clearing" Name="Clearing">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担成交清算与账户状态更新职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Risk" Name="Risk">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担保证金、风险参数、强平和到期风险约束的业务角色。</Description>
+    </Participant>
+    <Participant Id="Oracle" Name="Oracle">
+      <ParticipantType Type="ROLE"/>
+      <Description>提供事件结果、标记价格、到期价格等结算输入的业务角色。</Description>
+    </Participant>
+    <Participant Id="Settlement" Name="Settlement">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担产品结算、赔付分配与最终状态确认职责的业务角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="PerpetualFuturesTradingFlowProcess" Name="Perpetual Futures Trading Flow Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="level" Value="L3"/>
+        <ExtendedAttribute Name="product_type" Value="perpetual_futures"/>
+        <ExtendedAttribute Name="produces" Value="AcceptedPerpetualFuturesOrderIntents, PerpetualFuturesTrades, PerpetualFuturesClearingEvents"/>
+        <ExtendedAttribute Name="consumed_by" Value="BlockExecutionProcess"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="PerpetualFuturesStart" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="PlacePerpetualFuturesOrdersUseCase" Name="PlacePerpetualFuturesOrdersUseCase">
+          <Performer>Trader</Performer>
+          <Description>交易者提交永续/交割合约订单意图，校验保证金、仓位、市场和产品风险参数。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="PlaceOrders"/>
+            <ExtendedAttribute Name="product_type" Value="perpetual_futures"/>
+            <ExtendedAttribute Name="margin_required" Value="true"/>
+            <ExtendedAttribute Name="funding_rate" Value="perpetual_only"/>
+            <ExtendedAttribute Name="given_state" Value="Account, MarginBalance, Position, DerivativesMarket, ProductRiskParameters, PermissionState"/>
+            <ExtendedAttribute Name="outputs" Value="AcceptedPerpetualFuturesOrderIntents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="MatchPerpetualFuturesOrdersUseCase" Name="MatchPerpetualFuturesOrdersUseCase">
+          <Performer>Matching</Performer>
+          <Description>对永续/交割合约订单簿执行撮合，生成合约成交、仓位变化和订单状态变化。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="MatchOrders"/>
+            <ExtendedAttribute Name="product_type" Value="perpetual_futures"/>
+            <ExtendedAttribute Name="given_state" Value="PerpetualFuturesOrderBook, MarkPrice, MatchingRules, RiskLimits"/>
+            <ExtendedAttribute Name="outputs" Value="PerpetualFuturesTrades, PositionStateChanges, OrderStateChanges"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ClearPerpetualFuturesTradesUseCase" Name="ClearPerpetualFuturesTradesUseCase">
+          <Performer>Clearing</Performer>
+          <Description>根据合约成交更新保证金、仓位和订单状态，并纳入资金费率、交割或强平相关事件。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="ClearTrades"/>
+            <ExtendedAttribute Name="product_type" Value="perpetual_futures"/>
+            <ExtendedAttribute Name="settlement_type" Value="margin_position"/>
+            <ExtendedAttribute Name="given_state" Value="PerpetualFuturesTradeSet, AccountState, MarginState, PositionState, FundingState"/>
+            <ExtendedAttribute Name="outputs" Value="PerpetualFuturesClearingEvents, MarginChanges, PositionChanges, FundingEvents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="PerpetualFuturesEnd" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="TPerpFutures1" From="PerpetualFuturesStart" To="PlacePerpetualFuturesOrdersUseCase" Name="submit_perpetual_futures_order"/>
+        <Transition Id="TPerpFutures2" From="PlacePerpetualFuturesOrdersUseCase" To="MatchPerpetualFuturesOrdersUseCase" Name="accepted_for_perpetual_futures_matching"/>
+        <Transition Id="TPerpFutures3" From="MatchPerpetualFuturesOrdersUseCase" To="ClearPerpetualFuturesTradesUseCase" Name="perpetual_futures_matched"/>
+        <Transition Id="TPerpFutures4" From="ClearPerpetualFuturesTradesUseCase" To="PerpetualFuturesEnd" Name="perpetual_futures_cleared"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

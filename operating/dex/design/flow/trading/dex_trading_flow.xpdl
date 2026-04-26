@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexTradingFlowPackage"
+         Name="DEX Trading Flow Group"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>DEX 交易流程组。作为 L2 流程包索引现货、永续/交割合约、期权、事件交易等独立 L3 产品交易流程文件。</Description>
+    <Documentation>
+      XPDL-style process grouping:
+      - Package: DexTradingFlowPackage as L2 trading flow group
+      - Overview: TradingFlowOverviewProcess indexes product trading processes
+      - WorkflowProcess references: SpotTradingFlowProcess, PerpetualFuturesTradingFlowProcess, OptionsTradingFlowProcess, EventTradingFlowProcess
+      - Detailed files: trading/dex_spot_trading_flow.xpdl, trading/dex_perpetual_futures_trading_flow.xpdl, trading/dex_options_trading_flow.xpdl, trading/dex_event_trading_flow.xpdl
+      - Common capabilities: PlaceOrders, MatchOrders, ClearTrades
+    </Documentation>
+  </PackageHeader>
+
+  <Participants>
+    <Participant Id="Trader" Name="Trader">
+      <ParticipantType Type="ROLE"/>
+      <Description>提交订单意图的业务参与者。</Description>
+    </Participant>
+    <Participant Id="Matching" Name="Matching">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担订单撮合职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Clearing" Name="Clearing">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担成交清算与账户状态更新职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Risk" Name="Risk">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担保证金、风险参数、强平和到期风险约束的业务角色。</Description>
+    </Participant>
+    <Participant Id="Oracle" Name="Oracle">
+      <ParticipantType Type="ROLE"/>
+      <Description>提供事件结果、标记价格、到期价格等结算输入的业务角色。</Description>
+    </Participant>
+    <Participant Id="Settlement" Name="Settlement">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担产品结算、赔付分配与最终状态确认职责的业务角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="TradingFlowOverviewProcess" Name="Trading Flow Overview Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="level" Value="package_overview"/>
+        <ExtendedAttribute Name="replaces" Value="TradingFlowProcess"/>
+        <ExtendedAttribute Name="contains" Value="SpotTradingFlowProcess, PerpetualFuturesTradingFlowProcess, OptionsTradingFlowProcess, EventTradingFlowProcess"/>
+        <ExtendedAttribute Name="bounded_context" Value="Trading Flow Domain"/>
+        <ExtendedAttribute Name="consumed_by" Value="BlockExecutionProcess"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="Start" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="SpotTradingFlowProcessRef" Name="SpotTradingFlowProcess">
+          <Performer>Trader</Performer>
+          <Description>现货交易流程引用。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="SpotTradingFlowProcess"/>
+            <ExtendedAttribute Name="source_file" Value="trading/dex_spot_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="product_type" Value="spot"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="PerpetualFuturesTradingFlowProcessRef" Name="PerpetualFuturesTradingFlowProcess">
+          <Performer>Risk</Performer>
+          <Description>永续/交割合约交易流程引用。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="PerpetualFuturesTradingFlowProcess"/>
+            <ExtendedAttribute Name="source_file" Value="trading/dex_perpetual_futures_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="product_type" Value="perpetual_futures"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="OptionsTradingFlowProcessRef" Name="OptionsTradingFlowProcess">
+          <Performer>Risk</Performer>
+          <Description>期权交易流程引用。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="OptionsTradingFlowProcess"/>
+            <ExtendedAttribute Name="source_file" Value="trading/dex_options_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="product_type" Value="options"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="EventTradingFlowProcessRef" Name="EventTradingFlowProcess">
+          <Performer>Oracle</Performer>
+          <Description>事件交易流程引用。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="process_ref" Value="EventTradingFlowProcess"/>
+            <ExtendedAttribute Name="source_file" Value="trading/dex_event_trading_flow.xpdl"/>
+            <ExtendedAttribute Name="product_type" Value="event_trading"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="End" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="TOverview1" From="Start" To="SpotTradingFlowProcessRef" Name="contains_spot"/>
+        <Transition Id="TOverview2" From="SpotTradingFlowProcessRef" To="PerpetualFuturesTradingFlowProcessRef" Name="contains_perpetual_futures"/>
+        <Transition Id="TOverview3" From="PerpetualFuturesTradingFlowProcessRef" To="OptionsTradingFlowProcessRef" Name="contains_options"/>
+        <Transition Id="TOverview4" From="OptionsTradingFlowProcessRef" To="EventTradingFlowProcessRef" Name="contains_event_trading"/>
+        <Transition Id="TOverview5" From="EventTradingFlowProcessRef" To="End" Name="overview_complete"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>

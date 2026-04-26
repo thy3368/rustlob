@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xpdl="http://www.wfmc.org/2009/XPDL2.2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.wfmc.org/2009/XPDL2.2 http://www.wfmc.org/standards/docs/bpmnxpdl_40.xsd"
+         Id="DexOptionsTradingFlowPackage"
+         Name="DEX Options Trading Flow"
+         Version="1.0">
+
+  <PackageHeader>
+    <XPDLVersion>2.2</XPDLVersion>
+    <Vendor>RustLOB</Vendor>
+    <Created>2026-04-21</Created>
+    <Description>DEX 期权交易 L3 流程。覆盖期权下单、撮合、权利金、行权/到期和风险参数相关清算。</Description>
+    <Documentation>
+      Product trading flow split from DexTradingFlowPackage.
+      - Source group: trading/dex_trading_flow.xpdl
+      - WorkflowProcess: OptionsTradingFlowProcess
+      - Common capabilities: PlaceOrders, MatchOrders, ClearTrades
+    </Documentation>
+  </PackageHeader>
+
+  <Participants>
+    <Participant Id="Trader" Name="Trader">
+      <ParticipantType Type="ROLE"/>
+      <Description>提交订单意图的业务参与者。</Description>
+    </Participant>
+    <Participant Id="Matching" Name="Matching">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担订单撮合职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Clearing" Name="Clearing">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担成交清算与账户状态更新职责的业务角色。</Description>
+    </Participant>
+    <Participant Id="Risk" Name="Risk">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担保证金、风险参数、强平和到期风险约束的业务角色。</Description>
+    </Participant>
+    <Participant Id="Oracle" Name="Oracle">
+      <ParticipantType Type="ROLE"/>
+      <Description>提供事件结果、标记价格、到期价格等结算输入的业务角色。</Description>
+    </Participant>
+    <Participant Id="Settlement" Name="Settlement">
+      <ParticipantType Type="ROLE"/>
+      <Description>承担产品结算、赔付分配与最终状态确认职责的业务角色。</Description>
+    </Participant>
+  </Participants>
+
+  <WorkflowProcesses>
+    <WorkflowProcess Id="OptionsTradingFlowProcess" Name="Options Trading Flow Process">
+      <ProcessHeader DurationUnit="s"/>
+      <RedefinableHeader PublicationStatus="UNDER_REVISION"/>
+      <ExtendedAttributes>
+        <ExtendedAttribute Name="level" Value="L3"/>
+        <ExtendedAttribute Name="product_type" Value="options"/>
+        <ExtendedAttribute Name="produces" Value="AcceptedOptionsOrderIntents, OptionsTrades, OptionsClearingEvents"/>
+        <ExtendedAttribute Name="consumed_by" Value="BlockExecutionProcess"/>
+      </ExtendedAttributes>
+
+      <Activities>
+        <Activity Id="OptionsStart" Name="Start">
+          <Route/>
+        </Activity>
+
+        <Activity Id="PlaceOptionsOrdersUseCase" Name="PlaceOptionsOrdersUseCase">
+          <Performer>Trader</Performer>
+          <Description>交易者提交期权订单意图，校验权利金、到期日、行权规则和风险参数。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="PlaceOrders"/>
+            <ExtendedAttribute Name="product_type" Value="options"/>
+            <ExtendedAttribute Name="expiry" Value="required"/>
+            <ExtendedAttribute Name="given_state" Value="Account, PremiumBalance, OptionSeries, VolatilityParameters, PermissionState"/>
+            <ExtendedAttribute Name="outputs" Value="AcceptedOptionsOrderIntents"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="MatchOptionsOrdersUseCase" Name="MatchOptionsOrdersUseCase">
+          <Performer>Matching</Performer>
+          <Description>对期权订单簿执行撮合，生成期权成交、权利金变化和订单状态变化。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="MatchOrders"/>
+            <ExtendedAttribute Name="product_type" Value="options"/>
+            <ExtendedAttribute Name="given_state" Value="OptionsOrderBook, OptionSeriesState, MatchingRules, RiskParameters"/>
+            <ExtendedAttribute Name="outputs" Value="OptionsTrades, PremiumChanges, OrderStateChanges"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="ClearOptionsTradesUseCase" Name="ClearOptionsTradesUseCase">
+          <Performer>Clearing</Performer>
+          <Description>根据期权成交更新权利金、仓位和订单状态，并关联行权或到期结算约束。</Description>
+          <ExtendedAttributes>
+            <ExtendedAttribute Name="kind" Value="command"/>
+            <ExtendedAttribute Name="common_capability" Value="ClearTrades"/>
+            <ExtendedAttribute Name="product_type" Value="options"/>
+            <ExtendedAttribute Name="settlement_type" Value="premium_and_exercise"/>
+            <ExtendedAttribute Name="exercise_or_expiry" Value="required"/>
+            <ExtendedAttribute Name="given_state" Value="OptionsTradeSet, AccountState, PremiumState, OptionPositionState, ExpiryState"/>
+            <ExtendedAttribute Name="outputs" Value="OptionsClearingEvents, PremiumChanges, OptionPositionChanges"/>
+          </ExtendedAttributes>
+        </Activity>
+
+        <Activity Id="OptionsEnd" Name="End">
+          <Route/>
+        </Activity>
+      </Activities>
+
+      <Transitions>
+        <Transition Id="TOptions1" From="OptionsStart" To="PlaceOptionsOrdersUseCase" Name="submit_options_order"/>
+        <Transition Id="TOptions2" From="PlaceOptionsOrdersUseCase" To="MatchOptionsOrdersUseCase" Name="accepted_for_options_matching"/>
+        <Transition Id="TOptions3" From="MatchOptionsOrdersUseCase" To="ClearOptionsTradesUseCase" Name="options_matched"/>
+        <Transition Id="TOptions4" From="ClearOptionsTradesUseCase" To="OptionsEnd" Name="options_cleared"/>
+      </Transitions>
+    </WorkflowProcess>
+  </WorkflowProcesses>
+</Package>
