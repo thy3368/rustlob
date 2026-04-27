@@ -4,7 +4,7 @@ use std::{
 };
 
 use cmd_handler::{
-    use_case_def::{CommandUseCaseExecutor, DomainEventPipeline},
+    use_case_def::{CommandUseCaseExecutor, DomainEventPipeline, LoadState},
     DomainEventSet,
 };
 use dex::{
@@ -15,18 +15,20 @@ use dex::{
     },
     use_case::command_handler::{
         ExecuteAndCommitBlockCmd, ExecuteAndCommitBlockError, ExecuteAndCommitBlockEvents,
-        ExecuteAndCommitBlockLoadPort, ExecuteAndCommitBlockStateSnapshot,
+        ExecuteAndCommitBlockStateSnapshot,
         ExecuteAndCommitBlockUseCase, ReceiveAndAdmitTransactionsCmd,
         ReceiveAndAdmitTransactionsError, ReceiveAndAdmitTransactionsEvents,
-        ReceiveAndAdmitTransactionsLoadPort, ReceiveAndAdmitTransactionsStateSnapshot,
+        ReceiveAndAdmitTransactionsStateSnapshot,
         ReceiveAndAdmitTransactionsUseCase,
     },
 };
 
 struct StubReceiveAdmissionLoadPort;
 
-impl ReceiveAndAdmitTransactionsLoadPort for StubReceiveAdmissionLoadPort {
-    fn load_receive_and_admit_state(
+impl LoadState<ReceiveAndAdmitTransactionsCmd, ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError>
+    for StubReceiveAdmissionLoadPort
+{
+    fn load_state(
         &self,
         cmd: &ReceiveAndAdmitTransactionsCmd,
     ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError> {
@@ -50,8 +52,14 @@ impl ReceiveAndAdmitTransactionsLoadPort for StubReceiveAdmissionLoadPort {
 
 struct StubExecuteCommitLoadPort;
 
-impl ExecuteAndCommitBlockLoadPort for StubExecuteCommitLoadPort {
-    fn load_execute_and_commit_state(
+impl
+    LoadState<
+        ExecuteAndCommitBlockCmd,
+        ExecuteAndCommitBlockStateSnapshot,
+        ExecuteAndCommitBlockError,
+    > for StubExecuteCommitLoadPort
+{
+    fn load_state(
         &self,
         cmd: &ExecuteAndCommitBlockCmd,
     ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError> {

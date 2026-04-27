@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cmd_handler::{
-    use_case_def::{CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, UseCaseReplyMapper},
+    use_case_def::{CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, LoadState, UseCaseReplyMapper},
     DomainEventSet,
 };
 use rust_decimal::Decimal;
@@ -70,6 +70,35 @@ pub trait HyperliquidPlaceOrdersLoadPort: Send + Sync {
         &self,
         cmd: &HyperliquidPlaceOrdersCmd,
     ) -> Result<HyperliquidPlaceOrdersStateSnapshot, HyperliquidPlaceOrdersError>;
+}
+
+impl
+    LoadState<
+        HyperliquidPlaceOrdersCmd,
+        HyperliquidPlaceOrdersState,
+        HyperliquidPlaceOrdersError,
+    > for dyn HyperliquidPlaceOrdersLoadPort
+{
+    fn load_state(
+        &self,
+        cmd: &HyperliquidPlaceOrdersCmd,
+    ) -> Result<HyperliquidPlaceOrdersState, HyperliquidPlaceOrdersError> {
+        let snapshot = self.load_place_orders_state(cmd)?;
+        Ok(HyperliquidPlaceOrdersState {
+            tradable_assets: snapshot
+                .tradable_assets
+                .into_iter()
+                .map(|asset| (asset.asset, asset))
+                .collect(),
+            signed_positions: snapshot
+                .positions
+                .into_iter()
+                .map(|position| (position.asset, position.signed_size))
+                .collect(),
+            allowed_groupings: snapshot.allowed_groupings.into_iter().collect(),
+            max_builder_fee_tenths_of_bps: snapshot.max_builder_fee_tenths_of_bps,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

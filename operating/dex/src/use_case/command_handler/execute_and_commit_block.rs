@@ -1,5 +1,5 @@
 use cmd_handler::{
-    use_case_def::{CommandUseCase, UseCaseReplyMapper},
+    use_case_def::{CommandUseCase, LoadState, UseCaseReplyMapper},
     DomainEventSet,
 };
 
@@ -32,13 +32,6 @@ pub struct ExecuteAndCommitBlockStateSnapshot {
     pub state_diff: StateDiff,
     pub block_events: Vec<BlockEvent>,
     pub node_state_updates: Vec<NodeStateUpdate>,
-}
-
-pub trait ExecuteAndCommitBlockLoadPort: Send + Sync {
-    fn load_execute_and_commit_state(
-        &self,
-        cmd: &ExecuteAndCommitBlockCmd,
-    ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,7 +79,11 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
     type GivenState = ExecuteAndCommitBlockStateSnapshot;
     type Events = ExecuteAndCommitBlockEvents;
     type Error = ExecuteAndCommitBlockError;
-    type LoadPort = dyn ExecuteAndCommitBlockLoadPort;
+    type LoadPort = dyn LoadState<
+        ExecuteAndCommitBlockCmd,
+        ExecuteAndCommitBlockStateSnapshot,
+        ExecuteAndCommitBlockError,
+    >;
 
     fn actor(&self) -> &'static str {
         "BlockExecutor"
@@ -97,19 +94,7 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
             return Err(ExecuteAndCommitBlockError::InvalidBlockHeight);
         }
 
-        if cmd.pending_requests.is_empty() {
-            return Err(ExecuteAndCommitBlockError::EmptyPendingRequests);
-        }
-
         Ok(())
-    }
-
-    fn load_state(
-        &self,
-        cmd: &Self::Command,
-        load_port: &Self::LoadPort,
-    ) -> Result<Self::GivenState, Self::Error> {
-        load_port.load_execute_and_commit_state(cmd)
     }
 
     fn validate_against_state(
@@ -165,8 +150,14 @@ mod tests {
 
     struct StubLoadPort;
 
-    impl ExecuteAndCommitBlockLoadPort for StubLoadPort {
-        fn load_execute_and_commit_state(
+    impl
+        LoadState<
+            ExecuteAndCommitBlockCmd,
+            ExecuteAndCommitBlockStateSnapshot,
+            ExecuteAndCommitBlockError,
+        > for StubLoadPort
+    {
+        fn load_state(
             &self,
             cmd: &ExecuteAndCommitBlockCmd,
         ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError> {
@@ -241,17 +232,33 @@ mod tests {
         );
     }
 
+    struct EmptyLoadPort;
+
+    impl
+        LoadState<
+            ExecuteAndCommitBlockCmd,
+            ExecuteAndCommitBlockStateSnapshot,
+            ExecuteAndCommitBlockError,
+        > for EmptyLoadPort
+    {
+        fn load_state(
+            &self,
+            _cmd: &ExecuteAndCommitBlockCmd,
+        ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError> {
+            Err(ExecuteAndCommitBlockError::EmptyPendingRequests)
+        }
+    }
+
     #[test]
-    fn rejects_empty_pending_requests() {
+    fn rejects_empty_pending_requests_from_load_port() {
         let cmd = ExecuteAndCommitBlockCmd {
             block_height: 1,
             pending_requests: vec![],
         };
 
-        assert_eq!(
-            ExecuteAndCommitBlockUseCase.pre_check_command(&cmd),
-            Err(ExecuteAndCommitBlockError::EmptyPendingRequests)
-        );
+        let result = ExecuteAndCommitBlockUseCase.load_state(&cmd, &EmptyLoadPort);
+
+        assert_eq!(result.unwrap_err(), ExecuteAndCommitBlockError::EmptyPendingRequests);
     }
 
     #[test]

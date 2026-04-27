@@ -1,5 +1,5 @@
 use cmd_handler::{
-    use_case_def::{CommandUseCase, UseCaseReplyMapper},
+    use_case_def::{CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, UseCaseReplyMapper},
     DomainEventSet,
 };
 
@@ -21,13 +21,6 @@ pub struct ReceiveAndAdmitTransactionsStateSnapshot {
     pub chain_state: ChainState,
     pub admitted_requests: Vec<PendingRequest>,
     pub ingress_decisions: Vec<IngressDecision>,
-}
-
-pub trait ReceiveAndAdmitTransactionsLoadPort: Send + Sync {
-    fn load_receive_and_admit_state(
-        &self,
-        cmd: &ReceiveAndAdmitTransactionsCmd,
-    ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,7 +72,11 @@ impl CommandUseCase for ReceiveAndAdmitTransactionsUseCase {
     type GivenState = ReceiveAndAdmitTransactionsStateSnapshot;
     type Events = ReceiveAndAdmitTransactionsEvents;
     type Error = ReceiveAndAdmitTransactionsError;
-    type LoadPort = dyn ReceiveAndAdmitTransactionsLoadPort;
+    type LoadPort = dyn cmd_handler::use_case_def::LoadState<
+        ReceiveAndAdmitTransactionsCmd,
+        ReceiveAndAdmitTransactionsStateSnapshot,
+        ReceiveAndAdmitTransactionsError,
+    >;
 
     fn actor(&self) -> &'static str {
         "IngressGateway"
@@ -91,14 +88,6 @@ impl CommandUseCase for ReceiveAndAdmitTransactionsUseCase {
         }
 
         Ok(())
-    }
-
-    fn load_state(
-        &self,
-        cmd: &Self::Command,
-        load_port: &Self::LoadPort,
-    ) -> Result<Self::GivenState, Self::Error> {
-        load_port.load_receive_and_admit_state(cmd)
     }
 
     fn validate_against_state(
@@ -128,8 +117,14 @@ mod tests {
 
     struct StubLoadPort;
 
-    impl ReceiveAndAdmitTransactionsLoadPort for StubLoadPort {
-        fn load_receive_and_admit_state(
+    impl
+        cmd_handler::use_case_def::LoadState<
+            ReceiveAndAdmitTransactionsCmd,
+            ReceiveAndAdmitTransactionsStateSnapshot,
+            ReceiveAndAdmitTransactionsError,
+        > for StubLoadPort
+    {
+        fn load_state(
             &self,
             _cmd: &ReceiveAndAdmitTransactionsCmd,
         ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError>
@@ -204,5 +199,64 @@ mod tests {
 
         assert_eq!(events.domain_event_count(), 1);
         assert_eq!(events.admitted_requests.len(), 1);
+    }
+
+    #[derive(Debug, Clone, Copy, Default)]
+    struct NoopReceiveAndAdmitPipeline;
+
+    impl DomainEventPipeline<ReceiveAndAdmitTransactionsEvents, ReceiveAndAdmitTransactionsError>
+        for NoopReceiveAndAdmitPipeline
+    {
+        fn persist(&self, _events: &ReceiveAndAdmitTransactionsEvents) -> Result<(), ReceiveAndAdmitTransactionsError> {
+            Ok(())
+        }
+
+        fn replay(&self, _events: &ReceiveAndAdmitTransactionsEvents) -> Result<(), ReceiveAndAdmitTransactionsError> {
+            Ok(())
+        }
+
+        fn publish(&self, _events: &ReceiveAndAdmitTransactionsEvents) -> Result<(), ReceiveAndAdmitTransactionsError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn execute_with_command_use_case_executor() {
+        let executor = CommandUseCaseExecutor;
+        let use_case = ReceiveAndAdmitTransactionsUseCase;
+        let load_port = StubLoadPort;
+        let pipeline = NoopReceiveAndAdmitPipeline;
+
+        let cmd = ReceiveAndAdmitTransactionsCmd {
+            requests: vec![SignedTransactionRequest {
+                request_id: "req-1".to_string(),
+                account: "acct-1".to_string(),
+                nonce: "1".to_string(),
+                expires_at: "2026-04-25T00:00:00Z".to_string(),
+                action_type: "order".to_string(),
+                payload_hash: "payload-1".to_string(),
+                signature_hash: "sig-1".to_string(),
+            }],
+        };
+
+        let events = executor.execute(&use_case, cmd, &load_port, &pipeline).unwrap();
+
+        assert_eq!(events.domain_event_count(), 1);
+        assert_eq!(events.admitted_requests.len(), 1);
+        assert_eq!(events.admitted_requests[0].request_id, "req-1");
+    }
+
+    #[test]
+    fn executor_rejects_empty_requests() {
+        let executor = CommandUseCaseExecutor;
+        let use_case = ReceiveAndAdmitTransactionsUseCase;
+        let load_port = StubLoadPort;
+        let pipeline = NoopReceiveAndAdmitPipeline;
+
+        let cmd = ReceiveAndAdmitTransactionsCmd { requests: vec![] };
+
+        let error = executor.execute(&use_case, cmd, &load_port, &pipeline).unwrap_err();
+
+        assert_eq!(error, ReceiveAndAdmitTransactionsError::EmptyRequests);
     }
 }
