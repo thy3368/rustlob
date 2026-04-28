@@ -290,7 +290,7 @@ impl CommandUseCase for HyperliquidPlaceOrdersUseCase {
         Ok(())
     }
 
-    fn then(
+    fn then_event_4_new_state(
         &self,
         cmd: &Self::Command,
         _state: Self::GivenState,

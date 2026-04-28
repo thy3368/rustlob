@@ -98,7 +98,7 @@ impl CommandUseCase for ReceiveAndAdmitTransactionsUseCase {
         Ok(())
     }
 
-    fn then(
+    fn then_event_4_new_state(
         &self,
         _cmd: &Self::Command,
         state: Self::GivenState,
@@ -195,7 +195,7 @@ mod tests {
         let state = ReceiveAndAdmitTransactionsUseCase
             .load_state(&cmd, &StubLoadPort)
             .unwrap();
-        let events = ReceiveAndAdmitTransactionsUseCase.then(&cmd, state).unwrap();
+        let events = ReceiveAndAdmitTransactionsUseCase.then_event_4_new_state(&cmd, state).unwrap();
 
         assert_eq!(events.domain_event_count(), 1);
         assert_eq!(events.admitted_requests.len(), 1);

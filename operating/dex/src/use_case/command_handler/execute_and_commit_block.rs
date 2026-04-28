@@ -1,7 +1,5 @@
-use cmd_handler::{
-    use_case_def::{CommandUseCase, LoadState, UseCaseReplyMapper},
-    DomainEventSet,
-};
+use cmd_handler::use_case_def::{CommandUseCase, LoadState, UseCaseReplyMapper};
+use cmd_handler::DomainEventSet;
 
 use crate::entity::{
     BlockEvent, ChainState, CommittedBlock, ExecutionResult, ExecutionRuleSet, ExecutionTrace,
@@ -34,6 +32,7 @@ pub struct ExecuteAndCommitBlockStateSnapshot {
     pub node_state_updates: Vec<NodeStateUpdate>,
 }
 
+//todo 出块后的领域模型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecuteAndCommitBlockEvents {
     pub committed_block: CommittedBlock,
@@ -80,10 +79,10 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
     type Events = ExecuteAndCommitBlockEvents;
     type Error = ExecuteAndCommitBlockError;
     type LoadPort = dyn LoadState<
-        ExecuteAndCommitBlockCmd,
-        ExecuteAndCommitBlockStateSnapshot,
-        ExecuteAndCommitBlockError,
-    >;
+            ExecuteAndCommitBlockCmd,
+            ExecuteAndCommitBlockStateSnapshot,
+            ExecuteAndCommitBlockError,
+        >;
 
     fn actor(&self) -> &'static str {
         "BlockExecutor"
@@ -109,11 +108,12 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
         Ok(())
     }
 
-    fn then(
+    fn then_event_4_new_state(
         &self,
         _cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Self::Events, Self::Error> {
+        //todo 分析执行请求并出块逻辑
         Ok(ExecuteAndCommitBlockEvents {
             committed_block: state.committed_block,
             execution_trace: state.execution_trace,
@@ -221,10 +221,8 @@ mod tests {
 
     #[test]
     fn rejects_invalid_block_height() {
-        let cmd = ExecuteAndCommitBlockCmd {
-            block_height: 0,
-            pending_requests: vec![pending_request()],
-        };
+        let cmd =
+            ExecuteAndCommitBlockCmd { block_height: 0, pending_requests: vec![pending_request()] };
 
         assert_eq!(
             ExecuteAndCommitBlockUseCase.pre_check_command(&cmd),
@@ -251,10 +249,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_pending_requests_from_load_port() {
-        let cmd = ExecuteAndCommitBlockCmd {
-            block_height: 1,
-            pending_requests: vec![],
-        };
+        let cmd = ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![] };
 
         let result = ExecuteAndCommitBlockUseCase.load_state(&cmd, &EmptyLoadPort);
 
@@ -300,18 +295,12 @@ mod tests {
 
     #[test]
     fn completes_minimal_command_path() {
-        let cmd = ExecuteAndCommitBlockCmd {
-            block_height: 1,
-            pending_requests: vec![pending_request()],
-        };
+        let cmd =
+            ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![pending_request()] };
 
-        let state = ExecuteAndCommitBlockUseCase
-            .load_state(&cmd, &StubLoadPort)
-            .unwrap();
-        ExecuteAndCommitBlockUseCase
-            .validate_against_state(&cmd, &state)
-            .unwrap();
-        let events = ExecuteAndCommitBlockUseCase.then(&cmd, state).unwrap();
+        let state = ExecuteAndCommitBlockUseCase.load_state(&cmd, &StubLoadPort).unwrap();
+        ExecuteAndCommitBlockUseCase.validate_against_state(&cmd, &state).unwrap();
+        let events = ExecuteAndCommitBlockUseCase.then_event_4_new_state(&cmd, state).unwrap();
 
         assert_eq!(events.committed_block.block_height, 1);
         assert_eq!(events.domain_event_count(), 3);
