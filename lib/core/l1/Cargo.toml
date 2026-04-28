@@ -1,0 +1,10 @@
+[package]
+name = "l1_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+alloy-primitives = "0.8"
+cmd_handler = { path = "../../common/cmd_handler" }

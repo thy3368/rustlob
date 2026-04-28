@@ -1,0 +1,13 @@
+[package]
+name = "l1_adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+alloy-primitives = "0.8"
+cmd_handler = { path = "../../common/cmd_handler" }
+db_repo = { path = "../../common/db_repo" }
+l1_core = { path = "../l1" }
+mdbx = { path = "../../common/mdbx" }
