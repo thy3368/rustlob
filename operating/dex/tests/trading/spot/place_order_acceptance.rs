@@ -1,10 +1,9 @@
 use base_types::base_types::Price;
-use base_types::exchange::spot::spot_types::OrderStatus;
+use base_types::exchange::spot::spot_types::{OrderStatus, OrderType};
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
     ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
-    ExecutedTrade, OrderType, ProductType, SpotCommand, SpotPlaceOrderCmd, SpotSide,
-    TradingCommand,
+    ExecutedTrade, ProductType, SpotCommand, SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
 fn spot_place_order(
@@ -33,7 +32,7 @@ fn spot_place_order_with_type(
     side: SpotSide,
     price: u64,
     quantity: u64,
-    order_type: OrderType,
+    _order_type: impl core::fmt::Debug,
 ) -> ExchangeCommandEnvelope {
     ExchangeCommandEnvelope {
         command_id,
@@ -48,7 +47,6 @@ fn spot_place_order_with_type(
                 side,
                 price,
                 quantity,
-                order_type,
             },
         ))),
     }

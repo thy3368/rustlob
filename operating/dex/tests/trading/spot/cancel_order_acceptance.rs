@@ -17,7 +17,7 @@ use base_types::base_types::Price;
 use base_types::exchange::spot::spot_types::OrderStatus;
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder, OrderType,
+    ExchangeCommand, ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ExecutedOrder,
     ProductType, SpotCancelOrderCmd, SpotCommand, SpotPlaceOrderCmd, SpotSide, TradingCommand,
 };
 
@@ -44,7 +44,6 @@ fn spot_place_order(
                 side,
                 price,
                 quantity,
-                order_type: OrderType::Limit,
             },
         ))),
     }

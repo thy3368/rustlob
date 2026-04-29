@@ -40,10 +40,7 @@ fn option_cancel_order_command_can_enter_pending_queue() {
         timestamp_ns: 30_001,
         product_type: ProductType::Option,
         command: ExchangeCommand::TradingCommand(TradingCommand::Option(
-            OptionCommand::CancelOrder(OptionCancelOrderCmd {
-                trader_id: 99,
-                order_id: 300,
-            }),
+            OptionCommand::CancelOrder(OptionCancelOrderCmd { trader_id: 99, order_id: 300 }),
         )),
     };
 

@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    ExchangeCommand, ExchangeCommandEnvelope, OrderType, ProductType, SpotCancelOrderCmd,
-    SpotCommand, SpotPlaceOrderCmd, SpotSide, SubmitTradingCommandHandler, TradingCommand,
+    ExchangeCommand, ExchangeCommandEnvelope, ProductType, SpotCancelOrderCmd, SpotCommand,
+    SpotPlaceOrderCmd, SpotSide, SubmitTradingCommandHandler, TradingCommand,
 };
 
 #[test]
@@ -23,7 +23,6 @@ fn spot_cancel_order_command_can_enter_pending_queue() {
                         side: SpotSide::Buy,
                         price: 100_000,
                         quantity: 2,
-                        order_type: OrderType::Limit,
                     }),
                 )),
             },

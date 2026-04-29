@@ -1,7 +1,7 @@
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use dex::cmd_handler::{
-    DepositCmd, ExchangeCommand, ExchangeCommandEnvelope, ProductType,
-    SubmitTradingCommandHandler, TreasuryCommand,
+    DepositCmd, ExchangeCommand, ExchangeCommandEnvelope, ProductType, SubmitTradingCommandHandler,
+    TreasuryCommand,
 };
 
 #[test]

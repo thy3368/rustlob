@@ -9,6 +9,11 @@ license.workspace = true
 alloy-primitives = "0.8"
 base_types = { path = "../../lib/common/base_types" }
 cmd_handler = { path = "../../lib/common/cmd_handler" }
+db_repo = { path = "../../lib/common/db_repo" }
+l1_adapter = { path = "../../lib/core/l1_adapter" }
+l1_core = { path = "../../lib/core/l1" }
+mdbx = { path = "../../lib/common/mdbx" }
 rust_decimal = "1.41"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+web3 = { path = "../../study/web3" }
