@@ -6,7 +6,7 @@ use crate::{
     Account, AccountDelta, BlockEvent, BlockStateChanges, ChainState, CodeBlob, CodeDelta,
     CommittedBlock, ExecutionResult, ExecutionRuleSet, ExecutionTrace, NodeStateUpdate,
     OrderedBlockInput, PendingRequest, ProductEvent, Receipt, StateDiff, StorageDelta, StateRoot,
-    VmExecutionInput, VmExecutionOutput, VmRegistry, VmRuntime, VmRuntimeError,
+    VmExecutionInput, VmExecutionOutput, VmRegistry, VmRuntime, VmRuntimeError, VmRuntimeResolver,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,11 +75,20 @@ impl UseCaseReplyMapper<ExecuteAndCommitBlockEvents> for ExecuteAndCommitBlockRe
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ExecuteAndCommitBlockUseCase;
+pub struct ExecuteAndCommitBlockUseCase {
+    vm_resolver: Arc<dyn VmRuntimeResolver<PendingRequest>>,
+}
 
 impl ExecuteAndCommitBlockUseCase {
-    fn vm_registry() -> VmRegistry<PendingRequest> {
+    pub fn new(vm_resolver: Arc<dyn VmRuntimeResolver<PendingRequest>>) -> Self {
+        Self { vm_resolver }
+    }
+
+    pub fn with_vm_registry(vm_registry: VmRegistry<PendingRequest>) -> Self {
+        Self::new(Arc::new(vm_registry))
+    }
+
+    fn default_vm_registry() -> VmRegistry<PendingRequest> {
         let mut registry = VmRegistry::new();
         registry.register_runtime(
             crate::VmKind::RustVm,
@@ -93,14 +102,14 @@ impl ExecuteAndCommitBlockUseCase {
     }
 
     fn execute_pending_requests(
+        &self,
         pending_requests: &[PendingRequest],
     ) -> Result<Vec<VmExecutionOutput>, ExecuteAndCommitBlockError> {
-        let registry = Self::vm_registry();
         pending_requests
             .iter()
             .cloned()
             .map(|request| {
-                registry
+                self.vm_resolver
                     .execute(VmExecutionInput::from_pending_request(
                         request.vm_kind,
                         request.capability.clone(),
@@ -178,6 +187,12 @@ impl ExecuteAndCommitBlockUseCase {
     }
 }
 
+impl Default for ExecuteAndCommitBlockUseCase {
+    fn default() -> Self {
+        Self::with_vm_registry(Self::default_vm_registry())
+    }
+}
+
 impl CommandUseCase for ExecuteAndCommitBlockUseCase {
     type Command = ExecuteAndCommitBlockCmd;
     type GivenState = ExecuteAndCommitBlockStateSnapshot;
@@ -218,7 +233,7 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
         _cmd: &Self::Command,
         mut state: Self::GivenState,
     ) -> Result<Self::Events, Self::Error> {
-        let outputs = Self::execute_pending_requests(&state.pending_requests)?;
+        let outputs = self.execute_pending_requests(&state.pending_requests)?;
         state.state_changes = Self::merge_state_changes(&outputs);
         state.state_diff.account_delta_hash = Self::account_delta_hash(&state.state_changes);
         state.state_diff.storage_delta_hash = Self::storage_delta_hash(&state.state_changes);
@@ -306,6 +321,69 @@ impl VmRuntime<PendingRequest> for StaticVmRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::{Address, Bloom, B256, U256};
+
+    struct StubVmResolver {
+        output: VmExecutionOutput,
+    }
+
+    impl VmRuntimeResolver<PendingRequest> for StubVmResolver {
+        fn execute(&self, _input: VmExecutionInput<PendingRequest>) -> Result<VmExecutionOutput, VmRuntimeError> {
+            Ok(self.output.clone())
+        }
+    }
+
+    fn stub_vm_output() -> VmExecutionOutput {
+        let address = Address::repeat_byte(0x11);
+        let code_hash = B256::repeat_byte(0x22);
+        let storage_key = B256::repeat_byte(0x33);
+        let storage_value = B256::repeat_byte(0x44);
+
+        VmExecutionOutput {
+            vm_kind: crate::VmKind::RustVm,
+            capability: crate::VmCapability::new("dex.prep.place_order"),
+            state_changes: BlockStateChanges {
+                account_deltas: vec![AccountDelta {
+                    address,
+                    previous: None,
+                    current: Some(Account {
+                        nonce: 77,
+                        balance: U256::from(123u64),
+                        code_hash,
+                        storage_root: storage_value,
+                        vm_kind: crate::VmKind::RustVm,
+                    }),
+                }],
+                storage_deltas: vec![StorageDelta {
+                    address,
+                    key: storage_key,
+                    previous: B256::ZERO,
+                    current: storage_value,
+                }],
+                code_deltas: vec![CodeDelta {
+                    code_hash,
+                    previous: None,
+                    current: Some(CodeBlob {
+                        code_hash,
+                        vm_kind: crate::VmKind::RustVm,
+                        bytes: b"stub-runtime".to_vec(),
+                    }),
+                }],
+            },
+            receipts: vec![Receipt {
+                success: true,
+                cumulative_gas_used: 77,
+                logs: vec![],
+                bloom: Bloom::ZERO,
+            }],
+            gas_used: 77,
+            product_events: vec![ProductEvent {
+                product_type: "StubProduct".to_string(),
+                event_type: "stub.executed".to_string(),
+                payload: b"stub-payload".to_vec(),
+            }],
+        }
+    }
 
     fn pending_request() -> PendingRequest {
         PendingRequest {
@@ -417,25 +495,28 @@ mod tests {
 
     #[test]
     fn actor_is_block_executor() {
-        assert_eq!(ExecuteAndCommitBlockUseCase.actor(), "BlockExecutor");
+        let use_case = ExecuteAndCommitBlockUseCase::default();
+        assert_eq!(use_case.actor(), "BlockExecutor");
     }
 
     #[test]
     fn rejects_invalid_block_height() {
+        let use_case = ExecuteAndCommitBlockUseCase::default();
         let cmd =
             ExecuteAndCommitBlockCmd { block_height: 0, pending_requests: vec![pending_request()] };
 
         assert_eq!(
-            ExecuteAndCommitBlockUseCase.pre_check_command(&cmd),
+            use_case.pre_check_command(&cmd),
             Err(ExecuteAndCommitBlockError::InvalidBlockHeight)
         );
     }
 
     #[test]
     fn rejects_empty_pending_requests_from_load_port() {
+        let use_case = ExecuteAndCommitBlockUseCase::default();
         let cmd = ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![] };
 
-        let result = ExecuteAndCommitBlockUseCase.load_state(&cmd, &EmptyLoadPort);
+        let result = use_case.load_state(&cmd, &EmptyLoadPort);
 
         assert_eq!(result.unwrap_err(), ExecuteAndCommitBlockError::EmptyPendingRequests);
     }
@@ -483,12 +564,13 @@ mod tests {
 
     #[test]
     fn completes_minimal_command_path_through_vm_registry() {
+        let use_case = ExecuteAndCommitBlockUseCase::default();
         let cmd =
             ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![pending_request()] };
 
-        let state = ExecuteAndCommitBlockUseCase.load_state(&cmd, &StubLoadPort).unwrap();
-        ExecuteAndCommitBlockUseCase.validate_against_state(&cmd, &state).unwrap();
-        let events = ExecuteAndCommitBlockUseCase.then_event_4_new_state(&cmd, state).unwrap();
+        let state = use_case.load_state(&cmd, &StubLoadPort).unwrap();
+        use_case.validate_against_state(&cmd, &state).unwrap();
+        let events = use_case.then_event_4_new_state(&cmd, state).unwrap();
 
         assert_eq!(events.committed_block.block_height, 1);
         assert_eq!(events.domain_event_count(), 3);
@@ -499,5 +581,22 @@ mod tests {
         assert_ne!(events.state_diff.storage_delta_hash, "storage-delta-1");
         assert_ne!(events.state_diff.code_delta_hash, "code-delta-1");
         assert_eq!(events.state_changes.account_deltas[0].current.as_ref().unwrap().vm_kind, crate::VmKind::RustVm);
+    }
+
+    #[test]
+    fn injected_vm_resolver_overrides_default_runtime() {
+        let use_case = ExecuteAndCommitBlockUseCase::new(Arc::new(StubVmResolver {
+            output: stub_vm_output(),
+        }));
+        let cmd =
+            ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![pending_request()] };
+
+        let state = use_case.load_state(&cmd, &StubLoadPort).unwrap();
+        let events = use_case.then_event_4_new_state(&cmd, state).unwrap();
+
+        assert_eq!(events.state_changes.account_deltas.len(), 1);
+        assert_eq!(events.state_changes.account_deltas[0].current.as_ref().unwrap().nonce, 77);
+        assert_eq!(events.state_changes.code_deltas[0].current.as_ref().unwrap().bytes, b"stub-runtime".to_vec());
+        assert_ne!(events.state_diff.account_delta_hash, "account-delta-1");
     }
 }

@@ -68,6 +68,8 @@ mod tests {
         PendingRequest {
             request_id: id.to_string(),
             performer: "acct-1".to_string(),
+            vm_kind: l1_core::VmKind::RustVm,
+            capability: l1_core::VmCapability::new("dex.prep.place_order"),
             action_type: "order".to_string(),
             payload_hash: format!("payload-{}", id),
         }

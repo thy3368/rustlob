@@ -14,6 +14,10 @@ pub trait VmRuntime<Tx>: Send + Sync {
     fn execute(&self, input: VmExecutionInput<Tx>) -> Result<VmExecutionOutput, VmRuntimeError>;
 }
 
+pub trait VmRuntimeResolver<Tx>: Send + Sync {
+    fn execute(&self, input: VmExecutionInput<Tx>) -> Result<VmExecutionOutput, VmRuntimeError>;
+}
+
 #[derive(Default)]
 pub struct VmRegistry<Tx> {
     runtimes: HashMap<VmKind, Arc<dyn VmRuntime<Tx>>>,
@@ -31,8 +35,10 @@ impl<Tx> VmRegistry<Tx> {
     ) -> Option<Arc<dyn VmRuntime<Tx>>> {
         self.runtimes.insert(vm_kind, runtime)
     }
+}
 
-    pub fn execute(&self, input: VmExecutionInput<Tx>) -> Result<VmExecutionOutput, VmRuntimeError> {
+impl<Tx> VmRuntimeResolver<Tx> for VmRegistry<Tx> {
+    fn execute(&self, input: VmExecutionInput<Tx>) -> Result<VmExecutionOutput, VmRuntimeError> {
         let runtime = self
             .runtimes
             .get(&input.vm_kind)
