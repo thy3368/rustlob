@@ -1,7 +1,9 @@
-use crate::{BlockStateChanges, Receipt};
+use crate::{BlockStateChanges, Receipt, VmCapability, VmKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VmExecutionOutput {
+    pub vm_kind: VmKind,
+    pub capability: VmCapability,
     pub state_changes: BlockStateChanges,
     pub receipts: Vec<Receipt>,
     pub gas_used: u64,

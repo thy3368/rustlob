@@ -1,6 +1,6 @@
 pub use crate::{
     BlockEvent, ChainState, CommittedBlock, ExecutionRuleSet, ExecutionTrace, NodeStateUpdate,
-    StateDiff, StateRoot,
+    StateDiff, StateRoot, VmCapability, VmKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +24,8 @@ pub enum IngressDecision {
 pub struct PendingRequest {
     pub request_id: String,
     pub performer: String,
+    pub vm_kind: VmKind,
+    pub capability: VmCapability,
     pub action_type: String,
     pub payload_hash: String,
 }

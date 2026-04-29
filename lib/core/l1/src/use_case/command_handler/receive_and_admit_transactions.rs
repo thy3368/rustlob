@@ -3,7 +3,10 @@ use cmd_handler::use_case_def::{
     CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, UseCaseReplyMapper,
 };
 
-use crate::{ChainState, IngressDecision, PendingRequest, SignedTransactionRequest, StateRoot};
+use crate::{
+    ChainState, IngressDecision, PendingRequest, SignedTransactionRequest, StateRoot, VmCapability,
+    VmKind,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceiveAndAdmitTransactionsError {
@@ -130,6 +133,8 @@ mod tests {
                 admitted_requests: vec![PendingRequest {
                     request_id: "req-1".to_string(),
                     performer: "acct-1".to_string(),
+                    vm_kind: VmKind::RustVm,
+                    capability: VmCapability::new("dex.prep.place_order"),
                     action_type: "order".to_string(),
                     payload_hash: "payload-1".to_string(),
                 }],
@@ -159,6 +164,8 @@ mod tests {
             admitted_requests: vec![PendingRequest {
                 request_id: "req-1".to_string(),
                 performer: "acct-1".to_string(),
+                vm_kind: VmKind::RustVm,
+                capability: VmCapability::new("dex.prep.place_order"),
                 action_type: "order".to_string(),
                 payload_hash: "payload-1".to_string(),
             }],

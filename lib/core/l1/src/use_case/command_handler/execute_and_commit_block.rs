@@ -1,9 +1,12 @@
 use cmd_handler::DomainEventSet;
 use cmd_handler::use_case_def::{CommandUseCase, LoadState, UseCaseReplyMapper};
+use std::sync::Arc;
+
 use crate::{
     Account, AccountDelta, BlockEvent, BlockStateChanges, ChainState, CodeBlob, CodeDelta,
     CommittedBlock, ExecutionResult, ExecutionRuleSet, ExecutionTrace, NodeStateUpdate,
-    OrderedBlockInput, PendingRequest, StateDiff, StorageDelta, StateRoot, VmKind,
+    OrderedBlockInput, PendingRequest, ProductEvent, Receipt, StateDiff, StorageDelta, StateRoot,
+    VmExecutionInput, VmExecutionOutput, VmRegistry, VmRuntime, VmRuntimeError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +14,7 @@ pub enum ExecuteAndCommitBlockError {
     EmptyPendingRequests,
     InvalidBlockHeight,
     LoadStateFailed(String),
+    VmExecutionFailed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,54 +79,46 @@ impl UseCaseReplyMapper<ExecuteAndCommitBlockEvents> for ExecuteAndCommitBlockRe
 pub struct ExecuteAndCommitBlockUseCase;
 
 impl ExecuteAndCommitBlockUseCase {
-    fn derive_state_changes(
+    fn vm_registry() -> VmRegistry<PendingRequest> {
+        let mut registry = VmRegistry::new();
+        registry.register_runtime(
+            crate::VmKind::RustVm,
+            Arc::new(StaticVmRuntime { gas_used: 11, event_prefix: "rustvm" }),
+        );
+        registry.register_runtime(
+            crate::VmKind::Evm,
+            Arc::new(StaticVmRuntime { gas_used: 29, event_prefix: "evm" }),
+        );
+        registry
+    }
+
+    fn execute_pending_requests(
         pending_requests: &[PendingRequest],
-        execution_results: &[ExecutionResult],
-    ) -> BlockStateChanges {
-        let deltas: Vec<_> = pending_requests
+    ) -> Result<Vec<VmExecutionOutput>, ExecuteAndCommitBlockError> {
+        let registry = Self::vm_registry();
+        pending_requests
             .iter()
-            .zip(execution_results.iter().cycle())
-            .enumerate()
-            .map(|(index, (request, execution_result))| {
-                let address = Self::address_from_request(&request.performer, index as u64);
-                let code_hash = Self::hash_to_b256(&execution_result.events_hash);
-                let storage_key = Self::hash_to_b256(&format!("{}:{}", request.request_id, index));
-                let storage_value = Self::hash_to_b256(&request.payload_hash);
-                let code = CodeBlob {
-                    code_hash,
-                    vm_kind: VmKind::Evm,
-                    bytes: format!(
-                        "{}:{}:{}",
-                        request.action_type, request.payload_hash, execution_result.result_id
-                    )
-                    .into_bytes(),
-                };
-                let account = Account {
-                    nonce: index as u64 + 1,
-                    balance: alloy_primitives::U256::from((index + 1) as u64),
-                    code_hash,
-                    storage_root: storage_value,
-                    vm_kind: VmKind::Evm,
-                };
-
-                (
-                    AccountDelta { address, previous: None, current: Some(account) },
-                    StorageDelta {
-                        address,
-                        key: storage_key,
-                        previous: alloy_primitives::B256::ZERO,
-                        current: storage_value,
-                    },
-                    CodeDelta { code_hash, previous: None, current: Some(code) },
-                )
+            .cloned()
+            .map(|request| {
+                registry
+                    .execute(VmExecutionInput::from_pending_request(
+                        request.vm_kind,
+                        request.capability.clone(),
+                        request,
+                    ))
+                    .map_err(|error| ExecuteAndCommitBlockError::VmExecutionFailed(format!("{error:?}")))
             })
-            .collect();
+            .collect()
+    }
 
-        let account_deltas = deltas.iter().map(|(account, _, _)| account.clone()).collect();
-        let storage_deltas = deltas.iter().map(|(_, storage, _)| storage.clone()).collect();
-        let code_deltas = deltas.iter().map(|(_, _, code)| code.clone()).collect();
-
-        BlockStateChanges { account_deltas, storage_deltas, code_deltas }
+    fn merge_state_changes(outputs: &[VmExecutionOutput]) -> BlockStateChanges {
+        let mut merged = BlockStateChanges::default();
+        for output in outputs {
+            merged.account_deltas.extend(output.state_changes.account_deltas.clone());
+            merged.storage_deltas.extend(output.state_changes.storage_deltas.clone());
+            merged.code_deltas.extend(output.state_changes.code_deltas.clone());
+        }
+        merged
     }
 
     fn hash_to_b256(input: &str) -> alloy_primitives::B256 {
@@ -222,8 +218,8 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
         _cmd: &Self::Command,
         mut state: Self::GivenState,
     ) -> Result<Self::Events, Self::Error> {
-        state.state_changes =
-            Self::derive_state_changes(&state.pending_requests, &state.execution_results);
+        let outputs = Self::execute_pending_requests(&state.pending_requests)?;
+        state.state_changes = Self::merge_state_changes(&outputs);
         state.state_diff.account_delta_hash = Self::account_delta_hash(&state.state_changes);
         state.state_diff.storage_delta_hash = Self::storage_delta_hash(&state.state_changes);
         state.state_diff.code_delta_hash = Self::code_delta_hash(&state.state_changes);
@@ -238,6 +234,75 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
     }
 }
 
+struct StaticVmRuntime {
+    gas_used: u64,
+    event_prefix: &'static str,
+}
+
+impl VmRuntime<PendingRequest> for StaticVmRuntime {
+    fn execute(&self, input: VmExecutionInput<PendingRequest>) -> Result<VmExecutionOutput, VmRuntimeError> {
+        let address = ExecuteAndCommitBlockUseCase::address_from_request(&input.transaction.performer, self.gas_used);
+        let code_hash = ExecuteAndCommitBlockUseCase::hash_to_b256(&format!(
+            "{}:{}:{}",
+            input.capability.0, input.transaction.payload_hash, self.event_prefix
+        ));
+        let storage_key = ExecuteAndCommitBlockUseCase::hash_to_b256(&input.transaction.request_id);
+        let storage_value = ExecuteAndCommitBlockUseCase::hash_to_b256(&format!(
+            "{}:{}",
+            input.transaction.action_type, input.transaction.payload_hash
+        ));
+
+        Ok(VmExecutionOutput {
+            vm_kind: input.vm_kind,
+            capability: input.capability.clone(),
+            state_changes: BlockStateChanges {
+                account_deltas: vec![AccountDelta {
+                    address,
+                    previous: None,
+                    current: Some(Account {
+                        nonce: self.gas_used,
+                        balance: alloy_primitives::U256::from(self.gas_used),
+                        code_hash,
+                        storage_root: storage_value,
+                        vm_kind: input.vm_kind,
+                    }),
+                }],
+                storage_deltas: vec![StorageDelta {
+                    address,
+                    key: storage_key,
+                    previous: alloy_primitives::B256::ZERO,
+                    current: storage_value,
+                }],
+                code_deltas: vec![CodeDelta {
+                    code_hash,
+                    previous: None,
+                    current: Some(CodeBlob {
+                        code_hash,
+                        vm_kind: input.vm_kind,
+                        bytes: format!(
+                            "{}:{}:{}",
+                            self.event_prefix, input.transaction.action_type, input.transaction.payload_hash
+                        )
+                        .into_bytes(),
+                    }),
+                }],
+            },
+            receipts: vec![Receipt {
+                success: true,
+                cumulative_gas_used: self.gas_used,
+                logs: vec![],
+                bloom: alloy_primitives::Bloom::ZERO,
+            }],
+            gas_used: self.gas_used,
+            product_events: vec![ProductEvent {
+                product_type: format!("{:?}", input.vm_kind),
+                event_type: input.capability.0,
+                payload: input.transaction.payload_hash.clone().into_bytes(),
+            }],
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +311,8 @@ mod tests {
         PendingRequest {
             request_id: "req-1".to_string(),
             performer: "acct-1".to_string(),
+            vm_kind: crate::VmKind::RustVm,
+            capability: crate::VmCapability::new("dex.prep.place_order"),
             action_type: "order".to_string(),
             payload_hash: "payload-1".to_string(),
         }
@@ -331,22 +398,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn actor_is_block_executor() {
-        assert_eq!(ExecuteAndCommitBlockUseCase.actor(), "BlockExecutor");
-    }
-
-    #[test]
-    fn rejects_invalid_block_height() {
-        let cmd =
-            ExecuteAndCommitBlockCmd { block_height: 0, pending_requests: vec![pending_request()] };
-
-        assert_eq!(
-            ExecuteAndCommitBlockUseCase.pre_check_command(&cmd),
-            Err(ExecuteAndCommitBlockError::InvalidBlockHeight)
-        );
-    }
-
     struct EmptyLoadPort;
 
     impl
@@ -362,6 +413,22 @@ mod tests {
         ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError> {
             Err(ExecuteAndCommitBlockError::EmptyPendingRequests)
         }
+    }
+
+    #[test]
+    fn actor_is_block_executor() {
+        assert_eq!(ExecuteAndCommitBlockUseCase.actor(), "BlockExecutor");
+    }
+
+    #[test]
+    fn rejects_invalid_block_height() {
+        let cmd =
+            ExecuteAndCommitBlockCmd { block_height: 0, pending_requests: vec![pending_request()] };
+
+        assert_eq!(
+            ExecuteAndCommitBlockUseCase.pre_check_command(&cmd),
+            Err(ExecuteAndCommitBlockError::InvalidBlockHeight)
+        );
     }
 
     #[test]
@@ -415,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn completes_minimal_command_path() {
+    fn completes_minimal_command_path_through_vm_registry() {
         let cmd =
             ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![pending_request()] };
 
@@ -431,5 +498,6 @@ mod tests {
         assert_ne!(events.state_diff.account_delta_hash, "account-delta-1");
         assert_ne!(events.state_diff.storage_delta_hash, "storage-delta-1");
         assert_ne!(events.state_diff.code_delta_hash, "code-delta-1");
+        assert_eq!(events.state_changes.account_deltas[0].current.as_ref().unwrap().vm_kind, crate::VmKind::RustVm);
     }
 }
