@@ -7,12 +7,16 @@
     {
       "id": 4,
       "prompt": "我们要设计一个类似 Twitter 的社交媒体平台。用户可以发推文、关注其他用户、查看时间线。预计有 1000 万用户，每天 1 亿条推文。请问应该如何设计架构？需要用到哪些组件（缓存、消息队列、数据库等）？",
-      "expected_output": "Should apply Clean Architecture layering to system design, separate business logic from infrastructure, use dependency inversion for external services, and recommend appropriate scalability patterns",
+      "expected_output": "Should apply the updated clean-architecture contract to system design: core/adapter/infra framing, separate role view from source dependency view and call flow view, keep business policy independent from infrastructure, and recommend scalability patterns as infra decisions",
       "files": [],
       "assertions": [
         {
-          "name": "applies_clean_architecture_to_system_design",
-          "description": "Should organize the system using Clean Architecture layers (Entities for core business rules like Tweet/User, Use Cases for timeline generation, Adapters for API/cache, Frameworks for specific tech choices)"
+          "name": "uses_core_adapter_infra_framing",
+          "description": "Should organize the design using core, adapter, infra and identify use_case/entity plus inbound/outbound responsibilities"
+        },
+        {
+          "name": "distinguishes_role_dependency_and_call_views",
+          "description": "Should distinguish structural role view, source dependency view, and runtime call flow instead of flattening architecture into one chain"
         },
         {
           "name": "separates_policy_from_mechanism",
@@ -55,12 +59,12 @@
     {
       "id": 6,
       "prompt": "我们的 API 响应很慢，数据库查询要 500ms。团队建议加 Redis 缓存。但我担心缓存一致性问题——如果数据更新了，缓存怎么失效？有什么好的方案吗？",
-      "expected_output": "Should frame caching as an implementation detail in the Frameworks layer, show how to use Repository pattern with cache-aside or write-through strategies, and keep business logic unaware of caching",
+      "expected_output": "Should frame caching as an infra concern reached through outbound adapters, keep use_case unaware of cache details, explain cache strategies, and preserve the distinction between source dependency and call flow",
       "files": [],
       "assertions": [
         {
-          "name": "frames_cache_as_implementation_detail",
-          "description": "Should explain that caching is a Frameworks & Drivers layer concern, not a business logic concern"
+          "name": "frames_cache_as_infra_via_outbound_adapter",
+          "description": "Should explain that cache is infra and should be reached through an outbound adapter or repository/gateway implementation, not embedded in use_case"
         },
         {
           "name": "uses_repository_pattern",

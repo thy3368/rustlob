@@ -4,16 +4,20 @@
     {
       "id": 1,
       "prompt": "我有一个 Express.js 的后端项目，目前所有业务逻辑都写在 controller 里，数据库查询也直接在 controller 中调用。项目越来越大，改一个功能经常要改好几个文件。我想重构一下，应该怎么分层？",
-      "expected_output": "Should reference Clean Architecture layers, dependency rule, and provide concrete refactoring steps with code examples",
+      "expected_output": "Should use the core/adapter/infra framing, distinguish role view vs source dependency view vs call flow view, explain dependency violations precisely, and provide minimal restructuring guidance with examples",
       "files": [],
       "assertions": [
         {
-          "name": "uses_clean_architecture_terminology",
-          "description": "Response must use Clean Architecture layer names: Entity/Entities, Use Case(s), Interface Adapter(s), Framework/Driver(s) - not generic terms like 'business layer' or 'data layer'"
+          "name": "uses_core_adapter_infra_framing",
+          "description": "Response must organize the answer using core, adapter, infra and split core into use_case/entity plus adapter into inbound/outbound"
         },
         {
-          "name": "explains_dependency_rule",
-          "description": "Response must explicitly explain the dependency rule: dependencies point inward, outer layers depend on inner layers, never the reverse"
+          "name": "distinguishes_architecture_views",
+          "description": "Response must distinguish role view, source dependency view, and call flow view instead of collapsing them into one dependency diagram"
+        },
+        {
+          "name": "explains_source_dependency_precisely",
+          "description": "Response must explain that inbound depends on use_case, use_case depends on entity and port abstractions, outbound implements ports and depends on infra"
         },
         {
           "name": "provides_concrete_steps",
@@ -28,20 +32,24 @@
     {
       "id": 2,
       "prompt": "我们团队在做一个电商系统，现在 Order 实体直接 import 了 Stripe 的 SDK 来处理支付。这样设计有什么问题？怎么改？",
-      "expected_output": "Should identify DIP violation, explain why business entities shouldn't depend on external SDKs, and show interface-based solution",
+      "expected_output": "Should identify the violation using core/use_case/entity/adapter/infra language, explain why entity must not depend on external SDKs, and show a port-based redesign where outbound adapter depends on infra",
       "files": [],
       "assertions": [
         {
+          "name": "uses_updated_layer_language",
+          "description": "Response should classify Stripe SDK as infra, entity as core, and the integration as outbound adapter or port boundary"
+        },
+        {
           "name": "identifies_dependency_violation",
-          "description": "Response must identify this as a Dependency Inversion Principle (DIP) violation or explain that entities shouldn't depend on external frameworks"
+          "description": "Response must identify this as a dependency rule / DIP violation because entity should not depend on external SDKs or framework details"
         },
         {
           "name": "explains_why_problematic",
           "description": "Response must explain why entities depending on SDKs is problematic (e.g., tight coupling, hard to test, violates dependency rule)"
         },
         {
-          "name": "proposes_interface_solution",
-          "description": "Response must propose using an interface/port to decouple the entity from Stripe"
+          "name": "proposes_port_and_outbound_adapter_solution",
+          "description": "Response must propose moving Stripe integration behind a port/interface owned by use_case, implemented by an outbound adapter that depends on infra"
         },
         {
           "name": "shows_refactored_code",
