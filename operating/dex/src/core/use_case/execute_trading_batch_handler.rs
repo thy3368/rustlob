@@ -1,19 +1,14 @@
-use std::{
-    collections::BTreeMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex,
-    },
-};
-
 use base_types::exchange::prep::perp_types::PrepTrade;
 use base_types::exchange::prep::prep_order::PrepOrder;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use base_types::handler::handler_update::{
     ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
 };
-use crate::core::use_case::execute_trading_batch::context::ExecuteTradingBatchContext;
-use crate::core::use_case::execute_trading_batch::{option, perp, spot, treasury, ExecuteTradingBatchError, SpotOrderBook};
+use crate::core::use_case::execute_trading_batch::option_handler::OptionBatchHandler;
+use crate::core::use_case::execute_trading_batch::perp_handler::PerpBatchHandler;
+use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
+use crate::core::use_case::execute_trading_batch::treasury_handler::TreasuryBatchHandler;
+use crate::core::use_case::execute_trading_batch::{option, perp, treasury, ExecuteTradingBatchError};
 use crate::core::use_case::trading_command::{ExchangeCommand, ExchangeCommandEnvelope, TradingCommand};
 
 
@@ -76,38 +71,34 @@ pub enum TradeExecutionLog {
 
 #[derive(Debug, Default)]
 pub struct ExecuteTradingBatchHandler {
-    spot_order_book: Mutex<SpotOrderBook>,
-    next_order_id: AtomicU64,
+    spot: SpotBatchHandler,
+    perp: PerpBatchHandler,
+    option: OptionBatchHandler,
+    treasury: TreasuryBatchHandler,
 }
 
 impl ExecuteTradingBatchHandler {
     pub fn new() -> Self {
         Self {
-            spot_order_book: Mutex::new(BTreeMap::new()),
-            next_order_id: AtomicU64::new(1),
+            spot: SpotBatchHandler::new(),
+            perp: PerpBatchHandler::new(),
+            option: OptionBatchHandler::new(),
+            treasury: TreasuryBatchHandler::new(),
         }
-    }
-
-    pub(crate) fn next_order_id(&self) -> u64 {
-        self.next_order_id.fetch_add(1, Ordering::Relaxed)
     }
 
     fn handle_envelope(
         &self,
         envelope: &ExchangeCommandEnvelope,
-        ctx: &mut ExecuteTradingBatchContext<'_>,
+        writes: &mut ExecutedBatchBlock,
+        changelogs: &mut Vec<TradeExecutionLog>,
     ) -> Result<(), ExecuteTradingBatchError> {
         match &envelope.command {
             ExchangeCommand::TradingCommand(command) => {
-                self.handle_trading_command(envelope, command, ctx)
+                self.handle_trading_command(envelope, command, writes, changelogs)
             }
             ExchangeCommand::TreasuryCommand(command) => {
-                treasury::handle_treasury_command(
-                    self,
-                    envelope,
-                    command,
-                    ctx,
-                )
+                self.treasury.handle_command(envelope, command, writes, changelogs)
             }
         }
     }
@@ -116,22 +107,18 @@ impl ExecuteTradingBatchHandler {
         &self,
         envelope: &ExchangeCommandEnvelope,
         command: &TradingCommand,
-        ctx: &mut ExecuteTradingBatchContext<'_>,
+        writes: &mut ExecutedBatchBlock,
+        changelogs: &mut Vec<TradeExecutionLog>,
     ) -> Result<(), ExecuteTradingBatchError> {
         match command {
             TradingCommand::Spot(command) => {
-                spot::handle_spot_command(self, envelope, command, ctx)
+                self.spot.handle_command(envelope, command, writes, changelogs)
             }
             TradingCommand::Perp(command) => {
-                perp::handle_perp_command(self, envelope, command, ctx)
+                self.perp.handle_command(envelope, command, writes, changelogs)
             }
             TradingCommand::Option(command) => {
-                option::handle_option_command(
-                    self,
-                    envelope,
-                    command,
-                    ctx,
-                )
+                self.option.handle_command(envelope, command, writes, changelogs)
             }
         }
     }
@@ -142,17 +129,8 @@ impl ExecuteTradingBatchHandler {
         writes: &mut ExecutedBatchBlock,
         changelogs: &mut Vec<TradeExecutionLog>,
     ) -> Result<(), ExecuteTradingBatchError> {
-        let mut spot_order_book = self.spot_order_book.lock().unwrap();
-
         for envelope in envelopes {
-            self.handle_envelope(
-                envelope,
-                &mut ExecuteTradingBatchContext {
-                    writes,
-                    changelogs,
-                    spot_order_book: &mut spot_order_book,
-                },
-            )?;
+            self.handle_envelope(envelope, writes, changelogs)?;
         }
 
         Ok(())

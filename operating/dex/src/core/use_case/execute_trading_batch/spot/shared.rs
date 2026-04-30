@@ -6,8 +6,9 @@ use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
 use crate::core::use_case::execute_trading_batch::{
     ExecuteTradingBatchError, RestingSpotOrder, SpotOrderBook,
 };
+use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
 use crate::core::use_case::execute_trading_batch_handler::{
-    BalanceDelta, ExecuteTradingBatchHandler, ExecutedBatchBlock, ExecutedTrade, TradeExecutionLog,
+    BalanceDelta, ExecutedBatchBlock, ExecutedTrade, TradeExecutionLog,
 };
 use crate::core::SpotSide;
 
@@ -18,7 +19,7 @@ pub(in crate::core) fn split_spot_market(market: &str) -> Result<TradingPair, Ex
 }
 
 pub(in crate::core) fn match_spot_order(
-    handler: &ExecuteTradingBatchHandler,
+    handler: &SpotBatchHandler,
     spot_order_book: &mut SpotOrderBook,
     order: &mut RestingSpotOrder,
     writes: &mut ExecutedBatchBlock,

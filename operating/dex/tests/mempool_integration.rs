@@ -30,7 +30,7 @@ impl
                 request_id: req.request_id.clone(),
                 performer: req.account.clone(),
                 vm_kind: VmKind::RustVm,
-                capability: VmCapability::new("dex.prep.place_order"),
+                capability: VmCapability::new("dex.perp.place_order"),
                 action_type: req.action_type.clone(),
                 payload_hash: req.payload_hash.clone(),
             })

@@ -1,8 +1,11 @@
 pub mod context;
 pub mod option;
+pub mod option_handler;
 pub mod perp;
+pub mod perp_handler;
 pub mod spot;
 pub mod treasury;
+pub mod treasury_handler;
 
 use std::collections::BTreeMap;
 

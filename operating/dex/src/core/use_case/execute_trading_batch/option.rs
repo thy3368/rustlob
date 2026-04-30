@@ -1,15 +1,14 @@
-use crate::core::{
-    ExchangeCommandEnvelope, OptionCommand,
-};
-use crate::core::use_case::execute_trading_batch::{context::ExecuteTradingBatchContext, ExecuteTradingBatchError};
-use crate::core::use_case::execute_trading_batch_handler::ExecuteTradingBatchHandler;
+use crate::core::{ExchangeCommandEnvelope, OptionCommand};
+use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
+use crate::core::use_case::execute_trading_batch::option_handler::OptionBatchHandler;
+use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
 
 pub fn handle_option_command(
-    _handler: &ExecuteTradingBatchHandler,
-    _envelope: &ExchangeCommandEnvelope,
-    _command: &OptionCommand,
-    ctx: &mut ExecuteTradingBatchContext<'_>,
+    handler: &OptionBatchHandler,
+    envelope: &ExchangeCommandEnvelope,
+    command: &OptionCommand,
+    writes: &mut ExecutedBatchBlock,
+    changelogs: &mut Vec<TradeExecutionLog>,
 ) -> Result<(), ExecuteTradingBatchError> {
-    ctx.writes.summary.accepted_commands += 1;
-    Ok(())
+    handler.handle_command(envelope, command, writes, changelogs)
 }
