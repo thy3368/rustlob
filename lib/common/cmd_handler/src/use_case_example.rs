@@ -1,5 +1,5 @@
 use super::use_case_def::{
-    CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, UseCaseReplyMapper,
+    CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, LoadState, UseCaseReplyMapper,
 };
 use crate::DomainEventSet;
 
@@ -23,6 +23,15 @@ pub trait PlaceOrderLoadPort: Send + Sync {
         &self,
         cmd: &PlaceOrderCommand,
     ) -> Result<PlaceOrderStateSnapshot, PlaceOrderError>;
+}
+
+impl LoadState<PlaceOrderCommand, PlaceOrderState, PlaceOrderError> for dyn PlaceOrderLoadPort {
+    fn load_state(&self, cmd: &PlaceOrderCommand) -> Result<PlaceOrderState, PlaceOrderError> {
+        let snapshot = self.load_place_order_state(cmd)?;
+        Ok(PlaceOrderState {
+            can_place: snapshot.can_place,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,17 +67,6 @@ impl CommandUseCase for PlaceOrderUseCase {
         Ok(())
     }
 
-    fn load_state(
-        &self,
-        cmd: &Self::Command,
-        load_port: &Self::LoadPort,
-    ) -> Result<Self::GivenState, Self::Error> {
-        let state = load_port.load_place_order_state(cmd)?;
-        Ok(PlaceOrderState {
-            can_place: state.can_place,
-        })
-    }
-
     fn validate_against_state(
         &self,
         _cmd: &Self::Command,
@@ -81,7 +79,7 @@ impl CommandUseCase for PlaceOrderUseCase {
         }
     }
 
-    fn then(
+    fn then_event_4_new_state(
         &self,
         _cmd: &Self::Command,
         _state: Self::GivenState,

@@ -1,5 +1,12 @@
 use crate::{DomainEventSet, HandlerLatencyMetrics};
 
+/// 状态加载端口 - 标准化从外部存储加载领域状态
+/// 
+/// 用于 CommandUseCase 的 LoadPort 关联类型，提供统一的状态加载接口
+pub trait LoadState<Cmd, State, Err>: Send + Sync {
+    fn load_state(&self, cmd: &Cmd) -> Result<State, Err>;
+}
+
 /// 更贴近 Use Cases（用例）的命令型抽象：
 /// 只定义业务输入、状态装载、业务校验与领域事件产出。
 pub trait CommandUseCase: Send + Sync {
@@ -7,7 +14,7 @@ pub trait CommandUseCase: Send + Sync {
     type GivenState;
     type Events: DomainEventSet;
     type Error;
-    type LoadPort: ?Sized + Send + Sync;
+    type LoadPort: ?Sized + Send + Sync + LoadState<Self::Command, Self::GivenState, Self::Error>;
 
     fn actor(&self) -> &'static str {
         "UnknownActor用来做权限控制和追溯"
@@ -19,7 +26,9 @@ pub trait CommandUseCase: Send + Sync {
         &self,
         cmd: &Self::Command,
         load_port: &Self::LoadPort,
-    ) -> Result<Self::GivenState, Self::Error>;
+    ) -> Result<Self::GivenState, Self::Error> {
+        load_port.load_state(cmd)
+    }
 
     fn validate_against_state(
         &self,
@@ -27,7 +36,7 @@ pub trait CommandUseCase: Send + Sync {
         state: &Self::GivenState,
     ) -> Result<(), Self::Error>;
 
-    fn then(
+    fn then_event_4_new_state(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
@@ -84,7 +93,7 @@ impl CommandUseCaseExecutor {
         let validate_in_lock_ns = validate_start.elapsed().as_nanos();
 
         let then_start = Instant::now();
-        let events = use_case.then(&command, state)?;
+        let events = use_case.then_event_4_new_state(&command, state)?;
         let apply_changes_ns = then_start.elapsed().as_nanos();
 
         let persist_start = Instant::now();
