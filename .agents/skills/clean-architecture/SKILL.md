@@ -147,6 +147,114 @@ description: >
 10. optional `Accelerate`
 11. optional `Automate`
 
+## Testing Guidelines
+
+当用户询问测试放在哪里时，使用以下 Clean Architecture 测试策略：
+
+### 测试分层映射
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  E2E 测试                                                   │
+│  - 完整用户场景，跨所有层                                    │
+│  - 位于: tests/e2e/ 或 e2e/                                  │
+├─────────────────────────────────────────────────────────────┤
+│  集成测试                                                   │
+│  - adapter 与 infra 层交互                                   │
+│  - 位于: 与被测代码同级 tests/ 目录                          │
+├─────────────────────────────────────────────────────────────┤
+│  单元测试                                                   │
+│  - core 层: use_case + entity                               │
+│  - 位于: 与被测代码同级 tests/ 或内联 #[test]               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 各层测试放置规则
+
+**1. Core 层测试 (单元测试)**
+- **use_case**: 测试业务逻辑，mock 所有 outbound ports
+  - 位置: `core/use_case/tests/` 或 `#[cfg(test)]` 内联
+  - 依赖: 只依赖 entity，不依赖具体 infra
+  
+- **entity**: 测试业务规则、状态转换、不变式
+  - 位置: `core/entity/tests/` 或 `#[cfg(test)]` 内联
+  - 特点: 纯逻辑，无外部依赖，最容易测试
+
+**2. Adapter 层测试 (集成测试)**
+- **inbound**: 测试输入转换（HTTP/CLI → command）
+  - 位置: `adapter/inbound/tests/`
+  - 验证: 请求解析、参数校验、调用 use_case
+  
+- **outbound**: 测试 port 实现（repository → DB/API）
+  - 位置: `adapter/outbound/tests/`
+  - 使用: 内存数据库或 testcontainers 验证真实交互
+
+**3. Infra 层 (外部工具，无独立测试)**
+- **Infra 是外部框架/SDK**（Tokio、PostgreSQL、Redis、Kafka 等），**不**作为项目目录存在
+- 不编写针对 infra 的独立测试，因为：
+  - 外部工具由各自社区测试
+  - 通过 `adapter/outbound` 的集成测试间接验证
+  - 通过 `tests/e2e/` 的全流程测试验证
+
+### 测试目录结构示例
+
+```
+project/
+├── core/                               # 业务核心 (无外部依赖)
+│   ├── use_case/
+│   │   ├── place_order.rs
+│   │   └── tests/                      # use_case 单元测试
+│   │       ├── place_order_test.rs     # mock outbound ports
+│   │       └── mod.rs
+│   └── entity/
+│       ├── order.rs
+│       └── tests/                      # entity 单元测试
+│           └── order_test.rs           # 纯业务规则测试
+├── adapter/                            # 适配器层 (连接 core 与外部)
+│   ├── inbound/
+│   │   ├── http/
+│   │   │   ├── order_controller.rs
+│   │   │   └── tests/                  # inbound 集成测试
+│   │   │       └── order_api_test.rs   # 验证 HTTP → command 转换
+│   │   └── cli/
+│   └── outbound/
+│       ├── repository/
+│       │   ├── order_repo.rs           # 实现 repository port
+│       │   └── tests/                  # outbound 集成测试
+│       │       └── order_repo_test.rs  # 测试与真实 DB 交互
+│       └── api_client/
+│           ├── external_api_client.rs  # 实现 api_client port
+│           └── tests/
+│               └── api_client_test.rs  # 测试与外部 API 交互
+└── tests/                              # E2E 测试 (顶层)
+    └── e2e/
+        └── order_flow_test.rs          # 完整用户场景
+```
+
+**说明：**
+- `core`: 纯业务逻辑，无外部依赖，单元测试全覆盖
+- `adapter`: 连接核心业务与外部工具，集成测试验证适配器正确性
+- `infra`: 外部框架/工具（Tokio、PostgreSQL、Redis 等），**不**在项目中作为目录存在，通过 adapter 的集成测试间接验证
+
+### 测试原则
+
+1. **单元测试**: 覆盖 core 层，无 I/O，快速执行 (< 10ms)
+2. **集成测试**: 覆盖 adapter + infra 层，验证真实交互
+3. **E2E 测试**: 覆盖完整流程，验证用户价值
+4. **测试金字塔**: 单元 (70%) > 集成 (20%) > E2E (10%)
+
+### 依赖规则（测试也遵守）
+
+```text
+test_use_case → use_case → entity
+test_use_case mocks outbound ports
+
+test_outbound → outbound adapter → real/test infra
+test_inbound  → inbound adapter → mock use_case
+
+test_e2e → full stack → real infra
+```
+
 ## Done When
 
 一次回答完成，必须满足：
