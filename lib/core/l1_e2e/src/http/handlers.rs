@@ -47,6 +47,7 @@ pub async fn execute_block(
                     block_height: reply.block_height,
                     block_event_count: reply.block_event_count,
                     node_state_update_count: reply.node_state_update_count,
+                    matched_trade_count: reply.matched_trade_count,
                 }),
             )
         })

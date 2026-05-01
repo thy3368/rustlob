@@ -51,6 +51,7 @@ pub struct ExecuteBlockResponse {
     pub block_height: u64,
     pub block_event_count: usize,
     pub node_state_update_count: usize,
+    pub matched_trade_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]

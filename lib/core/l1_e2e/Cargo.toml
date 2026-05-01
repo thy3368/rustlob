@@ -35,10 +35,10 @@ dex = { path = "../../../operating/dex" }
 db_repo = { path = "../../common/db_repo" }
 mdbx = { path = "../../common/mdbx" }
 libmdbx = "0.6"
-web3 = { path = "../../../study/web3" }
 alloy-primitives = "0.8"
 
 [dev-dependencies]
 bdd = { path = "../../common/bdd" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+md5 = "0.8"

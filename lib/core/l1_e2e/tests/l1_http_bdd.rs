@@ -6,7 +6,7 @@ use axum::{
 use bdd::bdd_test;
 use http_body_util::BodyExt;
 use l1_adapter::MdbxStateStore;
-use l1_core::{CodeStore, StateReader};
+use l1_core::{Account, CodeBlob, CodeStore, StateReader, VmKind};
 use l1_e2e::{bootstrap, http};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -39,24 +39,119 @@ fn assert_mdbx_files_exist(state_path: &PathBuf) {
     assert!(state_path.join("mdbx.lck").exists());
 }
 
-fn assert_mdbx_activity_exists(state_path: &PathBuf) {
+fn assert_mdbx_state_exists(
+    state_path: &PathBuf,
+    address: alloy_primitives::Address,
+    storage_key: alloy_primitives::B256,
+    expected_account: Account,
+    expected_storage: alloy_primitives::B256,
+    expected_code: CodeBlob,
+) {
     let store = MdbxStateStore::open(state_path).expect("failed to reopen MDBX store");
 
-    let has_account = store.account(alloy_primitives::Address::ZERO).ok().flatten().is_some();
-    let has_code = CodeStore::code(&store, alloy_primitives::B256::ZERO)
-        .ok()
-        .flatten()
-        .is_some();
-    let has_storage = store.storage(alloy_primitives::Address::ZERO, alloy_primitives::B256::ZERO)
-        .map(|value| value != alloy_primitives::B256::ZERO)
-        .unwrap_or(false);
+    assert_eq!(store.account(address).expect("failed to load account"), Some(expected_account));
+    assert_eq!(
+        store.storage(address, storage_key).expect("failed to load storage"),
+        expected_storage
+    );
+    assert_eq!(
+        CodeStore::code(&store, expected_code.code_hash).expect("failed to load code"),
+        Some(expected_code)
+    );
+}
 
-    let db_size = std::fs::metadata(state_path.join("mdbx.dat"))
-        .expect("failed to stat mdbx.dat")
-        .len();
+fn hash_to_b256(input: &str) -> alloy_primitives::B256 {
+    let digest = md5::compute(input.as_bytes());
+    let mut bytes = [0u8; 32];
+    bytes[..16].copy_from_slice(&digest.0);
+    bytes[16..].copy_from_slice(&digest.0);
+    alloy_primitives::B256::from(bytes)
+}
 
-    assert!(db_size > 0, "expected MDBX data file to be non-empty");
-    assert!(has_account || has_code || has_storage || db_size > 0, "expected MDBX persistence activity to be observable");
+fn rustvm_address(performer: &str, gas_used: u64) -> alloy_primitives::Address {
+    let hash = hash_to_b256(&format!("{}:{}", performer, gas_used));
+    alloy_primitives::Address::from_slice(&hash.as_slice()[..20])
+}
+
+fn rustvm_expected_state(
+    performer: &str,
+    request_id: &str,
+    action_type: &str,
+    capability: &str,
+    payload_hash: &str,
+) -> (
+    alloy_primitives::Address,
+    alloy_primitives::B256,
+    Account,
+    alloy_primitives::B256,
+    CodeBlob,
+) {
+    let gas_used = 1;
+    let address = rustvm_address(performer, gas_used);
+    let code_hash = hash_to_b256(&format!("{}:{}:{}", capability, payload_hash, action_type));
+    let storage_key = hash_to_b256(request_id);
+    let storage_value = hash_to_b256(&format!("{}:{}:{}", performer, action_type, payload_hash));
+    let account = Account {
+        nonce: gas_used,
+        balance: alloy_primitives::U256::from(gas_used),
+        code_hash,
+        storage_root: storage_value,
+        vm_kind: VmKind::RustVm,
+    };
+    let code = CodeBlob {
+        code_hash,
+        vm_kind: VmKind::RustVm,
+        bytes: format!("rustvm:{}:{}:{}", capability, action_type, payload_hash).into_bytes(),
+    };
+
+    (address, storage_key, account, storage_value, code)
+}
+
+fn evm_encode_amount(payload_hash: &str) -> u64 {
+    payload_hash
+        .as_bytes()
+        .iter()
+        .fold(0u64, |acc, byte| acc.wrapping_mul(131).wrapping_add(*byte as u64))
+        % 10_000
+        + 1
+}
+
+fn evm_expected_state(
+    performer: &str,
+    request_id: &str,
+    payload_hash: &str,
+) -> (
+    alloy_primitives::Address,
+    alloy_primitives::B256,
+    Account,
+    alloy_primitives::B256,
+    CodeBlob,
+) {
+    let gas_used = 2;
+    let address = l1_adapter::contracts::address_from_performer(performer);
+    let contract_name = format!("settlement-{performer}");
+    let code_hash = hash_to_b256(&format!("create:{contract_name}"));
+    let storage_key = hash_to_b256(&l1_adapter::contracts::settlement_id_from_seed(request_id));
+    let storage_value = hash_to_b256(&format!(
+        "create:{}:{}:{}",
+        request_id,
+        payload_hash,
+        evm_encode_amount(payload_hash)
+    ));
+    let account = Account {
+        nonce: gas_used,
+        balance: alloy_primitives::U256::from(evm_encode_amount(payload_hash)),
+        code_hash,
+        storage_root: storage_value,
+        vm_kind: VmKind::Evm,
+    };
+    let code = CodeBlob {
+        code_hash,
+        vm_kind: VmKind::Evm,
+        bytes: format!("evm:create:{contract_name}").into_bytes(),
+    };
+
+    (address, storage_key, account, storage_value, code)
 }
 
 async fn send_json(app: Router, method: Method, path: &str, body: Value) -> (StatusCode, Value) {
@@ -130,6 +225,10 @@ fn transaction_request(request_id: &str, account: &str, action_type: &str, vm_ki
     })
 }
 
+fn spot_match_request(request_id: &str, account: &str, side: &str) -> Value {
+    transaction_request(request_id, account, side, "rust_vm", "dex.spot.place_order")
+}
+
 #[tokio::test]
 #[bdd_test(
     feature = "L1 HTTP E2E",
@@ -185,8 +284,63 @@ async fn spot_order_is_admitted_and_executed() {
     assert!(execute_body["block_event_count"].as_u64().unwrap_or_default() >= 1);
     assert_eq!(health_status, StatusCode::OK);
     assert_eq!(health_body["mempool_len"], json!(0));
-    assert_mdbx_files_exist(&state_path);
-    assert_mdbx_activity_exists(&state_path);
+    let (address, storage_key, account, storage_value, code) = rustvm_expected_state(
+        "acct-bdd-spot-1",
+        "req-bdd-spot-1",
+        "spot_order",
+        "dex.spot.place_order",
+        "payload-req-bdd-spot-1",
+    );
+    assert_mdbx_state_exists(&state_path, address, storage_key, account, storage_value, code);
+}
+
+#[tokio::test]
+#[bdd_test(
+    feature = "L1 HTTP E2E",
+    scenario = "spot orders match in a single executed block",
+    given(empty_demo_state),
+    when = "the client submits crossing Rust VM spot orders and executes a block",
+    then(transaction_is_admitted, spot_matching_execution_succeeds),
+    tags(http, rust_vm, spot, matching, e2e),
+    priority = "5"
+)]
+async fn spot_orders_match_in_a_single_executed_block() {
+    let app = build_app();
+    let (sell_submit_status, sell_submit_body) = send_json(
+        app.clone(),
+        Method::POST,
+        "/api/l1/transactions",
+        spot_match_request("req-bdd-spot-sell-1", "acct-bdd-spot-maker-1", "sell"),
+    )
+    .await;
+    let (buy_submit_status, buy_submit_body) = send_json(
+        app.clone(),
+        Method::POST,
+        "/api/l1/transactions",
+        spot_match_request("req-bdd-spot-buy-1", "acct-bdd-spot-taker-1", "buy"),
+    )
+    .await;
+    let (execute_status, execute_body) = send_json(
+        app.clone(),
+        Method::POST,
+        "/api/l1/blocks/execute",
+        json!({ "block_height": 1011 }),
+    )
+    .await;
+    let (health_status, health_body) = send_empty(app, Method::GET, "/api/l1/health").await;
+
+    assert_eq!(sell_submit_status, StatusCode::OK);
+    assert_eq!(sell_submit_body["admitted_count"], json!(1));
+    assert_eq!(sell_submit_body["rejected_count"], json!(0));
+    assert_eq!(buy_submit_status, StatusCode::OK);
+    assert_eq!(buy_submit_body["admitted_count"], json!(1));
+    assert_eq!(buy_submit_body["rejected_count"], json!(0));
+    assert_eq!(execute_status, StatusCode::OK);
+    assert_eq!(execute_body["block_height"], json!(1011));
+    assert_eq!(execute_body["matched_trade_count"], json!(1));
+    assert!(execute_body["block_event_count"].as_u64().unwrap_or_default() >= 2);
+    assert_eq!(health_status, StatusCode::OK);
+    assert_eq!(health_body["mempool_len"], json!(0));
 }
 
 #[tokio::test]
@@ -292,8 +446,12 @@ async fn evm_settlement_create_is_admitted_and_executed() {
     assert_eq!(submit_body["rejected_count"], json!(0));
     assert_eq!(execute_status, StatusCode::OK);
     assert_eq!(execute_body["block_height"], json!(104));
-    assert!(execute_body["block_event_count"].as_u64().unwrap_or_default() >= 1);
-    assert_mdbx_files_exist(&state_path);
+    let (address, storage_key, account, storage_value, code) = evm_expected_state(
+        "acct-bdd-evm-1",
+        "req-bdd-evm-1",
+        "payload-req-bdd-evm-1",
+    );
+    assert_mdbx_state_exists(&state_path, address, storage_key, account, storage_value, code);
 }
 
 #[tokio::test]
