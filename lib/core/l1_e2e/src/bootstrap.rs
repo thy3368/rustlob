@@ -1,6 +1,5 @@
-use dex::adapter::evm_runtime::EvmRuntimeAdapter;
 use dex::adapter::rust_vm_runtime::RustVmRuntimeAdapter;
-use l1_adapter::{InMemoryMempool, MdbxStateStore};
+use l1_adapter::{EvmRuntimeAdapter, InMemoryMempool, MdbxStateStore};
 use l1_core::{PendingRequest, VmKind, VmRegistry};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

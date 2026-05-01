@@ -1,5 +1,5 @@
 use alloy_primitives::Address;
-use web3::revm::{contracts, RevmExecutor};
+use l1_adapter::{contracts, RevmExecutor};
 
 fn main() {
     let mut executor = RevmExecutor::new();
