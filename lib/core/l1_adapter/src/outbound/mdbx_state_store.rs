@@ -5,25 +5,27 @@ use l1_core::{
     CodeStore, StateReader, StateWriter, StorageChangeSet, StorageKey, StorageValue, VmKind,
 };
 use mdbx::MdbxKvStore;
+use std::sync::Arc;
 
 pub struct MdbxStateStore {
-    accounts: MdbxKvStore,
-    storage: MdbxKvStore,
-    codes: MdbxKvStore,
-    account_changes: MdbxKvStore,
-    storage_changes: MdbxKvStore,
-    code_changes: MdbxKvStore,
+    accounts: Arc<MdbxKvStore>,
+    storage: Arc<MdbxKvStore>,
+    codes: Arc<MdbxKvStore>,
+    account_changes: Arc<MdbxKvStore>,
+    storage_changes: Arc<MdbxKvStore>,
+    code_changes: Arc<MdbxKvStore>,
 }
 
 impl MdbxStateStore {
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+        let accounts = Arc::new(MdbxKvStore::open(path.as_ref(), "l1_shared_state")?);
         Ok(Self {
-            accounts: MdbxKvStore::open(path.as_ref(), "l1_plain_accounts")?,
-            storage: MdbxKvStore::open(path.as_ref(), "l1_plain_storage")?,
-            codes: MdbxKvStore::open(path.as_ref(), "l1_code_store")?,
-            account_changes: MdbxKvStore::open(path.as_ref(), "l1_account_changes")?,
-            storage_changes: MdbxKvStore::open(path.as_ref(), "l1_storage_changes")?,
-            code_changes: MdbxKvStore::open(path.as_ref(), "l1_code_changes")?,
+            accounts: accounts.clone(),
+            storage: accounts.clone(),
+            codes: accounts.clone(),
+            account_changes: accounts.clone(),
+            storage_changes: accounts.clone(),
+            code_changes: accounts,
         })
     }
 
