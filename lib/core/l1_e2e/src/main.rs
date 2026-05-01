@@ -1,7 +1,4 @@
-mod bootstrap;
-mod http;
-mod ingress_load_port;
-mod service;
+use l1_e2e::{bootstrap, http};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
