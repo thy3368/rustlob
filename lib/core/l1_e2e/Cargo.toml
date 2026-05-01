@@ -1,0 +1,39 @@
+[package]
+name = "l1_e2e"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "l1_e2e"
+path = "src/main.rs"
+
+[[bin]]
+name = "probe_mdbx"
+path = "src/bin_probe_mdbx.rs"
+
+[[bin]]
+name = "probe_multi_open"
+path = "src/bin_probe_multi_open.rs"
+
+[[bin]]
+name = "probe_revm_settlement"
+path = "src/bin_probe_revm_settlement.rs"
+
+[dependencies]
+axum = { version = "0.8.8", features = ["macros"] }
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+cmd_handler = { path = "../../common/cmd_handler" }
+l1_core = { path = "../l1" }
+l1_adapter = { path = "../l1_adapter" }
+dex = { path = "../../../operating/dex" }
+db_repo = { path = "../../common/db_repo" }
+mdbx = { path = "../../common/mdbx" }
+libmdbx = "0.6"
+web3 = { path = "../../../study/web3" }
+alloy-primitives = "0.8"
