@@ -28,6 +28,7 @@ pub struct PendingRequest {
     pub capability: VmCapability,
     pub action_type: String,
     pub payload_hash: String,
+    pub payload: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

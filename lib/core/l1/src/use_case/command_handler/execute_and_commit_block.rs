@@ -45,6 +45,7 @@ pub struct ExecuteAndCommitBlockEvents {
     pub state_changes: BlockStateChanges,
     pub block_events: Vec<BlockEvent>,
     pub node_state_updates: Vec<NodeStateUpdate>,
+    pub product_events: Vec<ProductEvent>,
 }
 
 impl DomainEventSet for ExecuteAndCommitBlockEvents {
@@ -58,6 +59,7 @@ pub struct ExecuteAndCommitBlockReply {
     pub block_height: u64,
     pub block_event_count: usize,
     pub node_state_update_count: usize,
+    pub matched_trade_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -71,8 +73,32 @@ impl UseCaseReplyMapper<ExecuteAndCommitBlockEvents> for ExecuteAndCommitBlockRe
             block_height: events.committed_block.block_height,
             block_event_count: events.block_events.len(),
             node_state_update_count: events.node_state_updates.len(),
+            matched_trade_count: count_matched_trades(&events.product_events),
         }
     }
+}
+
+fn count_matched_trades(product_events: &[ProductEvent]) -> usize {
+    product_events
+        .iter()
+        .filter_map(|event| {
+            if event.product_type == "Spot" {
+                parse_accepted_trade_count(&event.event_type)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+fn parse_accepted_trade_count(event_type: &str) -> Option<usize> {
+    let mut parts = event_type.split(':');
+    if parts.next()? != "accepted" {
+        return None;
+    }
+    parts.next()?;
+    parts.next()?;
+    parts.next()?.parse().ok()
 }
 
 pub struct ExecuteAndCommitBlockUseCase {
@@ -126,6 +152,14 @@ impl ExecuteAndCommitBlockUseCase {
             merged.account_deltas.extend(output.state_changes.account_deltas.clone());
             merged.storage_deltas.extend(output.state_changes.storage_deltas.clone());
             merged.code_deltas.extend(output.state_changes.code_deltas.clone());
+        }
+        merged
+    }
+
+    fn merge_product_events(outputs: &[VmExecutionOutput]) -> Vec<ProductEvent> {
+        let mut merged = Vec::new();
+        for output in outputs {
+            merged.extend(output.product_events.clone());
         }
         merged
     }
@@ -234,6 +268,7 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
         mut state: Self::GivenState,
     ) -> Result<Self::Events, Self::Error> {
         let outputs = self.execute_pending_requests(&state.pending_requests)?;
+        let product_events = Self::merge_product_events(&outputs);
         state.state_changes = Self::merge_state_changes(&outputs);
         state.state_diff.account_delta_hash = Self::account_delta_hash(&state.state_changes);
         state.state_diff.storage_delta_hash = Self::storage_delta_hash(&state.state_changes);
@@ -245,6 +280,7 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
             state_changes: state.state_changes,
             block_events: state.block_events,
             node_state_updates: state.node_state_updates,
+            product_events,
         })
     }
 }
@@ -472,6 +508,7 @@ mod tests {
                     state_root: StateRoot("state-root-1".to_string()),
                     update_hash: "update-1".to_string(),
                 }],
+                product_events: vec![],
             })
         }
     }
@@ -553,6 +590,11 @@ mod tests {
                 state_root: StateRoot("state-root-1".to_string()),
                 update_hash: "update-1".to_string(),
             }],
+            product_events: vec![ProductEvent {
+                product_type: "Spot".to_string(),
+                event_type: "accepted:1:1:1".to_string(),
+                payload: b"payload-1".to_vec(),
+            }],
         };
 
         let reply = ExecuteAndCommitBlockReplyMapper.map(events);
@@ -560,6 +602,7 @@ mod tests {
         assert_eq!(reply.block_height, 1);
         assert_eq!(reply.block_event_count, 1);
         assert_eq!(reply.node_state_update_count, 1);
+        assert_eq!(reply.matched_trade_count, 1);
     }
 
     #[test]
