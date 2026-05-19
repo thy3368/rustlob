@@ -272,6 +272,7 @@ mod tests {
             capability: VmCapability::new(capability),
             action_type: "settlement".to_string(),
             payload_hash: "payload-evm-1".to_string(),
+            payload: None,
         }
     }
 
