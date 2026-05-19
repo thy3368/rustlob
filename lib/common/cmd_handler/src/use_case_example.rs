@@ -1,7 +1,7 @@
 use super::use_case_def::{
     CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, LoadState, UseCaseReplyMapper,
 };
-use crate::DomainEventSet;
+use crate::TraceableEventSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceOrderCommand {
@@ -44,8 +44,8 @@ pub struct PlaceOrderEvents {
     pub accepted: bool,
 }
 
-impl DomainEventSet for PlaceOrderEvents {
-    fn domain_event_count(&self) -> usize {
+impl TraceableEventSet for PlaceOrderEvents {
+    fn event_count(&self) -> usize {
         usize::from(self.accepted)
     }
 }
@@ -55,7 +55,7 @@ pub struct PlaceOrderUseCase;
 impl CommandUseCase for PlaceOrderUseCase {
     type Command = PlaceOrderCommand;
     type GivenState = PlaceOrderState;
-    type Events = PlaceOrderEvents;
+    type ThenTraceableEvents = PlaceOrderEvents;
     type Error = PlaceOrderError;
     type LoadPort = dyn PlaceOrderLoadPort;
 
@@ -79,11 +79,11 @@ impl CommandUseCase for PlaceOrderUseCase {
         }
     }
 
-    fn then_event_4_new_state(
+    fn gen_traceable_events(
         &self,
         _cmd: &Self::Command,
         _state: Self::GivenState,
-    ) -> Result<Self::Events, Self::Error> {
+    ) -> Result<Self::ThenTraceableEvents, Self::Error> {
         Ok(PlaceOrderEvents { accepted: true })
     }
 }
@@ -191,7 +191,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(events, PlaceOrderEvents { accepted: true });
-        assert_eq!(events.domain_event_count(), 1);
+        assert_eq!(events.event_count(), 1);
     }
 
     #[test]

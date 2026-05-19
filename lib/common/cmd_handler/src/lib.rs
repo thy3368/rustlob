@@ -9,5 +9,5 @@ pub mod use_case_def;
 pub mod use_case_example;
 
 pub use handler_cmd::{
-    CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet, HandlerLatencyMetrics,
+    CmdHandlerForUpdate3, CmdHandlerInternal, TraceableEventSet, HandlerLatencyMetrics,
 };

@@ -13,8 +13,10 @@ pub struct HandlerLatencyMetrics {
     pub domain_event_count: usize,
 }
 
-pub trait DomainEventSet {
-    fn domain_event_count(&self) -> usize;
+
+/// TraceableDomainEvent 可溯源 事件
+pub trait TraceableEventSet {
+    fn event_count(&self) -> usize;
     // fn events(&self) -> &[ChangeLog];
 }
 
@@ -26,7 +28,7 @@ pub trait CmdHandlerInternal: Send + Sync {
     type Command;
     type Reply;
     type GivenStateSet;
-    type ThenStateSet: DomainEventSet;
+    type ThenTraceableEventSet: TraceableEventSet;
     type Error;
 
     type Repo: CmdRepo2;
@@ -36,9 +38,9 @@ pub trait CmdHandlerInternal: Send + Sync {
         &self,
         cmd: &Self::Command,
         state_set: Self::GivenStateSet,
-    ) -> Result<Self::ThenStateSet, Self::Error>;
+    ) -> Result<Self::ThenTraceableEventSet, Self::Error>;
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply;
+    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenTraceableEventSet) -> Self::Reply;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
 
@@ -56,7 +58,7 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn persist_domain_events(
         &self,
-        domain_events: &Self::ThenStateSet,
+        domain_events: &Self::ThenTraceableEventSet,
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         todo!()
@@ -64,7 +66,7 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::ThenStateSet,
+        domain_events: &Self::ThenTraceableEventSet,
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         //todo 在这里回放
@@ -76,7 +78,7 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::ThenStateSet,
+        domain_events: &Self::ThenTraceableEventSet,
         publisher: Self::Publisher,
     ) -> Result<(), Self::Error> {
         todo!()
@@ -91,7 +93,7 @@ pub trait CmdHandlerForUpdate3: CmdHandlerInternal + Send + Sync {
         cmd: Self::Command,
         repo: Self::Repo,
         publisher: Self::Publisher,
-    ) -> Result<Self::ThenStateSet, Self::Error> {
+    ) -> Result<Self::ThenTraceableEventSet, Self::Error> {
         use minstant::Instant;
 
         let total_start = Instant::now();
@@ -133,7 +135,7 @@ pub trait CmdHandlerForUpdate3: CmdHandlerInternal + Send + Sync {
             persist_domain_events_ns,
             replay_domain_events_ns,
             publish_domain_events_ns,
-            domain_event_count: changes.domain_event_count(),
+            domain_event_count: changes.event_count(),
         };
 
         self.observe_latency(&metrics);

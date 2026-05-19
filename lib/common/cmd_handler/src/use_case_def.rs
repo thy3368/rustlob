@@ -1,4 +1,4 @@
-use crate::{DomainEventSet, HandlerLatencyMetrics};
+use crate::{TraceableEventSet, HandlerLatencyMetrics};
 
 /// 状态加载端口 - 标准化从外部存储加载领域状态
 /// 
@@ -11,8 +11,11 @@ pub trait LoadState<Cmd, State, Err>: Send + Sync {
 /// 只定义业务输入、状态装载、业务校验与领域事件产出。
 pub trait CommandUseCase: Send + Sync {
     type Command;
+    
+    
+    /// 通常是加载的 entity, 从数据库/内存/文件等
     type GivenState;
-    type Events: DomainEventSet;
+    type ThenTraceableEvents: TraceableEventSet;
     type Error;
     type LoadPort: ?Sized + Send + Sync + LoadState<Self::Command, Self::GivenState, Self::Error>;
 
@@ -36,11 +39,11 @@ pub trait CommandUseCase: Send + Sync {
         state: &Self::GivenState,
     ) -> Result<(), Self::Error>;
 
-    fn then_event_4_new_state(
+    fn gen_traceable_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Self::Events, Self::Error>;
+    ) -> Result<Self::ThenTraceableEvents, Self::Error>;
 
     fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
 }
@@ -71,10 +74,10 @@ impl CommandUseCaseExecutor {
         command: U::Command,
         load_port: &U::LoadPort,
         pipeline: &P,
-    ) -> Result<U::Events, U::Error>
+    ) -> Result<U::ThenTraceableEvents, U::Error>
     where
         U: CommandUseCase,
-        P: DomainEventPipeline<U::Events, U::Error>,
+        P: DomainEventPipeline<U::ThenTraceableEvents, U::Error>,
     {
         use minstant::Instant;
 
@@ -93,7 +96,7 @@ impl CommandUseCaseExecutor {
         let validate_in_lock_ns = validate_start.elapsed().as_nanos();
 
         let then_start = Instant::now();
-        let events = use_case.then_event_4_new_state(&command, state)?;
+        let events = use_case.gen_traceable_events(&command, state)?;
         let apply_changes_ns = then_start.elapsed().as_nanos();
 
         let persist_start = Instant::now();
@@ -117,7 +120,7 @@ impl CommandUseCaseExecutor {
             persist_domain_events_ns,
             replay_domain_events_ns,
             publish_domain_events_ns,
-            domain_event_count: events.domain_event_count(),
+            domain_event_count: events.event_count(),
         };
 
         use_case.observe_latency(&metrics);
@@ -134,8 +137,8 @@ impl CommandUseCaseExecutor {
     ) -> Result<M::Reply, U::Error>
     where
         U: CommandUseCase,
-        P: DomainEventPipeline<U::Events, U::Error>,
-        M: UseCaseReplyMapper<U::Events>,
+        P: DomainEventPipeline<U::ThenTraceableEvents, U::Error>,
+        M: UseCaseReplyMapper<U::ThenTraceableEvents>,
     {
         let events = self.execute(use_case, command, load_port, pipeline)?;
         Ok(mapper.map(events))
