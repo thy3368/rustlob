@@ -19,6 +19,10 @@ impl<'a> ApplyCommandChanges<
     ExecuteTradingBatchError,
 > for PlaceOrderApplier
 {
+
+    // Build the incoming order from the command, match it against opposite-side resting orders,
+    // return any generated trades/balance deltas, and reinsert the unfilled remainder into the book.
+
     fn apply_command_and_collect_changes(
         &self,
         command: &SpotPlaceOrderCmd,

@@ -2,6 +2,7 @@ mod option;
 mod perp;
 mod shared;
 mod spot;
+pub mod spot_book;
 mod treasury;
 
 use alloy_primitives::{Address, B256, U256};
@@ -11,21 +12,124 @@ use l1_core::{
     Receipt, StorageDelta, VmExecutionInput, VmExecutionOutput, VmKind, VmRuntime, VmRuntimeError,
 };
 
+use std::sync::Arc;
+
 use crate::core::{ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ProductType};
 
 use self::option::build_option_envelope;
 use self::perp::build_perp_envelope;
 use self::shared::unsupported_capability;
 use self::spot::build_spot_envelope;
+use self::spot_book::{
+    MdbxSpotOrderBookRepository, RestingSpotOrderSnapshot, SpotOrderBookRepository,
+    SpotOrderBookSnapshot,
+};
 use self::treasury::build_treasury_envelope;
 
 pub struct RustVmRuntimeAdapter {
     handler: ExecuteTradingBatchHandler,
+    spot_order_book_repository: Option<Arc<dyn SpotOrderBookRepository>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SpotBookOrderView {
+    pub order_id: u64,
+    pub trader_id: u64,
+    pub market: String,
+    pub side: crate::core::SpotSide,
+    pub price: u64,
+    pub original_quantity: u64,
+    pub remaining_quantity: u64,
 }
 
 impl RustVmRuntimeAdapter {
     pub fn new() -> Self {
-        Self { handler: ExecuteTradingBatchHandler::new() }
+        Self {
+            handler: ExecuteTradingBatchHandler::new(),
+            spot_order_book_repository: None,
+        }
+    }
+
+    pub fn with_spot_order_book_repository(
+        spot_order_book_repository: Arc<dyn SpotOrderBookRepository>,
+    ) -> Self {
+        Self {
+            handler: ExecuteTradingBatchHandler::new(),
+            spot_order_book_repository: Some(spot_order_book_repository),
+        }
+    }
+
+    pub fn with_spot_order_book_path(
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, db_repo::StorageError> {
+        let repository = Arc::new(MdbxSpotOrderBookRepository::open(path)?);
+        Ok(Self::with_spot_order_book_repository(repository))
+    }
+
+    fn snapshot_to_live_order_book(snapshot: SpotOrderBookSnapshot) -> crate::core::use_case::execute_trading_batch::SpotOrderBook {
+        snapshot
+            .into_iter()
+            .map(|(market, orders)| (market, orders.into_iter().map(Into::into).collect()))
+            .collect()
+    }
+
+    fn live_order_book_to_snapshot(
+        order_book: crate::core::use_case::execute_trading_batch::SpotOrderBook,
+    ) -> SpotOrderBookSnapshot {
+        order_book
+            .into_iter()
+            .map(|(market, orders)| (market, orders.into_iter().map(Into::into).collect()))
+            .collect()
+    }
+
+    fn snapshot_orders(snapshot: SpotOrderBookSnapshot, market: &str) -> Vec<SpotBookOrderView> {
+        snapshot
+            .get(market)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|order| SpotBookOrderView {
+                order_id: order.order_id,
+                trader_id: order.trader_id,
+                market: order.market,
+                side: order.side,
+                price: order.price,
+                original_quantity: order.original_quantity,
+                remaining_quantity: order.remaining_quantity,
+            })
+            .collect()
+    }
+
+    pub fn spot_book_orders(&self, market: &str) -> Result<Vec<SpotBookOrderView>, VmRuntimeError> {
+        if let Some(repository) = &self.spot_order_book_repository {
+            let snapshot = repository
+                .load()
+                .map_err(VmRuntimeError::ExecutionFailed)?;
+            return Ok(Self::snapshot_orders(snapshot, market));
+        }
+
+        let snapshot = Self::live_order_book_to_snapshot(self.handler.snapshot_spot_order_book());
+        Ok(Self::snapshot_orders(snapshot, market))
+    }
+
+    fn restore_spot_order_book(&self) -> Result<(), VmRuntimeError> {
+        let Some(repository) = &self.spot_order_book_repository else {
+            return Ok(());
+        };
+        let snapshot = repository
+            .load()
+            .map_err(VmRuntimeError::ExecutionFailed)?;
+        self.handler
+            .restore_spot_order_book(Self::snapshot_to_live_order_book(snapshot));
+        Ok(())
+    }
+
+    fn persist_spot_order_book(&self) -> Result<(), VmRuntimeError> {
+        let Some(repository) = &self.spot_order_book_repository else {
+            return Ok(());
+        };
+        let snapshot = Self::live_order_book_to_snapshot(self.handler.snapshot_spot_order_book());
+        repository.save(&snapshot).map_err(VmRuntimeError::ExecutionFailed)
     }
 
     fn address_from_request(performer: &str, salt: u64) -> Address {
@@ -124,10 +228,16 @@ impl VmRuntime<PendingRequest> for RustVmRuntimeAdapter {
             ProductType::Option => "Option",
             ProductType::Treasury => "Treasury",
         };
+        if matches!(envelope.product_type, ProductType::Spot) {
+            self.restore_spot_order_book()?;
+        }
         let writes = self
             .handler
             .cmd_handle(vec![envelope], |writes, _| writes.clone())
             .map_err(VmRuntimeError::ExecutionFailed)?;
+        if product_type == "Spot" {
+            self.persist_spot_order_book()?;
+        }
 
         let state_changes = Self::state_changes(&input, writes.summary.accepted_commands as u64);
 
@@ -169,6 +279,7 @@ mod tests {
             capability: VmCapability::new("dex.perp.place_order"),
             action_type: "perp_order".to_string(),
             payload_hash: "payload-perp-1".to_string(),
+            payload: None,
         }
     }
 

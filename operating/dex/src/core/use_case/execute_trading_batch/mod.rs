@@ -14,7 +14,7 @@ use crate::core::SpotSide;
 pub(crate) type ExecuteTradingBatchError = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RestingSpotOrder {
+pub struct RestingSpotOrder {
     pub(crate) order_id: u64,
     pub(crate) trader_id: u64,
     pub(crate) market: String,
@@ -24,4 +24,4 @@ pub(crate) struct RestingSpotOrder {
     pub(crate) remaining_quantity: u64,
 }
 
-pub(crate) type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;
+pub type SpotOrderBook = BTreeMap<String, Vec<RestingSpotOrder>>;

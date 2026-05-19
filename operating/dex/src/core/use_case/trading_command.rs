@@ -6,7 +6,8 @@
 
 use crate::core::entity::ProductType;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SpotSide {
     Buy,
     Sell,

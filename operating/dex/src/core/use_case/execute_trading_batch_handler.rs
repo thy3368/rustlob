@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use base_types::exchange::prep::perp_types::PrepTrade;
 use base_types::exchange::prep::prep_order::PrepOrder;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
@@ -8,7 +10,7 @@ use crate::core::use_case::execute_trading_batch::option_handler::OptionBatchHan
 use crate::core::use_case::execute_trading_batch::perp_handler::PerpBatchHandler;
 use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
 use crate::core::use_case::execute_trading_batch::treasury_handler::TreasuryBatchHandler;
-use crate::core::use_case::execute_trading_batch::{option, perp, treasury, ExecuteTradingBatchError};
+use crate::core::use_case::execute_trading_batch::{option, perp, treasury, ExecuteTradingBatchError, SpotOrderBook};
 use crate::core::use_case::trading_command::{ExchangeCommand, ExchangeCommandEnvelope, TradingCommand};
 
 
@@ -54,6 +56,7 @@ pub struct ExecutedBatchBlock {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ExecuteTradingBatchState {
     pub batch_size: usize,
+    pub spot_order_book: SpotOrderBook,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +88,15 @@ impl ExecuteTradingBatchHandler {
             option: OptionBatchHandler::new(),
             treasury: TreasuryBatchHandler::new(),
         }
+    }
+
+    pub fn restore_spot_order_book(&self, spot_order_book: SpotOrderBook) {
+        let mut current = self.spot.spot_order_book.lock().unwrap();
+        *current = spot_order_book;
+    }
+
+    pub fn snapshot_spot_order_book(&self) -> SpotOrderBook {
+        self.spot.spot_order_book.lock().unwrap().clone()
     }
 
     fn handle_envelope(
@@ -161,6 +173,7 @@ impl ApplyCommandChanges<
         };
 
         let mut changelogs = Vec::new();
+        self.restore_spot_order_book(state_set.spot_order_book);
         self.delegate_batch_commands(cmd, &mut writes, &mut changelogs)?;
 
         writes.summary.balance_updates = writes.balance_deltas.len();
@@ -193,10 +206,9 @@ impl CmdHandlerForUpdate<
         &self,
         cmd: &Vec<ExchangeCommandEnvelope>,
     ) -> Result<ExecuteTradingBatchState, ExecuteTradingBatchError> {
-        //todo 委派给子command
-
         Ok(ExecuteTradingBatchState {
             batch_size: cmd.len(),
+            spot_order_book: self.snapshot_spot_order_book(),
         })
     }
 
