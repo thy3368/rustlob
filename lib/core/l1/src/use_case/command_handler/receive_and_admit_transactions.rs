@@ -1,4 +1,4 @@
-use cmd_handler::DomainEventSet;
+use cmd_handler::TraceableEventSet;
 use cmd_handler::use_case_def::{
     CommandUseCase, CommandUseCaseExecutor, DomainEventPipeline, UseCaseReplyMapper,
 };
@@ -32,8 +32,8 @@ pub struct ReceiveAndAdmitTransactionsEvents {
     pub ingress_decisions: Vec<IngressDecision>,
 }
 
-impl DomainEventSet for ReceiveAndAdmitTransactionsEvents {
-    fn domain_event_count(&self) -> usize {
+impl TraceableEventSet for ReceiveAndAdmitTransactionsEvents {
+    fn event_count(&self) -> usize {
         self.ingress_decisions.len()
     }
 }
@@ -70,7 +70,7 @@ pub struct ReceiveAndAdmitTransactionsUseCase;
 impl CommandUseCase for ReceiveAndAdmitTransactionsUseCase {
     type Command = ReceiveAndAdmitTransactionsCmd;
     type GivenState = ReceiveAndAdmitTransactionsStateSnapshot;
-    type Events = ReceiveAndAdmitTransactionsEvents;
+    type ThenTraceableEvents = ReceiveAndAdmitTransactionsEvents;
     type Error = ReceiveAndAdmitTransactionsError;
     type LoadPort = dyn cmd_handler::use_case_def::LoadState<
             ReceiveAndAdmitTransactionsCmd,
@@ -98,11 +98,11 @@ impl CommandUseCase for ReceiveAndAdmitTransactionsUseCase {
         Ok(())
     }
 
-    fn then_event_4_new_state(
+    fn gen_traceable_events(
         &self,
         _cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Self::Events, Self::Error> {
+    ) -> Result<Self::ThenTraceableEvents, Self::Error> {
         Ok(ReceiveAndAdmitTransactionsEvents {
             admitted_requests: state.admitted_requests,
             ingress_decisions: state.ingress_decisions,
@@ -194,9 +194,9 @@ mod tests {
 
         let state = ReceiveAndAdmitTransactionsUseCase.load_state(&cmd, &StubLoadPort).unwrap();
         let events =
-            ReceiveAndAdmitTransactionsUseCase.then_event_4_new_state(&cmd, state).unwrap();
+            ReceiveAndAdmitTransactionsUseCase.gen_traceable_events(&cmd, state).unwrap();
 
-        assert_eq!(events.domain_event_count(), 1);
+        assert_eq!(events.event_count(), 1);
         assert_eq!(events.admitted_requests.len(), 1);
     }
 
@@ -249,7 +249,7 @@ mod tests {
 
         let events = executor.execute(&use_case, cmd, &load_port, &pipeline).unwrap();
 
-        assert_eq!(events.domain_event_count(), 1);
+        assert_eq!(events.event_count(), 1);
         assert_eq!(events.admitted_requests.len(), 1);
         assert_eq!(events.admitted_requests[0].request_id, "req-1");
     }

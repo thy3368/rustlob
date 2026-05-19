@@ -1,4 +1,4 @@
-use cmd_handler::DomainEventSet;
+use cmd_handler::TraceableEventSet;
 use cmd_handler::use_case_def::{CommandUseCase, LoadState, UseCaseReplyMapper};
 use std::sync::Arc;
 
@@ -48,8 +48,8 @@ pub struct ExecuteAndCommitBlockEvents {
     pub product_events: Vec<ProductEvent>,
 }
 
-impl DomainEventSet for ExecuteAndCommitBlockEvents {
-    fn domain_event_count(&self) -> usize {
+impl TraceableEventSet for ExecuteAndCommitBlockEvents {
+    fn event_count(&self) -> usize {
         1 + self.block_events.len() + self.node_state_updates.len()
     }
 }
@@ -230,7 +230,7 @@ impl Default for ExecuteAndCommitBlockUseCase {
 impl CommandUseCase for ExecuteAndCommitBlockUseCase {
     type Command = ExecuteAndCommitBlockCmd;
     type GivenState = ExecuteAndCommitBlockStateSnapshot;
-    type Events = ExecuteAndCommitBlockEvents;
+    type ThenTraceableEvents = ExecuteAndCommitBlockEvents;
     type Error = ExecuteAndCommitBlockError;
     type LoadPort = dyn LoadState<
             ExecuteAndCommitBlockCmd,
@@ -262,11 +262,11 @@ impl CommandUseCase for ExecuteAndCommitBlockUseCase {
         Ok(())
     }
 
-    fn then_event_4_new_state(
+    fn gen_traceable_events(
         &self,
         _cmd: &Self::Command,
         mut state: Self::GivenState,
-    ) -> Result<Self::Events, Self::Error> {
+    ) -> Result<Self::ThenTraceableEvents, Self::Error> {
         let outputs = self.execute_pending_requests(&state.pending_requests)?;
         let product_events = Self::merge_product_events(&outputs);
         state.state_changes = Self::merge_state_changes(&outputs);
@@ -613,10 +613,10 @@ mod tests {
 
         let state = use_case.load_state(&cmd, &StubLoadPort).unwrap();
         use_case.validate_against_state(&cmd, &state).unwrap();
-        let events = use_case.then_event_4_new_state(&cmd, state).unwrap();
+        let events = use_case.gen_traceable_events(&cmd, state).unwrap();
 
         assert_eq!(events.committed_block.block_height, 1);
-        assert_eq!(events.domain_event_count(), 3);
+        assert_eq!(events.event_count(), 3);
         assert_eq!(events.state_changes.account_deltas.len(), 1);
         assert_eq!(events.state_changes.storage_deltas.len(), 1);
         assert_eq!(events.state_changes.code_deltas.len(), 1);
@@ -635,7 +635,7 @@ mod tests {
             ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![pending_request()] };
 
         let state = use_case.load_state(&cmd, &StubLoadPort).unwrap();
-        let events = use_case.then_event_4_new_state(&cmd, state).unwrap();
+        let events = use_case.gen_traceable_events(&cmd, state).unwrap();
 
         assert_eq!(events.state_changes.account_deltas.len(), 1);
         assert_eq!(events.state_changes.account_deltas[0].current.as_ref().unwrap().nonce, 77);
