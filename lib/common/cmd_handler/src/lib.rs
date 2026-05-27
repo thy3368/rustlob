@@ -6,8 +6,11 @@ pub mod handler_cmd;
 pub mod handler_query;
 pub mod pipe_line_handler;
 pub mod use_case_def;
+pub mod use_case_def2;
+mod use_case_design;
 pub mod use_case_example;
+mod use_case_impl;
 
 pub use handler_cmd::{
-    CmdHandlerForUpdate3, CmdHandlerInternal, TraceableEventSet, HandlerLatencyMetrics,
+    CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, TraceableEventSet,
 };
