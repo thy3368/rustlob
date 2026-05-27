@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `l1_adapter`
+ --> tests/fail/core_depends_on_l1_adapter.rs:3:5
+  |
+3 | use l1_adapter as outbound_adapter;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no external crate `l1_adapter`

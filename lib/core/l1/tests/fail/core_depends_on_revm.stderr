@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `revm`
+ --> tests/fail/core_depends_on_revm.rs:3:5
+  |
+3 | use revm as infra_runtime;
+  |     ^^^^^^^^^^^^^^^^^^^^^ no external crate `revm`
