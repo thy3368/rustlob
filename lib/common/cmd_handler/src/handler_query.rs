@@ -21,7 +21,6 @@ pub trait DomainEventSet {
     fn domain_event_count(&self) -> usize;
 }
 
-
 /// 查询处理器 trait
 pub trait QueryHandler: Send + Sync {
     type Query;

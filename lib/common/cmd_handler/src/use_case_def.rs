@@ -1,7 +1,7 @@
-use crate::{TraceableEventSet, HandlerLatencyMetrics};
+use crate::{HandlerLatencyMetrics, TraceableEventSet};
 
 /// 状态加载端口 - 标准化从外部存储加载领域状态
-/// 
+///
 /// 用于 CommandUseCase 的 LoadPort 关联类型，提供统一的状态加载接口
 pub trait LoadState<Cmd, State, Err>: Send + Sync {
     fn load_state(&self, cmd: &Cmd) -> Result<State, Err>;
@@ -11,8 +11,7 @@ pub trait LoadState<Cmd, State, Err>: Send + Sync {
 /// 只定义业务输入、状态装载、业务校验与领域事件产出。
 pub trait CommandUseCase: Send + Sync {
     type Command;
-    
-    
+
     /// 通常是加载的 entity, 从数据库/内存/文件等
     type GivenState;
     type ThenTraceableEvents: TraceableEventSet;

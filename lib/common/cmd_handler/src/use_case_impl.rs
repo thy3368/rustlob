@@ -1,6 +1,4 @@
-use super::use_case_def2::{
-    CommandUseCase2, DomainEventPipeline, LoadState, UseCaseReplyMapper,
-};
+use super::use_case_def2::{CommandUseCase2, DomainEventPipeline, LoadState, UseCaseReplyMapper};
 use crate::TraceableEventSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,9 +29,7 @@ where
 {
     fn load_state(&self, cmd: &PlaceOrderCommand) -> Result<PlaceOrderState, PlaceOrderError> {
         let snapshot = self.load_place_order_state(cmd)?;
-        Ok(PlaceOrderState {
-            can_place: snapshot.can_place,
-        })
+        Ok(PlaceOrderState { can_place: snapshot.can_place })
     }
 }
 
@@ -74,11 +70,7 @@ impl CommandUseCase2 for PlaceOrderUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.can_place {
-            Ok(())
-        } else {
-            Err(PlaceOrderError::Rejected)
-        }
+        if state.can_place { Ok(()) } else { Err(PlaceOrderError::Rejected) }
     }
 
     fn gen_traceable_events(
@@ -102,9 +94,7 @@ impl UseCaseReplyMapper<PlaceOrderEvents> for PlaceOrderReplyMapper {
     type Reply = PlaceOrderReply;
 
     fn map(&self, events: PlaceOrderEvents) -> Self::Reply {
-        PlaceOrderReply {
-            accepted: events.accepted,
-        }
+        PlaceOrderReply { accepted: events.accepted }
     }
 }
 

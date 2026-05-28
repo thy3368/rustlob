@@ -4,9 +4,14 @@ fn saturating_u64(value: u128) -> u64 {
     value.min(u64::MAX as u128) as u64
 }
 
+fn trace_field_or_placeholder(value: Option<&str>) -> &str {
+    value.unwrap_or("-")
+}
+
 fn trace_phase<T, E>(
     phase: &'static str,
     operation: &'static str,
+    format_error: impl Fn(&E) -> Option<String>,
     f: impl FnOnce() -> Result<T, E>,
 ) -> Result<(T, u128), E> {
     use minstant::Instant;
@@ -28,16 +33,38 @@ fn trace_phase<T, E>(
             Ok((value, elapsed_ns))
         }
         Err(error) => {
-            tracing::trace!(
-                phase,
-                operation,
-                status = "err",
-                elapsed_ns = saturating_u64(elapsed_ns),
-                "command use case phase failed"
-            );
+            if let Some(error_message) = format_error(&error) {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "err",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    error_message = %error_message,
+                    "command use case phase failed"
+                );
+            } else {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "err",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    "command use case phase failed"
+                );
+            }
             Err(error)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CommandTraceContext<'a> {
+    pub trace_id: Option<&'a str>,
+    pub request_id: Option<&'a str>,
+    pub command_id: Option<&'a str>,
+    pub entity_id: Option<&'a str>,
+    pub account_id: Option<&'a str>,
+    pub symbol: Option<&'a str>,
+    pub command_summary: Option<&'a str>,
 }
 
 /// 更贴近 Use Cases（用例）的命令型抽象：
@@ -56,6 +83,16 @@ pub trait CommandUseCase2: Send + Sync {
     /// 对应四色建模的role
     fn role(&self) -> &'static str {
         "UnknownActor用来做权限控制和追溯"
+    }
+
+    /// 提供结构化追溯字段，默认空实现，不强迫所有 use case 修改。
+    fn trace_context<'a>(&'a self, _cmd: &'a Self::Command) -> CommandTraceContext<'a> {
+        CommandTraceContext::default()
+    }
+
+    /// 提供错误的可读摘要，默认空实现。
+    fn format_error(&self, _error: &Self::Error) -> Option<String> {
+        None
     }
 
     /// 对command的检查
@@ -139,14 +176,23 @@ impl CommandUseCaseExecutor2 {
         use minstant::Instant;
 
         let total_start = Instant::now();
+        let trace_context = use_case.trace_context(&command);
         let execution_span = tracing::span!(
             tracing::Level::TRACE,
             "command_use_case_execute",
             use_case = std::any::type_name::<U>(),
             role = use_case.role(),
             command_type = std::any::type_name::<U::Command>(),
+            error_type = std::any::type_name::<U::Error>(),
             load_port = std::any::type_name::<L>(),
             pipeline = std::any::type_name::<P>(),
+            trace_id = trace_field_or_placeholder(trace_context.trace_id),
+            request_id = trace_field_or_placeholder(trace_context.request_id),
+            command_id = trace_field_or_placeholder(trace_context.command_id),
+            entity_id = trace_field_or_placeholder(trace_context.entity_id),
+            account_id = trace_field_or_placeholder(trace_context.account_id),
+            symbol = trace_field_or_placeholder(trace_context.symbol),
+            command_summary = trace_field_or_placeholder(trace_context.command_summary),
         );
         let _execution_guard = execution_span.enter();
 
@@ -157,49 +203,67 @@ impl CommandUseCaseExecutor2 {
             "command use case execution started"
         );
 
-        let execution = (|| -> Result<(U::ThenTraceableEvents, HandlerLatencyMetrics), U::Error> {
-            let ((), pre_check_ns) = trace_phase(
-                "pre_check",
-                "use_case.pre_check_command(&command)",
-                || use_case.pre_check_command(&command),
-            )?;
-            let (state, load_state_ns) =
-                trace_phase("load_state", "load_port.load_state(&command)", || {
-                    load_port.load_state(&command)
-                })?;
-            let ((), validate_in_lock_ns) = trace_phase(
-                "validate_against_state",
-                "use_case.validate_against_state(&command, &state)",
-                || use_case.validate_against_state(&command, &state),
-            )?;
-            let (events, apply_changes_ns) = trace_phase(
-                "gen_traceable_events",
-                "use_case.gen_traceable_events(&command, state)",
-                || use_case.gen_traceable_events(&command, state),
-            )?;
-            let domain_event_count = events.event_count();
+        let execution =
+            (|| -> Result<(U::ThenTraceableEvents, HandlerLatencyMetrics), U::Error> {
+                let ((), pre_check_ns) = trace_phase(
+                    "pre_check",
+                    "use_case.pre_check_command(&command)",
+                    |error| use_case.format_error(error),
+                    || use_case.pre_check_command(&command),
+                )?;
+                let (state, load_state_ns) = trace_phase(
+                    "load_state",
+                    "load_port.load_state(&command)",
+                    |error| use_case.format_error(error),
+                    || load_port.load_state(&command),
+                )?;
+                let ((), validate_in_lock_ns) = trace_phase(
+                    "validate_against_state",
+                    "use_case.validate_against_state(&command, &state)",
+                    |error| use_case.format_error(error),
+                    || use_case.validate_against_state(&command, &state),
+                )?;
+                let (events, apply_changes_ns) = trace_phase(
+                    "gen_traceable_events",
+                    "use_case.gen_traceable_events(&command, state)",
+                    |error| use_case.format_error(error),
+                    || use_case.gen_traceable_events(&command, state),
+                )?;
+                let domain_event_count = events.event_count();
 
-            let ((), persist_domain_events_ns) =
-                trace_phase("persist", "pipeline.persist(&events)", || pipeline.persist(&events))?;
-            let ((), replay_domain_events_ns) =
-                trace_phase("replay", "pipeline.replay(&events)", || pipeline.replay(&events))?;
-            let ((), publish_domain_events_ns) =
-                trace_phase("publish", "pipeline.publish(&events)", || pipeline.publish(&events))?;
+                let ((), persist_domain_events_ns) = trace_phase(
+                    "persist",
+                    "pipeline.persist(&events)",
+                    |error| use_case.format_error(error),
+                    || pipeline.persist(&events),
+                )?;
+                let ((), replay_domain_events_ns) = trace_phase(
+                    "replay",
+                    "pipeline.replay(&events)",
+                    |error| use_case.format_error(error),
+                    || pipeline.replay(&events),
+                )?;
+                let ((), publish_domain_events_ns) = trace_phase(
+                    "publish",
+                    "pipeline.publish(&events)",
+                    |error| use_case.format_error(error),
+                    || pipeline.publish(&events),
+                )?;
 
-            let metrics = HandlerLatencyMetrics {
-                total_ns: total_start.elapsed().as_nanos(),
-                pre_check_ns,
-                load_state_ns,
-                validate_in_lock_ns,
-                apply_changes_ns,
-                persist_domain_events_ns,
-                replay_domain_events_ns,
-                publish_domain_events_ns,
-                domain_event_count,
-            };
+                let metrics = HandlerLatencyMetrics {
+                    total_ns: total_start.elapsed().as_nanos(),
+                    pre_check_ns,
+                    load_state_ns,
+                    validate_in_lock_ns,
+                    apply_changes_ns,
+                    persist_domain_events_ns,
+                    replay_domain_events_ns,
+                    publish_domain_events_ns,
+                    domain_event_count,
+                };
 
-            Ok((events, metrics))
-        })();
+                Ok((events, metrics))
+            })();
 
         match execution {
             Ok((events, metrics)) => {
@@ -215,13 +279,24 @@ impl CommandUseCaseExecutor2 {
                 Ok(events)
             }
             Err(error) => {
-                tracing::trace!(
-                    phase = "total",
-                    operation = "executor.execute",
-                    status = "err",
-                    total_ns = saturating_u64(total_start.elapsed().as_nanos()),
-                    "command use case execution failed"
-                );
+                if let Some(error_message) = use_case.format_error(&error) {
+                    tracing::trace!(
+                        phase = "total",
+                        operation = "executor.execute",
+                        status = "err",
+                        total_ns = saturating_u64(total_start.elapsed().as_nanos()),
+                        error_message = %error_message,
+                        "command use case execution failed"
+                    );
+                } else {
+                    tracing::trace!(
+                        phase = "total",
+                        operation = "executor.execute",
+                        status = "err",
+                        total_ns = saturating_u64(total_start.elapsed().as_nanos()),
+                        "command use case execution failed"
+                    );
+                }
                 Err(error)
             }
         }
@@ -251,17 +326,35 @@ impl CommandUseCaseExecutor2 {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
-    use std::sync::{Arc, Mutex};
+    use std::fs::{self, File, OpenOptions};
+    use std::io::{self, Write};
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex, MutexGuard};
+    use std::{fmt, str};
 
     use tracing::field::{Field, Visit};
-    use tracing::span::{Attributes, Id, Record};
-    use tracing::{Event, Metadata, Subscriber};
+    use tracing::{Event, Subscriber};
+    use tracing_subscriber::filter::LevelFilter;
+    use tracing_subscriber::fmt::MakeWriter;
+    use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
 
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    struct StubError;
+    struct StubCommand {
+        trace_id: String,
+        request_id: String,
+        command_id: String,
+        account_id: String,
+        symbol: String,
+        quantity: u64,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum StubError {
+        RiskRejected(&'static str),
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubEvents {
@@ -278,7 +371,7 @@ mod tests {
     struct StubUseCase;
 
     impl CommandUseCase2 for StubUseCase {
-        type Command = u64;
+        type Command = StubCommand;
         type GivenState = u64;
         type ThenTraceableEvents = StubEvents;
         type Error = StubError;
@@ -287,16 +380,38 @@ mod tests {
             "StubRole"
         }
 
+        fn trace_context<'a>(&'a self, cmd: &'a Self::Command) -> CommandTraceContext<'a> {
+            CommandTraceContext {
+                trace_id: Some(cmd.trace_id.as_str()),
+                request_id: Some(cmd.request_id.as_str()),
+                command_id: Some(cmd.command_id.as_str()),
+                entity_id: Some(cmd.command_id.as_str()),
+                account_id: Some(cmd.account_id.as_str()),
+                symbol: Some(cmd.symbol.as_str()),
+                command_summary: Some("submit_stub_order"),
+            }
+        }
+
+        fn format_error(&self, error: &Self::Error) -> Option<String> {
+            match error {
+                StubError::RiskRejected(reason) => Some(format!("risk rejected: {reason}")),
+            }
+        }
+
         fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn validate_against_state(
             &self,
-            _cmd: &Self::Command,
+            cmd: &Self::Command,
             _state: &Self::GivenState,
         ) -> Result<(), Self::Error> {
-            Ok(())
+            if cmd.symbol == "REJECTED" {
+                Err(StubError::RiskRejected("symbol disabled"))
+            } else {
+                Ok(())
+            }
         }
 
         fn gen_traceable_events(
@@ -311,9 +426,9 @@ mod tests {
     #[derive(Debug, Clone, Copy, Default)]
     struct StubLoadPort;
 
-    impl LoadState<u64, u64, StubError> for StubLoadPort {
-        fn load_state(&self, cmd: &u64) -> Result<u64, StubError> {
-            Ok(*cmd)
+    impl LoadState<StubCommand, u64, StubError> for StubLoadPort {
+        fn load_state(&self, cmd: &StubCommand) -> Result<u64, StubError> {
+            Ok(cmd.quantity)
         }
     }
 
@@ -370,11 +485,11 @@ mod tests {
     }
 
     #[derive(Clone, Default)]
-    struct RecordingSubscriber {
+    struct RecordingLayer {
         events: Arc<Mutex<Vec<RecordedTraceEvent>>>,
     }
 
-    impl RecordingSubscriber {
+    impl RecordingLayer {
         fn operations_by_status(&self, status: &str) -> Vec<String> {
             self.events
                 .lock()
@@ -384,22 +499,23 @@ mod tests {
                 .filter_map(|event| event.operation.clone())
                 .collect()
         }
+
+        fn statuses_for_operation(&self, operation: &str) -> Vec<String> {
+            self.events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|event| event.operation.as_deref() == Some(operation))
+                .filter_map(|event| event.status.clone())
+                .collect()
+        }
     }
 
-    impl Subscriber for RecordingSubscriber {
-        fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-            *metadata.level() <= tracing::Level::TRACE
-        }
-
-        fn new_span(&self, _span: &Attributes<'_>) -> Id {
-            Id::from_u64(1)
-        }
-
-        fn record(&self, _span: &Id, _values: &Record<'_>) {}
-
-        fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-
-        fn event(&self, event: &Event<'_>) {
+    impl<S> Layer<S> for RecordingLayer
+    where
+        S: Subscriber,
+    {
+        fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
             let mut visitor = TraceFieldVisitor::default();
             event.record(&mut visitor);
             self.events.lock().unwrap().push(RecordedTraceEvent {
@@ -408,31 +524,180 @@ mod tests {
                 status: visitor.status,
             });
         }
+    }
 
-        fn enter(&self, _span: &Id) {}
+    #[derive(Clone)]
+    struct SharedFileWriter {
+        output: Arc<Mutex<SharedFileOutput>>,
+    }
 
-        fn exit(&self, _span: &Id) {}
+    struct SharedFileOutput {
+        file: File,
+        in_escape_sequence: bool,
+    }
+
+    impl SharedFileWriter {
+        fn new(path: &Path) -> io::Result<Self> {
+            let file = OpenOptions::new().create(true).truncate(true).write(true).open(path)?;
+            Ok(Self {
+                output: Arc::new(Mutex::new(SharedFileOutput { file, in_escape_sequence: false })),
+            })
+        }
+    }
+
+    struct SharedFileGuard<'a>(MutexGuard<'a, SharedFileOutput>);
+
+    impl Write for SharedFileGuard<'_> {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut filtered = Vec::with_capacity(buf.len());
+
+            for byte in buf {
+                if self.0.in_escape_sequence {
+                    if (0x40..=0x7e).contains(byte) {
+                        self.0.in_escape_sequence = false;
+                    }
+                    continue;
+                }
+
+                if *byte == 0x1b {
+                    self.0.in_escape_sequence = true;
+                    continue;
+                }
+
+                filtered.push(*byte);
+            }
+
+            self.0.file.write_all(&filtered)?;
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.0.file.flush()
+        }
+    }
+
+    impl<'a> MakeWriter<'a> for SharedFileWriter {
+        type Writer = SharedFileGuard<'a>;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            SharedFileGuard(self.output.lock().unwrap())
+        }
+    }
+
+    fn workspace_target_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .expect("cmd_handler should live under the workspace root")
+            .join("target")
+    }
+
+    fn test_log_path(test_name: &str) -> PathBuf {
+        let dir = workspace_target_dir().join("test-logs").join("cmd_handler");
+        fs::create_dir_all(&dir).unwrap();
+        dir.join(format!("{test_name}.log"))
+    }
+
+    fn build_test_subscriber(
+        test_name: &str,
+        recording: RecordingLayer,
+    ) -> (impl Subscriber + Send + Sync, PathBuf) {
+        let log_path = test_log_path(test_name);
+        let file_writer = SharedFileWriter::new(&log_path).unwrap();
+        let subscriber = tracing_subscriber::registry()
+            .with(LevelFilter::TRACE)
+            .with(recording)
+            .with(tracing_subscriber::fmt::layer().compact().with_writer(std::io::stderr))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .compact()
+                    .with_ansi(false)
+                    .with_writer(file_writer),
+            );
+        (subscriber, log_path)
+    }
+
+    fn read_log(path: &Path) -> String {
+        str::from_utf8(&fs::read(path).unwrap()).unwrap().to_string()
     }
 
     #[test]
     fn execute_traces_load_and_pipeline_phases() {
         let executor = CommandUseCaseExecutor2;
-        let subscriber = RecordingSubscriber::default();
+        let recording = RecordingLayer::default();
+        let (subscriber, log_path) =
+            build_test_subscriber("execute_traces_load_and_pipeline_phases", recording.clone());
 
-        tracing::subscriber::with_default(subscriber.clone(), || {
+        eprintln!("trace log file: {}", log_path.display());
+        tracing::subscriber::with_default(subscriber, || {
             let use_case = StubUseCase;
             let load_port = StubLoadPort;
             let pipeline = StubPipeline;
+            let command = StubCommand {
+                trace_id: "trace-spot-001".into(),
+                request_id: "req-spot-001".into(),
+                command_id: "cmd-spot-001".into(),
+                account_id: "acct-007".into(),
+                symbol: "BTCUSDT".into(),
+                quantity: 1,
+            };
 
-            let events = executor.execute(&use_case, 1, &load_port, &pipeline, &()).unwrap();
+            let events = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap();
             assert_eq!(events.event_count(), 1);
         });
 
-        let ok_operations = subscriber.operations_by_status("ok");
+        let ok_operations = recording.operations_by_status("ok");
+        let log = read_log(&log_path);
 
         assert!(ok_operations.iter().any(|op| op == "load_port.load_state(&command)"));
         assert!(ok_operations.iter().any(|op| op == "pipeline.persist(&events)"));
         assert!(ok_operations.iter().any(|op| op == "pipeline.replay(&events)"));
         assert!(ok_operations.iter().any(|op| op == "pipeline.publish(&events)"));
+        assert!(log.contains("trace_id=\"trace-spot-001\""));
+        assert!(log.contains("request_id=\"req-spot-001\""));
+        assert!(log.contains("command_id=\"cmd-spot-001\""));
+        assert!(log.contains("entity_id=\"cmd-spot-001\""));
+        assert!(log.contains("account_id=\"acct-007\""));
+        assert!(log.contains("symbol=\"BTCUSDT\""));
+        assert!(log.contains("command_summary=\"submit_stub_order\""));
+    }
+
+    #[test]
+    fn execute_traces_error_details_for_failed_phase() {
+        let executor = CommandUseCaseExecutor2;
+        let recording = RecordingLayer::default();
+        let (subscriber, log_path) = build_test_subscriber(
+            "execute_traces_error_details_for_failed_phase",
+            recording.clone(),
+        );
+
+        eprintln!("trace log file: {}", log_path.display());
+        tracing::subscriber::with_default(subscriber, || {
+            let use_case = StubUseCase;
+            let load_port = StubLoadPort;
+            let pipeline = StubPipeline;
+            let command = StubCommand {
+                trace_id: "trace-spot-err".into(),
+                request_id: "req-spot-err".into(),
+                command_id: "cmd-spot-err".into(),
+                account_id: "acct-999".into(),
+                symbol: "REJECTED".into(),
+                quantity: 1,
+            };
+
+            let error =
+                executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap_err();
+            assert_eq!(error, StubError::RiskRejected("symbol disabled"));
+        });
+
+        let validate_statuses =
+            recording.statuses_for_operation("use_case.validate_against_state(&command, &state)");
+        let total_statuses = recording.statuses_for_operation("executor.execute");
+        let log = read_log(&log_path);
+
+        assert!(validate_statuses.iter().any(|status| status == "err"));
+        assert!(total_statuses.iter().any(|status| status == "err"));
+        assert!(log.contains("symbol=\"REJECTED\""));
+        assert!(log.contains("error_message=risk rejected: symbol disabled"));
     }
 }

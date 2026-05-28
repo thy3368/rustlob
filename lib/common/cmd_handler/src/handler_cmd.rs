@@ -13,16 +13,11 @@ pub struct HandlerLatencyMetrics {
     pub domain_event_count: usize,
 }
 
-
 /// TraceableDomainEvent 可溯源 事件
 pub trait TraceableEventSet {
     fn event_count(&self) -> usize;
     // fn events(&self) -> &[ChangeLog];
 }
-
-
-
-
 
 pub trait CmdHandlerInternal: Send + Sync {
     type Command;
@@ -40,7 +35,10 @@ pub trait CmdHandlerInternal: Send + Sync {
         state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenTraceableEventSet, Self::Error>;
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenTraceableEventSet) -> Self::Reply;
+    fn state_changed_set_to_reply(
+        &self,
+        state_changed_set: Self::ThenTraceableEventSet,
+    ) -> Self::Reply;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error>;
 

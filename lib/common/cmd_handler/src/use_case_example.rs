@@ -28,9 +28,7 @@ pub trait PlaceOrderLoadPort: Send + Sync {
 impl LoadState<PlaceOrderCommand, PlaceOrderState, PlaceOrderError> for dyn PlaceOrderLoadPort {
     fn load_state(&self, cmd: &PlaceOrderCommand) -> Result<PlaceOrderState, PlaceOrderError> {
         let snapshot = self.load_place_order_state(cmd)?;
-        Ok(PlaceOrderState {
-            can_place: snapshot.can_place,
-        })
+        Ok(PlaceOrderState { can_place: snapshot.can_place })
     }
 }
 
@@ -72,11 +70,7 @@ impl CommandUseCase for PlaceOrderUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.can_place {
-            Ok(())
-        } else {
-            Err(PlaceOrderError::Rejected)
-        }
+        if state.can_place { Ok(()) } else { Err(PlaceOrderError::Rejected) }
     }
 
     fn gen_traceable_events(
@@ -100,9 +94,7 @@ impl UseCaseReplyMapper<PlaceOrderEvents> for PlaceOrderReplyMapper {
     type Reply = PlaceOrderReply;
 
     fn map(&self, events: PlaceOrderEvents) -> Self::Reply {
-        PlaceOrderReply {
-            accepted: events.accepted,
-        }
+        PlaceOrderReply { accepted: events.accepted }
     }
 }
 
@@ -236,9 +228,7 @@ mod tests {
         let load_port = StubPlaceOrderLoadPort;
         let pipeline = SpyDomainEventPipeline::default();
 
-        executor
-            .execute(&use_case, PlaceOrderCommand { asset: 1 }, &load_port, &pipeline)
-            .unwrap();
+        executor.execute(&use_case, PlaceOrderCommand { asset: 1 }, &load_port, &pipeline).unwrap();
 
         assert_eq!(pipeline.calls(), vec!["persist", "replay", "publish"]);
     }
