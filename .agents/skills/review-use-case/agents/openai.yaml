@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Use Case"
+  short_description: "Review and score RustLOB use cases"
+  default_prompt: "Review RustLOB command use cases with Clean Architecture and four-color modeling, map them to core, adapter, and infra, identify design violations, and score them with a 100-point rubric."
