@@ -5,6 +5,7 @@ pub use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedTransactionRequest {
+    pub trace_id: Option<String>,
     pub request_id: String,
     pub account: String,
     pub nonce: String,
@@ -22,6 +23,7 @@ pub enum IngressDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingRequest {
+    pub trace_id: Option<String>,
     pub request_id: String,
     pub performer: String,
     pub vm_kind: VmKind,

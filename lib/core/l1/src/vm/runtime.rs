@@ -49,14 +49,18 @@ impl<Tx> VmRuntimeResolver<Tx> for VmRegistry<Tx> {
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::Bloom;
+
     use super::*;
     use crate::{BlockStateChanges, ProductEvent, Receipt, VmCapability};
-    use alloy_primitives::Bloom;
 
     struct StubRuntime;
 
     impl VmRuntime<String> for StubRuntime {
-        fn execute(&self, input: VmExecutionInput<String>) -> Result<VmExecutionOutput, VmRuntimeError> {
+        fn execute(
+            &self,
+            input: VmExecutionInput<String>,
+        ) -> Result<VmExecutionOutput, VmRuntimeError> {
             Ok(VmExecutionOutput {
                 vm_kind: input.vm_kind,
                 capability: input.capability.clone(),

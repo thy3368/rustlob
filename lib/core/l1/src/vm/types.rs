@@ -1,5 +1,6 @@
-use crate::PendingRequest;
 use serde::{Deserialize, Serialize};
+
+use crate::PendingRequest;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct VmCapability(pub String);
