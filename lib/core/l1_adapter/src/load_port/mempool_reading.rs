@@ -1,4 +1,3 @@
-use cmd_handler::use_case_def::LoadState;
 use l1_core::{
     BlockEvent, BlockStateChanges, ChainState, CommittedBlock, ExecuteAndCommitBlockCmd,
     ExecuteAndCommitBlockError, ExecuteAndCommitBlockStateSnapshot, ExecutionResult,
@@ -14,23 +13,79 @@ impl MempoolReadingLoadPort {
     pub fn new(mempool: Box<dyn MempoolPort>, batch_size: usize) -> Self {
         Self { mempool, batch_size }
     }
-}
 
-impl LoadState<ExecuteAndCommitBlockCmd, ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError>
-    for MempoolReadingLoadPort
-{
-    fn load_state(
+    pub fn load_state(
         &self,
         cmd: &ExecuteAndCommitBlockCmd,
     ) -> Result<ExecuteAndCommitBlockStateSnapshot, ExecuteAndCommitBlockError> {
+        use minstant::Instant;
+
+        let started_at = Instant::now();
+        tracing::trace!(
+            adapter = "MempoolReadingLoadPort",
+            adapter_kind = "outbound",
+            port = "MempoolPort",
+            action = "load_state",
+            block_height = cmd.block_height,
+            batch_size = self.batch_size as u64,
+            status = "start",
+            "l1 adapter load_state started"
+        );
+
         let pending_requests = self
             .mempool
             .fetch_requests(self.batch_size)
             .map_err(|e| ExecuteAndCommitBlockError::LoadStateFailed(format!("{:?}", e)))?;
 
         if pending_requests.is_empty() {
+            tracing::trace!(
+                call_stack = true,
+                layer = "outbound",
+                component = "MempoolReadingLoadPort",
+                operation = "load_state",
+                trace_id = cmd.trace_id.as_deref().unwrap_or("-"),
+                command_id = cmd.block_command_id.as_deref().unwrap_or("-"),
+                request_block_height = cmd.block_height,
+                request_batch_size = self.batch_size as u64,
+                response_result = "err",
+                adapter = "MempoolReadingLoadPort",
+                adapter_kind = "outbound",
+                port = "MempoolPort",
+                action = "load_state",
+                block_height = cmd.block_height,
+                batch_size = self.batch_size as u64,
+                status = "err",
+                latency_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                error_message = "mempool returned no pending requests",
+                "l1 adapter load_state failed"
+            );
             return Err(ExecuteAndCommitBlockError::EmptyPendingRequests);
         }
+
+        let first_request = pending_requests.first();
+        tracing::trace!(
+            call_stack = true,
+            layer = "outbound",
+            component = "MempoolReadingLoadPort",
+            operation = "load_state",
+            trace_id = cmd.trace_id.as_deref().unwrap_or("-"),
+            command_id = cmd.block_command_id.as_deref().unwrap_or("-"),
+            request_block_height = cmd.block_height,
+            request_batch_size = self.batch_size as u64,
+            response_fetched_request_count = pending_requests.len() as u64,
+            adapter = "MempoolReadingLoadPort",
+            adapter_kind = "outbound",
+            port = "MempoolPort",
+            action = "load_state",
+            block_height = cmd.block_height,
+            batch_size = self.batch_size as u64,
+            fetched_request_count = pending_requests.len() as u64,
+            first_trace_id =
+                first_request.and_then(|request| request.trace_id.as_deref()).unwrap_or("-"),
+            status = "ok",
+            latency_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+            "l1 adapter load_state completed"
+        );
 
         Ok(ExecuteAndCommitBlockStateSnapshot {
             pending_requests: pending_requests.clone(),

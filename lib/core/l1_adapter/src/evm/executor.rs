@@ -1,10 +1,9 @@
-use alloy_primitives::{Address, Bytes, U256};
-use revm::{
-    db::InMemoryDB,
-    primitives::{AccountInfo, ExecutionResult, Output, TransactTo},
-    DatabaseCommit, Evm,
-};
 use std::collections::HashMap;
+
+use alloy_primitives::{Address, Bytes, U256};
+use revm::db::InMemoryDB;
+use revm::primitives::{AccountInfo, ExecutionResult, Output, TransactTo};
+use revm::{DatabaseCommit, Evm};
 
 pub struct RevmExecutor {
     db: InMemoryDB,
@@ -39,7 +38,8 @@ impl RevmExecutor {
             })
             .build();
 
-        let result_and_state = evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state =
+            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
         drop(evm);
         self.db.commit(result_and_state.state);
         let result = result_and_state.result;
@@ -62,7 +62,11 @@ impl RevmExecutor {
         }
     }
 
-    pub fn call_contract(&mut self, contract_name: &str, calldata: Vec<u8>) -> Result<Bytes, String> {
+    pub fn call_contract(
+        &mut self,
+        contract_name: &str,
+        calldata: Vec<u8>,
+    ) -> Result<Bytes, String> {
         let contract_address = self
             .contracts
             .get(contract_name)
@@ -79,7 +83,8 @@ impl RevmExecutor {
             })
             .build();
 
-        let result_and_state = evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state =
+            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
         drop(evm);
         self.db.commit(result_and_state.state);
         let result = result_and_state.result;
@@ -122,7 +127,9 @@ impl RevmExecutor {
 
         match result {
             ExecutionResult::Success { output: Output::Call(output), .. } => Ok(output),
-            ExecutionResult::Revert { output, .. } => Err(format!("View call reverted: {:?}", output)),
+            ExecutionResult::Revert { output, .. } => {
+                Err(format!("View call reverted: {:?}", output))
+            }
             ExecutionResult::Halt { reason, .. } => Err(format!("View call halted: {:?}", reason)),
             _ => Err("Unexpected execution result".to_string()),
         }

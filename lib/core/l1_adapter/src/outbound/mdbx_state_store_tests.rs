@@ -2,12 +2,12 @@
 mod tests {
     use alloy_primitives::{Address, B256, U256};
     use db_repo::StorageError;
-    use crate::MdbxStateStore;
     use l1_core::{
         Account, AccountDelta, BlockStateChanges, CodeBlob, CodeDelta, StateReader, StorageDelta,
         VmKind,
     };
 
+    use crate::MdbxStateStore;
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         let nanos =

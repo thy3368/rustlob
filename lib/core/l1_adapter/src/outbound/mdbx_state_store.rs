@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use alloy_primitives::{Address, B256};
 use db_repo::{KvStore, StorageError};
 use l1_core::{
@@ -5,7 +7,6 @@ use l1_core::{
     CodeStore, StateReader, StateWriter, StorageChangeSet, StorageKey, StorageValue, VmKind,
 };
 use mdbx::MdbxKvStore;
-use std::sync::Arc;
 
 pub struct MdbxStateStore {
     accounts: Arc<MdbxKvStore>,

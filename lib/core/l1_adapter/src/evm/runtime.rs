@@ -4,7 +4,7 @@ use l1_core::{
     Receipt, StorageDelta, VmExecutionInput, VmExecutionOutput, VmKind, VmRuntime, VmRuntimeError,
 };
 
-use crate::{contracts, RevmExecutor};
+use crate::{RevmExecutor, contracts};
 
 pub struct EvmRuntimeAdapter;
 
@@ -88,14 +88,23 @@ impl EvmRuntimeAdapter {
         Receipt { success, cumulative_gas_used: gas_used, logs: vec![], bloom: Bloom::ZERO }
     }
 
-    fn deploy_contract(executor: &mut RevmExecutor, request: &PendingRequest) -> Result<(), VmRuntimeError> {
+    fn deploy_contract(
+        executor: &mut RevmExecutor,
+        request: &PendingRequest,
+    ) -> Result<(), VmRuntimeError> {
         executor
-            .deploy_contract(&Self::contract_name(request), contracts::get_settlement_escrow_bytecode())
+            .deploy_contract(
+                &Self::contract_name(request),
+                contracts::get_settlement_escrow_bytecode(),
+            )
             .map_err(VmRuntimeError::ExecutionFailed)?;
         Ok(())
     }
 
-    fn create_settlement(executor: &mut RevmExecutor, request: &PendingRequest) -> Result<u64, VmRuntimeError> {
+    fn create_settlement(
+        executor: &mut RevmExecutor,
+        request: &PendingRequest,
+    ) -> Result<u64, VmRuntimeError> {
         executor
             .call_contract(
                 &Self::contract_name(request),
@@ -113,7 +122,9 @@ impl EvmRuntimeAdapter {
                 contracts::encode_get_amount(&Self::settlement_id(request)),
             )
             .map_err(VmRuntimeError::ExecutionFailed)
-            .and_then(|bytes| contracts::decode_u64_word(&bytes).map_err(VmRuntimeError::ExecutionFailed))
+            .and_then(|bytes| {
+                contracts::decode_u64_word(&bytes).map_err(VmRuntimeError::ExecutionFailed)
+            })
     }
 
     fn deploy(request: &PendingRequest) -> Result<VmExecutionOutput, VmRuntimeError> {
@@ -169,7 +180,9 @@ impl EvmRuntimeAdapter {
                 contracts::encode_is_released(&Self::settlement_id(request)),
             )
             .map_err(VmRuntimeError::ExecutionFailed)
-            .and_then(|bytes| contracts::decode_bool_word(&bytes).map_err(VmRuntimeError::ExecutionFailed))?;
+            .and_then(|bytes| {
+                contracts::decode_bool_word(&bytes).map_err(VmRuntimeError::ExecutionFailed)
+            })?;
 
         Ok(VmExecutionOutput {
             vm_kind: request.vm_kind,
@@ -195,7 +208,9 @@ impl EvmRuntimeAdapter {
                 contracts::encode_is_released(&Self::settlement_id(request)),
             )
             .map_err(VmRuntimeError::ExecutionFailed)
-            .and_then(|bytes| contracts::decode_bool_word(&bytes).map_err(VmRuntimeError::ExecutionFailed))?;
+            .and_then(|bytes| {
+                contracts::decode_bool_word(&bytes).map_err(VmRuntimeError::ExecutionFailed)
+            })?;
 
         Ok(VmExecutionOutput {
             vm_kind: request.vm_kind,
@@ -211,13 +226,20 @@ impl EvmRuntimeAdapter {
         })
     }
 
-    fn release_without_create(request: &PendingRequest) -> Result<VmExecutionOutput, VmRuntimeError> {
+    fn release_without_create(
+        request: &PendingRequest,
+    ) -> Result<VmExecutionOutput, VmRuntimeError> {
         let mut executor = RevmExecutor::new();
         Self::deploy_contract(&mut executor, request)?;
         let result = executor
-            .view_contract(&Self::contract_name(request), contracts::encode_get_amount(&Self::settlement_id(request)))
+            .view_contract(
+                &Self::contract_name(request),
+                contracts::encode_get_amount(&Self::settlement_id(request)),
+            )
             .map_err(VmRuntimeError::ExecutionFailed)
-            .and_then(|bytes| contracts::decode_u64_word(&bytes).map_err(VmRuntimeError::ExecutionFailed))?;
+            .and_then(|bytes| {
+                contracts::decode_u64_word(&bytes).map_err(VmRuntimeError::ExecutionFailed)
+            })?;
 
         if result == 0 {
             return Err(VmRuntimeError::ExecutionFailed("not found".to_string()));
@@ -250,7 +272,9 @@ impl VmRuntime<PendingRequest> for EvmRuntimeAdapter {
             "evm.settlement.create" => Self::create(&input.transaction),
             "evm.settlement.release" => Self::release(&input.transaction),
             "evm.settlement.get" => Self::get(&input.transaction),
-            "evm.settlement.release_without_create" => Self::release_without_create(&input.transaction),
+            "evm.settlement.release_without_create" => {
+                Self::release_without_create(&input.transaction)
+            }
             other => Err(VmRuntimeError::UnsupportedCapability {
                 vm_kind: input.vm_kind,
                 capability: other.to_string(),
@@ -261,11 +285,13 @@ impl VmRuntime<PendingRequest> for EvmRuntimeAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use l1_core::VmCapability;
+
+    use super::*;
 
     fn pending_request(capability: &str) -> PendingRequest {
         PendingRequest {
+            trace_id: Some("trace-evm-7".to_string()),
             request_id: "req-evm-7".to_string(),
             performer: "acct-evm-9".to_string(),
             vm_kind: VmKind::Evm,

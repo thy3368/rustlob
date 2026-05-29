@@ -1,4 +1,4 @@
-use alloy_primitives::{hex, Address, FixedBytes};
+use alloy_primitives::{Address, FixedBytes, hex};
 use sha3::{Digest, Keccak256};
 
 pub const COUNTER_BYTECODE: &str = "6080604052348015600e575f5ffd5b5060c580601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c806306661abd146034578063d09de08a14604d575b5f5ffd5b603b5f5481565b60405190815260200160405180910390f35b60536055565b005b60015f5f82825460649190606b565b9091555050565b80820180821115608957634e487b7160e01b5f52601160045260245ffd5b9291505056fea2646970667358221220a48aa1ce6ad99f3a568df931a13cb1db6bbd0417ec8cf682182c794454b27c5664736f6c634300081e0033";
@@ -47,7 +47,8 @@ pub fn address_from_performer(performer: &str) -> Address {
 }
 
 pub fn settlement_id_word(settlement_id: &str) -> Result<FixedBytes<32>, String> {
-    let bytes = hex::decode(settlement_id).map_err(|err| format!("invalid settlement id hex: {err}"))?;
+    let bytes =
+        hex::decode(settlement_id).map_err(|err| format!("invalid settlement id hex: {err}"))?;
     if bytes.len() != 32 {
         return Err(format!("expected 32-byte settlement id, got {} bytes", bytes.len()));
     }
@@ -70,7 +71,9 @@ fn encode_u256_word(value: u64) -> [u8; 32] {
 
 pub fn encode_create_settlement(settlement_id: &str, beneficiary: Address, amount: u64) -> Vec<u8> {
     let mut calldata = selectors::CREATE_SETTLEMENT.to_vec();
-    calldata.extend_from_slice(settlement_id_word(settlement_id).expect("invalid settlement id").as_slice());
+    calldata.extend_from_slice(
+        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
+    );
     calldata.extend_from_slice(&encode_address_word(beneficiary));
     calldata.extend_from_slice(&encode_u256_word(amount));
     calldata
@@ -78,19 +81,25 @@ pub fn encode_create_settlement(settlement_id: &str, beneficiary: Address, amoun
 
 pub fn encode_get_amount(settlement_id: &str) -> Vec<u8> {
     let mut calldata = selectors::GET_AMOUNT.to_vec();
-    calldata.extend_from_slice(settlement_id_word(settlement_id).expect("invalid settlement id").as_slice());
+    calldata.extend_from_slice(
+        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
+    );
     calldata
 }
 
 pub fn encode_release_settlement(settlement_id: &str) -> Vec<u8> {
     let mut calldata = selectors::RELEASE_SETTLEMENT.to_vec();
-    calldata.extend_from_slice(settlement_id_word(settlement_id).expect("invalid settlement id").as_slice());
+    calldata.extend_from_slice(
+        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
+    );
     calldata
 }
 
 pub fn encode_is_released(settlement_id: &str) -> Vec<u8> {
     let mut calldata = selectors::IS_RELEASED.to_vec();
-    calldata.extend_from_slice(settlement_id_word(settlement_id).expect("invalid settlement id").as_slice());
+    calldata.extend_from_slice(
+        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
+    );
     calldata
 }
 

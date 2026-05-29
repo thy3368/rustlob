@@ -12,6 +12,15 @@ impl InMemoryMempool {
     pub fn new() -> Self {
         Self { inner: Arc::new(Mutex::new(HashMap::new())) }
     }
+
+    pub fn peek_first_request(&self) -> Result<Option<PendingRequest>, MempoolError> {
+        let pool = self
+            .inner
+            .lock()
+            .map_err(|e| MempoolError::StorageError(format!("Lock poisoned: {}", e)))?;
+
+        Ok(pool.values().next().cloned())
+    }
 }
 
 impl MempoolPort for InMemoryMempool {
@@ -66,12 +75,14 @@ mod tests {
 
     fn pending_request(id: &str) -> PendingRequest {
         PendingRequest {
+            trace_id: Some(format!("trace-{id}")),
             request_id: id.to_string(),
             performer: "acct-1".to_string(),
             vm_kind: l1_core::VmKind::RustVm,
             capability: l1_core::VmCapability::new("dex.prep.place_order"),
             action_type: "order".to_string(),
             payload_hash: format!("payload-{}", id),
+            payload: None,
         }
     }
 
@@ -114,5 +125,17 @@ mod tests {
 
         mempool.fetch_requests(10).unwrap();
         assert_eq!(mempool.len(), 0);
+    }
+
+    #[test]
+    fn peek_first_request_does_not_drain_pool() {
+        let mempool = InMemoryMempool::new();
+
+        mempool.add_requests(vec![pending_request("req-1")]).unwrap();
+
+        let peeked = mempool.peek_first_request().unwrap();
+
+        assert_eq!(peeked.unwrap().request_id, "req-1");
+        assert_eq!(mempool.len(), 1);
     }
 }
