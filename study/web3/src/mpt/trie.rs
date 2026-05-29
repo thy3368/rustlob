@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
+use sha3::{Digest, Keccak256};
+
 /// Merkle Patricia Trie 核心实现
 ///
 /// 实现所有 Use Case trait，提供完整的 MPT 功能
-
 use crate::{
     entities::{MerkleProof, MptError, MptResult, Node, Path},
     storage::{InMemoryStorage, Storage},
@@ -10,8 +13,6 @@ use crate::{
         ProveUseCase, RootHashUseCase,
     },
 };
-use sha3::{Digest, Keccak256};
-use std::collections::HashMap;
 
 /// Merkle Patricia Trie 实现
 ///
@@ -30,20 +31,12 @@ pub struct MerklePatriciaTrie<S: Storage> {
 impl<S: Storage> MerklePatriciaTrie<S> {
     /// 创建新的 MPT
     pub fn new(storage: S) -> Self {
-        Self {
-            storage,
-            root_hash: [0u8; 32],
-            entries_cache: HashMap::new(),
-        }
+        Self { storage, root_hash: [0u8; 32], entries_cache: HashMap::new() }
     }
 
     /// 从现有根哈希创建 MPT（用于恢复持久化的树）
     pub fn from_root(storage: S, root_hash: [u8; 32]) -> Self {
-        Self {
-            storage,
-            root_hash,
-            entries_cache: HashMap::new(),
-        }
+        Self { storage, root_hash, entries_cache: HashMap::new() }
     }
 
     /// 计算节点哈希
@@ -58,10 +51,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 hasher.update(value);
                 hasher.finalize().into()
             }
-            Node::Extension {
-                partial_path,
-                next_node_hash,
-            } => {
+            Node::Extension { partial_path, next_node_hash } => {
                 hasher.update(b"extension");
                 hasher.update(partial_path);
                 hasher.update(next_node_hash);
@@ -93,9 +83,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
         let node = if node_hash == [0u8; 32] {
             Node::Empty
         } else {
-            self.storage
-                .get(&node_hash)?
-                .ok_or(MptError::InvalidNode)?
+            self.storage.get(&node_hash)?.ok_or(MptError::InvalidNode)?
         };
 
         let new_node = match node {
@@ -104,10 +92,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 Node::leaf(path.nibbles().to_vec(), value)
             }
 
-            Node::Leaf {
-                partial_path: existing_path,
-                value: existing_value,
-            } => {
+            Node::Leaf { partial_path: existing_path, value: existing_value } => {
                 let existing_path_obj = Path::from_nibbles(existing_path.clone());
                 let common_len = path.common_prefix_len(&existing_path_obj);
 
@@ -167,17 +152,15 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 }
             }
 
-            Node::Extension {
-                partial_path: ext_path,
-                next_node_hash,
-            } => {
+            Node::Extension { partial_path: ext_path, next_node_hash } => {
                 let ext_path_obj = Path::from_nibbles(ext_path.clone());
                 let common_len = path.common_prefix_len(&ext_path_obj);
 
                 if common_len == ext_path.len() {
                     // 路径匹配 -> 递归到下一个节点
                     let remaining_path = path.slice(common_len, path.len());
-                    let new_child_hash = self.insert_recursive(next_node_hash, &remaining_path, value)?;
+                    let new_child_hash =
+                        self.insert_recursive(next_node_hash, &remaining_path, value)?;
                     Node::extension(ext_path, new_child_hash)
                 } else {
                     // 需要分裂扩展节点
@@ -231,7 +214,8 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                     let remaining_path = path.slice(1, path.len());
 
                     let child_hash = children[idx].unwrap_or([0u8; 32]);
-                    let new_child_hash = self.insert_recursive(child_hash, &remaining_path, value)?;
+                    let new_child_hash =
+                        self.insert_recursive(child_hash, &remaining_path, value)?;
                     children[idx] = Some(new_child_hash);
 
                     Node::branch(children, branch_value)
@@ -258,17 +242,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
 
             Node::Leaf { partial_path, value } => {
                 let leaf_path = Path::from_nibbles(partial_path);
-                if &leaf_path == path {
-                    Ok(Some(value))
-                } else {
-                    Ok(None)
-                }
+                if &leaf_path == path { Ok(Some(value)) } else { Ok(None) }
             }
 
-            Node::Extension {
-                partial_path,
-                next_node_hash,
-            } => {
+            Node::Extension { partial_path, next_node_hash } => {
                 let ext_path = Path::from_nibbles(partial_path);
                 if path.len() >= ext_path.len() {
                     let path_prefix = path.slice(0, ext_path.len());
@@ -338,12 +315,7 @@ impl<S: Storage> ProveUseCase for MerklePatriciaTrie<S> {
         let value = self.get(key)?;
         let nodes = self.collect_proof_nodes(self.root_hash, &path)?;
 
-        Ok(MerkleProof::new(
-            self.root_hash,
-            key.to_vec(),
-            value,
-            nodes,
-        ))
+        Ok(MerkleProof::new(self.root_hash, key.to_vec(), value, nodes))
     }
 }
 
@@ -408,11 +380,7 @@ impl<S: Storage> IteratorUseCase for MerklePatriciaTrie<S> {
     }
 
     fn entries(&self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
-        Box::new(
-            self.entries_cache
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        )
+        Box::new(self.entries_cache.iter().map(|(k, v)| (k.clone(), v.clone())))
     }
 
     fn len(&self) -> usize {
@@ -430,11 +398,8 @@ impl<S: Storage> MptUseCases for MerklePatriciaTrie<S> {
     }
 
     fn snapshot(&self) -> MptResult<MptSnapshot> {
-        let entries: Vec<(Vec<u8>, Vec<u8>)> = self
-            .entries_cache
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let entries: Vec<(Vec<u8>, Vec<u8>)> =
+            self.entries_cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
         Ok(MptSnapshot::new(self.root_hash, entries))
     }

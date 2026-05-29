@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
 /// 持久化存储实现
 ///
 /// 基于 geth 的区块持久化机制，使用嵌入式数据库实现
@@ -9,13 +14,8 @@
 ///
 /// 本实现使用文件系统作为简单的持久化后端，
 /// 生产环境可替换为 RocksDB 或 LMDB
-
 use crate::entities::{MptError, MptResult, Node};
 use crate::storage::Storage;
-use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
 
 /// 持久化存储
 ///
@@ -46,11 +46,7 @@ impl PersistentStorage {
                 .map_err(|e| MptError::StorageError(format!("Failed to create data dir: {}", e)))?;
         }
 
-        Ok(Self {
-            data_dir,
-            cache: HashMap::new(),
-            cache_size_limit: cache_size,
-        })
+        Ok(Self { data_dir, cache: HashMap::new(), cache_size_limit: cache_size })
     }
 
     /// 获取节点文件路径
@@ -81,10 +77,7 @@ impl PersistentStorage {
                 data.extend_from_slice(value);
                 data
             }
-            Node::Extension {
-                partial_path,
-                next_node_hash,
-            } => {
+            Node::Extension { partial_path, next_node_hash } => {
                 let mut data = vec![2]; // 类型标记
                 data.extend_from_slice(&(partial_path.len() as u32).to_le_bytes());
                 data.extend_from_slice(partial_path);
@@ -156,10 +149,7 @@ impl PersistentStorage {
 
                 let value = data[offset..offset + value_len].to_vec();
 
-                Ok(Node::Leaf {
-                    partial_path,
-                    value,
-                })
+                Ok(Node::Leaf { partial_path, value })
             }
             2 => {
                 // Extension
@@ -181,10 +171,7 @@ impl PersistentStorage {
                 let mut next_node_hash = [0u8; 32];
                 next_node_hash.copy_from_slice(&data[offset..offset + 32]);
 
-                Ok(Node::Extension {
-                    partial_path,
-                    next_node_hash,
-                })
+                Ok(Node::Extension { partial_path, next_node_hash })
             }
             3 => {
                 // Branch
@@ -219,10 +206,7 @@ impl PersistentStorage {
 
                 Ok(Node::Branch { children, value })
             }
-            _ => Err(MptError::DecodingError(format!(
-                "Unknown node type: {}",
-                node_type
-            ))),
+            _ => Err(MptError::DecodingError(format!("Unknown node type: {}", node_type))),
         }
     }
 
@@ -407,18 +391,15 @@ impl StorageStats {
 
     /// 获取缓存命中率（需要外部统计）
     pub fn cache_usage_ratio(&self) -> f64 {
-        if self.cache_limit == 0 {
-            0.0
-        } else {
-            self.cache_size as f64 / self.cache_limit as f64
-        }
+        if self.cache_limit == 0 { 0.0 } else { self.cache_size as f64 / self.cache_limit as f64 }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_persistent_storage_basic() {

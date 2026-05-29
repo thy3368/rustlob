@@ -2,7 +2,6 @@
 ///
 /// 定义 Merkle Patricia Trie 的核心数据结构和领域模型
 /// 遵循 Clean Architecture 的 Entities Layer 原则：无外部依赖
-
 use std::fmt;
 
 /// MPT 节点类型
@@ -18,22 +17,13 @@ pub enum Node {
     Empty,
 
     /// 叶子节点 (partial_path, value)
-    Leaf {
-        partial_path: Vec<u8>,
-        value: Vec<u8>,
-    },
+    Leaf { partial_path: Vec<u8>, value: Vec<u8> },
 
     /// 扩展节点 (partial_path, next_node_hash)
-    Extension {
-        partial_path: Vec<u8>,
-        next_node_hash: [u8; 32],
-    },
+    Extension { partial_path: Vec<u8>, next_node_hash: [u8; 32] },
 
     /// 分支节点 (16 children hashes, optional value)
-    Branch {
-        children: [Option<[u8; 32]>; 16],
-        value: Option<Vec<u8>>,
-    },
+    Branch { children: [Option<[u8; 32]>; 16], value: Option<Vec<u8>> },
 }
 
 impl Node {
@@ -49,10 +39,7 @@ impl Node {
 
     /// 创建扩展节点
     pub fn extension(partial_path: Vec<u8>, next_node_hash: [u8; 32]) -> Self {
-        Node::Extension {
-            partial_path,
-            next_node_hash,
-        }
+        Node::Extension { partial_path, next_node_hash }
     }
 
     /// 创建分支节点
@@ -94,8 +81,8 @@ impl Path {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let mut nibbles = Vec::with_capacity(bytes.len() * 2);
         for byte in bytes {
-            nibbles.push(byte >> 4);      // 高4位
-            nibbles.push(byte & 0x0F);    // 低4位
+            nibbles.push(byte >> 4); // 高4位
+            nibbles.push(byte & 0x0F); // 低4位
         }
         Self { nibbles }
     }
@@ -132,11 +119,7 @@ impl Path {
 
     /// 查找与另一个路径的公共前缀长度
     pub fn common_prefix_len(&self, other: &Path) -> usize {
-        self.nibbles
-            .iter()
-            .zip(other.nibbles.iter())
-            .take_while(|(a, b)| a == b)
-            .count()
+        self.nibbles.iter().zip(other.nibbles.iter()).take_while(|(a, b)| a == b).count()
     }
 }
 
@@ -214,12 +197,7 @@ impl MerkleProof {
         value: Option<Vec<u8>>,
         nodes: Vec<Node>,
     ) -> Self {
-        Self {
-            root_hash,
-            key,
-            value,
-            nodes,
-        }
+        Self { root_hash, key, value, nodes }
     }
 
     /// 验证证明是否有效

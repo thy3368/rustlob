@@ -8,7 +8,6 @@
 /// - Transactions: 交易列表
 /// - Receipts: 收据列表
 /// - Uncles: 叔块列表
-
 use sha3::{Digest, Keccak256};
 
 /// 区块头
@@ -379,11 +378,7 @@ pub struct Log {
 impl Log {
     /// 创建新日志
     pub fn new(address: [u8; 20], topics: Vec<[u8; 32]>, data: Vec<u8>) -> Self {
-        Self {
-            address,
-            topics,
-            data,
-        }
+        Self { address, topics, data }
     }
 
     /// 序列化日志
@@ -427,12 +422,7 @@ pub struct Block {
 impl Block {
     /// 创建新区块
     pub fn new(header: BlockHeader) -> Self {
-        Self {
-            header,
-            transactions: Vec::new(),
-            receipts: Vec::new(),
-            uncles: Vec::new(),
-        }
+        Self { header, transactions: Vec::new(), receipts: Vec::new(), uncles: Vec::new() }
     }
 
     /// 添加交易
@@ -484,7 +474,14 @@ mod tests {
 
     #[test]
     fn test_transaction_hash() {
-        let tx = Transaction::legacy(0, 1000000000, 21000, Some([1u8; 20]), 1000000000000000000, Vec::new());
+        let tx = Transaction::legacy(
+            0,
+            1000000000,
+            21000,
+            Some([1u8; 20]),
+            1000000000000000000,
+            Vec::new(),
+        );
         let hash = tx.hash();
         assert_ne!(hash, [0u8; 32]);
     }
@@ -493,7 +490,14 @@ mod tests {
     fn test_block_creation() {
         let mut block = Block::new(BlockHeader::new(1, [0u8; 32]));
 
-        let tx = Transaction::legacy(0, 1000000000, 21000, Some([1u8; 20]), 1000000000000000000, Vec::new());
+        let tx = Transaction::legacy(
+            0,
+            1000000000,
+            21000,
+            Some([1u8; 20]),
+            1000000000000000000,
+            Vec::new(),
+        );
         let receipt = Receipt::new(0, 1, 21000);
 
         block.add_transaction(tx, receipt);

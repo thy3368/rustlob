@@ -1,11 +1,12 @@
 /// MPT 使用示例
 ///
 /// 展示如何使用 trait-based MPT 接口
-
 use crate::{
     storage::InMemoryStorage,
     trie::MerklePatriciaTrie,
-    usecases::{DeleteUseCase, GetUseCase, InsertUseCase, IteratorUseCase, MptUseCases, RootHashUseCase},
+    usecases::{
+        DeleteUseCase, GetUseCase, InsertUseCase, IteratorUseCase, MptUseCases, RootHashUseCase,
+    },
 };
 
 /// 运行 MPT 基本操作示例
@@ -34,7 +35,11 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
 
     for (key, value) in &entries {
         trie.insert(key, value)?;
-        println!("   ✓ 插入: {} => {}", String::from_utf8_lossy(key), String::from_utf8_lossy(value));
+        println!(
+            "   ✓ 插入: {} => {}",
+            String::from_utf8_lossy(key),
+            String::from_utf8_lossy(value)
+        );
     }
     println!("   根哈希更新: {:?}", hex::encode(trie.root_hash()));
     println!();
@@ -45,7 +50,11 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
         let value = trie.get(key)?;
         match value {
             Some(v) => {
-                println!("   ✓ 查询 {}: {}", String::from_utf8_lossy(key), String::from_utf8_lossy(&v));
+                println!(
+                    "   ✓ 查询 {}: {}",
+                    String::from_utf8_lossy(key),
+                    String::from_utf8_lossy(&v)
+                );
                 assert_eq!(&v, expected_value);
             }
             None => {
@@ -100,9 +109,15 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - 恢复后键值对: {}", trie.len());
     println!();
 
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("✨ MPT 基本操作示例完成！");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
 
     Ok(())
 }
@@ -110,9 +125,15 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
 /// 运行 MPT 高级操作示例
 pub fn run_advanced_example() -> Result<(), Box<dyn std::error::Error>> {
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("🚀 Merkle Patricia Trie (MPT) 高级操作示例");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
 
     let mut trie = MerklePatriciaTrie::new(InMemoryStorage::new());
@@ -141,7 +162,11 @@ pub fn run_advanced_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   查询结果:");
     for (i, result) in results.iter().enumerate() {
         match result {
-            Some(v) => println!("      ✓ {} => {}", String::from_utf8_lossy(keys[i]), String::from_utf8_lossy(v)),
+            Some(v) => println!(
+                "      ✓ {} => {}",
+                String::from_utf8_lossy(keys[i]),
+                String::from_utf8_lossy(v)
+            ),
             None => println!("      ✗ {} 不存在", String::from_utf8_lossy(keys[i])),
         }
     }
@@ -186,9 +211,15 @@ pub fn run_advanced_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   删除后根哈希: {}", hex::encode(root3));
     println!();
 
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("✨ MPT 高级操作示例完成！");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
 
     Ok(())
 }
@@ -196,9 +227,15 @@ pub fn run_advanced_example() -> Result<(), Box<dyn std::error::Error>> {
 /// 运行以太坊状态树示例
 pub fn run_ethereum_state_example() -> Result<(), Box<dyn std::error::Error>> {
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("⛓️  以太坊状态树模拟示例");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
 
     let mut state_trie = MerklePatriciaTrie::new(InMemoryStorage::new());
@@ -288,9 +325,15 @@ pub fn run_ethereum_state_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ 状态根已更新");
     println!();
 
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("✨ 以太坊状态树模拟完成！");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
 
     Ok(())
 }
@@ -330,9 +373,15 @@ mod tests {
 /// 模拟以太坊区块中的交易树和收据树，展示高性能插入和查询
 pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Error>> {
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("🚀 以太坊交易树与收据树 - 高频场景示例");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -360,7 +409,13 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
         fn serialize(&self) -> String {
             format!(
                 "from:{},to:{},value:{},gas_price:{},gas_limit:{},nonce:{},data:{}",
-                self.from, self.to, self.value, self.gas_price, self.gas_limit, self.nonce, self.data
+                self.from,
+                self.to,
+                self.value,
+                self.gas_price,
+                self.gas_limit,
+                self.nonce,
+                self.data
             )
         }
 
@@ -507,7 +562,10 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 插入 {} 个收据完成", receipts.len());
     println!("   - 总耗时: {:?}", receipt_insert_duration);
     println!("   - 平均每个: {:.2?}", receipt_insert_duration / receipts.len() as u32);
-    println!("   - 吞吐量: {:.0} receipt/s", receipts.len() as f64 / receipt_insert_duration.as_secs_f64());
+    println!(
+        "   - 吞吐量: {:.0} receipt/s",
+        receipts.len() as f64 / receipt_insert_duration.as_secs_f64()
+    );
     println!("   📍 收据根: {}", hex::encode(receipt_root));
     println!();
 
@@ -557,12 +615,16 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!();
 
     println!("⚡ 写入性能:");
-    println!("   交易树: {:.0} tx/s  (avg: {:.2?}/tx)",
+    println!(
+        "   交易树: {:.0} tx/s  (avg: {:.2?}/tx)",
         tx_count as f64 / insert_duration.as_secs_f64(),
-        insert_duration / tx_count);
-    println!("   收据树: {:.0} receipt/s  (avg: {:.2?}/receipt)",
+        insert_duration / tx_count
+    );
+    println!(
+        "   收据树: {:.0} receipt/s  (avg: {:.2?}/receipt)",
         receipts.len() as f64 / receipt_insert_duration.as_secs_f64(),
-        receipt_insert_duration / receipts.len() as u32);
+        receipt_insert_duration / receipts.len() as u32
+    );
     println!();
 
     println!("🔍 读取性能:");
@@ -632,13 +694,19 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 查询 {} 次完成", stress_query_count);
     println!("   - 总耗时: {:?}", stress_query_duration);
     println!("   - 平均延迟: {:.2?}/query", stress_query_duration / stress_query_count);
-    println!("   - QPS: {:.0} queries/s", stress_query_count as f64 / stress_query_duration.as_secs_f64());
+    println!(
+        "   - QPS: {:.0} queries/s",
+        stress_query_count as f64 / stress_query_duration.as_secs_f64()
+    );
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
     // 总结
     // ═══════════════════════════════════════════════════════════════════════
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("✨ 以太坊交易树与收据树高频场景测试完成！");
     println!();
     println!("📈 性能总结:");
@@ -652,7 +720,10 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 轻客户端：生成 Merkle 证明验证交易存在性");
     println!("   ✓ 归档节点：高效存储和检索历史交易数据");
     println!("   ✓ 状态同步：批量处理区块数据实现快速同步");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
 
     Ok(())
 }
@@ -664,9 +735,15 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     use crate::usecases::ProveUseCase;
 
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("💡 轻客户端 Merkle 证明验证 - 高频场景示例");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
 
     println!("📖 场景说明:");
@@ -709,10 +786,12 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
 
     impl Receipt {
         fn serialize(&self) -> String {
-            format!("status:{},gas_used:{},logs:{}",
+            format!(
+                "status:{},gas_used:{},logs:{}",
                 if self.status { "1" } else { "0" },
                 self.gas_used,
-                self.logs_count)
+                self.logs_count
+            )
         }
     }
 
@@ -811,8 +890,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     for (idx, proof) in &tx_proofs {
         let size = proof.proof_size();
         total_proof_size += size;
-        println!("   📦 交易 #{}: 证明大小 {} bytes, 深度 {}",
-            idx, size, proof.depth());
+        println!("   📦 交易 #{}: 证明大小 {} bytes, 深度 {}", idx, size, proof.depth());
     }
     println!("   📊 平均证明大小: {} bytes", total_proof_size / tx_proofs.len());
     println!();
@@ -878,8 +956,10 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ 验证完成: {}/{} 成功", verified_count, tx_proofs.len());
     println!("   - 总耗时: {:?}", verify_duration);
     println!("   - 平均每个: {:.2?}", verify_duration / tx_proofs.len() as u32);
-    println!("   - 验证速率: {:.0} proofs/s",
-        tx_proofs.len() as f64 / verify_duration.as_secs_f64());
+    println!(
+        "   - 验证速率: {:.0} proofs/s",
+        tx_proofs.len() as f64 / verify_duration.as_secs_f64()
+    );
     println!();
 
     // 验证收据证明
@@ -932,8 +1012,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ 批量生成证明完成");
     println!("   - 总耗时: {:?}", batch_gen_duration);
     println!("   - 平均每个: {:.2?}", batch_gen_duration / batch_size);
-    println!("   - 生成速率: {:.0} proofs/s",
-        batch_size as f64 / batch_gen_duration.as_secs_f64());
+    println!("   - 生成速率: {:.0} proofs/s", batch_size as f64 / batch_gen_duration.as_secs_f64());
     println!();
 
     // 批量验证证明
@@ -952,8 +1031,10 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - 验证成功: {}/{}", batch_verified, batch_size);
     println!("   - 总耗时: {:?}", batch_verify_duration);
     println!("   - 平均每个: {:.2?}", batch_verify_duration / batch_size);
-    println!("   - 验证速率: {:.0} proofs/s",
-        batch_size as f64 / batch_verify_duration.as_secs_f64());
+    println!(
+        "   - 验证速率: {:.0} proofs/s",
+        batch_size as f64 / batch_verify_duration.as_secs_f64()
+    );
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -987,23 +1068,31 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Merkle 证明: {:.2} KB", proof_data_size as f64 / 1024.0);
     println!("   - 总计: {:.2} KB", (500 + proof_data_size) as f64 / 1024.0);
     println!();
-    println!("   📈 数据节省: {:.1}%",
-        (1.0 - (proof_data_size as f64 / full_data_size as f64)) * 100.0);
-    println!("   📉 传输减少: {:.1}x",
-        full_data_size as f64 / proof_data_size as f64);
+    println!(
+        "   📈 数据节省: {:.1}%",
+        (1.0 - (proof_data_size as f64 / full_data_size as f64)) * 100.0
+    );
+    println!("   📉 传输减少: {:.1}x", full_data_size as f64 / proof_data_size as f64);
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
     // 总结
     // ═══════════════════════════════════════════════════════════════════════
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("✨ 轻客户端 Merkle 证明验证示例完成！");
     println!();
     println!("📈 性能总结:");
-    println!("   • 证明生成速率: {:.0} proofs/s",
-        batch_size as f64 / batch_gen_duration.as_secs_f64());
-    println!("   • 证明验证速率: {:.0} proofs/s",
-        batch_size as f64 / batch_verify_duration.as_secs_f64());
+    println!(
+        "   • 证明生成速率: {:.0} proofs/s",
+        batch_size as f64 / batch_gen_duration.as_secs_f64()
+    );
+    println!(
+        "   • 证明验证速率: {:.0} proofs/s",
+        batch_size as f64 / batch_verify_duration.as_secs_f64()
+    );
     println!("   • 平均证明大小: {} bytes", total_proof_size / tx_proofs.len());
     println!("   • 平均生成延迟: {:.2?}", batch_gen_duration / batch_size);
     println!("   • 平均验证延迟: {:.2?}", batch_verify_duration / batch_size);
@@ -1011,8 +1100,10 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("💡 轻客户端优势:");
     println!("   ✓ 无需下载完整区块链 (节省 99%+ 存储空间)");
     println!("   ✓ 快速验证交易存在性 (微秒级延迟)");
-    println!("   ✓ 降低网络带宽消耗 (减少 {:.1}x 数据传输)",
-        full_data_size as f64 / proof_data_size as f64);
+    println!(
+        "   ✓ 降低网络带宽消耗 (减少 {:.1}x 数据传输)",
+        full_data_size as f64 / proof_data_size as f64
+    );
     println!("   ✓ 保持安全性 (密码学证明保证)");
     println!();
     println!("🎯 典型应用场景:");
@@ -1021,7 +1112,10 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • 跨链桥: 验证源链交易的存在性");
     println!("   • 支付终端: 实时验证支付交易");
     println!("   • 审计工具: 抽查验证特定交易");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
 
     Ok(())
 }

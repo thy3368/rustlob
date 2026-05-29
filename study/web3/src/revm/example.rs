@@ -1,6 +1,7 @@
+use alloy_primitives::U256;
+
 use super::contracts;
 use super::executor::RevmExecutor;
-use alloy_primitives::U256;
 
 /// REVM Counter 合约演示示例
 ///
@@ -84,11 +85,7 @@ pub fn run_counter_example() -> Result<(), String> {
 ///
 /// 将 32 字节的返回数据转换为 U256 类型
 fn decode_uint256(data: &[u8]) -> U256 {
-    if data.len() >= 32 {
-        U256::from_be_slice(&data[0..32])
-    } else {
-        U256::ZERO
-    }
+    if data.len() >= 32 { U256::from_be_slice(&data[0..32]) } else { U256::ZERO }
 }
 
 /// 打印执行统计信息

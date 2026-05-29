@@ -1,3 +1,4 @@
+use kameo::Actor;
 use kameo::actor::ActorRef;
 /// Kameo Framework Simple Example
 ///
@@ -7,7 +8,6 @@ use kameo::actor::ActorRef;
 /// Run with: cargo run --bin kameo_simple
 use kameo::actor::Spawn;
 use kameo::message::{Context, Message};
-use kameo::Actor;
 
 /// Counter actor that maintains a simple count
 #[derive(Actor)]

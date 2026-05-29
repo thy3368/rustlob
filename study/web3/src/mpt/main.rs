@@ -1,14 +1,17 @@
-mod entities;
-mod usecases;
-mod trie;
-mod storage;
-mod example;
-mod persistent_storage;
 mod block_data;
 mod block_persistence_example;
+mod entities;
+mod example;
+mod persistent_storage;
+mod storage;
+mod trie;
+mod usecases;
 
-use example::{run_advanced_example, run_basic_example, run_ethereum_state_example, run_ethereum_transaction_example, run_light_client_example};
 use block_persistence_example::run_block_persistence_example;
+use example::{
+    run_advanced_example, run_basic_example, run_ethereum_state_example,
+    run_ethereum_transaction_example, run_light_client_example,
+};
 
 /// MPT 演示程序
 ///
@@ -67,9 +70,15 @@ fn main() {
 
 fn print_architecture_info() {
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("📐 Clean Architecture 分层说明");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
     println!("1️⃣  Entities Layer (entities.rs)");
     println!("   - Node: MPT 节点类型（Empty, Leaf, Extension, Branch）");
@@ -105,9 +114,15 @@ fn print_architecture_info() {
     println!("   - 使用示例展示");
     println!("   ✓ 依赖内层接口");
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("🎯 设计原则");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
     println!("✅ 依赖倒置原则 (DIP): 高层模块不依赖低层模块");
     println!("✅ 单一职责原则 (SRP): 每个 trait 负责一个用例");
@@ -115,12 +130,22 @@ fn print_architecture_info() {
     println!("✅ 接口隔离原则 (ISP): 细粒度的 trait 接口");
     println!("✅ 里氏替换原则 (LSP): Storage trait 可替换实现");
     println!();
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!("📚 参考资源");
-    {let l = "=".repeat(70); println!("{}", l);}
+    {
+        let l = "=".repeat(70);
+        println!("{}", l);
+    }
     println!();
     println!("   - 以太坊黄皮书: https://ethereum.github.io/yellowpaper/");
-    println!("   - Merkle Patricia Trie 规范: https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/");
-    println!("   - Clean Architecture: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html");
+    println!(
+        "   - Merkle Patricia Trie 规范: https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/"
+    );
+    println!(
+        "   - Clean Architecture: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html"
+    );
     println!();
 }

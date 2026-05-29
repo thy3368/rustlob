@@ -1,7 +1,8 @@
+use std::path::PathBuf;
+
+use kameo::Actor;
 use kameo::actor::Spawn;
 use kameo::message::{Context, Message};
-use kameo::Actor;
-use std::path::PathBuf;
 
 // 1. 定义转码消息
 pub struct Transcode {

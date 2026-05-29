@@ -33,16 +33,14 @@
 ```
 */
 
-use futures::StreamExt;
-use libp2p::{
-    gossipsub, identify, mdns, noise,
-    swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, yamux, PeerId, SwarmBuilder,
-};
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
+
+use futures::StreamExt;
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use libp2p::{PeerId, SwarmBuilder, gossipsub, identify, mdns, noise, tcp, yamux};
 use tracing::{error, info, warn};
 
 /// # 第一步：定义网络行为（Network Behaviour）
@@ -67,10 +65,7 @@ struct ChatBehaviour {
 /// # 第二步：配置和初始化
 ///
 /// 创建 libp2p Swarm，配置传输层和网络行为
-async fn create_swarm() -> Result<
-    libp2p::Swarm<ChatBehaviour>,
-    Box<dyn Error>,
-> {
+async fn create_swarm() -> Result<libp2p::Swarm<ChatBehaviour>, Box<dyn Error>> {
     // 2.1 生成密钥对和 PeerId
     // 每个节点都有唯一的身份标识
     let local_key = libp2p::identity::Keypair::generate_ed25519();
@@ -87,11 +82,7 @@ async fn create_swarm() -> Result<
     // - Yamux 多路复用
     let swarm = SwarmBuilder::with_existing_identity(local_key.clone())
         .with_tokio()
-        .with_tcp(
-            tcp::Config::default(),
-            noise::Config::new,
-            yamux::Config::default,
-        )?
+        .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
         .with_behaviour(|key| {
             // 2.3 配置 Gossipsub（消息广播协议）
             //
@@ -125,14 +116,11 @@ async fn create_swarm() -> Result<
             // mDNS 在局域网内广播节点存在，实现零配置发现
             // 注意：配置 query_interval 减少网络负载
             let mdns_config = mdns::Config {
-                query_interval: Duration::from_secs(5),  // 查询间隔5秒
+                query_interval: Duration::from_secs(5), // 查询间隔5秒
                 ..Default::default()
             };
 
-            let mdns = mdns::tokio::Behaviour::new(
-                mdns_config,
-                key.public().to_peer_id(),
-            )?;
+            let mdns = mdns::tokio::Behaviour::new(mdns_config, key.public().to_peer_id())?;
 
             info!("✅ mDNS 协议配置完成");
 
@@ -147,11 +135,7 @@ async fn create_swarm() -> Result<
             info!("✅ Identify 协议配置完成");
 
             // 2.6 组合所有行为
-            Ok(ChatBehaviour {
-                mdns,
-                gossipsub,
-                identify,
-            })
+            Ok(ChatBehaviour { mdns, gossipsub, identify })
         })?
         .build();
 
@@ -169,7 +153,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into())
-                .add_directive("libp2p_mdns=warn".parse()?),  // mDNS只显示warn及以上
+                .add_directive("libp2p_mdns=warn".parse()?), // mDNS只显示warn及以上
         )
         .init();
 

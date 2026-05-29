@@ -1,13 +1,9 @@
-use alloy_primitives::{Address, Bytes, U256};
-use revm::{
-    db::InMemoryDB,
-    primitives::{
-        AccountInfo, ExecutionResult, Output, TransactTo,
-    },
-    DatabaseCommit,
-    Evm,
-};
 use std::collections::HashMap;
+
+use alloy_primitives::{Address, Bytes, U256};
+use revm::db::InMemoryDB;
+use revm::primitives::{AccountInfo, ExecutionResult, Output, TransactTo};
+use revm::{DatabaseCommit, Evm};
 
 /// REVM 执行器 - 用于部署和执行智能合约
 ///
@@ -39,11 +35,7 @@ impl RevmExecutor {
         };
         db.insert_account_info(caller, account_info);
 
-        Self {
-            db,
-            contracts: HashMap::new(),
-            caller,
-        }
+        Self { db, contracts: HashMap::new(), caller }
     }
 
     /// 部署合约
@@ -55,11 +47,7 @@ impl RevmExecutor {
     /// # 返回
     /// - `Ok(Address)`: 部署成功，返回合约地址
     /// - `Err(String)`: 部署失败，返回错误信息
-    pub fn deploy_contract(
-        &mut self,
-        name: &str,
-        bytecode: Vec<u8>,
-    ) -> Result<Address, String> {
+    pub fn deploy_contract(&mut self, name: &str, bytecode: Vec<u8>) -> Result<Address, String> {
         // 创建 EVM 实例
         let mut evm = Evm::builder()
             .with_db(&mut self.db)
@@ -73,9 +61,8 @@ impl RevmExecutor {
             .build();
 
         // 执行部署交易
-        let result_and_state = evm
-            .transact()
-            .map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state =
+            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
 
         // 显式 drop EVM 以释放对 db 的借用
         drop(evm);
@@ -86,10 +73,7 @@ impl RevmExecutor {
 
         // 检查执行结果
         match result {
-            ExecutionResult::Success {
-                output: Output::Create(_, Some(address)),
-                ..
-            } => {
+            ExecutionResult::Success { output: Output::Create(_, Some(address)), .. } => {
                 println!("✅ 合约 '{}' 部署成功: {:?}", name, address);
                 self.contracts.insert(name.to_string(), address);
                 Ok(address)
@@ -139,9 +123,8 @@ impl RevmExecutor {
             .build();
 
         // 执行调用
-        let result_and_state = evm
-            .transact()
-            .map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state =
+            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
 
         // 显式 drop EVM 以释放对 db 的借用
         drop(evm);
@@ -152,25 +135,15 @@ impl RevmExecutor {
 
         // 检查执行结果
         match result {
-            ExecutionResult::Success {
-                output: Output::Call(output),
-                gas_used,
-                ..
-            } => {
+            ExecutionResult::Success { output: Output::Call(output), gas_used, .. } => {
                 println!("✅ 合约调用成功，Gas 使用: {}", gas_used);
                 Ok(output)
             }
             ExecutionResult::Revert { output, gas_used } => {
-                Err(format!(
-                    "Contract call reverted (gas used: {}): {:?}",
-                    gas_used, output
-                ))
+                Err(format!("Contract call reverted (gas used: {}): {:?}", gas_used, output))
             }
             ExecutionResult::Halt { reason, gas_used } => {
-                Err(format!(
-                    "Contract call halted (gas used: {}): {:?}",
-                    gas_used, reason
-                ))
+                Err(format!("Contract call halted (gas used: {}): {:?}", gas_used, reason))
             }
             _ => Err("Unexpected execution result".to_string()),
         }
@@ -185,11 +158,7 @@ impl RevmExecutor {
     /// # 返回
     /// - `Ok(Bytes)`: 调用成功，返回查询结果
     /// - `Err(String)`: 调用失败，返回错误信息
-    pub fn view_contract(
-        &self,
-        contract_name: &str,
-        calldata: Vec<u8>,
-    ) -> Result<Bytes, String> {
+    pub fn view_contract(&self, contract_name: &str, calldata: Vec<u8>) -> Result<Bytes, String> {
         // 获取合约地址
         let contract_address = self
             .contracts
@@ -212,24 +181,17 @@ impl RevmExecutor {
             .build();
 
         // 执行查询
-        let result = evm
-            .transact()
-            .map_err(|e| format!("View call failed: {:?}", e))?;
+        let result = evm.transact().map_err(|e| format!("View call failed: {:?}", e))?;
 
         let result = result.result;
 
         // 检查执行结果
         match result {
-            ExecutionResult::Success {
-                output: Output::Call(output),
-                ..
-            } => Ok(output),
+            ExecutionResult::Success { output: Output::Call(output), .. } => Ok(output),
             ExecutionResult::Revert { output, .. } => {
                 Err(format!("View call reverted: {:?}", output))
             }
-            ExecutionResult::Halt { reason, .. } => {
-                Err(format!("View call halted: {:?}", reason))
-            }
+            ExecutionResult::Halt { reason, .. } => Err(format!("View call halted: {:?}", reason)),
             _ => Err("Unexpected execution result".to_string()),
         }
     }

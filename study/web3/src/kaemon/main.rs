@@ -1,10 +1,9 @@
-use futures::StreamExt;
-use libp2p::{
-    kad::{self, Mode, Record, RecordKey},
-    noise, tcp, yamux, Multiaddr, SwarmBuilder,
-};
 use std::error::Error;
 use std::time::Duration;
+
+use futures::StreamExt;
+use libp2p::kad::{self, Mode, Record, RecordKey};
+use libp2p::{Multiaddr, SwarmBuilder, noise, tcp, yamux};
 use tokio::io::{self, AsyncBufReadExt};
 use tracing_subscriber::EnvFilter;
 
@@ -18,11 +17,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 创建 libp2p Swarm
     let mut swarm = SwarmBuilder::with_new_identity()
         .with_tokio()
-        .with_tcp(
-            tcp::Config::default(),
-            noise::Config::new,
-            yamux::Config::default,
-        )?
+        .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
         .with_behaviour(|key| {
             // 创建 Kademlia 行为
             let peer_id = key.public().to_peer_id();
@@ -71,12 +66,8 @@ fn handle_command(swarm: &mut libp2p::Swarm<kad::Behaviour<kad::store::MemorySto
             let key = parts[1].as_bytes().to_vec();
             let value = parts[2].as_bytes().to_vec();
 
-            let record = Record {
-                key: RecordKey::new(&key),
-                value,
-                publisher: None,
-                expires: None,
-            };
+            let record =
+                Record { key: RecordKey::new(&key), value, publisher: None, expires: None };
 
             match swarm.behaviour_mut().put_record(record, kad::Quorum::One) {
                 Ok(_) => println!("✓ 存储记录: {}", parts[1]),
@@ -88,18 +79,16 @@ fn handle_command(swarm: &mut libp2p::Swarm<kad::Behaviour<kad::store::MemorySto
             swarm.behaviour_mut().get_record(key);
             println!("🔍 查询中: {}", parts[1]);
         }
-        Some("CONNECT") if parts.len() == 2 => {
-            match parts[1].parse::<Multiaddr>() {
-                Ok(addr) => {
-                    if let Err(e) = swarm.dial(addr.clone()) {
-                        eprintln!("✗ 连接失败: {:?}", e);
-                    } else {
-                        println!("📡 正在连接: {}", addr);
-                    }
+        Some("CONNECT") if parts.len() == 2 => match parts[1].parse::<Multiaddr>() {
+            Ok(addr) => {
+                if let Err(e) = swarm.dial(addr.clone()) {
+                    eprintln!("✗ 连接失败: {:?}", e);
+                } else {
+                    println!("📡 正在连接: {}", addr);
                 }
-                Err(e) => eprintln!("✗ 地址格式错误: {:?}", e),
             }
-        }
+            Err(e) => eprintln!("✗ 地址格式错误: {:?}", e),
+        },
         Some("QUIT") => {
             println!("👋 退出...");
             std::process::exit(0);
@@ -118,25 +107,23 @@ fn handle_event(event: libp2p::swarm::SwarmEvent<kad::Event>) {
         libp2p::swarm::SwarmEvent::Behaviour(kad::Event::OutboundQueryProgressed {
             result,
             ..
-        }) => {
-            match result {
-                kad::QueryResult::GetRecord(Ok(kad::GetRecordOk::FoundRecord(record))) => {
-                    let key = String::from_utf8_lossy(record.record.key.as_ref());
-                    let value = String::from_utf8_lossy(&record.record.value);
-                    println!("✓ 查询到记录: {} = {}", key, value);
-                }
-                kad::QueryResult::GetRecord(Err(e)) => {
-                    eprintln!("✗ 查询失败: {:?}", e);
-                }
-                kad::QueryResult::PutRecord(Ok(kad::PutRecordOk { key })) => {
-                    println!("✓ 记录已发布到网络: {}", String::from_utf8_lossy(key.as_ref()));
-                }
-                kad::QueryResult::PutRecord(Err(e)) => {
-                    eprintln!("✗ 发布失败: {:?}", e);
-                }
-                _ => {}
+        }) => match result {
+            kad::QueryResult::GetRecord(Ok(kad::GetRecordOk::FoundRecord(record))) => {
+                let key = String::from_utf8_lossy(record.record.key.as_ref());
+                let value = String::from_utf8_lossy(&record.record.value);
+                println!("✓ 查询到记录: {} = {}", key, value);
             }
-        }
+            kad::QueryResult::GetRecord(Err(e)) => {
+                eprintln!("✗ 查询失败: {:?}", e);
+            }
+            kad::QueryResult::PutRecord(Ok(kad::PutRecordOk { key })) => {
+                println!("✓ 记录已发布到网络: {}", String::from_utf8_lossy(key.as_ref()));
+            }
+            kad::QueryResult::PutRecord(Err(e)) => {
+                eprintln!("✗ 发布失败: {:?}", e);
+            }
+            _ => {}
+        },
         libp2p::swarm::SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
             println!("🤝 已连接节点: {} ({})", peer_id, endpoint.get_remote_address());
             // 自动添加到路由表
