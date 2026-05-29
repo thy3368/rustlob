@@ -14,7 +14,7 @@ pub struct HandlerLatencyMetrics {
 }
 
 /// TraceableDomainEvent 可溯源 事件
-pub trait TraceableEventSet {
+pub trait ReplayableEventSet {
     fn event_count(&self) -> usize;
     // fn events(&self) -> &[ChangeLog];
 }
@@ -23,7 +23,7 @@ pub trait CmdHandlerInternal: Send + Sync {
     type Command;
     type Reply;
     type GivenStateSet;
-    type ThenTraceableEventSet: TraceableEventSet;
+    type ThenTraceableEventSet: ReplayableEventSet;
     type Error;
 
     type Repo: CmdRepo2;

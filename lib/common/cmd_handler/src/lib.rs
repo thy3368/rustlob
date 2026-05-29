@@ -4,15 +4,13 @@
 
 pub mod handler_cmd;
 pub mod handler_query;
-pub mod pipe_line_handler;
-pub mod use_case_def;
 pub mod use_case_def2;
 #[cfg(test)]
-mod use_case_review_examples;
-mod use_case_design;
-pub mod use_case_example;
-mod use_case_impl;
+mod use_case_examples;
+#[cfg(test)]
+mod use_case_proptest_examples;
 
+pub use diff::{EntityReplayableEvent, ReplayFieldChange};
 pub use handler_cmd::{
-    CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, TraceableEventSet,
+    CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, ReplayableEventSet,
 };

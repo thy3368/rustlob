@@ -1,4 +1,5 @@
-use crate::{HandlerLatencyMetrics, TraceableEventSet};
+use crate::HandlerLatencyMetrics;
+use diff::EntityReplayableEvent;
 
 fn saturating_u64(value: u128) -> u64 {
     value.min(u64::MAX as u128) as u64
@@ -90,8 +91,6 @@ pub trait CommandUseCase2: Send + Sync {
     /// 对应clean 架构的 entity , 从数据库/内存/文件等
     type GivenState;
 
-    /// 对应事件溯源的可重放事件
-    type ThenTraceableEvents: TraceableEventSet;
     type Error;
 
     /// 对应四色建模的 role。
@@ -116,27 +115,27 @@ pub trait CommandUseCase2: Send + Sync {
     ) -> Result<(), Self::Error>;
 
     /// 计算可重放事件
-    fn gen_traceable_events(
+    fn compute_replayable_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Self::ThenTraceableEvents, Self::Error>;
+    ) -> Result<Vec<EntityReplayableEvent>, Self::Error>;
 }
 
 /// 对外回复映射移出核心 Use Case，交给 Interface Adapters（接口适配器）。
-pub trait UseCaseReplyMapper<E>: Send + Sync {
+pub trait UseCaseReplyMapper: Send + Sync {
     type Reply;
 
-    fn map(&self, events: E) -> Self::Reply;
+    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply;
 }
 
 /// 事件执行管线也从核心 Use Case 中拆出。
-pub trait TraceableEventPipeline<E, Err>: Send + Sync {
-    fn persist(&self, events: &E) -> Result<(), Err>;
+pub trait ReplayableEventPipeline<Err>: Send + Sync {
+    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
 
-    fn replay(&self, events: &E) -> Result<(), Err>;
+    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
 
-    fn publish(&self, events: &E) -> Result<(), Err>;
+    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
 }
 
 /// 状态加载端口 - 标准化从外部存储加载领域状态
@@ -167,7 +166,7 @@ impl CommandUseCaseExecutor2 {
     where
         U: CommandUseCase2,
         L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        P: ReplayableEventPipeline<U::Error>,
     {
         tracing::span!(
             tracing::Level::TRACE,
@@ -184,25 +183,35 @@ impl CommandUseCaseExecutor2 {
         )
     }
 
-    fn execute_inner<U, P, L, O>(
+    /// 执行命令型 use case 的标准编排：
+    /// 1. 先做 command 级别的快速预检查
+    /// 2. 通过外部 load port 加载当前 given state
+    /// 3. 基于 state 做业务校验
+    /// 4. 生成领域事件
+    /// 5. 依次持久化、回放、发布领域事件
+    /// 6. 最后把整条链路的 latency 交给外部 observer
+    ///
+    /// 这里故意不把加载和 metrics 观察放进 use case，
+    /// 让核心 use case 只保留业务规则本身。
+    pub fn execute<U, P, L, O>(
         &self,
         use_case: &U,
-        command: U::Command,
-        meta: &CommandMeta,
+        envelope: CommandEnvelope<U::Command>,
         load_port: &L,
         pipeline: &P,
         latency_observer: &O,
-    ) -> Result<U::ThenTraceableEvents, U::Error>
+    ) -> Result<Vec<EntityReplayableEvent>, U::Error>
     where
         U: CommandUseCase2,
         L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        P: ReplayableEventPipeline<U::Error>,
         O: ?Sized + ObserveHandlerLatency,
     {
         use minstant::Instant;
 
+        let CommandEnvelope { meta, command } = envelope;
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, P, L>(use_case, meta, &command);
+        let execution_span = Self::trace_span::<U, P, L>(use_case, &meta, &command);
         let _execution_guard = execution_span.enter();
 
         tracing::trace!(
@@ -213,7 +222,7 @@ impl CommandUseCaseExecutor2 {
         );
 
         let execution =
-            (|| -> Result<(U::ThenTraceableEvents, HandlerLatencyMetrics), U::Error> {
+            (|| -> Result<(Vec<EntityReplayableEvent>, HandlerLatencyMetrics), U::Error> {
                 let ((), pre_check_ns) = trace_phase(
                     "pre_check",
                     "use_case.pre_check_command(&command)",
@@ -233,12 +242,12 @@ impl CommandUseCaseExecutor2 {
                     || use_case.validate_against_state(&command, &state),
                 )?;
                 let (events, apply_changes_ns) = trace_phase(
-                    "gen_traceable_events",
-                    "use_case.gen_traceable_events(&command, state)",
+                    "compute_replayable_events",
+                    "use_case.compute_replayable_events(&command, state)",
                     |error| use_case.format_error(error),
-                    || use_case.gen_traceable_events(&command, state),
+                    || use_case.compute_replayable_events(&command, state),
                 )?;
-                let domain_event_count = events.event_count();
+                let domain_event_count = events.len();
 
                 let ((), persist_domain_events_ns) = trace_phase(
                     "persist",
@@ -311,90 +320,10 @@ impl CommandUseCaseExecutor2 {
         }
     }
 
-    /// 执行命令型 use case 的标准编排：
-    /// 1. 先做 command 级别的快速预检查
-    /// 2. 通过外部 load port 加载当前 given state
-    /// 3. 基于 state 做业务校验
-    /// 4. 生成领域事件
-    /// 5. 依次持久化、回放、发布领域事件
-    /// 6. 最后把整条链路的 latency 交给外部 observer
-    ///
-    /// 这里故意不把加载和 metrics 观察放进 use case，
-    /// 让核心 use case 只保留业务规则本身。
-    pub fn execute<U, P, L, O>(
-        &self,
-        use_case: &U,
-        command: U::Command,
-        load_port: &L,
-        pipeline: &P,
-        latency_observer: &O,
-    ) -> Result<U::ThenTraceableEvents, U::Error>
-    where
-        U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
-        O: ?Sized + ObserveHandlerLatency,
-    {
-        self.execute_inner(
-            use_case,
-            command,
-            &CommandMeta::default(),
-            load_port,
-            pipeline,
-            latency_observer,
-        )
-    }
-
-    /// 用 envelope 携带技术追踪元数据，让业务 command 本身保持聚焦。
-    pub fn execute_enveloped<U, P, L, O>(
-        &self,
-        use_case: &U,
-        envelope: CommandEnvelope<U::Command>,
-        load_port: &L,
-        pipeline: &P,
-        latency_observer: &O,
-    ) -> Result<U::ThenTraceableEvents, U::Error>
-    where
-        U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
-        O: ?Sized + ObserveHandlerLatency,
-    {
-        self.execute_inner(
-            use_case,
-            envelope.command,
-            &envelope.meta,
-            load_port,
-            pipeline,
-            latency_observer,
-        )
-    }
-
     /// 在标准执行编排之后，把领域事件交给外部 reply mapper 转成对外响应。
     pub fn execute_and_map_reply<U, P, M, L, O>(
         &self,
         use_case: &U,
-        command: U::Command,
-        load_port: &L,
-        pipeline: &P,
-        latency_observer: &O,
-        mapper: &M,
-    ) -> Result<M::Reply, U::Error>
-    where
-        U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
-        O: ?Sized + ObserveHandlerLatency,
-        M: UseCaseReplyMapper<U::ThenTraceableEvents>,
-    {
-        let events = self.execute(use_case, command, load_port, pipeline, latency_observer)?;
-        Ok(mapper.map(events))
-    }
-
-    /// 用 envelope 执行并映射 reply。
-    pub fn execute_enveloped_and_map_reply<U, P, M, L, O>(
-        &self,
-        use_case: &U,
         envelope: CommandEnvelope<U::Command>,
         load_port: &L,
         pipeline: &P,
@@ -404,12 +333,11 @@ impl CommandUseCaseExecutor2 {
     where
         U: CommandUseCase2,
         L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        P: ReplayableEventPipeline<U::Error>,
         O: ?Sized + ObserveHandlerLatency,
-        M: UseCaseReplyMapper<U::ThenTraceableEvents>,
+        M: UseCaseReplyMapper,
     {
-        let events =
-            self.execute_enveloped(use_case, envelope, load_port, pipeline, latency_observer)?;
+        let events = self.execute(use_case, envelope, load_port, pipeline, latency_observer)?;
         Ok(mapper.map(events))
     }
 }
@@ -449,15 +377,8 @@ mod tests {
         RiskRejected(&'static str),
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct StubEvents {
-        count: usize,
-    }
-
-    impl TraceableEventSet for StubEvents {
-        fn event_count(&self) -> usize {
-            self.count
-        }
+    fn stub_event(sequence: u64) -> EntityReplayableEvent {
+        EntityReplayableEvent::new_created(0, sequence, sequence as i64 + 1, 1)
     }
 
     #[derive(Debug, Clone, Copy, Default)]
@@ -466,7 +387,6 @@ mod tests {
     impl CommandUseCase2 for StubUseCase {
         type Command = StubCommand;
         type GivenState = u64;
-        type ThenTraceableEvents = StubEvents;
         type Error = StubError;
 
         fn role(&self) -> &'static str {
@@ -495,12 +415,12 @@ mod tests {
             }
         }
 
-        fn gen_traceable_events(
+        fn compute_replayable_events(
             &self,
             _cmd: &Self::Command,
             state: Self::GivenState,
-        ) -> Result<Self::ThenTraceableEvents, Self::Error> {
-            Ok(StubEvents { count: state as usize })
+        ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+            Ok((0..state).map(stub_event).collect())
         }
     }
 
@@ -516,16 +436,16 @@ mod tests {
     #[derive(Debug, Clone, Copy, Default)]
     struct StubPipeline;
 
-    impl TraceableEventPipeline<StubEvents, StubError> for StubPipeline {
-        fn persist(&self, _events: &StubEvents) -> Result<(), StubError> {
+    impl ReplayableEventPipeline<StubError> for StubPipeline {
+        fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), StubError> {
             Ok(())
         }
 
-        fn replay(&self, _events: &StubEvents) -> Result<(), StubError> {
+        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), StubError> {
             Ok(())
         }
 
-        fn publish(&self, _events: &StubEvents) -> Result<(), StubError> {
+        fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), StubError> {
             Ok(())
         }
     }
@@ -726,9 +646,8 @@ mod tests {
                 },
             };
 
-            let events =
-                executor.execute_enveloped(&use_case, command, &load_port, &pipeline, &()).unwrap();
-            assert_eq!(events.event_count(), 1);
+            let events = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap();
+            assert_eq!(events.len(), 1);
         });
 
         let ok_operations = recording.operations_by_status("ok");
@@ -769,9 +688,7 @@ mod tests {
                 },
             };
 
-            let error = executor
-                .execute_enveloped(&use_case, command, &load_port, &pipeline, &())
-                .unwrap_err();
+            let error = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap_err();
             assert_eq!(error, StubError::RiskRejected("symbol disabled"));
         });
 
