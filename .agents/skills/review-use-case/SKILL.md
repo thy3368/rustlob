@@ -12,13 +12,13 @@ Review a RustLOB use case as design, not just syntax. The job is to determine wh
 Start from these source files:
 - Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
 - Small example: `lib/common/cmd_handler/src/use_case_impl.rs`
-- Review calibration examples: `lib/common/cmd_handler/src/use_case_review_examples.rs`
+- Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Real L1 examples:
   - `lib/core/l1/src/use_case/command_handler/receive_and_admit_transactions.rs`
   - `lib/core/l1/src/use_case/command_handler/execute_and_commit_block.rs`
 
 Load [references/scorecard.md](references/scorecard.md) before scoring.
-Read `lib/common/cmd_handler/src/use_case_review_examples.rs` when you need a fast good-vs-bad calibration before reviewing a real use case.
+Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need a fast good-vs-bad calibration before reviewing a real use case.
 
 ## Workflow
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proptest Use Case"
+  short_description: "Write proptest for Rust use cases"
+  default_prompt: "Write property-based tests for RustLOB command use cases using proptest, focus on invariants and executor behavior, and avoid trivial or non-business properties."
