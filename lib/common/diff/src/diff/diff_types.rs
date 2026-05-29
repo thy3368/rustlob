@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use immutable_derive::immutable;
 // ============================================================================

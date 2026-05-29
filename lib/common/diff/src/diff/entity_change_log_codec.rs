@@ -85,7 +85,7 @@ impl ChangeLogEntrySoaEncoder {
     }
 
     /// 添加条目
-    pub fn push(&mut self, entry: super::entity_change_log::EntityChangeLog) {
+    pub fn push(&mut self, entry: super::entity_change_log::EntityReplayableEvent) {
         self.soa.push_entry(entry);
     }
 
@@ -553,7 +553,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::entity_change_log::{EntityChangeLog, FieldChange};
+    use super::super::entity_change_log::{EntityReplayableEvent, FieldChange};
     use super::*;
 
     #[test]
@@ -570,8 +570,8 @@ mod tests {
     fn test_encode_decode_single_entry() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = EntityChangeLog::entity_id_from_str("123").unwrap();
-        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("123").unwrap();
+        let entry = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let data = encoder.encode();
@@ -590,8 +590,8 @@ mod tests {
     fn test_encode_decode_with_field_changes() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = EntityChangeLog::entity_id_from_str("456").unwrap();
-        let mut entry = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("456").unwrap();
+        let mut entry = EntityReplayableEvent::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
         let fc = FieldChange::new(field_name, b"100.0", b"120.0", 0);
@@ -610,8 +610,8 @@ mod tests {
     fn test_encode_to_external_buffer() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
-        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("789").unwrap();
+        let entry = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let size = encoder.encoded_size();
@@ -630,7 +630,7 @@ mod tests {
 
         for i in 0..5 {
             let entity_id = i as i64;
-            let mut entry = EntityChangeLog::new(1000 + i, i, i, i + 1, entity_id, 1, 1);
+            let mut entry = EntityReplayableEvent::new(1000 + i, i, i, i + 1, entity_id, 1, 1);
 
             let field_name = FieldChange::field_name_from_str("price");
             let fc = FieldChange::new(field_name, b"100.0", b"120.0", 0);
@@ -658,8 +658,8 @@ mod tests {
     fn test_buffer_too_small() {
         let mut encoder = ChangeLogEntrySoaEncoder::new();
 
-        let entity_id = EntityChangeLog::entity_id_from_str("999").unwrap();
-        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("999").unwrap();
+        let entry = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
         encoder.push(entry);
 
         let mut small_buffer = vec![0u8; 10];

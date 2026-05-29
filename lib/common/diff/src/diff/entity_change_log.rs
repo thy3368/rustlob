@@ -18,7 +18,7 @@ use zerocopy::{FromZeros, Immutable, IntoBytes, Unaligned};
 /// - Updated 事件: old_version=N, new_version=N+1
 /// - Deleted 事件: old_version=N, new_version=N+1
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntityChangeLog {
+pub struct EntityReplayableEvent {
     /// 变更时间戳（纳秒）
     pub timestamp: u64,
     /// 变更序列号（用于全局排序）
@@ -116,7 +116,7 @@ impl FieldChange {
     }
 }
 
-impl EntityChangeLog {
+impl EntityReplayableEvent {
     /// 创建新的变更日志条目
     pub fn new(
         timestamp: u64,
@@ -442,7 +442,7 @@ impl EntityChangeLogSoa {
     }
 
     /// 从 AOS 条目添加
-    pub fn push_entry(&mut self, entry: EntityChangeLog) {
+    pub fn push_entry(&mut self, entry: EntityReplayableEvent) {
         self.timestamps.push(entry.timestamp);
         self.sequences.push(entry.sequence);
         self.old_versions.push(entry.old_version);
@@ -476,12 +476,12 @@ impl EntityChangeLogSoa {
     }
 
     /// 获取指定索引的条目（转换为 AOS）
-    pub fn get(&self, index: usize) -> Option<EntityChangeLog> {
+    pub fn get(&self, index: usize) -> Option<EntityReplayableEvent> {
         if index >= self.len() {
             return None;
         }
 
-        Some(EntityChangeLog {
+        Some(EntityReplayableEvent {
             timestamp: self.timestamps[index],
             sequence: self.sequences[index],
             old_version: self.old_versions[index],
@@ -566,8 +566,8 @@ impl Default for EntityChangeLogSoa {
 }
 
 /// AOS 到 SOA 的转换
-impl From<Vec<EntityChangeLog>> for EntityChangeLogSoa {
-    fn from(entries: Vec<EntityChangeLog>) -> Self {
+impl From<Vec<EntityReplayableEvent>> for EntityChangeLogSoa {
+    fn from(entries: Vec<EntityReplayableEvent>) -> Self {
         let mut soa = Self::with_capacity(entries.len());
         for entry in entries {
             soa.push_entry(entry);
@@ -577,10 +577,10 @@ impl From<Vec<EntityChangeLog>> for EntityChangeLogSoa {
 }
 
 /// SOA 到 AOS 的转换
-impl From<EntityChangeLogSoa> for Vec<EntityChangeLog> {
+impl From<EntityChangeLogSoa> for Vec<EntityReplayableEvent> {
     fn from(soa: EntityChangeLogSoa) -> Self {
         (0..soa.len())
-            .map(|i| EntityChangeLog {
+            .map(|i| EntityReplayableEvent {
                 timestamp: soa.timestamps[i],
                 sequence: soa.sequences[i],
                 old_version: soa.old_versions[i],
@@ -600,8 +600,8 @@ mod tests {
 
     #[test]
     fn test_new_entry() {
-        let entity_id = EntityChangeLog::entity_id_from_str("123").unwrap();
-        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("123").unwrap();
+        let entry = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
 
         assert_eq!(entry.timestamp, 1000);
         assert_eq!(entry.sequence, 1);
@@ -615,19 +615,19 @@ mod tests {
 
     #[test]
     fn test_change_type_checks() {
-        let entity_id = EntityChangeLog::entity_id_from_str("456").unwrap();
+        let entity_id = EntityReplayableEvent::entity_id_from_str("456").unwrap();
 
-        let created = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let created = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert!(created.is_created());
         assert!(!created.is_updated());
         assert!(!created.is_deleted());
 
-        let updated = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let updated = EntityReplayableEvent::new(1000, 1, 1, 2, entity_id, 1, 1);
         assert!(!updated.is_created());
         assert!(updated.is_updated());
         assert!(!updated.is_deleted());
 
-        let deleted = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 2);
+        let deleted = EntityReplayableEvent::new(1000, 1, 1, 2, entity_id, 1, 2);
         assert!(!deleted.is_created());
         assert!(!deleted.is_updated());
         assert!(deleted.is_deleted());
@@ -635,8 +635,8 @@ mod tests {
 
     #[test]
     fn test_add_field_change() {
-        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
-        let mut entry = EntityChangeLog::new(1000, 1, 1, 2, entity_id, 1, 1);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("789").unwrap();
+        let mut entry = EntityReplayableEvent::new(1000, 1, 1, 2, entity_id, 1, 1);
 
         let field_name = FieldChange::field_name_from_str("price");
         let field_change = FieldChange::new(field_name, b"100.0", b"120.0", 0);
@@ -660,25 +660,25 @@ mod tests {
     #[test]
     fn test_entity_id_conversion() {
         // 测试有效的数字字符串转换
-        let id1 = EntityChangeLog::entity_id_from_str("123").unwrap();
+        let id1 = EntityReplayableEvent::entity_id_from_str("123").unwrap();
         assert_eq!(id1, 123);
 
         // 测试负数
-        let id2 = EntityChangeLog::entity_id_from_str("-456").unwrap();
+        let id2 = EntityReplayableEvent::entity_id_from_str("-456").unwrap();
         assert_eq!(id2, -456);
 
         // 测试大数字
-        let id3 = EntityChangeLog::entity_id_from_str("9223372036854775807").unwrap();
+        let id3 = EntityReplayableEvent::entity_id_from_str("9223372036854775807").unwrap();
         assert_eq!(id3, i64::MAX);
 
         // 测试往返转换
-        let entity_id = EntityChangeLog::entity_id_from_str("789").unwrap();
-        let entry = EntityChangeLog::new(1000, 1, 0, 1, entity_id, 1, 0);
+        let entity_id = EntityReplayableEvent::entity_id_from_str("789").unwrap();
+        let entry = EntityReplayableEvent::new(1000, 1, 0, 1, entity_id, 1, 0);
         assert_eq!(entry.entity_id_as_str(), "789");
 
         // 测试无效字符串应该返回错误
-        assert!(EntityChangeLog::entity_id_from_str("not_a_number").is_err());
-        assert!(EntityChangeLog::entity_id_from_str("").is_err());
+        assert!(EntityReplayableEvent::entity_id_from_str("not_a_number").is_err());
+        assert!(EntityReplayableEvent::entity_id_from_str("").is_err());
     }
 }
 
