@@ -1,10 +1,14 @@
-use super::use_case_def2::{CommandUseCase2, DomainEventPipeline, LoadState, UseCaseReplyMapper};
+use super::use_case_def2::{
+    CommandUseCase2, IssuedByParty, LoadState, TraceableEventPipeline, UseCaseReplyMapper,
+};
 use crate::TraceableEventSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceOrderCommand {
     pub asset: u32,
 }
+
+impl IssuedByParty for PlaceOrderCommand {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOrderError {
@@ -101,7 +105,7 @@ impl UseCaseReplyMapper<PlaceOrderEvents> for PlaceOrderReplyMapper {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoopDomainEventPipeline;
 
-impl<E, Err> DomainEventPipeline<E, Err> for NoopDomainEventPipeline {
+impl<E, Err> TraceableEventPipeline<E, Err> for NoopDomainEventPipeline {
     fn persist(&self, _events: &E) -> Result<(), Err> {
         Ok(())
     }
@@ -150,7 +154,7 @@ impl SpyDomainEventPipeline {
     }
 }
 
-impl DomainEventPipeline<PlaceOrderEvents, PlaceOrderError> for SpyDomainEventPipeline {
+impl TraceableEventPipeline<PlaceOrderEvents, PlaceOrderError> for SpyDomainEventPipeline {
     fn persist(&self, _events: &PlaceOrderEvents) -> Result<(), PlaceOrderError> {
         self.calls.lock().unwrap().push("persist");
         Ok(())

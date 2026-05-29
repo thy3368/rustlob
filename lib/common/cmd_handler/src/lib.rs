@@ -7,6 +7,8 @@ pub mod handler_query;
 pub mod pipe_line_handler;
 pub mod use_case_def;
 pub mod use_case_def2;
+#[cfg(test)]
+mod use_case_review_examples;
 mod use_case_design;
 pub mod use_case_example;
 mod use_case_impl;

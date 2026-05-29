@@ -8,6 +8,31 @@ fn trace_field_or_placeholder(value: Option<&str>) -> &str {
     value.unwrap_or("-")
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommandMeta {
+    /// Tracing correlation id for spans/logs across retries and service hops.
+    /// This is only for observability and troubleshooting, not for business idempotency.
+    pub trace_id: Option<String>,
+    /// Stable business command identity.
+    /// Use this as the primary idempotency and deduplication key for the same business command.
+    /// Retries of the same command should keep the same command_id.
+    pub command_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommandEnvelope<C> {
+    pub meta: CommandMeta,
+    pub command: C,
+}
+
+/// Business actor instance carried by the command.
+/// Semantically: `party_id` plays the `role()` of the use case and issues the command.
+pub trait IssuedByParty {
+    fn party_id(&self) -> Option<&str> {
+        None
+    }
+}
+
 fn trace_phase<T, E>(
     phase: &'static str,
     operation: &'static str,
@@ -56,22 +81,11 @@ fn trace_phase<T, E>(
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CommandTraceContext<'a> {
-    pub trace_id: Option<&'a str>,
-    pub request_id: Option<&'a str>,
-    pub command_id: Option<&'a str>,
-    pub entity_id: Option<&'a str>,
-    pub account_id: Option<&'a str>,
-    pub symbol: Option<&'a str>,
-    pub command_summary: Option<&'a str>,
-}
-
 /// 更贴近 Use Cases（用例）的命令型抽象：
 /// 只定义业务输入、业务校验与可重放事件产出。
 pub trait CommandUseCase2: Send + Sync {
     /// 对应cqrs的 command
-    type Command;
+    type Command: IssuedByParty;
 
     /// 对应clean 架构的 entity , 从数据库/内存/文件等
     type GivenState;
@@ -80,14 +94,10 @@ pub trait CommandUseCase2: Send + Sync {
     type ThenTraceableEvents: TraceableEventSet;
     type Error;
 
-    /// 对应四色建模的role
+    /// 对应四色建模的 role。
+    /// 语义上：`party_id()` 标识哪个业务主体，以这个 role 下达当前 command。
     fn role(&self) -> &'static str {
         "UnknownActor用来做权限控制和追溯"
-    }
-
-    /// 提供结构化追溯字段，默认空实现，不强迫所有 use case 修改。
-    fn trace_context<'a>(&'a self, _cmd: &'a Self::Command) -> CommandTraceContext<'a> {
-        CommandTraceContext::default()
     }
 
     /// 提供错误的可读摘要，默认空实现。
@@ -121,7 +131,7 @@ pub trait UseCaseReplyMapper<E>: Send + Sync {
 }
 
 /// 事件执行管线也从核心 Use Case 中拆出。
-pub trait DomainEventPipeline<E, Err>: Send + Sync {
+pub trait TraceableEventPipeline<E, Err>: Send + Sync {
     fn persist(&self, events: &E) -> Result<(), Err>;
 
     fn replay(&self, events: &E) -> Result<(), Err>;
@@ -149,35 +159,17 @@ impl ObserveHandlerLatency for () {
 pub struct CommandUseCaseExecutor2;
 
 impl CommandUseCaseExecutor2 {
-    /// 执行命令型 use case 的标准编排：
-    /// 1. 先做 command 级别的快速预检查
-    /// 2. 通过外部 load port 加载当前 given state
-    /// 3. 基于 state 做业务校验
-    /// 4. 生成领域事件
-    /// 5. 依次持久化、回放、发布领域事件
-    /// 6. 最后把整条链路的 latency 交给外部 observer
-    ///
-    /// 这里故意不把加载和 metrics 观察放进 use case，
-    /// 让核心 use case 只保留业务规则本身。
-    pub fn execute<U, P, L, O>(
-        &self,
+    fn trace_span<U, P, L>(
         use_case: &U,
-        command: U::Command,
-        load_port: &L,
-        pipeline: &P,
-        latency_observer: &O,
-    ) -> Result<U::ThenTraceableEvents, U::Error>
+        meta: &CommandMeta,
+        command: &U::Command,
+    ) -> tracing::Span
     where
         U: CommandUseCase2,
         L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: DomainEventPipeline<U::ThenTraceableEvents, U::Error>,
-        O: ?Sized + ObserveHandlerLatency,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
     {
-        use minstant::Instant;
-
-        let total_start = Instant::now();
-        let trace_context = use_case.trace_context(&command);
-        let execution_span = tracing::span!(
+        tracing::span!(
             tracing::Level::TRACE,
             "command_use_case_execute",
             use_case = std::any::type_name::<U>(),
@@ -186,14 +178,31 @@ impl CommandUseCaseExecutor2 {
             error_type = std::any::type_name::<U::Error>(),
             load_port = std::any::type_name::<L>(),
             pipeline = std::any::type_name::<P>(),
-            trace_id = trace_field_or_placeholder(trace_context.trace_id),
-            request_id = trace_field_or_placeholder(trace_context.request_id),
-            command_id = trace_field_or_placeholder(trace_context.command_id),
-            entity_id = trace_field_or_placeholder(trace_context.entity_id),
-            account_id = trace_field_or_placeholder(trace_context.account_id),
-            symbol = trace_field_or_placeholder(trace_context.symbol),
-            command_summary = trace_field_or_placeholder(trace_context.command_summary),
-        );
+            trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
+            command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
+            party_id = trace_field_or_placeholder(command.party_id()),
+        )
+    }
+
+    fn execute_inner<U, P, L, O>(
+        &self,
+        use_case: &U,
+        command: U::Command,
+        meta: &CommandMeta,
+        load_port: &L,
+        pipeline: &P,
+        latency_observer: &O,
+    ) -> Result<U::ThenTraceableEvents, U::Error>
+    where
+        U: CommandUseCase2,
+        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        O: ?Sized + ObserveHandlerLatency,
+    {
+        use minstant::Instant;
+
+        let total_start = Instant::now();
+        let execution_span = Self::trace_span::<U, P, L>(use_case, meta, &command);
         let _execution_guard = execution_span.enter();
 
         tracing::trace!(
@@ -302,6 +311,65 @@ impl CommandUseCaseExecutor2 {
         }
     }
 
+    /// 执行命令型 use case 的标准编排：
+    /// 1. 先做 command 级别的快速预检查
+    /// 2. 通过外部 load port 加载当前 given state
+    /// 3. 基于 state 做业务校验
+    /// 4. 生成领域事件
+    /// 5. 依次持久化、回放、发布领域事件
+    /// 6. 最后把整条链路的 latency 交给外部 observer
+    ///
+    /// 这里故意不把加载和 metrics 观察放进 use case，
+    /// 让核心 use case 只保留业务规则本身。
+    pub fn execute<U, P, L, O>(
+        &self,
+        use_case: &U,
+        command: U::Command,
+        load_port: &L,
+        pipeline: &P,
+        latency_observer: &O,
+    ) -> Result<U::ThenTraceableEvents, U::Error>
+    where
+        U: CommandUseCase2,
+        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        O: ?Sized + ObserveHandlerLatency,
+    {
+        self.execute_inner(
+            use_case,
+            command,
+            &CommandMeta::default(),
+            load_port,
+            pipeline,
+            latency_observer,
+        )
+    }
+
+    /// 用 envelope 携带技术追踪元数据，让业务 command 本身保持聚焦。
+    pub fn execute_enveloped<U, P, L, O>(
+        &self,
+        use_case: &U,
+        envelope: CommandEnvelope<U::Command>,
+        load_port: &L,
+        pipeline: &P,
+        latency_observer: &O,
+    ) -> Result<U::ThenTraceableEvents, U::Error>
+    where
+        U: CommandUseCase2,
+        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        O: ?Sized + ObserveHandlerLatency,
+    {
+        self.execute_inner(
+            use_case,
+            envelope.command,
+            &envelope.meta,
+            load_port,
+            pipeline,
+            latency_observer,
+        )
+    }
+
     /// 在标准执行编排之后，把领域事件交给外部 reply mapper 转成对外响应。
     pub fn execute_and_map_reply<U, P, M, L, O>(
         &self,
@@ -315,11 +383,33 @@ impl CommandUseCaseExecutor2 {
     where
         U: CommandUseCase2,
         L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: DomainEventPipeline<U::ThenTraceableEvents, U::Error>,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
         O: ?Sized + ObserveHandlerLatency,
         M: UseCaseReplyMapper<U::ThenTraceableEvents>,
     {
         let events = self.execute(use_case, command, load_port, pipeline, latency_observer)?;
+        Ok(mapper.map(events))
+    }
+
+    /// 用 envelope 执行并映射 reply。
+    pub fn execute_enveloped_and_map_reply<U, P, M, L, O>(
+        &self,
+        use_case: &U,
+        envelope: CommandEnvelope<U::Command>,
+        load_port: &L,
+        pipeline: &P,
+        latency_observer: &O,
+        mapper: &M,
+    ) -> Result<M::Reply, U::Error>
+    where
+        U: CommandUseCase2,
+        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
+        P: TraceableEventPipeline<U::ThenTraceableEvents, U::Error>,
+        O: ?Sized + ObserveHandlerLatency,
+        M: UseCaseReplyMapper<U::ThenTraceableEvents>,
+    {
+        let events =
+            self.execute_enveloped(use_case, envelope, load_port, pipeline, latency_observer)?;
         Ok(mapper.map(events))
     }
 }
@@ -343,12 +433,15 @@ mod tests {
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct StubCommand {
-        trace_id: String,
-        request_id: String,
-        command_id: String,
         account_id: String,
         symbol: String,
         quantity: u64,
+    }
+
+    impl IssuedByParty for StubCommand {
+        fn party_id(&self) -> Option<&str> {
+            Some(self.account_id.as_str())
+        }
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -378,18 +471,6 @@ mod tests {
 
         fn role(&self) -> &'static str {
             "StubRole"
-        }
-
-        fn trace_context<'a>(&'a self, cmd: &'a Self::Command) -> CommandTraceContext<'a> {
-            CommandTraceContext {
-                trace_id: Some(cmd.trace_id.as_str()),
-                request_id: Some(cmd.request_id.as_str()),
-                command_id: Some(cmd.command_id.as_str()),
-                entity_id: Some(cmd.command_id.as_str()),
-                account_id: Some(cmd.account_id.as_str()),
-                symbol: Some(cmd.symbol.as_str()),
-                command_summary: Some("submit_stub_order"),
-            }
         }
 
         fn format_error(&self, error: &Self::Error) -> Option<String> {
@@ -435,7 +516,7 @@ mod tests {
     #[derive(Debug, Clone, Copy, Default)]
     struct StubPipeline;
 
-    impl DomainEventPipeline<StubEvents, StubError> for StubPipeline {
+    impl TraceableEventPipeline<StubEvents, StubError> for StubPipeline {
         fn persist(&self, _events: &StubEvents) -> Result<(), StubError> {
             Ok(())
         }
@@ -633,16 +714,20 @@ mod tests {
             let use_case = StubUseCase;
             let load_port = StubLoadPort;
             let pipeline = StubPipeline;
-            let command = StubCommand {
-                trace_id: "trace-spot-001".into(),
-                request_id: "req-spot-001".into(),
-                command_id: "cmd-spot-001".into(),
-                account_id: "acct-007".into(),
-                symbol: "BTCUSDT".into(),
-                quantity: 1,
+            let command = CommandEnvelope {
+                meta: CommandMeta {
+                    trace_id: Some("trace-spot-001".into()),
+                    command_id: Some("cmd-spot-001".into()),
+                },
+                command: StubCommand {
+                    account_id: "acct-007".into(),
+                    symbol: "BTCUSDT".into(),
+                    quantity: 1,
+                },
             };
 
-            let events = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap();
+            let events =
+                executor.execute_enveloped(&use_case, command, &load_port, &pipeline, &()).unwrap();
             assert_eq!(events.event_count(), 1);
         });
 
@@ -654,12 +739,8 @@ mod tests {
         assert!(ok_operations.iter().any(|op| op == "pipeline.replay(&events)"));
         assert!(ok_operations.iter().any(|op| op == "pipeline.publish(&events)"));
         assert!(log.contains("trace_id=\"trace-spot-001\""));
-        assert!(log.contains("request_id=\"req-spot-001\""));
         assert!(log.contains("command_id=\"cmd-spot-001\""));
-        assert!(log.contains("entity_id=\"cmd-spot-001\""));
-        assert!(log.contains("account_id=\"acct-007\""));
-        assert!(log.contains("symbol=\"BTCUSDT\""));
-        assert!(log.contains("command_summary=\"submit_stub_order\""));
+        assert!(log.contains("party_id=\"acct-007\""));
     }
 
     #[test]
@@ -676,17 +757,21 @@ mod tests {
             let use_case = StubUseCase;
             let load_port = StubLoadPort;
             let pipeline = StubPipeline;
-            let command = StubCommand {
-                trace_id: "trace-spot-err".into(),
-                request_id: "req-spot-err".into(),
-                command_id: "cmd-spot-err".into(),
-                account_id: "acct-999".into(),
-                symbol: "REJECTED".into(),
-                quantity: 1,
+            let command = CommandEnvelope {
+                meta: CommandMeta {
+                    trace_id: Some("trace-spot-err".into()),
+                    command_id: Some("cmd-spot-err".into()),
+                },
+                command: StubCommand {
+                    account_id: "acct-999".into(),
+                    symbol: "REJECTED".into(),
+                    quantity: 1,
+                },
             };
 
-            let error =
-                executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap_err();
+            let error = executor
+                .execute_enveloped(&use_case, command, &load_port, &pipeline, &())
+                .unwrap_err();
             assert_eq!(error, StubError::RiskRejected("symbol disabled"));
         });
 
@@ -697,7 +782,7 @@ mod tests {
 
         assert!(validate_statuses.iter().any(|status| status == "err"));
         assert!(total_statuses.iter().any(|status| status == "err"));
-        assert!(log.contains("symbol=\"REJECTED\""));
         assert!(log.contains("error_message=risk rejected: symbol disabled"));
+        assert!(log.contains("party_id=\"acct-999\""));
     }
 }
