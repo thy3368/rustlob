@@ -1,17 +1,15 @@
-use db_repo::StorageError;
-use libmdbx::{Database, DatabaseOptions, NoWriteMap};
 use std::fs;
 use std::path::Path;
+
+use db_repo::StorageError;
+use libmdbx::{Database, DatabaseOptions, NoWriteMap};
 
 type MdbxDatabase = Database<NoWriteMap>;
 
 fn open_one(path: &Path, label: &str) -> Result<(), StorageError> {
     let db = MdbxDatabase::open_with_options(
         path,
-        DatabaseOptions {
-            max_tables: Some(16),
-            ..Default::default()
-        },
+        DatabaseOptions { max_tables: Some(16), ..Default::default() },
     )
     .map_err(|e| StorageError::Open { source: Box::new(e) })?;
     println!("opened {label}: {:p}", &db);

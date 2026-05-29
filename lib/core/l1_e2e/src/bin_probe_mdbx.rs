@@ -6,10 +6,7 @@ fn main() {
     println!("path={}", path.display());
     match libmdbx::Database::<libmdbx::NoWriteMap>::open_with_options(
         &path,
-        libmdbx::DatabaseOptions {
-            max_tables: Some(16),
-            ..Default::default()
-        },
+        libmdbx::DatabaseOptions { max_tables: Some(16), ..Default::default() },
     ) {
         Ok(_) => println!("raw_db_ok"),
         Err(err) => println!("raw_db_err: {:?}", err),

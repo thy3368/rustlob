@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitTransactionsRequest {
@@ -7,6 +8,7 @@ pub struct SubmitTransactionsRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitTransactionItem {
+    pub trace_id: Option<String>,
     pub request_id: String,
     pub account: String,
     pub nonce: String,
@@ -16,6 +18,7 @@ pub struct SubmitTransactionItem {
     pub signature_hash: String,
     pub vm_kind: VmKindDto,
     pub capability: String,
+    pub payload: Option<Value>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -38,6 +41,8 @@ impl From<VmKindDto> for l1_core::VmKind {
 pub struct ExecuteBlockRequest {
     pub block_height: u64,
     pub batch_size: Option<usize>,
+    pub trace_id: Option<String>,
+    pub block_command_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,6 +57,22 @@ pub struct ExecuteBlockResponse {
     pub block_event_count: usize,
     pub node_state_update_count: usize,
     pub matched_trade_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SpotBookResponse {
+    pub market: String,
+    pub orders: Vec<SpotBookOrderResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SpotBookOrderResponse {
+    pub order_id: u64,
+    pub trader_id: u64,
+    pub side: dex::core::SpotSide,
+    pub price: u64,
+    pub original_quantity: u64,
+    pub remaining_quantity: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,5 +1,5 @@
 use alloy_primitives::Address;
-use l1_adapter::{contracts, RevmExecutor};
+use l1_adapter::{RevmExecutor, contracts};
 
 fn main() {
     let mut executor = RevmExecutor::new();
@@ -13,7 +13,8 @@ fn main() {
     println!("beneficiary={beneficiary:?}");
     println!("amount={amount}");
 
-    let deploy = executor.deploy_contract("settlement", contracts::get_settlement_escrow_bytecode());
+    let deploy =
+        executor.deploy_contract("settlement", contracts::get_settlement_escrow_bytecode());
     println!("deploy={deploy:?}");
 
     let create_calldata = contracts::encode_create_settlement(&settlement_id, beneficiary, amount);
@@ -21,9 +22,11 @@ fn main() {
     let create = executor.call_contract("settlement", create_calldata);
     println!("create={create:?}");
 
-    let get_amount = executor.view_contract("settlement", contracts::encode_get_amount(&settlement_id));
+    let get_amount =
+        executor.view_contract("settlement", contracts::encode_get_amount(&settlement_id));
     println!("get_amount={get_amount:?}");
 
-    let is_released = executor.view_contract("settlement", contracts::encode_is_released(&settlement_id));
+    let is_released =
+        executor.view_contract("settlement", contracts::encode_is_released(&settlement_id));
     println!("is_released={is_released:?}");
 }

@@ -1,10 +1,24 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 
-use crate::http::dto::{ErrorResponse, ExecuteBlockRequest, ExecuteBlockResponse, SubmitTransactionsRequest, SubmitTransactionsResponse};
+use crate::http::dto::{
+    ErrorResponse, ExecuteBlockRequest, ExecuteBlockResponse, SpotBookResponse,
+    SubmitTransactionsRequest, SubmitTransactionsResponse,
+};
 use crate::service::AppState;
 
 pub async fn health(State(state): State<AppState>) -> Json<crate::service::HealthResponse> {
     Json(state.service.health())
+}
+
+pub async fn spot_book(
+    State(state): State<AppState>,
+    Path(market): Path<String>,
+) -> Result<(StatusCode, Json<SpotBookResponse>), (StatusCode, Json<ErrorResponse>)> {
+    state.service.spot_book(&market).map(|response| (StatusCode::OK, Json(response))).map_err(
+        |error| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("{error:?}") })),
+    )
 }
 
 pub async fn submit_transactions(
@@ -24,12 +38,7 @@ pub async fn submit_transactions(
             )
         })
         .map_err(|error| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: format!("{error:?}"),
-                }),
-            )
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("{error:?}") }))
         })
 }
 
@@ -52,11 +61,6 @@ pub async fn execute_block(
             )
         })
         .map_err(|error| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: format!("{error:?}"),
-                }),
-            )
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("{error:?}") }))
         })
 }

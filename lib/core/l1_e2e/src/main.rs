@@ -1,8 +1,9 @@
+use l1_e2e::tracing_setup::TraceLogFormatter;
 use l1_e2e::{bootstrap, http};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt().event_format(TraceLogFormatter::default()).init();
 
     let state = bootstrap::build_app_state()?;
     let app = http::router(state);
