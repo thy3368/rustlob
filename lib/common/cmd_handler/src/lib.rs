@@ -4,6 +4,7 @@
 
 pub mod handler_cmd;
 pub mod handler_query;
+pub mod trace_log;
 pub mod use_case_def2;
 #[cfg(test)]
 mod use_case_examples;
@@ -13,4 +14,7 @@ mod use_case_proptest_examples;
 pub use diff::{EntityReplayableEvent, ReplayFieldChange};
 pub use handler_cmd::{
     CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, ReplayableEventSet,
+};
+pub use trace_log::{
+    build_dual_trace_subscriber, FullTraceLogFormatter, MinimalTraceLogFormatter, TraceLogFormatter,
 };

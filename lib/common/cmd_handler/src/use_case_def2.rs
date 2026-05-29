@@ -9,6 +9,28 @@ fn trace_field_or_placeholder(value: Option<&str>) -> &str {
     value.unwrap_or("-")
 }
 
+fn use_case_command_summary<U>() -> String {
+    let type_name = std::any::type_name::<U>();
+    let simple_name = type_name.rsplit("::").next().unwrap_or(type_name);
+    let base_name = simple_name.strip_suffix("UseCase").unwrap_or(simple_name);
+    let mut summary = String::with_capacity(base_name.len() + 8);
+
+    for (index, ch) in base_name.chars().enumerate() {
+        if ch.is_uppercase() {
+            if index > 0 {
+                summary.push('_');
+            }
+            for lower in ch.to_lowercase() {
+                summary.push(lower);
+            }
+        } else {
+            summary.push(ch);
+        }
+    }
+
+    summary
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommandMeta {
     /// Tracing correlation id for spans/logs across retries and service hops.
@@ -129,8 +151,13 @@ pub trait UseCaseReplyMapper: Send + Sync {
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply;
 }
 
-/// 事件执行管线也从核心 Use Case 中拆出。
-pub trait ReplayableEventPipeline<Err>: Send + Sync {
+/// Use case 视角下统一的 outbound port。
+///
+/// `load_state / persist / replay / publish` 都属于 adapter.outbound，
+/// executor 只依赖这一个抽象。
+pub trait CommandUseCaseOutbound<Cmd, State, Err>: Send + Sync {
+    fn load_state(&self, cmd: &Cmd) -> Result<State, Err>;
+
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
 
     fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
@@ -138,11 +165,25 @@ pub trait ReplayableEventPipeline<Err>: Send + Sync {
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Err>;
 }
 
-/// 状态加载端口 - 标准化从外部存储加载领域状态
-///
-/// 由执行编排侧注入，提供统一的状态加载接口。
-pub trait LoadState<Cmd, State, Err>: Send + Sync {
-    fn load_state(&self, cmd: &Cmd) -> Result<State, Err>;
+impl<Cmd, State, Err, T> CommandUseCaseOutbound<Cmd, State, Err> for &T
+where
+    T: ?Sized + CommandUseCaseOutbound<Cmd, State, Err>,
+{
+    fn load_state(&self, cmd: &Cmd) -> Result<State, Err> {
+        (*self).load_state(cmd)
+    }
+
+    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Err> {
+        (*self).persist(events)
+    }
+
+    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Err> {
+        (*self).replay(events)
+    }
+
+    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Err> {
+        (*self).publish(events)
+    }
 }
 
 /// latency 观察端口，由执行编排侧注入。
@@ -158,25 +199,24 @@ impl ObserveHandlerLatency for () {
 pub struct CommandUseCaseExecutor2;
 
 impl CommandUseCaseExecutor2 {
-    fn trace_span<U, P, L>(
+    fn trace_span<U, O>(
         use_case: &U,
         meta: &CommandMeta,
         command: &U::Command,
     ) -> tracing::Span
     where
         U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: ReplayableEventPipeline<U::Error>,
+        O: ?Sized + Send + Sync + CommandUseCaseOutbound<U::Command, U::GivenState, U::Error>,
     {
         tracing::span!(
             tracing::Level::TRACE,
             "command_use_case_execute",
             use_case = std::any::type_name::<U>(),
+            command_summary = ?use_case_command_summary::<U>(),
             role = use_case.role(),
             command_type = std::any::type_name::<U::Command>(),
             error_type = std::any::type_name::<U::Error>(),
-            load_port = std::any::type_name::<L>(),
-            pipeline = std::any::type_name::<P>(),
+            outbound = std::any::type_name::<O>(),
             trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
             command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
             party_id = trace_field_or_placeholder(command.party_id()),
@@ -193,25 +233,27 @@ impl CommandUseCaseExecutor2 {
     ///
     /// 这里故意不把加载和 metrics 观察放进 use case，
     /// 让核心 use case 只保留业务规则本身。
-    pub fn execute<U, P, L, O>(
+    pub fn execute<U, OB, O>(
         &self,
         use_case: &U,
         envelope: CommandEnvelope<U::Command>,
-        load_port: &L,
-        pipeline: &P,
+        outbound: &OB,
         latency_observer: &O,
     ) -> Result<Vec<EntityReplayableEvent>, U::Error>
     where
         U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: ReplayableEventPipeline<U::Error>,
+        OB: ?Sized + Send + Sync + CommandUseCaseOutbound<U::Command, U::GivenState, U::Error>,
         O: ?Sized + ObserveHandlerLatency,
     {
         use minstant::Instant;
 
         let CommandEnvelope { meta, command } = envelope;
+        let command_summary = use_case_command_summary::<U>();
+        let role = use_case.role().to_string();
+        let party_id = command.party_id().map(str::to_string);
+        let outbound_type = std::any::type_name::<OB>().to_string();
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, P, L>(use_case, &meta, &command);
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
         let _execution_guard = execution_span.enter();
 
         tracing::trace!(
@@ -231,9 +273,9 @@ impl CommandUseCaseExecutor2 {
                 )?;
                 let (state, load_state_ns) = trace_phase(
                     "load_state",
-                    "load_port.load_state(&command)",
+                    "outbound.load_state(&command)",
                     |error| use_case.format_error(error),
-                    || load_port.load_state(&command),
+                    || outbound.load_state(&command),
                 )?;
                 let ((), validate_in_lock_ns) = trace_phase(
                     "validate_against_state",
@@ -251,21 +293,21 @@ impl CommandUseCaseExecutor2 {
 
                 let ((), persist_domain_events_ns) = trace_phase(
                     "persist",
-                    "pipeline.persist(&events)",
+                    "outbound.persist(&events)",
                     |error| use_case.format_error(error),
-                    || pipeline.persist(&events),
+                    || outbound.persist(&events),
                 )?;
                 let ((), replay_domain_events_ns) = trace_phase(
                     "replay",
-                    "pipeline.replay(&events)",
+                    "outbound.replay(&events)",
                     |error| use_case.format_error(error),
-                    || pipeline.replay(&events),
+                    || outbound.replay(&events),
                 )?;
                 let ((), publish_domain_events_ns) = trace_phase(
                     "publish",
-                    "pipeline.publish(&events)",
+                    "outbound.publish(&events)",
                     |error| use_case.format_error(error),
-                    || pipeline.publish(&events),
+                    || outbound.publish(&events),
                 )?;
 
                 let metrics = HandlerLatencyMetrics {
@@ -286,9 +328,19 @@ impl CommandUseCaseExecutor2 {
         match execution {
             Ok((events, metrics)) => {
                 tracing::trace!(
+                    call_stack = true,
+                    layer = "use_case",
+                    component = "command_use_case_execute",
+                    operation = "execute",
                     phase = "total",
-                    operation = "executor.execute",
+                    request_command_summary = %command_summary,
+                    request_role = %role,
+                    request_party_id = party_id.as_deref().unwrap_or("-"),
+                    request_outbound = %outbound_type,
+                    response_result = "ok",
+                    response_domain_event_count = metrics.domain_event_count as u64,
                     status = "ok",
+                    latency_ns = saturating_u64(metrics.total_ns),
                     total_ns = saturating_u64(metrics.total_ns),
                     domain_event_count = metrics.domain_event_count as u64,
                     "command use case execution completed"
@@ -299,18 +351,36 @@ impl CommandUseCaseExecutor2 {
             Err(error) => {
                 if let Some(error_message) = use_case.format_error(&error) {
                     tracing::trace!(
+                        call_stack = true,
+                        layer = "use_case",
+                        component = "command_use_case_execute",
+                        operation = "execute",
                         phase = "total",
-                        operation = "executor.execute",
+                        request_command_summary = %command_summary,
+                        request_role = %role,
+                        request_party_id = party_id.as_deref().unwrap_or("-"),
+                        request_outbound = %outbound_type,
+                        response_result = "err",
                         status = "err",
+                        latency_ns = saturating_u64(total_start.elapsed().as_nanos()),
                         total_ns = saturating_u64(total_start.elapsed().as_nanos()),
                         error_message = %error_message,
                         "command use case execution failed"
                     );
                 } else {
                     tracing::trace!(
+                        call_stack = true,
+                        layer = "use_case",
+                        component = "command_use_case_execute",
+                        operation = "execute",
                         phase = "total",
-                        operation = "executor.execute",
+                        request_command_summary = %command_summary,
+                        request_role = %role,
+                        request_party_id = party_id.as_deref().unwrap_or("-"),
+                        request_outbound = %outbound_type,
+                        response_result = "err",
                         status = "err",
+                        latency_ns = saturating_u64(total_start.elapsed().as_nanos()),
                         total_ns = saturating_u64(total_start.elapsed().as_nanos()),
                         "command use case execution failed"
                     );
@@ -321,23 +391,21 @@ impl CommandUseCaseExecutor2 {
     }
 
     /// 在标准执行编排之后，把领域事件交给外部 reply mapper 转成对外响应。
-    pub fn execute_and_map_reply<U, P, M, L, O>(
+    pub fn execute_and_map_reply<U, OB, M, O>(
         &self,
         use_case: &U,
         envelope: CommandEnvelope<U::Command>,
-        load_port: &L,
-        pipeline: &P,
+        outbound: &OB,
         latency_observer: &O,
         mapper: &M,
     ) -> Result<M::Reply, U::Error>
     where
         U: CommandUseCase2,
-        L: ?Sized + Send + Sync + LoadState<U::Command, U::GivenState, U::Error>,
-        P: ReplayableEventPipeline<U::Error>,
+        OB: ?Sized + Send + Sync + CommandUseCaseOutbound<U::Command, U::GivenState, U::Error>,
         O: ?Sized + ObserveHandlerLatency,
         M: UseCaseReplyMapper,
     {
-        let events = self.execute(use_case, envelope, load_port, pipeline, latency_observer)?;
+        let events = self.execute(use_case, envelope, outbound, latency_observer)?;
         Ok(mapper.map(events))
     }
 }
@@ -425,18 +493,13 @@ mod tests {
     }
 
     #[derive(Debug, Clone, Copy, Default)]
-    struct StubLoadPort;
+    struct StubOutbound;
 
-    impl LoadState<StubCommand, u64, StubError> for StubLoadPort {
+    impl CommandUseCaseOutbound<StubCommand, u64, StubError> for StubOutbound {
         fn load_state(&self, cmd: &StubCommand) -> Result<u64, StubError> {
             Ok(cmd.quantity)
         }
-    }
 
-    #[derive(Debug, Clone, Copy, Default)]
-    struct StubPipeline;
-
-    impl ReplayableEventPipeline<StubError> for StubPipeline {
         fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), StubError> {
             Ok(())
         }
@@ -632,8 +695,7 @@ mod tests {
         eprintln!("trace log file: {}", log_path.display());
         tracing::subscriber::with_default(subscriber, || {
             let use_case = StubUseCase;
-            let load_port = StubLoadPort;
-            let pipeline = StubPipeline;
+            let outbound = StubOutbound;
             let command = CommandEnvelope {
                 meta: CommandMeta {
                     trace_id: Some("trace-spot-001".into()),
@@ -646,17 +708,17 @@ mod tests {
                 },
             };
 
-            let events = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap();
+            let events = executor.execute(&use_case, command, &outbound, &()).unwrap();
             assert_eq!(events.len(), 1);
         });
 
         let ok_operations = recording.operations_by_status("ok");
         let log = read_log(&log_path);
 
-        assert!(ok_operations.iter().any(|op| op == "load_port.load_state(&command)"));
-        assert!(ok_operations.iter().any(|op| op == "pipeline.persist(&events)"));
-        assert!(ok_operations.iter().any(|op| op == "pipeline.replay(&events)"));
-        assert!(ok_operations.iter().any(|op| op == "pipeline.publish(&events)"));
+        assert!(ok_operations.iter().any(|op| op == "outbound.load_state(&command)"));
+        assert!(ok_operations.iter().any(|op| op == "outbound.persist(&events)"));
+        assert!(ok_operations.iter().any(|op| op == "outbound.replay(&events)"));
+        assert!(ok_operations.iter().any(|op| op == "outbound.publish(&events)"));
         assert!(log.contains("trace_id=\"trace-spot-001\""));
         assert!(log.contains("command_id=\"cmd-spot-001\""));
         assert!(log.contains("party_id=\"acct-007\""));
@@ -674,8 +736,7 @@ mod tests {
         eprintln!("trace log file: {}", log_path.display());
         tracing::subscriber::with_default(subscriber, || {
             let use_case = StubUseCase;
-            let load_port = StubLoadPort;
-            let pipeline = StubPipeline;
+            let outbound = StubOutbound;
             let command = CommandEnvelope {
                 meta: CommandMeta {
                     trace_id: Some("trace-spot-err".into()),
@@ -688,13 +749,13 @@ mod tests {
                 },
             };
 
-            let error = executor.execute(&use_case, command, &load_port, &pipeline, &()).unwrap_err();
+            let error = executor.execute(&use_case, command, &outbound, &()).unwrap_err();
             assert_eq!(error, StubError::RiskRejected("symbol disabled"));
         });
 
         let validate_statuses =
             recording.statuses_for_operation("use_case.validate_against_state(&command, &state)");
-        let total_statuses = recording.statuses_for_operation("executor.execute");
+        let total_statuses = recording.statuses_for_operation("execute");
         let log = read_log(&log_path);
 
         assert!(validate_statuses.iter().any(|status| status == "err"));

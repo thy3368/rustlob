@@ -4,7 +4,7 @@ use proptest::prelude::*;
 
 use crate::use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, IssuedByParty,
-    LoadState, ReplayableEventPipeline,
+    CommandUseCaseOutbound,
 };
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
@@ -129,25 +129,19 @@ impl CommandUseCase2 for DepositUseCase {
     }
 }
 
-#[derive(Debug, Clone)]
-struct StubLoadPort {
+#[derive(Debug)]
+struct CountingOutbound {
     state: DepositState,
-}
-
-impl LoadState<DepositCmd, DepositState, DepositError> for StubLoadPort {
-    fn load_state(&self, _cmd: &DepositCmd) -> Result<DepositState, DepositError> {
-        Ok(self.state.clone())
-    }
-}
-
-#[derive(Debug, Default)]
-struct CountingPipeline {
     persist_calls: AtomicUsize,
     replay_calls: AtomicUsize,
     publish_calls: AtomicUsize,
 }
 
-impl ReplayableEventPipeline<DepositError> for CountingPipeline {
+impl CommandUseCaseOutbound<DepositCmd, DepositState, DepositError> for CountingOutbound {
+    fn load_state(&self, _cmd: &DepositCmd) -> Result<DepositState, DepositError> {
+        Ok(self.state.clone())
+    }
+
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), DepositError> {
         self.persist_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -185,8 +179,12 @@ proptest! {
     ) {
         let executor = CommandUseCaseExecutor2;
         let use_case = DepositUseCase;
-        let load_port = StubLoadPort { state: state.clone() };
-        let pipeline = CountingPipeline::default();
+        let outbound = CountingOutbound {
+            state: state.clone(),
+            persist_calls: AtomicUsize::new(0),
+            replay_calls: AtomicUsize::new(0),
+            publish_calls: AtomicUsize::new(0),
+        };
 
         let result = executor.execute(
             &use_case,
@@ -194,35 +192,34 @@ proptest! {
                 meta: CommandMeta::default(),
                 command: cmd.clone(),
             },
-            &load_port,
-            &pipeline,
+            &outbound,
             &(),
         );
 
         if cmd.amount == 0 {
             prop_assert_eq!(result, Err(DepositError::ZeroAmount));
-            prop_assert_eq!(pipeline.persist_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.replay_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.publish_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if !state.account_open {
             prop_assert_eq!(result, Err(DepositError::AccountFrozen));
-            prop_assert_eq!(pipeline.persist_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.replay_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.publish_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if cmd.amount > state.max_amount {
             prop_assert_eq!(result, Err(DepositError::LimitExceeded));
-            prop_assert_eq!(pipeline.persist_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.replay_calls.load(Ordering::Relaxed), 0);
-            prop_assert_eq!(pipeline.publish_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
+            prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else {
             let events = result.unwrap();
             let expected_amount = cmd.amount.to_string();
             prop_assert_eq!(events.len(), 1);
             prop_assert_eq!(event_field(&events[0], "party_id"), Some(cmd.party_id.as_str()));
             prop_assert_eq!(event_field(&events[0], "amount"), Some(expected_amount.as_str()));
-            prop_assert_eq!(pipeline.persist_calls.load(Ordering::Relaxed), 1);
-            prop_assert_eq!(pipeline.replay_calls.load(Ordering::Relaxed), 1);
-            prop_assert_eq!(pipeline.publish_calls.load(Ordering::Relaxed), 1);
+            prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 1);
+            prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 1);
+            prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 1);
         }
     }
 }
