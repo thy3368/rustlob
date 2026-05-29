@@ -111,11 +111,7 @@ impl CommandUseCase2 for PlaceOrderUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.trading_enabled {
-            Ok(())
-        } else {
-            Err(PlaceOrderError::TradingDisabled)
-        }
+        if state.trading_enabled { Ok(()) } else { Err(PlaceOrderError::TradingDisabled) }
     }
 
     fn compute_replayable_events(

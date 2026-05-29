@@ -1,5 +1,6 @@
-use crate::HandlerLatencyMetrics;
 use diff::EntityReplayableEvent;
+
+use crate::HandlerLatencyMetrics;
 
 fn saturating_u64(value: u128) -> u64 {
     value.min(u64::MAX as u128) as u64
@@ -199,11 +200,7 @@ impl ObserveHandlerLatency for () {
 pub struct CommandUseCaseExecutor2;
 
 impl CommandUseCaseExecutor2 {
-    fn trace_span<U, O>(
-        use_case: &U,
-        meta: &CommandMeta,
-        command: &U::Command,
-    ) -> tracing::Span
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
     where
         U: CommandUseCase2,
         O: ?Sized + Send + Sync + CommandUseCaseOutbound<U::Command, U::GivenState, U::Error>,

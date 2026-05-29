@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use proptest::prelude::*;
 
 use crate::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, IssuedByParty,
-    CommandUseCaseOutbound,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
+    IssuedByParty,
 };
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
@@ -162,10 +162,7 @@ fn deposit_case_strategy() -> impl Strategy<Value = (DepositCmd, DepositState)> 
     (any::<u16>(), any::<u64>(), any::<bool>(), any::<u64>()).prop_map(
         |(party_suffix, amount, account_open, max_amount)| {
             (
-                DepositCmd {
-                    party_id: format!("acct-{party_suffix}"),
-                    amount,
-                },
+                DepositCmd { party_id: format!("acct-{party_suffix}"), amount },
                 DepositState { account_open, max_amount },
             )
         },

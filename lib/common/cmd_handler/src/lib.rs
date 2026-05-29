@@ -16,5 +16,5 @@ pub use handler_cmd::{
     CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, ReplayableEventSet,
 };
 pub use trace_log::{
-    build_dual_trace_subscriber, FullTraceLogFormatter, MinimalTraceLogFormatter, TraceLogFormatter,
+    FullTraceLogFormatter, MinimalTraceLogFormatter, TraceLogFormatter, build_dual_trace_subscriber,
 };

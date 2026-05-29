@@ -1,5 +1,5 @@
-use crate::{EntityReplayableEvent, ReplayFieldChange};
 use crate::use_case_def2::{CommandUseCase2, IssuedByParty};
+use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 2;
 const FIELD_TYPE_STRING: u8 = 0;
