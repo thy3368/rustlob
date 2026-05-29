@@ -11,7 +11,6 @@ Implement use cases the way this repository expects: business rules live in `Com
 
 Start from these source files:
 - Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
-- Small example: `lib/common/cmd_handler/src/use_case_impl.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Real L1 examples:
   - `lib/core/l1/src/use_case/command_handler/receive_and_admit_transactions.rs`
