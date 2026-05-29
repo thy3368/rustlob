@@ -1,0 +1,133 @@
+{
+  "focus_crates": [
+    "l1_core",
+    "l1_adapter",
+    "axum_server",
+    "dex"
+  ],
+  "high_fanout_threshold": 10,
+  "crate_layers": {
+    "core": [
+      "l1_core",
+      "prep"
+    ],
+    "adapter_inbound": [
+      "axum_server",
+      "websocket_sockudo"
+    ],
+    "adapter_outbound": [
+      "l1_adapter",
+      "dex",
+      "db_repo",
+      "lob_repo",
+      "rust_queue",
+      "sbe",
+      "push",
+      "spot_behavior",
+      "derivatives_behavior",
+      "wallet_behavior",
+      "spot_md_behavior",
+      "bdd",
+      "bdd-core"
+    ],
+    "infra": [
+      "mdbx",
+      "client",
+      "pingora_gateway",
+      "xdp_libbpf",
+      "web3",
+      "hyperliquid_analyzer",
+      "l2_prod2",
+      "l1_e2e",
+      "rust_analyzer"
+    ]
+  },
+  "require_direct_deps": [
+    {
+      "from": "l1_adapter",
+      "to": "l1_core",
+      "reason": "outbound adapter should implement core ports"
+    }
+  ],
+  "forbid_direct_deps": [
+    {
+      "from": "l1_core",
+      "to": "l1_adapter",
+      "reason": "core must stay independent of adapters"
+    },
+    {
+      "from": "l1_core",
+      "to": "axum",
+      "reason": "core must not depend on HTTP framework"
+    },
+    {
+      "from": "l1_core",
+      "to": "tokio",
+      "reason": "core should stay runtime-agnostic"
+    },
+    {
+      "from": "l1_core",
+      "to": "revm",
+      "reason": "core must not depend on EVM infra"
+    },
+    {
+      "from": "l1_core",
+      "to": "mdbx",
+      "reason": "core must not depend on storage infra"
+    },
+    {
+      "from": "l1_core",
+      "to": "mysql",
+      "reason": "core must not depend on SQL driver"
+    },
+    {
+      "from": "l1_adapter",
+      "to": "axum",
+      "reason": "outbound adapter should not depend on inbound web framework"
+    },
+    {
+      "from": "l1_adapter",
+      "to": "mysql",
+      "reason": "adapter should not couple directly to SQL if not intended"
+    },
+    {
+      "from": "axum_server",
+      "to": "db_repo",
+      "reason": "inbound adapter should call use cases, not repositories"
+    },
+    {
+      "from": "axum_server",
+      "to": "lob_repo",
+      "reason": "inbound adapter should not own LOB persistence"
+    },
+    {
+      "from": "axum_server",
+      "to": "mysql",
+      "reason": "inbound adapter should not talk to SQL driver directly"
+    },
+    {
+      "from": "axum_server",
+      "to": "mdbx",
+      "reason": "inbound adapter should not depend on storage engine directly"
+    }
+  ],
+  "allow_direct_deps": [
+  ],
+  "forbid_layer_deps": [
+    {
+      "from_layer": "core",
+      "to_layer": "adapter:inbound",
+      "reason": "core must not depend on inbound adapters"
+    },
+    {
+      "from_layer": "core",
+      "to_layer": "infra",
+      "reason": "core must not depend on infrastructure"
+    },
+    {
+      "from_layer": "adapter:inbound",
+      "to_layer": "infra",
+      "reason": "inbound adapters should call ports/use cases, not infrastructure directly"
+    }
+  ]
+}
