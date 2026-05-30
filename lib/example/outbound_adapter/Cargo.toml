@@ -1,0 +1,11 @@
+[package]
+name = "example_outbound_adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+cmd_handler = { path = "../../common/cmd_handler" }
+example_core = { path = "../core" }
+mysql = "24.0"
