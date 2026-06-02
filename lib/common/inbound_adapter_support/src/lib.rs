@@ -11,6 +11,7 @@ pub use descriptor::{
     build_http_openapi, cli_arg, cli_error, http_error, insert_schema, object_schema,
     optional_string_schema, schema_ref, string_schema, u64_schema,
 };
+pub use inbound_adapter_support_macros::collect_http_endpoint;
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
