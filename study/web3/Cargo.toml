@@ -34,7 +34,7 @@ path = "src/mpt/main.rs"
 
 [[bin]]
 name = "zevm_demo"
-path = "src/zvem/main.rs"
+path = "src/evm/main.rs"
 
 [[bin]]
 name = "hash_settlement"

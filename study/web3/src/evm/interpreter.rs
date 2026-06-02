@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use crate::evm::instruction::OpCode;
+use super::instruction::OpCode;
 
 pub type Word = [u8; 32];
 
