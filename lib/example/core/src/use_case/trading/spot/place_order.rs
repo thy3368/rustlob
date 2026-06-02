@@ -1,19 +1,43 @@
-use std::fmt;
-
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use thiserror::Error;
 
-use super::super::support::{
+use crate::use_case::support::{
     ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE, int_field, stable_entity_id, string_field,
     updated_int_field,
 };
 use crate::entity::PlaceOrderState;
 
+/// Command for placing a spot order that reserves quote balance from a trader account.
+///
+/// This command only carries caller input. Cheap input validation happens in
+/// [`PlaceOrderUseCase::pre_check_command`], while market-rule and balance checks happen in
+/// [`PlaceOrderUseCase::validate_against_state`].
+///
+/// # Examples
+///
+/// ```
+/// use example_core::PlaceOrderCmd;
+///
+/// let cmd = PlaceOrderCmd {
+///     party_id: "trader-1".to_string(),
+///     symbol: "BTCUSDT".to_string(),
+///     qty: 2,
+///     price: 100,
+/// };
+///
+/// assert_eq!(cmd.symbol, "BTCUSDT");
+/// assert_eq!(cmd.qty, 2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceOrderCmd {
+    /// Trader account id that issues the command and owns the reserved quote balance.
     pub party_id: String,
+    /// Market symbol to trade, for example `BTCUSDT`.
     pub symbol: String,
+    /// Base-asset quantity to place. Must be greater than zero and satisfy market minimums.
     pub qty: u64,
+    /// Limit price in quote units. Must be greater than zero.
     pub price: u64,
 }
 
@@ -23,43 +47,50 @@ impl IssuedByParty for PlaceOrderCmd {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Business errors that can reject a spot order placement.
+///
+/// These errors are stable enough for adapters to map into CLI, HTTP, or tracing output through
+/// [`std::fmt::Display`].
+///
+/// # Examples
+///
+/// ```
+/// use example_core::PlaceOrderError;
+///
+/// assert_eq!(
+///     PlaceOrderError::InvalidQty.to_string(),
+///     "qty must be greater than zero"
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PlaceOrderError {
+    /// Returned when `qty == 0`.
+    #[error("qty must be greater than zero")]
     InvalidQty,
+    /// Returned when `price == 0`.
+    #[error("price must be greater than zero")]
     InvalidPrice,
+    /// Returned when the quantity is below current market minimum rules.
+    #[error("qty is below market minimum")]
     QtyBelowMin,
+    /// Returned when the market is temporarily not accepting orders.
+    #[error("trading is disabled")]
     TradingDisabled,
+    /// Returned when the symbol is not supported by the loaded market rules.
+    #[error("symbol is not tradable in current market rules")]
     SymbolNotTradable,
+    /// Returned when the account cannot reserve enough quote balance.
+    #[error("insufficient quote balance")]
     InsufficientQuoteBalance,
+    /// Returned when numeric derivation overflows while computing business results.
+    #[error("arithmetic overflow while deriving business result")]
     ArithmeticOverflow,
-    AccountNotFound,
-    MarketRulesNotFound,
-    EventDecodeFailed,
-    StoreUnavailable,
 }
 
-impl fmt::Display for PlaceOrderError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::InvalidQty => "qty must be greater than zero",
-            Self::InvalidPrice => "price must be greater than zero",
-            Self::QtyBelowMin => "qty is below market minimum",
-            Self::TradingDisabled => "trading is disabled",
-            Self::SymbolNotTradable => "symbol is not tradable in current market rules",
-            Self::InsufficientQuoteBalance => "insufficient quote balance",
-            Self::ArithmeticOverflow => "arithmetic overflow while deriving business result",
-            Self::AccountNotFound => "account not found",
-            Self::MarketRulesNotFound => "market rules not found",
-            Self::EventDecodeFailed => "failed to decode replayable event",
-            Self::StoreUnavailable => "store unavailable",
-        };
-
-        f.write_str(message)
-    }
-}
-
-impl std::error::Error for PlaceOrderError {}
-
+/// Use case that validates a spot order command and derives replayable order/account events.
+///
+/// The use case itself is deterministic for the same command and loaded state. It does not talk to
+/// storage, publish events, or shape HTTP replies.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceOrderUseCase;
 
@@ -70,10 +101,6 @@ impl CommandUseCase2 for PlaceOrderUseCase {
 
     fn role(&self) -> &'static str {
         "Trader"
-    }
-
-    fn format_error(&self, error: &Self::Error) -> Option<String> {
-        Some(error.to_string())
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {

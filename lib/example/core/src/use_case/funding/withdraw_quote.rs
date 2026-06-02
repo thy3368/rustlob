@@ -1,7 +1,6 @@
-use std::fmt;
-
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use thiserror::Error;
 
 use super::super::support::{
     ACCOUNT_ENTITY_TYPE, stable_entity_id, string_field, updated_int_field,
@@ -25,32 +24,15 @@ pub struct WithdrawQuoteState {
     pub account: TradingAccount,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum WithdrawQuoteError {
+    #[error("withdraw amount must be greater than zero")]
     InvalidAmount,
+    #[error("insufficient quote balance")]
     InsufficientQuoteBalance,
+    #[error("arithmetic overflow while deriving business result")]
     ArithmeticOverflow,
-    AccountNotFound,
-    EventDecodeFailed,
-    StoreUnavailable,
 }
-
-impl fmt::Display for WithdrawQuoteError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let message = match self {
-            Self::InvalidAmount => "withdraw amount must be greater than zero",
-            Self::InsufficientQuoteBalance => "insufficient quote balance",
-            Self::ArithmeticOverflow => "arithmetic overflow while deriving business result",
-            Self::AccountNotFound => "account not found",
-            Self::EventDecodeFailed => "failed to decode replayable event",
-            Self::StoreUnavailable => "store unavailable",
-        };
-
-        f.write_str(message)
-    }
-}
-
-impl std::error::Error for WithdrawQuoteError {}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WithdrawQuoteUseCase;
@@ -62,10 +44,6 @@ impl CommandUseCase2 for WithdrawQuoteUseCase {
 
     fn role(&self) -> &'static str {
         "Treasury"
-    }
-
-    fn format_error(&self, error: &Self::Error) -> Option<String> {
-        Some(error.to_string())
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
