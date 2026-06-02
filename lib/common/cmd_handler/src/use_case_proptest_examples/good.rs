@@ -141,22 +141,26 @@ struct CountingOutbound {
     publish_calls: AtomicUsize,
 }
 
-impl CommandUseCaseOutbound<DepositCmd, DepositState, DepositError> for CountingOutbound {
-    fn load_state(&self, _cmd: &DepositCmd) -> Result<DepositState, DepositError> {
+impl CommandUseCaseOutbound for CountingOutbound {
+    type Command = DepositCmd;
+    type State = DepositState;
+    type Error = DepositError;
+
+    fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         Ok(self.state.clone())
     }
 
-    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), DepositError> {
+    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         self.persist_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
-    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), DepositError> {
+    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         self.replay_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
-    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), DepositError> {
+    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         self.publish_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
