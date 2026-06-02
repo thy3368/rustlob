@@ -92,33 +92,16 @@ description: >
 
 ## 工程目录结构参考
 
-本仓库的标准参考实现位于 `/Users/hongyaotang/src/rustlob/lib/example`：
+本仓库的标准参考实现位于 `/Users/hongyaotang/src/rustlob/lib/example`。
 
-```text
-lib/example/
-├── core/
-│   └── src/
-│       ├── entity/
-│       └── use_case/
-│           ├── funding/
-│           │   ├── deposit_quote.rs
-│           │   └── withdraw_quote.rs
-│           └── trading/
-│               └── spot/
-│                   └── place_order.rs
-├── inbound_adapter/
-│   └── src/
-│       ├── funding/
-│       └── trading/
-├── outbound_adapter/
-│   └── src/
-│       ├── funding/
-│       ├── shared/
-│       └── trading/
-└── app/
-    └── composition_root/
-        └── src/
+使用本 skill 给目录建议前，必须先查看当前目录结构：
+
+```bash
+find lib/example -maxdepth 4 -type d | sort
+find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 ```
+
+以实际文件为准，不要依赖本文档中的过期快照。
 
 使用该结构作为目录建议时：
 
@@ -172,51 +155,13 @@ lib/example/
 
 ### 测试目录结构示例
 
-```
-lib/example/
-├── core/
-│   ├── src/
-│   │   ├── entity/
-│   │   │   ├── market_rules.rs
-│   │   │   └── trading_account.rs
-│   │   └── use_case/
-│   │       ├── funding/
-│   │       │   ├── deposit_quote.rs
-│   │       │   └── withdraw_quote.rs
-│   │       └── trading/
-│   │           └── spot/
-│   │               └── place_order.rs
-│   └── tests/
-│       ├── entity_market_rules_test.rs
-│       └── trading_spot_place_order_test.rs # mock outbound ports
-├── inbound_adapter/
-│   ├── src/
-│   │   ├── funding/
-│   │   │   ├── deposit_cli.rs
-│   │   │   └── deposit_http.rs
-│   │   └── trading/
-│   │       ├── cli.rs
-│   │       └── http.rs
-│   └── tests/
-│       ├── deposit_http_to_command_test.rs
-│       └── trading_cli_to_command_test.rs
-├── outbound_adapter/
-│   ├── src/
-│   │   ├── funding/
-│   │   │   ├── deposit_quote_in_memory.rs
-│   │   │   └── deposit_quote_mysql.rs
-│   │   └── trading/
-│   │       ├── place_order_in_memory.rs
-│   │       └── place_order_mysql.rs
-│   └── tests/
-│       ├── deposit_quote_mysql_test.rs
-│       └── place_order_mysql_test.rs
-└── app/
-    └── composition_root/
-        ├── src/
-        └── tests/
-            └── place_order_flow_test.rs     # E2E / composition test
-```
+以 `lib/example` 当前结构为准，按以下位置放测试：
+
+- `lib/example/core/tests/<workflow>_<use_case>_test.rs`: use_case 单元测试，mock outbound ports
+- `lib/example/core/tests/entity_<entity>_test.rs`: entity 纯业务规则测试
+- `lib/example/inbound_adapter/tests/<workflow>_<entrypoint>_to_command_test.rs`: inbound 输入转换测试
+- `lib/example/outbound_adapter/tests/<workflow>_<port_impl>_test.rs`: outbound port 实现测试
+- `lib/example/app/composition_root/tests/<workflow>_flow_test.rs`: E2E / composition test
 
 ### 测试原则
 
