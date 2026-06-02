@@ -166,36 +166,45 @@ lib/example/
 ### 测试目录结构示例
 
 ```
-project/
-├── core/                               # 业务核心 (无外部依赖)
-│   ├── use_case/
-│   │   ├── place_order.rs
-│   │   └── tests/                      # use_case 单元测试
-│   │       ├── place_order_test.rs     # mock outbound ports
-│   │       └── mod.rs
-│   └── entity/
-│       ├── order.rs
-│       └── tests/                      # entity 单元测试
-│           └── order_test.rs           # 纯业务规则测试
-├── adapter/                            # 适配器层 (连接 core 与外部)
-│   ├── inbound/
-│   │   ├── http/
-│   │   │   ├── order_controller.rs
-│   │   │   └── tests/                  # inbound 集成测试
-│   │   │       └── order_api_test.rs   # 验证 HTTP → command 转换
-│   │   └── cli/
-│   └── outbound/
-│       ├── repository/
-│       │   ├── order_repo.rs           # 实现 repository port
-│       │   └── tests/                  # outbound 集成测试
-│       │       └── order_repo_test.rs  # 测试与真实 DB 交互
-│       └── api_client/
-│           ├── external_api_client.rs  # 实现 api_client port
-│           └── tests/
-│               └── api_client_test.rs  # 测试与外部 API 交互
-└── tests/                              # E2E 测试 (顶层)
-    └── e2e/
-        └── order_flow_test.rs          # 完整用户场景
+lib/example/
+├── core/
+│   ├── src/
+│   │   ├── entity/
+│   │   │   ├── market_rules.rs
+│   │   │   └── trading_account.rs
+│   │   └── use_case/
+│   │       ├── funding/
+│   │       └── trading/
+│   └── tests/
+│       ├── entity_market_rules_test.rs
+│       └── use_case_place_order_test.rs     # mock outbound ports
+├── inbound_adapter/
+│   ├── src/
+│   │   ├── funding/
+│   │   │   ├── deposit_cli.rs
+│   │   │   └── deposit_http.rs
+│   │   └── trading/
+│   │       ├── cli.rs
+│   │       └── http.rs
+│   └── tests/
+│       ├── deposit_http_to_command_test.rs
+│       └── trading_cli_to_command_test.rs
+├── outbound_adapter/
+│   ├── src/
+│   │   ├── funding/
+│   │   │   ├── deposit_quote_in_memory.rs
+│   │   │   └── deposit_quote_mysql.rs
+│   │   └── trading/
+│   │       ├── place_order_in_memory.rs
+│   │       └── place_order_mysql.rs
+│   └── tests/
+│       ├── deposit_quote_mysql_test.rs
+│       └── place_order_mysql_test.rs
+└── app/
+    └── composition_root/
+        ├── src/
+        └── tests/
+            └── place_order_flow_test.rs     # E2E / composition test
 ```
 
 ### 测试原则
