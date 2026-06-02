@@ -100,6 +100,12 @@ lib/example/
 │   └── src/
 │       ├── entity/
 │       └── use_case/
+│           ├── funding/
+│           │   ├── deposit_quote.rs
+│           │   └── withdraw_quote.rs
+│           └── trading/
+│               └── spot/
+│                   └── place_order.rs
 ├── inbound_adapter/
 │   └── src/
 │       ├── funding/
@@ -117,6 +123,7 @@ lib/example/
 使用该结构作为目录建议时：
 
 - `lib/example/core` 对应 `core`
+- `lib/example/core/src/use_case/<workflow>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
 - `lib/example/inbound_adapter` 对应 `adapter.inbound`
 - `lib/example/outbound_adapter` 对应 `adapter.outbound`
 - `lib/example/app/composition_root` 负责组装 use case、adapter 和 infra
@@ -174,10 +181,14 @@ lib/example/
 │   │   │   └── trading_account.rs
 │   │   └── use_case/
 │   │       ├── funding/
+│   │       │   ├── deposit_quote.rs
+│   │       │   └── withdraw_quote.rs
 │   │       └── trading/
+│   │           └── spot/
+│   │               └── place_order.rs
 │   └── tests/
 │       ├── entity_market_rules_test.rs
-│       └── use_case_place_order_test.rs     # mock outbound ports
+│       └── trading_spot_place_order_test.rs # mock outbound ports
 ├── inbound_adapter/
 │   ├── src/
 │   │   ├── funding/
