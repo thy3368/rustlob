@@ -10,5 +10,6 @@ actix-web = "4"
 anyhow = "1"
 axum = "0.7"
 cmd_handler = { path = "../cmd_handler" }
+inbound_adapter_support_macros = { path = "../inbound_adapter_support_macros" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
