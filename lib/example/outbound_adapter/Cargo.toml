@@ -9,3 +9,4 @@ license.workspace = true
 cmd_handler = { path = "../../common/cmd_handler" }
 example_core = { path = "../core" }
 mysql = "24.0"
+thiserror = "1"
