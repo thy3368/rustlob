@@ -1,6 +1,6 @@
 ---
 name: clean-architecture
-author: Tokenaissance (https://tokenaissance.com)
+author: Tang Hong Yao
 description: >
   整洁架构实战指南。当用户询问架构设计、代码分层、重构、依赖管理、技术选型、过度设计时使用。
   回答优先使用 core / adapter / infra 三层表达，并保持与 Clean Architecture 的标准语义对齐。
@@ -37,19 +37,24 @@ description: >
 2. 同时保持与标准 Clean Architecture 的映射：
     - `core.entity` = `Entities`
     - `core.use_case` = `Use Cases`
-    - `adapter` = `Interface Adapters`
-    - `infra` = `Frameworks & Drivers` 的工程化表达
+    - `adapter` ≈ `Interface Adapters`
+        - `adapter.inbound` ≈ Controllers
+        - `adapter.outbound` ≈ Presenters / Gateways / Repository implementations
+    - `infra` ≈ `Frameworks & Drivers`，包括 frameworks、SDKs、DB drivers、runtimes、third-party tools
 
-3. `adapter` 是 `core` 与 `infra` 的胶水层，负责在外部机制与核心策略之间做翻译与桥接。
+3. `adapter` 负责在外部机制与 `core` 边界之间做适配：
+    - `inbound` 把 HTTP / CLI / MQ / GUI 等输入转换为 `use_case` 的 command/query
+    - `outbound` 实现 `use_case` 定义的 port，并把 core 输出转换给 DB / SDK / API / message broker 等外部系统
 
 4. 必须显式维护依赖规则：
-    - role view:
+    - responsibility view / 职责视图:
       ```text
       core
         use_case, entity
  
       adapter
-        glue / translation layer between core and infra
+        inbound: translate external input into use_case command/query
+        outbound: implement use_case ports and translate core output to infra/external systems
  
       infra
         frameworks, SDKs, drivers, runtimes, third-party tools
@@ -68,7 +73,7 @@ description: >
     - `inbound` 只负责把外部输入翻译到 `use_case`，不承载核心业务规则
     - `outbound` 只实现 `use_case` 定义的 port，不定义 port
 
-5. 不要把这些实现模式当作主架构层名直接接受：
+5. 如果用户使用以下实现模式或传统分层名，不要直接当作主架构层接受；先翻译回真实架构角色，再给建议：
     - `controller`
     - `service`
     - `repository`
@@ -77,35 +82,58 @@ description: >
     - `data layer`
     - `infrastructure`
 
-6. 如果用户使用这些词，先把它们翻译回真实架构角色，再给建议。
+6. 当用户提出微服务、Kafka、Redis、Kubernetes、service mesh 或额外抽象层时，先判断是否真的需要：
+    - `Question`: 问清楚要解决的真实问题
+    - `Delete`: 能不用就不用
+    - `Simplify`: 必须用时，先选最简单方案
+    - `Accelerate`: 方案成立后再优化性能
+    - `Automate`: 最后再自动化部署、运维和扩缩容
 
-7. 当用户提出微服务、Kafka、Redis、Kubernetes、service mesh 或额外抽象层时，按这个顺序回答：
-    - `Question`
-    - `Delete`
-    - `Simplify`
-    - 只有在前面成立后，才讨论 `Accelerate` / `Automate`
+
+## 工程目录结构参考
+
+本仓库的标准参考实现位于 `/Users/hongyaotang/src/rustlob/lib/example`：
+
+```text
+lib/example/
+├── core/
+│   └── src/
+│       ├── entity/
+│       └── use_case/
+├── inbound_adapter/
+│   └── src/
+│       ├── funding/
+│       └── trading/
+├── outbound_adapter/
+│   └── src/
+│       ├── funding/
+│       ├── shared/
+│       └── trading/
+└── app/
+    └── composition_root/
+        └── src/
+```
+
+使用该结构作为目录建议时：
+
+- `lib/example/core` 对应 `core`
+- `lib/example/inbound_adapter` 对应 `adapter.inbound`
+- `lib/example/outbound_adapter` 对应 `adapter.outbound`
+- `lib/example/app/composition_root` 负责组装 use case、adapter 和 infra
 
 ## Output Contract
+
 
 每次执行必须按以下顺序组织回答：
 
 1. `Layer Mapping`: `Core` / `Adapter` / `Infra`
     - `Core` 必须拆成 `use_case` 与 `entity`
     - `Adapter` 必须拆成 `inbound` 与 `outbound`
-2. `Architecture Views`: role view / source dependency view / call flow view
-    - 如有违规，指出是 role、dependency、还是 call flow 被混淆
-3. `Violations`: 指出哪些是架构层、哪些只是实现模式，并点出 inner policy 是否被 outer mechanism 污染
-4. `Minimal restructuring advice`
-    - 只给满足当前目标的最小调整建议
-    - 如果用户在追求复杂方案，先做必要性质疑
-
-如果问题涉及复杂度或技术选型，再追加：
-
-5. `Question`
-6. `Delete`
-7. `Simplify`
-8. optional `Accelerate`
-9. optional `Automate`
+2. `Architecture Views`: responsibility view / source dependency view / call flow view
+    - 如有违规，指出是 responsibility、dependency、还是 call flow 被混淆
+3. `Violations`: 指出是否把实现模式误当成架构层；检查 core 是否直接依赖 DB / HTTP / SDK / ORM / framework 等外部技术
+4. `Minimal restructuring advice`: 只给满足当前目标的最小调整建议
+    - 如果问题涉及复杂度或技术选型，按 `Design Rules` 第 6 条先判断是否真的需要
 
 ## Testing Guidelines
 
@@ -133,6 +161,7 @@ description: >
     - 外部工具由各自社区测试
     - 通过 `adapter/outbound` 的集成测试间接验证
     - 通过 `tests/e2e/` 的全流程测试验证
+
 
 ### 测试目录结构示例
 
