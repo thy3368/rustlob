@@ -1,38 +1,33 @@
 use std::sync::Arc;
 
-use actix_web::{HttpResponse, ResponseError, Scope, web};
+use actix_web::{HttpResponse, Scope, web};
 use axum::extract::State;
-use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
+    UseCaseReplyMapper,
 };
 use example_core::{PlaceOrderCmd, PlaceOrderError, PlaceOrderState};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 
-use crate::common::{execute_place_order_with_mapper, find_string_field, find_u64_field};
+use crate::common::{
+    HttpInboundError, execute_place_order_with_mapper, find_string_field, find_u64_field,
+};
 
 pub trait PlaceOrderOutboundAccess {
-    type Outbound: CommandUseCaseOutbound<PlaceOrderCmd, PlaceOrderState, PlaceOrderError>;
+    type OutboundError: std::error::Error + Send + Sync + 'static;
+    type Outbound: CommandUseCaseOutbound<
+            Command = PlaceOrderCmd,
+            State = PlaceOrderState,
+            Error = Self::OutboundError,
+        >;
 
     fn place_order_outbound(&self) -> &Self::Outbound;
 }
 
-impl<T> PlaceOrderOutboundAccess for T
-where
-    T: CommandUseCaseOutbound<PlaceOrderCmd, PlaceOrderState, PlaceOrderError>,
-{
-    type Outbound = Self;
-
-    fn place_order_outbound(&self) -> &Self::Outbound {
-        self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceOrderHttpRequest {
     pub trace_id: Option<String>,
     pub command_id: Option<String>,
@@ -56,30 +51,7 @@ impl PlaceOrderHttpRequest {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateOrderHttpPayload {
-    trace_id: Option<String>,
-    command_id: Option<String>,
-    trader_id: String,
-    symbol: String,
-    qty: u64,
-    price: u64,
-}
-
-impl From<CreateOrderHttpPayload> for PlaceOrderHttpRequest {
-    fn from(value: CreateOrderHttpPayload) -> Self {
-        Self {
-            trace_id: value.trace_id,
-            command_id: value.command_id,
-            trader_id: value.trader_id,
-            symbol: value.symbol,
-            qty: value.qty,
-            price: value.price,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceOrderHttpResponse {
     pub order_id: String,
     pub reserved_quote: u64,
@@ -107,12 +79,13 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
 pub fn handle_place_order_http<OB>(
     request: PlaceOrderHttpRequest,
     outbound: &OB,
-) -> Result<PlaceOrderHttpResponse, PlaceOrderError>
+) -> Result<PlaceOrderHttpResponse, CommandUseCaseExecutionError<PlaceOrderError, OB::Error>>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<PlaceOrderCmd, PlaceOrderState, PlaceOrderError>,
+        + CommandUseCaseOutbound<Command = PlaceOrderCmd, State = PlaceOrderState>,
+    OB::Error: 'static,
 {
     execute_place_order_with_mapper(request.into_envelope(), outbound, &PlaceOrderHttpReplyMapper)
 }
@@ -133,121 +106,43 @@ where
 
 async fn create_order<S>(
     State(state): State<Arc<S>>,
-    Json(payload): Json<CreateOrderHttpPayload>,
-) -> Result<Json<Value>, HttpApiError>
+    Json(payload): Json<PlaceOrderHttpRequest>,
+) -> Result<Json<PlaceOrderHttpResponse>, HttpApiError>
 where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
-    let response = handle_place_order_http(payload.into(), state.place_order_outbound())?;
-
-    Ok(Json(json!({
-        "order_id": response.order_id,
-        "reserved_quote": response.reserved_quote,
-        "remaining_quote": response.remaining_quote,
-        "domain_event_count": response.domain_event_count
-    })))
+    let response = handle_place_order_http(payload, state.place_order_outbound())?;
+    Ok(Json(response))
 }
 
 async fn create_order_actix<S>(
     state: web::Data<Arc<S>>,
-    payload: web::Json<CreateOrderHttpPayload>,
+    payload: web::Json<PlaceOrderHttpRequest>,
 ) -> Result<HttpResponse, HttpApiError>
 where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
-    let response = handle_place_order_http(
-        payload.into_inner().into(),
-        state.get_ref().place_order_outbound(),
-    )?;
-
-    Ok(HttpResponse::Ok().json(json!({
-        "order_id": response.order_id,
-        "reserved_quote": response.reserved_quote,
-        "remaining_quote": response.remaining_quote,
-        "domain_event_count": response.domain_event_count
-    })))
+    let response =
+        handle_place_order_http(payload.into_inner(), state.get_ref().place_order_outbound())?;
+    Ok(HttpResponse::Ok().json(response))
 }
 
-#[derive(Debug)]
-struct HttpApiError {
-    status_code: u16,
-    code: &'static str,
-    message: String,
-}
-
-impl std::fmt::Display for HttpApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
-    }
-}
-
-impl From<PlaceOrderError> for HttpApiError {
-    fn from(error: PlaceOrderError) -> Self {
-        let (status_code, code) = match error {
-            PlaceOrderError::InvalidQty => (400, "invalid_qty"),
-            PlaceOrderError::InvalidPrice => (400, "invalid_price"),
-            PlaceOrderError::QtyBelowMin => (400, "qty_below_min"),
-            PlaceOrderError::TradingDisabled => (400, "trading_disabled"),
-            PlaceOrderError::SymbolNotTradable => (400, "symbol_not_tradable"),
-            PlaceOrderError::InsufficientQuoteBalance => (400, "insufficient_quote_balance"),
-            PlaceOrderError::AccountNotFound => (404, "account_not_found"),
-            PlaceOrderError::MarketRulesNotFound => (404, "market_rules_not_found"),
-            PlaceOrderError::ArithmeticOverflow => (500, "arithmetic_overflow"),
-            PlaceOrderError::EventDecodeFailed => (500, "event_decode_failed"),
-            PlaceOrderError::StoreUnavailable => (500, "store_unavailable"),
-        };
-
-        Self { status_code, code, message: error.to_string() }
-    }
-}
-
-impl IntoResponse for HttpApiError {
-    fn into_response(self) -> Response {
-        let status = axum::http::StatusCode::from_u16(self.status_code)
-            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        (
-            status,
-            Json(json!({
-                "error": {
-                    "code": self.code,
-                    "message": self.message
-                }
-            })),
-        )
-            .into_response()
-    }
-}
-
-impl ResponseError for HttpApiError {
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        actix_web::http::StatusCode::from_u16(self.status_code)
-            .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR)
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(json!({
-            "error": {
-                "code": self.code,
-                "message": self.message
-            }
-        }))
-    }
-}
+type HttpApiError = HttpInboundError;
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use actix_web::{App, test};
-    use example_core::PlaceOrderError;
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::tests::TestOutbound;
+    use crate::common::tests::PlaceOrderTestOutbound;
 
     #[actix_web::test]
-    async fn http_adapter_translates_request_and_maps_response() -> Result<(), PlaceOrderError> {
-        let outbound = TestOutbound::default();
+    async fn http_adapter_translates_request_and_maps_response()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let outbound = PlaceOrderTestOutbound::default();
         let request = PlaceOrderHttpRequest {
             trace_id: Some("trace-http".to_string()),
             command_id: Some("cmd-http".to_string()),
@@ -271,11 +166,11 @@ mod tests {
 
     #[actix_web::test]
     async fn actix_http_route_translates_request_and_maps_response() {
-        let outbound = Arc::new(TestOutbound::default());
+        let outbound = Arc::new(PlaceOrderTestOutbound::default());
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(outbound))
-                .service(build_orders_actix_scope::<TestOutbound>()),
+                .service(build_orders_actix_scope::<PlaceOrderTestOutbound>()),
         )
         .await;
 

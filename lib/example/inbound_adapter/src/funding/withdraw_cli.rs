@@ -1,12 +1,23 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
+    UseCaseReplyMapper,
 };
 use example_core::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
+use serde::Serialize;
 
-use crate::common::{execute_withdraw_quote_with_mapper, find_string_field, find_u64_field};
+use crate::common::{
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_withdraw_quote_with_mapper,
+    find_string_field, find_u64_field,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub const WITHDRAW_QUOTE_CLI_BIN: &str = "cli_withdraw_demo";
+pub const WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
+pub const WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT: u64 = 200;
+const WITHDRAW_QUOTE_CLI_USAGE: &str =
+    "usage: cargo run -p example_composition_root --bin cli_withdraw_demo -- <trader_id> <amount>";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WithdrawQuoteCliCommand {
     pub trader_id: String,
     pub amount: u64,
@@ -29,6 +40,32 @@ impl std::fmt::Display for ParseWithdrawQuoteCliArgsError {
 
 impl std::error::Error for ParseWithdrawQuoteCliArgsError {}
 
+impl ExampleCliParseErrorMapping for ParseWithdrawQuoteCliArgsError {
+    fn cli_error_code(&self) -> &'static str {
+        match self {
+            Self::TooManyArgs => "too_many_args",
+            Self::InvalidAmount(_) => "invalid_amount",
+        }
+    }
+}
+
+impl ExampleBusinessErrorMapping for WithdrawQuoteError {
+    fn inbound_error_code(&self) -> &'static str {
+        match self {
+            WithdrawQuoteError::InvalidAmount => "invalid_amount",
+            WithdrawQuoteError::InsufficientQuoteBalance => "insufficient_quote_balance",
+            WithdrawQuoteError::ArithmeticOverflow => "arithmetic_overflow",
+        }
+    }
+
+    fn http_status_code(&self) -> u16 {
+        match self {
+            WithdrawQuoteError::ArithmeticOverflow => 500,
+            WithdrawQuoteError::InvalidAmount | WithdrawQuoteError::InsufficientQuoteBalance => 400,
+        }
+    }
+}
+
 impl WithdrawQuoteCliCommand {
     fn into_envelope(self) -> CommandEnvelope<WithdrawQuoteCmd> {
         CommandEnvelope {
@@ -42,7 +79,7 @@ impl WithdrawQuoteCliCommand {
 }
 
 pub fn withdraw_quote_cli_usage() -> &'static str {
-    "usage: cargo run -p example_composition_root --bin cli_withdraw_demo -- <trader_id> <amount>"
+    WITHDRAW_QUOTE_CLI_USAGE
 }
 
 pub fn parse_withdraw_quote_cli_args<I, S>(
@@ -54,12 +91,12 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| "trader-1".to_string());
+    let trader_id = args.next().unwrap_or_else(|| WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
     let amount = match args.next() {
         Some(raw) => {
             raw.parse::<u64>().map_err(|_| ParseWithdrawQuoteCliArgsError::InvalidAmount(raw))?
         }
-        None => 200,
+        None => WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT,
     };
 
     if args.next().is_some() {
@@ -69,7 +106,7 @@ where
     Ok(WithdrawQuoteCliCommand { trader_id, amount })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WithdrawQuoteCliResponse {
     pub summary: String,
     pub account_id: String,
@@ -99,12 +136,13 @@ impl UseCaseReplyMapper for WithdrawQuoteCliReplyMapper {
 pub fn run_withdraw_quote_cli<OB>(
     command: WithdrawQuoteCliCommand,
     outbound: &OB,
-) -> Result<WithdrawQuoteCliResponse, WithdrawQuoteError>
+) -> Result<WithdrawQuoteCliResponse, CommandUseCaseExecutionError<WithdrawQuoteError, OB::Error>>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteError>,
+        + CommandUseCaseOutbound<Command = WithdrawQuoteCmd, State = WithdrawQuoteState>,
+    OB::Error: 'static,
 {
     execute_withdraw_quote_with_mapper(
         command.into_envelope(),
@@ -116,17 +154,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::tests::TestOutbound;
+    use crate::common::tests::WithdrawQuoteTestOutbound;
 
     #[test]
     fn cli_adapter_translates_withdraw_command_and_maps_text_response()
-    -> Result<(), WithdrawQuoteError> {
-        let outbound = TestOutbound::default();
+    -> Result<(), Box<dyn std::error::Error>> {
+        let outbound = WithdrawQuoteTestOutbound::default();
         let command = WithdrawQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 250 };
 
         let response = run_withdraw_quote_cli(command, &outbound)?;
-        let counts =
-            outbound.snapshot_event_counts().map_err(|_| WithdrawQuoteError::StoreUnavailable)?;
+        let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");
         assert_eq!(

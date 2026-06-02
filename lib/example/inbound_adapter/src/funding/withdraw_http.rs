@@ -1,38 +1,33 @@
 use std::sync::Arc;
 
-use actix_web::{HttpResponse, ResponseError, Scope, web};
+use actix_web::{HttpResponse, Scope, web};
 use axum::extract::State;
-use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
+    UseCaseReplyMapper,
 };
 use example_core::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 
-use crate::common::{execute_withdraw_quote_with_mapper, find_string_field, find_u64_field};
+use crate::common::{
+    HttpInboundError, execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
+};
 
 pub trait WithdrawQuoteOutboundAccess {
-    type Outbound: CommandUseCaseOutbound<WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteError>;
+    type OutboundError: std::error::Error + Send + Sync + 'static;
+    type Outbound: CommandUseCaseOutbound<
+            Command = WithdrawQuoteCmd,
+            State = WithdrawQuoteState,
+            Error = Self::OutboundError,
+        >;
 
     fn withdraw_quote_outbound(&self) -> &Self::Outbound;
 }
 
-impl<T> WithdrawQuoteOutboundAccess for T
-where
-    T: CommandUseCaseOutbound<WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteError>,
-{
-    type Outbound = Self;
-
-    fn withdraw_quote_outbound(&self) -> &Self::Outbound {
-        self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WithdrawQuoteHttpRequest {
     pub trace_id: Option<String>,
     pub command_id: Option<String>,
@@ -49,26 +44,7 @@ impl WithdrawQuoteHttpRequest {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct WithdrawQuoteHttpPayload {
-    trace_id: Option<String>,
-    command_id: Option<String>,
-    trader_id: String,
-    amount: u64,
-}
-
-impl From<WithdrawQuoteHttpPayload> for WithdrawQuoteHttpRequest {
-    fn from(value: WithdrawQuoteHttpPayload) -> Self {
-        Self {
-            trace_id: value.trace_id,
-            command_id: value.command_id,
-            trader_id: value.trader_id,
-            amount: value.amount,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WithdrawQuoteHttpResponse {
     pub account_id: String,
     pub available_quote: u64,
@@ -96,12 +72,13 @@ impl UseCaseReplyMapper for WithdrawQuoteHttpReplyMapper {
 pub fn handle_withdraw_quote_http<OB>(
     request: WithdrawQuoteHttpRequest,
     outbound: &OB,
-) -> Result<WithdrawQuoteHttpResponse, WithdrawQuoteError>
+) -> Result<WithdrawQuoteHttpResponse, CommandUseCaseExecutionError<WithdrawQuoteError, OB::Error>>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteError>,
+        + CommandUseCaseOutbound<Command = WithdrawQuoteCmd, State = WithdrawQuoteState>,
+    OB::Error: 'static,
 {
     execute_withdraw_quote_with_mapper(
         request.into_envelope(),
@@ -126,117 +103,45 @@ where
 
 async fn create_withdraw<S>(
     State(state): State<Arc<S>>,
-    Json(payload): Json<WithdrawQuoteHttpPayload>,
-) -> Result<Json<Value>, WithdrawHttpApiError>
+    Json(payload): Json<WithdrawQuoteHttpRequest>,
+) -> Result<Json<WithdrawQuoteHttpResponse>, WithdrawHttpApiError>
 where
     S: Send + Sync + 'static + WithdrawQuoteOutboundAccess,
 {
-    let response = handle_withdraw_quote_http(payload.into(), state.withdraw_quote_outbound())?;
-
-    Ok(Json(json!({
-        "account_id": response.account_id,
-        "available_quote": response.available_quote,
-        "frozen_quote": response.frozen_quote,
-        "domain_event_count": response.domain_event_count
-    })))
+    let response = handle_withdraw_quote_http(payload, state.withdraw_quote_outbound())?;
+    Ok(Json(response))
 }
 
 async fn create_withdraw_actix<S>(
     state: web::Data<Arc<S>>,
-    payload: web::Json<WithdrawQuoteHttpPayload>,
+    payload: web::Json<WithdrawQuoteHttpRequest>,
 ) -> Result<HttpResponse, WithdrawHttpApiError>
 where
     S: Send + Sync + 'static + WithdrawQuoteOutboundAccess,
 {
     let response = handle_withdraw_quote_http(
-        payload.into_inner().into(),
+        payload.into_inner(),
         state.get_ref().withdraw_quote_outbound(),
     )?;
-
-    Ok(HttpResponse::Ok().json(json!({
-        "account_id": response.account_id,
-        "available_quote": response.available_quote,
-        "frozen_quote": response.frozen_quote,
-        "domain_event_count": response.domain_event_count
-    })))
+    Ok(HttpResponse::Ok().json(response))
 }
 
-#[derive(Debug)]
-struct WithdrawHttpApiError {
-    status_code: u16,
-    code: &'static str,
-    message: String,
-}
-
-impl std::fmt::Display for WithdrawHttpApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
-    }
-}
-
-impl From<WithdrawQuoteError> for WithdrawHttpApiError {
-    fn from(error: WithdrawQuoteError) -> Self {
-        let (status_code, code) = match error {
-            WithdrawQuoteError::InvalidAmount => (400, "invalid_amount"),
-            WithdrawQuoteError::InsufficientQuoteBalance => (400, "insufficient_quote_balance"),
-            WithdrawQuoteError::AccountNotFound => (404, "account_not_found"),
-            WithdrawQuoteError::ArithmeticOverflow => (500, "arithmetic_overflow"),
-            WithdrawQuoteError::EventDecodeFailed => (500, "event_decode_failed"),
-            WithdrawQuoteError::StoreUnavailable => (500, "store_unavailable"),
-        };
-
-        Self { status_code, code, message: error.to_string() }
-    }
-}
-
-impl IntoResponse for WithdrawHttpApiError {
-    fn into_response(self) -> Response {
-        let status = axum::http::StatusCode::from_u16(self.status_code)
-            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        (
-            status,
-            Json(json!({
-                "error": {
-                    "code": self.code,
-                    "message": self.message
-                }
-            })),
-        )
-            .into_response()
-    }
-}
-
-impl ResponseError for WithdrawHttpApiError {
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        actix_web::http::StatusCode::from_u16(self.status_code)
-            .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR)
-    }
-
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(json!({
-            "error": {
-                "code": self.code,
-                "message": self.message
-            }
-        }))
-    }
-}
+type WithdrawHttpApiError = HttpInboundError;
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use actix_web::{App, test};
-    use example_core::WithdrawQuoteError;
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::tests::TestOutbound;
+    use crate::common::tests::WithdrawQuoteTestOutbound;
 
     #[actix_web::test]
     async fn http_adapter_translates_withdraw_request_and_maps_response()
-    -> Result<(), WithdrawQuoteError> {
-        let outbound = TestOutbound::default();
+    -> Result<(), Box<dyn std::error::Error>> {
+        let outbound = WithdrawQuoteTestOutbound::default();
         let request = WithdrawQuoteHttpRequest {
             trace_id: Some("trace-withdraw".to_string()),
             command_id: Some("cmd-withdraw".to_string()),
@@ -245,8 +150,7 @@ mod tests {
         };
 
         let response = handle_withdraw_quote_http(request, &outbound)?;
-        let counts =
-            outbound.snapshot_event_counts().map_err(|_| WithdrawQuoteError::StoreUnavailable)?;
+        let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");
         assert_eq!(response.available_quote, 750);
@@ -259,11 +163,11 @@ mod tests {
 
     #[actix_web::test]
     async fn actix_http_route_translates_withdraw_request_and_maps_response() {
-        let outbound = Arc::new(TestOutbound::default());
+        let outbound = Arc::new(WithdrawQuoteTestOutbound::default());
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(outbound))
-                .service(build_withdraw_actix_scope::<TestOutbound>()),
+                .service(build_withdraw_actix_scope::<WithdrawQuoteTestOutbound>()),
         )
         .await;
 

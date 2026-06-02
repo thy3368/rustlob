@@ -1,12 +1,24 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
+    UseCaseReplyMapper,
 };
 use example_core::{PlaceOrderCmd, PlaceOrderError, PlaceOrderState};
+use serde::Serialize;
 
-use crate::common::{execute_place_order_with_mapper, find_string_field, find_u64_field};
+use crate::common::{
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_place_order_with_mapper,
+    find_string_field, find_u64_field,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub const PLACE_ORDER_CLI_BIN: &str = "cli_demo";
+pub const PLACE_ORDER_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
+pub const PLACE_ORDER_CLI_DEFAULT_SYMBOL: &str = "BTCUSDT";
+pub const PLACE_ORDER_CLI_DEFAULT_QTY: u64 = 2;
+pub const PLACE_ORDER_CLI_DEFAULT_PRICE: u64 = 100;
+const PLACE_ORDER_CLI_USAGE: &str = "usage: cargo run -p example_composition_root --bin cli_demo -- <trader_id> <symbol> <qty> <price>";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlaceOrderCliCommand {
     pub trader_id: String,
     pub symbol: String,
@@ -33,6 +45,42 @@ impl std::fmt::Display for ParsePlaceOrderCliArgsError {
 
 impl std::error::Error for ParsePlaceOrderCliArgsError {}
 
+impl ExampleCliParseErrorMapping for ParsePlaceOrderCliArgsError {
+    fn cli_error_code(&self) -> &'static str {
+        match self {
+            Self::TooManyArgs => "too_many_args",
+            Self::InvalidQty(_) => "invalid_qty",
+            Self::InvalidPrice(_) => "invalid_price",
+        }
+    }
+}
+
+impl ExampleBusinessErrorMapping for PlaceOrderError {
+    fn inbound_error_code(&self) -> &'static str {
+        match self {
+            PlaceOrderError::InvalidQty => "invalid_qty",
+            PlaceOrderError::InvalidPrice => "invalid_price",
+            PlaceOrderError::QtyBelowMin => "qty_below_min",
+            PlaceOrderError::TradingDisabled => "trading_disabled",
+            PlaceOrderError::SymbolNotTradable => "symbol_not_tradable",
+            PlaceOrderError::InsufficientQuoteBalance => "insufficient_quote_balance",
+            PlaceOrderError::ArithmeticOverflow => "arithmetic_overflow",
+        }
+    }
+
+    fn http_status_code(&self) -> u16 {
+        match self {
+            PlaceOrderError::ArithmeticOverflow => 500,
+            PlaceOrderError::InvalidQty
+            | PlaceOrderError::InvalidPrice
+            | PlaceOrderError::QtyBelowMin
+            | PlaceOrderError::TradingDisabled
+            | PlaceOrderError::SymbolNotTradable
+            | PlaceOrderError::InsufficientQuoteBalance => 400,
+        }
+    }
+}
+
 impl PlaceOrderCliCommand {
     fn into_envelope(self) -> CommandEnvelope<PlaceOrderCmd> {
         CommandEnvelope {
@@ -51,7 +99,7 @@ impl PlaceOrderCliCommand {
 }
 
 pub fn place_order_cli_usage() -> &'static str {
-    "usage: cargo run -p example_composition_root --bin cli_demo -- <trader_id> <symbol> <qty> <price>"
+    PLACE_ORDER_CLI_USAGE
 }
 
 pub fn parse_place_order_cli_args<I, S>(
@@ -63,10 +111,18 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| "trader-1".to_string());
-    let symbol = args.next().unwrap_or_else(|| "BTCUSDT".to_string());
-    let qty = parse_or_default(args.next(), 2, ParsePlaceOrderCliArgsError::InvalidQty)?;
-    let price = parse_or_default(args.next(), 100, ParsePlaceOrderCliArgsError::InvalidPrice)?;
+    let trader_id = args.next().unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_TRADER_ID.to_string());
+    let symbol = args.next().unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_SYMBOL.to_string());
+    let qty = parse_or_default(
+        args.next(),
+        PLACE_ORDER_CLI_DEFAULT_QTY,
+        ParsePlaceOrderCliArgsError::InvalidQty,
+    )?;
+    let price = parse_or_default(
+        args.next(),
+        PLACE_ORDER_CLI_DEFAULT_PRICE,
+        ParsePlaceOrderCliArgsError::InvalidPrice,
+    )?;
 
     if args.next().is_some() {
         return Err(ParsePlaceOrderCliArgsError::TooManyArgs);
@@ -86,7 +142,7 @@ fn parse_or_default(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlaceOrderCliResponse {
     pub summary: String,
     pub order_id: String,
@@ -116,26 +172,26 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
 pub fn run_place_order_cli<OB>(
     command: PlaceOrderCliCommand,
     outbound: &OB,
-) -> Result<PlaceOrderCliResponse, PlaceOrderError>
+) -> Result<PlaceOrderCliResponse, CommandUseCaseExecutionError<PlaceOrderError, OB::Error>>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<PlaceOrderCmd, PlaceOrderState, PlaceOrderError>,
+        + CommandUseCaseOutbound<Command = PlaceOrderCmd, State = PlaceOrderState>,
+    OB::Error: 'static,
 {
     execute_place_order_with_mapper(command.into_envelope(), outbound, &PlaceOrderCliReplyMapper)
 }
 
 #[cfg(test)]
 mod tests {
-    use example_core::PlaceOrderError;
-
     use super::*;
-    use crate::common::tests::TestOutbound;
+    use crate::common::tests::PlaceOrderTestOutbound;
 
     #[test]
-    fn cli_adapter_translates_command_and_maps_text_response() -> Result<(), PlaceOrderError> {
-        let outbound = TestOutbound::default();
+    fn cli_adapter_translates_command_and_maps_text_response()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let outbound = PlaceOrderTestOutbound::default();
         let command = PlaceOrderCliCommand {
             trader_id: "trader-1".to_string(),
             symbol: "BTCUSDT".to_string(),

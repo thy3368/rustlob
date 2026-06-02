@@ -1,12 +1,23 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
+    UseCaseReplyMapper,
 };
 use example_core::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
+use serde::Serialize;
 
-use crate::common::{execute_deposit_quote_with_mapper, find_string_field, find_u64_field};
+use crate::common::{
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_deposit_quote_with_mapper,
+    find_string_field, find_u64_field,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub const DEPOSIT_QUOTE_CLI_BIN: &str = "cli_deposit_demo";
+pub const DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
+pub const DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT: u64 = 200;
+const DEPOSIT_QUOTE_CLI_USAGE: &str =
+    "usage: cargo run -p example_composition_root --bin cli_deposit_demo -- <trader_id> <amount>";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DepositQuoteCliCommand {
     pub trader_id: String,
     pub amount: u64,
@@ -29,12 +40,37 @@ impl std::fmt::Display for ParseDepositQuoteCliArgsError {
 
 impl std::error::Error for ParseDepositQuoteCliArgsError {}
 
+impl ExampleCliParseErrorMapping for ParseDepositQuoteCliArgsError {
+    fn cli_error_code(&self) -> &'static str {
+        match self {
+            Self::TooManyArgs => "too_many_args",
+            Self::InvalidAmount(_) => "invalid_amount",
+        }
+    }
+}
+
+impl ExampleBusinessErrorMapping for DepositQuoteError {
+    fn inbound_error_code(&self) -> &'static str {
+        match self {
+            DepositQuoteError::InvalidAmount => "invalid_amount",
+            DepositQuoteError::ArithmeticOverflow => "arithmetic_overflow",
+        }
+    }
+
+    fn http_status_code(&self) -> u16 {
+        match self {
+            DepositQuoteError::InvalidAmount => 400,
+            DepositQuoteError::ArithmeticOverflow => 500,
+        }
+    }
+}
+
 impl DepositQuoteCliCommand {
     fn into_envelope(self) -> CommandEnvelope<DepositQuoteCmd> {
         CommandEnvelope {
             meta: CommandMeta {
                 trace_id: Some("cli-deposit-quote".to_string()),
-                command_id: Some(format!("cli:{}:deposit:{}", self.trader_id, self.amount)),
+                command_id: Some(format!("cli:deposit:{}:{}", self.trader_id, self.amount)),
             },
             command: DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
         }
@@ -42,7 +78,7 @@ impl DepositQuoteCliCommand {
 }
 
 pub fn deposit_quote_cli_usage() -> &'static str {
-    "usage: cargo run -p example_composition_root --bin cli_deposit_demo -- <trader_id> <amount>"
+    DEPOSIT_QUOTE_CLI_USAGE
 }
 
 pub fn parse_deposit_quote_cli_args<I, S>(
@@ -54,12 +90,12 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| "trader-1".to_string());
+    let trader_id = args.next().unwrap_or_else(|| DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
     let amount = match args.next() {
         Some(raw) => {
             raw.parse::<u64>().map_err(|_| ParseDepositQuoteCliArgsError::InvalidAmount(raw))?
         }
-        None => 200,
+        None => DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT,
     };
 
     if args.next().is_some() {
@@ -69,7 +105,7 @@ where
     Ok(DepositQuoteCliCommand { trader_id, amount })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DepositQuoteCliResponse {
     pub summary: String,
     pub account_id: String,
@@ -89,7 +125,7 @@ impl UseCaseReplyMapper for DepositQuoteCliReplyMapper {
 
         DepositQuoteCliResponse {
             summary: format!(
-                "accepted account_id={account_id} available_quote={available_quote} frozen_quote={frozen_quote}"
+                "quoted deposit account_id={account_id} available_quote={available_quote} frozen_quote={frozen_quote}"
             ),
             account_id,
         }
@@ -99,12 +135,13 @@ impl UseCaseReplyMapper for DepositQuoteCliReplyMapper {
 pub fn run_deposit_quote_cli<OB>(
     command: DepositQuoteCliCommand,
     outbound: &OB,
-) -> Result<DepositQuoteCliResponse, DepositQuoteError>
+) -> Result<DepositQuoteCliResponse, CommandUseCaseExecutionError<DepositQuoteError, OB::Error>>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<DepositQuoteCmd, DepositQuoteState, DepositQuoteError>,
+        + CommandUseCaseOutbound<Command = DepositQuoteCmd, State = DepositQuoteState>,
+    OB::Error: 'static,
 {
     execute_deposit_quote_with_mapper(
         command.into_envelope(),
@@ -116,22 +153,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::tests::TestOutbound;
+    use crate::common::tests::DepositQuoteTestOutbound;
 
     #[test]
     fn cli_adapter_translates_deposit_command_and_maps_text_response()
-    -> Result<(), DepositQuoteError> {
-        let outbound = TestOutbound::default();
-        let command = DepositQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 250 };
+    -> Result<(), Box<dyn std::error::Error>> {
+        let outbound = DepositQuoteTestOutbound::default();
+        let command = DepositQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 200 };
 
         let response = run_deposit_quote_cli(command, &outbound)?;
-        let counts =
-            outbound.snapshot_event_counts().map_err(|_| DepositQuoteError::StoreUnavailable)?;
+        let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");
         assert_eq!(
             response.summary,
-            "accepted account_id=trader-1 available_quote=1250 frozen_quote=0"
+            "quoted deposit account_id=trader-1 available_quote=1200 frozen_quote=0"
         );
         assert_eq!(counts, (1, 1));
 
