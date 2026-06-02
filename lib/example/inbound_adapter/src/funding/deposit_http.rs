@@ -101,6 +101,21 @@ where
     web::scope("").route("/deposits/quote", web::post().to(create_deposit_actix::<S>))
 }
 
+#[inbound_adapter_support::collect_http_endpoint(
+    name = "deposit_quote_http",
+    method = "POST",
+    path = "/deposits/quote",
+    summary = "Quote a deposit against the trading account.",
+    error_response_schema = "ExampleHttpErrorResponse",
+    error_codes = [
+        (400, "invalid_amount"),
+        (500, "arithmetic_overflow"),
+        (500, "outbound_load_state_failed"),
+        (500, "outbound_persist_failed"),
+        (500, "outbound_replay_failed"),
+        (500, "outbound_publish_failed")
+    ]
+)]
 async fn create_deposit<S>(
     State(state): State<Arc<S>>,
     Json(payload): Json<DepositQuoteHttpRequest>,
