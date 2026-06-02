@@ -2,11 +2,11 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
 use thiserror::Error;
 
+use crate::entity::PlaceOrderState;
 use crate::use_case::support::{
     ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE, int_field, stable_entity_id, string_field,
     updated_int_field,
 };
-use crate::entity::PlaceOrderState;
 
 /// Command for placing a spot order that reserves quote balance from a trader account.
 ///
