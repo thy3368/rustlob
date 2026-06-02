@@ -206,3 +206,101 @@ fn extract_json_inner_type(ty: &Type) -> Option<&Type> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use quote::quote;
+    use syn::{parse_quote, parse_str};
+
+    use super::*;
+
+    #[test]
+    fn parses_http_endpoint_args() {
+        let args: HttpEndpointArgs = parse_str(
+            r#"
+            name = "place_order_http",
+            method = "POST",
+            path = "/orders",
+            summary = "Submit a spot order request.",
+            error_response_schema = "ExampleHttpErrorResponse",
+            error_codes = [
+                (400, "invalid_qty"),
+                (500, "outbound_load_state_failed")
+            ]
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(args.name.value(), "place_order_http");
+        assert_eq!(args.method.value(), "POST");
+        assert_eq!(args.path.value(), "/orders");
+        assert_eq!(args.summary.value(), "Submit a spot order request.");
+        assert_eq!(args.error_response_schema.value(), "ExampleHttpErrorResponse");
+        assert_eq!(args.error_codes.len(), 2);
+        assert_eq!(args.error_codes[0].0.base10_parse::<u16>().unwrap(), 400);
+        assert_eq!(args.error_codes[0].1.value(), "invalid_qty");
+    }
+
+    #[test]
+    fn extracts_request_and_response_types_from_handler_signature() {
+        let input_fn: ItemFn = parse_quote! {
+            async fn create_order<S>(
+                State(state): State<Arc<S>>,
+                Json(payload): Json<PlaceOrderHttpRequest>,
+            ) -> Result<Json<PlaceOrderHttpResponse>, HttpApiError>
+            where
+                S: Send + Sync + 'static,
+            {
+                todo!()
+            }
+        };
+
+        let request = extract_request_type(&input_fn).unwrap();
+        let response = extract_response_type(&input_fn).unwrap();
+
+        assert_eq!(quote!(#request).to_string(), "PlaceOrderHttpRequest");
+        assert_eq!(quote!(#response).to_string(), "PlaceOrderHttpResponse");
+    }
+
+    #[test]
+    fn expands_descriptor_function_with_signature_derived_schema_names() {
+        let args: HttpEndpointArgs = parse_str(
+            r#"
+            name = "place_order_http",
+            method = "POST",
+            path = "/orders",
+            summary = "Submit a spot order request.",
+            error_response_schema = "ExampleHttpErrorResponse",
+            error_codes = [
+                (400, "invalid_qty"),
+                (500, "outbound_load_state_failed")
+            ]
+            "#,
+        )
+        .unwrap();
+        let input_fn: ItemFn = parse_quote! {
+            async fn create_order<S>(
+                State(state): State<Arc<S>>,
+                Json(payload): Json<PlaceOrderHttpRequest>,
+            ) -> Result<Json<PlaceOrderHttpResponse>, HttpApiError>
+            where
+                S: Send + Sync + 'static,
+            {
+                todo!()
+            }
+        };
+
+        let expanded = expand_collect_http_endpoint(args, input_fn).unwrap().to_string();
+
+        assert!(expanded.contains("create_order_http_api_descriptor"));
+        assert!(expanded.contains("request_schema_name : stringify ! (PlaceOrderHttpRequest)"));
+        assert!(
+            expanded
+                .contains("success_response_schema_name : stringify ! (PlaceOrderHttpResponse)")
+        );
+        assert!(expanded.contains("error_response_schema_name : \"ExampleHttpErrorResponse\""));
+        assert!(
+            expanded.contains(":: inbound_adapter_support :: http_error (400 , \"invalid_qty\")")
+        );
+    }
+}
