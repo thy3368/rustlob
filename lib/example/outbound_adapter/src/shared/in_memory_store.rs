@@ -40,10 +40,7 @@ impl InMemoryStore {
         Self::default()
     }
 
-    pub fn seeded(
-        account: TradingAccount,
-        market_rules: MarketRules,
-    ) -> Result<Self, StoreError> {
+    pub fn seeded(account: TradingAccount, market_rules: MarketRules) -> Result<Self, StoreError> {
         let store = Self::new();
         store.seed_account(account)?;
         store.seed_market_rules(market_rules)?;

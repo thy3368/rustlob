@@ -81,8 +81,8 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
 
         for event in events {
             if event.entity_type == ORDER_ENTITY_TYPE && event.is_created() {
-                let order_sequence =
-                    event_order_sequence(event).ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+                let order_sequence = event_order_sequence(event)
+                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
                 let stored_order = StoredOrder {
                     order_id: event_string_field(event, "order_id")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,

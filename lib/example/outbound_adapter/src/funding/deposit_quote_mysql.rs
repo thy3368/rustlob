@@ -1,8 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::CommandUseCaseOutbound;
-use example_core::{
-    ACCOUNT_ENTITY_TYPE, DepositQuoteCmd, DepositQuoteState, TradingAccount,
-};
+use example_core::{ACCOUNT_ENTITY_TYPE, DepositQuoteCmd, DepositQuoteState, TradingAccount};
 use mysql::params;
 use mysql::prelude::Queryable;
 
