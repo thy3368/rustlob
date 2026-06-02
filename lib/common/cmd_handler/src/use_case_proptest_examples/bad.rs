@@ -1,4 +1,5 @@
 use proptest::prelude::*;
+use thiserror::Error;
 
 use crate::use_case_def2::{CommandUseCase2, IssuedByParty};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
@@ -45,8 +46,9 @@ struct SubmitCmd {
 
 impl IssuedByParty for SubmitCmd {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 enum SubmitError {
+    #[error("rejected")]
     Rejected,
 }
 

@@ -1,10 +1,11 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use proptest::prelude::*;
+use thiserror::Error;
 
 use crate::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
-    IssuedByParty,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutionError,
+    CommandUseCaseExecutor2, CommandUseCaseOutbound, IssuedByParty,
 };
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
@@ -66,10 +67,13 @@ impl IssuedByParty for DepositCmd {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 enum DepositError {
+    #[error("amount must be greater than zero")]
     ZeroAmount,
+    #[error("account is frozen")]
     AccountFrozen,
+    #[error("amount exceeds current limit")]
     LimitExceeded,
 }
 
@@ -194,17 +198,17 @@ proptest! {
         );
 
         if cmd.amount == 0 {
-            prop_assert_eq!(result, Err(DepositError::ZeroAmount));
+            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::ZeroAmount)));
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if !state.account_open {
-            prop_assert_eq!(result, Err(DepositError::AccountFrozen));
+            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::AccountFrozen)));
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if cmd.amount > state.max_amount {
-            prop_assert_eq!(result, Err(DepositError::LimitExceeded));
+            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::LimitExceeded)));
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);

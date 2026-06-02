@@ -1,5 +1,6 @@
 use crate::use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
+use thiserror::Error;
 
 const PLACE_ORDER_ENTITY_TYPE: u8 = 1;
 const FIELD_TYPE_STRING: u8 = 0;
@@ -61,9 +62,11 @@ impl IssuedByParty for PlaceOrderCmd {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PlaceOrderError {
+    #[error("qty must be greater than zero")]
     InvalidQty,
+    #[error("trading is disabled")]
     TradingDisabled,
 }
 

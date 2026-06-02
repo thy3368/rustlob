@@ -1,5 +1,6 @@
 use crate::use_case_def2::{CommandUseCase2, IssuedByParty};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
+use thiserror::Error;
 
 const SUBMIT_ENTITY_TYPE: u8 = 2;
 const FIELD_TYPE_STRING: u8 = 0;
@@ -36,8 +37,9 @@ pub struct SubmitCmd {
 
 impl IssuedByParty for SubmitCmd {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SubmitError {
+    #[error("rejected")]
     Rejected,
 }
 
