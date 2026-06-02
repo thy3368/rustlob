@@ -1,0 +1,127 @@
+use cmd_handler::EntityReplayableEvent;
+use cmd_handler::use_case_def2::CommandUseCaseOutbound;
+use example_core::{
+    ACCOUNT_ENTITY_TYPE, TradingAccount, WithdrawQuoteCmd, WithdrawQuoteState,
+};
+use mysql::params;
+use mysql::prelude::Queryable;
+
+use crate::shared::{
+    ACCOUNT_TABLE, EVENT_TABLE, MySqlStore, WithdrawQuoteOutboundError, event_string_field_mysql,
+    event_u64_field_mysql, map_mysql_error,
+};
+
+#[derive(Debug, Clone)]
+pub struct MySqlWithdrawQuoteOutbound {
+    store: MySqlStore,
+}
+
+impl MySqlWithdrawQuoteOutbound {
+    pub fn from_store(store: MySqlStore) -> Self {
+        Self { store }
+    }
+}
+
+impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
+    type Command = WithdrawQuoteCmd;
+    type State = WithdrawQuoteState;
+    type Error = WithdrawQuoteOutboundError;
+
+    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+        let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
+
+        let account_row: Option<(String, u64, u64, u64)> = conn
+            .exec_first(
+                format!(
+                    "SELECT account_id, available_quote, frozen_quote, version
+                     FROM {ACCOUNT_TABLE}
+                     WHERE account_id = :account_id"
+                ),
+                params! { "account_id" => cmd.party_id.as_str() },
+            )
+            .map_err(map_mysql_error)?;
+        let (account_id, available_quote, frozen_quote, version) =
+            account_row.ok_or(WithdrawQuoteOutboundError::AccountNotFound)?;
+
+        Ok(WithdrawQuoteState {
+            account: TradingAccount { account_id, available_quote, frozen_quote, version },
+        })
+    }
+
+    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
+
+        for event in events {
+            conn.exec_drop(
+                format!(
+                    "INSERT INTO {EVENT_TABLE} (
+                        entity_type, change_type, entity_id, old_version, new_version,
+                        order_id, account_id, symbol, qty, price, reserved_quote, available_quote, frozen_quote
+                     ) VALUES (
+                        :entity_type, :change_type, :entity_id, :old_version, :new_version,
+                        :order_id, :account_id, :symbol, :qty, :price, :reserved_quote, :available_quote, :frozen_quote
+                     )"
+                ),
+                params! {
+                    "entity_type" => event.entity_type,
+                    "change_type" => event.change_type,
+                    "entity_id" => event.entity_id,
+                    "old_version" => event.old_version,
+                    "new_version" => event.new_version,
+                    "order_id" => event_string_field_mysql(event, "order_id"),
+                    "account_id" => event_string_field_mysql(event, "account_id"),
+                    "symbol" => event_string_field_mysql(event, "symbol"),
+                    "qty" => event_u64_field_mysql(event, "qty"),
+                    "price" => event_u64_field_mysql(event, "price"),
+                    "reserved_quote" => event_u64_field_mysql(event, "reserved_quote"),
+                    "available_quote" => event_u64_field_mysql(event, "available_quote"),
+                    "frozen_quote" => event_u64_field_mysql(event, "frozen_quote"),
+                },
+            )
+            .map_err(map_mysql_error)?;
+        }
+
+        Ok(())
+    }
+
+    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
+
+        for event in events {
+            if event.entity_type == ACCOUNT_ENTITY_TYPE && event.is_updated() {
+                conn.exec_drop(
+                    format!(
+                        "UPDATE {ACCOUNT_TABLE}
+                         SET available_quote = :available_quote,
+                             frozen_quote = :frozen_quote,
+                             version = :version
+                         WHERE account_id = :account_id"
+                    ),
+                    params! {
+                        "account_id" => event_string_field_mysql(event, "account_id")
+                            .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
+                        "available_quote" => event_u64_field_mysql(event, "available_quote")
+                            .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
+                        "frozen_quote" => event_u64_field_mysql(event, "frozen_quote")
+                            .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
+                        "version" => event.new_version,
+                    },
+                )
+                .map_err(map_mysql_error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
+        conn.query_drop(format!(
+            "UPDATE {EVENT_TABLE}
+             SET published_at = CURRENT_TIMESTAMP
+             WHERE published_at IS NULL"
+        ))
+        .map_err(map_mysql_error)?;
+        Ok(())
+    }
+}
