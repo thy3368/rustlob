@@ -1,6 +1,6 @@
 ---
 name: review-use-case
-description: Review and score RustLOB command-style use cases. Use when Codex needs to inspect `*/use_case/*.rs`, map a use case to `core / adapter / infra`, apply four-color modeling, identify boundary or naming problems, or score the design with a Clean Architecture and four-color rubric.
+description: Review and score RustLOB command-style use cases. Use when Codex needs to inspect `*/workflow/*.rs`, map a use case to `core / adapter / infra`, apply four-color modeling, identify boundary or naming problems, or score the design with a Clean Architecture and four-color rubric.
 ---
 
 # Review Use Case

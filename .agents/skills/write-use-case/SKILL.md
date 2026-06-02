@@ -1,6 +1,6 @@
 ---
 name: write-use-case
-description: Write RustLOB command-style use cases around `CommandUseCase2`. Use when Codex needs to add or refactor files such as `*/use_case/*.rs`, define command/state/event/reply types, implement `pre_check_command` or `validate_against_state`, wire `UseCaseReplyMapper`, or keep persistence/load/publish logic out of the core use case.
+description: Write RustLOB command-style use cases around `CommandUseCase2`. Use when Codex needs to add or refactor files such as `*/workflow/*.rs`, define command/state/event/reply types, implement `pre_check_command` or `validate_against_state`, wire `UseCaseReplyMapper`, or keep persistence/load/publish logic out of the core use case.
 ---
 
 # Write Use Case
@@ -12,9 +12,7 @@ Implement use cases the way this repository expects: business rules live in `Com
 Start from these source files:
 - Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
-- Real L1 examples:
-  - `lib/core/l1/src/use_case/command_handler/receive_and_admit_transactions.rs`
-  - `lib/core/l1/src/use_case/command_handler/execute_and_commit_block.rs`
+
 
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
 If the task is to critique or score a use case, use the sibling skill `review-use-case` instead.

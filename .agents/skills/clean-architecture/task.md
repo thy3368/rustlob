@@ -1,8 +1,3 @@
-写个流程建模skill 生成xpdl 参考 /Users/hongyaotang/src/rustlob/docs/hyperliquid-use-case-define/SKILL.md
-
-优化skill /Users/hongyaotang/src/rustlob/.agents/skills/clean-architecture/SKILL.md 及references 
-
-"
 大的分三层
 
 ## core
@@ -19,8 +14,6 @@
 ## infra (外部三方工具）
 
 adapter是core与 infra的胶水
-"
-
 
      测试金字塔（Clean Architecture 版）                                                                                                                                 ▼ MCP                                   
                                                                                                                                                                          • code-review-graph Connected           
@@ -37,5 +30,7 @@ adapter是core与 infra的胶水
 
 
 
-use case的单元测试放哪？ 另外集成测试放哪？
+e2e测试在:inbound adapter
+
+单元测试在:core
 
