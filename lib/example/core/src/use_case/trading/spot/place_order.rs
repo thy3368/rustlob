@@ -161,6 +161,9 @@ impl CommandUseCase2 for PlaceOrderUseCase {
             state.account.version.checked_add(1).ok_or(PlaceOrderError::ArithmeticOverflow)?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
 
+
+        /// EntityReplayableEvent = track entity change
+
         let mut order_event = EntityReplayableEvent::new_created(
             0,
             0,
