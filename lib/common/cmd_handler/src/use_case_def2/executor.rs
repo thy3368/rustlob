@@ -4,11 +4,39 @@ use super::trace::{
     saturating_u64, trace_field_or_placeholder, trace_phase, use_case_command_summary,
 };
 use super::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutionError,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, IssuedByParty, ObserveHandlerLatency,
-    UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseOutbound,
+    CommandUseCaseOutboundPhase, IssuedByParty, ObserveHandlerLatency, UseCaseReplyMapper,
 };
 use crate::HandlerLatencyMetrics;
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum CommandUseCaseExecutionError<BusinessError, OutboundError>
+where
+    BusinessError: std::error::Error + 'static,
+    OutboundError: std::error::Error + 'static,
+{
+    #[error(transparent)]
+    Business(#[from] BusinessError),
+    #[error("outbound {phase} failed: {source}")]
+    Outbound {
+        phase: CommandUseCaseOutboundPhase,
+        #[source]
+        source: OutboundError,
+    },
+}
+
+impl<BusinessError, OutboundError> CommandUseCaseExecutionError<BusinessError, OutboundError>
+where
+    BusinessError: std::error::Error + 'static,
+    OutboundError: std::error::Error + 'static,
+{
+    pub fn outbound(
+        phase: CommandUseCaseOutboundPhase,
+        source: OutboundError,
+    ) -> CommandUseCaseExecutionError<BusinessError, OutboundError> {
+        Self::Outbound { phase, source }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommandUseCaseExecutor2;
@@ -232,8 +260,8 @@ impl CommandUseCaseExecutor2 {
         M: UseCaseReplyMapper,
         OB::Error: 'static,
     {
-
-        ///todo error 怎么转回给inbound？
+        // Executor keeps business/outbound failures typed and lets inbound adapters
+        // translate them into transport-specific errors such as HTTP/CLI error models.
         let events = self.execute(use_case, envelope, outbound, latency_observer)?;
         Ok(mapper.map(events))
     }
