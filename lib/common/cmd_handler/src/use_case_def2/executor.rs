@@ -1,7 +1,9 @@
 use diff::EntityReplayableEvent;
 
 use super::trace::{
-    saturating_u64, trace_field_or_placeholder, trace_phase, use_case_command_summary,
+    trace_command_use_case_completed, trace_command_use_case_failed,
+    trace_command_use_case_started, trace_field_or_placeholder, trace_phase,
+    use_case_command_summary,
 };
 use super::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseOutbound,
@@ -104,12 +106,7 @@ impl CommandUseCaseExecutor2 {
         let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
         let _execution_guard = execution_span.enter();
 
-        tracing::trace!(
-            phase = "total",
-            operation = "executor.execute",
-            status = "start",
-            "command use case execution started"
-        );
+        trace_command_use_case_started!();
 
         let execution = (|| -> Result<
             (Vec<EntityReplayableEvent>, HandlerLatencyMetrics),
@@ -197,44 +194,24 @@ impl CommandUseCaseExecutor2 {
 
         match execution {
             Ok((events, metrics)) => {
-                tracing::trace!(
-                    call_stack = true,
-                    layer = "workflow",
-                    component = "command_use_case_execute",
-                    operation = "execute",
-                    phase = "total",
-                    request_command_summary = %command_summary,
-                    request_role = %role,
-                    request_party_id = party_id.as_deref().unwrap_or("-"),
-                    request_outbound = %outbound_type,
-                    response_result = "ok",
-                    response_domain_event_count = metrics.domain_event_count as u64,
-                    status = "ok",
-                    latency_ns = saturating_u64(metrics.total_ns),
-                    total_ns = saturating_u64(metrics.total_ns),
-                    domain_event_count = metrics.domain_event_count as u64,
-                    "command use case execution completed"
+                trace_command_use_case_completed!(
+                    command_summary,
+                    role,
+                    party_id,
+                    outbound_type,
+                    metrics
                 );
                 latency_observer.observe_latency(&metrics);
                 Ok(events)
             }
             Err(error) => {
-                tracing::trace!(
-                    call_stack = true,
-                    layer = "workflow",
-                    component = "command_use_case_execute",
-                    operation = "execute",
-                    phase = "total",
-                    request_command_summary = %command_summary,
-                    request_role = %role,
-                    request_party_id = party_id.as_deref().unwrap_or("-"),
-                    request_outbound = %outbound_type,
-                    response_result = "err",
-                    status = "err",
-                    latency_ns = saturating_u64(total_start.elapsed().as_nanos()),
-                    total_ns = saturating_u64(total_start.elapsed().as_nanos()),
-                    error_message = %error,
-                    "command use case execution failed"
+                trace_command_use_case_failed!(
+                    command_summary,
+                    role,
+                    party_id,
+                    outbound_type,
+                    total_start.elapsed().as_nanos(),
+                    error
                 );
                 Err(error)
             }

@@ -67,3 +67,70 @@ where
         }
     }
 }
+
+macro_rules! trace_command_use_case_started {
+    () => {
+        tracing::trace!(
+            phase = "total",
+            operation = "executor.execute",
+            status = "start",
+            "command use case execution started"
+        );
+    };
+}
+
+macro_rules! trace_command_use_case_completed {
+    ($command_summary:expr, $role:expr, $party_id:expr, $outbound_type:expr, $metrics:expr) => {
+        tracing::trace!(
+            call_stack = true,
+            layer = "workflow",
+            component = "command_use_case_execute",
+            operation = "execute",
+            phase = "total",
+            request_command_summary = %$command_summary,
+            request_role = %$role,
+            request_party_id = $party_id.as_deref().unwrap_or("-"),
+            request_outbound = %$outbound_type,
+            response_result = "ok",
+            response_domain_event_count = $metrics.domain_event_count as u64,
+            status = "ok",
+            latency_ns = $crate::use_case_def2::trace::saturating_u64($metrics.total_ns),
+            total_ns = $crate::use_case_def2::trace::saturating_u64($metrics.total_ns),
+            domain_event_count = $metrics.domain_event_count as u64,
+            "command use case execution completed"
+        );
+    };
+}
+
+macro_rules! trace_command_use_case_failed {
+    (
+        $command_summary:expr,
+        $role:expr,
+        $party_id:expr,
+        $outbound_type:expr,
+        $total_elapsed_ns:expr,
+        $error:expr
+    ) => {
+        tracing::trace!(
+            call_stack = true,
+            layer = "workflow",
+            component = "command_use_case_execute",
+            operation = "execute",
+            phase = "total",
+            request_command_summary = %$command_summary,
+            request_role = %$role,
+            request_party_id = $party_id.as_deref().unwrap_or("-"),
+            request_outbound = %$outbound_type,
+            response_result = "err",
+            status = "err",
+            latency_ns = $crate::use_case_def2::trace::saturating_u64($total_elapsed_ns),
+            total_ns = $crate::use_case_def2::trace::saturating_u64($total_elapsed_ns),
+            error_message = %$error,
+            "command use case execution failed"
+        );
+    };
+}
+
+pub(super) use {
+    trace_command_use_case_completed, trace_command_use_case_failed, trace_command_use_case_started,
+};
