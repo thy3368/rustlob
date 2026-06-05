@@ -1,3 +1,7 @@
+use common_entity::{Entity, EntityError, EntityFieldChange};
+
+const STORED_ORDER_ENTITY_TYPE: u8 = 2;
+
 /// Order snapshot stored after a spot order is accepted.
 ///
 /// The stored order keeps the business facts needed by later workflows such as
@@ -61,6 +65,111 @@ impl StoredOrder {
     pub fn quote_to_release_on_cancel(&self) -> u64 {
         self.reserved_quote
     }
+}
+
+impl Entity for StoredOrder {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.order_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        STORED_ORDER_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
+
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        let mut changes = vec![
+            EntityFieldChange::new("order_id", "", self.order_id.clone()),
+            EntityFieldChange::new("account_id", "", self.account_id.clone()),
+            EntityFieldChange::new("symbol", "", self.symbol.clone()),
+            EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("price", "", self.price.to_string()),
+            EntityFieldChange::new("reserved_quote", "", self.reserved_quote.to_string()),
+        ];
+
+        if let Some(order_sequence) = self.order_sequence_from_id() {
+            changes.push(EntityFieldChange::new("order_sequence", "", order_sequence.to_string()));
+        }
+
+        changes
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let mut changes = Vec::new();
+
+        if self.account_id != other.account_id {
+            changes.push(EntityFieldChange::new(
+                "account_id",
+                self.account_id.clone(),
+                other.account_id.clone(),
+            ));
+        }
+
+        if self.symbol != other.symbol {
+            changes.push(EntityFieldChange::new(
+                "symbol",
+                self.symbol.clone(),
+                other.symbol.clone(),
+            ));
+        }
+
+        if self.qty != other.qty {
+            changes.push(EntityFieldChange::new(
+                "qty",
+                self.qty.to_string(),
+                other.qty.to_string(),
+            ));
+        }
+
+        if self.price != other.price {
+            changes.push(EntityFieldChange::new(
+                "price",
+                self.price.to_string(),
+                other.price.to_string(),
+            ));
+        }
+
+        if self.reserved_quote != other.reserved_quote {
+            changes.push(EntityFieldChange::new(
+                "reserved_quote",
+                self.reserved_quote.to_string(),
+                other.reserved_quote.to_string(),
+            ));
+        }
+
+        changes
+    }
+
+    fn replay_field_type(field_name: &str) -> u8 {
+        match field_name {
+            "order_id" | "account_id" | "symbol" => 0,
+            "order_sequence" | "qty" | "price" | "reserved_quote" => 1,
+            _ => 0,
+        }
+    }
+
+    fn replay_entity_id(&self) -> Result<i64, EntityError> {
+        Ok(stable_order_entity_id(&self.order_id))
+    }
+}
+
+impl StoredOrder {
+    fn order_sequence_from_id(&self) -> Option<u64> {
+        self.order_id.rsplit('-').next()?.parse::<u64>().ok()
+    }
+}
+
+fn stable_order_entity_id(value: &str) -> i64 {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    (hasher.finish() & i64::MAX as u64) as i64
 }
 
 #[cfg(test)]

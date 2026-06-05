@@ -1,12 +1,19 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::PlaceOrderState;
-use crate::use_case::support::{
-    ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE, int_field, stable_entity_id, string_field,
-    updated_int_field,
-};
+use crate::entity::{StoredOrder};
+use crate::{MarketRules, TradingAccount};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceOrderState {
+    pub trading_enabled: bool,
+    pub next_order_sequence: u64,
+    pub account: TradingAccount,
+    pub market_rules: MarketRules,
+}
+
 
 /// Command for placing a spot order that reserves quote balance from a trader account.
 ///
@@ -161,44 +168,27 @@ impl CommandUseCase2 for PlaceOrderUseCase {
             state.account.version.checked_add(1).ok_or(PlaceOrderError::ArithmeticOverflow)?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
 
-
-        /// EntityReplayableEvent = track entity change
-
-        let mut order_event = EntityReplayableEvent::new_created(
-            0,
-            0,
-            stable_entity_id(&order_id),
-            ORDER_ENTITY_TYPE,
+        let order = StoredOrder::new(
+            order_id,
+            cmd.party_id.clone(),
+            cmd.symbol.clone(),
+            cmd.qty,
+            cmd.price,
+            reserved_quote,
         );
-        order_event.add_field_change(string_field("order_id", &order_id));
-        order_event.add_field_change(string_field("account_id", &cmd.party_id));
-        order_event.add_field_change(string_field("symbol", &cmd.symbol));
-        order_event.add_field_change(int_field("order_sequence", state.next_order_sequence));
-        order_event.add_field_change(int_field("qty", cmd.qty));
-        order_event.add_field_change(int_field("price", cmd.price));
-        order_event.add_field_change(int_field("reserved_quote", reserved_quote));
+        let order_event =
+            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-        let mut account_event = EntityReplayableEvent::new_updated(
-            0,
-            1,
-            state.account.version,
-            next_version,
-            stable_entity_id(&state.account.account_id),
-            ACCOUNT_ENTITY_TYPE,
-        );
-        account_event.add_field_change(string_field("account_id", &state.account.account_id));
-        account_event.add_field_change(updated_int_field(
-            "available_quote",
-            state.account.available_quote,
-            next_available,
-        ));
-        account_event.add_field_change(updated_int_field(
-            "frozen_quote",
-            state.account.frozen_quote,
-            next_frozen,
-        ));
+        let mut next_account = state.account.clone();
+        let tracked_account_event = next_account
+            .track_update_event(|account| {
+                account.available_quote = next_available;
+                account.frozen_quote = next_frozen;
+                account.version = next_version;
+            })
+            .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-        Ok(vec![order_event, account_event])
+        Ok(vec![order_event, tracked_account_event])
     }
 }
 
