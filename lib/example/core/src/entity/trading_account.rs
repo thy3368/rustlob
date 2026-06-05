@@ -20,6 +20,17 @@ impl TradingAccount {
         let next_frozen = self.frozen_quote.checked_add(reserved_quote)?;
         Some((next_available, next_frozen))
     }
+
+    pub fn apply_reserved_quote_after(
+        &mut self,
+        next_available: u64,
+        next_frozen: u64,
+        next_version: u64,
+    ) {
+        self.available_quote = next_available;
+        self.frozen_quote = next_frozen;
+        self.version = next_version;
+    }
 }
 
 impl Entity for TradingAccount {

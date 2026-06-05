@@ -83,20 +83,20 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
             if event.entity_type == ORDER_ENTITY_TYPE && event.is_created() {
                 let order_sequence = event_order_sequence(event)
                     .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-                let stored_order = StoredOrder {
-                    order_id: event_string_field(event, "order_id")
+                let stored_order = StoredOrder::new(
+                    event_string_field(event, "order_id")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    account_id: event_string_field(event, "account_id")
+                    event_string_field(event, "account_id")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    symbol: event_string_field(event, "symbol")
+                    event_string_field(event, "symbol")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    qty: event_u64_field(event, "qty")
+                    event_u64_field(event, "qty")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    price: event_u64_field(event, "price")
+                    event_u64_field(event, "price")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    reserved_quote: event_u64_field(event, "reserved_quote")
+                    event_u64_field(event, "reserved_quote")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                };
+                );
                 state.orders.insert(stored_order.order_id.clone(), stored_order);
                 state.next_order_sequence = order_sequence
                     .checked_add(1)

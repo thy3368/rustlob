@@ -3,7 +3,7 @@ use cmd_handler::use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
-use example_core::{PlaceOrderCmd, PlaceOrderError, PlaceOrderState};
+use example_core::{PlaceOrderCmd, PlaceOrderError};
 use serde::Serialize;
 
 use crate::common::{

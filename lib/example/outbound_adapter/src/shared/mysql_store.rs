@@ -153,7 +153,7 @@ impl MySqlStore {
             .map(|(order_id, account_id, symbol, qty, price, reserved_quote)| {
                 (
                     order_id.clone(),
-                    StoredOrder { order_id, account_id, symbol, qty, price, reserved_quote },
+                    StoredOrder::new(order_id, account_id, symbol, qty, price, reserved_quote),
                 )
             })
             .collect::<HashMap<_, _>>();

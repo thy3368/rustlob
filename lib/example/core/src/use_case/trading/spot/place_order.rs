@@ -3,7 +3,7 @@ use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{StoredOrder};
+use crate::entity::StoredOrder;
 use crate::{MarketRules, TradingAccount};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,7 +13,6 @@ pub struct PlaceOrderState {
     pub account: TradingAccount,
     pub market_rules: MarketRules,
 }
-
 
 /// Command for placing a spot order that reserves quote balance from a trader account.
 ///
@@ -182,9 +181,7 @@ impl CommandUseCase2 for PlaceOrderUseCase {
         let mut next_account = state.account.clone();
         let tracked_account_event = next_account
             .track_update_event(|account| {
-                account.available_quote = next_available;
-                account.frozen_quote = next_frozen;
-                account.version = next_version;
+                account.apply_reserved_quote_after(next_available, next_frozen, next_version);
             })
             .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 

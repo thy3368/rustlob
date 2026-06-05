@@ -1,5 +1,4 @@
 mod market_rules;
-mod place_order_state;
 mod stored_order;
 mod trading_account;
 

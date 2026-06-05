@@ -6,10 +6,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use example_composition_root::InMemoryExampleApplication;
-use example_core::PlaceOrderError;
 use example_inbound_adapter::{
     build_deposit_http_router, build_orders_http_router, build_withdraw_http_router,
 };
+use example_outbound_adapter::StoreError;
 use serde_json::{Value, json};
 
 #[tokio::main]
@@ -95,8 +95,8 @@ struct SnapshotApiError {
     message: String,
 }
 
-impl From<PlaceOrderError> for SnapshotApiError {
-    fn from(error: PlaceOrderError) -> Self {
+impl From<StoreError> for SnapshotApiError {
+    fn from(error: StoreError) -> Self {
         Self { message: error.to_string() }
     }
 }
