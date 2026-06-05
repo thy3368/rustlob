@@ -7,4 +7,5 @@ license.workspace = true
 
 [dependencies]
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 thiserror = "1"
