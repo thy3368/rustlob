@@ -6,12 +6,19 @@ pub(crate) fn sample_state() -> PlaceImmediateOrderState {
     PlaceImmediateOrderState {
         trading_enabled: true,
         next_order_sequence: 7,
-        account: TradingAccount {
+        account_id: "trader-1".to_string(),
+        base_balance: Balance {
             account_id: "trader-1".to_string(),
-            available_base: 1_000,
-            frozen_base: 0,
-            available_quote: 1_000,
-            frozen_quote: 0,
+            asset_id: "BTC".to_string(),
+            available: 1_000,
+            frozen: 0,
+            version: 3,
+        },
+        quote_balance: Balance {
+            account_id: "trader-1".to_string(),
+            asset_id: "USDT".to_string(),
+            available: 1_000,
+            frozen: 0,
             version: 3,
         },
         market_rules: MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
@@ -59,9 +66,9 @@ pub(crate) fn state_with_balances(
     version: u64,
 ) -> PlaceImmediateOrderState {
     let mut state = sample_state();
-    state.account.available_quote = available_quote;
-    state.account.frozen_quote = frozen_quote;
-    state.account.version = version;
+    state.quote_balance.available = available_quote;
+    state.quote_balance.frozen = frozen_quote;
+    state.quote_balance.version = version;
     state
 }
 

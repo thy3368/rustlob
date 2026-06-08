@@ -9,8 +9,16 @@ pub use funding::{
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
 pub use trading::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
-    PlaceConditionalOrderCmd, PlaceConditionalOrderState, PlaceConditionalOrderUseCase,
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderState,
-    PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution, PlaceOrderSide,
-    PlaceOrderTimeInForce, PlaceOrderTriggerRole,
+    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
+    MatchHyperliquidPerpOrderUseCase, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
+    MatchSpotOrderUseCase, PlaceConditionalOrderCmd, PlaceConditionalOrderState,
+    PlaceConditionalOrderUseCase, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
+    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
+    PlaceHyperliquidPerpOrderUseCase, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution,
+    PlaceImmediateOrderState, PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution,
+    PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole, PlaceUsdsMFuturesOrderCmd,
+    PlaceUsdsMFuturesOrderError, PlaceUsdsMFuturesOrderExecution, PlaceUsdsMFuturesOrderState,
+    PlaceUsdsMFuturesOrderUseCase, SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
+    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase, SettleSpotTradeCmd,
+    SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
 };

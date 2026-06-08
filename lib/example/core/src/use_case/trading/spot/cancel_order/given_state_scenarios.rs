@@ -26,12 +26,19 @@ impl CancelSpotOrderGivenStateScenario {
         match self {
             Self::MissingOpenOrder => CancelSpotOrderState {
                 open_order: None,
-                account: TradingAccount {
+                account_id: "trader-1".to_string(),
+                base_balance: Balance {
                     account_id: "trader-1".to_string(),
-                    available_base: 0,
-                    frozen_base: 0,
-                    available_quote: 0,
-                    frozen_quote: 0,
+                    asset_id: "BTC".to_string(),
+                    available: 0,
+                    frozen: 0,
+                    version: 3,
+                },
+                quote_balance: Balance {
+                    account_id: "trader-1".to_string(),
+                    asset_id: "USDT".to_string(),
+                    available: 0,
+                    frozen: 0,
                     version: 3,
                 },
             },

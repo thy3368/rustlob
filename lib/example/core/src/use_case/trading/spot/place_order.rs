@@ -10,11 +10,11 @@ pub use immediate_order::{
 };
 use thiserror::Error;
 
+use crate::MarketRules;
 pub use crate::entity::{
     SpotOrderSide as PlaceOrderSide, SpotOrderTimeInForce as PlaceOrderTimeInForce,
     SpotOrderTriggerRole as PlaceOrderTriggerRole,
 };
-use crate::{MarketRules, TradingAccount};
 
 /// 触发后或立即进入执行流程的现货执行意图。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,14 +85,14 @@ fn validate_market_state(
     symbol: &str,
     qty: u64,
     trading_enabled: bool,
-    account: &TradingAccount,
+    account_id: &str,
     market_rules: &MarketRules,
 ) -> Result<(), PlaceOrderError> {
     if !trading_enabled {
         return Err(PlaceOrderError::TradingDisabled);
     }
 
-    if account.account_id != party_id {
+    if account_id != party_id {
         return Err(PlaceOrderError::AccountMismatch);
     }
 

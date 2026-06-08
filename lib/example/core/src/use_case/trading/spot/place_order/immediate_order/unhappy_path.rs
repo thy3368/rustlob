@@ -64,7 +64,7 @@ fn pre_check_rejects_reduce_only_for_spot_order() {
 fn validate_against_state_rejects_insufficient_balance() {
     let use_case = PlaceImmediateOrderUseCase;
     let mut state = sample_state();
-    state.account.available_quote = 10;
+    state.quote_balance.available = 10;
 
     let result = use_case.validate_against_state(&sample_cmd(), &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientQuoteBalance));
@@ -76,7 +76,7 @@ fn validate_against_state_rejects_insufficient_base_for_sell_order() {
     let mut cmd = sample_cmd();
     cmd.is_buy = false;
     let mut state = sample_state();
-    state.account.available_base = 1;
+    state.base_balance.available = 1;
 
     let result = use_case.validate_against_state(&cmd, &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientBaseBalance));

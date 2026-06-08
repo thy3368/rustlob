@@ -35,10 +35,10 @@ fn required_happy_path_scenarios(
             };
             let mut scenario_state = state.clone();
             if scenario_reserved_quote > reserved_quote {
-                scenario_state.account.available_quote += scenario_reserved_quote - reserved_quote;
+                scenario_state.quote_balance.available += scenario_reserved_quote - reserved_quote;
             }
-            if scenario_reserved_base > scenario_state.account.available_base {
-                scenario_state.account.available_base = scenario_reserved_base;
+            if scenario_reserved_base > scenario_state.base_balance.available {
+                scenario_state.base_balance.available = scenario_reserved_base;
             }
 
             ImmediateHappyPathCase {
@@ -97,8 +97,9 @@ fn compute_replayable_events_produces_order_and_account_events() -> Result<(), P
     assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTCUSDT-7"));
     assert_eq!(field_as_u64(&events[0], "asset"), Some(10_001));
     assert_eq!(field_as_u64(&events[0], "reserved_quote"), Some(200));
-    assert_eq!(field_as_u64(&events[1], "available_quote"), Some(800));
-    assert_eq!(field_as_u64(&events[1], "frozen_quote"), Some(200));
+    assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
+    assert_eq!(field_as_u64(&events[1], "available"), Some(800));
+    assert_eq!(field_as_u64(&events[1], "frozen"), Some(200));
 
     Ok(())
 }
@@ -120,10 +121,10 @@ proptest! {
             let state = case.state;
             let reserved_base = case.reserved_base;
             let reserved_quote = case.reserved_quote;
-            let expected_available_base = state.account.available_base - reserved_base;
-            let expected_frozen_base = state.account.frozen_base + reserved_base;
-            let expected_available_quote = state.account.available_quote - reserved_quote;
-            let expected_frozen_quote = state.account.frozen_quote + reserved_quote;
+            let expected_available_base = state.base_balance.available - reserved_base;
+            let expected_frozen_base = state.base_balance.frozen + reserved_base;
+            let expected_available_quote = state.quote_balance.available - reserved_quote;
+            let expected_frozen_quote = state.quote_balance.frozen + reserved_quote;
             let expected_order_id = format!(
                 "{}-{}-{}",
                 cmd.party_id,
@@ -184,20 +185,28 @@ proptest! {
             );
             if case.scenario.expected_side() == PlaceOrderSide::Buy {
                 prop_assert_eq!(
-                    event_field(&events[1], "available_quote"),
+                    event_field(&events[1], "asset_id"),
+                    Some("USDT")
+                );
+                prop_assert_eq!(
+                    event_field(&events[1], "available"),
                     Some(expected_available_quote.as_str())
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "frozen_quote"),
+                    event_field(&events[1], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
             } else {
                 prop_assert_eq!(
-                    event_field(&events[1], "available_base"),
+                    event_field(&events[1], "asset_id"),
+                    Some("BTC")
+                );
+                prop_assert_eq!(
+                    event_field(&events[1], "available"),
                     Some(expected_available_base.as_str())
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "frozen_base"),
+                    event_field(&events[1], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
             }

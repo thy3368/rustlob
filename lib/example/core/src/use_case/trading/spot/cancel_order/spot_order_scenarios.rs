@@ -35,10 +35,14 @@ impl SpotOrderCancelScenario {
             Self::EntityOrder { order_scenario, available_base, available_quote } => {
                 let order = order_scenario.order();
                 CancelSpotOrderState {
-                    account: account(
-                        "trader-1",
+                    account_id: "trader-1".to_string(),
+                    base_balance: balance(
+                        "BTC",
                         *available_base,
                         order.base_to_release_on_cancel(),
+                    ),
+                    quote_balance: balance(
+                        "USDT",
                         *available_quote,
                         order.quote_to_release_on_cancel(),
                     ),
@@ -50,13 +54,9 @@ impl SpotOrderCancelScenario {
                 order.account_id = "trader-2".to_string();
 
                 CancelSpotOrderState {
-                    account: account(
-                        "trader-1",
-                        0,
-                        order.base_to_release_on_cancel(),
-                        100,
-                        order.quote_to_release_on_cancel(),
-                    ),
+                    account_id: "trader-1".to_string(),
+                    base_balance: balance("BTC", 0, order.base_to_release_on_cancel()),
+                    quote_balance: balance("USDT", 100, order.quote_to_release_on_cancel()),
                     open_order: Some(order),
                 }
             }
@@ -66,7 +66,9 @@ impl SpotOrderCancelScenario {
                 let frozen_quote = lower_than(order.quote_to_release_on_cancel());
 
                 CancelSpotOrderState {
-                    account: account("trader-1", 0, frozen_base, 100, frozen_quote),
+                    account_id: "trader-1".to_string(),
+                    base_balance: balance("BTC", 0, frozen_base),
+                    quote_balance: balance("USDT", 100, frozen_quote),
                     open_order: Some(order),
                 }
             }
@@ -93,13 +95,13 @@ impl SpotOrderCancelScenario {
             {
                 match order_scenario.side() {
                     crate::SpotOrderSide::Buy => Some(ExpectedAccountRelease {
-                        available_field: "available_quote",
-                        frozen_field: "frozen_quote",
+                        available_field: "available",
+                        frozen_field: "frozen",
                         next_available: available_quote + order_scenario.reserved_quote(),
                     }),
                     crate::SpotOrderSide::Sell => Some(ExpectedAccountRelease {
-                        available_field: "available_base",
-                        frozen_field: "frozen_base",
+                        available_field: "available",
+                        frozen_field: "frozen",
                         next_available: available_base + order_scenario.reserved_base(),
                     }),
                 }
@@ -154,19 +156,12 @@ fn lower_than(value: u64) -> u64 {
     value.saturating_sub(1)
 }
 
-fn account(
-    account_id: &str,
-    available_base: u64,
-    frozen_base: u64,
-    available_quote: u64,
-    frozen_quote: u64,
-) -> TradingAccount {
-    TradingAccount {
-        account_id: account_id.to_string(),
-        available_base,
-        frozen_base,
-        available_quote,
-        frozen_quote,
+fn balance(asset_id: &str, available: u64, frozen: u64) -> Balance {
+    Balance {
+        account_id: "trader-1".to_string(),
+        asset_id: asset_id.to_string(),
+        available,
+        frozen,
         version: 3,
     }
 }

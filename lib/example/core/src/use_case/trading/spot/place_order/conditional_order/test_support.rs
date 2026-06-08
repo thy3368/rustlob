@@ -6,14 +6,7 @@ pub(crate) fn sample_state() -> PlaceConditionalOrderState {
     PlaceConditionalOrderState {
         trading_enabled: true,
         next_order_sequence: 7,
-        account: TradingAccount {
-            account_id: "trader-1".to_string(),
-            available_base: 1_000,
-            frozen_base: 0,
-            available_quote: 1_000,
-            frozen_quote: 0,
-            version: 3,
-        },
+        account_id: "trader-1".to_string(),
         market_rules: MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
     }
 }

@@ -6,8 +6,8 @@ use super::{
     PlaceOrderError, PlaceOrderSide, PlaceOrderTimeInForce, check_common_command, checked_price,
     checked_qty, validate_market_state,
 };
-use crate::entity::{SpotOrder, SpotOrderExecution};
-use crate::{MarketRules, TradingAccount};
+use crate::MarketRules;
+use crate::entity::{Balance, SpotOrder, SpotOrderExecution};
 
 /// 立即执行单需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,8 +16,12 @@ pub struct PlaceImmediateOrderState {
     pub trading_enabled: bool,
     /// 用于生成稳定订单 ID 的下一个订单序号。
     pub next_order_sequence: u64,
-    /// 下单账户快照。
-    pub account: TradingAccount,
+    /// 下单账户 ID。
+    pub account_id: String,
+    /// base 资产余额快照。
+    pub base_balance: Balance,
+    /// quote 资产余额快照。
+    pub quote_balance: Balance,
     /// 当前交易对规则快照。
     pub market_rules: MarketRules,
 }
@@ -171,7 +175,7 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
             cmd.symbol.as_str(),
             qty,
             state.trading_enabled,
-            &state.account,
+            state.account_id.as_str(),
             &state.market_rules,
         )?;
 
@@ -182,12 +186,12 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
 
         match cmd.side() {
             PlaceOrderSide::Buy => {
-                if !state.account.can_reserve_quote(reserved_quote) {
+                if !state.quote_balance.can_reserve(reserved_quote) {
                     return Err(PlaceOrderError::InsufficientQuoteBalance);
                 }
             }
             PlaceOrderSide::Sell => {
-                if !state.account.can_reserve_base(qty) {
+                if !state.base_balance.can_reserve(qty) {
                     return Err(PlaceOrderError::InsufficientBaseBalance);
                 }
             }
@@ -207,8 +211,6 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
             .market_rules
             .required_quote(qty, reserve_price)
             .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-        let next_version =
-            state.account.version.checked_add(1).ok_or(PlaceOrderError::ArithmeticOverflow)?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
         let side = cmd.side();
         let (reserved_base, reserved_quote) = match side {
@@ -232,41 +234,44 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
         let order_event =
             order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-        let mut next_account = state.account.clone();
-        let tracked_account_event = match side {
+        let tracked_balance_event = match side {
             PlaceOrderSide::Buy => {
+                let mut next_balance = state.quote_balance.clone();
                 let (next_available, next_frozen) = state
-                    .account
-                    .reserve_quote_after(reserved_quote)
+                    .quote_balance
+                    .reserve_after(reserved_quote)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_account
-                    .track_update_event(|account| {
-                        account.apply_reserved_quote_after(
-                            next_available,
-                            next_frozen,
-                            next_version,
-                        );
+                let next_version = state
+                    .quote_balance
+                    .version
+                    .checked_add(1)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                next_balance
+                    .track_update_event(|balance| {
+                        balance.apply_after(next_available, next_frozen, next_version);
                     })
                     .map_err(|_| PlaceOrderError::ArithmeticOverflow)?
             }
             PlaceOrderSide::Sell => {
+                let mut next_balance = state.base_balance.clone();
                 let (next_available, next_frozen) = state
-                    .account
-                    .reserve_base_after(reserved_base)
+                    .base_balance
+                    .reserve_after(reserved_base)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_account
-                    .track_update_event(|account| {
-                        account.apply_reserved_base_after(
-                            next_available,
-                            next_frozen,
-                            next_version,
-                        );
+                let next_version = state
+                    .base_balance
+                    .version
+                    .checked_add(1)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                next_balance
+                    .track_update_event(|balance| {
+                        balance.apply_after(next_available, next_frozen, next_version);
                     })
                     .map_err(|_| PlaceOrderError::ArithmeticOverflow)?
             }
         };
 
-        Ok(vec![order_event, tracked_account_event])
+        Ok(vec![order_event, tracked_balance_event])
     }
 }
 

@@ -21,8 +21,7 @@ fn pre_check_accepts_market_execution() {
 #[test]
 fn validate_against_state_does_not_require_available_quote() {
     let use_case = PlaceConditionalOrderUseCase;
-    let mut state = sample_state();
-    state.account.available_quote = 0;
+    let state = sample_state();
 
     let result = use_case.validate_against_state(&sample_cmd(), &state);
     assert_eq!(result, Ok(()));

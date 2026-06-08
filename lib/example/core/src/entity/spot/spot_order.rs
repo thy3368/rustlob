@@ -313,6 +313,8 @@ pub struct SpotOrder {
     pub reserved_quote: u64,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
+    /// 当前订单实体版本，用于生成可重放更新事件。
+    pub version: u64,
 }
 
 impl SpotOrder {
@@ -350,6 +352,7 @@ impl SpotOrder {
             reserved_base,
             reserved_quote,
             client_order_id,
+            version: 1,
         }
     }
 
@@ -369,6 +372,12 @@ impl SpotOrder {
     /// 返回带 Hyperliquid 细分状态原因的订单快照。
     pub fn with_status_reason(mut self, status_reason: SpotOrderStatusReason) -> Self {
         self.status_reason = Some(status_reason);
+        self
+    }
+
+    /// 返回带指定实体版本的订单快照。
+    pub fn with_version(mut self, version: u64) -> Self {
+        self.version = version;
         self
     }
 
@@ -591,7 +600,7 @@ impl Entity for SpotOrder {
     }
 
     fn entity_version(&self) -> u64 {
-        1
+        self.version
     }
 
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {

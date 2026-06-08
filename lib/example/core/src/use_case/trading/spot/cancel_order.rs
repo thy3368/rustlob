@@ -3,16 +3,19 @@ use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::TradingAccount;
-use crate::entity::SpotOrder;
+use crate::entity::{Balance, SpotOrder};
 
 /// 撤销现货订单时需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderState {
     /// 按 `asset + order_id` 查到的开放订单；不存在表示该订单不能撤销。
     pub open_order: Option<SpotOrder>,
-    /// 订单所在账户快照，用于释放冻结余额。
-    pub account: TradingAccount,
+    /// 订单所在账户 ID。
+    pub account_id: String,
+    /// base 资产余额快照。
+    pub base_balance: Balance,
+    /// quote 资产余额快照。
+    pub quote_balance: Balance,
 }
 
 /// 撤销现货订单的命令。
@@ -104,7 +107,7 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
     ) -> Result<(), Self::Error> {
         let order = state.open_order.as_ref().ok_or(CancelSpotOrderError::OrderNotFound)?;
 
-        if state.account.account_id != cmd.party_id || !order.belongs_to_account(&cmd.party_id) {
+        if state.account_id != cmd.party_id || !order.belongs_to_account(&cmd.party_id) {
             return Err(CancelSpotOrderError::OrderOwnerMismatch);
         }
 
@@ -112,8 +115,8 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
             return Err(CancelSpotOrderError::OrderNotCancelable);
         }
 
-        if state.account.frozen_base < order.base_to_release_on_cancel()
-            || state.account.frozen_quote < order.quote_to_release_on_cancel()
+        if state.base_balance.frozen < order.base_to_release_on_cancel()
+            || state.quote_balance.frozen < order.quote_to_release_on_cancel()
         {
             return Err(CancelSpotOrderError::FrozenBalanceMismatch);
         }
@@ -129,44 +132,37 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
         let order = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
         let release_base = order.base_to_release_on_cancel();
         let release_quote = order.quote_to_release_on_cancel();
-        let next_version =
-            state.account.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-        let next_available_base = state
-            .account
-            .available_base
-            .checked_add(release_base)
-            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-        let next_frozen_base = state
-            .account
-            .frozen_base
-            .checked_sub(release_base)
-            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-        let next_available_quote = state
-            .account
-            .available_quote
-            .checked_add(release_quote)
-            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-        let next_frozen_quote = state
-            .account
-            .frozen_quote
-            .checked_sub(release_quote)
-            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
 
         let order_deleted =
             order.track_delete_event().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
 
-        let mut next_account = state.account;
-        let account_released = next_account
-            .track_update_event(|account| {
-                account.available_base = next_available_base;
-                account.frozen_base = next_frozen_base;
-                account.available_quote = next_available_quote;
-                account.frozen_quote = next_frozen_quote;
-                account.version = next_version;
-            })
-            .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+        let balance_released = if release_quote > 0 {
+            let mut balance = state.quote_balance;
+            let (next_available, next_frozen) = balance
+                .release_after(release_quote)
+                .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+            let next_version =
+                balance.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+            balance
+                .track_update_event(|balance| {
+                    balance.apply_after(next_available, next_frozen, next_version);
+                })
+                .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
+        } else {
+            let mut balance = state.base_balance;
+            let (next_available, next_frozen) = balance
+                .release_after(release_base)
+                .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+            let next_version =
+                balance.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+            balance
+                .track_update_event(|balance| {
+                    balance.apply_after(next_available, next_frozen, next_version);
+                })
+                .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
+        };
 
-        Ok(vec![order_deleted, account_released])
+        Ok(vec![order_deleted, balance_released])
     }
 }
 
@@ -182,7 +178,9 @@ mod given_state_scenarios;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::{SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce};
+    use crate::entity::{
+        Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce,
+    };
 
     fn buy_order() -> SpotOrder {
         SpotOrder::new(
@@ -201,14 +199,32 @@ mod tests {
         )
     }
 
-    fn account() -> TradingAccount {
-        TradingAccount {
+    fn base_balance() -> Balance {
+        Balance {
             account_id: "trader-1".to_string(),
-            available_base: 5,
-            frozen_base: 0,
-            available_quote: 80,
-            frozen_quote: 20,
+            asset_id: "BTC".to_string(),
+            available: 5,
+            frozen: 0,
             version: 3,
+        }
+    }
+
+    fn quote_balance() -> Balance {
+        Balance {
+            account_id: "trader-1".to_string(),
+            asset_id: "USDT".to_string(),
+            available: 80,
+            frozen: 20,
+            version: 3,
+        }
+    }
+
+    fn state(open_order: Option<SpotOrder>) -> CancelSpotOrderState {
+        CancelSpotOrderState {
+            open_order,
+            account_id: "trader-1".to_string(),
+            base_balance: base_balance(),
+            quote_balance: quote_balance(),
         }
     }
 
@@ -245,7 +261,7 @@ mod tests {
 
     #[test]
     fn validate_rejects_missing_open_order() {
-        let state = CancelSpotOrderState { open_order: None, account: account() };
+        let state = state(None);
 
         assert_eq!(
             CancelSpotOrderUseCase.validate_against_state(&cmd(), &state),
@@ -255,7 +271,7 @@ mod tests {
 
     #[test]
     fn validate_rejects_order_owner_mismatch() {
-        let state = CancelSpotOrderState { open_order: Some(buy_order()), account: account() };
+        let state = state(Some(buy_order()));
         let mut cmd = cmd();
         cmd.party_id = "trader-2".to_string();
 
@@ -267,7 +283,7 @@ mod tests {
 
     #[test]
     fn compute_replayable_events_deletes_order_and_releases_quote() {
-        let state = CancelSpotOrderState { open_order: Some(buy_order()), account: account() };
+        let state = state(Some(buy_order()));
 
         let events = CancelSpotOrderUseCase
             .compute_replayable_events(&cmd(), state)
@@ -277,12 +293,12 @@ mod tests {
         assert!(events[0].is_deleted());
         assert!(events[1].is_updated());
         assert!(events[1].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("available_quote")
+            change.field_name_as_str().ok() == Some("available")
                 && change.old_value_bytes() == b"80"
                 && change.new_value_bytes() == b"100"
         }));
         assert!(events[1].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("frozen_quote")
+            change.field_name_as_str().ok() == Some("frozen")
                 && change.old_value_bytes() == b"20"
                 && change.new_value_bytes() == b"0"
         }));

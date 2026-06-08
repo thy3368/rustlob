@@ -6,8 +6,8 @@ use super::{
     PlaceOrderError, PlaceOrderExecution, PlaceOrderSide, PlaceOrderTriggerRole,
     check_common_command, checked_qty, limit_execution_price, validate_market_state,
 };
+use crate::MarketRules;
 use crate::entity::{SpotConditionalOrder, SpotOrderExecution, SpotOrderTimeInForce};
-use crate::{MarketRules, TradingAccount};
 
 /// 条件单创建需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,8 +16,8 @@ pub struct PlaceConditionalOrderState {
     pub trading_enabled: bool,
     /// 用于生成稳定订单 ID 的下一个订单序号。
     pub next_order_sequence: u64,
-    /// 下单账户快照。创建条件单时不冻结资金，但账户归属仍是业务事实。
-    pub account: TradingAccount,
+    /// 下单账户 ID。创建条件单时不冻结资金，但账户归属仍是业务事实。
+    pub account_id: String,
     /// 当前交易对规则快照。
     pub market_rules: MarketRules,
 }
@@ -120,7 +120,7 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
             cmd.symbol.as_str(),
             qty,
             state.trading_enabled,
-            &state.account,
+            state.account_id.as_str(),
             &state.market_rules,
         )
     }
