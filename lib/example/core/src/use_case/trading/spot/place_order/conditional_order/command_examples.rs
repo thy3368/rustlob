@@ -12,21 +12,37 @@ const EXAMPLE_TRIGGER_LIMIT_PRICE: u64 = 88;
 /// command 设计是否覆盖下单 API 的核心场景。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ConditionalCommandExample {
+    /// 买入止损条件单，触发后按市价意图执行，不带客户端订单号。
     BuyStopLossMarketWithoutCloid,
+    /// 买入止损条件单，触发后按市价意图执行，带客户端订单号。
     BuyStopLossMarketWithCloid,
+    /// 买入止损条件单，触发后按限价执行，不带客户端订单号。
     BuyStopLossLimitWithoutCloid,
+    /// 买入止损条件单，触发后按限价执行，带客户端订单号。
     BuyStopLossLimitWithCloid,
+    /// 买入止盈条件单，触发后按市价意图执行，不带客户端订单号。
     BuyTakeProfitMarketWithoutCloid,
+    /// 买入止盈条件单，触发后按市价意图执行，带客户端订单号。
     BuyTakeProfitMarketWithCloid,
+    /// 买入止盈条件单，触发后按限价执行，不带客户端订单号。
     BuyTakeProfitLimitWithoutCloid,
+    /// 买入止盈条件单，触发后按限价执行，带客户端订单号。
     BuyTakeProfitLimitWithCloid,
+    /// 卖出止损条件单，触发后按市价意图执行，不带客户端订单号。
     SellStopLossMarketWithoutCloid,
+    /// 卖出止损条件单，触发后按市价意图执行，带客户端订单号。
     SellStopLossMarketWithCloid,
+    /// 卖出止损条件单，触发后按限价执行，不带客户端订单号。
     SellStopLossLimitWithoutCloid,
+    /// 卖出止损条件单，触发后按限价执行，带客户端订单号。
     SellStopLossLimitWithCloid,
+    /// 卖出止盈条件单，触发后按市价意图执行，不带客户端订单号。
     SellTakeProfitMarketWithoutCloid,
+    /// 卖出止盈条件单，触发后按市价意图执行，带客户端订单号。
     SellTakeProfitMarketWithCloid,
+    /// 卖出止盈条件单，触发后按限价执行，不带客户端订单号。
     SellTakeProfitLimitWithoutCloid,
+    /// 卖出止盈条件单，触发后按限价执行，带客户端订单号。
     SellTakeProfitLimitWithCloid,
 }
 
