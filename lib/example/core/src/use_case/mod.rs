@@ -7,4 +7,9 @@ pub use funding::{
     WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
-pub use trading::{PlaceOrderCmd, PlaceOrderError, PlaceOrderUseCase};
+pub use trading::{
+    PlaceConditionalOrderSpec, PlaceImmediateOrderSpec, PlaceOrderCmd, PlaceOrderError,
+    PlaceOrderExecution, PlaceOrderKind, PlaceOrderPegOffsetType, PlaceOrderPegPriceType,
+    PlaceOrderRespType, PlaceOrderSelfTradePreventionMode, PlaceOrderSide, PlaceOrderTimeInForce,
+    PlaceOrderTriggerRole, PlaceOrderUseCase,
+};
