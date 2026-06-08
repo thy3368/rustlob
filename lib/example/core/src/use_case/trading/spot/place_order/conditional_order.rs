@@ -3,11 +3,10 @@ use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 
 use super::{
-    PlaceOrderError, PlaceOrderExecution, PlaceOrderPegOffsetType, PlaceOrderPegPriceType,
-    PlaceOrderRespType, PlaceOrderSelfTradePreventionMode, PlaceOrderSide, PlaceOrderTriggerRole,
+    PlaceOrderError, PlaceOrderExecution, PlaceOrderSide, PlaceOrderTriggerRole,
     check_common_command, checked_qty, limit_execution_price, validate_market_state,
 };
-use crate::entity::{StoredConditionalOrderSpec, StoredOrder, StoredOrderKind};
+use crate::entity::{SpotConditionalOrder, SpotOrderExecution, SpotOrderTimeInForce};
 use crate::{MarketRules, TradingAccount};
 
 /// 条件单创建需要的已加载业务状态。
@@ -31,6 +30,8 @@ pub struct PlaceConditionalOrderState {
 pub struct PlaceConditionalOrderCmd {
     /// 发起下单的交易账户 ID。
     pub party_id: String,
+    /// Hyperliquid 资产编号；现货通常使用 `10000 + spot index`。
+    pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
     pub symbol: String,
     /// 订单方向。当前示例用例只处理买单。
@@ -45,22 +46,6 @@ pub struct PlaceConditionalOrderCmd {
     pub execution: PlaceOrderExecution,
     /// 客户端自定义订单 ID，可由 adapter 映射为 Hyperliquid `cloid`。
     pub client_order_id: Option<String>,
-    /// 客户端附带的策略 ID。
-    pub strategy_id: Option<i64>,
-    /// 客户端附带的策略类型。参考 Binance 规则，小于 1_000_000 的值保留不用。
-    pub strategy_type: Option<i32>,
-    /// 冰山订单的可见数量。
-    pub iceberg_qty: Option<u64>,
-    /// 期望的下单响应类型。
-    pub new_order_resp_type: Option<PlaceOrderRespType>,
-    /// 自成交保护模式。
-    pub self_trade_prevention_mode: Option<PlaceOrderSelfTradePreventionMode>,
-    /// 价格钉住类型。
-    pub peg_price_type: Option<PlaceOrderPegPriceType>,
-    /// 价格钉住偏移值。
-    pub peg_offset_value: Option<i32>,
-    /// 价格钉住偏移单位。
-    pub peg_offset_type: Option<PlaceOrderPegOffsetType>,
 }
 
 impl PlaceConditionalOrderCmd {
@@ -71,6 +56,22 @@ impl PlaceConditionalOrderCmd {
     fn validate_execution(&self) -> Result<(), PlaceOrderError> {
         let _ = limit_execution_price(self.execution)?;
         Ok(())
+    }
+
+    fn spot_execution(&self) -> SpotOrderExecution {
+        match self.execution {
+            PlaceOrderExecution::Market { aggressive_price } => {
+                SpotOrderExecution::Market { aggressive_price }
+            }
+            PlaceOrderExecution::Limit { price } => SpotOrderExecution::Limit { price },
+        }
+    }
+
+    fn triggered_time_in_force(&self) -> SpotOrderTimeInForce {
+        match self.execution {
+            PlaceOrderExecution::Market { .. } => SpotOrderTimeInForce::Ioc,
+            PlaceOrderExecution::Limit { .. } => SpotOrderTimeInForce::Gtc,
+        }
     }
 }
 
@@ -97,7 +98,7 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        check_common_command(cmd.side, cmd.quantity, cmd.strategy_type, cmd.peg_offset_value)?;
+        check_common_command(cmd.side, cmd.quantity)?;
 
         if cmd.trigger_price == 0 {
             return Err(PlaceOrderError::InvalidTriggerPrice);
@@ -131,30 +132,20 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
         let qty = cmd.qty()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
-        let kind = StoredOrderKind::Conditional(StoredConditionalOrderSpec {
-            trigger_price: cmd.trigger_price,
-            trigger_role: cmd.trigger_role,
-            execution: cmd.execution,
-        });
 
-        let order = StoredOrder::new(
+        let order = SpotConditionalOrder::new(
             order_id,
+            cmd.asset,
+            None,
             cmd.party_id.clone(),
             cmd.symbol.clone(),
             cmd.side,
-            kind,
+            cmd.trigger_price,
+            cmd.trigger_role,
+            cmd.spot_execution(),
+            cmd.triggered_time_in_force(),
             qty,
-            0,
-            0,
             cmd.client_order_id.clone(),
-            cmd.strategy_id,
-            cmd.strategy_type,
-            cmd.iceberg_qty,
-            cmd.new_order_resp_type,
-            cmd.self_trade_prevention_mode,
-            cmd.peg_price_type,
-            cmd.peg_offset_value,
-            cmd.peg_offset_type,
         );
         let order_event =
             order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;

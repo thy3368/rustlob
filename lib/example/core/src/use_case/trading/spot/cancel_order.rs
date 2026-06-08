@@ -1,0 +1,290 @@
+use cmd_handler::EntityReplayableEvent;
+use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use common_entity::Entity;
+use thiserror::Error;
+
+use crate::TradingAccount;
+use crate::entity::SpotOrder;
+
+/// 撤销现货订单时需要的已加载业务状态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderState {
+    /// 按 `asset + order_id` 查到的开放订单；不存在表示该订单不能撤销。
+    pub open_order: Option<SpotOrder>,
+    /// 订单所在账户快照，用于释放冻结余额。
+    pub account: TradingAccount,
+}
+
+/// 撤销现货订单的命令。
+///
+/// 字段对齐 Hyperliquid exchange endpoint 的 cancel action：
+/// `{"type": "cancel", "cancels": [{"a": asset, "o": oid}]}`。
+/// `party_id` 是 core 层业务发起方，adapter 负责从签名地址或会话身份映射而来。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderCmd {
+    /// 发起撤单的交易账户 ID。
+    pub party_id: String,
+    /// Hyperliquid 资产编号；现货使用 `10000 + spot index`。
+    pub asset: u32,
+    /// Hyperliquid `o`，交易所订单号 OID。
+    pub order_id: u64,
+}
+
+impl IssuedByParty for CancelSpotOrderCmd {
+    fn party_id(&self) -> Option<&str> {
+        Some(self.party_id.as_str())
+    }
+}
+
+/// 撤销现货订单可能产生的业务拒绝原因。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum CancelSpotOrderError {
+    /// 业务发起方不能为空。
+    #[error("party_id must not be empty")]
+    InvalidPartyId,
+    /// 现货 asset 必须使用 Hyperliquid 的 `10000 + spot index` 编号。
+    #[error("asset must be a Hyperliquid spot asset id")]
+    InvalidSpotAsset,
+    /// Hyperliquid OID 必须是正数。
+    #[error("order_id must be greater than zero")]
+    InvalidOrderId,
+    /// 按 asset 和 OID 没有找到开放订单。
+    #[error("open order was not found")]
+    OrderNotFound,
+    /// 命令账户、订单账户和账户快照不一致。
+    #[error("order does not belong to command party")]
+    OrderOwnerMismatch,
+    /// 订单已经全部成交或已经撤销。
+    #[error("order status is not cancelable")]
+    OrderNotCancelable,
+    /// 账户冻结余额不足以释放该订单。
+    #[error("frozen balance is lower than order reservation")]
+    FrozenBalanceMismatch,
+    /// 生成账户释放事件时发生整数溢出。
+    #[error("arithmetic overflow while deriving cancel result")]
+    ArithmeticOverflow,
+}
+
+/// Use case that cancels one open spot order by Hyperliquid asset + OID.
+///
+/// 用例只表达业务规则：校验命令、校验已加载状态、生成订单删除事件和账户释放冻结余额事件。
+/// 加载订单、持久化事件、发布事件和响应映射都属于 adapter / executor。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CancelSpotOrderUseCase;
+
+impl CommandUseCase2 for CancelSpotOrderUseCase {
+    type Command = CancelSpotOrderCmd;
+    type GivenState = CancelSpotOrderState;
+    type Error = CancelSpotOrderError;
+
+    fn role(&self) -> &'static str {
+        "Trader"
+    }
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        if cmd.party_id.is_empty() {
+            return Err(CancelSpotOrderError::InvalidPartyId);
+        }
+
+        if cmd.asset < 10_000 {
+            return Err(CancelSpotOrderError::InvalidSpotAsset);
+        }
+
+        if cmd.order_id == 0 {
+            return Err(CancelSpotOrderError::InvalidOrderId);
+        }
+
+        Ok(())
+    }
+
+    fn validate_against_state(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        let order = state.open_order.as_ref().ok_or(CancelSpotOrderError::OrderNotFound)?;
+
+        if state.account.account_id != cmd.party_id || !order.belongs_to_account(&cmd.party_id) {
+            return Err(CancelSpotOrderError::OrderOwnerMismatch);
+        }
+
+        if !order.can_be_cancelled() {
+            return Err(CancelSpotOrderError::OrderNotCancelable);
+        }
+
+        if state.account.frozen_base < order.base_to_release_on_cancel()
+            || state.account.frozen_quote < order.quote_to_release_on_cancel()
+        {
+            return Err(CancelSpotOrderError::FrozenBalanceMismatch);
+        }
+
+        Ok(())
+    }
+
+    fn compute_replayable_events(
+        &self,
+        _cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+        let order = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
+        let release_base = order.base_to_release_on_cancel();
+        let release_quote = order.quote_to_release_on_cancel();
+        let next_version =
+            state.account.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+        let next_available_base = state
+            .account
+            .available_base
+            .checked_add(release_base)
+            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+        let next_frozen_base = state
+            .account
+            .frozen_base
+            .checked_sub(release_base)
+            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+        let next_available_quote = state
+            .account
+            .available_quote
+            .checked_add(release_quote)
+            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+        let next_frozen_quote = state
+            .account
+            .frozen_quote
+            .checked_sub(release_quote)
+            .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+
+        let order_deleted =
+            order.track_delete_event().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+
+        let mut next_account = state.account;
+        let account_released = next_account
+            .track_update_event(|account| {
+                account.available_base = next_available_base;
+                account.frozen_base = next_frozen_base;
+                account.available_quote = next_available_quote;
+                account.frozen_quote = next_frozen_quote;
+                account.version = next_version;
+            })
+            .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+
+        Ok(vec![order_deleted, account_released])
+    }
+}
+
+#[cfg(test)]
+mod command_scenarios;
+
+#[cfg(test)]
+mod spot_order_scenarios;
+
+#[cfg(test)]
+mod given_state_scenarios;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce};
+
+    fn buy_order() -> SpotOrder {
+        SpotOrder::new(
+            "42".to_string(),
+            10_001,
+            Some(42),
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Buy,
+            SpotOrderExecution::Limit { price: 10 },
+            SpotOrderTimeInForce::Gtc,
+            2,
+            0,
+            20,
+            None,
+        )
+    }
+
+    fn account() -> TradingAccount {
+        TradingAccount {
+            account_id: "trader-1".to_string(),
+            available_base: 5,
+            frozen_base: 0,
+            available_quote: 80,
+            frozen_quote: 20,
+            version: 3,
+        }
+    }
+
+    fn cmd() -> CancelSpotOrderCmd {
+        CancelSpotOrderCmd { party_id: "trader-1".to_string(), asset: 10_001, order_id: 42 }
+    }
+
+    #[test]
+    fn role_is_trader() {
+        assert_eq!(CancelSpotOrderUseCase.role(), "Trader");
+    }
+
+    #[test]
+    fn pre_check_rejects_non_spot_asset() {
+        let mut cmd = cmd();
+        cmd.asset = 1;
+
+        assert_eq!(
+            CancelSpotOrderUseCase.pre_check_command(&cmd),
+            Err(CancelSpotOrderError::InvalidSpotAsset)
+        );
+    }
+
+    #[test]
+    fn pre_check_rejects_zero_order_id() {
+        let mut cmd = cmd();
+        cmd.order_id = 0;
+
+        assert_eq!(
+            CancelSpotOrderUseCase.pre_check_command(&cmd),
+            Err(CancelSpotOrderError::InvalidOrderId)
+        );
+    }
+
+    #[test]
+    fn validate_rejects_missing_open_order() {
+        let state = CancelSpotOrderState { open_order: None, account: account() };
+
+        assert_eq!(
+            CancelSpotOrderUseCase.validate_against_state(&cmd(), &state),
+            Err(CancelSpotOrderError::OrderNotFound)
+        );
+    }
+
+    #[test]
+    fn validate_rejects_order_owner_mismatch() {
+        let state = CancelSpotOrderState { open_order: Some(buy_order()), account: account() };
+        let mut cmd = cmd();
+        cmd.party_id = "trader-2".to_string();
+
+        assert_eq!(
+            CancelSpotOrderUseCase.validate_against_state(&cmd, &state),
+            Err(CancelSpotOrderError::OrderOwnerMismatch)
+        );
+    }
+
+    #[test]
+    fn compute_replayable_events_deletes_order_and_releases_quote() {
+        let state = CancelSpotOrderState { open_order: Some(buy_order()), account: account() };
+
+        let events = CancelSpotOrderUseCase
+            .compute_replayable_events(&cmd(), state)
+            .expect("cancel should emit replayable events");
+
+        assert_eq!(events.len(), 2);
+        assert!(events[0].is_deleted());
+        assert!(events[1].is_updated());
+        assert!(events[1].field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("available_quote")
+                && change.old_value_bytes() == b"80"
+                && change.new_value_bytes() == b"100"
+        }));
+        assert!(events[1].field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("frozen_quote")
+                && change.old_value_bytes() == b"20"
+                && change.new_value_bytes() == b"0"
+        }));
+    }
+}

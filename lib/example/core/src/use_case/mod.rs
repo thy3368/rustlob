@@ -8,9 +8,9 @@ pub use funding::{
 };
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
 pub use trading::{
+    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
     PlaceConditionalOrderCmd, PlaceConditionalOrderState, PlaceConditionalOrderUseCase,
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderState,
-    PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution, PlaceOrderPegOffsetType,
-    PlaceOrderPegPriceType, PlaceOrderRespType, PlaceOrderSelfTradePreventionMode, PlaceOrderSide,
+    PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution, PlaceOrderSide,
     PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };

@@ -21,21 +21,14 @@ pub(crate) fn sample_state() -> PlaceConditionalOrderState {
 pub(crate) fn sample_cmd() -> PlaceConditionalOrderCmd {
     PlaceConditionalOrderCmd {
         party_id: "trader-1".to_string(),
+        asset: 10_001,
         symbol: "BTCUSDT".to_string(),
         side: PlaceOrderSide::Buy,
         quantity: 2,
         trigger_price: 90,
         trigger_role: PlaceOrderTriggerRole::StopLoss,
-        execution: PlaceOrderExecution::Market,
+        execution: PlaceOrderExecution::Market { aggressive_price: 95 },
         client_order_id: None,
-        strategy_id: None,
-        strategy_type: None,
-        iceberg_qty: None,
-        new_order_resp_type: None,
-        self_trade_prevention_mode: None,
-        peg_price_type: None,
-        peg_offset_value: None,
-        peg_offset_type: None,
     }
 }
 

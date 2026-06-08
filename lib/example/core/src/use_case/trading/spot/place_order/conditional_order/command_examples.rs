@@ -140,7 +140,7 @@ impl ConditionalCommandExample {
         let execution = if self.is_limit() {
             PlaceOrderExecution::Limit { price: EXAMPLE_TRIGGER_LIMIT_PRICE }
         } else {
-            PlaceOrderExecution::Market
+            PlaceOrderExecution::Market { aggressive_price: 95 }
         };
 
         PlaceConditionalOrderCmd {
@@ -197,7 +197,8 @@ fn supported_command_examples_are_accepted_by_pre_check() {
 fn print_supported_command_examples() {
     for (example, cmd) in supported_command_examples(sample_cmd()) {
         println!(
-            "{example:?}: symbol={}, side={:?}, trigger_price={}, trigger_role={:?}, execution={:?}, qty={}, cloid={:?}",
+            "{example:?}: asset={}, symbol={}, side={:?}, trigger_price={}, trigger_role={:?}, execution={:?}, qty={}, cloid={:?}",
+            cmd.asset,
             cmd.symbol,
             cmd.side,
             cmd.trigger_price,

@@ -1,12 +1,14 @@
 mod market_rules;
-mod stored_order;
+mod spot_order;
 mod trading_account;
 
 pub use market_rules::MarketRules;
-pub use stored_order::{
-    StoredConditionalOrderSpec, StoredImmediateOrderSpec, StoredOrder, StoredOrderExecution,
-    StoredOrderKind, StoredOrderPegOffsetType, StoredOrderPegPriceType, StoredOrderRespType,
-    StoredOrderSelfTradePreventionMode, StoredOrderSide, StoredOrderTimeInForce,
-    StoredOrderTriggerRole,
+#[cfg(test)]
+pub(crate) use spot_order::spot_order_scenarios::{
+    ActiveSpotOrderScenario, active_spot_order_scenario_strategy,
+};
+pub use spot_order::{
+    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide,
+    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole,
 };
 pub use trading_account::TradingAccount;

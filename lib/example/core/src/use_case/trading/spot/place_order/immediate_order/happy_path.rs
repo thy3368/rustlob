@@ -94,7 +94,8 @@ fn compute_replayable_events_produces_order_and_account_events() -> Result<(), P
     assert_eq!(events.len(), 2);
     assert!(events[0].is_created());
     assert!(events[1].is_updated());
-    assert_eq!(field_as_u64(&events[0], "order_sequence"), Some(7));
+    assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTCUSDT-7"));
+    assert_eq!(field_as_u64(&events[0], "asset"), Some(10_001));
     assert_eq!(field_as_u64(&events[0], "reserved_quote"), Some(200));
     assert_eq!(field_as_u64(&events[1], "available_quote"), Some(800));
     assert_eq!(field_as_u64(&events[1], "frozen_quote"), Some(200));
@@ -131,8 +132,11 @@ proptest! {
             );
             let expected_price = match cmd.execution {
                 PlaceImmediateOrderExecution::Limit { price, .. } => price.to_string(),
-                PlaceImmediateOrderExecution::Market { .. } => String::new(),
+                PlaceImmediateOrderExecution::Market { aggressive_price } => {
+                    aggressive_price.to_string()
+                }
             };
+            let expected_asset = cmd.asset.to_string();
             let expected_size = cmd.size.to_string();
             let expected_reserved_base = reserved_base.to_string();
             let expected_reserved = reserved_quote.to_string();
@@ -156,9 +160,9 @@ proptest! {
                 Some(expected_order_id.as_str())
             );
             prop_assert_eq!(event_field(&events[0], "account_id"), Some(cmd.party_id.as_str()));
+            prop_assert_eq!(event_field(&events[0], "asset"), Some(expected_asset.as_str()));
             prop_assert_eq!(event_field(&events[0], "symbol"), Some(cmd.symbol.as_str()));
             prop_assert_eq!(event_field(&events[0], "side"), Some(expected_side));
-            prop_assert_eq!(event_field(&events[0], "order_kind"), Some("immediate"));
             prop_assert_eq!(
                 event_field(&events[0], "execution"),
                 Some(case.scenario.expected_execution())
@@ -178,7 +182,6 @@ proptest! {
                 event_field(&events[0], "client_order_id"),
                 Some(expected_cloid.as_str())
             );
-            prop_assert_eq!(field_as_u64(&events[0], "order_sequence"), Some(7));
             if case.scenario.expected_side() == PlaceOrderSide::Buy {
                 prop_assert_eq!(
                     event_field(&events[1], "available_quote"),

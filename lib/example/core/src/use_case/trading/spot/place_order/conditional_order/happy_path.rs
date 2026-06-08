@@ -35,10 +35,10 @@ fn compute_replayable_events_only_creates_order() -> Result<(), PlaceOrderError>
 
     assert_eq!(events.len(), 1);
     assert!(events[0].is_created());
-    assert_eq!(field_as_u64(&events[0], "order_sequence"), Some(7));
-    assert_eq!(field_as_u64(&events[0], "reserved_quote"), Some(0));
+    assert_eq!(event_field(&events[0], "trigger_order_id"), Some("trader-1-BTCUSDT-7"));
+    assert_eq!(field_as_u64(&events[0], "asset"), Some(10_001));
     assert_eq!(field_as_u64(&events[0], "trigger_price"), Some(90));
-    assert_eq!(event_field(&events[0], "order_kind"), Some("conditional"));
+    assert_eq!(event_field(&events[0], "trigger_role"), Some("stop_loss"));
     assert_eq!(event_field(&events[0], "execution"), Some("market"));
 
     Ok(())

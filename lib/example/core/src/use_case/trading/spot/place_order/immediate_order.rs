@@ -3,10 +3,10 @@ use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 
 use super::{
-    PlaceOrderError, PlaceOrderExecution, PlaceOrderSide, PlaceOrderTimeInForce,
-    check_common_command, checked_price, checked_qty, validate_market_state,
+    PlaceOrderError, PlaceOrderSide, PlaceOrderTimeInForce, check_common_command, checked_price,
+    checked_qty, validate_market_state,
 };
-use crate::entity::{StoredImmediateOrderSpec, StoredOrder, StoredOrderKind};
+use crate::entity::{SpotOrder, SpotOrderExecution};
 use crate::{MarketRules, TradingAccount};
 
 /// 立即执行单需要的已加载业务状态。
@@ -48,10 +48,10 @@ impl PlaceImmediateOrderExecution {
         }
     }
 
-    const fn stored_execution(self) -> PlaceOrderExecution {
+    const fn spot_execution(self) -> SpotOrderExecution {
         match self {
-            Self::Limit { price, .. } => PlaceOrderExecution::Limit { price },
-            Self::Market { .. } => PlaceOrderExecution::Market,
+            Self::Limit { price, .. } => SpotOrderExecution::Limit { price },
+            Self::Market { aggressive_price } => SpotOrderExecution::Market { aggressive_price },
         }
     }
 
@@ -150,7 +150,7 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        check_common_command(cmd.side(), cmd.size, None, None)?;
+        check_common_command(cmd.side(), cmd.size)?;
         if cmd.reduce_only {
             return Err(PlaceOrderError::UnsupportedReduceOnly);
         }
@@ -215,29 +215,19 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
             PlaceOrderSide::Buy => (0, notional_quote),
             PlaceOrderSide::Sell => (qty, 0),
         };
-        let kind = StoredOrderKind::Immediate(StoredImmediateOrderSpec {
-            execution: cmd.execution.stored_execution(),
-            time_in_force: cmd.execution.stored_time_in_force(),
-        });
-
-        let order = StoredOrder::new(
+        let order = SpotOrder::new(
             order_id,
+            cmd.asset,
+            None,
             cmd.party_id.clone(),
             cmd.symbol.clone(),
             side,
-            kind,
+            cmd.execution.spot_execution(),
+            cmd.execution.stored_time_in_force(),
             qty,
             reserved_base,
             reserved_quote,
             cmd.cloid.clone(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         );
         let order_event =
             order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;

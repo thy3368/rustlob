@@ -11,14 +11,25 @@ pub use immediate_order::{
 use thiserror::Error;
 
 pub use crate::entity::{
-    StoredOrderExecution as PlaceOrderExecution,
-    StoredOrderPegOffsetType as PlaceOrderPegOffsetType,
-    StoredOrderPegPriceType as PlaceOrderPegPriceType, StoredOrderRespType as PlaceOrderRespType,
-    StoredOrderSelfTradePreventionMode as PlaceOrderSelfTradePreventionMode,
-    StoredOrderSide as PlaceOrderSide, StoredOrderTimeInForce as PlaceOrderTimeInForce,
-    StoredOrderTriggerRole as PlaceOrderTriggerRole,
+    SpotOrderSide as PlaceOrderSide, SpotOrderTimeInForce as PlaceOrderTimeInForce,
+    SpotOrderTriggerRole as PlaceOrderTriggerRole,
 };
 use crate::{MarketRules, TradingAccount};
+
+/// 触发后或立即进入执行流程的现货执行意图。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaceOrderExecution {
+    /// 市价意图。Hyperliquid spot 仍需要价格字段，adapter 可映射为 IOC + 激进限价。
+    Market {
+        /// 用于冻结上限和 Hyperliquid `p` 字段的激进价格。
+        aggressive_price: u64,
+    },
+    /// 限价意图。
+    Limit {
+        /// quote 计价价格。
+        price: u64,
+    },
+}
 
 /// Business errors that can reject a spot order placement.
 ///
@@ -41,12 +52,6 @@ pub enum PlaceOrderError {
     /// Returned when `trigger_price == 0`.
     #[error("trigger_price must be greater than zero")]
     InvalidTriggerPrice,
-    /// Returned when a strategy type violates the external spot API range.
-    #[error("strategy_type must be at least 1000000")]
-    InvalidStrategyType,
-    /// Returned when a peg offset exceeds the external spot API range.
-    #[error("peg_offset_value must be between 0 and 100")]
-    InvalidPegOffsetValue,
     /// Returned when the quantity is below current market minimum rules.
     #[error("qty is below market minimum")]
     QtyBelowMin,
@@ -70,26 +75,8 @@ pub enum PlaceOrderError {
     ArithmeticOverflow,
 }
 
-fn check_common_command(
-    _side: PlaceOrderSide,
-    quantity: u64,
-    strategy_type: Option<i32>,
-    peg_offset_value: Option<i32>,
-) -> Result<(), PlaceOrderError> {
+fn check_common_command(_side: PlaceOrderSide, quantity: u64) -> Result<(), PlaceOrderError> {
     checked_qty(quantity)?;
-
-    if let Some(strategy_type) = strategy_type {
-        if strategy_type < 1_000_000 {
-            return Err(PlaceOrderError::InvalidStrategyType);
-        }
-    }
-
-    if let Some(peg_offset_value) = peg_offset_value {
-        if !(0..=100).contains(&peg_offset_value) {
-            return Err(PlaceOrderError::InvalidPegOffsetValue);
-        }
-    }
-
     Ok(())
 }
 
@@ -136,7 +123,9 @@ fn checked_price(price: u64) -> Result<u64, PlaceOrderError> {
 
 fn limit_execution_price(execution: PlaceOrderExecution) -> Result<Option<u64>, PlaceOrderError> {
     match execution {
-        PlaceOrderExecution::Market => Ok(None),
+        PlaceOrderExecution::Market { aggressive_price } => {
+            checked_price(aggressive_price).map(Some)
+        }
         PlaceOrderExecution::Limit { price } => checked_price(price).map(Some),
     }
 }

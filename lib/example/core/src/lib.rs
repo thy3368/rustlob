@@ -2,18 +2,16 @@ pub mod entity;
 pub mod use_case;
 
 pub use entity::{
-    MarketRules, StoredConditionalOrderSpec, StoredImmediateOrderSpec, StoredOrder,
-    StoredOrderExecution, StoredOrderKind, StoredOrderPegOffsetType, StoredOrderPegPriceType,
-    StoredOrderRespType, StoredOrderSelfTradePreventionMode, StoredOrderSide,
-    StoredOrderTimeInForce, StoredOrderTriggerRole, TradingAccount,
+    MarketRules, SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution,
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
+    SpotOrderTriggerRole, TradingAccount,
 };
 pub use use_case::{
-    ACCOUNT_ENTITY_TYPE, DepositQuoteCmd, DepositQuoteError, DepositQuoteState,
+    ACCOUNT_ENTITY_TYPE, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
+    CancelSpotOrderUseCase, DepositQuoteCmd, DepositQuoteError, DepositQuoteState,
     DepositQuoteUseCase, ORDER_ENTITY_TYPE, PlaceConditionalOrderCmd, PlaceConditionalOrderState,
     PlaceConditionalOrderUseCase, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution,
     PlaceImmediateOrderState, PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution,
-    PlaceOrderPegOffsetType, PlaceOrderPegPriceType, PlaceOrderRespType,
-    PlaceOrderSelfTradePreventionMode, PlaceOrderSide, PlaceOrderTimeInForce,
-    PlaceOrderTriggerRole, WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState,
-    WithdrawQuoteUseCase,
+    PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole, WithdrawQuoteCmd,
+    WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
