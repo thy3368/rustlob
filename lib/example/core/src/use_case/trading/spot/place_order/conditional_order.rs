@@ -167,6 +167,9 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
 mod test_support;
 
 #[cfg(test)]
+mod command_examples;
+
+#[cfg(test)]
 mod happy_path;
 
 #[cfg(test)]

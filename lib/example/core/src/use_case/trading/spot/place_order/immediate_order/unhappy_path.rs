@@ -70,6 +70,18 @@ fn validate_against_state_rejects_insufficient_balance() {
     assert_eq!(result, Err(PlaceOrderError::InsufficientQuoteBalance));
 }
 
+#[test]
+fn validate_against_state_rejects_insufficient_base_for_sell_order() {
+    let use_case = PlaceImmediateOrderUseCase;
+    let mut cmd = sample_cmd();
+    cmd.is_buy = false;
+    let mut state = sample_state();
+    state.account.available_base = 1;
+
+    let result = use_case.validate_against_state(&cmd, &state);
+    assert_eq!(result, Err(PlaceOrderError::InsufficientBaseBalance));
+}
+
 proptest! {
     #[test]
     fn property_compute_replayable_events_rejects_zero_price_or_size(

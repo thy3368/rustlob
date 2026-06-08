@@ -14,116 +14,209 @@ const EXAMPLE_MARKET_AGGRESSIVE_PRICE: u64 = 101;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ImmediateCommandExample {
     /// 限价 GTC，不带客户端订单号。
-    LimitGtcWithoutCloid,
+    BuyLimitGtcWithoutCloid,
     /// 限价 GTC，带客户端订单号。
-    LimitGtcWithCloid,
+    BuyLimitGtcWithCloid,
     /// 限价 IOC，不带客户端订单号。
-    LimitIocWithoutCloid,
+    BuyLimitIocWithoutCloid,
     /// 限价 IOC，带客户端订单号。
-    LimitIocWithCloid,
+    BuyLimitIocWithCloid,
     /// 限价 ALO，不带客户端订单号。
-    LimitAloWithoutCloid,
+    BuyLimitAloWithoutCloid,
     /// 限价 ALO，带客户端订单号。
-    LimitAloWithCloid,
+    BuyLimitAloWithCloid,
     /// 市价意图，不带客户端订单号。
     ///
     /// Hyperliquid 普通市价单可由 IOC + aggressive limitPx 表达；
     /// 这里用 `aggressive_price` 记录买方愿意接受的最高成交价。
-    MarketWithoutCloid,
+    BuyMarketWithoutCloid,
     /// 市价意图，带客户端订单号。
     ///
     /// 与 `MarketWithoutCloid` 相同，只是额外携带客户端订单号。
-    MarketWithCloid,
+    BuyMarketWithCloid,
+    /// 卖出限价 GTC，不带客户端订单号。
+    SellLimitGtcWithoutCloid,
+    /// 卖出限价 GTC，带客户端订单号。
+    SellLimitGtcWithCloid,
+    /// 卖出限价 IOC，不带客户端订单号。
+    SellLimitIocWithoutCloid,
+    /// 卖出限价 IOC，带客户端订单号。
+    SellLimitIocWithCloid,
+    /// 卖出限价 ALO，不带客户端订单号。
+    SellLimitAloWithoutCloid,
+    /// 卖出限价 ALO，带客户端订单号。
+    SellLimitAloWithCloid,
+    /// 卖出市价意图，不带客户端订单号。
+    ///
+    /// 对卖单而言，`aggressive_price` 表示卖方愿意接受的最低成交价。
+    SellMarketWithoutCloid,
+    /// 卖出市价意图，带客户端订单号。
+    SellMarketWithCloid,
 }
 
 impl ImmediateCommandExample {
-    pub(super) const ALL: [Self; 8] = [
-        Self::LimitGtcWithoutCloid,
-        Self::LimitGtcWithCloid,
-        Self::LimitIocWithoutCloid,
-        Self::LimitIocWithCloid,
-        Self::LimitAloWithoutCloid,
-        Self::LimitAloWithCloid,
-        Self::MarketWithoutCloid,
-        Self::MarketWithCloid,
+    pub(super) const ALL: [Self; 16] = [
+        Self::BuyLimitGtcWithoutCloid,
+        Self::BuyLimitGtcWithCloid,
+        Self::BuyLimitIocWithoutCloid,
+        Self::BuyLimitIocWithCloid,
+        Self::BuyLimitAloWithoutCloid,
+        Self::BuyLimitAloWithCloid,
+        Self::BuyMarketWithoutCloid,
+        Self::BuyMarketWithCloid,
+        Self::SellLimitGtcWithoutCloid,
+        Self::SellLimitGtcWithCloid,
+        Self::SellLimitIocWithoutCloid,
+        Self::SellLimitIocWithCloid,
+        Self::SellLimitAloWithoutCloid,
+        Self::SellLimitAloWithCloid,
+        Self::SellMarketWithoutCloid,
+        Self::SellMarketWithCloid,
     ];
 
     pub(super) const fn expected_time_in_force(self) -> PlaceOrderTimeInForce {
         match self {
-            Self::LimitGtcWithoutCloid | Self::LimitGtcWithCloid => PlaceOrderTimeInForce::Gtc,
-            Self::LimitIocWithoutCloid | Self::LimitIocWithCloid => PlaceOrderTimeInForce::Ioc,
-            Self::LimitAloWithoutCloid | Self::LimitAloWithCloid => PlaceOrderTimeInForce::Alo,
-            Self::MarketWithoutCloid | Self::MarketWithCloid => PlaceOrderTimeInForce::Ioc,
+            Self::BuyLimitGtcWithoutCloid
+            | Self::BuyLimitGtcWithCloid
+            | Self::SellLimitGtcWithoutCloid
+            | Self::SellLimitGtcWithCloid => PlaceOrderTimeInForce::Gtc,
+            Self::BuyLimitIocWithoutCloid
+            | Self::BuyLimitIocWithCloid
+            | Self::BuyMarketWithoutCloid
+            | Self::BuyMarketWithCloid
+            | Self::SellLimitIocWithoutCloid
+            | Self::SellLimitIocWithCloid
+            | Self::SellMarketWithoutCloid
+            | Self::SellMarketWithCloid => PlaceOrderTimeInForce::Ioc,
+            Self::BuyLimitAloWithoutCloid
+            | Self::BuyLimitAloWithCloid
+            | Self::SellLimitAloWithoutCloid
+            | Self::SellLimitAloWithCloid => PlaceOrderTimeInForce::Alo,
         }
     }
 
     pub(super) const fn has_cloid(self) -> bool {
         matches!(
             self,
-            Self::LimitGtcWithCloid
-                | Self::LimitIocWithCloid
-                | Self::LimitAloWithCloid
-                | Self::MarketWithCloid
+            Self::BuyLimitGtcWithCloid
+                | Self::BuyLimitIocWithCloid
+                | Self::BuyLimitAloWithCloid
+                | Self::BuyMarketWithCloid
+                | Self::SellLimitGtcWithCloid
+                | Self::SellLimitIocWithCloid
+                | Self::SellLimitAloWithCloid
+                | Self::SellMarketWithCloid
         )
     }
 
     pub(super) const fn is_limit(self) -> bool {
         matches!(
             self,
-            Self::LimitGtcWithoutCloid
-                | Self::LimitGtcWithCloid
-                | Self::LimitIocWithoutCloid
-                | Self::LimitIocWithCloid
-                | Self::LimitAloWithoutCloid
-                | Self::LimitAloWithCloid
+            Self::BuyLimitGtcWithoutCloid
+                | Self::BuyLimitGtcWithCloid
+                | Self::BuyLimitIocWithoutCloid
+                | Self::BuyLimitIocWithCloid
+                | Self::BuyLimitAloWithoutCloid
+                | Self::BuyLimitAloWithCloid
+                | Self::SellLimitGtcWithoutCloid
+                | Self::SellLimitGtcWithCloid
+                | Self::SellLimitIocWithoutCloid
+                | Self::SellLimitIocWithCloid
+                | Self::SellLimitAloWithoutCloid
+                | Self::SellLimitAloWithCloid
         )
     }
 
     pub(super) const fn is_market(self) -> bool {
-        matches!(self, Self::MarketWithoutCloid | Self::MarketWithCloid)
+        matches!(
+            self,
+            Self::BuyMarketWithoutCloid
+                | Self::BuyMarketWithCloid
+                | Self::SellMarketWithoutCloid
+                | Self::SellMarketWithCloid
+        )
+    }
+
+    pub(super) const fn expected_side(self) -> PlaceOrderSide {
+        match self {
+            Self::BuyLimitGtcWithoutCloid
+            | Self::BuyLimitGtcWithCloid
+            | Self::BuyLimitIocWithoutCloid
+            | Self::BuyLimitIocWithCloid
+            | Self::BuyLimitAloWithoutCloid
+            | Self::BuyLimitAloWithCloid
+            | Self::BuyMarketWithoutCloid
+            | Self::BuyMarketWithCloid => PlaceOrderSide::Buy,
+            Self::SellLimitGtcWithoutCloid
+            | Self::SellLimitGtcWithCloid
+            | Self::SellLimitIocWithoutCloid
+            | Self::SellLimitIocWithCloid
+            | Self::SellLimitAloWithoutCloid
+            | Self::SellLimitAloWithCloid
+            | Self::SellMarketWithoutCloid
+            | Self::SellMarketWithCloid => PlaceOrderSide::Sell,
+        }
     }
 
     pub(super) const fn expected_execution(self) -> &'static str {
         match self {
-            Self::LimitGtcWithoutCloid
-            | Self::LimitGtcWithCloid
-            | Self::LimitIocWithoutCloid
-            | Self::LimitIocWithCloid
-            | Self::LimitAloWithoutCloid
-            | Self::LimitAloWithCloid => "limit",
-            Self::MarketWithoutCloid | Self::MarketWithCloid => "market",
+            Self::BuyLimitGtcWithoutCloid
+            | Self::BuyLimitGtcWithCloid
+            | Self::BuyLimitIocWithoutCloid
+            | Self::BuyLimitIocWithCloid
+            | Self::BuyLimitAloWithoutCloid
+            | Self::BuyLimitAloWithCloid
+            | Self::SellLimitGtcWithoutCloid
+            | Self::SellLimitGtcWithCloid
+            | Self::SellLimitIocWithoutCloid
+            | Self::SellLimitIocWithCloid
+            | Self::SellLimitAloWithoutCloid
+            | Self::SellLimitAloWithCloid => "limit",
+            Self::BuyMarketWithoutCloid
+            | Self::BuyMarketWithCloid
+            | Self::SellMarketWithoutCloid
+            | Self::SellMarketWithCloid => "market",
         }
     }
 
     pub(super) fn command_from(self, base_cmd: PlaceImmediateOrderCmd) -> PlaceImmediateOrderCmd {
         let cloid = self.has_cloid().then(|| "0123456789abcdef0123456789abcdef".to_string());
         let execution = match self {
-            Self::LimitGtcWithoutCloid | Self::LimitGtcWithCloid => {
-                PlaceImmediateOrderExecution::Limit {
-                    price: base_cmd.execution.reserve_price().unwrap_or_default(),
-                    time_in_force: PlaceOrderTimeInForce::Gtc,
-                }
-            }
-            Self::LimitIocWithoutCloid | Self::LimitIocWithCloid => {
-                PlaceImmediateOrderExecution::Limit {
-                    price: base_cmd.execution.reserve_price().unwrap_or_default(),
-                    time_in_force: PlaceOrderTimeInForce::Ioc,
-                }
-            }
-            Self::LimitAloWithoutCloid | Self::LimitAloWithCloid => {
-                PlaceImmediateOrderExecution::Limit {
-                    price: base_cmd.execution.reserve_price().unwrap_or_default(),
-                    time_in_force: PlaceOrderTimeInForce::Alo,
-                }
-            }
-            Self::MarketWithoutCloid | Self::MarketWithCloid => {
-                PlaceImmediateOrderExecution::Market {
-                    aggressive_price: EXAMPLE_MARKET_AGGRESSIVE_PRICE,
-                }
-            }
+            Self::BuyLimitGtcWithoutCloid
+            | Self::BuyLimitGtcWithCloid
+            | Self::SellLimitGtcWithoutCloid
+            | Self::SellLimitGtcWithCloid => PlaceImmediateOrderExecution::Limit {
+                price: base_cmd.execution.reserve_price().unwrap_or_default(),
+                time_in_force: PlaceOrderTimeInForce::Gtc,
+            },
+            Self::BuyLimitIocWithoutCloid
+            | Self::BuyLimitIocWithCloid
+            | Self::SellLimitIocWithoutCloid
+            | Self::SellLimitIocWithCloid => PlaceImmediateOrderExecution::Limit {
+                price: base_cmd.execution.reserve_price().unwrap_or_default(),
+                time_in_force: PlaceOrderTimeInForce::Ioc,
+            },
+            Self::BuyLimitAloWithoutCloid
+            | Self::BuyLimitAloWithCloid
+            | Self::SellLimitAloWithoutCloid
+            | Self::SellLimitAloWithCloid => PlaceImmediateOrderExecution::Limit {
+                price: base_cmd.execution.reserve_price().unwrap_or_default(),
+                time_in_force: PlaceOrderTimeInForce::Alo,
+            },
+            Self::BuyMarketWithoutCloid
+            | Self::BuyMarketWithCloid
+            | Self::SellMarketWithoutCloid
+            | Self::SellMarketWithCloid => PlaceImmediateOrderExecution::Market {
+                aggressive_price: EXAMPLE_MARKET_AGGRESSIVE_PRICE,
+            },
         };
 
-        PlaceImmediateOrderCmd { execution, cloid, ..base_cmd }
+        PlaceImmediateOrderCmd {
+            is_buy: self.expected_side() == PlaceOrderSide::Buy,
+            execution,
+            cloid,
+            ..base_cmd
+        }
     }
 }
 
@@ -132,11 +225,11 @@ pub(super) fn supported_command_examples(
 ) -> Vec<(ImmediateCommandExample, PlaceImmediateOrderCmd)> {
     // 覆盖充分性判断：
     // 参考 Hyperliquid exchange endpoint：
-    // 1. 普通限价单使用 `t.limit.tif`，支持 Gtc / Ioc / Alo，
-    //    所以限价成功场景是 3 个 TIF × cloid 有无 = 6 种 command 组合；
+    // 1. 普通限价单使用 `t.limit.tif`，支持 Buy/Sell × Gtc/Ioc/Alo × cloid 有无，
+    //    所以限价成功场景是 2 × 3 × 2 = 12 种 command 组合；
     // 2. 普通市价单是立即执行语义，API adapter 映射为 IOC + aggressive limitPx，
-    //    不支持 Gtc / Alo；所以市价成功场景只覆盖 IOC 语义 × cloid 有无 = 2 种组合。
-    // 总成功矩阵是 8 种。这里的场景数就是对 command 业务支持面的检查。
+    //    不支持 Gtc/Alo；所以市价成功场景覆盖 Buy/Sell × IOC 语义 × cloid 有无 = 4 种。
+    // 总成功矩阵是 16 种。这里的场景数就是对 command 业务支持面的检查。
     ImmediateCommandExample::ALL
         .into_iter()
         .map(|example| (example, example.command_from(base_cmd.clone())))
@@ -147,7 +240,7 @@ pub(super) fn supported_command_examples(
 fn supported_command_examples_cover_current_business_matrix() {
     let examples = supported_command_examples(sample_cmd());
 
-    assert_eq!(examples.len(), 8);
+    assert_eq!(examples.len(), 16);
     for scenario in ImmediateCommandExample::ALL {
         assert!(examples.iter().any(|(example, _)| *example == scenario));
     }
@@ -159,8 +252,8 @@ fn hyperliquid_time_in_force_support_matrix_is_explicit() {
     let limit_count = examples.iter().filter(|(example, _)| example.is_limit()).count();
     let market_count = examples.iter().filter(|(example, _)| example.is_market()).count();
 
-    assert_eq!(limit_count, 6);
-    assert_eq!(market_count, 2);
+    assert_eq!(limit_count, 12);
+    assert_eq!(market_count, 4);
 
     for (example, cmd) in examples {
         match cmd.execution {
@@ -238,6 +331,7 @@ fn supported_command_examples_are_accepted_by_pre_check() {
             Ok(()),
             "immediate command example should be accepted: {example:?}",
         );
+        assert_eq!(cmd.side(), example.expected_side());
         assert_eq!(cmd.execution.stored_time_in_force(), example.expected_time_in_force());
         assert_eq!(cmd.cloid.is_some(), example.has_cloid());
     }

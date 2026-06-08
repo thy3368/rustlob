@@ -71,7 +71,7 @@ pub enum PlaceOrderError {
 }
 
 fn check_common_command(
-    side: PlaceOrderSide,
+    _side: PlaceOrderSide,
     quantity: u64,
     strategy_type: Option<i32>,
     peg_offset_value: Option<i32>,

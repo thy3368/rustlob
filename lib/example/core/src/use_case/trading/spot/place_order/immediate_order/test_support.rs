@@ -65,18 +65,6 @@ pub(crate) fn state_with_balances(
     state
 }
 
-pub(crate) fn state_with_base_balances(
-    available_base: u64,
-    frozen_base: u64,
-    version: u64,
-) -> PlaceImmediateOrderState {
-    let mut state = sample_state();
-    state.account.available_base = available_base;
-    state.account.frozen_base = frozen_base;
-    state.account.version = version;
-    state
-}
-
 pub(crate) fn event_field<'a>(
     event: &'a EntityReplayableEvent,
     field_name: &str,

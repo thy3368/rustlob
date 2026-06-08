@@ -11,6 +11,7 @@ struct ImmediateHappyPathCase {
     scenario: ImmediateCommandExample,
     cmd: PlaceImmediateOrderCmd,
     state: PlaceImmediateOrderState,
+    reserved_base: u64,
     reserved_quote: u64,
 }
 
@@ -25,17 +26,26 @@ fn required_happy_path_scenarios(
     supported_command_examples(base_cmd)
         .into_iter()
         .map(|(scenario, cmd)| {
-            let scenario_reserved_quote =
-                cmd.execution.reserve_price().unwrap_or_default() * cmd.size;
+            let scenario_reserved_base =
+                if scenario.expected_side() == PlaceOrderSide::Sell { cmd.size } else { 0 };
+            let scenario_reserved_quote = if scenario.expected_side() == PlaceOrderSide::Buy {
+                cmd.execution.reserve_price().unwrap_or_default() * cmd.size
+            } else {
+                0
+            };
             let mut scenario_state = state.clone();
             if scenario_reserved_quote > reserved_quote {
                 scenario_state.account.available_quote += scenario_reserved_quote - reserved_quote;
+            }
+            if scenario_reserved_base > scenario_state.account.available_base {
+                scenario_state.account.available_base = scenario_reserved_base;
             }
 
             ImmediateHappyPathCase {
                 scenario,
                 cmd,
                 state: scenario_state,
+                reserved_base: scenario_reserved_base,
                 reserved_quote: scenario_reserved_quote,
             }
         })
@@ -99,7 +109,7 @@ proptest! {
     ) {
         let use_case = PlaceImmediateOrderUseCase;
 
-        prop_assert_eq!(cases.len(), 8);
+        prop_assert_eq!(cases.len(), 16);
         for scenario in ImmediateCommandExample::ALL {
             prop_assert!(cases.iter().any(|case| case.scenario == scenario));
         }
@@ -107,9 +117,12 @@ proptest! {
         for case in cases {
             let cmd = case.cmd;
             let state = case.state;
+            let reserved_base = case.reserved_base;
             let reserved_quote = case.reserved_quote;
-            let expected_available = state.account.available_quote - reserved_quote;
-            let expected_frozen = state.account.frozen_quote + reserved_quote;
+            let expected_available_base = state.account.available_base - reserved_base;
+            let expected_frozen_base = state.account.frozen_base + reserved_base;
+            let expected_available_quote = state.account.available_quote - reserved_quote;
+            let expected_frozen_quote = state.account.frozen_quote + reserved_quote;
             let expected_order_id = format!(
                 "{}-{}-{}",
                 cmd.party_id,
@@ -121,11 +134,15 @@ proptest! {
                 PlaceImmediateOrderExecution::Market { .. } => String::new(),
             };
             let expected_size = cmd.size.to_string();
+            let expected_reserved_base = reserved_base.to_string();
             let expected_reserved = reserved_quote.to_string();
-            let expected_available = expected_available.to_string();
-            let expected_frozen = expected_frozen.to_string();
+            let expected_available_base = expected_available_base.to_string();
+            let expected_frozen_base = expected_frozen_base.to_string();
+            let expected_available_quote = expected_available_quote.to_string();
+            let expected_frozen_quote = expected_frozen_quote.to_string();
             let expected_tif = cmd.execution.stored_time_in_force().as_str();
             let expected_cloid = cmd.cloid.clone().unwrap_or_default();
+            let expected_side = case.scenario.expected_side().as_str();
 
             prop_assert_eq!(use_case.pre_check_command(&cmd), Ok(()));
 
@@ -140,7 +157,7 @@ proptest! {
             );
             prop_assert_eq!(event_field(&events[0], "account_id"), Some(cmd.party_id.as_str()));
             prop_assert_eq!(event_field(&events[0], "symbol"), Some(cmd.symbol.as_str()));
-            prop_assert_eq!(event_field(&events[0], "side"), Some("buy"));
+            prop_assert_eq!(event_field(&events[0], "side"), Some(expected_side));
             prop_assert_eq!(event_field(&events[0], "order_kind"), Some("immediate"));
             prop_assert_eq!(
                 event_field(&events[0], "execution"),
@@ -150,6 +167,10 @@ proptest! {
             prop_assert_eq!(event_field(&events[0], "price"), Some(expected_price.as_str()));
             prop_assert_eq!(event_field(&events[0], "qty"), Some(expected_size.as_str()));
             prop_assert_eq!(
+                event_field(&events[0], "reserved_base"),
+                Some(expected_reserved_base.as_str())
+            );
+            prop_assert_eq!(
                 event_field(&events[0], "reserved_quote"),
                 Some(expected_reserved.as_str())
             );
@@ -158,14 +179,25 @@ proptest! {
                 Some(expected_cloid.as_str())
             );
             prop_assert_eq!(field_as_u64(&events[0], "order_sequence"), Some(7));
-            prop_assert_eq!(
-                event_field(&events[1], "available_quote"),
-                Some(expected_available.as_str())
-            );
-            prop_assert_eq!(
-                event_field(&events[1], "frozen_quote"),
-                Some(expected_frozen.as_str())
-            );
+            if case.scenario.expected_side() == PlaceOrderSide::Buy {
+                prop_assert_eq!(
+                    event_field(&events[1], "available_quote"),
+                    Some(expected_available_quote.as_str())
+                );
+                prop_assert_eq!(
+                    event_field(&events[1], "frozen_quote"),
+                    Some(expected_frozen_quote.as_str())
+                );
+            } else {
+                prop_assert_eq!(
+                    event_field(&events[1], "available_base"),
+                    Some(expected_available_base.as_str())
+                );
+                prop_assert_eq!(
+                    event_field(&events[1], "frozen_base"),
+                    Some(expected_frozen_base.as_str())
+                );
+            }
         }
     }
 }
