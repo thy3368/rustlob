@@ -1,0 +1,173 @@
+use cmd_handler::EntityReplayableEvent;
+use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use common_entity::Entity;
+
+use super::{
+    PlaceOrderError, PlaceOrderExecution, PlaceOrderPegOffsetType, PlaceOrderPegPriceType,
+    PlaceOrderRespType, PlaceOrderSelfTradePreventionMode, PlaceOrderSide, PlaceOrderTriggerRole,
+    check_common_command, checked_qty, limit_execution_price, validate_market_state,
+};
+use crate::entity::{StoredConditionalOrderSpec, StoredOrder, StoredOrderKind};
+use crate::{MarketRules, TradingAccount};
+
+/// 条件单创建需要的已加载业务状态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceConditionalOrderState {
+    /// 当前市场是否接受条件单创建。
+    pub trading_enabled: bool,
+    /// 用于生成稳定订单 ID 的下一个订单序号。
+    pub next_order_sequence: u64,
+    /// 下单账户快照。创建条件单时不冻结资金，但账户归属仍是业务事实。
+    pub account: TradingAccount,
+    /// 当前交易对规则快照。
+    pub market_rules: MarketRules,
+}
+
+/// 创建条件现货订单的命令。
+///
+/// 条件单表达“先登记触发规则，触发后再进入执行流程”的业务动作。创建时不冻结资金；
+/// 触发时再根据触发后的市价/限价执行方式做余额校验和冻结。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceConditionalOrderCmd {
+    /// 发起下单的交易账户 ID。
+    pub party_id: String,
+    /// 交易对，例如 `BTCUSDT`。
+    pub symbol: String,
+    /// 订单方向。当前示例用例只处理买单。
+    pub side: PlaceOrderSide,
+    /// 以 base asset 计价的下单数量，例如买入多少 BTC。
+    pub quantity: u64,
+    /// 满足该价格后进入触发执行流程。
+    pub trigger_price: u64,
+    /// 条件单角色，止盈或止损。
+    pub trigger_role: PlaceOrderTriggerRole,
+    /// 触发后的执行方式，市价意图或限价意图。
+    pub execution: PlaceOrderExecution,
+    /// 客户端自定义订单 ID，可由 adapter 映射为 Hyperliquid `cloid`。
+    pub client_order_id: Option<String>,
+    /// 客户端附带的策略 ID。
+    pub strategy_id: Option<i64>,
+    /// 客户端附带的策略类型。参考 Binance 规则，小于 1_000_000 的值保留不用。
+    pub strategy_type: Option<i32>,
+    /// 冰山订单的可见数量。
+    pub iceberg_qty: Option<u64>,
+    /// 期望的下单响应类型。
+    pub new_order_resp_type: Option<PlaceOrderRespType>,
+    /// 自成交保护模式。
+    pub self_trade_prevention_mode: Option<PlaceOrderSelfTradePreventionMode>,
+    /// 价格钉住类型。
+    pub peg_price_type: Option<PlaceOrderPegPriceType>,
+    /// 价格钉住偏移值。
+    pub peg_offset_value: Option<i32>,
+    /// 价格钉住偏移单位。
+    pub peg_offset_type: Option<PlaceOrderPegOffsetType>,
+}
+
+impl PlaceConditionalOrderCmd {
+    fn qty(&self) -> Result<u64, PlaceOrderError> {
+        checked_qty(self.quantity)
+    }
+
+    fn validate_execution(&self) -> Result<(), PlaceOrderError> {
+        let _ = limit_execution_price(self.execution)?;
+        Ok(())
+    }
+}
+
+impl IssuedByParty for PlaceConditionalOrderCmd {
+    fn party_id(&self) -> Option<&str> {
+        Some(self.party_id.as_str())
+    }
+}
+
+/// Use case that creates a conditional spot order.
+///
+/// 条件单创建时不冻结资金。它只保存触发条件和触发后的执行意图；触发时再进入执行流程，
+/// 根据当时账户余额、市场规则和成交保护规则决定是否冻结和成交。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlaceConditionalOrderUseCase;
+
+impl CommandUseCase2 for PlaceConditionalOrderUseCase {
+    type Command = PlaceConditionalOrderCmd;
+    type GivenState = PlaceConditionalOrderState;
+    type Error = PlaceOrderError;
+
+    fn role(&self) -> &'static str {
+        "Trader"
+    }
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        check_common_command(cmd.side, cmd.quantity, cmd.strategy_type, cmd.peg_offset_value)?;
+
+        if cmd.trigger_price == 0 {
+            return Err(PlaceOrderError::InvalidTriggerPrice);
+        }
+
+        cmd.validate_execution()?;
+
+        Ok(())
+    }
+
+    fn validate_against_state(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        let qty = cmd.qty()?;
+        validate_market_state(
+            cmd.party_id.as_str(),
+            cmd.symbol.as_str(),
+            qty,
+            state.trading_enabled,
+            &state.account,
+            &state.market_rules,
+        )
+    }
+
+    fn compute_replayable_events(
+        &self,
+        cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+        let qty = cmd.qty()?;
+        let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
+        let kind = StoredOrderKind::Conditional(StoredConditionalOrderSpec {
+            trigger_price: cmd.trigger_price,
+            trigger_role: cmd.trigger_role,
+            execution: cmd.execution,
+        });
+
+        let order = StoredOrder::new(
+            order_id,
+            cmd.party_id.clone(),
+            cmd.symbol.clone(),
+            cmd.side,
+            kind,
+            qty,
+            0,
+            0,
+            cmd.client_order_id.clone(),
+            cmd.strategy_id,
+            cmd.strategy_type,
+            cmd.iceberg_qty,
+            cmd.new_order_resp_type,
+            cmd.self_trade_prevention_mode,
+            cmd.peg_price_type,
+            cmd.peg_offset_value,
+            cmd.peg_offset_type,
+        );
+        let order_event =
+            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
+
+        Ok(vec![order_event])
+    }
+}
+
+#[cfg(test)]
+mod test_support;
+
+#[cfg(test)]
+mod happy_path;
+
+#[cfg(test)]
+mod unhappy_path;

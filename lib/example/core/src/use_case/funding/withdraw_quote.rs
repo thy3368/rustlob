@@ -112,6 +112,8 @@ mod tests {
         WithdrawQuoteState {
             account: TradingAccount {
                 account_id: "trader-1".to_string(),
+                available_base: 0,
+                frozen_base: 0,
                 available_quote: 1_000,
                 frozen_quote: 50,
                 version: 3,

@@ -116,6 +116,7 @@ impl StoredOrderExecution {
 
 /// 订单有效方式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///todo 确认下 hyperliquid有多少种？
 pub enum StoredOrderTimeInForce {
     /// 一直有效，直到成交或取消。
     Gtc,
@@ -248,7 +249,9 @@ pub struct StoredOrder {
     pub kind: StoredOrderKind,
     /// 以 base asset 计价的订单数量。
     pub qty: u64,
-    /// 订单接受时从账户冻结的 quote 余额。
+    /// 订单接受时从账户冻结的 base 余额，通常用于卖单。
+    pub reserved_base: u64,
+    /// 订单接受时从账户冻结的 quote 余额，通常用于买单。
     pub reserved_quote: u64,
     /// 客户端自定义订单 ID，可由 adapter 映射为 Hyperliquid `cloid`。
     pub client_order_id: Option<String>,
@@ -282,6 +285,7 @@ impl StoredOrder {
         side: StoredOrderSide,
         kind: StoredOrderKind,
         qty: u64,
+        reserved_base: u64,
         reserved_quote: u64,
         client_order_id: Option<String>,
         strategy_id: Option<i64>,
@@ -300,6 +304,7 @@ impl StoredOrder {
             side,
             kind,
             qty,
+            reserved_base,
             reserved_quote,
             client_order_id,
             strategy_id,
@@ -337,7 +342,23 @@ impl StoredOrder {
 
     /// 返回冻结 quote 余额是否与订单名义价值一致。
     pub fn has_consistent_reserved_quote(&self) -> bool {
-        self.notional_quote() == Some(self.reserved_quote)
+        match self.side {
+            StoredOrderSide::Buy => self.notional_quote() == Some(self.reserved_quote),
+            StoredOrderSide::Sell => self.reserved_quote == 0,
+        }
+    }
+
+    /// 返回冻结 base 余额是否与订单数量一致。
+    pub fn has_consistent_reserved_base(&self) -> bool {
+        match self.side {
+            StoredOrderSide::Buy => self.reserved_base == 0,
+            StoredOrderSide::Sell => self.reserved_base == self.qty,
+        }
+    }
+
+    /// 返回撤单时应释放的 base 余额。
+    pub fn base_to_release_on_cancel(&self) -> u64 {
+        self.reserved_base
     }
 
     /// 返回撤单时应释放的 quote 余额。
@@ -397,6 +418,7 @@ impl Entity for StoredOrder {
                 option_trigger_role_value(self.kind.trigger_role()),
             ),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("reserved_base", "", self.reserved_base.to_string()),
             EntityFieldChange::new("reserved_quote", "", self.reserved_quote.to_string()),
             EntityFieldChange::new(
                 "client_order_id",
@@ -476,6 +498,12 @@ impl Entity for StoredOrder {
         push_change(&mut changes, "qty", self.qty.to_string(), other.qty.to_string());
         push_change(
             &mut changes,
+            "reserved_base",
+            self.reserved_base.to_string(),
+            other.reserved_base.to_string(),
+        );
+        push_change(
+            &mut changes,
             "reserved_quote",
             self.reserved_quote.to_string(),
             other.reserved_quote.to_string(),
@@ -553,8 +581,9 @@ impl Entity for StoredOrder {
             | "self_trade_prevention_mode"
             | "peg_price_type"
             | "peg_offset_type" => 0,
-            "order_sequence" | "qty" | "price" | "reserved_quote" | "trigger_price"
-            | "strategy_id" | "strategy_type" | "iceberg_qty" | "peg_offset_value" => 1,
+            "order_sequence" | "qty" | "price" | "reserved_base" | "reserved_quote"
+            | "trigger_price" | "strategy_id" | "strategy_type" | "iceberg_qty"
+            | "peg_offset_value" => 1,
             _ => 0,
         }
     }
@@ -648,6 +677,7 @@ mod tests {
             StoredOrderSide::Buy,
             sample_kind(),
             2,
+            0,
             200,
             Some("client-order-1".to_string()),
             Some(10),
@@ -710,6 +740,7 @@ mod tests {
             StoredOrderSide::Buy,
             sample_kind(),
             2,
+            0,
             199,
             Some("client-order-1".to_string()),
             Some(10),
@@ -752,6 +783,7 @@ mod tests {
             }),
             2,
             0,
+            0,
             None,
             None,
             None,
@@ -788,5 +820,55 @@ mod tests {
         assert!(changes.iter().any(|change| {
             change.field_name == "strategy_type" && change.new_value == "1000000"
         }));
+    }
+
+    #[test]
+    fn conditional_created_event_contains_trigger_fields() {
+        let order = StoredOrder::new(
+            "order-1".to_string(),
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            StoredOrderSide::Buy,
+            StoredOrderKind::Conditional(StoredConditionalOrderSpec {
+                trigger_price: 90,
+                trigger_role: StoredOrderTriggerRole::StopLoss,
+                execution: StoredOrderExecution::Market,
+            }),
+            2,
+            0,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        let changes = order.created_field_changes();
+
+        assert!(changes.iter().any(|change| {
+            change.field_name == "order_kind" && change.new_value == "conditional"
+        }));
+        assert!(
+            changes
+                .iter()
+                .any(|change| { change.field_name == "execution" && change.new_value == "market" })
+        );
+        assert!(
+            changes
+                .iter()
+                .any(|change| { change.field_name == "trigger_price" && change.new_value == "90" })
+        );
+        assert!(changes.iter().any(|change| {
+            change.field_name == "trigger_role" && change.new_value == "stop_loss"
+        }));
+        assert!(
+            changes
+                .iter()
+                .any(|change| { change.field_name == "reserved_quote" && change.new_value == "0" })
+        );
     }
 }

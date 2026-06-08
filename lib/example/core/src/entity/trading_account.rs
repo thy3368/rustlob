@@ -5,20 +5,43 @@ const TRADING_ACCOUNT_ENTITY_TYPE: u8 = 1;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TradingAccount {
     pub account_id: String,
+    pub available_base: u64,
+    pub frozen_base: u64,
     pub available_quote: u64,
     pub frozen_quote: u64,
     pub version: u64,
 }
 
 impl TradingAccount {
+    pub fn can_reserve_base(&self, reserved_base: u64) -> bool {
+        self.available_base >= reserved_base
+    }
+
     pub fn can_reserve_quote(&self, reserved_quote: u64) -> bool {
         self.available_quote >= reserved_quote
+    }
+
+    pub fn reserve_base_after(&self, reserved_base: u64) -> Option<(u64, u64)> {
+        let next_available = self.available_base.checked_sub(reserved_base)?;
+        let next_frozen = self.frozen_base.checked_add(reserved_base)?;
+        Some((next_available, next_frozen))
     }
 
     pub fn reserve_quote_after(&self, reserved_quote: u64) -> Option<(u64, u64)> {
         let next_available = self.available_quote.checked_sub(reserved_quote)?;
         let next_frozen = self.frozen_quote.checked_add(reserved_quote)?;
         Some((next_available, next_frozen))
+    }
+
+    pub fn apply_reserved_base_after(
+        &mut self,
+        next_available: u64,
+        next_frozen: u64,
+        next_version: u64,
+    ) {
+        self.available_base = next_available;
+        self.frozen_base = next_frozen;
+        self.version = next_version;
     }
 
     pub fn apply_reserved_quote_after(
@@ -51,6 +74,22 @@ impl Entity for TradingAccount {
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::new();
 
+        if self.available_base != other.available_base {
+            changes.push(EntityFieldChange::new(
+                "available_base",
+                self.available_base.to_string(),
+                other.available_base.to_string(),
+            ));
+        }
+
+        if self.frozen_base != other.frozen_base {
+            changes.push(EntityFieldChange::new(
+                "frozen_base",
+                self.frozen_base.to_string(),
+                other.frozen_base.to_string(),
+            ));
+        }
+
         if self.available_quote != other.available_quote {
             changes.push(EntityFieldChange::new(
                 "available_quote",
@@ -72,7 +111,7 @@ impl Entity for TradingAccount {
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "available_quote" | "frozen_quote" => 1,
+            "available_base" | "frozen_base" | "available_quote" | "frozen_quote" => 1,
             _ => 0,
         }
     }
