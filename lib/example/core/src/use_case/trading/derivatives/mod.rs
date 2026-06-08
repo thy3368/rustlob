@@ -12,7 +12,3 @@ pub use hyperliquid_perp::{
     SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
     SettleHyperliquidPerpTradeUseCase,
 };
-pub use usds_m_future::{
-    PlaceUsdsMFuturesOrderCmd, PlaceUsdsMFuturesOrderError, PlaceUsdsMFuturesOrderExecution,
-    PlaceUsdsMFuturesOrderState, PlaceUsdsMFuturesOrderUseCase,
-};
