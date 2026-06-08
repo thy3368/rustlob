@@ -1,5 +1,4 @@
 mod market_rules;
-mod trading_account;
 
 pub mod perp;
 
@@ -30,4 +29,3 @@ pub use spot::spot_order::{
 };
 pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;
-pub use trading_account::TradingAccount;

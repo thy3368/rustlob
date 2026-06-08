@@ -7,8 +7,8 @@ pub use entity::{
     HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
     HyperliquidPerpSettlement, HyperliquidPerpTrade, MarketRules, SpotConditionalOrder, SpotConditionalOrderStatus,
     SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
-    SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole, SpotSettlement, SpotTrade,
-    TradingAccount,
+    SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole, SpotSettlement,
+    SpotTrade,
 };
 pub use use_case::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
