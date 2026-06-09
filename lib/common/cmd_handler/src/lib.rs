@@ -4,6 +4,7 @@
 
 pub mod handler_cmd;
 pub mod handler_query;
+pub mod query_use_case_def2;
 pub mod trace_log;
 pub mod use_case_def2;
 #[cfg(test)]
@@ -11,7 +12,7 @@ mod use_case_examples;
 #[cfg(test)]
 mod use_case_proptest_examples;
 
-pub use diff::{EntityReplayableEvent, ReplayFieldChange};
+pub use common_entity::{EntityReplayableEvent, ReplayFieldChange};
 pub use handler_cmd::{
     CmdHandlerForUpdate3, CmdHandlerInternal, HandlerLatencyMetrics, ReplayableEventSet,
 };

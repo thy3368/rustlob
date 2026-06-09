@@ -1,4 +1,4 @@
-use diff::EntityReplayableEvent;
+use common_entity::EntityReplayableEvent;
 
 /// Use case 视角下统一的 outbound port。
 ///

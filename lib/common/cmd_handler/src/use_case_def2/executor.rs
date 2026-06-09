@@ -1,4 +1,4 @@
-use diff::EntityReplayableEvent;
+use common_entity::EntityReplayableEvent;
 
 use super::trace::{
     trace_command_use_case_completed, trace_command_use_case_failed,

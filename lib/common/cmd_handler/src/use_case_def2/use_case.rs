@@ -1,4 +1,4 @@
-use diff::EntityReplayableEvent;
+use common_entity::EntityReplayableEvent;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommandMeta {
