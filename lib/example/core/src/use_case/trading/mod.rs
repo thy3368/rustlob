@@ -3,12 +3,17 @@ pub mod spot;
 pub mod derivatives;
 
 pub use derivatives::{
-    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
-    MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
-    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
-    PlaceHyperliquidPerpOrderUseCase, SettleHyperliquidPerpTradeCmd,
-    SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
-    SettleHyperliquidPerpTradeUseCase,
+    HyperliquidPerpOpenOrderView, HyperliquidPerpOrderDetailView, MatchHyperliquidPerpOrderCmd,
+    MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
+    MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd,
+    PlaceHyperliquidPerpOrderError, PlaceHyperliquidPerpOrderExecution,
+    PlaceHyperliquidPerpOrderState, PlaceHyperliquidPerpOrderUseCase,
+    QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrdersError,
+    QueryHyperliquidPerpOpenOrdersReadModel, QueryHyperliquidPerpOpenOrdersUseCase,
+    QueryHyperliquidPerpOrderDetail, QueryHyperliquidPerpOrderDetailError,
+    QueryHyperliquidPerpOrderDetailReadModel, QueryHyperliquidPerpOrderDetailUseCase,
+    SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
+    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
 };
 pub use spot::place_order::{
     PlaceConditionalOrderCmd, PlaceConditionalOrderState, PlaceConditionalOrderUseCase,

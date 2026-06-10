@@ -5,10 +5,15 @@ pub mod usds_m_future;
 pub mod hyperliquid_perp;
 
 pub use hyperliquid_perp::{
-    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
-    MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
-    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
-    PlaceHyperliquidPerpOrderUseCase, SettleHyperliquidPerpTradeCmd,
-    SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
-    SettleHyperliquidPerpTradeUseCase,
+    HyperliquidPerpOrderDetailView, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,
+    MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd,
+    PlaceHyperliquidPerpOrderError, PlaceHyperliquidPerpOrderExecution,
+    PlaceHyperliquidPerpOrderState, PlaceHyperliquidPerpOrderUseCase,
+    QueryHyperliquidPerpOrderDetail, QueryHyperliquidPerpOrderDetailError,
+    QueryHyperliquidPerpOrderDetailReadModel, QueryHyperliquidPerpOrderDetailUseCase,
+    QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrdersError,
+    QueryHyperliquidPerpOpenOrdersReadModel, QueryHyperliquidPerpOpenOrdersUseCase,
+    SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
+    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
+    HyperliquidPerpOpenOrderView,
 };
