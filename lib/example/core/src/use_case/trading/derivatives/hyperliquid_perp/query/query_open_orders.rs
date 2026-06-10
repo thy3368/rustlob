@@ -1,5 +1,5 @@
-use cmd_handler::query_use_case_def2::QueryUseCase;
 use cmd_handler::command_use_case_def2::IssuedByParty;
+use cmd_handler::query_use_case_def2::QueryUseCase;
 use thiserror::Error;
 
 use crate::{
@@ -63,10 +63,7 @@ pub enum QueryHyperliquidPerpOpenOrdersError {
     OrderNotOwned { order_id: String },
     /// 读模型中包含非开放状态的订单。
     #[error("order {order_id} is not open; actual status is {status:?}")]
-    OrderNotOpen {
-        order_id: String,
-        status: HyperliquidPerpOrderStatus,
-    },
+    OrderNotOpen { order_id: String, status: HyperliquidPerpOrderStatus },
     /// 读模型中包含不符合 symbol 过滤的订单。
     #[error("order {order_id} does not match query filter")]
     OrderFilterMismatch { order_id: String },
@@ -124,11 +121,7 @@ impl QueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
                     status: order.status,
                 });
             }
-            if query
-                .symbol
-                .as_deref()
-                .is_some_and(|symbol| !order.trades_symbol(symbol))
-            {
+            if query.symbol.as_deref().is_some_and(|symbol| !order.trades_symbol(symbol)) {
                 return Err(QueryHyperliquidPerpOpenOrdersError::OrderFilterMismatch {
                     order_id: order.order_id.clone(),
                 });
@@ -224,10 +217,7 @@ mod tests {
     #[test]
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpOpenOrdersUseCase.pre_check_query(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: String::new(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: String::new(), symbol: None },
         );
 
         assert_eq!(result, Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId));
@@ -251,10 +241,7 @@ mod tests {
         order.account_id = "trader-2".to_string();
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
             &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
         );
 
@@ -272,10 +259,7 @@ mod tests {
             .with_execution_state(HyperliquidPerpOrderStatus::Filled, 5);
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
             &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
         );
 
@@ -314,10 +298,7 @@ mod tests {
         order.filled_qty = 9;
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
             &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
         );
 
@@ -388,10 +369,7 @@ mod tests {
     #[test]
     fn compute_view_allows_empty_result() {
         let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
             QueryHyperliquidPerpOpenOrdersReadModel { orders: Vec::new() },
         );
 
@@ -404,10 +382,7 @@ mod tests {
         order.filled_qty = 9;
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: None,
-            },
+            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
             QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
         );
 

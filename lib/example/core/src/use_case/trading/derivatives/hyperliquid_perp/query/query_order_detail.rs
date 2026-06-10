@@ -1,5 +1,5 @@
-use cmd_handler::query_use_case_def2::QueryUseCase;
 use cmd_handler::command_use_case_def2::IssuedByParty;
+use cmd_handler::query_use_case_def2::QueryUseCase;
 use thiserror::Error;
 
 use crate::{

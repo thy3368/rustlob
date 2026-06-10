@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 use thiserror::Error;
 

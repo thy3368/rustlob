@@ -1,29 +1,36 @@
-pub mod match_perp_order;
-pub mod place_perp_order;
-pub mod query_order_detail;
-pub mod query_open_orders;
-pub mod settle_perp_trade;
+pub mod execution;
+pub mod funding;
+pub mod query;
+pub mod risk;
 
-pub use match_perp_order::{
+pub use execution::{
     MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
-    MatchHyperliquidPerpOrderUseCase,
-};
-pub use place_perp_order::{
-    PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
+    MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
     PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
-    PlaceHyperliquidPerpOrderUseCase,
+    PlaceHyperliquidPerpOrderUseCase, SettleHyperliquidPerpTradeCmd,
+    SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
+    SettleHyperliquidPerpTradeUseCase,
 };
-pub use query_order_detail::{
-    HyperliquidPerpOrderDetailView, QueryHyperliquidPerpOrderDetail,
+pub use funding::{
+    SettleHyperliquidPerpFundingCmd, SettleHyperliquidPerpFundingError,
+    SettleHyperliquidPerpFundingState, SettleHyperliquidPerpFundingUseCase,
+};
+pub use query::{
+    HyperliquidPerpOpenOrderView, HyperliquidPerpOrderDetailView, QueryHyperliquidPerpOpenOrders,
+    QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
+    QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
     QueryHyperliquidPerpOrderDetailUseCase,
 };
-pub use query_open_orders::{
-    HyperliquidPerpOpenOrderView, QueryHyperliquidPerpOpenOrders,
-    QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
-    QueryHyperliquidPerpOpenOrdersUseCase,
+pub use risk::{
+    HyperliquidPerpLiquidationCandidate, HyperliquidPerpRiskSnapshot,
+    PlaceHyperliquidPerpLiquidationOrderCmd, PlaceHyperliquidPerpLiquidationOrderError,
+    PlaceHyperliquidPerpLiquidationOrderState, PlaceHyperliquidPerpLiquidationOrderUseCase,
+    QueryHyperliquidPerpLiquidationCandidates, QueryHyperliquidPerpLiquidationCandidatesError,
+    QueryHyperliquidPerpLiquidationCandidatesReadModel,
+    QueryHyperliquidPerpLiquidationCandidatesUseCase, StartHyperliquidPerpLiquidationCmd,
+    StartHyperliquidPerpLiquidationError, StartHyperliquidPerpLiquidationState,
+    StartHyperliquidPerpLiquidationUseCase,
 };
-pub use settle_perp_trade::{
-    SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
-    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
-};
+
+pub use crate::entity::HyperliquidPerpMarginMode;
