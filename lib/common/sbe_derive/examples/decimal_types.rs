@@ -44,7 +44,8 @@ struct DecimalTrade {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("SBE Decimal Type Support Example");
     println!("=================================\n");

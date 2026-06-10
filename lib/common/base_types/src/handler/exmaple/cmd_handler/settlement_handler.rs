@@ -3,9 +3,7 @@
 use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, BalanceChange, HandlerError, Trade,
 };
-use crate::handler::handler_update::{
-    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
-};
+use crate::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate};
 
 pub struct SettlementCmd {
     pub settlement_id: String,

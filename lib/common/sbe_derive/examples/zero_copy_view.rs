@@ -148,7 +148,7 @@ fn main() {
     // Test 3: Fixed-size arrays
     // ========================================================================
     println!("\n--- Test 3: Fixed-size arrays ---");
-    
+
     // Test [u8; N] implementation directly
     let test_data = [1u8, 2, 3, 4, 5];
     let decoded: [u8; 5] = sbe::ZeroCopyDecode::zero_copy_decode(&test_data, 0);

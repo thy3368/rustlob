@@ -2,11 +2,11 @@
 //!
 //! 提供高性能命令处理框架，支持纳秒级延迟度量
 
+pub mod command_use_case_def2;
 pub mod handler_cmd;
 pub mod handler_query;
-pub mod query_use_case_def2;
+pub mod query_use_case_def;
 pub mod trace_log;
-pub mod command_use_case_def2;
 #[cfg(test)]
 mod use_case_examples;
 #[cfg(test)]

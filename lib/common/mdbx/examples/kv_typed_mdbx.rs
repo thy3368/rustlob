@@ -23,21 +23,13 @@ impl std::error::Error for ValueMismatch {}
 fn main() -> Result<()> {
     let store = MdbxKvStore::open("/tmp/rustlob-kv-typed-mdbx", "kv")?;
 
-    let alice = User {
-        id: 1,
-        name: "Alice".to_string(),
-    };
+    let alice = User { id: 1, name: "Alice".to_string() };
     store.put_obj(b"user:1", &alice)?;
 
-    let loaded = store
-        .get_obj::<User>(b"user:1")?
-        .ok_or_else(|| anyhow!("missing key: user:1"))?;
+    let loaded = store.get_obj::<User>(b"user:1")?.ok_or_else(|| anyhow!("missing key: user:1"))?;
 
     if loaded != alice {
-        return Err(StorageError::Codec {
-            source: Box::new(ValueMismatch),
-        }
-        .into());
+        return Err(StorageError::Codec { source: Box::new(ValueMismatch) }.into());
     }
 
     println!("loaded user: {loaded:?}");

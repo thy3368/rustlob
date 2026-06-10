@@ -3,10 +3,11 @@
 //! This benchmark compares the performance of SBE encoding/decoding
 //! against popular Rust serialization libraries.
 
-use sbe_derive::{SbeDecode, SbeEncode};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
+
+use sbe::{ActingVersion, Decoder, Encoder, ReadBuf, Reader, WriteBuf, Writer};
+use sbe_derive::{SbeDecode, SbeEncode};
+use serde::{Deserialize, Serialize};
 
 /// Trade message for SBE
 #[derive(SbeEncode, SbeDecode)]
@@ -53,12 +54,8 @@ fn benchmark_sbe(iterations: usize) -> (u128, u128, usize) {
     let start = Instant::now();
     for _ in 0..iterations {
         let read_buf = ReadBuf::new(&buffer);
-        let decoder = SbeTradeDecoder::default().wrap(
-            read_buf,
-            0,
-            sbe_trade_encoder::SBE_BLOCK_LENGTH,
-            0,
-        );
+        let decoder =
+            SbeTradeDecoder::default().wrap(read_buf, 0, sbe_trade_encoder::SBE_BLOCK_LENGTH, 0);
         let _ = decoder.trade_id();
         let _ = decoder.symbol();
         let _ = decoder.price();
@@ -71,12 +68,7 @@ fn benchmark_sbe(iterations: usize) -> (u128, u128, usize) {
 }
 
 fn benchmark_serde_json(iterations: usize) -> (u128, u128, usize) {
-    let trade = SerdeTrade {
-        trade_id: 12345,
-        symbol: b'A',
-        price: 100.50,
-        quantity: 1000,
-    };
+    let trade = SerdeTrade { trade_id: 12345, symbol: b'A', price: 100.50, quantity: 1000 };
 
     // Encode benchmark
     let start = Instant::now();
@@ -100,12 +92,7 @@ fn benchmark_serde_json(iterations: usize) -> (u128, u128, usize) {
 }
 
 fn benchmark_bincode(iterations: usize) -> (u128, u128, usize) {
-    let trade = SerdeTrade {
-        trade_id: 12345,
-        symbol: b'A',
-        price: 100.50,
-        quantity: 1000,
-    };
+    let trade = SerdeTrade { trade_id: 12345, symbol: b'A', price: 100.50, quantity: 1000 };
 
     // Encode benchmark
     let start = Instant::now();

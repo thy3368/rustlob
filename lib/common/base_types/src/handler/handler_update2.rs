@@ -52,19 +52,25 @@ pub trait CmdHandlerInternal: Send + Sync {
     ) -> Result<(), Self::Error>;
 
     ///repo怎么从外面传进来？
-    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn persist_domain_events(
+        &self,
+        _domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 
     ///repo怎么从外面传进来？
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
     ///event_publisher怎么从外面传进来？
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn publish_domain_events(
+        &self,
+        _domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 

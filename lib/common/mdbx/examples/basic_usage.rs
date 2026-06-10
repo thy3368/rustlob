@@ -1,14 +1,13 @@
-use anyhow::Result;
-use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags, WriteFlags};
-use rkyv::{
-    access,
-    api::{deserialize_using, high::to_bytes},
-    de::Pool,
-    rancor::Error,
-    Archive, Deserialize, Serialize,
-};
 use std::fs;
 use std::path::Path;
+
+use anyhow::Result;
+use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags, WriteFlags};
+use rkyv::api::deserialize_using;
+use rkyv::api::high::to_bytes;
+use rkyv::de::Pool;
+use rkyv::rancor::Error;
+use rkyv::{Archive, Deserialize, Serialize, access};
 
 type Mdbx = Database<NoWriteMap>;
 
@@ -25,21 +24,15 @@ fn main() -> Result<()> {
 
     let db = Mdbx::open_with_options(
         db_path,
-        DatabaseOptions {
-            max_tables: Some(4),
-            ..Default::default()
-        },
+        DatabaseOptions { max_tables: Some(4), ..Default::default() },
     )?;
 
     {
         let txn = db.begin_rw_txn()?;
         let table = txn.create_table(Some("users"), TableFlags::empty())?;
 
-        let user = User {
-            id: 1,
-            name: "Alice".to_string(),
-            email: "alice@example.com".to_string(),
-        };
+        let user =
+            User { id: 1, name: "Alice".to_string(), email: "alice@example.com".to_string() };
 
         let encoded = to_bytes::<Error>(&user)?;
         txn.put(&table, user.id.to_be_bytes(), encoded.as_slice(), WriteFlags::empty())?;

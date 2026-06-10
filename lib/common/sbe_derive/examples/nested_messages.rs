@@ -23,7 +23,6 @@ struct TradeWithNested {
 
     #[sbe(id = 1)]
     symbol: [u8; 8],
-
     // Nested message would be encoded inline
     // The nested message's fields are embedded at this offset
 }

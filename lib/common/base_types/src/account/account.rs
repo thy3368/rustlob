@@ -5,6 +5,7 @@ use crate::{AccountId, Timestamp, UserId};
 /// 交易账户
 #[derive(Debug, Clone)]
 #[repr(align(64))]
+// 研究下币安的 Account 设计
 pub struct Account {
     /// 账户ID
     pub id: AccountId,

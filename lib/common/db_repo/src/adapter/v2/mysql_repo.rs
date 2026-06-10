@@ -16,9 +16,7 @@ pub struct MySqlRepo {
 impl MySqlRepo {
     pub fn create(url: &str) -> Result<Self, RepoError> {
         let rt = tokio::runtime::Handle::current();
-        let pool = rt.block_on(async {
-            sqlx::Pool::<MySql>::connect(url).await
-        }).map_err(|e| {
+        let pool = rt.block_on(async { sqlx::Pool::<MySql>::connect(url).await }).map_err(|e| {
             RepoError::DeserializationFailed(format!("Failed to connect to MySQL: {}", e))
         })?;
         Ok(Self { pool: Some(Arc::new(pool)) })
@@ -125,7 +123,10 @@ impl QueryRepo2 for MySqlRepo {
 }
 
 impl CmdRepo2 for MySqlRepo {
-    fn replay_event<E: Entity + Clone + Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError> {
+    fn replay_event<E: Entity + Clone + Debug>(
+        &self,
+        event: &DomainEvent<E>,
+    ) -> Result<(), RepoError> {
         let change_log = event.change_log();
         if change_log.entity_type() != <E as Entity>::entity_type() {
             return Err(RepoError::DeserializationFailed(format!(
@@ -194,7 +195,10 @@ impl CmdRepo2 for MySqlRepo {
         })
     }
 
-    fn replay_events<E: Entity + Clone + Debug>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
+    fn replay_events<E: Entity + Clone + Debug>(
+        &self,
+        events: &[DomainEvent<E>],
+    ) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }

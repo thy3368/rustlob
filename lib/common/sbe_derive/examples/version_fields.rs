@@ -26,7 +26,8 @@ struct VersionedTrade {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("SBE Version Field Support Example");
     println!("==================================\n");

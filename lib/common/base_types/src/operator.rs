@@ -133,4 +133,3 @@ mod examples {
         assert_eq!(DOUBLE_F64(&5.0).unwrap(), 10.0);
     }
 }
-

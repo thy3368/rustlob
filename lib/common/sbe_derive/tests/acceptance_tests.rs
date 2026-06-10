@@ -2,8 +2,8 @@
 //!
 //! This test suite validates the implementation against the plan requirements.
 
+use sbe::{ReadBuf, SbeMessage, WriteBuf};
 use sbe_derive::{SbeDecode, SbeEncode};
-use sbe::{ReadBuf, WriteBuf, SbeMessage};
 
 /// Test message header format (8 bytes: blockLength + templateId + schemaId + version)
 #[test]
@@ -65,7 +65,12 @@ fn test_var_data_encode_decode() {
         drop(encoder);
 
         let read_buf = ReadBuf::new(&buffer);
-        let decoder = VarDataMsgDecoder::default().wrap(read_buf, 0, var_data_msg_encoder::SBE_BLOCK_LENGTH, 0);
+        let decoder = VarDataMsgDecoder::default().wrap(
+            read_buf,
+            0,
+            var_data_msg_encoder::SBE_BLOCK_LENGTH,
+            0,
+        );
         assert_eq!(decoder.sequence(), 100);
         assert_eq!(decoder.payload(), Vec::<u8>::new());
     }
@@ -82,7 +87,12 @@ fn test_var_data_encode_decode() {
         drop(encoder);
 
         let read_buf = ReadBuf::new(&buffer);
-        let decoder = VarDataMsgDecoder::default().wrap(read_buf, 0, var_data_msg_encoder::SBE_BLOCK_LENGTH, 0);
+        let decoder = VarDataMsgDecoder::default().wrap(
+            read_buf,
+            0,
+            var_data_msg_encoder::SBE_BLOCK_LENGTH,
+            0,
+        );
         assert_eq!(decoder.sequence(), 200);
         assert_eq!(decoder.payload(), test_data.to_vec());
     }
@@ -99,7 +109,12 @@ fn test_var_data_encode_decode() {
         drop(encoder);
 
         let read_buf = ReadBuf::new(&buffer);
-        let decoder = VarDataMsgDecoder::default().wrap(read_buf, 0, var_data_msg_encoder::SBE_BLOCK_LENGTH, 0);
+        let decoder = VarDataMsgDecoder::default().wrap(
+            read_buf,
+            0,
+            var_data_msg_encoder::SBE_BLOCK_LENGTH,
+            0,
+        );
         assert_eq!(decoder.sequence(), 300);
         assert_eq!(decoder.payload(), test_data);
     }
@@ -116,7 +131,12 @@ fn test_var_data_encode_decode() {
         drop(encoder);
 
         let read_buf = ReadBuf::new(&buffer);
-        let decoder = VarDataMsgDecoder::default().wrap(read_buf, 0, var_data_msg_encoder::SBE_BLOCK_LENGTH, 0);
+        let decoder = VarDataMsgDecoder::default().wrap(
+            read_buf,
+            0,
+            var_data_msg_encoder::SBE_BLOCK_LENGTH,
+            0,
+        );
         let decoded_data = decoder.payload();
 
         assert_eq!(decoded_data.len(), original_data.len());
@@ -167,12 +187,8 @@ fn test_repeating_groups_encode_decode() {
 
     // Decode and verify
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = OrderBookDecoder::default().wrap(
-        read_buf,
-        0,
-        order_book_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder =
+        OrderBookDecoder::default().wrap(read_buf, 0, order_book_encoder::SBE_BLOCK_LENGTH, 0);
 
     assert_eq!(decoder.symbol_id(), 12345);
     let decoded_bids = decoder.bids();
@@ -273,9 +289,9 @@ fn test_decimal_types_encode_decode() {
         #[sbe(id = 0)]
         symbol_id: u64,
         #[sbe(id = 1, mantissa_type = "i64", exponent = -8)]
-        price: (i64, i8),  // Decimal field: (mantissa, exponent)
+        price: (i64, i8), // Decimal field: (mantissa, exponent)
         #[sbe(id = 2, mantissa_type = "i64", exponent = -4)]
-        quantity: (i64, i8),  // Decimal field: (mantissa, exponent)
+        quantity: (i64, i8), // Decimal field: (mantissa, exponent)
     }
 
     let mut buffer = vec![0u8; 1024];
@@ -291,12 +307,8 @@ fn test_decimal_types_encode_decode() {
 
     // Decode and verify
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = PriceUpdateDecoder::default().wrap(
-        read_buf,
-        0,
-        price_update_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder =
+        PriceUpdateDecoder::default().wrap(read_buf, 0, price_update_encoder::SBE_BLOCK_LENGTH, 0);
 
     assert_eq!(decoder.symbol_id(), 12345);
 
@@ -329,9 +341,9 @@ fn test_time_types_encode_decode() {
         #[sbe(id = 0)]
         order_id: u64,
         #[sbe(id = 1, time_type = "UTCTimestamp")]
-        created_at: i64,  // Nanoseconds since Unix epoch
+        created_at: i64, // Nanoseconds since Unix epoch
         #[sbe(id = 2, time_type = "UTCTimestamp")]
-        updated_at: i64,  // Nanoseconds since Unix epoch
+        updated_at: i64, // Nanoseconds since Unix epoch
     }
 
     let mut buffer = vec![0u8; 1024];
@@ -347,12 +359,8 @@ fn test_time_types_encode_decode() {
 
     // Decode and verify
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = OrderEventDecoder::default().wrap(
-        read_buf,
-        0,
-        order_event_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder =
+        OrderEventDecoder::default().wrap(read_buf, 0, order_event_encoder::SBE_BLOCK_LENGTH, 0);
 
     assert_eq!(decoder.order_id(), 789);
     assert_eq!(decoder.created_at(), 1704067200000000000_i64);

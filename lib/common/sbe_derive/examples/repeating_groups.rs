@@ -20,7 +20,6 @@ struct TradeWithOrders {
 
     #[sbe(id = 1)]
     symbol: [u8; 8],
-
     // Repeating group would be encoded after fixed fields
     // Group dimension: numInGroup (u16) + blockLength (u16)
     // Followed by: entry1, entry2, ..., entryN
@@ -53,21 +52,9 @@ fn main() {
     println!("─────────────────────────────");
 
     let orders = vec![
-        OrderEntry {
-            order_id: 1001,
-            price: 100.50,
-            quantity: 100,
-        },
-        OrderEntry {
-            order_id: 1002,
-            price: 100.75,
-            quantity: 200,
-        },
-        OrderEntry {
-            order_id: 1003,
-            price: 101.00,
-            quantity: 150,
-        },
+        OrderEntry { order_id: 1001, price: 100.50, quantity: 100 },
+        OrderEntry { order_id: 1002, price: 100.75, quantity: 200 },
+        OrderEntry { order_id: 1003, price: 101.00, quantity: 150 },
     ];
 
     println!("\nGroup Dimension:");
@@ -76,8 +63,13 @@ fn main() {
 
     println!("\nGroup Entries:");
     for (i, order) in orders.iter().enumerate() {
-        println!("  Entry {}: ID={}, Price=${:.2}, Qty={}",
-            i + 1, order.order_id, order.price, order.quantity);
+        println!(
+            "  Entry {}: ID={}, Price=${:.2}, Qty={}",
+            i + 1,
+            order.order_id,
+            order.price,
+            order.quantity
+        );
     }
 
     println!("\n📝 Encoding Process:");

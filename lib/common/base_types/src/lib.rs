@@ -23,6 +23,8 @@ pub mod spot_topic;
 
 pub mod operator;
 
+pub mod sys_error;
+
 // Re-export all types
 pub use base_types::{
     AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,

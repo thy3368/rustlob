@@ -10,7 +10,9 @@ use rdkafka::types::RDKafkaErrorCode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-use crate::queue::queue::{ChannelConfig, DefaultQueueConfig, Queue, SendOptions, SubscribeOptions};
+use crate::queue::queue::{
+    ChannelConfig, DefaultQueueConfig, Queue, SendOptions, SubscribeOptions,
+};
 
 /// Kafka 配置（兼容 Queue trait 的 Config 关联类型）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,9 +184,8 @@ impl KafkaQueue {
         topic: &str,
         config: Option<ChannelConfig>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let admin_client: AdminClient<DefaultClientContext> = ClientConfig::new()
-            .set("bootstrap.servers", &self.config.brokers)
-            .create()?;
+        let admin_client: AdminClient<DefaultClientContext> =
+            ClientConfig::new().set("bootstrap.servers", &self.config.brokers).create()?;
 
         // 优先使用传入的配置，其次使用全局默认配置
         let num_partitions = config
@@ -212,7 +213,9 @@ impl KafkaQueue {
                         Ok(_) => {
                             tracing::info!(
                                 "Kafka topic '{}' created successfully (partitions: {}, replication: {})",
-                                topic, num_partitions, replication_factor
+                                topic,
+                                num_partitions,
+                                replication_factor
                             );
                         }
                         Err((name, code)) => {
@@ -253,15 +256,9 @@ impl Queue for KafkaQueue {
             .entry(topic.to_string())
             .or_insert_with(|| {
                 // 优先使用传入的配置，其次使用全局配置
-                let buffer_size = config
-                    .as_ref()
-                    .and_then(|c| c.buffer_size)
-                    .unwrap_or_else(|| {
-                        if self.config.buffer_size > 0 {
-                            self.config.buffer_size
-                        } else {
-                            1024
-                        }
+                let buffer_size =
+                    config.as_ref().and_then(|c| c.buffer_size).unwrap_or_else(|| {
+                        if self.config.buffer_size > 0 { self.config.buffer_size } else { 1024 }
                     });
                 let (tx, _) = broadcast::channel(buffer_size);
                 let topic_str = topic.to_string();
@@ -270,7 +267,10 @@ impl Queue for KafkaQueue {
                 let topic_for_async = topic_str.clone();
                 let channel_config_for_topic = config.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = queue.create_topic_if_not_exists(&topic_for_async, channel_config_for_topic).await {
+                    if let Err(e) = queue
+                        .create_topic_if_not_exists(&topic_for_async, channel_config_for_topic)
+                        .await
+                    {
                         tracing::warn!("Failed to create topic '{}': {}", topic_for_async, e);
                     }
                 });
@@ -388,9 +388,8 @@ impl Queue for KafkaQueue {
         options: Option<SubscribeOptions>,
     ) -> broadcast::Receiver<bytes::Bytes> {
         // 从 SubscribeOptions 中提取 buffer_size 并创建 ChannelConfig
-        let channel_config = options.as_ref().map(|opts| {
-            ChannelConfig::new().with_buffer_size(opts.buffer_size)
-        });
+        let channel_config =
+            options.as_ref().map(|opts| ChannelConfig::new().with_buffer_size(opts.buffer_size));
         let channel = self.get_or_create_channel(topic, channel_config);
         let rx = channel.subscribe();
 

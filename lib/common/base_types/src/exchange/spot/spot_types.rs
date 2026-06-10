@@ -981,12 +981,12 @@ impl SpotOrder {
         // 更新 Taker 的余额
         match self.side {
             OrderSide::Buy => {
-                quote_asset_balance
+                let _ = quote_asset_balance
                     .frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
                 base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
             }
             OrderSide::Sell => {
-                base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
+                let _ = base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
                 quote_asset_balance
                     .add_balance(filled * transaction_price, Timestamp::now_as_nanos());
             }
@@ -995,12 +995,12 @@ impl SpotOrder {
         // 更新 Maker 的余额
         match matched_order.side {
             OrderSide::Buy => {
-                o_quote_asset_balance
+                let _ = o_quote_asset_balance
                     .frozen2pay(filled * transaction_price, Timestamp::now_as_nanos());
                 o_base_asset_balance.add_balance(filled, Timestamp::now_as_nanos());
             }
             OrderSide::Sell => {
-                o_base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
+                let _ = o_base_asset_balance.frozen2pay(filled, Timestamp::now_as_nanos());
                 o_quote_asset_balance
                     .add_balance(filled * transaction_price, Timestamp::now_as_nanos());
             }

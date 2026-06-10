@@ -162,7 +162,7 @@ impl PrepOrder {
         // 直接使用 Price，无需转换
         self.frozen_margin =
             Self::calculate_required_margin(estimate_price, self.quantity, self.leverage);
-        balance.frozen(self.frozen_margin, now);
+        let _ = balance.frozen(self.frozen_margin, now);
         // todo 冻结不成功 则reject
         self.change2reject();
     }
@@ -233,14 +233,14 @@ impl PrepOrder {
         // 如果filled_quantity==0
         self.status = FutureOrderStatus::Rejected;
 
-        balance.un_frozen(self.frozen_margin, now);
+        let _ = balance.un_frozen(self.frozen_margin, now);
         self.frozen_margin = Price::from_raw(0);
     }
 
     pub fn frozen2pay(&mut self, balance: &mut Balance, now: Timestamp) {
         // 直接使用 Price，无需转换
 
-        balance.frozen2pay(self.frozen_margin, now);
+        let _ = balance.frozen2pay(self.frozen_margin, now);
     }
 
     pub fn filled_qty(
@@ -290,7 +290,7 @@ impl PrepOrder {
         self.filled_qty(my_b, my_p, filled, now);
         matched_order.filled_qty(matched_b, matched_p, filled, now);
 
-        matched_b.frozen2pay(Price::from_raw(0), now);
+        let _ = matched_b.frozen2pay(Price::from_raw(0), now);
 
         // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
         let price = matched_order.price.unwrap_or_else(|| Price::from_raw(0));

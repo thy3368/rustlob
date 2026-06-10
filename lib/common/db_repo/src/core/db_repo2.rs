@@ -267,7 +267,10 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     ///
     /// lob_repo.replay_event(&event)?;
     /// ```
-    fn replay_event<E: Entity + Clone + fmt::Debug>(&self, event: &DomainEvent<E>) -> Result<(), RepoError>;
+    fn replay_event<E: Entity + Clone + fmt::Debug>(
+        &self,
+        event: &DomainEvent<E>,
+    ) -> Result<(), RepoError>;
 
     /// 批量回放多个事件
     ///
@@ -301,7 +304,10 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     ///
     /// lob_repo.replay_events(&events)?;
     /// ```
-    fn replay_events<E: Entity + Clone + fmt::Debug>(&self, events: &[DomainEvent<E>]) -> Result<(), RepoError> {
+    fn replay_events<E: Entity + Clone + fmt::Debug>(
+        &self,
+        events: &[DomainEvent<E>],
+    ) -> Result<(), RepoError> {
         for event in events {
             self.replay_event(event)?;
         }

@@ -1,7 +1,7 @@
 mod executor;
 mod metrics;
 mod outbound;
-mod trace;
+pub(crate) mod trace;
 mod use_case;
 
 pub use executor::{QueryUseCaseExecutionError, QueryUseCaseExecutor};

@@ -41,7 +41,8 @@ fn test_basic_encode_decode() {
 
 #[test]
 fn test_with_message_header() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     // Create a buffer
     let mut buffer = vec![0u8; 1024];

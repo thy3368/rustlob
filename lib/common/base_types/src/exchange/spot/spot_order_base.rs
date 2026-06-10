@@ -129,7 +129,6 @@ impl SpotOrderBase {
         self.filled_base_qty += filled_qty;
 
         // 更新平均成交价
-        let old_value = self.cumulative_quote_qty;
         let new_value = filled_qty * fill_price;
         self.cumulative_quote_qty += new_value;
 
@@ -150,8 +149,8 @@ const _: () = assert!(std::mem::align_of::<SpotOrderBase>() == 128);
 
 #[cfg(test)]
 mod tests {
-    use crate::exchange::spot::spot_order_base::SpotOrderBase;
     use crate::OrderSide;
+    use crate::exchange::spot::spot_order_base::SpotOrderBase;
 
     #[test]
     fn test_size_and_alignment() {

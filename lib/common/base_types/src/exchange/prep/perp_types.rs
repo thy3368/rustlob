@@ -189,6 +189,7 @@ impl PrepPosition {
         Price::from_f64(fee)
     }
 
+    #[allow(dead_code)]
     fn calculate_liquidation_price(&self, position: &PrepPosition) -> Option<Price> {
         if !position.has_position() {
             return None;
@@ -216,6 +217,7 @@ impl PrepPosition {
         Some(Price::from_f64(liq_price.max(0.0)))
     }
 
+    #[allow(dead_code)]
     fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
         if !position.has_position() {
             return Price::from_raw(0);

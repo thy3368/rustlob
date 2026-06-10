@@ -17,6 +17,7 @@ immutable_derive = { path = "../immutable_derive" }
 
 diff = { path = "../diff" }
 decimal = { path = "../decimal", features = ["serde"] }
+rust_decimal = "1.41"
 chrono = "0.4.43"
 serde = { version = "1.0", features = ["derive"], optional = true }
 sealed = "0.6.0"

@@ -13,7 +13,7 @@
 //! - 可以直接memcpy
 //! - 128字节对齐（2个缓存行）
 
-use zerocopy::{FromZeros, Immutable, IntoBytes};
+use zerocopy::{FromZeros, IntoBytes};
 
 use crate::account::balance_change::{BalanceChange, BalanceChangeReason, BalanceChangeType};
 use crate::{AccountId, AssetId, Quantity, Timestamp};

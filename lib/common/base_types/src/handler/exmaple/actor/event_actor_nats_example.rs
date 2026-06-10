@@ -5,12 +5,16 @@ use std::thread;
 
 use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
-use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
-use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
-use crate::handler::exmaple::cmd_handler::settlement_handler::{SettlementHandler, SettlementResult};
 use crate::handler::exmaple::actor::event_actor_example_shared::build_first_place_order_event;
+use crate::handler::exmaple::cmd_handler::match_handler::{
+    MatchHandler, MatchOutput, TradeCreatedEvent,
+};
+use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
+use crate::handler::exmaple::cmd_handler::settlement_handler::{
+    SettlementHandler, SettlementResult,
+};
 use crate::handler::exmaple::event_handler::event_template::{
-    emit_trade_created_event, EventHandlerError, PlaceOrderEventHandler, TradeEventHandler,
+    EventHandlerError, PlaceOrderEventHandler, TradeEventHandler, emit_trade_created_event,
 };
 
 pub enum NatsPayload {
@@ -57,7 +61,8 @@ impl EventHandler<NatsMessage, (), EventHandlerError> for NatsDispatcher {
     fn event_handle(&self, message: NatsMessage) -> Result<(), EventHandlerError> {
         match message.payload {
             NatsPayload::PlaceOrderAccepted(event) => {
-                let match_output: MatchOutput = self.place_order_event_handler.event_handle(event)?;
+                let match_output: MatchOutput =
+                    self.place_order_event_handler.event_handle(event)?;
                 if let Some(trade_event) = emit_trade_created_event(&match_output) {
                     self.pending_messages
                         .lock()
@@ -72,11 +77,9 @@ impl EventHandler<NatsMessage, (), EventHandlerError> for NatsDispatcher {
             }
             NatsPayload::TradeCreated(event) => {
                 let settlement_result = self.trade_event_handler.event_handle(event)?;
-                *self
-                    .settlement_result
-                    .lock()
-                    .map_err(|_| EventHandlerError("nats settlement result lock poisoned".into()))? =
-                    Some(settlement_result);
+                *self.settlement_result.lock().map_err(|_| {
+                    EventHandlerError("nats settlement result lock poisoned".into())
+                })? = Some(settlement_result);
                 Ok(())
             }
         }
@@ -125,13 +128,12 @@ pub fn run_event_actor_with_nats_queue() -> Result<SettlementResult, EventHandle
     let join_handle = thread::spawn(move || {
         let mut actor = NatsEventActor::new(messages);
         actor.run()?;
-        actor.into_result()
+        actor
+            .into_result()
             .ok_or_else(|| EventHandlerError("nats actor ended without settlement result".into()))
     });
 
-    join_handle
-        .join()
-        .map_err(|_| EventHandlerError("nats actor thread panicked".into()))?
+    join_handle.join().map_err(|_| EventHandlerError("nats actor thread panicked".into()))?
 }
 
 #[cfg(test)]

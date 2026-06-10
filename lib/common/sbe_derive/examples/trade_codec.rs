@@ -5,8 +5,8 @@
 //!
 //! Run with: cargo run --example trade_codec
 
-use sbe_derive::{SbeDecode, SbeEncode};
 use sbe::SbeMessage;
+use sbe_derive::{SbeDecode, SbeEncode};
 
 /// Trade message
 ///
@@ -38,12 +38,7 @@ fn main() {
 
     // Encode using SbeMessage trait
     println!("Encoding trade message...");
-    let trade = Trade {
-        trade_id: 12345,
-        symbol: b'A',
-        price: 100.50,
-        quantity: 1000,
-    };
+    let trade = Trade { trade_id: 12345, symbol: b'A', price: 100.50, quantity: 1000 };
 
     let mut buffer = [0u8; 1024];
     let len = trade.encode_into(&mut buffer).unwrap();

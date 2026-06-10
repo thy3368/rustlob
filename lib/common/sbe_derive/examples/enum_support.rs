@@ -1,7 +1,7 @@
 //! Example demonstrating enum support
 
+use sbe::{ActingVersion, Decoder, Encoder, ReadBuf, Reader, WriteBuf, Writer};
 use sbe_derive::{SbeDecode, SbeEncode, SbeEnum};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
 
 /// Order side enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SbeEnum)]
@@ -40,7 +40,8 @@ struct TradeWithEnum {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("SBE Enum Support Example");
     println!("========================\n");

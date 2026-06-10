@@ -5,12 +5,16 @@ use std::thread;
 
 use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
-use crate::handler::exmaple::cmd_handler::match_handler::{MatchHandler, MatchOutput, TradeCreatedEvent};
-use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
-use crate::handler::exmaple::cmd_handler::settlement_handler::{SettlementHandler, SettlementResult};
 use crate::handler::exmaple::actor::event_actor_example_shared::build_first_place_order_event;
+use crate::handler::exmaple::cmd_handler::match_handler::{
+    MatchHandler, MatchOutput, TradeCreatedEvent,
+};
+use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
+use crate::handler::exmaple::cmd_handler::settlement_handler::{
+    SettlementHandler, SettlementResult,
+};
 use crate::handler::exmaple::event_handler::event_template::{
-    emit_trade_created_event, EventHandlerError, PlaceOrderEventHandler, TradeEventHandler,
+    EventHandlerError, PlaceOrderEventHandler, TradeEventHandler, emit_trade_created_event,
 };
 
 pub struct InProcMatchStageDispatcher {
@@ -80,10 +84,7 @@ impl InProcMatchStageActor {
         receiver: Receiver<PlaceOrderAcceptedEvent>,
         trade_sender: Sender<TradeCreatedEvent>,
     ) -> Self {
-        Self {
-            receiver,
-            dispatcher: InProcMatchStageDispatcher::new(trade_sender),
-        }
+        Self { receiver, dispatcher: InProcMatchStageDispatcher::new(trade_sender) }
     }
 }
 
@@ -99,7 +100,6 @@ impl EventRecvActor<PlaceOrderAcceptedEvent, EventHandlerError> for InProcMatchS
         }
     }
 }
-
 
 // 结算阶段
 pub struct InProcSettlementStageActor {
@@ -144,13 +144,12 @@ pub fn run_event_actor_with_inproc_channel() -> Result<SettlementResult, EventHa
     let settlement_stage_join_handle = thread::spawn(move || {
         let mut actor = InProcSettlementStageActor::new(settlement_stage_receiver);
         actor.run()?;
-        actor.into_result()
-            .ok_or_else(|| EventHandlerError("settlement-stage actor ended without settlement result".into()))
+        actor.into_result().ok_or_else(|| {
+            EventHandlerError("settlement-stage actor ended without settlement result".into())
+        })
     });
 
-    match_stage_sender
-        .send(first_event)
-        .map_err(|err| EventHandlerError(err.to_string()))?;
+    match_stage_sender.send(first_event).map_err(|err| EventHandlerError(err.to_string()))?;
     drop(match_stage_sender);
 
     match_stage_join_handle

@@ -1,7 +1,7 @@
 //! Example demonstrating all implemented SBE features
 
+use sbe::{ActingVersion, Decoder, Encoder, ReadBuf, Reader, WriteBuf, Writer};
 use sbe_derive::{SbeDecode, SbeEncode, SbeEnum};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
 
 /// Order side enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SbeEnum)]
@@ -55,13 +55,13 @@ struct ComprehensiveTrade {
     // Version 2 field
     #[sbe(id = 10, since_version = 2)]
     liquidity_flag: u8,
-
     // Variable-length data (must be last)
     // Note: In actual usage, this would be handled separately
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("╔════════════════════════════════════════════════════════╗");
     println!("║  SBE Derive Macro - Comprehensive Feature Showcase    ║");

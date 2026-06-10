@@ -296,8 +296,6 @@ impl DefaultQueueConfig {
 mod tests {
     use super::*;
 
-
-
     #[tokio::test]
     async fn test_send_options_builder() {
         let options = SendOptions::new()

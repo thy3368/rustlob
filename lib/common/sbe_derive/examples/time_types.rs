@@ -29,16 +29,16 @@ struct TimedTrade {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("SBE Time Types Example");
     println!("======================\n");
 
     // Get current time
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let timestamp_nanos = now.as_nanos() as i64;
     let timestamp_millis = now.as_millis() as i64;
 

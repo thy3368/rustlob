@@ -3,7 +3,7 @@ use crate::handler::exmaple::cmd_handler::place_order_handler::{
     PlaceOrderHandler, PlaceOrderOutput, PlaceOrderResult,
 };
 use crate::handler::exmaple::event_handler::event_template::{
-    emit_place_order_event, EventHandlerError,
+    EventHandlerError, emit_place_order_event,
 };
 use crate::handler::handler_update::CmdHandlerForUpdate;
 

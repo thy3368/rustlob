@@ -242,4 +242,3 @@ pub trait MultiSymbolLobRepo {
     /// 更新指定交易对的最后一笔成交价
     fn update_last_price(&mut self, symbol: TradingPair, price: Price);
 }
-

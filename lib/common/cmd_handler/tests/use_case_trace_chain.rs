@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
     IssuedByParty,
 };

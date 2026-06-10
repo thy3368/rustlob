@@ -56,16 +56,16 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn persist_domain_events(
         &self,
-        domain_events: &Self::ThenTraceableEventSet,
-        repo: &Self::Repo,
+        _domain_events: &Self::ThenTraceableEventSet,
+        _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::ThenTraceableEventSet,
-        repo: &Self::Repo,
+        _domain_events: &Self::ThenTraceableEventSet,
+        _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         //todo 在这里回放
         // repo.replay_event::<SpotOrder>(&domain_events.events)
@@ -76,8 +76,8 @@ pub trait CmdHandlerInternal: Send + Sync {
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::ThenTraceableEventSet,
-        publisher: Self::Publisher,
+        _domain_events: &Self::ThenTraceableEventSet,
+        _publisher: Self::Publisher,
     ) -> Result<(), Self::Error> {
         todo!()
     }

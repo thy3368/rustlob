@@ -137,19 +137,13 @@ impl SpotOrderSoa {
     /// 批量检查订单是否已完全成交
     #[inline]
     pub fn batch_is_filled(&self, indices: &[usize]) -> Vec<bool> {
-        indices
-            .iter()
-            .map(|&idx| self.unfilled_qtys[idx] == 0)
-            .collect()
+        indices.iter().map(|&idx| self.unfilled_qtys[idx] == 0).collect()
     }
 
     /// 批量检查订单是否有未成交数量
     #[inline]
     pub fn batch_is_active(&self, indices: &[usize]) -> Vec<bool> {
-        indices
-            .iter()
-            .map(|&idx| self.unfilled_qtys[idx] > 0)
-            .collect()
+        indices.iter().map(|&idx| self.unfilled_qtys[idx] > 0).collect()
     }
 
     /// 批量检查是否为市价单
@@ -196,8 +190,7 @@ impl SpotOrderSoa {
             self.cumulative_quote_qtys[idx] += new_value;
 
             if self.filled_qtys[idx] > 0 {
-                self.average_prices[idx] =
-                    self.cumulative_quote_qtys[idx] / self.filled_qtys[idx];
+                self.average_prices[idx] = self.cumulative_quote_qtys[idx] / self.filled_qtys[idx];
             }
 
             self.last_updateds[idx] = timestamp;
@@ -239,10 +232,10 @@ impl Default for SpotOrderSoa {
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 pub mod simd_x86 {
-    use super::*;
-
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
+
+    use super::*;
 
     impl SpotOrderSoa {
         /// AVX2批量检查订单是否已完全成交（一次处理4个u64）
@@ -337,10 +330,10 @@ pub mod simd_x86 {
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub mod simd_arm {
-    use super::*;
-
     #[cfg(target_arch = "aarch64")]
     use std::arch::aarch64::*;
+
+    use super::*;
 
     impl SpotOrderSoa {
         /// NEON批量检查订单是否已完全成交（一次处理2个u64）

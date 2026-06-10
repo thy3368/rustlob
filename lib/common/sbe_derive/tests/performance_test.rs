@@ -1,8 +1,9 @@
 //! Performance benchmarks for SBE derive macros
 
-use sbe_derive::{SbeDecode, SbeEncode};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
 use std::time::Instant;
+
+use sbe::{ActingVersion, Decoder, Encoder, ReadBuf, Reader, WriteBuf, Writer};
+use sbe_derive::{SbeDecode, SbeEncode};
 
 /// Simple trade message for benchmarking
 #[derive(SbeEncode, SbeDecode)]

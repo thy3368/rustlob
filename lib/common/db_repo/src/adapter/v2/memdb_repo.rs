@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 
-use diff::diff_types::{ChangeType, DomainEvent};
 use diff::Entity;
+use diff::diff_types::{ChangeType, DomainEvent};
 use immutable_derive::immutable;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
@@ -33,10 +33,10 @@ struct TypeStore {
 
 impl TypeStore {
     fn insert<E: Entity>(&mut self, entity_id: String, sequence: u64, entity: E) {
-        if let Some(previous) = self.by_id.insert(
-            entity_id.clone(),
-            StoredEntity::new(entity_id.clone(), sequence, entity),
-        ) {
+        if let Some(previous) = self
+            .by_id
+            .insert(entity_id.clone(), StoredEntity::new(entity_id.clone(), sequence, entity))
+        {
             self.by_sequence.remove(&previous.sequence);
         }
         self.by_sequence.insert(sequence, entity_id);
@@ -301,7 +301,9 @@ impl QueryRepo2 for MemdbRepo {
 
             let mut items: Vec<(u64, E)> = sequences
                 .into_iter()
-                .filter_map(|sequence| store.get_by_sequence::<E>(sequence).map(|entity| (sequence, entity)))
+                .filter_map(|sequence| {
+                    store.get_by_sequence::<E>(sequence).map(|entity| (sequence, entity))
+                })
                 .filter(|(_, entity)| {
                     entity_id.is_empty() || entity.entity_id().to_string() == entity_id
                 })
@@ -390,7 +392,12 @@ mod tests {
         }
     }
 
-    fn test_event(id: &str, value: &str, sequence: u64, change_type: ChangeType) -> DomainEvent<TestEntity> {
+    fn test_event(
+        id: &str,
+        value: &str,
+        sequence: u64,
+        change_type: ChangeType,
+    ) -> DomainEvent<TestEntity> {
         DomainEvent::new(
             ChangeLog::new(
                 id.to_string(),
@@ -416,7 +423,10 @@ mod tests {
         repo.replay_event(&created).unwrap();
 
         assert_eq!(repo.count().unwrap(), 1);
-        assert_eq!(repo.find_by_id::<TestEntity>("entity-1").unwrap(), Some(created.object().clone()));
+        assert_eq!(
+            repo.find_by_id::<TestEntity>("entity-1").unwrap(),
+            Some(created.object().clone())
+        );
         assert_eq!(repo.find_by_sequence::<TestEntity>(1).unwrap(), Some(created.object().clone()));
     }
 
@@ -435,7 +445,9 @@ mod tests {
             "entity-1",
             "beta",
             2,
-            ChangeType::Updated { changed_fields: vec![FieldChange::new("value", "alpha", "beta")] },
+            ChangeType::Updated {
+                changed_fields: vec![FieldChange::new("value", "alpha", "beta")],
+            },
         ))
         .unwrap();
 
@@ -494,13 +506,18 @@ mod tests {
                 &format!("entity-{}", sequence),
                 &format!("v{}", sequence),
                 sequence,
-                ChangeType::Created { fields: vec![FieldChange::new("value", "", format!("v{}", sequence))] },
+                ChangeType::Created {
+                    fields: vec![FieldChange::new("value", "", format!("v{}", sequence))],
+                },
             ))
             .unwrap();
         }
 
         let range = repo.find_range_by_sequence::<TestEntity>(1, 3).unwrap();
-        assert_eq!(range.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(), vec!["v1", "v2", "v3"]);
+        assert_eq!(
+            range.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(),
+            vec!["v1", "v2", "v3"]
+        );
 
         let page = repo
             .find_range_by_sequence_paginated::<TestEntity>(1, 3, PageRequest::new(1, 2))
@@ -518,18 +535,28 @@ mod tests {
                 &format!("entity-{}", sequence),
                 &format!("v{}", sequence),
                 sequence,
-                ChangeType::Created { fields: vec![FieldChange::new("value", "", format!("v{}", sequence))] },
+                ChangeType::Created {
+                    fields: vec![FieldChange::new("value", "", format!("v{}", sequence))],
+                },
             ))
             .unwrap();
         }
 
         let condition = TestEntity { id: String::new(), value: String::new() };
-        let (forward_items, next_cursor) = repo.find_by_cursor(condition.clone(), None, 2, true).unwrap();
-        assert_eq!(forward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(), vec!["v1", "v2"]);
+        let (forward_items, next_cursor) =
+            repo.find_by_cursor(condition.clone(), None, 2, true).unwrap();
+        assert_eq!(
+            forward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(),
+            vec!["v1", "v2"]
+        );
         assert_eq!(next_cursor, Some("2".to_string()));
 
-        let (backward_items, prev_cursor) = repo.find_by_cursor(condition, Some("4".to_string()), 2, false).unwrap();
-        assert_eq!(backward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(), vec!["v2", "v3"]);
+        let (backward_items, prev_cursor) =
+            repo.find_by_cursor(condition, Some("4".to_string()), 2, false).unwrap();
+        assert_eq!(
+            backward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(),
+            vec!["v2", "v3"]
+        );
         assert_eq!(prev_cursor, Some("3".to_string()));
     }
 
@@ -547,9 +574,8 @@ mod tests {
         let condition = TestEntity { id: "entity-1".to_string(), value: "ignored".to_string() };
         let one = repo.find_one_by_condition(condition.clone()).unwrap();
         let all = repo.find_all_by_condition(condition.clone()).unwrap();
-        let paged = repo
-            .find_all_by_condition_paginated(condition, PageRequest::new(0, 10))
-            .unwrap();
+        let paged =
+            repo.find_all_by_condition_paginated(condition, PageRequest::new(0, 10)).unwrap();
 
         assert_eq!(one.unwrap().value, "alpha");
         assert_eq!(all.len(), 1);

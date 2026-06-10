@@ -51,7 +51,6 @@ pub fn immutable(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // 检查所有字段是否为私有
     for field in fields.iter() {
-
         //todo 检查类型为非堆分配
 
         if matches!(field.vis, syn::Visibility::Public(_)) {

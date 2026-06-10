@@ -23,7 +23,8 @@ struct ValidatedTrade {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("SBE Value Range Validation Example");
     println!("===================================\n");

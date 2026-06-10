@@ -9,17 +9,19 @@
 
 use std::collections::VecDeque;
 
-use crate::handler::exmaple::event_handler::event_template::{
-    emit_place_order_event, emit_trade_created_event, EventHandlerError, PlaceOrderEventHandler,
-    TradeEventHandler,
-};
+use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::cmd_handler::match_handler::MatchOutput;
 use crate::handler::exmaple::cmd_handler::place_order_handler::{
     OrderSide, OrderType, PlaceOrderAcceptedEvent, PlaceOrderCmd, PlaceOrderEvent,
     PlaceOrderHandler, PlaceOrderOutput, PlaceOrderResult,
 };
-use crate::handler::exmaple::cmd_handler::settlement_handler::{SettlementHandler, SettlementResult};
-use crate::handler::event_handler::EventHandler;
+use crate::handler::exmaple::cmd_handler::settlement_handler::{
+    SettlementHandler, SettlementResult,
+};
+use crate::handler::exmaple::event_handler::event_template::{
+    EventHandlerError, PlaceOrderEventHandler, TradeEventHandler, emit_place_order_event,
+    emit_trade_created_event,
+};
 use crate::handler::handler_update::CmdHandlerForUpdate;
 
 pub enum InProcEventEnvelope {
@@ -47,8 +49,9 @@ impl InProcEventQueue {
 
 pub fn run_full_event_chain_via_inproc_queue() -> Result<SettlementResult, EventHandlerError> {
     let place_order_handler = PlaceOrderHandler::new();
-    let place_order_event_handler =
-        PlaceOrderEventHandler::new(crate::handler::exmaple::cmd_handler::match_handler::MatchHandler::new());
+    let place_order_event_handler = PlaceOrderEventHandler::new(
+        crate::handler::exmaple::cmd_handler::match_handler::MatchHandler::new(),
+    );
     let trade_event_handler = TradeEventHandler::new(SettlementHandler::new());
 
     let cmd = PlaceOrderCmd {

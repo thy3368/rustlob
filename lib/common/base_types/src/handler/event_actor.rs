@@ -29,4 +29,3 @@ pub trait EventRecvActor<Ev, Err>: Send {
         Ok(())
     }
 }
-

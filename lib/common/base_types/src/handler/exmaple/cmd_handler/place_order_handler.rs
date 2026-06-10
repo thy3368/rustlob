@@ -3,9 +3,7 @@
 use crate::handler::exmaple::cmd_handler::example_types::{
     AccountBalance, BalanceChange, HandlerError, Order, OrderBookSnapshot, OrderStatus,
 };
-use crate::handler::handler_update::{
-    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
-};
+use crate::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate};
 
 pub struct PlaceOrderCmd {
     pub cmd_id: String,

@@ -1,6 +1,6 @@
 mod executor;
 mod outbound;
-mod trace;
+pub(crate) mod trace;
 mod use_case;
 
 pub use executor::{CommandUseCaseExecutionError, CommandUseCaseExecutor2};

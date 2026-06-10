@@ -1,8 +1,6 @@
 //! Enhanced example with more SBE features
 
-
 use sbe_derive::{SbeDecode, SbeEncode};
-
 
 pub mod trade_codec;
 
@@ -43,7 +41,8 @@ struct AdvancedTrade {
 }
 
 fn main() {
-    use sbe::{message_header_codec::MessageHeaderDecoder, ReadBuf, WriteBuf};
+    use sbe::message_header_codec::MessageHeaderDecoder;
+    use sbe::{ReadBuf, WriteBuf};
 
     println!("Advanced SBE Features Example");
     println!("==============================\n");

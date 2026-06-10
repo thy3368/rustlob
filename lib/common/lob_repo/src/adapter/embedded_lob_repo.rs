@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
+
+use crate::LobError;
 use crate::adapter::local_lob_impl::LocalLob;
 use crate::core::symbol_lob_repo::{MultiSymbolLobRepo, SymbolLob};
-use crate::LobError;
 
 #[allow(dead_code)]
 ///规则：BDD必须用EmbeddedLobRepo,Lob都必须单线程访问无须锁

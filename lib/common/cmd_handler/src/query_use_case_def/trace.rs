@@ -100,8 +100,8 @@ macro_rules! trace_query_use_case_completed {
             request_outbound = %$outbound_type,
             response_result = "ok",
             status = "ok",
-            latency_ns = $crate::query_use_case_def2::trace::saturating_u64($metrics.total_ns),
-            total_ns = $crate::query_use_case_def2::trace::saturating_u64($metrics.total_ns),
+            latency_ns = $crate::query_use_case_def::trace::saturating_u64($metrics.total_ns),
+            total_ns = $crate::query_use_case_def::trace::saturating_u64($metrics.total_ns),
             "query use case execution completed"
         );
     };
@@ -128,8 +128,8 @@ macro_rules! trace_query_use_case_failed {
             request_outbound = %$outbound_type,
             response_result = "err",
             status = "err",
-            latency_ns = $crate::query_use_case_def2::trace::saturating_u64($total_elapsed_ns),
-            total_ns = $crate::query_use_case_def2::trace::saturating_u64($total_elapsed_ns),
+            latency_ns = $crate::query_use_case_def::trace::saturating_u64($total_elapsed_ns),
+            total_ns = $crate::query_use_case_def::trace::saturating_u64($total_elapsed_ns),
             error_message = %$error,
             "query use case execution failed"
         );

@@ -32,8 +32,13 @@ impl PlaceOrderEventHandler {
     }
 }
 
-impl EventHandler<PlaceOrderAcceptedEvent, MatchOutput, EventHandlerError> for PlaceOrderEventHandler {
-    fn event_handle(&self, event: PlaceOrderAcceptedEvent) -> Result<MatchOutput, EventHandlerError> {
+impl EventHandler<PlaceOrderAcceptedEvent, MatchOutput, EventHandlerError>
+    for PlaceOrderEventHandler
+{
+    fn event_handle(
+        &self,
+        event: PlaceOrderAcceptedEvent,
+    ) -> Result<MatchOutput, EventHandlerError> {
         let cmd = MatchCmd {
             match_id: format!("match_{}", event.order_id),
             taker_order_id: event.order_id,
@@ -60,9 +65,11 @@ impl EventHandler<PlaceOrderAcceptedEvent, MatchOutput, EventHandlerError> for P
                     .events
                     .iter()
                     .map(|event| match event {
-                        MatchEvent::TradeCreated(event) => MatchEvent::TradeCreated(TradeCreatedEvent {
-                            trade_id: event.trade_id.clone(),
-                        }),
+                        MatchEvent::TradeCreated(event) => {
+                            MatchEvent::TradeCreated(TradeCreatedEvent {
+                                trade_id: event.trade_id.clone(),
+                            })
+                        }
                     })
                     .collect(),
             })
@@ -81,7 +88,10 @@ impl TradeEventHandler {
 }
 
 impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for TradeEventHandler {
-    fn event_handle(&self, event: TradeCreatedEvent) -> Result<SettlementResult, EventHandlerError> {
+    fn event_handle(
+        &self,
+        event: TradeCreatedEvent,
+    ) -> Result<SettlementResult, EventHandlerError> {
         let cmd = SettlementCmd {
             settlement_id: format!("settlement_{}", event.trade_id),
             trade_ids: vec![event.trade_id],
@@ -92,10 +102,12 @@ impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for Tr
                 balance_changes: writes
                     .balance_changes
                     .iter()
-                    .map(|change| crate::handler::exmaple::cmd_handler::example_types::BalanceChange {
-                        user_id: change.user_id.clone(),
-                        asset: change.asset.clone(),
-                        change: change.change,
+                    .map(|change| {
+                        crate::handler::exmaple::cmd_handler::example_types::BalanceChange {
+                            user_id: change.user_id.clone(),
+                            asset: change.asset.clone(),
+                            change: change.change,
+                        }
                     })
                     .collect(),
             })
@@ -105,17 +117,17 @@ impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for Tr
 
 pub fn emit_place_order_event(output: &PlaceOrderOutput) -> Option<PlaceOrderAcceptedEvent> {
     output.events.iter().find_map(|event| match event {
-        PlaceOrderEvent::Accepted(event) => Some(PlaceOrderAcceptedEvent {
-            order_id: event.order_id.clone(),
-        }),
+        PlaceOrderEvent::Accepted(event) => {
+            Some(PlaceOrderAcceptedEvent { order_id: event.order_id.clone() })
+        }
     })
 }
 
 pub fn emit_trade_created_event(output: &MatchOutput) -> Option<TradeCreatedEvent> {
     output.events.iter().find_map(|event| match event {
-        MatchEvent::TradeCreated(event) => Some(TradeCreatedEvent {
-            trade_id: event.trade_id.clone(),
-        }),
+        MatchEvent::TradeCreated(event) => {
+            Some(TradeCreatedEvent { trade_id: event.trade_id.clone() })
+        }
     })
 }
 

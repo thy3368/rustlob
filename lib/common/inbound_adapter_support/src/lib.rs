@@ -4,7 +4,9 @@ use actix_web::{HttpResponse, ResponseError};
 use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use cmd_handler::use_case_def2::{CommandUseCaseExecutionError, CommandUseCaseOutboundPhase};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCaseExecutionError, CommandUseCaseOutboundPhase,
+};
 pub use descriptor::{
     CliApiDescriptor, CliArgDescriptor, CliErrorCodeDescriptor, HttpApiDescriptor,
     HttpErrorCodeDescriptor, InboundApiDescriptor, build_api_manifest, build_cli_schema,
@@ -221,7 +223,9 @@ pub fn outbound_phase_code(phase: CommandUseCaseOutboundPhase) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::use_case_def2::{CommandUseCaseExecutionError, CommandUseCaseOutboundPhase};
+    use cmd_handler::command_use_case_def2::{
+        CommandUseCaseExecutionError, CommandUseCaseOutboundPhase,
+    };
 
     use super::*;
 

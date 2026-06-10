@@ -2,7 +2,6 @@
 
 pub mod diff;
 pub use diff::diff_types;
-pub use diff::entity_change_log::{EntityReplayableEvent, FieldChange as ReplayFieldChange};
 // 重新导出核心类型，方便使用
 pub use diff::diff_types::{
     // 核心数据结构
@@ -29,6 +28,7 @@ pub use diff::diff_types::{
     track_delete,
     track_update,
 };
+pub use diff::entity_change_log::{EntityReplayableEvent, FieldChange as ReplayFieldChange};
 
 // Entity derive 宏从 entity_derive crate 导入
 // 使用方法: #[derive(entity_derive::Entity)]

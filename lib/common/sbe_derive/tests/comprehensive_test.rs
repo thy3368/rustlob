@@ -1,7 +1,7 @@
 //! Comprehensive test suite for SBE derive macros
 
+use sbe::{ActingVersion, Decoder, Encoder, ReadBuf, Reader, WriteBuf, Writer};
 use sbe_derive::{SbeDecode, SbeEncode, SbeEnum};
-use sbe::{ReadBuf, WriteBuf, Writer, Encoder, Reader, Decoder, ActingVersion};
 
 /// Test enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SbeEnum)]
@@ -145,12 +145,8 @@ fn test_optional_none() {
     encoder.field_optional(None);
 
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = TestMessageDecoder::default().wrap(
-        read_buf,
-        0,
-        test_message_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder =
+        TestMessageDecoder::default().wrap(read_buf, 0, test_message_encoder::SBE_BLOCK_LENGTH, 0);
 
     assert_eq!(decoder.field_optional(), None);
 }
@@ -168,36 +164,24 @@ fn test_version_fields() {
 
     // Decode with version 0 (no version fields available)
     let read_buf = ReadBuf::new(&buffer);
-    let decoder_v0 = TestMessageDecoder::default().wrap(
-        read_buf,
-        0,
-        test_message_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder_v0 =
+        TestMessageDecoder::default().wrap(read_buf, 0, test_message_encoder::SBE_BLOCK_LENGTH, 0);
 
     assert_eq!(decoder_v0.field_v1(), None);
     assert_eq!(decoder_v0.field_v2(), None);
 
     // Decode with version 1 (v1 available, v2 not)
     let read_buf = ReadBuf::new(&buffer);
-    let decoder_v1 = TestMessageDecoder::default().wrap(
-        read_buf,
-        0,
-        test_message_encoder::SBE_BLOCK_LENGTH,
-        1,
-    );
+    let decoder_v1 =
+        TestMessageDecoder::default().wrap(read_buf, 0, test_message_encoder::SBE_BLOCK_LENGTH, 1);
 
     assert_eq!(decoder_v1.field_v1(), Some(100));
     assert_eq!(decoder_v1.field_v2(), None);
 
     // Decode with version 2 (both available)
     let read_buf = ReadBuf::new(&buffer);
-    let decoder_v2 = TestMessageDecoder::default().wrap(
-        read_buf,
-        0,
-        test_message_encoder::SBE_BLOCK_LENGTH,
-        2,
-    );
+    let decoder_v2 =
+        TestMessageDecoder::default().wrap(read_buf, 0, test_message_encoder::SBE_BLOCK_LENGTH, 2);
 
     assert_eq!(decoder_v2.field_v1(), Some(100));
     assert_eq!(decoder_v2.field_v2(), Some(200));
@@ -222,12 +206,8 @@ fn test_constant_field() {
     // Constant field has no setter
 
     let read_buf = ReadBuf::new(&buffer);
-    let decoder = TestMessageDecoder::default().wrap(
-        read_buf,
-        0,
-        test_message_encoder::SBE_BLOCK_LENGTH,
-        0,
-    );
+    let decoder =
+        TestMessageDecoder::default().wrap(read_buf, 0, test_message_encoder::SBE_BLOCK_LENGTH, 0);
 
     // Constant field always returns the constant value
     assert_eq!(decoder.field_constant(), 42);

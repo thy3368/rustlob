@@ -3,10 +3,10 @@
 //! 展示如何使用 sbe 库的 trait 系统手动实现编解码。
 //! 参考 serde 的设计模式。
 
-use sbe::sbe_types::{Decimal, Timestamp};
-use sbe::codec::simple_codec::{SimpleDecoder, SimpleEncoder};
-use sbe::{ReadBuf, WriteBuf};
 use sbe::codec::codec::{SbeDecode, SbeDecoder, SbeEncode, SbeEncoder};
+use sbe::codec::simple_codec::{SimpleDecoder, SimpleEncoder};
+use sbe::sbe_types::{Decimal, Timestamp};
+use sbe::{ReadBuf, WriteBuf};
 // ============================================================================
 // Composite 类型示例 - 嵌套结构体（符合 SBE 官方定义）
 // ============================================================================

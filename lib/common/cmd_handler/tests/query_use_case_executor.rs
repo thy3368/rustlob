@@ -1,12 +1,12 @@
 use std::fmt;
 use std::sync::Mutex;
 
-use cmd_handler::HandlerLatencyMetrics;
-use cmd_handler::query_use_case_def2::{
-    QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseExecutionError, QueryUseCaseExecutor,
-    QueryUseCaseOutbound, QueryUseCaseOutboundPhase,
+use cmd_handler::command_use_case_def2::IssuedByParty;
+use cmd_handler::query_use_case_def::{
+    ObserveQueryUseCaseLatency, QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseExecutionError,
+    QueryUseCaseExecutor, QueryUseCaseLatencyMetrics, QueryUseCaseOutbound,
+    QueryUseCaseOutboundPhase,
 };
-use cmd_handler::use_case_def2::{IssuedByParty, ObserveHandlerLatency};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StubQuery {
@@ -128,7 +128,7 @@ impl QueryUseCaseOutbound for StubQueryOutbound {
 
 #[derive(Debug, Default)]
 struct StubObserver {
-    observed: Mutex<Vec<HandlerLatencyMetrics>>,
+    observed: Mutex<Vec<QueryUseCaseLatencyMetrics>>,
 }
 
 impl StubObserver {
@@ -137,8 +137,8 @@ impl StubObserver {
     }
 }
 
-impl ObserveHandlerLatency for StubObserver {
-    fn observe_latency(&self, metrics: &HandlerLatencyMetrics) {
+impl ObserveQueryUseCaseLatency for StubObserver {
+    fn observe_latency(&self, metrics: &QueryUseCaseLatencyMetrics) {
         self.observed.lock().unwrap().push(*metrics);
     }
 }
