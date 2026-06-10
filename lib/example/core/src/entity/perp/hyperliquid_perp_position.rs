@@ -23,6 +23,15 @@ impl HyperliquidPerpPositionSide {
     }
 }
 
+/// 当前仓位在一次资金费结算中的收付方向。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HyperliquidPerpFundingDirection {
+    /// 当前仓位需要支付资金费。
+    Pay,
+    /// 当前仓位会收到资金费。
+    Receive,
+}
+
 /// Hyperliquid perp 账户在单个合约上的 Cross 净仓位。
 ///
 /// `version == 0` 可表示 adapter 加载到的未创建空仓位槽位；结算后若产生非空仓位，
@@ -142,6 +151,49 @@ impl HyperliquidPerpPosition {
     /// 返回当前仓位名义价值；乘法溢出时返回 `None`。
     pub fn notional(&self) -> Option<u64> {
         self.qty.checked_mul(self.entry_price)
+    }
+
+    /// 返回当前仓位是否应参与资金费结算。
+    pub fn is_funding_eligible(&self) -> bool {
+        !self.is_flat() && self.has_consistent_state()
+    }
+
+    /// 返回按 oracle 价格计算的资金费名义价值；乘法溢出时返回 `None`。
+    pub fn funding_notional(&self, oracle_price: u64) -> Option<u64> {
+        self.qty.checked_mul(oracle_price)
+    }
+
+    /// 返回当前仓位在指定资金费率下是付款方还是收款方。
+    pub fn funding_direction(
+        &self,
+        funding_rate_e8: i64,
+    ) -> Option<HyperliquidPerpFundingDirection> {
+        if self.is_flat() || funding_rate_e8 == 0 {
+            return None;
+        }
+
+        match (self.side, funding_rate_e8.is_positive()) {
+            (HyperliquidPerpPositionSide::Long, true)
+            | (HyperliquidPerpPositionSide::Short, false) => {
+                Some(HyperliquidPerpFundingDirection::Pay)
+            }
+            (HyperliquidPerpPositionSide::Long, false)
+            | (HyperliquidPerpPositionSide::Short, true) => {
+                Some(HyperliquidPerpFundingDirection::Receive)
+            }
+            (HyperliquidPerpPositionSide::Flat, _) => None,
+        }
+    }
+
+    /// 返回当前仓位在指定 oracle 价格和资金费率下的资金费绝对金额。
+    pub fn funding_fee(&self, oracle_price: u64, funding_rate_e8: i64) -> Option<u64> {
+        if funding_rate_e8 == 0 {
+            return Some(0);
+        }
+        let notional = self.funding_notional(oracle_price)? as u128;
+        let rate = funding_rate_e8.unsigned_abs() as u128;
+        let fee = notional.checked_mul(rate)?.checked_div(100_000_000)?;
+        u64::try_from(fee).ok()
     }
 
     /// 返回 `ceil(qty * entry_price / leverage)`；空仓返回 0。
@@ -296,6 +348,7 @@ mod tests {
         assert!(position.trades_asset(0));
         assert!(position.trades_symbol("BTC-PERP"));
         assert!(position.is_flat());
+        assert!(!position.is_funding_eligible());
         assert_eq!(position.required_margin(), Some(0));
         assert_eq!(position.version, 0);
     }
@@ -306,5 +359,43 @@ mod tests {
         assert_eq!(required_position_margin(10, 20, 5), Some(40));
         assert_eq!(required_position_margin(0, 20, 0), Some(0));
         assert_eq!(required_position_margin(1, 1, 0), None);
+    }
+
+    #[test]
+    fn funding_helpers_follow_hyperliquid_direction_rule() {
+        let long = HyperliquidPerpPosition::new(
+            "long-1".to_string(),
+            "trader-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            50_000,
+            10,
+            10_000,
+            0,
+            3,
+        );
+        let short = HyperliquidPerpPosition::new(
+            "short-1".to_string(),
+            "trader-2".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Short,
+            2,
+            50_000,
+            10,
+            10_000,
+            0,
+            3,
+        );
+
+        assert!(long.is_funding_eligible());
+        assert_eq!(long.funding_notional(60_000), Some(120_000));
+        assert_eq!(long.funding_direction(10_000), Some(HyperliquidPerpFundingDirection::Pay));
+        assert_eq!(short.funding_direction(10_000), Some(HyperliquidPerpFundingDirection::Receive));
+        assert_eq!(long.funding_direction(-10_000), Some(HyperliquidPerpFundingDirection::Receive));
+        assert_eq!(long.funding_fee(60_000, 10_000), Some(12));
+        assert_eq!(long.funding_fee(60_000, 0), Some(0));
     }
 }

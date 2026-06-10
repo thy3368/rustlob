@@ -68,6 +68,16 @@ impl Balance {
         self.available.checked_add(amount)
     }
 
+    /// 返回当前可用余额是否足以直接支付指定金额。
+    pub fn can_debit_available(&self, amount: u64) -> bool {
+        self.available >= amount
+    }
+
+    /// 返回直接扣减可用余额后的新可用余额。
+    pub fn debit_available_after(&self, amount: u64) -> Option<u64> {
+        self.available.checked_sub(amount)
+    }
+
     /// 返回扣减冻结后的冻结余额。
     pub fn debit_frozen_after(&self, amount: u64) -> Option<u64> {
         self.frozen.checked_sub(amount)
@@ -158,6 +168,10 @@ mod tests {
 
         assert!(balance.belongs_to_account("trader-1"));
         assert!(balance.is_asset("USDT"));
+        assert!(balance.can_debit_available(200));
+        assert!(!balance.can_debit_available(2_000));
+        assert_eq!(balance.debit_available_after(300), Some(700));
+        assert_eq!(balance.debit_available_after(2_000), None);
         assert_eq!(balance.reserve_after(200), Some((800, 200)));
         assert_eq!(
             Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 4).release_after(50),

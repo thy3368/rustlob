@@ -15,13 +15,14 @@ pub use perp::hyperliquid_perp_order::{
     HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
 };
 pub use perp::hyperliquid_perp_position::{
-    required_position_margin, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+    HyperliquidPerpFundingDirection, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+    required_position_margin,
 };
 pub use perp::hyperliquid_perp_settlement::HyperliquidPerpSettlement;
 pub use perp::hyperliquid_perp_trade::HyperliquidPerpTrade;
 #[cfg(test)]
 pub(crate) use spot::spot_order::spot_order_scenarios::{
-    active_spot_order_scenario_strategy, ActiveSpotOrderScenario,
+    ActiveSpotOrderScenario, active_spot_order_scenario_strategy,
 };
 pub use spot::spot_order::{
     SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide,

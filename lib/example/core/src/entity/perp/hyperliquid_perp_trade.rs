@@ -1,4 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
+
 use crate::HyperliquidPerpOrderSide;
 
 const HYPERLIQUID_PERP_TRADE_ENTITY_TYPE: u8 = 10;

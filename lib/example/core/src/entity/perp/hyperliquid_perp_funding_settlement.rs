@@ -26,8 +26,8 @@ pub struct HyperliquidPerpFundingSettlement {
     pub side: HyperliquidPerpPositionSide,
     /// 被结算仓位数量。
     pub qty: u64,
-    /// 本次资金费使用的标记价格。
-    pub mark_price: u64,
+    /// 本次资金费使用的 oracle 价格。
+    pub oracle_price: u64,
     /// 本次资金费使用的名义价值。
     pub notional: u64,
     /// signed 1e8 刻度资金费率；`0.01% = 10000`。
@@ -50,7 +50,7 @@ impl HyperliquidPerpFundingSettlement {
         symbol: String,
         side: HyperliquidPerpPositionSide,
         qty: u64,
-        mark_price: u64,
+        oracle_price: u64,
         notional: u64,
         funding_rate_e8: i64,
         funding_fee: u64,
@@ -65,7 +65,7 @@ impl HyperliquidPerpFundingSettlement {
             symbol,
             side,
             qty,
-            mark_price,
+            oracle_price,
             notional,
             funding_rate_e8,
             funding_fee,
@@ -91,11 +91,7 @@ impl Entity for HyperliquidPerpFundingSettlement {
 
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new(
-                "funding_settlement_id",
-                "",
-                self.funding_settlement_id.clone(),
-            ),
+            EntityFieldChange::new("funding_settlement_id", "", self.funding_settlement_id.clone()),
             EntityFieldChange::new("funding_batch_id", "", self.funding_batch_id.clone()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
@@ -103,7 +99,7 @@ impl Entity for HyperliquidPerpFundingSettlement {
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
             EntityFieldChange::new("side", "", self.side.as_str()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("mark_price", "", self.mark_price.to_string()),
+            EntityFieldChange::new("oracle_price", "", self.oracle_price.to_string()),
             EntityFieldChange::new("notional", "", self.notional.to_string()),
             EntityFieldChange::new("funding_rate_e8", "", self.funding_rate_e8.to_string()),
             EntityFieldChange::new("funding_fee", "", self.funding_fee.to_string()),
@@ -117,10 +113,14 @@ impl Entity for HyperliquidPerpFundingSettlement {
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "funding_settlement_id" | "funding_batch_id" | "account_id" | "position_id"
-            | "symbol" | "side" | "is_payment" => 0,
-            "asset" | "qty" | "mark_price" | "notional" | "funding_rate_e8"
-            | "funding_fee" => 1,
+            "funding_settlement_id"
+            | "funding_batch_id"
+            | "account_id"
+            | "position_id"
+            | "symbol"
+            | "side"
+            | "is_payment" => 0,
+            "asset" | "qty" | "oracle_price" | "notional" | "funding_rate_e8" | "funding_fee" => 1,
             _ => 0,
         }
     }
@@ -172,6 +172,10 @@ mod tests {
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("funding_rate_e8")
                 && change.new_value_bytes() == b"10000"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("oracle_price")
+                && change.new_value_bytes() == b"50000"
         }));
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("is_payment")
