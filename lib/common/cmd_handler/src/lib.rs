@@ -6,7 +6,7 @@ pub mod handler_cmd;
 pub mod handler_query;
 pub mod query_use_case_def2;
 pub mod trace_log;
-pub mod use_case_def2;
+pub mod command_use_case_def2;
 #[cfg(test)]
 mod use_case_examples;
 #[cfg(test)]

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use proptest::prelude::*;
 use thiserror::Error;
 
-use crate::use_case_def2::{
+use crate::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutionError,
     CommandUseCaseExecutor2, CommandUseCaseOutbound, IssuedByParty,
 };

@@ -1,4 +1,4 @@
-use crate::use_case_def2::IssuedByParty;
+use crate::command_use_case_def2::IssuedByParty;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QueryMeta {

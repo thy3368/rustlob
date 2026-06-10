@@ -38,31 +38,38 @@ where
 {
     use minstant::Instant;
 
-    tracing::trace!(phase, operation, status = "start", "command use case phase started");
+    let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
+    if trace_enabled {
+        tracing::trace!(phase, operation, status = "start", "command use case phase started");
+    }
     let start = Instant::now();
     let result = f();
     let elapsed_ns = start.elapsed().as_nanos();
 
     match result {
         Ok(value) => {
-            tracing::trace!(
-                phase,
-                operation,
-                status = "ok",
-                elapsed_ns = saturating_u64(elapsed_ns),
-                "command use case phase completed"
-            );
+            if trace_enabled {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "ok",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    "command use case phase completed"
+                );
+            }
             Ok((value, elapsed_ns))
         }
         Err(error) => {
-            tracing::trace!(
-                phase,
-                operation,
-                status = "err",
-                elapsed_ns = saturating_u64(elapsed_ns),
-                error_message = %error,
-                "command use case phase failed"
-            );
+            if trace_enabled {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "err",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    error_message = %error,
+                    "command use case phase failed"
+                );
+            }
             Err(error)
         }
     }
@@ -94,8 +101,8 @@ macro_rules! trace_command_use_case_completed {
             response_result = "ok",
             response_domain_event_count = $metrics.domain_event_count as u64,
             status = "ok",
-            latency_ns = $crate::use_case_def2::trace::saturating_u64($metrics.total_ns),
-            total_ns = $crate::use_case_def2::trace::saturating_u64($metrics.total_ns),
+            latency_ns = $crate::command_use_case_def2::trace::saturating_u64($metrics.total_ns),
+            total_ns = $crate::command_use_case_def2::trace::saturating_u64($metrics.total_ns),
             domain_event_count = $metrics.domain_event_count as u64,
             "command use case execution completed"
         );
@@ -123,8 +130,8 @@ macro_rules! trace_command_use_case_failed {
             request_outbound = %$outbound_type,
             response_result = "err",
             status = "err",
-            latency_ns = $crate::use_case_def2::trace::saturating_u64($total_elapsed_ns),
-            total_ns = $crate::use_case_def2::trace::saturating_u64($total_elapsed_ns),
+            latency_ns = $crate::command_use_case_def2::trace::saturating_u64($total_elapsed_ns),
+            total_ns = $crate::command_use_case_def2::trace::saturating_u64($total_elapsed_ns),
             error_message = %$error,
             "command use case execution failed"
         );

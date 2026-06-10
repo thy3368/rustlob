@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::use_case_def2::{CommandUseCase2, IssuedByParty};
+use crate::command_use_case_def2::{CommandUseCase2, IssuedByParty};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 2;

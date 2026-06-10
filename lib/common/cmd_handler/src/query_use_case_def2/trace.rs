@@ -38,31 +38,38 @@ where
 {
     use minstant::Instant;
 
-    tracing::trace!(phase, operation, status = "start", "query use case phase started");
+    let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
+    if trace_enabled {
+        tracing::trace!(phase, operation, status = "start", "query use case phase started");
+    }
     let start = Instant::now();
     let result = f();
     let elapsed_ns = start.elapsed().as_nanos();
 
     match result {
         Ok(value) => {
-            tracing::trace!(
-                phase,
-                operation,
-                status = "ok",
-                elapsed_ns = saturating_u64(elapsed_ns),
-                "query use case phase completed"
-            );
+            if trace_enabled {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "ok",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    "query use case phase completed"
+                );
+            }
             Ok((value, elapsed_ns))
         }
         Err(error) => {
-            tracing::trace!(
-                phase,
-                operation,
-                status = "err",
-                elapsed_ns = saturating_u64(elapsed_ns),
-                error_message = %error,
-                "query use case phase failed"
-            );
+            if trace_enabled {
+                tracing::trace!(
+                    phase,
+                    operation,
+                    status = "err",
+                    elapsed_ns = saturating_u64(elapsed_ns),
+                    error_message = %error,
+                    "query use case phase failed"
+                );
+            }
             Err(error)
         }
     }

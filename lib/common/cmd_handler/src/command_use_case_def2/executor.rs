@@ -53,6 +53,10 @@ impl CommandUseCaseExecutor2 {
             + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
         O::Error: 'static,
     {
+        if !tracing::enabled!(tracing::Level::TRACE) {
+            return tracing::Span::none();
+        }
+
         tracing::span!(
             tracing::Level::TRACE,
             "command_use_case_execute",
@@ -98,15 +102,14 @@ impl CommandUseCaseExecutor2 {
         use minstant::Instant;
 
         let CommandEnvelope { meta, command } = envelope;
-        let command_summary = use_case_command_summary::<U>();
-        let role = use_case.role().to_string();
-        let party_id = command.party_id().map(str::to_string);
-        let outbound_type = std::any::type_name::<OB>().to_string();
+        let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
         let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
         let _execution_guard = execution_span.enter();
 
-        trace_command_use_case_started!();
+        if trace_enabled {
+            trace_command_use_case_started!();
+        }
 
         let execution = (|| -> Result<
             (Vec<EntityReplayableEvent>, HandlerLatencyMetrics),
@@ -194,25 +197,29 @@ impl CommandUseCaseExecutor2 {
 
         match execution {
             Ok((events, metrics)) => {
-                trace_command_use_case_completed!(
-                    command_summary,
-                    role,
-                    party_id,
-                    outbound_type,
-                    metrics
-                );
+                if trace_enabled {
+                    trace_command_use_case_completed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        metrics
+                    );
+                }
                 latency_observer.observe_latency(&metrics);
                 Ok(events)
             }
             Err(error) => {
-                trace_command_use_case_failed!(
-                    command_summary,
-                    role,
-                    party_id,
-                    outbound_type,
-                    total_start.elapsed().as_nanos(),
-                    error
-                );
+                if trace_enabled {
+                    trace_command_use_case_failed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        total_start.elapsed().as_nanos(),
+                        error
+                    );
+                }
                 Err(error)
             }
         }

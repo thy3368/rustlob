@@ -3,10 +3,10 @@ use super::trace::{
     trace_query_use_case_failed, trace_query_use_case_started, use_case_query_summary,
 };
 use super::{
-    QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseOutbound, QueryUseCaseOutboundPhase,
+    ObserveQueryUseCaseLatency, QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseLatencyMetrics,
+    QueryUseCaseOutbound, QueryUseCaseOutboundPhase,
 };
-use crate::HandlerLatencyMetrics;
-use crate::use_case_def2::{IssuedByParty, ObserveHandlerLatency};
+use crate::command_use_case_def2::IssuedByParty;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum QueryUseCaseExecutionError<BusinessError, OutboundError>
@@ -47,6 +47,10 @@ impl QueryUseCaseExecutor {
         O: ?Sized + Send + Sync + QueryUseCaseOutbound<Query = U::Query, ReadModel = U::ReadModel>,
         O::Error: 'static,
     {
+        if !tracing::enabled!(tracing::Level::TRACE) {
+            return tracing::Span::none();
+        }
+
         tracing::span!(
             tracing::Level::TRACE,
             "query_use_case_execute",
@@ -78,24 +82,23 @@ impl QueryUseCaseExecutor {
     where
         U: QueryUseCase,
         OB: ?Sized + Send + Sync + QueryUseCaseOutbound<Query = U::Query, ReadModel = U::ReadModel>,
-        O: ?Sized + ObserveHandlerLatency,
+        O: ?Sized + ObserveQueryUseCaseLatency,
         OB::Error: 'static,
     {
         use minstant::Instant;
 
         let QueryEnvelope { meta, query } = envelope;
-        let query_summary = use_case_query_summary::<U>();
-        let role = use_case.role().to_string();
-        let party_id = query.party_id().map(str::to_string);
-        let outbound_type = std::any::type_name::<OB>().to_string();
+        let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
         let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &query);
         let _execution_guard = execution_span.enter();
 
-        trace_query_use_case_started!();
+        if trace_enabled {
+            trace_query_use_case_started!();
+        }
 
         let execution = (|| -> Result<
-            (U::View, HandlerLatencyMetrics),
+            (U::View, QueryUseCaseLatencyMetrics),
             QueryUseCaseExecutionError<U::Error, OB::Error>,
         > {
             let ((), pre_check_ns) = trace_phase(
@@ -115,7 +118,7 @@ impl QueryUseCaseExecutor {
                     error,
                 )
             })?;
-            let ((), validate_in_lock_ns) = trace_phase(
+            let ((), validate_against_read_model_ns) = trace_phase(
                 "validate_against_read_model",
                 "workflow.validate_against_read_model(&query, &read_model)",
                 || use_case.validate_against_read_model(&query, &read_model),
@@ -128,16 +131,12 @@ impl QueryUseCaseExecutor {
             )
             .map_err(QueryUseCaseExecutionError::Business)?;
 
-            let metrics = HandlerLatencyMetrics {
+            let metrics = QueryUseCaseLatencyMetrics {
                 total_ns: total_start.elapsed().as_nanos(),
                 pre_check_ns,
-                load_state_ns: load_read_model_ns,
-                validate_in_lock_ns,
-                apply_changes_ns: compute_view_ns,
-                persist_domain_events_ns: 0,
-                replay_domain_events_ns: 0,
-                publish_domain_events_ns: 0,
-                domain_event_count: 0,
+                load_read_model_ns,
+                validate_against_read_model_ns,
+                compute_view_ns,
             };
 
             Ok((view, metrics))
@@ -145,25 +144,29 @@ impl QueryUseCaseExecutor {
 
         match execution {
             Ok((view, metrics)) => {
-                trace_query_use_case_completed!(
-                    query_summary,
-                    role,
-                    party_id,
-                    outbound_type,
-                    metrics
-                );
+                if trace_enabled {
+                    trace_query_use_case_completed!(
+                        use_case_query_summary::<U>(),
+                        use_case.role(),
+                        query.party_id(),
+                        std::any::type_name::<OB>(),
+                        metrics
+                    );
+                }
                 latency_observer.observe_latency(&metrics);
                 Ok(view)
             }
             Err(error) => {
-                trace_query_use_case_failed!(
-                    query_summary,
-                    role,
-                    party_id,
-                    outbound_type,
-                    total_start.elapsed().as_nanos(),
-                    error
-                );
+                if trace_enabled {
+                    trace_query_use_case_failed!(
+                        use_case_query_summary::<U>(),
+                        use_case.role(),
+                        query.party_id(),
+                        std::any::type_name::<OB>(),
+                        total_start.elapsed().as_nanos(),
+                        error
+                    );
+                }
                 Err(error)
             }
         }

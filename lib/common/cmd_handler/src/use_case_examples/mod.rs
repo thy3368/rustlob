@@ -1,4 +1,4 @@
-use crate::use_case_def2::{CommandUseCase2, IssuedByParty};
+use crate::command_use_case_def2::{CommandUseCase2, IssuedByParty};
 
 mod bad;
 mod good;
