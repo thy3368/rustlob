@@ -23,12 +23,16 @@ description: >
 - 给出现有代码的最小重组建议
 - 讨论微服务、Kafka、Redis、Kubernetes、SDK 抽象等复杂度是否必要
 
+开始回答前，先读取共享约束文件：
+
+- `../shared/use_case_entity_constraints.md`
+
 ## Design Rules
 
 1. 回答时优先使用三层工程表达：
     - `core`
         - `use_case` — business action, input as `command/query`
-        - `entity` — core business rules and invariants
+        - `entity` — core business rules, invariants, and domain-semantic methods reusable by multiple `use_case`
     - `adapter`
         - `inbound` — HTTP/CLI/Event/GUI input to use case
         - `outbound` — use case port to DB/API/SDK/presenter
@@ -46,7 +50,14 @@ description: >
     - `inbound` 把 HTTP / CLI / MQ / GUI 等输入转换为 `use_case` 的 command/query
     - `outbound` 实现 `use_case` 定义的 port，并把 core 输出转换给 DB / SDK / API / message broker 等外部系统
 
-4. 必须显式维护依赖规则：
+4. `workflow` 的定义：
+    - `workflow` 是 `core/use_case` 下的业务分组边界，用于组织同一业务线中的多个相关 `use_case`
+    - `workflow` 不是单个 `use_case`
+    - `workflow` 也不是跨用例编排代码；跨用例协作属于更上层的 `process` / `composition root`
+    - 一个 `workflow` 下的多个 `use_case` 通常共享相近的领域语义、实体集合、状态装载方式，目录上体现为 `core/src/use_case/<workflow>/...`
+    - 例如本仓库中的 `funding`、`trading`，以及更细一级的 `trading/spot`
+
+5. 必须显式维护依赖规则：
     - responsibility view / 职责视图:
       ```text
       core
@@ -67,13 +78,16 @@ description: >
       ```
     - call flow view: `inbound -> use_case -> outbound -> infra`
     - `use_case -> entity`
+    - `use_case` 之间不互相调用；一个业务动作必须收敛在单一 `use_case` 中，跨用例协作只能通过上层编排（如 composition root / workflow / process）完成，不能在一个 `use_case` 内直接调用另一个 `use_case`
+    - `use_case` 与 `entity` 是多对一关系：多个 `use_case` 可以复用同一个 `entity`，但 `entity` 不反向绑定某个特定 `use_case`
+    - `entity` 必须包含有领域语义的方法，而不是只有字段和 getter/setter；这些方法承载可复用的业务规则，供多个 `use_case` 复用
     - `entity` 不依赖 `use_case`
     - `entity` 不知道 `command/query`
     - `use_case` 不依赖具体 DB/HTTP/SDK/ORM/framework
     - `inbound` 只负责把外部输入翻译到 `use_case`，不承载核心业务规则
     - `outbound` 只实现 `use_case` 定义的 port，不定义 port
 
-5. 如果用户使用以下实现模式或传统分层名，不要直接当作主架构层接受；先翻译回真实架构角色，再给建议：
+6. 如果用户使用以下实现模式或传统分层名，不要直接当作主架构层接受；先翻译回真实架构角色，再给建议：
     - `controller`
     - `service`
     - `repository`
@@ -82,7 +96,7 @@ description: >
     - `data layer`
     - `infrastructure`
 
-6. 当用户提出微服务、Kafka、Redis、Kubernetes、service mesh 或额外抽象层时，先判断是否真的需要：
+7. 当用户提出微服务、Kafka、Redis、Kubernetes、service mesh 或额外抽象层时，先判断是否真的需要：
     - `Question`: 问清楚要解决的真实问题
     - `Delete`: 能不用就不用
     - `Simplify`: 必须用时，先选最简单方案
@@ -122,6 +136,9 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 2. `Architecture Views`: responsibility view / source dependency view / call flow view
     - 如有违规，指出是 responsibility、dependency、还是 call flow 被混淆
 3. `Violations`: 指出是否把实现模式误当成架构层；检查 core 是否直接依赖 DB / HTTP / SDK / ORM / framework 等外部技术
+    - 必查：是否存在 `use_case` 互调
+    - 必查：是否把 `entity` 设计成只服务单一 `use_case` 的“私有流程对象”，从而破坏 `use_case` 与 `entity` 的多对一关系
+    - 必查：`entity` 是否退化为贫血数据结构，只剩字段搬运，没有可被 `use_case` 复用的领域语义方法
 4. `Minimal restructuring advice`: 只给满足当前目标的最小调整建议
     - 如果问题涉及复杂度或技术选型，按 `Design Rules` 第 6 条先判断是否真的需要
 
@@ -184,3 +201,4 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 - `references/architecture-output-template.md`
 - `references/musk-algorithm.md`
 - `references/engineering-philosophy.md`
+- `../shared/use_case_entity_constraints.md`

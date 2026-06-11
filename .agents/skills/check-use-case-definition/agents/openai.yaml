@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check Use Case Definition"
+  short_description: "Run the RustLOB use case definition checker"
+  default_prompt: "Use $check-use-case-definition to run the offline RustLOB CommandUseCase2 business-definition checker, summarize failed findings, and explain the minimal refactors."

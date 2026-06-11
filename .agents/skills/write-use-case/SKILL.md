@@ -12,9 +12,11 @@ Implement use cases the way this repository expects: business rules live in `Com
 Start from these source files:
 - Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
+- Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
 
 
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
+Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case.
 If the task is to critique or score a use case, use the sibling skill `review-use-case` instead.
 
 ## Workflow
@@ -45,6 +47,7 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - Do not persist, replay, or publish events inside the use case.
 - Do not map domain events to HTTP or API replies inside the use case.
 - Do not measure latency inside the business logic. The executor does that.
+- Do not call another `use_case` from inside the current `use_case`. If multiple business actions must cooperate, move that coordination to a higher orchestration layer.
 
 5. Put adapter concerns in the right places.
 - `LoadState<Cmd, State, Err>` belongs to the execution side and loads state from ports or adapters.
@@ -66,6 +69,8 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - Keep `compute_replayable_events()` deterministic for the same command and state.
 - `party_id` belongs to the business command, not to `CommandMeta`.
 - `trace_id` is only for tracing. Do not use it as the idempotency key.
+- Treat `entity` as a reusable core collaborator, not a private struct owned by one use case.
+- If business logic is likely reusable across use cases, prefer a domain-semantic entity method over duplicating the rule in the use case.
 
 ## Testing
 
@@ -86,4 +91,6 @@ Before finishing, verify:
 - External state loading happens through `LoadState`.
 - Side effects happen through `DomainEventPipeline`.
 - Reply shaping happens through `UseCaseReplyMapper`.
+- The use case does not directly invoke another use case.
+- Any reusable business rule that belongs on an entity is not duplicated inline in the use case.
 - Tests cover both direct method behavior and executor orchestration.

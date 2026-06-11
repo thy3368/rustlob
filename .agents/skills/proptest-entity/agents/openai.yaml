@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proptest Entity"
+  short_description: "Write proptest for RustLOB entities"
+  default_prompt: "Use $proptest-entity to add independent proptest scenario enums and strategies for a RustLOB core entity."

@@ -1,9 +1,9 @@
 ---
-name: develop-use-case-entity
-description: Develop RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable business rules out of use cases or adapters, implementing entity constructors and domain methods, adding Rustdoc, or writing focused entity unit tests. Uses StoredOrder as the reference pattern.
+name: write-entity
+description: Write RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable business rules out of use cases or adapters, implementing entity constructors and domain methods, adding Rustdoc, or writing focused entity unit tests. Uses StoredOrder as the reference pattern.
 ---
 
-# Develop Use Case Entity
+# Write Entity
 
 ## Overview
 
@@ -11,6 +11,13 @@ Use this skill to create or refactor RustLOB `core/src/entity` types so they car
 business meaning instead of being passive data bags. The reference pattern is
 `lib/example/core/src/entity/stored_order.rs`: a small entity with facts, constructor,
 domain queries/calculations, Rustdoc, and focused unit tests.
+
+Before changing an entity, read the shared constraints file:
+
+- `.agents/skills/shared/use_case_entity_constraints.md`
+
+For independent entity property tests, use `proptest-entity`. Keep this skill focused on
+entity modeling, Rustdoc, business methods, and small inline unit tests.
 
 ## Workflow
 
@@ -20,6 +27,8 @@ domain queries/calculations, Rustdoc, and focused unit tests.
 4. Keep validation ownership clear: use cases reject commands/state; entities expose facts and invariant checks.
 5. Add Rustdoc for the struct, fields, constructor, and business methods.
 6. Add focused inline `#[cfg(test)]` unit tests for the entity methods.
+   If the entity needs business-state enumeration with `proptest`, switch to
+   `proptest-entity` and put those scenarios in a dedicated file.
 7. Replace duplicate manual construction or calculation in adapters/use cases with entity methods when it does not couple core to adapter details.
 8. Run targeted formatting and tests for the touched package.
 
@@ -53,11 +62,13 @@ Do not use `unwrap()` or `expect()` in production entity code.
 
 ## Business Method Rules
 
+- Every entity must contain domain-semantic methods that a use case can reuse; a plain field bag is not enough.
 - Put stable domain vocabulary on the entity: ownership, symbol/product matching, status checks, reserved/releasable amounts, notional calculations, version transitions.
 - Keep persistence, event decoding, SQL, HTTP, CLI, and mapper details out of entities.
 - Constructors may be permissive when adapters need to rebuild historical state from events. Document that explicitly.
 - If a method enforces a command rejection rule, prefer returning a boolean or `Option`; map it to use-case errors in the use case.
 - Avoid generic utility methods that do not express business language.
+- Do not design the entity as a private helper for just one use case; preserve the many-`use_case` to one-`entity` reuse direction.
 
 ## StoredOrder Pattern
 
@@ -115,6 +126,7 @@ Replace only where the dependency direction remains clean:
 - `core` entities must not depend on adapters.
 - `use_case` may call entity methods.
 - `outbound_adapter` may construct entities and call entity methods.
+- `use_case` must not call another `use_case`; shared business meaning should be reused through entity methods or higher-level orchestration.
 
 ## Validation
 

@@ -12,11 +12,13 @@ Review a RustLOB use case as design, not just syntax. The job is to determine wh
 Start from these source files:
 - Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
+- Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
 - Real L1 examples:
   - `lib/core/l1/src/use_case/command_handler/receive_and_admit_transactions.rs`
   - `lib/core/l1/src/use_case/command_handler/execute_and_commit_block.rs`
 
 Load [references/scorecard.md](references/scorecard.md) before scoring.
+Read `.agents/skills/shared/use_case_entity_constraints.md` before reviewing.
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need a fast good-vs-bad calibration before reviewing a real use case.
 
 ## Workflow
@@ -55,11 +57,15 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 6. Give findings and minimal refactor advice.
 - Findings must lead with the biggest design violations.
 - Refactor advice must be the smallest set of changes that materially raises the score.
+- Explicitly check whether the use case is duplicating reusable business rules that should live on an entity.
 
 ## Scoring Heuristics
 
 - Score down when the use case directly calls repositories, clients, HTTP, DB, SDK, filesystem, or runtime machinery.
+- Score down when one use case directly calls another use case.
 - Score down when state snapshots already contain precomputed answers, so the use case is only copying results out.
+- Score down when entity logic is missing and reusable business rules are duplicated inline in the use case.
+- Score down when an entity appears to exist only for one use case instead of serving as a reusable business object.
 - Score down when `role()` names a technical component instead of a business-game role.
 - Score down when one use case bundles multiple unrelated business moments.
 - Score down when names hide business meaning behind generic technical words.

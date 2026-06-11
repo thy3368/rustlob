@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kani Use Case"
+  short_description: "Write kani proofs for Rust use cases"
+  default_prompt: "Write Kani proofs for RustLOB command use cases, focus on business invariants, keep symbolic inputs small, and avoid weak or tautological proofs."
