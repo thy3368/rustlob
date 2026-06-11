@@ -32,6 +32,24 @@ pub enum HyperliquidPerpFundingDirection {
     Receive,
 }
 
+/// Hyperliquid perp 保证金模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HyperliquidPerpMarginMode {
+    /// 账户级共享保证金池。
+    Cross,
+    /// 仓位级独立保证金池。
+    Isolated,
+}
+
+impl HyperliquidPerpMarginMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Cross => "cross",
+            Self::Isolated => "isolated",
+        }
+    }
+}
+
 /// Hyperliquid perp 账户在单个合约上的 Cross 净仓位。
 ///
 /// `version == 0` 可表示 adapter 加载到的未创建空仓位槽位；结算后若产生非空仓位，
@@ -194,6 +212,28 @@ impl HyperliquidPerpPosition {
         let rate = funding_rate_e8.unsigned_abs() as u128;
         let fee = notional.checked_mul(rate)?.checked_div(100_000_000)?;
         u64::try_from(fee).ok()
+    }
+
+    /// 返回当前仓位是否满足强平触发条件。
+    pub fn liquidation_triggered_by_mark_price(
+        &self,
+        mark_price: u64,
+        bankruptcy_price: u64,
+    ) -> bool {
+        if self.is_flat() || !self.has_consistent_state() {
+            return false;
+        }
+
+        match self.side {
+            HyperliquidPerpPositionSide::Long => mark_price <= bankruptcy_price,
+            HyperliquidPerpPositionSide::Short => mark_price >= bankruptcy_price,
+            HyperliquidPerpPositionSide::Flat => false,
+        }
+    }
+
+    /// 返回当前仓位是否可进入强平流程。
+    pub fn is_liquidatable(&self) -> bool {
+        !self.is_flat() && self.has_consistent_state()
     }
 
     /// 返回 `ceil(qty * entry_price / leverage)`；空仓返回 0。
@@ -397,5 +437,41 @@ mod tests {
         assert_eq!(long.funding_direction(-10_000), Some(HyperliquidPerpFundingDirection::Receive));
         assert_eq!(long.funding_fee(60_000, 10_000), Some(12));
         assert_eq!(long.funding_fee(60_000, 0), Some(0));
+    }
+
+    #[test]
+    fn liquidation_trigger_uses_mark_and_bankruptcy_price() {
+        let long = HyperliquidPerpPosition::new(
+            "position-long".to_string(),
+            "trader-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            60_000,
+            5,
+            24_000,
+            0,
+            1,
+        );
+        let short = HyperliquidPerpPosition::new(
+            "position-short".to_string(),
+            "trader-2".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Short,
+            2,
+            60_000,
+            5,
+            24_000,
+            0,
+            1,
+        );
+
+        assert!(long.liquidation_triggered_by_mark_price(50_000, 50_000));
+        assert!(!long.liquidation_triggered_by_mark_price(50_001, 50_000));
+        assert!(short.liquidation_triggered_by_mark_price(50_000, 50_000));
+        assert!(!short.liquidation_triggered_by_mark_price(49_999, 50_000));
+        assert!(long.is_liquidatable());
     }
 }

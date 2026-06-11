@@ -138,6 +138,10 @@ pub struct HyperliquidPerpOrder {
     pub status: HyperliquidPerpOrderStatus,
     /// 是否只减仓。
     pub reduce_only: bool,
+    /// 是否是强平流程发出的风险订单。
+    pub is_liquidation: bool,
+    /// 若是强平订单，则记录来源 liquidation id。
+    pub liquidation_id: Option<String>,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 当前订单实体版本。
@@ -173,9 +177,18 @@ impl HyperliquidPerpOrder {
             filled_qty: 0,
             status: HyperliquidPerpOrderStatus::Open,
             reduce_only,
+            is_liquidation: false,
+            liquidation_id: None,
             client_order_id,
             version: 1,
         }
+    }
+
+    /// 返回带强平来源标记的订单快照。
+    pub fn with_liquidation(mut self, liquidation_id: String) -> Self {
+        self.is_liquidation = true;
+        self.liquidation_id = Some(liquidation_id);
+        self
     }
 
     /// 返回带指定执行状态的订单快照。
@@ -271,6 +284,12 @@ impl Entity for HyperliquidPerpOrder {
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new("reduce_only", "", self.reduce_only.to_string()),
+            EntityFieldChange::new("is_liquidation", "", self.is_liquidation.to_string()),
+            EntityFieldChange::new(
+                "liquidation_id",
+                "",
+                self.liquidation_id.clone().unwrap_or_default(),
+            ),
             EntityFieldChange::new(
                 "client_order_id",
                 "",
@@ -321,6 +340,18 @@ impl Entity for HyperliquidPerpOrder {
         );
         push_change(
             &mut changes,
+            "is_liquidation",
+            self.is_liquidation.to_string(),
+            other.is_liquidation.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "liquidation_id",
+            self.liquidation_id.clone().unwrap_or_default(),
+            other.liquidation_id.clone().unwrap_or_default(),
+        );
+        push_change(
+            &mut changes,
             "client_order_id",
             self.client_order_id.clone().unwrap_or_default(),
             other.client_order_id.clone().unwrap_or_default(),
@@ -332,7 +363,8 @@ impl Entity for HyperliquidPerpOrder {
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "order_id" | "account_id" | "symbol" | "side" | "execution" | "time_in_force"
-            | "status" | "reduce_only" | "client_order_id" => 0,
+            | "status" | "reduce_only" | "is_liquidation" | "liquidation_id"
+            | "client_order_id" => 0,
             "exchange_oid" | "asset" | "price" | "qty" | "filled_qty" => 1,
             _ => 0,
         }
@@ -408,5 +440,16 @@ mod tests {
 
         assert!(!order.has_consistent_execution_state());
         assert!(!order.is_matchable());
+    }
+
+    #[test]
+    fn liquidation_marker_defaults_and_can_be_set() {
+        let normal = order();
+        let liquidation = order().with_liquidation("liq-1".to_string());
+
+        assert!(!normal.is_liquidation);
+        assert_eq!(normal.liquidation_id, None);
+        assert!(liquidation.is_liquidation);
+        assert_eq!(liquidation.liquidation_id.as_deref(), Some("liq-1"));
     }
 }

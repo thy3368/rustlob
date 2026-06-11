@@ -1,10 +1,15 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
 
+use crate::use_case::MatchSpotOrderError;
+
 #[cfg(test)]
 mod spot_order_fixed_scenarios;
 
 #[cfg(test)]
 mod spot_order_exhaustive_scenarios;
+
+#[cfg(test)]
+mod spot_order_match_semantics;
 
 #[cfg(test)]
 pub(crate) mod spot_order_scenarios;
@@ -317,6 +322,13 @@ pub struct SpotOrder {
     pub version: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SpotOrderFinalization {
+    pub(crate) next_filled_qty: u64,
+    pub(crate) status: SpotOrderStatus,
+    pub(crate) status_reason: Option<SpotOrderStatusReason>,
+}
+
 impl SpotOrder {
     /// 从已经校验过的业务事实或回放事件构造 active 现货订单快照。
     ///
@@ -434,6 +446,97 @@ impl SpotOrder {
         }
     }
 
+    /// 返回当前订单剩余可成交数量。
+    pub(crate) fn remaining_qty(&self) -> Result<u64, MatchSpotOrderError> {
+        self.qty.checked_sub(self.filled_qty).ok_or(MatchSpotOrderError::InconsistentOrderState)
+    }
+
+    /// 返回该订单是否会以当前价格和 maker 价格交叉成交。
+    pub(crate) fn crosses_maker_price(&self, maker_price: u64) -> bool {
+        match self.side {
+            SpotOrderSide::Buy => self.order_price() >= maker_price,
+            SpotOrderSide::Sell => self.order_price() <= maker_price,
+        }
+    }
+
+    /// 返回该订单是否会和给定 maker 订单成交。
+    pub(crate) fn crosses_order(&self, maker: &SpotOrder) -> Result<bool, MatchSpotOrderError> {
+        if self.side == maker.side {
+            return Err(MatchSpotOrderError::SameSideMaker);
+        }
+
+        let maker_price = maker.limit_price().ok_or(MatchSpotOrderError::MakerMustBeLimit)?;
+        Ok(self.crosses_maker_price(maker_price))
+    }
+
+    /// 返回该订单是否会因 ALO 语义在进入撮合前被拒绝。
+    pub(crate) fn would_be_rejected_as_alo(
+        &self,
+        best_maker: Option<&SpotOrder>,
+    ) -> Result<bool, MatchSpotOrderError> {
+        if self.time_in_force != SpotOrderTimeInForce::Alo {
+            return Ok(false);
+        }
+
+        best_maker.map_or(Ok(false), |maker| self.crosses_order(maker))
+    }
+
+    /// 返回给定成交后数量对应的撮合状态。
+    pub(crate) fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus {
+        if next_filled_qty == self.qty {
+            SpotOrderStatus::Filled
+        } else {
+            SpotOrderStatus::PartiallyFilled
+        }
+    }
+
+    /// 返回本轮撮合结束后 taker 订单应进入的生命周期状态。
+    pub(crate) fn finalize_after_match(
+        &self,
+        added_fill_qty: u64,
+    ) -> Result<SpotOrderFinalization, MatchSpotOrderError> {
+        let next_filled_qty = self
+            .filled_qty
+            .checked_add(added_fill_qty)
+            .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
+
+        match self.time_in_force {
+            SpotOrderTimeInForce::Gtc => {
+                if added_fill_qty == 0 {
+                    return Err(MatchSpotOrderError::NoTradesMatched);
+                }
+
+                Ok(SpotOrderFinalization {
+                    next_filled_qty,
+                    status: self.matched_status_for(next_filled_qty),
+                    status_reason: None,
+                })
+            }
+            SpotOrderTimeInForce::Ioc => {
+                let (status, status_reason) = if added_fill_qty == 0 {
+                    (SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()))
+                } else if next_filled_qty == self.qty {
+                    (SpotOrderStatus::Filled, None)
+                } else {
+                    (SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::IocCancelRejected))
+                };
+
+                Ok(SpotOrderFinalization { next_filled_qty, status, status_reason })
+            }
+            SpotOrderTimeInForce::Alo => {
+                if added_fill_qty == 0 {
+                    return Err(MatchSpotOrderError::NoTradesMatched);
+                }
+
+                Ok(SpotOrderFinalization {
+                    next_filled_qty,
+                    status: self.matched_status_for(next_filled_qty),
+                    status_reason: None,
+                })
+            }
+        }
+    }
+
     /// 返回冻结 quote 余额是否符合买卖方向。
     pub fn has_consistent_reserved_quote(&self) -> bool {
         match self.side {
@@ -458,6 +561,14 @@ impl SpotOrder {
     /// 返回撤单时应释放的 quote 余额。
     pub fn quote_to_release_on_cancel(&self) -> u64 {
         self.reserved_quote
+    }
+
+    fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
+        if self.limit_price().is_none() {
+            SpotOrderStatusReason::MarketOrderNoLiquidityRejected
+        } else {
+            SpotOrderStatusReason::IocCancelRejected
+        }
     }
 }
 

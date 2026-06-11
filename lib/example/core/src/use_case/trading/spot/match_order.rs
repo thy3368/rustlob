@@ -3,7 +3,10 @@ use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{SpotOrder, SpotOrderSide, SpotOrderStatus, SpotTrade};
+use crate::entity::{
+    SpotOrder, SpotOrderFinalization, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotTrade,
+};
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
 ///
@@ -150,28 +153,43 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+        // use case 只编排撮合流程与事件；价格交叉、ALO 拒绝、TIF 收尾都委托给 entity。
         let mut taker_order = state.taker_order;
-        let mut taker_remaining = remaining_qty(&taker_order)?;
+        let mut taker_remaining = taker_order.remaining_qty()?;
         let mut total_taker_fill = 0_u64;
         let mut events = Vec::new();
+        let best_maker = state.maker_orders.first();
+
+        // ALO 只看当前最优 maker：如果会立即吃单，就直接产出一条 taker reject update event。
+        if taker_order.would_be_rejected_as_alo(best_maker)? {
+            let current_filled_qty = taker_order.filled_qty;
+            return Ok(vec![update_taker_order(
+                &mut taker_order,
+                current_filled_qty,
+                SpotOrderStatus::Rejected,
+                Some(SpotOrderStatusReason::BadAloPxRejected),
+            )?]);
+        }
 
         for (trade_index, maker_order) in state.maker_orders.into_iter().enumerate() {
             if taker_remaining == 0 {
                 break;
             }
 
-            let maker_price =
-                maker_order.limit_price().ok_or(MatchSpotOrderError::MakerMustBeLimit)?;
-            if !can_cross(taker_order.side, taker_order.order_price(), maker_price) {
+            // maker 已按优先级排序；遇到首个不再交叉的价格就终止扫描，后续 maker 不再考虑。
+            if !taker_order.crosses_order(&maker_order)? {
                 break;
             }
 
-            let maker_remaining = remaining_qty(&maker_order)?;
+            let maker_price =
+                maker_order.limit_price().ok_or(MatchSpotOrderError::MakerMustBeLimit)?;
+            let maker_remaining = maker_order.remaining_qty()?;
             let trade_qty = taker_remaining.min(maker_remaining);
             if trade_qty == 0 {
                 continue;
             }
 
+            // 先记录成交事实，再分别推进 maker / taker 的成交数量与生命周期状态。
             let trade = SpotTrade::new(
                 format!("{}-{}", cmd.match_id, trade_index + 1),
                 cmd.match_id.clone(),
@@ -194,7 +212,7 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                 .filled_qty
                 .checked_add(trade_qty)
                 .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-            let next_maker_status = matched_status(next_maker_order.qty, next_maker_filled);
+            let next_maker_status = next_maker_order.matched_status_for(next_maker_filled);
             let next_maker_version = next_maker_order
                 .version
                 .checked_add(1)
@@ -217,26 +235,9 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                 .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
         }
 
-        if total_taker_fill == 0 {
-            return Err(MatchSpotOrderError::NoTradesMatched);
-        }
-
-        let next_taker_filled = taker_order
-            .filled_qty
-            .checked_add(total_taker_fill)
-            .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-        let next_taker_status = matched_status(taker_order.qty, next_taker_filled);
-        let next_taker_version =
-            taker_order.version.checked_add(1).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-        events.push(
-            taker_order
-                .track_update_event(|order| {
-                    order.filled_qty = next_taker_filled;
-                    order.status = next_taker_status;
-                    order.version = next_taker_version;
-                })
-                .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?,
-        );
+        // taker 收尾统一走 entity 决策：GTC / IOC / ALO 的最终状态在这里收口。
+        let finalization = taker_order.finalize_after_match(total_taker_fill)?;
+        events.push(update_taker_order_with_finalization(&mut taker_order, finalization)?);
 
         Ok(events)
     }
@@ -249,203 +250,41 @@ fn validate_matchable_order(order: &SpotOrder) -> Result<(), MatchSpotOrderError
     if !matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
         return Err(MatchSpotOrderError::OrderNotMatchable);
     }
-    if remaining_qty(order)? == 0 {
+    if order.remaining_qty()? == 0 {
         return Err(MatchSpotOrderError::OrderNotMatchable);
     }
     Ok(())
 }
 
-fn remaining_qty(order: &SpotOrder) -> Result<u64, MatchSpotOrderError> {
-    order.qty.checked_sub(order.filled_qty).ok_or(MatchSpotOrderError::InconsistentOrderState)
+fn update_taker_order(
+    taker_order: &mut SpotOrder,
+    next_taker_filled: u64,
+    next_taker_status: SpotOrderStatus,
+    next_taker_status_reason: Option<SpotOrderStatusReason>,
+) -> Result<EntityReplayableEvent, MatchSpotOrderError> {
+    let next_taker_version =
+        taker_order.version.checked_add(1).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
+    taker_order
+        .track_update_event(|order| {
+            order.filled_qty = next_taker_filled;
+            order.status = next_taker_status;
+            order.status_reason = next_taker_status_reason;
+            order.version = next_taker_version;
+        })
+        .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)
 }
 
-fn can_cross(taker_side: SpotOrderSide, taker_price: u64, maker_price: u64) -> bool {
-    match taker_side {
-        SpotOrderSide::Buy => taker_price >= maker_price,
-        SpotOrderSide::Sell => taker_price <= maker_price,
-    }
-}
-
-fn matched_status(qty: u64, filled_qty: u64) -> SpotOrderStatus {
-    if filled_qty == qty { SpotOrderStatus::Filled } else { SpotOrderStatus::PartiallyFilled }
+fn update_taker_order_with_finalization(
+    taker_order: &mut SpotOrder,
+    finalization: SpotOrderFinalization,
+) -> Result<EntityReplayableEvent, MatchSpotOrderError> {
+    update_taker_order(
+        taker_order,
+        finalization.next_filled_qty,
+        finalization.status,
+        finalization.status_reason,
+    )
 }
 
 #[cfg(test)]
-mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase2;
-
-    use super::*;
-    use crate::entity::{SpotOrderExecution, SpotOrderTimeInForce};
-    use crate::use_case::support::field_as_u64;
-
-    fn cmd() -> MatchSpotOrderCmd {
-        MatchSpotOrderCmd {
-            party_id: "buyer".to_string(),
-            taker_order_id: "taker-1".to_string(),
-            match_id: "match-1".to_string(),
-        }
-    }
-
-    fn order(
-        order_id: &str,
-        account_id: &str,
-        side: SpotOrderSide,
-        price: u64,
-        qty: u64,
-    ) -> SpotOrder {
-        let (reserved_base, reserved_quote) = match side {
-            SpotOrderSide::Buy => (0, qty * price),
-            SpotOrderSide::Sell => (qty, 0),
-        };
-        SpotOrder::new(
-            order_id.to_string(),
-            10_001,
-            Some(42),
-            account_id.to_string(),
-            "BTCUSDT".to_string(),
-            side,
-            SpotOrderExecution::Limit { price },
-            SpotOrderTimeInForce::Gtc,
-            qty,
-            reserved_base,
-            reserved_quote,
-            None,
-        )
-    }
-
-    fn taker_buy(qty: u64, price: u64) -> SpotOrder {
-        order("taker-1", "buyer", SpotOrderSide::Buy, price, qty)
-    }
-
-    fn maker_sell(order_id: &str, qty: u64, price: u64) -> SpotOrder {
-        order(order_id, "seller", SpotOrderSide::Sell, price, qty)
-    }
-
-    fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
-        event.field_changes.iter().find_map(|change| {
-            if change.field_name_as_str().ok() != Some(field_name) {
-                return None;
-            }
-            std::str::from_utf8(change.new_value_bytes()).ok()
-        })
-    }
-
-    #[test]
-    fn role_is_matching_engine() {
-        assert_eq!(MatchSpotOrderUseCase.role(), "MatchingEngine");
-    }
-
-    #[test]
-    fn pre_check_rejects_empty_match_id() {
-        let mut cmd = cmd();
-        cmd.match_id.clear();
-
-        assert_eq!(
-            MatchSpotOrderUseCase.pre_check_command(&cmd),
-            Err(MatchSpotOrderError::InvalidMatchId)
-        );
-    }
-
-    #[test]
-    fn validate_rejects_taker_order_mismatch() {
-        let state =
-            MatchSpotOrderState { taker_order: taker_buy(3, 100), maker_orders: Vec::new() };
-        let mut cmd = cmd();
-        cmd.taker_order_id = "different".to_string();
-
-        assert_eq!(
-            MatchSpotOrderUseCase.validate_against_state(&cmd, &state),
-            Err(MatchSpotOrderError::TakerOrderMismatch)
-        );
-    }
-
-    #[test]
-    fn validate_rejects_same_side_maker() {
-        let state = MatchSpotOrderState {
-            taker_order: taker_buy(3, 100),
-            maker_orders: vec![order("maker-1", "seller", SpotOrderSide::Buy, 99, 1)],
-        };
-
-        assert_eq!(
-            MatchSpotOrderUseCase.validate_against_state(&cmd(), &state),
-            Err(MatchSpotOrderError::SameSideMaker)
-        );
-    }
-
-    #[test]
-    fn validate_rejects_market_maker() {
-        let mut maker = maker_sell("maker-1", 1, 99);
-        maker.execution = SpotOrderExecution::Market { aggressive_price: 99 };
-        let state =
-            MatchSpotOrderState { taker_order: taker_buy(3, 100), maker_orders: vec![maker] };
-
-        assert_eq!(
-            MatchSpotOrderUseCase.validate_against_state(&cmd(), &state),
-            Err(MatchSpotOrderError::MakerMustBeLimit)
-        );
-    }
-
-    #[test]
-    fn compute_matches_multiple_makers_and_updates_orders() -> Result<(), MatchSpotOrderError> {
-        let state = MatchSpotOrderState {
-            taker_order: taker_buy(3, 100),
-            maker_orders: vec![maker_sell("maker-1", 1, 99), maker_sell("maker-2", 2, 100)],
-        };
-
-        let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd(), state)?;
-
-        assert_eq!(events.len(), 5);
-        assert!(events[0].is_created());
-        assert_eq!(event_field(&events[0], "trade_id"), Some("match-1-1"));
-        assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
-        assert_eq!(field_as_u64(&events[0], "price"), Some(99));
-        assert_eq!(field_as_u64(&events[0], "qty"), Some(1));
-        assert!(events[1].is_updated());
-        assert_eq!(event_field(&events[1], "filled_qty"), Some("1"));
-        assert_eq!(event_field(&events[1], "status"), Some("filled"));
-        assert!(events[2].is_created());
-        assert_eq!(event_field(&events[2], "trade_id"), Some("match-1-2"));
-        assert!(events[3].is_updated());
-        assert_eq!(event_field(&events[3], "filled_qty"), Some("2"));
-        assert_eq!(event_field(&events[3], "status"), Some("filled"));
-        assert!(events[4].is_updated());
-        assert_eq!(event_field(&events[4], "filled_qty"), Some("3"));
-        assert_eq!(event_field(&events[4], "status"), Some("filled"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn compute_stops_at_first_non_crossing_maker() -> Result<(), MatchSpotOrderError> {
-        let state = MatchSpotOrderState {
-            taker_order: taker_buy(3, 100),
-            maker_orders: vec![
-                maker_sell("maker-1", 1, 99),
-                maker_sell("maker-2", 1, 101),
-                maker_sell("maker-3", 1, 100),
-            ],
-        };
-
-        let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd(), state)?;
-
-        assert_eq!(events.len(), 3);
-        assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
-        assert_eq!(event_field(&events[2], "filled_qty"), Some("1"));
-        assert_eq!(event_field(&events[2], "status"), Some("partially_filled"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn compute_rejects_when_no_trade_crosses() {
-        let state = MatchSpotOrderState {
-            taker_order: taker_buy(3, 100),
-            maker_orders: vec![maker_sell("maker-1", 1, 101)],
-        };
-
-        assert_eq!(
-            MatchSpotOrderUseCase.compute_replayable_events(&cmd(), state),
-            Err(MatchSpotOrderError::NoTradesMatched)
-        );
-    }
-}
+mod compute_replayable_events_happy_path;
