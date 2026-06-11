@@ -1,5 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
+};
 use common_entity::Entity;
 
 use super::{
@@ -141,13 +143,86 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 ///
 /// The use case itself is deterministic for the same command and loaded state. It does not talk to
 /// storage, publish events, or shape HTTP replies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceImmediateOrderOutput {
+    /// 本次立即单创建出来的 taker 订单。
+    pub order: SpotOrder,
+    /// 本次下单影响到的那条余额冻结后快照。
+    pub affected_balance_after: Balance,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceImmediateOrderUseCase;
 
-impl CommandUseCase2 for PlaceImmediateOrderUseCase {
+impl PlaceImmediateOrderUseCase {
+    fn derive_output(
+        &self,
+        cmd: &PlaceImmediateOrderCmd,
+        state: PlaceImmediateOrderState,
+    ) -> Result<PlaceImmediateOrderOutput, PlaceOrderError> {
+        let qty = cmd.qty()?;
+        let reserve_price = cmd.reserve_price()?;
+        let notional_quote = state
+            .market_rules
+            .required_quote(qty, reserve_price)
+            .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+        let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
+        let side = cmd.side();
+        let (reserved_base, reserved_quote) = match side {
+            PlaceOrderSide::Buy => (0, notional_quote),
+            PlaceOrderSide::Sell => (qty, 0),
+        };
+        let order = SpotOrder::new(
+            order_id,
+            cmd.asset,
+            None,
+            cmd.party_id.clone(),
+            cmd.symbol.clone(),
+            side,
+            cmd.execution.spot_execution(),
+            cmd.execution.stored_time_in_force(),
+            qty,
+            reserved_base,
+            reserved_quote,
+            cmd.cloid.clone(),
+        );
+
+        let affected_balance_after = match side {
+            PlaceOrderSide::Buy => {
+                let mut next_balance = state.quote_balance;
+                let (next_available, next_frozen) = next_balance
+                    .reserve_after(reserved_quote)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                let next_version = next_balance
+                    .version
+                    .checked_add(1)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                next_balance.apply_after(next_available, next_frozen, next_version);
+                next_balance
+            }
+            PlaceOrderSide::Sell => {
+                let mut next_balance = state.base_balance;
+                let (next_available, next_frozen) = next_balance
+                    .reserve_after(reserved_base)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                let next_version = next_balance
+                    .version
+                    .checked_add(1)
+                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
+                next_balance.apply_after(next_available, next_frozen, next_version);
+                next_balance
+            }
+        };
+
+        Ok(PlaceImmediateOrderOutput { order, affected_balance_after })
+    }
+}
+
+impl CommandUseCase3 for PlaceImmediateOrderUseCase {
     type Command = PlaceImmediateOrderCmd;
     type GivenState = PlaceImmediateOrderState;
     type Error = PlaceOrderError;
+    type Output = PlaceImmediateOrderOutput;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -200,78 +275,55 @@ impl CommandUseCase2 for PlaceImmediateOrderUseCase {
         Ok(())
     }
 
+    fn compute_output_and_events(
+        &self,
+        cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let previous_affected_balance = match cmd.side() {
+            PlaceOrderSide::Buy => state.quote_balance.clone(),
+            PlaceOrderSide::Sell => state.base_balance.clone(),
+        };
+        let output = self.derive_output(cmd, state)?;
+        let order = output.order.clone();
+        let affected_balance = output.affected_balance_after.clone();
+        let order_event =
+            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
+        let tracked_balance_event = affected_balance
+            .track_update_event_from(&previous_affected_balance)
+            .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
+
+        Ok(UseCaseOutput { output, events: vec![order_event, tracked_balance_event] })
+    }
+}
+
+impl CommandUseCase2 for PlaceImmediateOrderUseCase {
+    type Command = PlaceImmediateOrderCmd;
+    type GivenState = PlaceImmediateOrderState;
+    type Error = PlaceOrderError;
+
+    fn role(&self) -> &'static str {
+        <Self as CommandUseCase3>::role(self)
+    }
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        <Self as CommandUseCase3>::pre_check_command(self, cmd)
+    }
+
+    fn validate_against_state(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        <Self as CommandUseCase3>::validate_against_state(self, cmd, state)
+    }
+
     fn compute_replayable_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        let qty = cmd.qty()?;
-        let reserve_price = cmd.reserve_price()?;
-        let notional_quote = state
-            .market_rules
-            .required_quote(qty, reserve_price)
-            .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-        let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
-        let side = cmd.side();
-        let (reserved_base, reserved_quote) = match side {
-            PlaceOrderSide::Buy => (0, notional_quote),
-            PlaceOrderSide::Sell => (qty, 0),
-        };
-        let order = SpotOrder::new(
-            order_id,
-            cmd.asset,
-            None,
-            cmd.party_id.clone(),
-            cmd.symbol.clone(),
-            side,
-            cmd.execution.spot_execution(),
-            cmd.execution.stored_time_in_force(),
-            qty,
-            reserved_base,
-            reserved_quote,
-            cmd.cloid.clone(),
-        );
-        let order_event =
-            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
-
-        let tracked_balance_event = match side {
-            PlaceOrderSide::Buy => {
-                let mut next_balance = state.quote_balance.clone();
-                let (next_available, next_frozen) = state
-                    .quote_balance
-                    .reserve_after(reserved_quote)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                let next_version = state
-                    .quote_balance
-                    .version
-                    .checked_add(1)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_balance
-                    .track_update_event(|balance| {
-                        balance.apply_after(next_available, next_frozen, next_version);
-                    })
-                    .map_err(|_| PlaceOrderError::ArithmeticOverflow)?
-            }
-            PlaceOrderSide::Sell => {
-                let mut next_balance = state.base_balance.clone();
-                let (next_available, next_frozen) = state
-                    .base_balance
-                    .reserve_after(reserved_base)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                let next_version = state
-                    .base_balance
-                    .version
-                    .checked_add(1)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_balance
-                    .track_update_event(|balance| {
-                        balance.apply_after(next_available, next_frozen, next_version);
-                    })
-                    .map_err(|_| PlaceOrderError::ArithmeticOverflow)?
-            }
-        };
-
-        Ok(vec![order_event, tracked_balance_event])
+        Ok(<Self as CommandUseCase3>::compute_output_and_events(self, cmd, state)?.events)
     }
 }
 

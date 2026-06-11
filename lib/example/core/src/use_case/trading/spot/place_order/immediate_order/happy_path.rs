@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
+use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3};
 use proptest::prelude::*;
 
 use super::command_examples::{ImmediateCommandExample, supported_command_examples};
@@ -83,7 +83,7 @@ fn required_happy_path_compute_cases_strategy() -> impl Strategy<Value = Vec<Imm
 #[test]
 fn role_is_trader() {
     let use_case = PlaceImmediateOrderUseCase;
-    assert_eq!(use_case.role(), "Trader");
+    assert_eq!(CommandUseCase2::role(&use_case), "Trader");
 }
 
 #[test]
@@ -100,6 +100,59 @@ fn compute_replayable_events_produces_order_and_account_events() -> Result<(), P
     assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
     assert_eq!(field_as_u64(&events[1], "available"), Some(800));
     assert_eq!(field_as_u64(&events[1], "frozen"), Some(200));
+
+    Ok(())
+}
+
+#[test]
+fn compute_output_and_events_keeps_output_and_events_consistent() -> Result<(), PlaceOrderError> {
+    let use_case = PlaceImmediateOrderUseCase;
+    let state = sample_state();
+
+    let result = CommandUseCase3::compute_output_and_events(&use_case, &sample_cmd(), state)?;
+
+    assert_eq!(result.output.order.order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(result.output.order.reserved_quote, 200);
+    assert_eq!(result.output.affected_balance_after.asset_id, "USDT");
+    assert_eq!(result.output.affected_balance_after.available, 800);
+    assert_eq!(result.output.affected_balance_after.frozen, 200);
+    assert_eq!(
+        event_field(&result.events[0], "order_id"),
+        Some(result.output.order.order_id.as_str())
+    );
+    assert_eq!(
+        event_field(&result.events[1], "asset_id"),
+        Some(result.output.affected_balance_after.asset_id.as_str())
+    );
+    assert_eq!(
+        field_as_u64(&result.events[1], "available"),
+        Some(result.output.affected_balance_after.available)
+    );
+    assert_eq!(
+        field_as_u64(&result.events[1], "frozen"),
+        Some(result.output.affected_balance_after.frozen)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn v2_compatibility_returns_same_events_as_v3() -> Result<(), PlaceOrderError> {
+    let use_case = PlaceImmediateOrderUseCase;
+    let state = sample_state();
+
+    let v2_events = use_case.compute_replayable_events(&sample_cmd(), state.clone())?;
+    let v3_result = CommandUseCase3::compute_output_and_events(&use_case, &sample_cmd(), state)?;
+
+    assert_eq!(v2_events.len(), v3_result.events.len());
+    for (v2_event, v3_event) in v2_events.iter().zip(v3_result.events.iter()) {
+        assert_eq!(v2_event.entity_id, v3_event.entity_id);
+        assert_eq!(v2_event.entity_type, v3_event.entity_type);
+        assert_eq!(v2_event.change_type, v3_event.change_type);
+        assert_eq!(v2_event.old_version, v3_event.old_version);
+        assert_eq!(v2_event.new_version, v3_event.new_version);
+        assert_eq!(v2_event.field_changes, v3_event.field_changes);
+    }
 
     Ok(())
 }
@@ -149,7 +202,7 @@ proptest! {
             let expected_cloid = cmd.cloid.clone().unwrap_or_default();
             let expected_side = case.scenario.expected_side().as_str();
 
-            prop_assert_eq!(use_case.pre_check_command(&cmd), Ok(()));
+            prop_assert_eq!(CommandUseCase2::pre_check_command(&use_case, &cmd), Ok(()));
 
             let events = use_case.compute_replayable_events(&cmd, state)?;
 

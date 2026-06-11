@@ -327,7 +327,7 @@ fn supported_command_examples_are_accepted_by_pre_check() {
 
     for (example, cmd) in supported_command_examples(sample_cmd()) {
         assert_eq!(
-            use_case.pre_check_command(&cmd),
+            CommandUseCase2::pre_check_command(&use_case, &cmd),
             Ok(()),
             "immediate command example should be accepted: {example:?}",
         );

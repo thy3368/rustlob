@@ -25,7 +25,7 @@ fn pre_check_rejects_zero_qty() {
     let mut cmd = sample_cmd();
     cmd.size = 0;
 
-    let result = use_case.pre_check_command(&cmd);
+    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidQty));
 }
 
@@ -36,7 +36,7 @@ fn pre_check_rejects_zero_price() {
     cmd.execution =
         PlaceImmediateOrderExecution::Limit { price: 0, time_in_force: PlaceOrderTimeInForce::Gtc };
 
-    let result = use_case.pre_check_command(&cmd);
+    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidPrice));
 }
 
@@ -46,7 +46,7 @@ fn pre_check_rejects_zero_market_aggressive_price() {
     let mut cmd = sample_cmd();
     cmd.execution = PlaceImmediateOrderExecution::Market { aggressive_price: 0 };
 
-    let result = use_case.pre_check_command(&cmd);
+    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidPrice));
 }
 
@@ -56,7 +56,7 @@ fn pre_check_rejects_reduce_only_for_spot_order() {
     let mut cmd = sample_cmd();
     cmd.reduce_only = true;
 
-    let result = use_case.pre_check_command(&cmd);
+    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
     assert_eq!(result, Err(PlaceOrderError::UnsupportedReduceOnly));
 }
 
@@ -66,7 +66,7 @@ fn validate_against_state_rejects_insufficient_balance() {
     let mut state = sample_state();
     state.quote_balance.available = 10;
 
-    let result = use_case.validate_against_state(&sample_cmd(), &state);
+    let result = CommandUseCase2::validate_against_state(&use_case, &sample_cmd(), &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientQuoteBalance));
 }
 
@@ -78,7 +78,7 @@ fn validate_against_state_rejects_insufficient_base_for_sell_order() {
     let mut state = sample_state();
     state.base_balance.available = 1;
 
-    let result = use_case.validate_against_state(&cmd, &state);
+    let result = CommandUseCase2::validate_against_state(&use_case, &cmd, &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientBaseBalance));
 }
 
