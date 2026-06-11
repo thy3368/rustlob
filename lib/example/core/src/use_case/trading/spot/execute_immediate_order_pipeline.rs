@@ -1,3 +1,4 @@
+use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3, IssuedByParty};
 use thiserror::Error;
 
@@ -191,9 +192,6 @@ fn should_enter_matching(
         Err(_) => Ok(true),
     }
 }
-
-#[cfg(test)]
-use cmd_handler::EntityReplayableEvent;
 
 #[cfg(test)]
 fn has_field(event: &EntityReplayableEvent, field_name: &str) -> bool {
