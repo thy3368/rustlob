@@ -4,8 +4,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotOrder, SpotOrderFinalization, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotTrade,
+    SpotOrder, SpotOrderFinalization, SpotOrderMatchError, SpotOrderSide, SpotOrderStatus,
+    SpotOrderStatusReason, SpotTrade,
 };
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
@@ -82,6 +82,18 @@ pub enum MatchSpotOrderError {
     /// 生成撮合结果时发生整数溢出。
     #[error("arithmetic overflow while deriving match result")]
     ArithmeticOverflow,
+}
+
+impl From<SpotOrderMatchError> for MatchSpotOrderError {
+    fn from(value: SpotOrderMatchError) -> Self {
+        match value {
+            SpotOrderMatchError::InconsistentExecutionState => Self::InconsistentOrderState,
+            SpotOrderMatchError::SameSideMaker => Self::SameSideMaker,
+            SpotOrderMatchError::MakerMustBeLimit => Self::MakerMustBeLimit,
+            SpotOrderMatchError::NoTradesMatched => Self::NoTradesMatched,
+            SpotOrderMatchError::ArithmeticOverflow => Self::ArithmeticOverflow,
+        }
+    }
 }
 
 /// Use case that matches one spot taker order against pre-sorted maker orders.
