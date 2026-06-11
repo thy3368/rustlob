@@ -1,6 +1,7 @@
 ---
 name: proptest-use-case
 description: Write property-based tests for RustLOB command-style use cases with `proptest`. Use when Codex needs to add or review `proptest!` tests for `CommandUseCase2`, design generators for commands or state snapshots, verify executor and pipeline invariants, or distinguish strong business properties from weak tautological tests.
+disabled: true
 ---
 
 # Proptest Use Case
