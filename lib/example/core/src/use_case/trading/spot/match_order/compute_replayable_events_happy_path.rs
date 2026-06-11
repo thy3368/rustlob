@@ -3,16 +3,21 @@ use cmd_handler::EntityReplayableEvent;
 use super::*;
 use crate::entity::{SpotOrderExecution, SpotOrderStatusReason, SpotOrderTimeInForce};
 
-// 这组测试只关心 `compute_replayable_events` 的成功业务语义：
-// 1. 当前实现支持哪些 happy path。
-// 2. 每种场景应产出什么顺序、什么内容的 replayable events。
+// 目的:
+// - 把 `compute_replayable_events` 的 happy path 测试写成“测试即需求规格”。
+// - 每个测试先表达业务规则，再表达输入状态、动作和期望事件。
 //
-// 业务覆盖矩阵：
+// 适用范围:
+// - 这里只覆盖 use case 层成功业务语义。
+// - 重点是事件顺序、订单生命周期状态、拒绝原因和停止扫描条件。
+//
+// 规格矩阵:
 // - taker side: buy / sell
-// - taker execution+tif: GTC limit / IOC limit / IOC market / ALO limit
-// - outcome: full fill / partial fill / zero fill reject / ALO pre-reject
+// - execution + tif: GTC limit / IOC limit / IOC market / ALO limit
+// - outcome: full fill / partial fill / zero fill reject / pre-reject / stop scanning
+// - event expectation: trade count / maker update count / taker update count / event order
 //
-// 当前已覆盖：
+// current coverage:
 // - GTC buy full fill
 // - GTC buy partial fill + stop at first non-crossing maker
 // - GTC sell partial fill
@@ -25,8 +30,11 @@ use crate::entity::{SpotOrderExecution, SpotOrderStatusReason, SpotOrderTimeInFo
 // - partially filled maker continue matching to filled
 // - first non-crossing maker stops scan even if later maker would cross
 //
-// 这里不用 Rustdoc，原因是该文件是私有测试模块，不是对外 API；
-// 维护价值主要在于阅读测试时快速理解设计意图，而不是生成文档页面。
+// 断言规范:
+// - 只要发生真实成交，就断言 trade event。
+// - 每个发生了成交数量或生命周期变化的 maker / taker，都断言 update event。
+// - `filled_qty` 未变化时，断言 `None`，不要伪造 `Some(0)`。
+// - 多事件场景必须断言顺序: 先 trade，再 maker update，最后 taker update。
 
 fn sample_cmd() -> MatchSpotOrderCmd {
     MatchSpotOrderCmd {
@@ -177,7 +185,23 @@ fn assert_order_update_event(
 #[test]
 fn gtc_limit_taker_matches_multiple_makers_and_fills_completely() -> Result<(), MatchSpotOrderError>
 {
-    // GTC 主路径：连续吃掉多个 maker，直到 taker 完全成交。
+    // Rule:
+    // - GTC taker 可以连续吃掉多个按优先级排序的 maker，直到自身完全成交。
+    //
+    // Given:
+    // - taker 是 buy side GTC limit。
+    // - maker-1 和 maker-2 都与 taker 价格交叉。
+    // - 两个 maker 的数量之和刚好填满 taker。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 事件顺序必须是 trade -> maker update -> trade -> maker update -> taker update。
+    // - 两个 maker 都变成 `Filled`。
+    // - taker 最终变成 `Filled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Gtc),
         maker_orders: vec![
@@ -186,8 +210,10 @@ fn gtc_limit_taker_matches_multiple_makers_and_fills_completely() -> Result<(), 
         ],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 5);
     assert_trade_event_for_accounts(
         &events[0],
@@ -219,7 +245,23 @@ fn gtc_limit_taker_matches_multiple_makers_and_fills_completely() -> Result<(), 
 #[test]
 fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker()
 -> Result<(), MatchSpotOrderError> {
-    // 一旦遇到首个不再交叉的 maker，撮合必须立即停止，后续 maker 不再扫描。
+    // Rule:
+    // - 一旦遇到首个不再交叉的 maker，扫描必须立即停止。
+    //
+    // Given:
+    // - taker 是 buy side GTC limit。
+    // - maker-1 可成交。
+    // - maker-2 是首个不交叉价格。
+    // - maker-3 即使可成交，也不应再被扫描。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生与 maker-1 相关的成交和更新事件。
+    // - taker 最终停在 `PartiallyFilled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Gtc),
         maker_orders: vec![
@@ -229,8 +271,10 @@ fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker()
         ],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -250,14 +294,30 @@ fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker()
 
 #[test]
 fn ioc_limit_taker_fills_completely() -> Result<(), MatchSpotOrderError> {
-    // IOC 如果刚好全部成交，最终状态应是 `Filled`，而不是 `Canceled`。
+    // Rule:
+    // - IOC taker 如果刚好全部成交，最终状态应是 `Filled`，而不是 `Canceled`。
+    //
+    // Given:
+    // - taker 是 buy side IOC limit。
+    // - 唯一 maker 的数量刚好填满 taker。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 产生 1 条 trade、1 条 maker update、1 条 taker update。
+    // - maker 和 taker 都变成 `Filled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(2, 100, SpotOrderTimeInForce::Ioc),
         maker_orders: vec![maker_sell("maker-1", 2, 99, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -277,14 +337,30 @@ fn ioc_limit_taker_fills_completely() -> Result<(), MatchSpotOrderError> {
 
 #[test]
 fn ioc_limit_taker_partially_fills_and_cancels_remaining_qty() -> Result<(), MatchSpotOrderError> {
-    // IOC 部分成交后，剩余数量不能继续留在簿上，必须以取消语义结束。
+    // Rule:
+    // - IOC taker 部分成交后，剩余数量不能继续留在簿上，必须以取消语义结束。
+    //
+    // Given:
+    // - taker 是 buy side IOC limit。
+    // - 只有一张 maker 可成交，且数量不足以填满 taker。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 先产生 trade 和 maker update。
+    // - taker 最后以 `Canceled + IocCancelRejected` 收尾。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Ioc),
         maker_orders: vec![maker_sell("maker-1", 1, 99, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -312,14 +388,31 @@ fn ioc_limit_taker_partially_fills_and_cancels_remaining_qty() -> Result<(), Mat
 #[test]
 fn ioc_limit_taker_with_no_crossing_maker_rejects_single_taker_update()
 -> Result<(), MatchSpotOrderError> {
-    // IOC 零成交时不会报错返回，而是要产出一条带拒绝原因的 taker update event。
+    // Rule:
+    // - IOC taker 零成交时不会返回业务错误，而是产出一条带拒绝原因的 taker update event。
+    //
+    // Given:
+    // - taker 是 buy side IOC limit。
+    // - 最优 maker 也不与 taker 价格交叉。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生 1 条 taker update event。
+    // - `filled_qty` 未变化，因此断言 `None`。
+    // - `status_reason` 是 `IocCancelRejected`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Ioc),
         maker_orders: vec![maker_sell("maker-1", 1, 101, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -335,14 +428,30 @@ fn ioc_limit_taker_with_no_crossing_maker_rejects_single_taker_update()
 
 #[test]
 fn alo_limit_taker_rejects_when_best_maker_would_cross() -> Result<(), MatchSpotOrderError> {
-    // ALO 的 happy path 不是“成交成功”，而是“按业务规则正常拒绝并产出拒绝事件”。
+    // Rule:
+    // - ALO taker 的 happy path 可以是“按业务规则正常预拒绝”。
+    //
+    // Given:
+    // - taker 是 buy side ALO limit。
+    // - 当前最优 maker 会与 taker 立即成交。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生 1 条 taker reject update event。
+    // - `status_reason` 是 `BadAloPxRejected`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Alo),
         maker_orders: vec![maker_sell("maker-1", 1, 99, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -359,7 +468,22 @@ fn alo_limit_taker_rejects_when_best_maker_would_cross() -> Result<(), MatchSpot
 #[test]
 fn alo_rejects_before_trade_loop_and_emits_single_taker_update() -> Result<(), MatchSpotOrderError>
 {
-    // ALO 预拒绝必须发生在 trade loop 之前，因此无论后面还有多少可成交 maker，都只能看到一条拒绝事件。
+    // Rule:
+    // - ALO 预拒绝必须发生在 trade loop 之前。
+    //
+    // Given:
+    // - taker 是 buy side ALO limit。
+    // - 最优 maker 已经会与 taker 立即成交。
+    // - 后面即使还有更多可成交 maker，也不应进入 trade loop。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只能看到 1 条 taker reject update event。
+    // - 不会出现任何 trade event。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Alo),
         maker_orders: vec![
@@ -368,8 +492,10 @@ fn alo_rejects_before_trade_loop_and_emits_single_taker_update() -> Result<(), M
         ],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -386,14 +512,30 @@ fn alo_rejects_before_trade_loop_and_emits_single_taker_update() -> Result<(), M
 #[test]
 fn market_ioc_buy_with_no_liquidity_rejects_with_market_reason() -> Result<(), MatchSpotOrderError>
 {
-    // 市价意图零成交时，状态原因不能退化成普通 IOC 拒绝，而要保留 `MarketOrderNoLiquidityRejected`。
+    // Rule:
+    // - market IOC taker 零成交时，拒绝原因必须保留为 market 语义。
+    //
+    // Given:
+    // - taker 是 buy side market IOC。
+    // - 最优 maker 价格高于 aggressive price，因此无法成交。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生 1 条 taker reject update event。
+    // - `status_reason` 必须是 `MarketOrderNoLiquidityRejected`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_market(2, 105),
         maker_orders: vec![maker_sell("maker-1", 2, 106, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -410,15 +552,31 @@ fn market_ioc_buy_with_no_liquidity_rejects_with_market_reason() -> Result<(), M
 #[test]
 fn market_ioc_sell_with_no_liquidity_rejects_with_market_reason() -> Result<(), MatchSpotOrderError>
 {
-    // 卖方向也要锁住同一条零流动性语义，避免 market reject reason 只在 buy side 生效。
+    // Rule:
+    // - sell side market IOC 零成交时，也必须保留同一条 market reject 语义。
+    //
+    // Given:
+    // - taker 是 sell side market IOC。
+    // - 最优 maker 价格低于 aggressive price，因此无法成交。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生 1 条 taker reject update event。
+    // - `status_reason` 必须是 `MarketOrderNoLiquidityRejected`。
+
+    // arrange
     let cmd = MatchSpotOrderCmd { party_id: "seller".to_string(), ..sample_cmd() };
     let state = MatchSpotOrderState {
         taker_order: taker_sell_market(2, 95),
         maker_orders: vec![maker_buy("maker-1", 2, 94, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -434,14 +592,30 @@ fn market_ioc_sell_with_no_liquidity_rejects_with_market_reason() -> Result<(), 
 
 #[test]
 fn market_ioc_buy_matches_using_maker_price() -> Result<(), MatchSpotOrderError> {
-    // 市价意图只用于 crossing 检查；真实成交价仍然取 maker limit price。
+    // Rule:
+    // - market taker 的 aggressive price 只用于 crossing 检查，真实成交价仍然取 maker limit price。
+    //
+    // Given:
+    // - taker 是 buy side market IOC。
+    // - maker 与 taker 可成交。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - trade event 中的价格必须等于 maker limit price。
+    // - maker 和 taker 都变成 `Filled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_market(2, 105),
         maker_orders: vec![maker_sell("maker-1", 2, 103, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -461,15 +635,31 @@ fn market_ioc_buy_matches_using_maker_price() -> Result<(), MatchSpotOrderError>
 
 #[test]
 fn sell_ioc_limit_partially_fills_and_cancels_remaining_qty() -> Result<(), MatchSpotOrderError> {
-    // IOC 的“部分成交后取消剩余”不能只测 buy side；sell side 也必须产出相同的 taker cancel 语义。
+    // Rule:
+    // - IOC 的“部分成交后取消剩余”不能只在 buy side 成立，sell side 也必须成立。
+    //
+    // Given:
+    // - taker 是 sell side IOC limit。
+    // - 只有一张 buy maker 可成交，且数量不足以填满 taker。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 先产生 trade 和 maker update。
+    // - taker 最后以 `Canceled + IocCancelRejected` 收尾。
+
+    // arrange
     let cmd = MatchSpotOrderCmd { party_id: "seller".to_string(), ..sample_cmd() };
     let state = MatchSpotOrderState {
         taker_order: taker_sell_limit(3, 95, SpotOrderTimeInForce::Ioc),
         maker_orders: vec![maker_buy("maker-1", 1, 97, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -497,15 +687,32 @@ fn sell_ioc_limit_partially_fills_and_cancels_remaining_qty() -> Result<(), Matc
 #[test]
 fn sell_ioc_limit_with_no_crossing_maker_rejects_single_taker_update()
 -> Result<(), MatchSpotOrderError> {
-    // sell + IOC + 零成交场景应和 buy side 一样，以单条 reject update event 结束，而不是返回业务错误。
+    // Rule:
+    // - sell side IOC 零成交时，也应以单条 reject update event 结束，而不是返回业务错误。
+    //
+    // Given:
+    // - taker 是 sell side IOC limit。
+    // - 最优 buy maker 价格不交叉。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生 1 条 taker reject update event。
+    // - `filled_qty` 未变化，因此断言 `None`。
+    // - `status_reason` 是 `IocCancelRejected`。
+
+    // arrange
     let cmd = MatchSpotOrderCmd { party_id: "seller".to_string(), ..sample_cmd() };
     let state = MatchSpotOrderState {
         taker_order: taker_sell_limit(3, 95, SpotOrderTimeInForce::Ioc),
         maker_orders: vec![maker_buy("maker-1", 1, 94, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
 
+    // assert
     assert_eq!(events.len(), 1);
     assert_order_update_event(
         &events[0],
@@ -521,15 +728,31 @@ fn sell_ioc_limit_with_no_crossing_maker_rejects_single_taker_update()
 
 #[test]
 fn market_ioc_sell_matches_using_maker_price() -> Result<(), MatchSpotOrderError> {
-    // 卖方向也要验证同一语义，避免 happy path 只覆盖 buy side。
+    // Rule:
+    // - sell side market taker 也必须以 maker limit price 成交。
+    //
+    // Given:
+    // - taker 是 sell side market IOC。
+    // - maker 与 taker 可成交。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - trade event 中的价格必须等于 maker limit price。
+    // - maker 和 taker 都变成 `Filled`。
+
+    // arrange
     let cmd = MatchSpotOrderCmd { party_id: "seller".to_string(), ..sample_cmd() };
     let state = MatchSpotOrderState {
         taker_order: taker_sell_market(2, 95),
         maker_orders: vec![maker_buy("maker-1", 2, 96, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -548,8 +771,23 @@ fn market_ioc_sell_matches_using_maker_price() -> Result<(), MatchSpotOrderError
 }
 
 #[test]
-fn partially_filled_taker_can_continue_matching_to_filled() -> Result<(), MatchSpotOrderError> {
-    // 已部分成交的 taker 仍可继续撮合；本次只验证剩余量上的增量行为。
+fn partially_filled_taker_continues_matching_until_filled() -> Result<(), MatchSpotOrderError> {
+    // Rule:
+    // - 已部分成交的 taker 仍可继续撮合，且本次只应在剩余量上追加成交。
+    //
+    // Given:
+    // - taker 初始状态已经是 `PartiallyFilled`，`filled_qty = 1`，版本是 7。
+    // - 当前 maker 的剩余数量刚好可以补齐 taker。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - trade event 只记录本次新增成交量。
+    // - maker 变成 `Filled`。
+    // - taker 从 version 7 前进到 8，并最终变成 `Filled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Gtc)
             .with_execution_state(SpotOrderStatus::PartiallyFilled, 1)
@@ -557,8 +795,10 @@ fn partially_filled_taker_can_continue_matching_to_filled() -> Result<(), MatchS
         maker_orders: vec![maker_sell("maker-1", 2, 100, SpotOrderTimeInForce::Gtc)],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -577,8 +817,23 @@ fn partially_filled_taker_can_continue_matching_to_filled() -> Result<(), MatchS
 }
 
 #[test]
-fn partially_filled_maker_can_be_completed_by_current_match() -> Result<(), MatchSpotOrderError> {
-    // maker 的已有 filled_qty 也必须被正确累加，并推动 version 前进。
+fn partially_filled_maker_continues_matching_until_filled() -> Result<(), MatchSpotOrderError> {
+    // Rule:
+    // - 已部分成交的 maker 也可以继续撮合，且已有 filled_qty 必须被正确累加。
+    //
+    // Given:
+    // - maker 初始状态已经是 `PartiallyFilled`，`filled_qty = 1`，版本是 5。
+    // - 当前 taker 还能再吃掉 maker 剩余的 2。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - trade event 只记录本次新增成交量。
+    // - maker 从 version 5 前进到 6，并最终变成 `Filled`。
+    // - taker 最终停在 `PartiallyFilled`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Gtc),
         maker_orders: vec![
@@ -588,8 +843,10 @@ fn partially_filled_maker_can_be_completed_by_current_match() -> Result<(), Matc
         ],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -609,7 +866,22 @@ fn partially_filled_maker_can_be_completed_by_current_match() -> Result<(), Matc
 
 #[test]
 fn sell_limit_gtc_partially_fills_against_buy_maker() -> Result<(), MatchSpotOrderError> {
-    // 覆盖 sell taker + buy maker，避免测试矩阵只锁定一个方向。
+    // Rule:
+    // - GTC sell taker 也必须遵守与 buy side 对称的撮合语义。
+    //
+    // Given:
+    // - taker 是 sell side GTC limit。
+    // - maker-1 可成交。
+    // - maker-2 不交叉，因此扫描应在 maker-1 后停止。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 只产生与 maker-1 相关的成交和更新事件。
+    // - taker 最终停在 `PartiallyFilled`。
+
+    // arrange
     let cmd = MatchSpotOrderCmd { party_id: "seller".to_string(), ..sample_cmd() };
     let state = MatchSpotOrderState {
         taker_order: taker_sell_limit(3, 95, SpotOrderTimeInForce::Gtc),
@@ -619,8 +891,10 @@ fn sell_limit_gtc_partially_fills_against_buy_maker() -> Result<(), MatchSpotOrd
         ],
     };
 
+    // act
     let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
 
+    // assert
     assert_eq!(events.len(), 3);
     assert_trade_event_for_accounts(
         &events[0],
@@ -641,7 +915,22 @@ fn sell_limit_gtc_partially_fills_against_buy_maker() -> Result<(), MatchSpotOrd
 #[test]
 fn first_non_crossing_maker_stops_scan_even_if_later_maker_would_cross()
 -> Result<(), MatchSpotOrderError> {
-    // 这里锁的是订单簿顺序语义，而不是价格集合语义：首个 maker 不交叉就停止，不能跳过去找后面更优价格。
+    // Rule:
+    // - 撮合遵循订单簿顺序语义，而不是“价格集合里是否存在可成交单”的语义。
+    //
+    // Given:
+    // - taker 是 buy side GTC limit。
+    // - maker-1 是首个不交叉价格。
+    // - maker-2 虽然会交叉，也不应被继续扫描。
+    //
+    // When:
+    // - 调用 `compute_replayable_events`。
+    //
+    // Then:
+    // - 因为首个 maker 已不交叉，整次撮合应直接结束。
+    // - 返回 `Err(MatchSpotOrderError::NoTradesMatched)`。
+
+    // arrange
     let state = MatchSpotOrderState {
         taker_order: taker_buy_limit(3, 100, SpotOrderTimeInForce::Gtc),
         maker_orders: vec![
@@ -650,8 +939,10 @@ fn first_non_crossing_maker_stops_scan_even_if_later_maker_would_cross()
         ],
     };
 
+    // act
     let result = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state);
 
+    // assert
     assert_eq!(result, Err(MatchSpotOrderError::NoTradesMatched));
 
     Ok(())
