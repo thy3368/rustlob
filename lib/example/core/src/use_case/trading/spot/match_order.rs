@@ -1,11 +1,11 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotOrder, SpotOrderFinalization, SpotOrderMatchError, SpotOrderSide, SpotOrderStatus,
-    SpotOrderStatusReason, SpotTrade,
+    SpotOrder, SpotOrderFinalization, SpotOrderMatchError, SpotOrderStatus, SpotOrderStatusReason,
+    SpotTrade,
 };
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
@@ -96,16 +96,28 @@ impl From<SpotOrderMatchError> for MatchSpotOrderError {
     }
 }
 
+/// 本次撮合的 typed output。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchSpotOrderOutput {
+    /// 本次撮合新生成的成交事实。
+    pub trades: Vec<SpotTrade>,
+    /// 本次撮合后 taker 订单状态。
+    pub taker_order_after: SpotOrder,
+    /// 本次撮合中实际发生变化的 maker 订单 after 快照，顺序与撮合顺序一致。
+    pub maker_orders_after: Vec<SpotOrder>,
+}
+
 /// Use case that matches one spot taker order against pre-sorted maker orders.
 ///
 /// 用例只负责订单撮合、成交事实创建和订单成交状态更新；账户清算由后续 use case 处理。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderUseCase;
 
-impl CommandUseCase2 for MatchSpotOrderUseCase {
+impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCase {
     type Command = MatchSpotOrderCmd;
     type GivenState = MatchSpotOrderState;
     type Error = MatchSpotOrderError;
+    type Output = MatchSpotOrderOutput;
 
     fn role(&self) -> &'static str {
         "MatchingEngine"
@@ -160,27 +172,35 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
         Ok(())
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        // use case 只编排撮合流程与事件；价格交叉、ALO 拒绝、TIF 收尾都委托给 entity。
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let mut taker_order = state.taker_order;
         let mut taker_remaining = taker_order.remaining_qty()?;
         let mut total_taker_fill = 0_u64;
         let mut events = Vec::new();
+        let mut trades = Vec::new();
+        let mut maker_orders_after = Vec::new();
         let best_maker = state.maker_orders.first();
 
-        // ALO 只看当前最优 maker：如果会立即吃单，就直接产出一条 taker reject update event。
         if taker_order.would_be_rejected_as_alo(best_maker)? {
             let current_filled_qty = taker_order.filled_qty;
-            return Ok(vec![update_taker_order(
+            events.push(update_taker_order(
                 &mut taker_order,
                 current_filled_qty,
                 SpotOrderStatus::Rejected,
                 Some(SpotOrderStatusReason::BadAloPxRejected),
-            )?]);
+            )?);
+            return Ok(UseCaseOutput {
+                output: MatchSpotOrderOutput {
+                    trades,
+                    taker_order_after: taker_order,
+                    maker_orders_after,
+                },
+                events,
+            });
         }
 
         for (trade_index, maker_order) in state.maker_orders.into_iter().enumerate() {
@@ -188,7 +208,6 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                 break;
             }
 
-            // maker 已按优先级排序；遇到首个不再交叉的价格就终止扫描，后续 maker 不再考虑。
             if !taker_order.crosses_order(&maker_order)? {
                 break;
             }
@@ -201,7 +220,6 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                 continue;
             }
 
-            // 先记录成交事实，再分别推进 maker / taker 的成交数量与生命周期状态。
             let trade = SpotTrade::new(
                 format!("{}-{}", cmd.match_id, trade_index + 1),
                 cmd.match_id.clone(),
@@ -218,6 +236,7 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
             events.push(
                 trade.track_create_event().map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?,
             );
+            trades.push(trade);
 
             let mut next_maker_order = maker_order;
             let next_maker_filled = next_maker_order
@@ -238,6 +257,7 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                     })
                     .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?,
             );
+            maker_orders_after.push(next_maker_order);
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -247,11 +267,17 @@ impl CommandUseCase2 for MatchSpotOrderUseCase {
                 .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
         }
 
-        // taker 收尾统一走 entity 决策：GTC / IOC / ALO 的最终状态在这里收口。
         let finalization = taker_order.finalize_after_match(total_taker_fill)?;
         events.push(update_taker_order_with_finalization(&mut taker_order, finalization)?);
 
-        Ok(events)
+        Ok(UseCaseOutput {
+            output: MatchSpotOrderOutput {
+                trades,
+                taker_order_after: taker_order,
+                maker_orders_after,
+            },
+            events,
+        })
     }
 }
 

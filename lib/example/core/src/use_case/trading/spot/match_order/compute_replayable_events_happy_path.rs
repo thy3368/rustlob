@@ -1,7 +1,10 @@
 use cmd_handler::EntityReplayableEvent;
+use cmd_handler::command_use_case_def2::CommandUseCase3;
 
 use super::*;
-use crate::entity::{SpotOrderExecution, SpotOrderStatusReason, SpotOrderTimeInForce};
+use crate::entity::{
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatusReason, SpotOrderTimeInForce,
+};
 
 // 目的:
 // - 把 `compute_replayable_events` 的 happy path 测试写成“测试即需求规格”。
@@ -35,6 +38,13 @@ use crate::entity::{SpotOrderExecution, SpotOrderStatusReason, SpotOrderTimeInFo
 // - 每个发生了成交数量或生命周期变化的 maker / taker，都断言 update event。
 // - `filled_qty` 未变化时，断言 `None`，不要伪造 `Some(0)`。
 // - 多事件场景必须断言顺序: 先 trade，再 maker update，最后 taker update。
+
+fn compute_events(
+    cmd: &MatchSpotOrderCmd,
+    state: MatchSpotOrderState,
+) -> Result<Vec<EntityReplayableEvent>, MatchSpotOrderError> {
+    Ok(CommandUseCase3::compute_output_and_events(&MatchSpotOrderUseCase, cmd, state)?.events)
+}
 
 fn sample_cmd() -> MatchSpotOrderCmd {
     MatchSpotOrderCmd {
@@ -211,7 +221,7 @@ fn gtc_limit_taker_matches_multiple_makers_and_fills_completely() -> Result<(), 
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 5);
@@ -272,7 +282,7 @@ fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker()
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -315,7 +325,7 @@ fn ioc_limit_taker_fills_completely() -> Result<(), MatchSpotOrderError> {
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -358,7 +368,7 @@ fn ioc_limit_taker_partially_fills_and_cancels_remaining_qty() -> Result<(), Mat
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -410,7 +420,7 @@ fn ioc_limit_taker_with_no_crossing_maker_rejects_single_taker_update()
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -449,7 +459,7 @@ fn alo_limit_taker_rejects_when_best_maker_would_cross() -> Result<(), MatchSpot
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -493,7 +503,7 @@ fn alo_rejects_before_trade_loop_and_emits_single_taker_update() -> Result<(), M
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -533,7 +543,7 @@ fn market_ioc_buy_with_no_liquidity_rejects_with_market_reason() -> Result<(), M
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -574,7 +584,7 @@ fn market_ioc_sell_with_no_liquidity_rejects_with_market_reason() -> Result<(), 
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -613,7 +623,7 @@ fn market_ioc_buy_matches_using_maker_price() -> Result<(), MatchSpotOrderError>
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -657,7 +667,7 @@ fn sell_ioc_limit_partially_fills_and_cancels_remaining_qty() -> Result<(), Matc
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -710,7 +720,7 @@ fn sell_ioc_limit_with_no_crossing_maker_rejects_single_taker_update()
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -750,7 +760,7 @@ fn market_ioc_sell_matches_using_maker_price() -> Result<(), MatchSpotOrderError
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -796,7 +806,7 @@ fn partially_filled_taker_continues_matching_until_filled() -> Result<(), MatchS
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -844,7 +854,7 @@ fn partially_filled_maker_continues_matching_until_filled() -> Result<(), MatchS
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -892,7 +902,7 @@ fn sell_limit_gtc_partially_fills_against_buy_maker() -> Result<(), MatchSpotOrd
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -940,7 +950,7 @@ fn first_non_crossing_maker_stops_scan_even_if_later_maker_would_cross()
     };
 
     // act
-    let result = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state);
+    let result = compute_events(&sample_cmd(), state);
 
     // assert
     assert_eq!(result, Err(MatchSpotOrderError::NoTradesMatched));

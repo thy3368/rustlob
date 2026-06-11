@@ -1,11 +1,12 @@
-//! `compute_replayable_events` 规格风格模板
+//! `compute_output_and_events(...).events` 规格风格模板
 //!
 //! 目的:
 //! - 把 use case 层测试写成“测试即需求规格”的形式。
 //! - 先表达业务规则，再表达输入状态、动作和期望事件。
 //!
 //! 适用范围:
-//! - 适用于 `MatchSpotOrderUseCase::compute_replayable_events` 这类 use case 层业务场景测试。
+//! - 适用于 `MatchSpotOrderUseCase::compute_output_and_events(...).events`
+//!   这类 use case 层业务场景测试。
 //! - 重点是事件顺序、订单生命周期状态、拒绝原因和停止条件。
 //!
 //! 使用方式:
@@ -14,6 +15,14 @@
 //! - helper 名称请沿用现有测试术语，例如 `sample_cmd()`、
 //!   `taker_buy_limit(...)`、`maker_sell(...)`、`assert_order_update_event(...)`、
 //!   `assert_trade_event_for_accounts(...)`。
+
+// 建议 helper:
+// fn compute_events(
+//     cmd: &MatchSpotOrderCmd,
+//     state: MatchSpotOrderState,
+// ) -> Result<Vec<EntityReplayableEvent>, MatchSpotOrderError> {
+//     Ok(CommandUseCase3::compute_output_and_events(&MatchSpotOrderUseCase, cmd, state)?.events)
+// }
 
 // -----------------------------------------------------------------------------
 // 规格矩阵模板
@@ -88,7 +97,7 @@ fn ioc_limit_taker_with_no_crossing_maker_rejects_single_taker_update_template()
     // - 因为零成交，所以不会产生 trade event。
     //
     // When:
-    // - 调用 `compute_replayable_events`。
+    // - 调用 `compute_output_and_events(...).events`。
     //
     // Then:
     // - 只产生 1 条 event。
@@ -104,7 +113,7 @@ fn ioc_limit_taker_with_no_crossing_maker_rejects_single_taker_update_template()
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 1);
@@ -139,7 +148,7 @@ fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker_templat
     // - maker-3 即使价格可成交，也不应再被扫描。
     //
     // When:
-    // - 调用 `compute_replayable_events`。
+    // - 调用 `compute_output_and_events(...).events`。
     //
     // Then:
     // - 先出现 1 条 trade event。
@@ -158,7 +167,7 @@ fn gtc_limit_taker_partially_fills_and_stops_at_first_non_crossing_maker_templat
     };
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&sample_cmd(), state)?;
+    let events = compute_events(&sample_cmd(), state)?;
 
     // assert
     assert_eq!(events.len(), 3);
@@ -207,7 +216,7 @@ fn replace_with_who_condition_outcome_template_name() -> Result<(), MatchSpotOrd
     let cmd = sample_cmd();
 
     // act
-    let events = MatchSpotOrderUseCase.compute_replayable_events(&cmd, state)?;
+    let events = compute_events(&cmd, state)?;
 
     // assert
     assert_eq!(events.len(), todo!("expected event count"));
@@ -238,7 +247,7 @@ fn replace_with_who_condition_outcome_template_name() -> Result<(), MatchSpotOrd
 // bad example:
 // - `gtc_case_1`
 // - `partial_fill_test`
-// - `compute_replayable_events_should_return_three_events`
+// - `compute_output_and_events_should_return_three_events`
 //
 // good example:
 // - `gtc_limit_taker_matches_multiple_makers_and_fills_completely`

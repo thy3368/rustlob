@@ -12,8 +12,10 @@ pub use execute_immediate_order_pipeline::{
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
 };
 pub use match_order::{
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase,
+    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
+    MatchSpotOrderUseCase,
 };
 pub use settle_trade::{
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
+    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput, SettleSpotTradeState,
+    SettleSpotTradeUseCase,
 };

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -71,16 +71,26 @@ pub enum SettleSpotTradeError {
     ArithmeticOverflow,
 }
 
+/// 本批次清结算的 typed output。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleSpotTradeOutput {
+    /// 本批次创建出的 settlement 事实。
+    pub settlements: Vec<SpotSettlement>,
+    /// 本批次实际受影响的余额 after 快照。
+    pub balances_after: Vec<Balance>,
+}
+
 /// Use case that settles matched spot trades into account balance changes.
 ///
 /// 用例只处理 base/quote 资产交割和 settlement 事实记录；手续费由独立 use case 处理。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleSpotTradeUseCase;
 
-impl CommandUseCase2 for SettleSpotTradeUseCase {
+impl cmd_handler::command_use_case_def2::CommandUseCase3 for SettleSpotTradeUseCase {
     type Command = SettleSpotTradeCmd;
     type GivenState = SettleSpotTradeState;
     type Error = SettleSpotTradeError;
+    type Output = SettleSpotTradeOutput;
 
     fn role(&self) -> &'static str {
         "ClearingHouse"
@@ -117,19 +127,21 @@ impl CommandUseCase2 for SettleSpotTradeUseCase {
         )
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
-        let mut events = Vec::new();
+        let mut settlements = Vec::new();
+        let mut balances_before = Vec::new();
+        let mut balances_after = Vec::new();
 
         for (index, trade) in state.trades.iter().enumerate() {
             let parties = settlement_parties(trade);
             let quote_qty =
                 trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            let settlement = SpotSettlement::new(
+            settlements.push(SpotSettlement::new(
                 format!("{}-{}", cmd.settlement_batch_id, index + 1),
                 trade.trade_id.clone(),
                 trade.match_id.clone(),
@@ -138,7 +150,11 @@ impl CommandUseCase2 for SettleSpotTradeUseCase {
                 trade.qty,
                 quote_qty,
                 trade.price,
-            );
+            ));
+        }
+
+        let mut events = Vec::new();
+        for settlement in &settlements {
             events.push(
                 settlement
                     .track_create_event()
@@ -151,6 +167,7 @@ impl CommandUseCase2 for SettleSpotTradeUseCase {
             else {
                 continue;
             };
+            let previous_balance = balance.clone();
             let next_available = balance
                 .available
                 .checked_add(delta.available_add)
@@ -162,16 +179,18 @@ impl CommandUseCase2 for SettleSpotTradeUseCase {
             let next_version =
                 balance.version.checked_add(1).ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
+            balance.apply_after(next_available, next_frozen, next_version);
             events.push(
                 balance
-                    .track_update_event(|balance| {
-                        balance.apply_after(next_available, next_frozen, next_version);
-                    })
+                    .track_update_event_from(&previous_balance)
                     .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
             );
+            balances_before.push(previous_balance);
+            balances_after.push(balance);
         }
 
-        Ok(events)
+        let _ = balances_before;
+        Ok(UseCaseOutput { output: SettleSpotTradeOutput { settlements, balances_after }, events })
     }
 }
 
@@ -296,86 +315,141 @@ fn balance_key(account_id: &str, asset_id: &str) -> String {
 }
 
 #[cfg(test)]
+fn cmd(trade_ids: Vec<&str>) -> SettleSpotTradeCmd {
+    SettleSpotTradeCmd {
+        party_id: "clearing-house".to_string(),
+        settlement_batch_id: "settle-1".to_string(),
+        trade_ids: trade_ids.into_iter().map(str::to_string).collect(),
+    }
+}
+
+#[cfg(test)]
+fn trade(
+    trade_id: &str,
+    taker_side: SpotOrderSide,
+    taker_account_id: &str,
+    maker_account_id: &str,
+    price: u64,
+    qty: u64,
+) -> SpotTrade {
+    SpotTrade::new(
+        trade_id.to_string(),
+        "match-1".to_string(),
+        10_001,
+        "BTCUSDT".to_string(),
+        format!("{trade_id}-taker"),
+        format!("{trade_id}-maker"),
+        taker_account_id.to_string(),
+        maker_account_id.to_string(),
+        taker_side,
+        price,
+        qty,
+    )
+}
+
+#[cfg(test)]
+fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Balance {
+    Balance::new(account_id.to_string(), asset_id.to_string(), available, frozen, 3)
+}
+
+#[cfg(test)]
+fn state(trades: Vec<SpotTrade>, balances: Vec<Balance>) -> SettleSpotTradeState {
+    SettleSpotTradeState {
+        trades,
+        base_asset_id: "BTC".to_string(),
+        quote_asset_id: "USDT".to_string(),
+        balances,
+        settled_trade_ids: Vec::new(),
+    }
+}
+
+#[cfg(test)]
+fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
+    event.field_changes.iter().find_map(|change| {
+        if change.field_name_as_str().ok() != Some(field_name) {
+            return None;
+        }
+        std::str::from_utf8(change.new_value_bytes()).ok()
+    })
+}
+
+#[cfg(test)]
+fn event_field_u64(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
+    event_field(event, field_name)?.parse::<u64>().ok()
+}
+
+#[cfg(test)]
+fn balance_event<'a>(
+    events: &'a [EntityReplayableEvent],
+    account_id: &str,
+    asset_id: &str,
+) -> Option<&'a EntityReplayableEvent> {
+    events.iter().find(|event| {
+        event.is_updated()
+            && event_field(event, "account_id") == Some(account_id)
+            && event_field(event, "asset_id") == Some(asset_id)
+    })
+}
+
+#[cfg(test)]
+fn assert_settlement_event(
+    event: &EntityReplayableEvent,
+    expected_settlement_id: &str,
+    expected_trade_id: &str,
+    expected_buyer_account_id: &str,
+    expected_seller_account_id: &str,
+    expected_base_qty: u64,
+    expected_quote_qty: u64,
+    expected_price: u64,
+) {
+    assert!(event.is_created());
+    assert_eq!(event_field(event, "settlement_id"), Some(expected_settlement_id));
+    assert_eq!(event_field(event, "trade_id"), Some(expected_trade_id));
+    assert_eq!(event_field(event, "match_id"), Some("match-1"));
+    assert_eq!(event_field(event, "buyer_account_id"), Some(expected_buyer_account_id));
+    assert_eq!(event_field(event, "seller_account_id"), Some(expected_seller_account_id));
+    assert_eq!(event_field_u64(event, "base_qty"), Some(expected_base_qty));
+    assert_eq!(event_field_u64(event, "quote_qty"), Some(expected_quote_qty));
+    assert_eq!(event_field_u64(event, "price"), Some(expected_price));
+}
+
+#[cfg(test)]
+fn assert_balance_update_event(
+    event: &EntityReplayableEvent,
+    expected_account_id: &str,
+    expected_asset_id: &str,
+    expected_available: Option<u64>,
+    expected_frozen: Option<u64>,
+    expected_old_version: u64,
+    expected_new_version: u64,
+) {
+    assert!(event.is_updated());
+    assert_eq!(event.old_version, expected_old_version);
+    assert_eq!(event.new_version, expected_new_version);
+    assert_eq!(event_field(event, "account_id"), Some(expected_account_id));
+    assert_eq!(event_field(event, "asset_id"), Some(expected_asset_id));
+    assert_eq!(event_field_u64(event, "available"), expected_available);
+    assert_eq!(event_field_u64(event, "frozen"), expected_frozen);
+}
+
+#[cfg(test)]
+mod compute_replayable_events_happy_path;
+
+#[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase2;
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
 
     use super::*;
 
-    fn cmd(trade_ids: Vec<&str>) -> SettleSpotTradeCmd {
-        SettleSpotTradeCmd {
-            party_id: "clearing-house".to_string(),
-            settlement_batch_id: "settle-1".to_string(),
-            trade_ids: trade_ids.into_iter().map(str::to_string).collect(),
-        }
-    }
-
-    fn trade(
-        trade_id: &str,
-        taker_side: SpotOrderSide,
-        taker_account_id: &str,
-        maker_account_id: &str,
-        price: u64,
-        qty: u64,
-    ) -> SpotTrade {
-        SpotTrade::new(
-            trade_id.to_string(),
-            "match-1".to_string(),
-            10_001,
-            "BTCUSDT".to_string(),
-            format!("{trade_id}-taker"),
-            format!("{trade_id}-maker"),
-            taker_account_id.to_string(),
-            maker_account_id.to_string(),
-            taker_side,
-            price,
-            qty,
-        )
-    }
-
-    fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Balance {
-        Balance::new(account_id.to_string(), asset_id.to_string(), available, frozen, 3)
-    }
-
-    fn state(trades: Vec<SpotTrade>, balances: Vec<Balance>) -> SettleSpotTradeState {
-        SettleSpotTradeState {
-            trades,
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            balances,
-            settled_trade_ids: Vec::new(),
-        }
-    }
-
-    fn balance_event<'a>(
-        events: &'a [EntityReplayableEvent],
-        account_id: &str,
-        asset_id: &str,
-    ) -> Option<&'a EntityReplayableEvent> {
-        events.iter().find(|event| {
-            event.is_updated()
-                && event_field(event, "account_id") == Some(account_id)
-                && event_field(event, "asset_id") == Some(asset_id)
-        })
-    }
-
-    fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
-        event.field_changes.iter().find_map(|change| {
-            if change.field_name_as_str().ok() != Some(field_name) {
-                return None;
-            }
-            std::str::from_utf8(change.new_value_bytes()).ok()
-        })
-    }
-
     #[test]
     fn role_is_clearing_house() {
-        assert_eq!(SettleSpotTradeUseCase.role(), "ClearingHouse");
+        assert_eq!(CommandUseCase3::role(&SettleSpotTradeUseCase), "ClearingHouse");
     }
 
     #[test]
     fn pre_check_rejects_empty_trade_ids() {
         assert_eq!(
-            SettleSpotTradeUseCase.pre_check_command(&cmd(Vec::new())),
+            CommandUseCase3::pre_check_command(&SettleSpotTradeUseCase, &cmd(Vec::new())),
             Err(SettleSpotTradeError::EmptyTradeIds)
         );
     }
@@ -388,7 +462,11 @@ mod tests {
         );
 
         assert_eq!(
-            SettleSpotTradeUseCase.validate_against_state(&cmd(vec!["different"]), &state),
+            CommandUseCase3::validate_against_state(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["different"]),
+                &state,
+            ),
             Err(SettleSpotTradeError::TradeIdsMismatch)
         );
     }
@@ -402,7 +480,11 @@ mod tests {
         state.settled_trade_ids = vec!["trade-1".to_string()];
 
         assert_eq!(
-            SettleSpotTradeUseCase.validate_against_state(&cmd(vec!["trade-1"]), &state),
+            CommandUseCase3::validate_against_state(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["trade-1"]),
+                &state,
+            ),
             Err(SettleSpotTradeError::TradeAlreadySettled)
         );
     }
@@ -420,7 +502,11 @@ mod tests {
         );
 
         assert_eq!(
-            SettleSpotTradeUseCase.validate_against_state(&cmd(vec!["trade-1"]), &state),
+            CommandUseCase3::validate_against_state(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["trade-1"]),
+                &state,
+            ),
             Err(SettleSpotTradeError::InsufficientBuyerFrozenQuote)
         );
     }
@@ -438,66 +524,20 @@ mod tests {
         );
 
         assert_eq!(
-            SettleSpotTradeUseCase.validate_against_state(&cmd(vec!["trade-1"]), &state),
+            CommandUseCase3::validate_against_state(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["trade-1"]),
+                &state,
+            ),
             Err(SettleSpotTradeError::InsufficientSellerFrozenBase)
         );
     }
 
     #[test]
-    fn compute_settles_batch_and_aggregates_account_updates() -> Result<(), SettleSpotTradeError> {
+    fn compute_output_and_events_keeps_output_and_events_consistent()
+    -> Result<(), SettleSpotTradeError> {
         let state = state(
-            vec![
-                trade("trade-1", SpotOrderSide::Buy, "buyer", "seller-1", 100, 2),
-                trade("trade-2", SpotOrderSide::Buy, "buyer", "seller-2", 90, 1),
-            ],
-            vec![
-                balance("buyer", "BTC", 0, 0),
-                balance("buyer", "USDT", 0, 290),
-                balance("seller-1", "USDT", 0, 0),
-                balance("seller-1", "BTC", 0, 2),
-                balance("seller-2", "USDT", 0, 0),
-                balance("seller-2", "BTC", 0, 1),
-            ],
-        );
-
-        let events = SettleSpotTradeUseCase
-            .compute_replayable_events(&cmd(vec!["trade-1", "trade-2"]), state)?;
-
-        assert_eq!(events.len(), 8);
-        assert!(events[0].is_created());
-        assert_eq!(event_field(&events[0], "settlement_id"), Some("settle-1-1"));
-        assert_eq!(event_field(&events[0], "quote_qty"), Some("200"));
-        assert!(events[1].is_created());
-        assert_eq!(event_field(&events[1], "settlement_id"), Some("settle-1-2"));
-        assert_eq!(event_field(&events[1], "quote_qty"), Some("90"));
-
-        let buyer_base = balance_event(&events, "buyer", "BTC").unwrap();
-        assert_eq!(event_field(buyer_base, "available"), Some("3"));
-        assert_eq!(event_field(buyer_base, "frozen"), None);
-
-        let buyer_quote = balance_event(&events, "buyer", "USDT").unwrap();
-        assert_eq!(event_field(buyer_quote, "available"), None);
-        assert_eq!(event_field(buyer_quote, "frozen"), Some("0"));
-
-        let seller_1_quote = balance_event(&events, "seller-1", "USDT").unwrap();
-        assert_eq!(event_field(seller_1_quote, "available"), Some("200"));
-
-        let seller_1_base = balance_event(&events, "seller-1", "BTC").unwrap();
-        assert_eq!(event_field(seller_1_base, "frozen"), Some("0"));
-
-        let seller_2_quote = balance_event(&events, "seller-2", "USDT").unwrap();
-        assert_eq!(event_field(seller_2_quote, "available"), Some("90"));
-
-        let seller_2_base = balance_event(&events, "seller-2", "BTC").unwrap();
-        assert_eq!(event_field(seller_2_base, "frozen"), Some("0"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn compute_derives_buyer_from_maker_when_taker_sells() -> Result<(), SettleSpotTradeError> {
-        let state = state(
-            vec![trade("trade-1", SpotOrderSide::Sell, "seller", "buyer", 100, 2)],
+            vec![trade("trade-1", SpotOrderSide::Buy, "buyer", "seller", 100, 2)],
             vec![
                 balance("buyer", "BTC", 0, 0),
                 balance("buyer", "USDT", 0, 200),
@@ -506,18 +546,23 @@ mod tests {
             ],
         );
 
-        let events =
-            SettleSpotTradeUseCase.compute_replayable_events(&cmd(vec!["trade-1"]), state)?;
+        let result =
+            cmd_handler::command_use_case_def2::CommandUseCase3::compute_output_and_events(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["trade-1"]),
+                state,
+            )?;
 
-        assert_eq!(event_field(&events[0], "buyer_account_id"), Some("buyer"));
-        assert_eq!(event_field(&events[0], "seller_account_id"), Some("seller"));
-        assert_eq!(
-            event_field(balance_event(&events, "buyer", "USDT").unwrap(), "frozen"),
-            Some("0")
-        );
-        assert_eq!(
-            event_field(balance_event(&events, "seller", "USDT").unwrap(), "available"),
-            Some("200")
+        assert_eq!(result.output.settlements.len(), 1);
+        assert_eq!(result.output.settlements[0].settlement_id, "settle-1-1");
+        assert!(result.output.balances_after.iter().any(|balance| {
+            balance.account_id == "buyer" && balance.asset_id == "BTC" && balance.available == 2
+        }));
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
         );
 
         Ok(())
@@ -531,7 +576,11 @@ mod tests {
         );
 
         assert_eq!(
-            SettleSpotTradeUseCase.compute_replayable_events(&cmd(vec!["trade-1"]), state),
+            CommandUseCase3::compute_output_and_events(
+                &SettleSpotTradeUseCase,
+                &cmd(vec!["trade-1"]),
+                state,
+            ),
             Err(SettleSpotTradeError::ArithmeticOverflow)
         );
     }
