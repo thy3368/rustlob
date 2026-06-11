@@ -81,9 +81,14 @@ Required tests:
 - `role()` returns the intended actor.
 - `pre_check_command()` rejects malformed command-only input.
 - `validate_against_state()` rejects invalid state transitions.
-- `compute_replayable_events()` produces the expected events.
+- `compute_replayable_events()` produces the expected replayable events.
 - `ReplyMapper` maps domain events correctly if a reply mapper exists.
 - `CommandUseCaseExecutor2::execute()` covers one happy path and one rejection path using stub `CommandUseCaseOutbound`.
+
+Testing split:
+- `compute_replayable_events()` happy-path tests must use the sibling skill `write-use-case-happy-path-tests` and stay as business specification tests.
+- Keep `pre_check_command()` and `validate_against_state()` tests separate from the happy-path spec file.
+- Use `proptest` only to add invariant coverage; do not replace happy-path spec tests with it.
 
 ## Output Checklist
 

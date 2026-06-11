@@ -1,6 +1,6 @@
 ---
 name: write-entity
-description: Write RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable business rules out of use cases or adapters, implementing entity constructors and domain methods, adding Rustdoc, or writing focused entity unit tests. Uses StoredOrder as the reference pattern.
+description: Write RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable business rules out of use cases or adapters, implementing entity constructors and domain methods, adding Rustdoc, or writing focused entity unit tests. Uses SpotOrder as the reference pattern.
 ---
 
 # Write Entity
@@ -9,8 +9,8 @@ description: Write RustLOB core entities for command-style use cases. Use when c
 
 Use this skill to create or refactor RustLOB `core/src/entity` types so they carry reusable
 business meaning instead of being passive data bags. The reference pattern is
-`lib/example/core/src/entity/stored_order.rs`: a small entity with facts, constructor,
-domain queries/calculations, Rustdoc, and focused unit tests.
+`lib/example/core/src/entity/spot/spot_order.rs`: a rich entity with facts, constructor,
+domain queries/calculations, match semantics, Rustdoc, and focused unit tests.
 
 Before changing an entity, read the shared constraints file:
 
@@ -70,23 +70,28 @@ Do not use `unwrap()` or `expect()` in production entity code.
 - Avoid generic utility methods that do not express business language.
 - Do not design the entity as a private helper for just one use case; preserve the many-`use_case` to one-`entity` reuse direction.
 
-## StoredOrder Pattern
+## SpotOrder Pattern
 
 For an order-like entity, the pattern is:
 
 ```rust
-impl StoredOrder {
+impl SpotOrder {
     pub fn belongs_to_account(&self, account_id: &str) -> bool { ... }
     pub fn trades_symbol(&self, symbol: &str) -> bool { ... }
+    pub fn limit_price(&self) -> Option<u64> { ... }
     pub fn notional_quote(&self) -> Option<u64> { ... }
-    pub fn has_consistent_reserved_quote(&self) -> bool { ... }
-    pub fn quote_to_release_on_cancel(&self) -> u64 { ... }
+    pub fn remaining_qty(&self) -> Option<u64> { ... }
+    pub fn crosses_order(&self, maker: &Self) -> Result<bool, SpotOrderMatchError> { ... }
+    pub fn finalize_after_match(
+        &self,
+        total_fill: u64,
+    ) -> Result<SpotOrderFinalization, SpotOrderMatchError> { ... }
 }
 ```
 
-These methods make future cancel/match/reconcile use cases reuse the same business meaning instead
-of recomputing `qty * price`, comparing raw strings, or directly reading reservation fields in
-multiple places.
+These methods make future place/cancel/match/reconcile use cases reuse the same business meaning
+instead of recomputing `qty * price`, comparing raw strings, re-deriving remaining quantity, or
+duplicating crossing and finish-state rules in multiple places.
 
 ## Rustdoc
 
