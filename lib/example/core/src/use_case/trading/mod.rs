@@ -37,6 +37,10 @@ pub use spot::place_order::{
     PlaceImmediateOrderState, PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution,
     PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };
+pub use spot::place_order::{
+    PlaceImmediateOrderCmd as PlaceOrderCmd, PlaceImmediateOrderState as PlaceOrderState,
+    PlaceImmediateOrderUseCase as PlaceOrderUseCase,
+};
 pub use spot::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
