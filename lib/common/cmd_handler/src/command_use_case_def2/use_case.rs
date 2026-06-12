@@ -1,5 +1,14 @@
 use common_entity::EntityReplayableEvent;
 
+/// V3 use case 的标准业务产出：
+/// `output` 是当前用例内部可复用的强类型业务中间结果，
+/// `events` 是唯一用于持久化 / 回放 / 发布的领域事实。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UseCaseOutput<O> {
+    pub output: O,
+    pub events: Vec<EntityReplayableEvent>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CommandMeta {
     /// Tracing correlation id for spans/logs across retries and service hops.
@@ -65,9 +74,70 @@ pub trait CommandUseCase2: Send + Sync {
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error>;
 }
 
+/// 更贴近跨 use case 业务复用的命令型抽象：
+/// use case 一次推导出 typed output 与 replayable events。
+///
+/// 约束：
+/// - 映射方向只定义为 `typed_output -> replayable_events`
+/// - 该映射只在当前 use case 内部维护
+/// - executor / persistence / replay / publish 只看 `events`
+/// - 不提供通用 `events -> typed_output` 的框架恢复能力
+pub trait CommandUseCase3: Send + Sync {
+    /// 对应 cqrs 的 command。
+    type Command: IssuedByParty;
+
+    /// 对应 clean 架构中当前 use case 已加载的 GivenState。
+    type GivenState;
+
+    /// core.use_case 只表达业务错误。
+    type Error: std::error::Error;
+
+    /// 当前用例内部可复用的强类型业务中间结果。
+    type Output;
+
+    /// 对应四色建模的 role。
+    fn role(&self) -> &'static str {
+        "UnknownActor用来做权限控制和追溯"
+    }
+
+    /// 对 command 的快速检查。
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// 对状态校验，可为空。
+    fn validate_against_state(
+        &self,
+        _cmd: &Self::Command,
+        _state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// 一次业务推导，同时给出 typed output 与 replayable events。
+    ///
+    /// 要求：
+    /// - `output` 必须是纯业务结果
+    /// - `events` 必须由 `output` 推导生成
+    /// - 不允许分别维护两套互相独立的 output / event 生成逻辑
+    fn compute_output_and_events(
+        &self,
+        cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error>;
+}
+
 /// 对外回复映射移出核心 Use Case，交给 Interface Adapters（接口适配器）。
 pub trait UseCaseReplyMapper: Send + Sync {
     type Reply;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply;
+}
+
+/// V3 reply mapper 直接消费 typed output + replayable events 的组合结果。
+pub trait UseCaseReplyMapper3: Send + Sync {
+    type Output;
+    type Reply;
+
+    fn map(&self, result: UseCaseOutput<Self::Output>) -> Self::Reply;
 }

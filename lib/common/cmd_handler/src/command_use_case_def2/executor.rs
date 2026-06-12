@@ -6,8 +6,9 @@ use super::trace::{
     use_case_command_summary,
 };
 use super::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseOutbound,
-    CommandUseCaseOutboundPhase, IssuedByParty, ObserveHandlerLatency, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, CommandUseCaseOutbound,
+    CommandUseCaseOutboundPhase, IssuedByParty, ObserveHandlerLatency, UseCaseOutput,
+    UseCaseReplyMapper, UseCaseReplyMapper3,
 };
 use crate::HandlerLatencyMetrics;
 
@@ -248,5 +249,209 @@ impl CommandUseCaseExecutor2 {
         // translate them into transport-specific errors such as HTTP/CLI error models.
         let events = self.execute(use_case, envelope, outbound, latency_observer)?;
         Ok(mapper.map(events))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CommandUseCaseExecutor3;
+
+impl CommandUseCaseExecutor3 {
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    where
+        U: CommandUseCase3,
+        O: ?Sized
+            + Send
+            + Sync
+            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+        O::Error: 'static,
+    {
+        if !tracing::enabled!(tracing::Level::TRACE) {
+            return tracing::Span::none();
+        }
+
+        tracing::span!(
+            tracing::Level::TRACE,
+            "command_use_case_execute",
+            use_case = std::any::type_name::<U>(),
+            command_summary = ?use_case_command_summary::<U>(),
+            role = use_case.role(),
+            command_type = std::any::type_name::<U::Command>(),
+            business_error_type = std::any::type_name::<U::Error>(),
+            output_type = std::any::type_name::<U::Output>(),
+            outbound_error_type = std::any::type_name::<O::Error>(),
+            outbound = std::any::type_name::<O>(),
+            trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
+            command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
+            party_id = trace_field_or_placeholder(command.party_id()),
+        )
+    }
+
+    /// V3 标准编排：
+    /// 1. pre_check_command
+    /// 2. load_state
+    /// 3. validate_against_state
+    /// 4. compute_output_and_events
+    /// 5. persist(events)
+    /// 6. replay(events)
+    /// 7. publish(events)
+    pub fn execute<U, OB, O>(
+        &self,
+        use_case: &U,
+        envelope: CommandEnvelope<U::Command>,
+        outbound: &OB,
+        latency_observer: &O,
+    ) -> Result<UseCaseOutput<U::Output>, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    where
+        U: CommandUseCase3,
+        OB: ?Sized
+            + Send
+            + Sync
+            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+        O: ?Sized + ObserveHandlerLatency,
+        OB::Error: 'static,
+    {
+        use minstant::Instant;
+
+        let CommandEnvelope { meta, command } = envelope;
+        let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
+        let total_start = Instant::now();
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
+        let _execution_guard = execution_span.enter();
+
+        if trace_enabled {
+            trace_command_use_case_started!();
+        }
+
+        let execution = (|| -> Result<
+            (UseCaseOutput<U::Output>, HandlerLatencyMetrics),
+            CommandUseCaseExecutionError<U::Error, OB::Error>,
+        > {
+            let ((), pre_check_ns) = trace_phase(
+                "pre_check",
+                "workflow.pre_check_command(&command)",
+                || use_case.pre_check_command(&command),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let (state, load_state_ns) =
+                trace_phase("load_state", "outbound.load_state(&command)", || {
+                    outbound.load_state(&command)
+                })
+                .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::LoadState,
+                        error,
+                    )
+                })?;
+            let ((), validate_in_lock_ns) = trace_phase(
+                "validate_against_state",
+                "workflow.validate_against_state(&command, &state)",
+                || use_case.validate_against_state(&command, &state),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let (result, apply_changes_ns) = trace_phase(
+                "compute_output_and_events",
+                "workflow.compute_output_and_events(&command, state)",
+                || use_case.compute_output_and_events(&command, state),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let domain_event_count = result.events.len();
+
+            let ((), persist_domain_events_ns) =
+                trace_phase("persist", "outbound.persist(&result.events)", || {
+                    outbound.persist(&result.events)
+                })
+                .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Persist,
+                        error,
+                    )
+                })?;
+            let ((), replay_domain_events_ns) =
+                trace_phase("replay", "outbound.replay(&result.events)", || {
+                    outbound.replay(&result.events)
+                })
+                .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Replay,
+                        error,
+                    )
+                })?;
+            let ((), publish_domain_events_ns) =
+                trace_phase("publish", "outbound.publish(&result.events)", || {
+                    outbound.publish(&result.events)
+                })
+                .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Publish,
+                        error,
+                    )
+                })?;
+
+            let metrics = HandlerLatencyMetrics {
+                total_ns: total_start.elapsed().as_nanos(),
+                pre_check_ns,
+                load_state_ns,
+                validate_in_lock_ns,
+                apply_changes_ns,
+                persist_domain_events_ns,
+                replay_domain_events_ns,
+                publish_domain_events_ns,
+                domain_event_count,
+            };
+
+            Ok((result, metrics))
+        })();
+
+        match execution {
+            Ok((result, metrics)) => {
+                if trace_enabled {
+                    trace_command_use_case_completed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        metrics
+                    );
+                }
+                latency_observer.observe_latency(&metrics);
+                Ok(result)
+            }
+            Err(error) => {
+                if trace_enabled {
+                    trace_command_use_case_failed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        total_start.elapsed().as_nanos(),
+                        error
+                    );
+                }
+                Err(error)
+            }
+        }
+    }
+
+    /// 在 V3 标准执行编排之后，把 typed output 交给外部 reply mapper。
+    pub fn execute_and_map_reply<U, OB, M, O>(
+        &self,
+        use_case: &U,
+        envelope: CommandEnvelope<U::Command>,
+        outbound: &OB,
+        latency_observer: &O,
+        mapper: &M,
+    ) -> Result<M::Reply, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    where
+        U: CommandUseCase3,
+        OB: ?Sized
+            + Send
+            + Sync
+            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+        O: ?Sized + ObserveHandlerLatency,
+        M: UseCaseReplyMapper3<Output = U::Output>,
+        OB::Error: 'static,
+    {
+        let result = self.execute(use_case, envelope, outbound, latency_observer)?;
+        Ok(mapper.map(result))
     }
 }

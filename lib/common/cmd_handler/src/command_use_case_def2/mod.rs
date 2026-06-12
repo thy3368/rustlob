@@ -3,10 +3,13 @@ mod outbound;
 pub(crate) mod trace;
 mod use_case;
 
-pub use executor::{CommandUseCaseExecutionError, CommandUseCaseExecutor2};
+pub use executor::{
+    CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,
+};
 pub use outbound::{CommandUseCaseOutbound, CommandUseCaseOutboundPhase};
 pub use use_case::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, IssuedByParty, UseCaseReplyMapper,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
+    UseCaseReplyMapper, UseCaseReplyMapper3,
 };
 
 use crate::HandlerLatencyMetrics;
