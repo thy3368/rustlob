@@ -1,0 +1,375 @@
+{
+  "commands": [
+    {
+      "args": [
+        {
+          "default": "trader-1",
+          "name": "trader_id",
+          "position": 0,
+          "required": false,
+          "summary": "Trader account identifier.",
+          "value_type": "string"
+        },
+        {
+          "default": "BTCUSDT",
+          "name": "symbol",
+          "position": 1,
+          "required": false,
+          "summary": "Trading symbol.",
+          "value_type": "string"
+        },
+        {
+          "default": 2,
+          "name": "qty",
+          "position": 2,
+          "required": false,
+          "summary": "Requested order quantity.",
+          "value_type": "u64"
+        },
+        {
+          "default": 100,
+          "name": "price",
+          "position": 3,
+          "required": false,
+          "summary": "Requested order limit price.",
+          "value_type": "u64"
+        }
+      ],
+      "bin": "cli_demo",
+      "command_schema": {
+        "$ref": "#/components/schemas/PlaceOrderCliCommand"
+      },
+      "command_schema_name": "PlaceOrderCliCommand",
+      "defaults": {
+        "price": 100,
+        "qty": 2,
+        "symbol": "BTCUSDT",
+        "trader_id": "trader-1"
+      },
+      "error_codes": [
+        {
+          "category": "parse",
+          "code": "too_many_args"
+        },
+        {
+          "category": "parse",
+          "code": "invalid_qty"
+        },
+        {
+          "category": "parse",
+          "code": "invalid_price"
+        },
+        {
+          "category": "business",
+          "code": "invalid_qty"
+        },
+        {
+          "category": "business",
+          "code": "invalid_price"
+        },
+        {
+          "category": "business",
+          "code": "qty_below_min"
+        },
+        {
+          "category": "business",
+          "code": "trading_disabled"
+        },
+        {
+          "category": "business",
+          "code": "symbol_not_tradable"
+        },
+        {
+          "category": "business",
+          "code": "insufficient_quote_balance"
+        },
+        {
+          "category": "business",
+          "code": "arithmetic_overflow"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_load_state_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_persist_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_replay_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_publish_failed"
+        }
+      ],
+      "name": "place_order_cli",
+      "stdout_schema": {
+        "$ref": "#/components/schemas/PlaceOrderCliResponse"
+      },
+      "stdout_schema_name": "PlaceOrderCliResponse",
+      "summary": "Run the spot order demo command from the CLI.",
+      "usage": "usage: cargo run -p example_inbound_adapter --example cli_demo -- <trader_id> <symbol> <qty> <price>"
+    },
+    {
+      "args": [
+        {
+          "default": "trader-1",
+          "name": "trader_id",
+          "position": 0,
+          "required": false,
+          "summary": "Trader account identifier.",
+          "value_type": "string"
+        },
+        {
+          "default": 200,
+          "name": "amount",
+          "position": 1,
+          "required": false,
+          "summary": "Deposit amount.",
+          "value_type": "u64"
+        }
+      ],
+      "bin": "cli_deposit_demo",
+      "command_schema": {
+        "$ref": "#/components/schemas/DepositQuoteCliCommand"
+      },
+      "command_schema_name": "DepositQuoteCliCommand",
+      "defaults": {
+        "amount": 200,
+        "trader_id": "trader-1"
+      },
+      "error_codes": [
+        {
+          "category": "parse",
+          "code": "too_many_args"
+        },
+        {
+          "category": "parse",
+          "code": "invalid_amount"
+        },
+        {
+          "category": "business",
+          "code": "invalid_amount"
+        },
+        {
+          "category": "business",
+          "code": "arithmetic_overflow"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_load_state_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_persist_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_replay_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_publish_failed"
+        }
+      ],
+      "name": "deposit_quote_cli",
+      "stdout_schema": {
+        "$ref": "#/components/schemas/DepositQuoteCliResponse"
+      },
+      "stdout_schema_name": "DepositQuoteCliResponse",
+      "summary": "Run the deposit quote demo command from the CLI.",
+      "usage": "usage: cargo run -p example_inbound_adapter --example cli_deposit_demo -- <trader_id> <amount>"
+    },
+    {
+      "args": [
+        {
+          "default": "trader-1",
+          "name": "trader_id",
+          "position": 0,
+          "required": false,
+          "summary": "Trader account identifier.",
+          "value_type": "string"
+        },
+        {
+          "default": 200,
+          "name": "amount",
+          "position": 1,
+          "required": false,
+          "summary": "Withdraw amount.",
+          "value_type": "u64"
+        }
+      ],
+      "bin": "cli_withdraw_demo",
+      "command_schema": {
+        "$ref": "#/components/schemas/WithdrawQuoteCliCommand"
+      },
+      "command_schema_name": "WithdrawQuoteCliCommand",
+      "defaults": {
+        "amount": 200,
+        "trader_id": "trader-1"
+      },
+      "error_codes": [
+        {
+          "category": "parse",
+          "code": "too_many_args"
+        },
+        {
+          "category": "parse",
+          "code": "invalid_amount"
+        },
+        {
+          "category": "business",
+          "code": "invalid_amount"
+        },
+        {
+          "category": "business",
+          "code": "insufficient_quote_balance"
+        },
+        {
+          "category": "business",
+          "code": "arithmetic_overflow"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_load_state_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_persist_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_replay_failed"
+        },
+        {
+          "category": "outbound",
+          "code": "outbound_publish_failed"
+        }
+      ],
+      "name": "withdraw_quote_cli",
+      "stdout_schema": {
+        "$ref": "#/components/schemas/WithdrawQuoteCliResponse"
+      },
+      "stdout_schema_name": "WithdrawQuoteCliResponse",
+      "summary": "Run the withdraw quote demo command from the CLI.",
+      "usage": "usage: cargo run -p example_inbound_adapter --example cli_withdraw_demo -- <trader_id> <amount>"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "DepositQuoteCliCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trader_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trader_id",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "DepositQuoteCliResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "account_id"
+        ],
+        "type": "object"
+      },
+      "PlaceOrderCliCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "price": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "qty": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "trader_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trader_id",
+          "symbol",
+          "qty",
+          "price"
+        ],
+        "type": "object"
+      },
+      "PlaceOrderCliResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "order_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "order_id"
+        ],
+        "type": "object"
+      },
+      "WithdrawQuoteCliCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trader_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trader_id",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "WithdrawQuoteCliResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "account_id"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "schema_version": "1.0.0",
+  "service": "example_inbound_adapter",
+  "summary": "Machine-readable CLI contract for the example inbound adapter demo binaries."
+}

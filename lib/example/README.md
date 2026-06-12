@@ -1,11 +1,10 @@
 # clean_arch_commandusecase2 示例
 
-这个目录下放了 4 个 crate：
+这个目录下放了 3 个 crate：
 
 - `core`
 - `inbound_adapter`
 - `outbound_adapter`
-- `app/composition_root`
 
 目标是演示你要的两条链路：
 
@@ -13,8 +12,6 @@
 - 依赖链路：
   - `inbound_adapter -> core`
   - `outbound_adapter -> core`
-  - `composition_root -> inbound_adapter`
-  - `composition_root -> outbound_adapter`
   - `core` 不依赖任何 adapter
 
 ## Core
@@ -47,16 +44,18 @@
   - `InMemoryDepositQuoteOutbound`
   - `MySqlPlaceOrderOutbound`
   - `MySqlDepositQuoteOutbound`
-- 选择哪一种实现，不在 `core` 决定，而在 `composition_root` 注入
+- 选择哪一种实现，不在 `core` 决定，而在最外层 demo/example 入口里装配
 
 ## Infra
 
-`app/composition_root` 负责：
+这里不再保留 `composition_root` crate。
+
+最外层机制只存在于 `example_inbound_adapter/examples/*`：
 
 - 组装具体 outbound 实现
-- 把 outbound 注入 inbound adapter
-- 启动 runtime 和 listener
-- 对外暴露 HTTP 和 CLI 两种运行入口
+- 启动 HTTP runtime 和 worker loop
+- 通过 broker message 驱动后两个 use case
+- 提供 demo 级别的 `GET /snapshot`
 
 本例里的底层技术细节仍然藏在 `outbound_adapter` 内部：
 
@@ -78,7 +77,7 @@ adapter
   outbound_adapter
 
 infra
-  composition_root
+  cargo examples / scripts
   in-memory store, std::sync::Mutex
 ```
 
@@ -87,8 +86,6 @@ infra
 ```text
 inbound_adapter -> core
 outbound_adapter -> core
-composition_root -> inbound_adapter
-composition_root -> outbound_adapter
 core -> cmd_handler
 ```
 
@@ -104,12 +101,19 @@ request
   -> outbound_adapter(use-case specific).publish
   -> inbound_adapter.http_reply_mapper / cli_reply_mapper
   -> response
+
+spot pipeline worker
+  -> inbound_adapter.event
+  -> core.use_case
+  -> outbound_adapter(use-case specific)
 ```
 
 ## Supported Inbound Styles
 
 - HTTP: `handle_place_order_http(...)`
 - HTTP: `handle_deposit_quote_http(...)`
+- Event: `handle_spot_order_placed_event(...)`
+- Event: `handle_spot_trade_matched_event(...)`
 - CLI: `run_place_order_cli(...)`
 - CLI: `run_deposit_quote_cli(...)`
 
@@ -121,31 +125,25 @@ HTTP 入口目前同时支持：
 
 ## Demo Binaries
 
-可以直接运行两个 demo：
+可以直接运行 demo examples：
 
 ```bash
-cargo run -p example_composition_root --bin http_demo
-cargo run -p example_composition_root --bin http_actix_demo
-cargo run -p example_composition_root --bin cli_demo -- trader-1 BTCUSDT 2 100
-cargo run -p example_composition_root --bin cli_deposit_demo -- trader-1 200
-```
-
-如果要从组合根切到 MySQL outbound，可以直接在代码里改成：
-
-```rust
-let app =
-    ExampleApplication::new_mysql_seeded("mysql://root:password@127.0.0.1:3306/example_clean_arch")?;
+cargo run -p example_inbound_adapter --example http_demo
+cargo run -p example_inbound_adapter --example http_actix_demo
+cargo run -p example_inbound_adapter --example cli_demo -- trader-1 BTCUSDT 2 100
+cargo run -p example_inbound_adapter --example cli_deposit_demo -- trader-1 200
 ```
 
 ### `http_demo`
 
 - 启动真实 HTTP 服务，默认监听 `127.0.0.1:3001`
-- 提供两个路由：
+- 提供四个路由：
   - `POST /orders`
   - `POST /deposits/quote`
+  - `POST /withdrawals/quote`
   - `GET /snapshot`
-- 其中 `POST /orders` 在 `inbound_adapter`
-- `http_demo` 自己只保留启动和 demo 专用 `GET /snapshot`
+- `POST /orders` 先进入 `inbound_adapter.http`
+- 后续撮合和结算通过 worker 消费 broker message，再进入 `inbound_adapter.event`
 - 启动地址可用环境变量 `HTTP_DEMO_ADDR` 覆盖
 
 ### `http_actix_demo`
@@ -154,8 +152,9 @@ let app =
 - 同样暴露：
   - `POST /orders`
   - `POST /deposits/quote`
+  - `POST /withdrawals/quote`
   - `GET /snapshot`
-- `POST /orders` 仍然走 `inbound_adapter`
+- `POST /orders` 仍然先走 `inbound_adapter.http`
 - 启动地址可用环境变量 `HTTP_ACTIX_DEMO_ADDR` 覆盖
 
 示例：

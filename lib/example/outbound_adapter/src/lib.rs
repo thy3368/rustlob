@@ -7,7 +7,13 @@ pub use funding::{
     MySqlWithdrawQuoteOutbound,
 };
 pub use shared::{
-    DepositQuoteOutboundError, InMemoryStore, MySqlStore, PlaceOrderOutboundError, StoreError,
+    DepositQuoteOutboundError, InMemorySpotPipelineBroker, InMemoryStore,
+    MatchSpotOrderOutboundError, MySqlStore, PlaceOrderOutboundError,
+    SettleSpotTradeOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker,
+    SpotPipelineBrokerError, SpotPipelineMessage, SpotTradeMatchedMessage, StoreError,
     StoreSnapshot, WithdrawQuoteOutboundError,
 };
-pub use trading::{InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound};
+pub use trading::{
+    InMemoryMatchSpotOrderOutbound, InMemoryPlaceOrderOutbound, InMemorySettleSpotTradeOutbound,
+    MySqlPlaceOrderOutbound,
+};

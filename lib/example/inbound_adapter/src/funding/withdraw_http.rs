@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
@@ -62,8 +62,8 @@ impl UseCaseReplyMapper for WithdrawQuoteHttpReplyMapper {
         WithdrawQuoteHttpResponse {
             account_id: find_string_field(&events, "account_id")
                 .unwrap_or_else(|| "missing-account-id".to_string()),
-            available_quote: find_u64_field(&events, "available_quote").unwrap_or(0),
-            frozen_quote: find_u64_field(&events, "frozen_quote").unwrap_or(0),
+            available_quote: find_u64_field(&events, "available").unwrap_or(0),
+            frozen_quote: find_u64_field(&events, "frozen").unwrap_or(0),
             domain_event_count: events.len(),
         }
     }

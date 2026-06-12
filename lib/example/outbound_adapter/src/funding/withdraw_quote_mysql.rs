@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::CommandUseCaseOutbound;
-use example_core::{ACCOUNT_ENTITY_TYPE, TradingAccount, WithdrawQuoteCmd, WithdrawQuoteState};
+use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
+use example_core::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
 use mysql::params;
 use mysql::prelude::Queryable;
 
@@ -28,21 +28,27 @@ impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
     fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
-        let account_row: Option<(String, u64, u64, u64)> = conn
+        let account_row: Option<(String, u64, u64)> = conn
             .exec_first(
                 format!(
-                    "SELECT account_id, available_quote, frozen_quote, version
+                    "SELECT account_id, available_quote, version
                      FROM {ACCOUNT_TABLE}
                      WHERE account_id = :account_id"
                 ),
                 params! { "account_id" => cmd.party_id.as_str() },
             )
             .map_err(map_mysql_error)?;
-        let (account_id, available_quote, frozen_quote, version) =
-            account_row.ok_or(WithdrawQuoteOutboundError::AccountNotFound)?;
+        let (account_id, available_quote, version) =
+            account_row.ok_or(WithdrawQuoteOutboundError::BalanceNotFound)?;
 
         Ok(WithdrawQuoteState {
-            account: TradingAccount { account_id, available_quote, frozen_quote, version },
+            quote_balance: Balance {
+                account_id,
+                asset_id: "USDT".to_string(),
+                available: available_quote,
+                frozen: 0,
+                version,
+            },
         })
     }
 
@@ -86,22 +92,20 @@ impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
         for event in events {
-            if event.entity_type == ACCOUNT_ENTITY_TYPE && event.is_updated() {
+            if event.is_updated() {
                 conn.exec_drop(
                     format!(
                         "UPDATE {ACCOUNT_TABLE}
-                         SET available_quote = :available_quote,
-                             frozen_quote = :frozen_quote,
+                         SET available_quote = COALESCE(:available_quote, available_quote),
+                             frozen_quote = COALESCE(:frozen_quote, frozen_quote),
                              version = :version
                          WHERE account_id = :account_id"
                     ),
                     params! {
                         "account_id" => event_string_field_mysql(event, "account_id")
                             .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
-                        "available_quote" => event_u64_field_mysql(event, "available_quote")
-                            .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
-                        "frozen_quote" => event_u64_field_mysql(event, "frozen_quote")
-                            .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?,
+                        "available_quote" => event_u64_field_mysql(event, "available"),
+                        "frozen_quote" => event_u64_field_mysql(event, "frozen"),
                         "version" => event.new_version,
                     },
                 )

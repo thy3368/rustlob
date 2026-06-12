@@ -1,13 +1,15 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandUseCase2, CommandUseCaseExecutionError, CommandUseCaseExecutor2,
     CommandUseCaseOutbound, UseCaseReplyMapper,
 };
 use example_core::{
-    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, PlaceOrderCmd,
-    PlaceOrderError, PlaceOrderState, PlaceOrderUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
+    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, MatchSpotOrderCmd,
+    MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase, PlaceOrderCmd,
+    PlaceOrderError, PlaceOrderState, PlaceOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError,
+    SettleSpotTradeState, SettleSpotTradeUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
     WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 pub use inbound_adapter_support::{
@@ -174,6 +176,42 @@ where
     execute_with_mapper(&DepositQuoteUseCase, envelope, outbound, mapper)
 }
 
+pub(crate) fn execute_match_spot_order<OB>(
+    envelope: CommandEnvelope<MatchSpotOrderCmd>,
+    outbound: &OB,
+) -> Result<
+    cmd_handler::command_use_case_def2::UseCaseOutput<example_core::MatchSpotOrderOutput>,
+    CommandUseCaseExecutionError<MatchSpotOrderError, OB::Error>,
+>
+where
+    OB: ?Sized
+        + Send
+        + Sync
+        + CommandUseCaseOutbound<Command = MatchSpotOrderCmd, State = MatchSpotOrderState>,
+    OB::Error: 'static,
+{
+    let executor = cmd_handler::command_use_case_def2::CommandUseCaseExecutor3;
+    executor.execute(&MatchSpotOrderUseCase, envelope, outbound, &())
+}
+
+pub(crate) fn execute_settle_spot_trade<OB>(
+    envelope: CommandEnvelope<SettleSpotTradeCmd>,
+    outbound: &OB,
+) -> Result<
+    cmd_handler::command_use_case_def2::UseCaseOutput<example_core::SettleSpotTradeOutput>,
+    CommandUseCaseExecutionError<SettleSpotTradeError, OB::Error>,
+>
+where
+    OB: ?Sized
+        + Send
+        + Sync
+        + CommandUseCaseOutbound<Command = SettleSpotTradeCmd, State = SettleSpotTradeState>,
+    OB::Error: 'static,
+{
+    let executor = cmd_handler::command_use_case_def2::CommandUseCaseExecutor3;
+    executor.execute(&SettleSpotTradeUseCase, envelope, outbound, &())
+}
+
 pub(crate) fn execute_withdraw_quote_with_mapper<OB, M>(
     envelope: CommandEnvelope<WithdrawQuoteCmd>,
     outbound: &OB,
@@ -222,10 +260,10 @@ pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
     use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::use_case_def2::CommandUseCaseOutbound;
+    use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
     use example_core::{
-        DepositQuoteCmd, DepositQuoteState, MarketRules, PlaceOrderCmd, PlaceOrderState,
-        TradingAccount, WithdrawQuoteCmd, WithdrawQuoteState,
+        Balance, DepositQuoteCmd, DepositQuoteState, MarketRules, PlaceOrderCmd, PlaceOrderState,
+        WithdrawQuoteCmd, WithdrawQuoteState,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum TestOutboundError {
@@ -324,12 +362,15 @@ pub(crate) mod tests {
             Ok(PlaceOrderState {
                 trading_enabled: true,
                 next_order_sequence: 11,
-                account: TradingAccount {
-                    account_id: "trader-1".to_string(),
-                    available_quote: 1_000,
-                    frozen_quote: 0,
-                    version: 5,
-                },
+                account_id: "trader-1".to_string(),
+                base_balance: Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
+                quote_balance: Balance::new(
+                    "trader-1".to_string(),
+                    "USDT".to_string(),
+                    1_000,
+                    0,
+                    5,
+                ),
                 market_rules: MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
             })
         }
@@ -354,12 +395,13 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(DepositQuoteState {
-                account: TradingAccount {
-                    account_id: "trader-1".to_string(),
-                    available_quote: 1_000,
-                    frozen_quote: 0,
-                    version: 5,
-                },
+                quote_balance: Balance::new(
+                    "trader-1".to_string(),
+                    "USDT".to_string(),
+                    1_000,
+                    0,
+                    5,
+                ),
             })
         }
 
@@ -383,12 +425,13 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(WithdrawQuoteState {
-                account: TradingAccount {
-                    account_id: "trader-1".to_string(),
-                    available_quote: 1_000,
-                    frozen_quote: 0,
-                    version: 5,
-                },
+                quote_balance: Balance::new(
+                    "trader-1".to_string(),
+                    "USDT".to_string(),
+                    1_000,
+                    0,
+                    5,
+                ),
             })
         }
 

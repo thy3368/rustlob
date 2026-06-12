@@ -2,16 +2,18 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
-use example_core::{MarketRules, StoredOrder, TradingAccount};
+use example_core::{Balance, MarketRules, SpotOrder, SpotSettlement, SpotTrade};
 
 use super::StoreSnapshot;
 use crate::shared::StoreError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct StoreState {
-    pub(crate) accounts: HashMap<String, TradingAccount>,
+    pub(crate) balances: HashMap<String, Balance>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
-    pub(crate) orders: HashMap<String, StoredOrder>,
+    pub(crate) orders: HashMap<String, SpotOrder>,
+    pub(crate) trades: HashMap<String, SpotTrade>,
+    pub(crate) settlements: HashMap<String, SpotSettlement>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
@@ -20,9 +22,11 @@ pub(crate) struct StoreState {
 impl Default for StoreState {
     fn default() -> Self {
         Self {
-            accounts: HashMap::new(),
+            balances: HashMap::new(),
             market_rules_by_symbol: HashMap::new(),
             orders: HashMap::new(),
+            trades: HashMap::new(),
+            settlements: HashMap::new(),
             persisted_events: Vec::new(),
             published_events: Vec::new(),
             next_order_sequence: 1,
@@ -40,16 +44,21 @@ impl InMemoryStore {
         Self::default()
     }
 
-    pub fn seeded(account: TradingAccount, market_rules: MarketRules) -> Result<Self, StoreError> {
+    pub fn seed_balances(
+        base_balance: Balance,
+        quote_balance: Balance,
+        market_rules: MarketRules,
+    ) -> Result<Self, StoreError> {
         let store = Self::new();
-        store.seed_account(account)?;
+        store.seed_balance(base_balance)?;
+        store.seed_balance(quote_balance)?;
         store.seed_market_rules(market_rules)?;
         Ok(store)
     }
 
-    pub fn seed_account(&self, account: TradingAccount) -> Result<(), StoreError> {
+    pub fn seed_balance(&self, balance: Balance) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.accounts.insert(account.account_id.clone(), account);
+        state.balances.insert(balance_key(&balance.account_id, &balance.asset_id), balance);
         Ok(())
     }
 
@@ -59,18 +68,35 @@ impl InMemoryStore {
         Ok(())
     }
 
-    pub fn snapshot(&self) -> Result<StoreSnapshot, StoreError> {
+    pub fn seed_order(&self, order: SpotOrder) -> Result<(), StoreError> {
+        let mut state = self.lock_state()?;
+        state.orders.insert(order.order_id.clone(), order);
+        Ok(())
+    }
+
+    pub fn snapshot_with_broker_depth(&self, broker_message_count: usize) -> Result<StoreSnapshot, StoreError> {
         let state = self.lock_state()?;
         Ok(StoreSnapshot {
-            accounts: state.accounts.clone(),
+            balances: state.balances.clone(),
             orders: state.orders.clone(),
+            trades: state.trades.clone(),
+            settlements: state.settlements.clone(),
             persisted_event_count: state.persisted_events.len(),
             published_event_count: state.published_events.len(),
+            broker_message_count,
             next_order_sequence: state.next_order_sequence,
         })
+    }
+
+    pub fn snapshot(&self) -> Result<StoreSnapshot, StoreError> {
+        self.snapshot_with_broker_depth(0)
     }
 
     pub(crate) fn lock_state(&self) -> Result<MutexGuard<'_, StoreState>, StoreError> {
         self.state.lock().map_err(|_| StoreError::StoreUnavailable)
     }
+}
+
+pub(crate) fn balance_key(account_id: &str, asset_id: &str) -> String {
+    format!("{account_id}:{asset_id}")
 }

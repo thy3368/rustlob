@@ -1,0 +1,48 @@
+{
+  "cli_spec_path": "lib/example/cli-schema.json",
+  "covered_interfaces": [
+    {
+      "kind": "http",
+      "method": "POST",
+      "name": "place_order_http",
+      "path": "/orders",
+      "summary": "Submit a spot order request."
+    },
+    {
+      "kind": "http",
+      "method": "POST",
+      "name": "deposit_quote_http",
+      "path": "/deposits/quote",
+      "summary": "Quote a deposit against the trading account."
+    },
+    {
+      "kind": "http",
+      "method": "POST",
+      "name": "withdraw_quote_http",
+      "path": "/withdrawals/quote",
+      "summary": "Quote a withdrawal against the trading account."
+    },
+    {
+      "bin": "cli_demo",
+      "kind": "cli",
+      "name": "place_order_cli",
+      "summary": "Run the spot order demo command from the CLI."
+    },
+    {
+      "bin": "cli_deposit_demo",
+      "kind": "cli",
+      "name": "deposit_quote_cli",
+      "summary": "Run the deposit quote demo command from the CLI."
+    },
+    {
+      "bin": "cli_withdraw_demo",
+      "kind": "cli",
+      "name": "withdraw_quote_cli",
+      "summary": "Run the withdraw quote demo command from the CLI."
+    }
+  ],
+  "http_spec_path": "lib/example/openapi.json",
+  "schema_version": "1.0.0",
+  "service": "example_inbound_adapter",
+  "summary": "Unified inbound contract manifest for the example HTTP and CLI adapters."
+}

@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
@@ -14,8 +14,7 @@ use crate::common::{
 pub const WITHDRAW_QUOTE_CLI_BIN: &str = "cli_withdraw_demo";
 pub const WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
 pub const WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT: u64 = 200;
-const WITHDRAW_QUOTE_CLI_USAGE: &str =
-    "usage: cargo run -p example_composition_root --bin cli_withdraw_demo -- <trader_id> <amount>";
+const WITHDRAW_QUOTE_CLI_USAGE: &str = "usage: cargo run -p example_inbound_adapter --example cli_withdraw_demo -- <trader_id> <amount>";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WithdrawQuoteCliCommand {
@@ -121,8 +120,8 @@ impl UseCaseReplyMapper for WithdrawQuoteCliReplyMapper {
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         let account_id = find_string_field(&events, "account_id")
             .unwrap_or_else(|| "missing-account-id".to_string());
-        let available_quote = find_u64_field(&events, "available_quote").unwrap_or(0);
-        let frozen_quote = find_u64_field(&events, "frozen_quote").unwrap_or(0);
+        let available_quote = find_u64_field(&events, "available").unwrap_or(0);
+        let frozen_quote = find_u64_field(&events, "frozen").unwrap_or(0);
 
         WithdrawQuoteCliResponse {
             summary: format!(

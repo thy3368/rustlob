@@ -1,9 +1,9 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::CommandUseCaseOutbound;
-use example_core::{ACCOUNT_ENTITY_TYPE, DepositQuoteCmd, DepositQuoteState};
+use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
+use example_core::{Balance, DepositQuoteCmd, DepositQuoteState};
 
 use crate::shared::{
-    DepositQuoteOutboundError, InMemoryStore, event_string_field, event_u64_field,
+    DepositQuoteOutboundError, InMemoryStore, balance_key, event_string_field, event_u64_field,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -24,13 +24,13 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
 
     fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         let state = self.store.lock_state()?;
-        let account = state
-            .accounts
-            .get(cmd.party_id.as_str())
+        let quote_balance = state
+            .balances
+            .get(&balance_key(cmd.party_id.as_str(), "USDT"))
             .cloned()
-            .ok_or(DepositQuoteOutboundError::AccountNotFound)?;
+            .ok_or(DepositQuoteOutboundError::BalanceNotFound)?;
 
-        Ok(DepositQuoteState { account })
+        Ok(DepositQuoteState { quote_balance })
     }
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -43,18 +43,23 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
         let mut state = self.store.lock_state()?;
 
         for event in events {
-            if event.entity_type == ACCOUNT_ENTITY_TYPE && event.is_updated() {
+            if event.is_updated() {
                 let account_id = event_string_field(event, "account_id")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                let account = state
-                    .accounts
-                    .get_mut(account_id.as_str())
-                    .ok_or(DepositQuoteOutboundError::AccountNotFound)?;
-                account.available_quote = event_u64_field(event, "available_quote")
+                let asset_id = event_string_field(event, "asset_id")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                account.frozen_quote = event_u64_field(event, "frozen_quote")
-                    .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                account.version = event.new_version;
+                let key = balance_key(account_id.as_str(), asset_id.as_str());
+                let balance = state
+                    .balances
+                    .entry(key)
+                    .or_insert_with(|| Balance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                if let Some(available) = event_u64_field(event, "available") {
+                    balance.available = available;
+                }
+                if let Some(frozen) = event_u64_field(event, "frozen") {
+                    balance.frozen = frozen;
+                }
+                balance.version = event.new_version;
             }
         }
 

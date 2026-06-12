@@ -13,3 +13,7 @@ example_core = { path = "../core" }
 inbound_adapter_support = { path = "../../common/inbound_adapter_support" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[dev-dependencies]
+example_outbound_adapter = { path = "../outbound_adapter" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }

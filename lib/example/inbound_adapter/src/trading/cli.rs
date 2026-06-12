@@ -1,9 +1,12 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
-use example_core::{PlaceOrderCmd, PlaceOrderError};
+use example_core::{
+    PlaceImmediateOrderExecution, PlaceOrderCmd, PlaceOrderError, PlaceOrderState,
+    PlaceOrderTimeInForce,
+};
 use serde::Serialize;
 
 use crate::common::{
@@ -16,7 +19,7 @@ pub const PLACE_ORDER_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
 pub const PLACE_ORDER_CLI_DEFAULT_SYMBOL: &str = "BTCUSDT";
 pub const PLACE_ORDER_CLI_DEFAULT_QTY: u64 = 2;
 pub const PLACE_ORDER_CLI_DEFAULT_PRICE: u64 = 100;
-const PLACE_ORDER_CLI_USAGE: &str = "usage: cargo run -p example_composition_root --bin cli_demo -- <trader_id> <symbol> <qty> <price>";
+const PLACE_ORDER_CLI_USAGE: &str = "usage: cargo run -p example_inbound_adapter --example cli_demo -- <trader_id> <symbol> <qty> <price>";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlaceOrderCliCommand {
@@ -58,12 +61,17 @@ impl ExampleCliParseErrorMapping for ParsePlaceOrderCliArgsError {
 impl ExampleBusinessErrorMapping for PlaceOrderError {
     fn inbound_error_code(&self) -> &'static str {
         match self {
+            PlaceOrderError::UnsupportedSide => "unsupported_side",
+            PlaceOrderError::UnsupportedReduceOnly => "unsupported_reduce_only",
             PlaceOrderError::InvalidQty => "invalid_qty",
             PlaceOrderError::InvalidPrice => "invalid_price",
+            PlaceOrderError::InvalidTriggerPrice => "invalid_trigger_price",
             PlaceOrderError::QtyBelowMin => "qty_below_min",
             PlaceOrderError::TradingDisabled => "trading_disabled",
             PlaceOrderError::SymbolNotTradable => "symbol_not_tradable",
+            PlaceOrderError::AccountMismatch => "account_mismatch",
             PlaceOrderError::InsufficientQuoteBalance => "insufficient_quote_balance",
+            PlaceOrderError::InsufficientBaseBalance => "insufficient_base_balance",
             PlaceOrderError::ArithmeticOverflow => "arithmetic_overflow",
         }
     }
@@ -71,12 +79,17 @@ impl ExampleBusinessErrorMapping for PlaceOrderError {
     fn http_status_code(&self) -> u16 {
         match self {
             PlaceOrderError::ArithmeticOverflow => 500,
-            PlaceOrderError::InvalidQty
+            PlaceOrderError::UnsupportedSide
+            | PlaceOrderError::UnsupportedReduceOnly
+            | PlaceOrderError::InvalidQty
             | PlaceOrderError::InvalidPrice
+            | PlaceOrderError::InvalidTriggerPrice
             | PlaceOrderError::QtyBelowMin
             | PlaceOrderError::TradingDisabled
             | PlaceOrderError::SymbolNotTradable
-            | PlaceOrderError::InsufficientQuoteBalance => 400,
+            | PlaceOrderError::AccountMismatch
+            | PlaceOrderError::InsufficientQuoteBalance
+            | PlaceOrderError::InsufficientBaseBalance => 400,
         }
     }
 }
@@ -90,9 +103,16 @@ impl PlaceOrderCliCommand {
             },
             command: PlaceOrderCmd {
                 party_id: self.trader_id,
+                asset: 10_001,
                 symbol: self.symbol,
-                qty: self.qty,
-                price: self.price,
+                is_buy: true,
+                size: self.qty,
+                reduce_only: false,
+                execution: PlaceImmediateOrderExecution::Limit {
+                    price: self.price,
+                    time_in_force: PlaceOrderTimeInForce::Gtc,
+                },
+                cloid: None,
             },
         }
     }
@@ -158,7 +178,7 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
         let order_id = find_string_field(&events, "order_id")
             .unwrap_or_else(|| "missing-order-id".to_string());
         let reserved_quote = find_u64_field(&events, "reserved_quote").unwrap_or(0);
-        let remaining_quote = find_u64_field(&events, "available_quote").unwrap_or(0);
+        let remaining_quote = find_u64_field(&events, "available").unwrap_or(0);
 
         PlaceOrderCliResponse {
             summary: format!(

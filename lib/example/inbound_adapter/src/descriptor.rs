@@ -234,6 +234,39 @@ pub fn example_api_manifest() -> Value {
     )
 }
 
+pub fn write_generated_api_docs(
+    root_dir: impl AsRef<Path>,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let root_dir = root_dir.as_ref();
+    let docs = [
+        (OPENAPI_REL_PATH, example_http_openapi()),
+        (CLI_SCHEMA_REL_PATH, example_cli_schema()),
+        (API_MANIFEST_REL_PATH, example_api_manifest()),
+    ];
+
+    let mut written_paths = Vec::with_capacity(docs.len());
+    for (relative_path, document) in docs {
+        let path = write_json_artifact(root_dir, relative_path, &document)?;
+        written_paths.push(path);
+    }
+
+    Ok(written_paths)
+}
+
+fn write_json_artifact(
+    root_dir: &Path,
+    relative_path: &str,
+    document: &serde_json::Value,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let output_path = root_dir.join(relative_path);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(&output_path, serde_json::to_vec_pretty(document)?)?;
+    Ok(output_path)
+}
+
 fn http_schema_components() -> Map<String, Value> {
     let mut schemas = Map::new();
     insert_schema(
@@ -743,3 +776,5 @@ mod tests {
         std::any::type_name::<T>().rsplit("::").next().unwrap()
     }
 }
+use std::fs;
+use std::path::{Path, PathBuf};

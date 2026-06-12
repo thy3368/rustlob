@@ -12,7 +12,7 @@ pub use descriptor::{
     API_MANIFEST_REL_PATH, CLI_SCHEMA_REL_PATH, CliApiDescriptor, CliArgDescriptor,
     CliErrorCodeDescriptor, HttpApiDescriptor, HttpErrorCodeDescriptor, InboundApiDescriptor,
     OPENAPI_REL_PATH, example_api_manifest, example_cli_schema, example_http_openapi,
-    example_inbound_descriptors,
+    example_inbound_descriptors, write_generated_api_docs,
 };
 pub use funding::{
     DEPOSIT_QUOTE_CLI_BIN, DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT, DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID,
@@ -27,10 +27,11 @@ pub use funding::{
     run_deposit_quote_cli, run_withdraw_quote_cli, withdraw_quote_cli_usage,
 };
 pub use trading::{
-    PLACE_ORDER_CLI_BIN, PLACE_ORDER_CLI_DEFAULT_PRICE, PLACE_ORDER_CLI_DEFAULT_QTY,
-    PLACE_ORDER_CLI_DEFAULT_SYMBOL, PLACE_ORDER_CLI_DEFAULT_TRADER_ID, ParsePlaceOrderCliArgsError,
-    PlaceOrderCliCommand, PlaceOrderCliResponse, PlaceOrderHttpRequest, PlaceOrderHttpResponse,
-    PlaceOrderOutboundAccess, build_orders_actix_scope, build_orders_http_router,
-    handle_place_order_http, parse_place_order_cli_args, place_order_cli_usage,
-    run_place_order_cli,
+    MatchSpotOrderEventRequest, PLACE_ORDER_CLI_BIN, PLACE_ORDER_CLI_DEFAULT_PRICE,
+    PLACE_ORDER_CLI_DEFAULT_QTY, PLACE_ORDER_CLI_DEFAULT_SYMBOL, PLACE_ORDER_CLI_DEFAULT_TRADER_ID,
+    ParsePlaceOrderCliArgsError, PlaceOrderCliCommand, PlaceOrderCliResponse,
+    PlaceOrderHttpRequest, PlaceOrderHttpResponse, PlaceOrderOutboundAccess,
+    SettleSpotTradeEventRequest, build_orders_actix_scope, build_orders_http_router,
+    handle_place_order_http, handle_spot_order_placed_event, handle_spot_trade_matched_event,
+    parse_place_order_cli_args, place_order_cli_usage, run_place_order_cli,
 };

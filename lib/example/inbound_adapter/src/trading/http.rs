@@ -5,11 +5,14 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::use_case_def2::{
+use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
-use example_core::{PlaceOrderCmd, PlaceOrderError};
+use example_core::{
+    PlaceImmediateOrderExecution, PlaceOrderCmd, PlaceOrderError, PlaceOrderState,
+    PlaceOrderTimeInForce,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
@@ -43,9 +46,16 @@ impl PlaceOrderHttpRequest {
             meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
             command: PlaceOrderCmd {
                 party_id: self.trader_id,
+                asset: 10_001,
                 symbol: self.symbol,
-                qty: self.qty,
-                price: self.price,
+                is_buy: true,
+                size: self.qty,
+                reduce_only: false,
+                execution: PlaceImmediateOrderExecution::Limit {
+                    price: self.price,
+                    time_in_force: PlaceOrderTimeInForce::Gtc,
+                },
+                cloid: None,
             },
         }
     }
@@ -70,7 +80,7 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
             order_id: find_string_field(&events, "order_id")
                 .unwrap_or_else(|| "missing-order-id".to_string()),
             reserved_quote: find_u64_field(&events, "reserved_quote").unwrap_or(0),
-            remaining_quote: find_u64_field(&events, "available_quote").unwrap_or(0),
+            remaining_quote: find_u64_field(&events, "available").unwrap_or(0),
             domain_event_count: events.len(),
         }
     }
