@@ -42,8 +42,8 @@ pub use spot::place_order::{
 pub use spot::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
-    ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
-    MatchSpotOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput,
-    SettleSpotTradeState, SettleSpotTradeUseCase,
+    ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
+    ExecuteImmediateSpotOrderPipelineUseCase, MatchSpotOrderCmd, MatchSpotOrderError,
+    MatchSpotOrderOutput, MatchSpotOrderState, MatchSpotOrderUseCase, SettleSpotTradeCmd,
+    SettleSpotTradeError, SettleSpotTradeOutput, SettleSpotTradeState, SettleSpotTradeUseCase,
 };

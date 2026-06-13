@@ -9,7 +9,8 @@ pub use cancel_order::{
 };
 pub use execute_immediate_order_pipeline::{
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
-    ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
+    ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
+    ExecuteImmediateSpotOrderPipelineUseCase,
 };
 pub use match_order::{
     MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
