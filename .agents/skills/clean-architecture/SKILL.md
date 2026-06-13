@@ -50,11 +50,11 @@ description: >
     - `inbound` 把 HTTP / CLI / MQ / GUI 等输入转换为 `use_case` 的 command/query
     - `outbound` 实现 `use_case` 定义的 port，并把 core 输出转换给 DB / SDK / API / message broker 等外部系统
 
-4. `workflow` 的定义：
-    - `workflow` 是 `core/use_case` 下的业务分组边界，用于组织同一业务线中的多个相关 `use_case`
-    - `workflow` 不是单个 `use_case`
-    - `workflow` 也不是跨用例编排代码；跨用例协作属于更上层的 `process` / `composition root`
-    - 一个 `workflow` 下的多个 `use_case` 通常共享相近的领域语义、实体集合、状态装载方式，目录上体现为 `core/src/use_case/<workflow>/...`
+4. `use case 组` 的定义：
+    - `use case 组` 是 `core/use_case` 下的业务分组边界，用于组织同一业务线中的多个相关 `use_case`
+    - `use case 组` 不是单个 `use_case`
+    - `use case 组` 也不是跨用例编排代码；跨用例协作属于更上层的 `process` / `composition root`
+    - 一个 `use case 组` 下的多个 `use_case` 通常共享相近的领域语义、实体集合、状态装载方式，目录上体现为 `core/src/use_case/<use_case_group>/...`
     - 例如本仓库中的 `funding`、`trading`，以及更细一级的 `trading/spot`
 
 5. 必须显式维护依赖规则：
@@ -78,7 +78,7 @@ description: >
       ```
     - call flow view: `inbound -> use_case -> outbound -> infra`
     - `use_case -> entity`
-    - `use_case` 之间不互相调用；一个业务动作必须收敛在单一 `use_case` 中，跨用例协作只能通过上层编排（如 composition root / workflow / process）完成，不能在一个 `use_case` 内直接调用另一个 `use_case`
+    - `use_case` 之间不互相调用；一个业务动作必须收敛在单一 `use_case` 中，跨用例协作只能通过上层编排（如 composition root / process）完成，不能在一个 `use_case` 内直接调用另一个 `use_case`
     - `use_case` 与 `entity` 是多对一关系：多个 `use_case` 可以复用同一个 `entity`，但 `entity` 不反向绑定某个特定 `use_case`
     - `entity` 必须包含有领域语义的方法，而不是只有字段和 getter/setter；这些方法承载可复用的业务规则，供多个 `use_case` 复用
     - `entity` 不依赖 `use_case`
@@ -120,7 +120,7 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 使用该结构作为目录建议时：
 
 - `lib/example/core` 对应 `core`
-- `lib/example/core/src/use_case/<workflow>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
+- `lib/example/core/src/use_case/<use_case_group>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
 - `lib/example/inbound_adapter` 对应 `adapter.inbound`
 - `lib/example/outbound_adapter` 对应 `adapter.outbound`
 - `lib/example/app/composition_root` 负责组装 use case、adapter 和 infra
@@ -174,11 +174,11 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 
 以 `lib/example` 当前结构为准，按以下位置放测试：
 
-- `lib/example/core/tests/<workflow>_<use_case>_test.rs`: use_case 单元测试，mock outbound ports
+- `lib/example/core/tests/<use_case_group>_<use_case>_test.rs`: use_case 单元测试，mock outbound ports
 - `lib/example/core/tests/entity_<entity>_test.rs`: entity 纯业务规则测试
-- `lib/example/inbound_adapter/tests/<workflow>_<entrypoint>_to_command_test.rs`: inbound 输入转换测试
-- `lib/example/outbound_adapter/tests/<workflow>_<port_impl>_test.rs`: outbound port 实现测试
-- `lib/example/app/composition_root/tests/<workflow>_flow_test.rs`: E2E / composition test
+- `lib/example/inbound_adapter/tests/<use_case_group>_<entrypoint>_to_command_test.rs`: inbound 输入转换测试
+- `lib/example/outbound_adapter/tests/<use_case_group>_<port_impl>_test.rs`: outbound port 实现测试
+- `lib/example/app/composition_root/tests/<use_case_group>_flow_test.rs`: E2E / composition test
 
 ### 测试原则
 
