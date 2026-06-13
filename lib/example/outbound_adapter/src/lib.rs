@@ -8,10 +8,9 @@ pub use funding::{
 };
 pub use shared::{
     DepositQuoteOutboundError, InMemorySpotPipelineBroker, InMemoryStore,
-    MatchSpotOrderOutboundError, MySqlStore, PlaceOrderOutboundError,
-    SettleSpotTradeOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker,
-    SpotPipelineBrokerError, SpotPipelineMessage, SpotTradeMatchedMessage, StoreError,
-    StoreSnapshot, WithdrawQuoteOutboundError,
+    MatchSpotOrderOutboundError, MySqlStore, PlaceOrderOutboundError, SettleSpotTradeOutboundError,
+    SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineBrokerError, SpotPipelineMessage,
+    SpotTradeMatchedMessage, StoreError, StoreSnapshot, WithdrawQuoteOutboundError,
 };
 pub use trading::{
     InMemoryMatchSpotOrderOutbound, InMemoryPlaceOrderOutbound, InMemorySettleSpotTradeOutbound,

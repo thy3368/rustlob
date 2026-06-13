@@ -74,7 +74,10 @@ impl InMemoryStore {
         Ok(())
     }
 
-    pub fn snapshot_with_broker_depth(&self, broker_message_count: usize) -> Result<StoreSnapshot, StoreError> {
+    pub fn snapshot_with_broker_depth(
+        &self,
+        broker_message_count: usize,
+    ) -> Result<StoreSnapshot, StoreError> {
         let state = self.lock_state()?;
         Ok(StoreSnapshot {
             balances: state.balances.clone(),

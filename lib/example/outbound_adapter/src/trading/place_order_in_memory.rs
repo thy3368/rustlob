@@ -25,7 +25,10 @@ impl InMemoryPlaceOrderOutbound {
         Self { store, broker: None }
     }
 
-    pub fn from_store_with_broker(store: InMemoryStore, broker: InMemorySpotPipelineBroker) -> Self {
+    pub fn from_store_with_broker(
+        store: InMemoryStore,
+        broker: InMemorySpotPipelineBroker,
+    ) -> Self {
         Self { store, broker: Some(broker) }
     }
 

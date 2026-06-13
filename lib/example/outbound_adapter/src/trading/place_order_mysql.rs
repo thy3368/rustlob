@@ -6,13 +6,12 @@ use example_core::{
 use mysql::params;
 use mysql::prelude::Queryable;
 
+use super::place_order_in_memory::{base_asset_id_for, quote_asset_id_for};
 use crate::shared::{
     ACCOUNT_TABLE, EVENT_TABLE, MARKET_RULES_TABLE, MySqlStore, ORDER_TABLE,
     PlaceOrderOutboundError, StoreSnapshot, event_string_field_mysql, event_u64_field_mysql,
     map_mysql_error,
 };
-
-use super::place_order_in_memory::{base_asset_id_for, quote_asset_id_for};
 
 #[derive(Debug, Clone)]
 pub struct MySqlPlaceOrderOutbound {

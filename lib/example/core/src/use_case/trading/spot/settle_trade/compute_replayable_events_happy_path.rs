@@ -161,26 +161,8 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
 
     // assert
     assert_eq!(events.len(), 8);
-    assert_settlement_event(
-        &events[0],
-        "settle-1-1",
-        "trade-1",
-        "buyer",
-        "seller-1",
-        2,
-        200,
-        100,
-    );
-    assert_settlement_event(
-        &events[1],
-        "settle-1-2",
-        "trade-2",
-        "buyer",
-        "seller-2",
-        1,
-        90,
-        90,
-    );
+    assert_settlement_event(&events[0], "settle-1-1", "trade-1", "buyer", "seller-1", 2, 200, 100);
+    assert_settlement_event(&events[1], "settle-1-2", "trade-2", "buyer", "seller-2", 1, 90, 90);
     assert_balance_update_event(&events[2], "buyer", "BTC", Some(3), None, 3, 4);
     assert_balance_update_event(&events[3], "buyer", "USDT", None, Some(0), 3, 4);
     assert_balance_update_event(&events[4], "seller-1", "USDT", Some(200), None, 3, 4);

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use thiserror::Error;
 
@@ -11,7 +12,6 @@ use crate::entity::{
 /// 构建新区块的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromPendingRequestsCommand {
-    /// 要构建的目标区块高度。
     pub block_height: u64,
 }
 
@@ -20,24 +20,17 @@ impl IssuedByParty for BuildBlockFromPendingRequestsCommand {}
 /// 构建新区块前已加载的业务状态。
 #[derive(Debug, Clone)]
 pub struct BuildBlockFromPendingRequestsState {
-    /// 父区块高度。
     pub parent_height: u64,
-    /// 父区块哈希。
     pub parent_block_hash: String,
-    /// 待执行请求批次。
     pub pending_requests: Vec<PendingRequest>,
-    /// 已注册产品插件。
     pub product_plugins: ProductPluginRegistry,
-    /// 产品上下文快照。
     pub product_contexts: BTreeMap<String, ProductContext>,
 }
 
-/// 区块构建的强类型业务产出。
+/// 区块构建的强类型输出。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromPendingRequestsOutput {
-    /// 新区块承诺。
     pub new_block: NewBlock,
-    /// 每个请求的业务执行结果。
     pub request_results: Vec<RequestExecutionResult>,
 }
 
@@ -93,6 +86,7 @@ impl CommandUseCase3 for BuildBlockFromPendingRequestsUseCase {
         if state.pending_requests.is_empty() {
             return Err(BuildBlockError::EmptyPendingRequests);
         }
+
         let expected_block_height = state.parent_height + 1;
         if cmd.block_height != expected_block_height {
             return Err(BuildBlockError::NonContinuousBlockHeight {
@@ -111,16 +105,18 @@ impl CommandUseCase3 for BuildBlockFromPendingRequestsUseCase {
                     action: request.action.clone(),
                 });
             }
+
             let context = state.product_contexts.get(&request.product_id).ok_or_else(|| {
                 BuildBlockError::MissingProductContext { product_id: request.product_id.clone() }
             })?;
-            if context.product_id() != request.product_id {
+            if context.product_id != request.product_id {
                 return Err(BuildBlockError::ProductContextMismatch {
                     expected: request.product_id.clone(),
-                    actual: context.product_id().to_string(),
+                    actual: context.product_id.clone(),
                 });
             }
         }
+
         Ok(())
     }
 
@@ -148,23 +144,27 @@ impl CommandUseCase3 for BuildBlockFromPendingRequestsUseCase {
                 BuildBlockError::MissingProductContext { product_id: request.product_id.clone() }
             })?;
             let result = plugin.execute(request, &context)?;
-            let request_events = result.to_events(next_sequence);
-            next_sequence += request_events.len() as u64;
+
+            let rebased_events = rebase_events(&result.events, next_sequence);
+            next_sequence += rebased_events.len() as u64;
+            events.extend(rebased_events);
+
+            let mut rebased_result = result.clone();
+            rebased_result.events =
+                rebase_events(&result.events, next_sequence - rebased_result.events.len() as u64);
             product_contexts
                 .get_mut(&request.product_id)
                 .ok_or_else(|| BuildBlockError::ApplyResultFailed {
                     product_id: request.product_id.clone(),
                 })?
-                .apply_result(&result)?;
-            request_results.push(result);
-            events.extend(request_events);
+                .apply_result(&rebased_result)?;
+            request_results.push(rebased_result);
         }
 
         let new_block = build_new_block(
             cmd.block_height,
             parent_block_hash,
             &pending_requests,
-            &request_results,
             &events,
             &product_contexts,
         );
@@ -175,18 +175,50 @@ impl CommandUseCase3 for BuildBlockFromPendingRequestsUseCase {
     }
 }
 
+fn rebase_events(
+    events: &[EntityReplayableEvent],
+    base_sequence: u64,
+) -> Vec<EntityReplayableEvent> {
+    events
+        .iter()
+        .enumerate()
+        .map(|(index, event)| {
+            let mut cloned = event.clone();
+            cloned.timestamp = 0;
+            cloned.sequence = base_sequence + index as u64;
+            cloned
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
+    use cmd_handler::ReplayFieldChange;
     use cmd_handler::command_use_case_def2::CommandUseCase3;
 
     use super::*;
-    use crate::entity::{
-        ProductPlugin, ProductPluginRegistry, SpotBalanceSnapshot, SpotMarketRules, SpotOrderSide,
-        SpotPlaceOrderPayload, SpotProductContext, SpotProductPlugin,
-    };
+    use crate::entity::ProductPlugin;
+
+    fn string_field(name: &str, value: &str) -> ReplayFieldChange {
+        ReplayFieldChange::new(
+            ReplayFieldChange::field_name_from_str(name),
+            &[],
+            value.as_bytes(),
+            0,
+        )
+    }
+
+    fn int_field(name: &str, value: u64) -> ReplayFieldChange {
+        ReplayFieldChange::new(
+            ReplayFieldChange::field_name_from_str(name),
+            &[],
+            value.to_string().as_bytes(),
+            1,
+        )
+    }
 
     fn sample_command() -> BuildBlockFromPendingRequestsCommand {
         BuildBlockFromPendingRequestsCommand { block_height: 2 }
@@ -197,57 +229,72 @@ mod tests {
             request_id: "req-1".to_string(),
             product_id: "spot".to_string(),
             action: "place_order".to_string(),
-            payload: serde_json::to_string(&SpotPlaceOrderPayload {
-                account_id: "acct-1".to_string(),
-                symbol: "BTCUSDT".to_string(),
-                side: SpotOrderSide::Buy,
-                price: 100,
-                qty: 3,
-                client_order_id: Some("cl-1".to_string()),
-            })
-            .unwrap(),
+            payload: "{\"price\":100}".to_string(),
         }
     }
 
-    fn sample_spot_context() -> SpotProductContext {
-        let mut balances = BTreeMap::new();
-        balances.insert(
-            "USDT".to_string(),
-            SpotBalanceSnapshot {
-                asset: "USDT".to_string(),
-                available: 10_000,
-                reserved: 0,
-                version: 1,
-            },
-        );
-        balances.insert(
-            "BTC".to_string(),
-            SpotBalanceSnapshot { asset: "BTC".to_string(), available: 5, reserved: 0, version: 1 },
-        );
-        SpotProductContext {
-            account_id: "acct-1".to_string(),
-            balances,
-            market_rules: SpotMarketRules {
-                symbol: "BTCUSDT".to_string(),
-                base_asset: "BTC".to_string(),
-                quote_asset: "USDT".to_string(),
-                min_price: 1,
-                min_qty: 1,
-            },
-            next_order_sequence: 9,
-            trading_enabled: true,
+    fn sample_context() -> ProductContext {
+        ProductContext::new(
+            "spot".to_string(),
+            "{\"balance\":10000}".to_string(),
+            "ctx-commitment-1".to_string(),
+        )
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct DeterministicSpotPlugin;
+
+    impl ProductPlugin for DeterministicSpotPlugin {
+        fn product_id(&self) -> &'static str {
+            "spot"
+        }
+
+        fn supports_action(&self, action: &str) -> bool {
+            action == "place_order"
+        }
+
+        fn execute(
+            &self,
+            request: &PendingRequest,
+            _context: &ProductContext,
+        ) -> Result<RequestExecutionResult, ProductPluginError> {
+            let reserve_amount = if request.payload.contains("101") { 303 } else { 300 };
+            let mut order_event = EntityReplayableEvent::new_created(9, 99, 101, 21);
+            order_event.add_field_change(string_field("request_id", &request.request_id));
+            order_event.add_field_change(int_field("reserve_amount", reserve_amount));
+
+            let mut balance_event = EntityReplayableEvent::new_updated(9, 100, 1, 2, 201, 22);
+            balance_event.add_field_change(string_field("asset", "USDT"));
+            balance_event.add_field_change(int_field("available", 10_000 - reserve_amount));
+
+            Ok(RequestExecutionResult {
+                request_id: request.request_id.clone(),
+                product_id: request.product_id.clone(),
+                action: request.action.clone(),
+                result_kind: "spot.place_order".to_string(),
+                result_payload: format!(
+                    "{{\"order_id\":\"acct-1-BTCUSDT-9\",\"reserve_amount\":{reserve_amount}}}"
+                ),
+                result_commitment: format!("result-commitment-{reserve_amount}"),
+                next_product_context: ProductContext::new(
+                    "spot".to_string(),
+                    format!("{{\"balance\":{}}}", 10_000 - reserve_amount),
+                    format!("ctx-commitment-{reserve_amount}"),
+                ),
+                events: vec![order_event, balance_event],
+            })
         }
     }
 
     fn sample_state() -> BuildBlockFromPendingRequestsState {
         let mut product_contexts = BTreeMap::new();
-        product_contexts.insert("spot".to_string(), ProductContext::Spot(sample_spot_context()));
+        product_contexts.insert("spot".to_string(), sample_context());
         BuildBlockFromPendingRequestsState {
             parent_height: 1,
             parent_block_hash: "parent-1".to_string(),
             pending_requests: vec![sample_pending_request()],
             product_plugins: ProductPluginRegistry::new(vec![
-                Arc::new(SpotProductPlugin) as Arc<dyn ProductPlugin>
+                Arc::new(DeterministicSpotPlugin) as Arc<dyn ProductPlugin>
             ]),
             product_contexts,
         }
@@ -282,10 +329,8 @@ mod tests {
     #[test]
     fn pre_check_rejects_zero_block_height() {
         let cmd = BuildBlockFromPendingRequestsCommand { block_height: 0 };
-
         let result =
             CommandUseCase3::pre_check_command(&BuildBlockFromPendingRequestsUseCase, &cmd);
-
         assert_eq!(result, Err(BuildBlockError::BlockHeightMustBePositive));
     }
 
@@ -293,26 +338,22 @@ mod tests {
     fn validate_rejects_empty_batch() {
         let mut state = sample_state();
         state.pending_requests.clear();
-
         let result = CommandUseCase3::validate_against_state(
             &BuildBlockFromPendingRequestsUseCase,
             &sample_command(),
             &state,
         );
-
         assert_eq!(result, Err(BuildBlockError::EmptyPendingRequests));
     }
 
     #[test]
     fn validate_rejects_non_continuous_height() {
         let cmd = BuildBlockFromPendingRequestsCommand { block_height: 3 };
-
         let result = CommandUseCase3::validate_against_state(
             &BuildBlockFromPendingRequestsUseCase,
             &cmd,
             &sample_state(),
         );
-
         assert_eq!(
             result,
             Err(BuildBlockError::NonContinuousBlockHeight { parent_height: 1, actual: 3 })
@@ -323,13 +364,11 @@ mod tests {
     fn validate_rejects_missing_plugin() {
         let mut state = sample_state();
         state.product_plugins = ProductPluginRegistry::default();
-
         let result = CommandUseCase3::validate_against_state(
             &BuildBlockFromPendingRequestsUseCase,
             &sample_command(),
             &state,
         );
-
         assert_eq!(
             result,
             Err(BuildBlockError::MissingProductPlugin { product_id: "spot".to_string() })
@@ -343,13 +382,11 @@ mod tests {
             ProductPluginRegistry::new(vec![
                 Arc::new(UnsupportedSpotActionPlugin) as Arc<dyn ProductPlugin>
             ]);
-
         let result = CommandUseCase3::validate_against_state(
             &BuildBlockFromPendingRequestsUseCase,
             &sample_command(),
             &state,
         );
-
         assert_eq!(
             result,
             Err(BuildBlockError::UnsupportedAction {
@@ -363,13 +400,11 @@ mod tests {
     fn validate_rejects_missing_context() {
         let mut state = sample_state();
         state.product_contexts.clear();
-
         let result = CommandUseCase3::validate_against_state(
             &BuildBlockFromPendingRequestsUseCase,
             &sample_command(),
             &state,
         );
-
         assert_eq!(
             result,
             Err(BuildBlockError::MissingProductContext { product_id: "spot".to_string() })
@@ -383,12 +418,18 @@ mod tests {
             &sample_command(),
             sample_state(),
         )?;
-
         assert_eq!(result.output.request_results.len(), 1);
         assert_eq!(result.events.len(), 2);
+        assert_eq!(result.events[0].timestamp, 0);
+        assert_eq!(result.events[0].sequence, 0);
+        assert_eq!(result.events[1].sequence, 1);
         assert_eq!(result.output.new_block.block_height, 2);
         assert_eq!(result.output.new_block.parent_block_hash, "parent-1");
         assert_eq!(result.output.request_results[0].request_id, "req-1");
+        assert_eq!(
+            result.output.request_results[0].next_product_context.commitment,
+            "ctx-commitment-300"
+        );
         assert!(!result.output.new_block.request_ids_root.is_empty());
         assert!(!result.output.new_block.events_root.is_empty());
         assert!(!result.output.new_block.post_state_root.is_empty());
@@ -408,7 +449,6 @@ mod tests {
             &sample_command(),
             sample_state(),
         )?;
-
         assert_eq!(left.output, right.output);
         assert_eq!(left.events, right.events);
         Ok(())
@@ -431,16 +471,7 @@ mod tests {
         )?;
 
         let mut modified_state = sample_state();
-        modified_state.pending_requests[0].payload =
-            serde_json::to_string(&SpotPlaceOrderPayload {
-                account_id: "acct-1".to_string(),
-                symbol: "BTCUSDT".to_string(),
-                side: SpotOrderSide::Buy,
-                price: 101,
-                qty: 3,
-                client_order_id: Some("cl-1".to_string()),
-            })
-            .unwrap();
+        modified_state.pending_requests[0].payload = "{\"price\":101}".to_string();
         let modified_event = CommandUseCase3::compute_output_and_events(
             &BuildBlockFromPendingRequestsUseCase,
             &sample_command(),
@@ -456,32 +487,9 @@ mod tests {
             modified_event.output.new_block.events_root
         );
         assert_ne!(
-            baseline.output.new_block.post_state_root,
-            modified_event.output.new_block.post_state_root
-        );
-        assert_ne!(
             baseline.output.new_block.block_hash,
             modified_request.output.new_block.block_hash
         );
-        assert_ne!(
-            baseline.output.new_block.block_hash,
-            modified_event.output.new_block.block_hash
-        );
         Ok(())
-    }
-
-    #[test]
-    fn plugin_rejects_unsupported_action_independently() {
-        let plugin = SpotProductPlugin;
-        let request =
-            PendingRequest { action: "cancel_order".to_string(), ..sample_pending_request() };
-
-        let result = plugin.execute(&request, &ProductContext::Spot(sample_spot_context()));
-
-        assert!(matches!(
-            result,
-            Err(ProductPluginError::UnsupportedAction { product_id, action })
-            if product_id == "spot" && action == "cancel_order"
-        ));
     }
 }

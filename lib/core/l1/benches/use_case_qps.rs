@@ -1,14 +1,12 @@
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use cmd_handler::use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2,
-    CommandUseCaseOutbound, ObserveHandlerLatency,
+use cmd_handler::command_use_case_def2::{
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
+    ObserveHandlerLatency,
 };
 use cmd_handler::{EntityReplayableEvent, HandlerLatencyMetrics};
-use criterion::{
-    BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use l1_core::{
     ChainState, IngressDecision, PendingRequest, ReceiveAndAdmitTransactionsCmd,
     ReceiveAndAdmitTransactionsError, ReceiveAndAdmitTransactionsStateSnapshot,
@@ -29,17 +27,11 @@ fn make_request(index: usize) -> SignedTransactionRequest {
 }
 
 fn benchmark_command(request_count: usize) -> ReceiveAndAdmitTransactionsCmd {
-    ReceiveAndAdmitTransactionsCmd {
-        requests: (0..request_count).map(make_request).collect(),
-    }
+    ReceiveAndAdmitTransactionsCmd { requests: (0..request_count).map(make_request).collect() }
 }
 
 fn request_is_admitted(request: &SignedTransactionRequest) -> bool {
-    request
-        .nonce
-        .chars()
-        .last()
-        .is_some_and(|digit| matches!(digit, '0' | '2' | '4' | '6' | '8'))
+    request.nonce.chars().last().is_some_and(|digit| matches!(digit, '0' | '2' | '4' | '6' | '8'))
 }
 
 fn ingress_decision_from_request(request: &SignedTransactionRequest) -> IngressDecision {
@@ -51,11 +43,7 @@ fn pending_request_from_request(request: &SignedTransactionRequest) -> PendingRe
         trace_id: request.trace_id.clone(),
         request_id: request.request_id.clone(),
         performer: request.account.clone(),
-        vm_kind: if request.signature_hash.len() % 2 == 0 {
-            VmKind::RustVm
-        } else {
-            VmKind::Evm
-        },
+        vm_kind: if request.signature_hash.len() % 2 == 0 { VmKind::RustVm } else { VmKind::Evm },
         capability: VmCapability::new(format!("ingress.{}", request.action_type)),
         action_type: request.action_type.clone(),
         payload_hash: request.payload_hash.clone(),
@@ -66,11 +54,8 @@ fn pending_request_from_request(request: &SignedTransactionRequest) -> PendingRe
 fn benchmark_state(
     cmd: &ReceiveAndAdmitTransactionsCmd,
 ) -> ReceiveAndAdmitTransactionsStateSnapshot {
-    let ingress_decisions = cmd
-        .requests
-        .iter()
-        .map(ingress_decision_from_request)
-        .collect::<Vec<_>>();
+    let ingress_decisions =
+        cmd.requests.iter().map(ingress_decision_from_request).collect::<Vec<_>>();
     let admitted_requests = cmd
         .requests
         .iter()
@@ -91,38 +76,24 @@ fn benchmark_state(
 #[derive(Debug, Clone, Copy, Default)]
 struct BenchmarkOutbound;
 
-impl
-    CommandUseCaseOutbound<
-        ReceiveAndAdmitTransactionsCmd,
-        ReceiveAndAdmitTransactionsStateSnapshot,
-        ReceiveAndAdmitTransactionsError,
-    > for BenchmarkOutbound
-{
-    fn load_state(
-        &self,
-        cmd: &ReceiveAndAdmitTransactionsCmd,
-    ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError> {
+impl CommandUseCaseOutbound for BenchmarkOutbound {
+    type Command = ReceiveAndAdmitTransactionsCmd;
+    type State = ReceiveAndAdmitTransactionsStateSnapshot;
+    type Error = ReceiveAndAdmitTransactionsError;
+
+    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         Ok(benchmark_state(cmd))
     }
 
-    fn persist(
-        &self,
-        _events: &[EntityReplayableEvent],
-    ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn replay(
-        &self,
-        _events: &[EntityReplayableEvent],
-    ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn publish(
-        &self,
-        _events: &[EntityReplayableEvent],
-    ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

@@ -1,13 +1,14 @@
-pub mod block;
 pub mod execution;
 pub mod ports;
-pub mod state;
-pub mod use_case;
+pub mod workflow;
+
+pub mod entity;
+
 pub mod vm;
 
-pub use block::*;
+pub use entity::block::*;
+pub use entity::state::*;
 pub use execution::*;
 pub use ports::*;
-pub use state::*;
-pub use use_case::*;
 pub use vm::*;
+pub use workflow::*;

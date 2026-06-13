@@ -1,13 +1,16 @@
-use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
+use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
 use cmd_handler::{EntityReplayableEvent, ReplayFieldChange};
+use thiserror::Error;
 
 use crate::{
     ChainState, IngressDecision, PendingRequest, SignedTransactionRequest, VmCapability, VmKind,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ReceiveAndAdmitTransactionsError {
+    #[error("requests must not be empty")]
     EmptyRequests,
+    #[error("failed to load ingress state: {0}")]
     LoadStateFailed(String),
 }
 
@@ -263,8 +266,9 @@ impl CommandUseCase2 for ReceiveAndAdmitTransactionsUseCase {
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use cmd_handler::use_case_def2::{
-        CommandEnvelope, CommandMeta, CommandUseCaseExecutor2, CommandUseCaseOutbound,
+    use cmd_handler::command_use_case_def2::{
+        CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor2,
+        CommandUseCaseOutbound,
     };
     use proptest::prelude::*;
 
@@ -388,39 +392,24 @@ mod tests {
     #[derive(Debug, Clone, Copy, Default)]
     struct NoopReceiveAndAdmitOutbound;
 
-    impl
-        CommandUseCaseOutbound<
-            ReceiveAndAdmitTransactionsCmd,
-            ReceiveAndAdmitTransactionsStateSnapshot,
-            ReceiveAndAdmitTransactionsError,
-        > for NoopReceiveAndAdmitOutbound
-    {
-        fn load_state(
-            &self,
-            cmd: &ReceiveAndAdmitTransactionsCmd,
-        ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError>
-        {
+    impl CommandUseCaseOutbound for NoopReceiveAndAdmitOutbound {
+        type Command = ReceiveAndAdmitTransactionsCmd;
+        type State = ReceiveAndAdmitTransactionsStateSnapshot;
+        type Error = ReceiveAndAdmitTransactionsError;
+
+        fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             StubLoadPort.load_state(cmd)
         }
 
-        fn persist(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        fn replay(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        fn publish(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
     }
@@ -474,7 +463,10 @@ mod tests {
             )
             .unwrap_err();
 
-        assert_eq!(error, ReceiveAndAdmitTransactionsError::EmptyRequests);
+        assert_eq!(
+            error,
+            CommandUseCaseExecutionError::Business(ReceiveAndAdmitTransactionsError::EmptyRequests)
+        );
     }
 
     fn signed_transaction_request_strategy() -> impl Strategy<Value = SignedTransactionRequest> {
@@ -552,18 +544,12 @@ mod tests {
         publish_calls: AtomicUsize,
     }
 
-    impl
-        CommandUseCaseOutbound<
-            ReceiveAndAdmitTransactionsCmd,
-            ReceiveAndAdmitTransactionsStateSnapshot,
-            ReceiveAndAdmitTransactionsError,
-        > for CountingOutbound
-    {
-        fn load_state(
-            &self,
-            cmd: &ReceiveAndAdmitTransactionsCmd,
-        ) -> Result<ReceiveAndAdmitTransactionsStateSnapshot, ReceiveAndAdmitTransactionsError>
-        {
+    impl CommandUseCaseOutbound for CountingOutbound {
+        type Command = ReceiveAndAdmitTransactionsCmd;
+        type State = ReceiveAndAdmitTransactionsStateSnapshot;
+        type Error = ReceiveAndAdmitTransactionsError;
+
+        fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             self.load_calls.fetch_add(1, Ordering::Relaxed);
 
             let ingress_decisions =
@@ -585,26 +571,17 @@ mod tests {
             })
         }
 
-        fn persist(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.persist_calls.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
 
-        fn replay(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.replay_calls.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
 
-        fn publish(
-            &self,
-            _events: &[EntityReplayableEvent],
-        ) -> Result<(), ReceiveAndAdmitTransactionsError> {
+        fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.publish_calls.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -630,7 +607,12 @@ mod tests {
             );
 
             if requests.is_empty() {
-                prop_assert_eq!(result, Err(ReceiveAndAdmitTransactionsError::EmptyRequests));
+                prop_assert_eq!(
+                    result,
+                    Err(CommandUseCaseExecutionError::Business(
+                        ReceiveAndAdmitTransactionsError::EmptyRequests,
+                    ))
+                );
                 prop_assert_eq!(outbound.load_calls.load(Ordering::Relaxed), 0);
                 prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
                 prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);

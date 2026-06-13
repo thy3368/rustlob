@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use cmd_handler::use_case_def2::{CommandEnvelope, CommandMeta, CommandUseCaseExecutor2};
+use cmd_handler::command_use_case_def2::{
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor2,
+};
 use dex::adapter::rust_vm_runtime::{RustVmRuntimeAdapter, SpotBookOrderView};
 use l1_adapter::{
     ExecuteAndCommitBlockStatePipeline, InMemoryMempool, MdbxStateStore, MempoolReadingLoadPort,
@@ -18,9 +20,7 @@ use crate::http::dto::{
     ExecuteBlockRequest, SpotBookResponse, SubmitTransactionItem, SubmitTransactionsRequest,
 };
 use crate::ingress_load_port::IngressLoadPort;
-use crate::outbound::{
-    ExecuteAndCommitBlockOutbound, ReceiveAndAdmitTransactionsOutbound,
-};
+use crate::outbound::{ExecuteAndCommitBlockOutbound, ReceiveAndAdmitTransactionsOutbound};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -39,6 +39,31 @@ pub struct L1E2eService {
 #[derive(Debug, Clone, Default)]
 struct ExecuteBlockTraceHints {
     first_trace_id: Option<String>,
+}
+
+fn flatten_receive_and_admit_error(
+    error: CommandUseCaseExecutionError<
+        ReceiveAndAdmitTransactionsError,
+        ReceiveAndAdmitTransactionsError,
+    >,
+) -> ReceiveAndAdmitTransactionsError {
+    // TODO: change L1E2eService::submit_transactions to return CommandUseCaseExecutionError
+    // so inbound can preserve business vs outbound phase information end-to-end.
+    match error {
+        CommandUseCaseExecutionError::Business(error) => error,
+        CommandUseCaseExecutionError::Outbound { source, .. } => source,
+    }
+}
+
+fn flatten_execute_and_commit_error(
+    error: CommandUseCaseExecutionError<ExecuteAndCommitBlockError, ExecuteAndCommitBlockError>,
+) -> ExecuteAndCommitBlockError {
+    // TODO: change L1E2eService::execute_block to return CommandUseCaseExecutionError
+    // so inbound can preserve business vs outbound phase information end-to-end.
+    match error {
+        CommandUseCaseExecutionError::Business(error) => error,
+        CommandUseCaseExecutionError::Outbound { source, .. } => source,
+    }
 }
 
 impl L1E2eService {
@@ -154,7 +179,7 @@ impl L1E2eService {
                     error_message = format!("{error:?}"),
                     "l1 submit_transactions dispatch failed"
                 );
-                Err(error)
+                Err(flatten_receive_and_admit_error(error))
             }
         }
     }
@@ -259,7 +284,7 @@ impl L1E2eService {
                     error_message = format!("{error:?}"),
                     "l1 execute_block dispatch failed"
                 );
-                Err(error)
+                Err(flatten_execute_and_commit_error(error))
             }
         }
     }

@@ -33,13 +33,11 @@ pub use derivatives::{
 };
 pub use spot::place_order::{
     PlaceConditionalOrderCmd, PlaceConditionalOrderState, PlaceConditionalOrderUseCase,
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderOutput,
-    PlaceImmediateOrderState, PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderExecution,
+    PlaceImmediateOrderCmd, PlaceImmediateOrderCmd as PlaceOrderCmd, PlaceImmediateOrderExecution,
+    PlaceImmediateOrderOutput, PlaceImmediateOrderState,
+    PlaceImmediateOrderState as PlaceOrderState, PlaceImmediateOrderUseCase,
+    PlaceImmediateOrderUseCase as PlaceOrderUseCase, PlaceOrderError, PlaceOrderExecution,
     PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
-};
-pub use spot::place_order::{
-    PlaceImmediateOrderCmd as PlaceOrderCmd, PlaceImmediateOrderState as PlaceOrderState,
-    PlaceImmediateOrderUseCase as PlaceOrderUseCase,
 };
 pub use spot::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
+use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
 use cmd_handler::{EntityReplayableEvent, ReplayFieldChange};
+use thiserror::Error;
 
 use crate::{
     Account, AccountDelta, BlockEvent, BlockStateChanges, ChainState, CodeBlob, CodeDelta,
@@ -10,11 +11,15 @@ use crate::{
     VmExecutionOutput, VmRegistry, VmRuntime, VmRuntimeError, VmRuntimeResolver,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ExecuteAndCommitBlockError {
+    #[error("pending requests must not be empty")]
     EmptyPendingRequests,
+    #[error("block height is inconsistent with current chain state")]
     InvalidBlockHeight,
+    #[error("failed to load block execution state: {0}")]
     LoadStateFailed(String),
+    #[error("vm execution failed: {0}")]
     VmExecutionFailed(String),
 }
 
@@ -1077,8 +1082,8 @@ mod tests {
 
     #[test]
     fn command_envelope_keeps_trace_meta_outside_business_command() {
-        let envelope = cmd_handler::use_case_def2::CommandEnvelope {
-            meta: cmd_handler::use_case_def2::CommandMeta {
+        let envelope = cmd_handler::command_use_case_def2::CommandEnvelope {
+            meta: cmd_handler::command_use_case_def2::CommandMeta {
                 trace_id: Some("trace-block-101".to_string()),
                 command_id: Some("execute-block-101".to_string()),
             },
