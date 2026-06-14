@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cmd_handler::EntityReplayableEvent;
 use example_core::{
-    Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
+    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     ExecuteImmediateSpotOrderPipelineOutput, HyperliquidPerpFundingSettlement,
     HyperliquidPerpOrder, HyperliquidPerpPosition, MarketRules, SpotOrder, SpotSettlement,
     SpotTrade, WithdrawQuoteCmd,
@@ -71,6 +71,7 @@ impl ProductCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotCommand {
     ExecuteImmediateOrderPipeline(ExecuteImmediateSpotOrderPipelineCmd),
+    CancelOrder(CancelSpotOrderCmd),
 }
 
 impl SpotCommand {
@@ -99,6 +100,12 @@ impl SpotCommand {
                     command.settlement_batch_id.as_str(),
                 ])
             }
+            Self::CancelOrder(command) => stable_hash_hex(&[
+                "spot.cancel_order",
+                command.party_id.as_str(),
+                command.asset.to_string().as_str(),
+                command.order_id.to_string().as_str(),
+            ]),
         }
     }
 }
@@ -176,13 +183,34 @@ impl ProductCommandResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotCommandResult {
     ExecuteImmediateOrderPipeline(SpotPipelineExecution),
+    CancelOrder(SpotCancelExecution),
 }
 
 impl SpotCommandResult {
     pub fn commitment(&self) -> String {
         match self {
             Self::ExecuteImmediateOrderPipeline(result) => result.commitment(),
+            Self::CancelOrder(result) => result.commitment(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotCancelExecution {
+    pub order_after: SpotOrder,
+    pub balances_after: Vec<Balance>,
+    pub events: Vec<EntityReplayableEvent>,
+}
+
+impl SpotCancelExecution {
+    pub fn commitment(&self) -> String {
+        let balances = self.balances_after.iter().map(balance_commitment).collect::<Vec<_>>();
+        stable_hash_hex(&[
+            spot_order_commitment(&self.order_after).as_str(),
+            stable_hash_hex(&balances).as_str(),
+            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
+                .as_str(),
+        ])
     }
 }
 

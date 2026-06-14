@@ -1,7 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3, UseCaseOutput};
 use example_core::{
-    Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
+    Balance, CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineOutput,
     MatchSpotOrderCmd, MatchSpotOrderOutput, MatchSpotOrderState, MatchSpotOrderUseCase,
     PlaceImmediateOrderOutput, PlaceImmediateOrderState, PlaceImmediateOrderUseCase,
@@ -15,8 +15,8 @@ use super::{
     BuildBlockFromCommandsState,
 };
 use crate::entity::{
-    AccountAssetKey, CommandExecutionResult, ProductCommand, ProductCommandResult, SpotCommand,
-    SpotCommandResult, SpotPipelineExecution, SpotState, TreasuryBalanceUpdate, TreasuryCommand,
+    AccountAssetKey, CommandExecutionResult, ProductCommand, ProductCommandResult, SpotCancelExecution,
+    SpotCommand, SpotCommandResult, SpotPipelineExecution, SpotState, TreasuryBalanceUpdate, TreasuryCommand,
     TreasuryCommandResult, TreasuryState, build_new_block,
 };
 
@@ -80,14 +80,12 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
             let mut execution_result = match &envelope.command {
                 ProductCommand::Spot(command) => {
                     let result = execute_spot_command(command, &exchange_state.spot)?;
-                    apply_spot_execution(&mut exchange_state.spot, command, &result);
+                    apply_spot_execution(&mut exchange_state.spot, &result);
                     CommandExecutionResult {
                         command_id: envelope.command_id.clone(),
                         command_kind: "spot".to_string(),
                         command_commitment: envelope.commitment(),
-                        result: ProductCommandResult::Spot(
-                            SpotCommandResult::ExecuteImmediateOrderPipeline(result),
-                        ),
+                        result: ProductCommandResult::Spot(result),
                     }
                 }
                 ProductCommand::Treasury(command) => {
@@ -174,6 +172,10 @@ fn validate_spot_command(
             let _ = rules;
             Ok(())
         }
+        SpotCommand::CancelOrder(command) => {
+            let _ = build_cancel_state(command, spot_state)?;
+            Ok(())
+        }
     }
 }
 
@@ -190,10 +192,14 @@ fn validate_treasury_command(
 fn execute_spot_command(
     command: &SpotCommand,
     spot_state: &SpotState,
-) -> Result<SpotPipelineExecution, BuildBlockError> {
+) -> Result<SpotCommandResult, BuildBlockError> {
     match command {
         SpotCommand::ExecuteImmediateOrderPipeline(command) => {
             execute_immediate_spot_pipeline(command, spot_state)
+                .map(SpotCommandResult::ExecuteImmediateOrderPipeline)
+        }
+        SpotCommand::CancelOrder(command) => {
+            execute_cancel_spot_order(command, spot_state).map(SpotCommandResult::CancelOrder)
         }
     }
 }
@@ -405,6 +411,110 @@ fn execute_immediate_spot_pipeline(
     })
 }
 
+fn build_cancel_state(
+    command: &CancelSpotOrderCmd,
+    spot_state: &SpotState,
+) -> Result<CancelSpotOrderState, BuildBlockError> {
+    let order = spot_state
+        .orders
+        .values()
+        .find(|order| {
+            order.exchange_oid == Some(command.order_id)
+                && order.asset == command.asset
+                && order.can_be_cancelled()
+        })
+        .cloned()
+        .ok_or_else(|| BuildBlockError::SpotExecution("open order was not found".to_string()))?;
+
+    let asset_pair = spot_state
+        .asset_pairs_by_symbol
+        .get(order.symbol.as_str())
+        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair {
+            symbol: order.symbol.clone(),
+        })?;
+    let base_balance = spot_state
+        .balances
+        .get(&AccountAssetKey::new(order.account_id.as_str(), asset_pair.base_asset_id.as_str()))
+        .cloned()
+        .ok_or_else(|| BuildBlockError::MissingSpotBalance {
+            account_id: order.account_id.clone(),
+            asset_id: asset_pair.base_asset_id.clone(),
+        })?;
+    let quote_balance = spot_state
+        .balances
+        .get(&AccountAssetKey::new(order.account_id.as_str(), asset_pair.quote_asset_id.as_str()))
+        .cloned()
+        .ok_or_else(|| BuildBlockError::MissingSpotBalance {
+            account_id: order.account_id.clone(),
+            asset_id: asset_pair.quote_asset_id.clone(),
+        })?;
+
+    Ok(CancelSpotOrderState {
+        account_id: order.account_id.clone(),
+        open_order: Some(order),
+        base_balance,
+        quote_balance,
+    })
+}
+
+fn execute_cancel_spot_order(
+    command: &CancelSpotOrderCmd,
+    spot_state: &SpotState,
+) -> Result<SpotCancelExecution, BuildBlockError> {
+    CommandUseCase2::pre_check_command(&CancelSpotOrderUseCase, command)
+        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    let state = build_cancel_state(command, spot_state)?;
+    CommandUseCase2::validate_against_state(&CancelSpotOrderUseCase, command, &state)
+        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    let events = CommandUseCase2::compute_replayable_events(&CancelSpotOrderUseCase, command, state.clone())
+        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+
+    let mut order_after = state
+        .open_order
+        .clone()
+        .ok_or_else(|| BuildBlockError::SpotExecution("open order was not found".to_string()))?;
+    order_after.status = example_core::SpotOrderStatus::Canceled;
+    order_after.status_reason = Some(example_core::SpotOrderStatusReason::CanceledByUser);
+    order_after.version = order_after
+        .version
+        .checked_add(1)
+        .ok_or_else(|| BuildBlockError::SpotExecution("spot order version overflow".to_string()))?;
+
+    let balance_after = if order_after.quote_to_release_on_cancel() > 0 {
+        let mut balance = state.quote_balance.clone();
+        let (next_available, next_frozen) = balance.release_after(order_after.quote_to_release_on_cancel()).ok_or_else(|| {
+            BuildBlockError::SpotExecution("spot quote release overflow".to_string())
+        })?;
+        balance.apply_after(
+            next_available,
+            next_frozen,
+            balance.version.checked_add(1).ok_or_else(|| {
+                BuildBlockError::SpotExecution("spot quote balance version overflow".to_string())
+            })?,
+        );
+        balance
+    } else {
+        let mut balance = state.base_balance.clone();
+        let (next_available, next_frozen) = balance.release_after(order_after.base_to_release_on_cancel()).ok_or_else(|| {
+            BuildBlockError::SpotExecution("spot base release overflow".to_string())
+        })?;
+        balance.apply_after(
+            next_available,
+            next_frozen,
+            balance.version.checked_add(1).ok_or_else(|| {
+                BuildBlockError::SpotExecution("spot base balance version overflow".to_string())
+            })?,
+        );
+        balance
+    };
+
+    Ok(SpotCancelExecution {
+        order_after,
+        balances_after: vec![balance_after],
+        events: canonicalize_local_events(events),
+    })
+}
+
 fn build_place_state(
     command: &ExecuteImmediateSpotOrderPipelineCmd,
     spot_state: &SpotState,
@@ -525,26 +635,38 @@ fn collect_orders_after(
 
 fn apply_spot_execution(
     spot_state: &mut SpotState,
-    command: &SpotCommand,
-    result: &SpotPipelineExecution,
+    result: &SpotCommandResult,
 ) {
-    let account_id = match command {
-        SpotCommand::ExecuteImmediateOrderPipeline(command) => command.place.party_id.as_str(),
-    };
-    spot_state
-        .next_order_sequence_by_account
-        .insert(account_id.to_string(), result.next_order_sequence);
-    for balance in &result.balances_after {
-        spot_state.balances.insert(
-            AccountAssetKey::new(balance.account_id.as_str(), balance.asset_id.as_str()),
-            balance.clone(),
-        );
-    }
-    for order in &result.orders_after {
-        spot_state.orders.insert(order.order_id.clone(), order.clone());
-    }
-    for trade_id in &result.settled_trade_ids_appended {
-        spot_state.settled_trade_ids.insert(trade_id.clone());
+    match result {
+        SpotCommandResult::ExecuteImmediateOrderPipeline(result) => {
+            let account_id = result.pipeline_output.place_output.order.account_id.as_str();
+            spot_state
+                .next_order_sequence_by_account
+                .insert(account_id.to_string(), result.next_order_sequence);
+            for balance in &result.balances_after {
+                spot_state.balances.insert(
+                    AccountAssetKey::new(balance.account_id.as_str(), balance.asset_id.as_str()),
+                    balance.clone(),
+                );
+            }
+            for order in &result.orders_after {
+                spot_state.orders.insert(order.order_id.clone(), order.clone());
+            }
+            for trade_id in &result.settled_trade_ids_appended {
+                spot_state.settled_trade_ids.insert(trade_id.clone());
+            }
+        }
+        SpotCommandResult::CancelOrder(result) => {
+            for balance in &result.balances_after {
+                spot_state.balances.insert(
+                    AccountAssetKey::new(balance.account_id.as_str(), balance.asset_id.as_str()),
+                    balance.clone(),
+                );
+            }
+            spot_state
+                .orders
+                .insert(result.order_after.order_id.clone(), result.order_after.clone());
+        }
     }
 }
 
@@ -563,6 +685,9 @@ fn command_result_events(result: &CommandExecutionResult) -> &[EntityReplayableE
         ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(result)) => {
             result.events.as_slice()
         }
+        ProductCommandResult::Spot(SpotCommandResult::CancelOrder(result)) => {
+            result.events.as_slice()
+        }
         ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(result)) => {
             result.events.as_slice()
         }
@@ -577,6 +702,9 @@ fn command_result_events_len(result: &CommandExecutionResult) -> usize {
 fn rebase_command_result_events(result: &mut CommandExecutionResult, base_sequence: u64) {
     match &mut result.result {
         ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(result)) => {
+            result.events = rebase_events(&result.events, base_sequence);
+        }
+        ProductCommandResult::Spot(SpotCommandResult::CancelOrder(result)) => {
             result.events = rebase_events(&result.events, base_sequence);
         }
         ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(result)) => {

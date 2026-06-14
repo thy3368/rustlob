@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use cmd_handler::command_use_case_def2::CommandUseCase3;
 use example_core::{
-    Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
+    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
+    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce, SpotOrder,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
 
 use super::*;
@@ -100,6 +101,82 @@ fn treasury_envelope() -> CommandEnvelope<ProductCommand> {
     }
 }
 
+fn cancel_envelope() -> CommandEnvelope<ProductCommand> {
+    CommandEnvelope {
+        command_id: "cmd-3".to_string(),
+        account_id: "trader-1".to_string(),
+        nonce: 3,
+        timestamp_ns: 1_002,
+        command: ProductCommand::Spot(SpotCommand::CancelOrder(CancelSpotOrderCmd {
+            party_id: "trader-1".to_string(),
+            asset: 10_001,
+            order_id: 42,
+        })),
+    }
+}
+
+fn open_buy_order() -> SpotOrder {
+    SpotOrder::new(
+        "order-42".to_string(),
+        10_001,
+        Some(42),
+        "trader-1".to_string(),
+        "BTCUSDT".to_string(),
+        SpotOrderSide::Buy,
+        SpotOrderExecution::Limit { price: 100 },
+        SpotOrderTimeInForce::Gtc,
+        2,
+        0,
+        200,
+        None,
+    )
+}
+
+fn open_sell_order() -> SpotOrder {
+    SpotOrder::new(
+        "order-42".to_string(),
+        10_001,
+        Some(42),
+        "trader-1".to_string(),
+        "BTCUSDT".to_string(),
+        SpotOrderSide::Sell,
+        SpotOrderExecution::Limit { price: 100 },
+        SpotOrderTimeInForce::Gtc,
+        2,
+        2,
+        0,
+        None,
+    )
+}
+
+fn state_with_open_buy_order() -> BuildBlockFromCommandsState {
+    let mut state = sample_state();
+    state.exchange_state.spot.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 9_800, 200, 3),
+    );
+    state.exchange_state
+        .spot
+        .orders
+        .insert("order-42".to_string(), open_buy_order());
+    state.commands = vec![cancel_envelope()];
+    state
+}
+
+fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
+    let mut state = sample_state();
+    state.exchange_state.spot.balances.insert(
+        AccountAssetKey::new("trader-1", "BTC"),
+        Balance::new("trader-1".to_string(), "BTC".to_string(), 5, 2, 2),
+    );
+    state.exchange_state
+        .spot
+        .orders
+        .insert("order-42".to_string(), open_sell_order());
+    state.commands = vec![cancel_envelope()];
+    state
+}
+
 #[test]
 fn role_is_block_builder() {
     assert_eq!(CommandUseCase3::role(&BuildBlockFromCommandsUseCase), "BlockBuilder");
@@ -179,4 +256,74 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
     assert_eq!(result.events.len(), 1);
 
     Ok(())
+}
+
+#[test]
+fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state_with_open_buy_order(),
+    )?;
+
+    assert_eq!(result.output.command_results.len(), 1);
+    assert_eq!(result.events.len(), 2);
+
+    let next_order = result.output.exchange_state.spot.orders.get("order-42").unwrap();
+    assert_eq!(next_order.status, SpotOrderStatus::Canceled);
+    assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
+    assert_eq!(next_order.version, 2);
+
+    let next_usdt = result
+        .output
+        .exchange_state
+        .spot
+        .balances
+        .get(&AccountAssetKey::new("trader-1", "USDT"))
+        .unwrap();
+    assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (10_000, 0, 4));
+    assert_eq!(result.output.exchange_state.spot.next_order_sequence_by_account["trader-1"], 7);
+
+    Ok(())
+}
+
+#[test]
+fn spot_cancel_sell_order_releases_base_balance() -> Result<(), BuildBlockError> {
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state_with_open_sell_order(),
+    )?;
+
+    let next_order = result.output.exchange_state.spot.orders.get("order-42").unwrap();
+    assert_eq!(next_order.status, SpotOrderStatus::Canceled);
+    assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
+
+    let next_btc = result
+        .output
+        .exchange_state
+        .spot
+        .balances
+        .get(&AccountAssetKey::new("trader-1", "BTC"))
+        .unwrap();
+    assert_eq!((next_btc.available, next_btc.frozen, next_btc.version), (7, 0, 3));
+
+    Ok(())
+}
+
+#[test]
+fn spot_cancel_missing_order_returns_spot_execution_error() {
+    let mut state = sample_state();
+    state.commands = vec![cancel_envelope()];
+
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    );
+
+    assert_eq!(
+        result,
+        Err(BuildBlockError::SpotExecution("open order was not found".to_string()))
+    );
 }
