@@ -7,11 +7,11 @@ pub struct NewBlock {
     pub block_height: u64,
     /// 父区块哈希。
     pub parent_block_hash: String,
-    /// request id 列表的稳定承诺。
-    pub request_ids_root: String,
+    /// command envelope 列表的稳定承诺。
+    pub commands_root: String,
     /// replayable events 列表的稳定承诺。
     pub events_root: String,
-    /// 执行后产品状态快照的稳定承诺。
+    /// 执行后交易所状态快照的稳定承诺。
     pub post_state_root: String,
     /// 当前区块头字段的稳定哈希。
     pub block_hash: String,
@@ -22,21 +22,21 @@ impl NewBlock {
     pub fn new(
         block_height: u64,
         parent_block_hash: String,
-        request_ids_root: String,
+        commands_root: String,
         events_root: String,
         post_state_root: String,
     ) -> Self {
         let block_hash = stable_hash_hex(&[
             block_height.to_string(),
             parent_block_hash.clone(),
-            request_ids_root.clone(),
+            commands_root.clone(),
             events_root.clone(),
             post_state_root.clone(),
         ]);
         Self {
             block_height,
             parent_block_hash,
-            request_ids_root,
+            commands_root,
             events_root,
             post_state_root,
             block_hash,

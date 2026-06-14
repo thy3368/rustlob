@@ -1,57 +1,54 @@
-use std::collections::BTreeMap;
-
 use cmd_handler::command_use_case_def2::IssuedByParty;
 use thiserror::Error;
 
-use crate::entity::{
-    NewBlock, PendingRequest, ProductContext, ProductPluginError, ProductPluginRegistry,
-    RequestExecutionResult,
-};
+use crate::entity::{CommandEnvelope, CommandExecutionResult, ExchangeState, NewBlock, ProductCommand};
 
-/// 构建新区块的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BuildBlockFromPendingRequestsCommand {
+pub struct BuildBlockFromCommandsCommand {
     pub block_height: u64,
 }
 
-impl IssuedByParty for BuildBlockFromPendingRequestsCommand {}
+impl IssuedByParty for BuildBlockFromCommandsCommand {}
 
-/// 构建新区块前已加载的业务状态。
-#[derive(Debug, Clone)]
-pub struct BuildBlockFromPendingRequestsState {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildBlockFromCommandsState {
     pub parent_height: u64,
     pub parent_block_hash: String,
-    pub pending_requests: Vec<PendingRequest>,
-    pub product_plugins: ProductPluginRegistry,
-    pub product_contexts: BTreeMap<String, ProductContext>,
+    pub exchange_state: ExchangeState,
+    pub commands: Vec<CommandEnvelope<ProductCommand>>,
 }
 
-/// 区块构建的强类型输出。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BuildBlockFromPendingRequestsOutput {
+pub struct BuildBlockFromCommandsOutput {
     pub new_block: NewBlock,
-    pub request_results: Vec<RequestExecutionResult>,
+    pub command_results: Vec<CommandExecutionResult>,
+    pub exchange_state: ExchangeState,
 }
 
-/// 区块构建业务错误。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum BuildBlockError {
     #[error("block height must be greater than zero")]
     BlockHeightMustBePositive,
-    #[error("pending requests batch is empty")]
-    EmptyPendingRequests,
+    #[error("command batch is empty")]
+    EmptyCommands,
     #[error("block height {actual} is not continuous after parent height {parent_height}")]
     NonContinuousBlockHeight { parent_height: u64, actual: u64 },
-    #[error("missing product plugin for '{product_id}'")]
-    MissingProductPlugin { product_id: String },
-    #[error("plugin for '{product_id}' does not support action '{action}'")]
-    UnsupportedAction { product_id: String, action: String },
-    #[error("missing product context for '{product_id}'")]
-    MissingProductContext { product_id: String },
-    #[error("product context '{actual}' does not match request product '{expected}'")]
-    ProductContextMismatch { expected: String, actual: String },
-    #[error("product plugin execution failed: {0}")]
-    ProductPlugin(#[from] ProductPluginError),
-    #[error("failed to apply request result back into product context: {product_id}")]
-    ApplyResultFailed { product_id: String },
+    #[error("missing spot market rules for '{symbol}'")]
+    MissingSpotMarketRules { symbol: String },
+    #[error("missing spot asset pair for '{symbol}'")]
+    MissingSpotAssetPair { symbol: String },
+    #[error("missing spot trading runtime for '{symbol}'")]
+    MissingSpotTradingRuntime { symbol: String },
+    #[error("missing spot balance for account '{account_id}' asset '{asset_id}'")]
+    MissingSpotBalance { account_id: String, asset_id: String },
+    #[error("missing spot next order sequence for account '{account_id}'")]
+    MissingSpotOrderSequence { account_id: String },
+    #[error("spot command execution failed: {0}")]
+    SpotExecution(String),
+    #[error("missing treasury quote balance for account '{account_id}' asset '{asset_id}'")]
+    MissingTreasuryBalance { account_id: String, asset_id: String },
+    #[error("treasury command execution failed: {0}")]
+    TreasuryExecution(String),
+    #[error("perp commands are not implemented yet")]
+    UnsupportedPerpCommand,
 }

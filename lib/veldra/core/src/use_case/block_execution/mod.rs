@@ -1,15 +1,11 @@
 mod build_block_from_pending_requests;
 mod definitions;
 
-pub use build_block_from_pending_requests::BuildBlockFromPendingRequestsUseCase;
+pub use build_block_from_pending_requests::BuildBlockFromCommandsUseCase;
 pub use definitions::{
-    BuildBlockError, BuildBlockFromPendingRequestsCommand, BuildBlockFromPendingRequestsOutput,
-    BuildBlockFromPendingRequestsState,
+    BuildBlockError, BuildBlockFromCommandsCommand, BuildBlockFromCommandsOutput,
+    BuildBlockFromCommandsState,
 };
 
 #[cfg(test)]
-mod happy_path;
-#[cfg(test)]
-mod regression_tests;
-#[cfg(test)]
-mod test_support;
+mod tests;
