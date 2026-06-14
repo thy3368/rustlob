@@ -46,16 +46,11 @@ fn sample_envelope() -> CommandEnvelope<ProductCommand> {
 
 fn sample_state() -> BuildBlockFromCommandsState {
     let mut market_rules_by_symbol = BTreeMap::new();
-    market_rules_by_symbol.insert(
-        "BTCUSDT".to_string(),
-        MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
-    );
+    market_rules_by_symbol
+        .insert("BTCUSDT".to_string(), MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 });
 
     let mut asset_pairs_by_symbol = BTreeMap::new();
-    asset_pairs_by_symbol.insert(
-        "BTCUSDT".to_string(),
-        SpotAssetPair::new("BTC", "USDT"),
-    );
+    asset_pairs_by_symbol.insert("BTCUSDT".to_string(), SpotAssetPair::new("BTC", "USDT"));
 
     let mut trading_enabled_by_symbol = BTreeMap::new();
     trading_enabled_by_symbol.insert("BTCUSDT".to_string(), true);
@@ -121,15 +116,21 @@ fn pre_check_rejects_zero_block_height() {
 fn validate_rejects_empty_batch() {
     let mut state = sample_state();
     state.commands.clear();
-    let result =
-        CommandUseCase3::validate_against_state(&BuildBlockFromCommandsUseCase, &sample_command(), &state);
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
     assert_eq!(result, Err(BuildBlockError::EmptyCommands));
 }
 
 #[test]
 fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
-    let result =
-        CommandUseCase3::compute_output_and_events(&BuildBlockFromCommandsUseCase, &sample_command(), sample_state())?;
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        sample_state(),
+    )?;
 
     assert_eq!(result.output.command_results.len(), 1);
     assert_eq!(result.output.new_block.block_height, 2);
@@ -147,10 +148,7 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
         .get(&AccountAssetKey::new("trader-1", "USDT"))
         .unwrap();
     assert_eq!((next_usdt.available, next_usdt.frozen), (9_800, 200));
-    assert_eq!(
-        result.output.exchange_state.spot.next_order_sequence_by_account["trader-1"],
-        8
-    );
+    assert_eq!(result.output.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
 
     Ok(())
 }
@@ -164,8 +162,11 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![treasury_envelope()];
 
-    let result =
-        CommandUseCase3::compute_output_and_events(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    )?;
 
     let next_usdt = result
         .output

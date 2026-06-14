@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use cmd_handler::EntityReplayableEvent;
 use example_core::{
     Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
-    ExecuteImmediateSpotOrderPipelineOutput, WithdrawQuoteCmd,
-    HyperliquidPerpFundingSettlement, HyperliquidPerpOrder, HyperliquidPerpPosition, MarketRules,
-    SpotOrder, SpotSettlement, SpotTrade,
+    ExecuteImmediateSpotOrderPipelineOutput, HyperliquidPerpFundingSettlement,
+    HyperliquidPerpOrder, HyperliquidPerpPosition, MarketRules, SpotOrder, SpotSettlement,
+    SpotTrade, WithdrawQuoteCmd,
 };
 
 use super::stable_hash_hex;
@@ -200,19 +200,11 @@ pub struct SpotPipelineExecution {
 
 impl SpotPipelineExecution {
     pub fn commitment(&self) -> String {
-        let balances = self
-            .balances_after
-            .iter()
-            .map(balance_commitment)
-            .collect::<Vec<_>>();
-        let orders =
-            self.orders_after.iter().map(spot_order_commitment).collect::<Vec<_>>();
+        let balances = self.balances_after.iter().map(balance_commitment).collect::<Vec<_>>();
+        let orders = self.orders_after.iter().map(spot_order_commitment).collect::<Vec<_>>();
         let trades = self.trades.iter().map(spot_trade_commitment).collect::<Vec<_>>();
-        let settlements = self
-            .settlements
-            .iter()
-            .map(spot_settlement_commitment)
-            .collect::<Vec<_>>();
+        let settlements =
+            self.settlements.iter().map(spot_settlement_commitment).collect::<Vec<_>>();
         stable_hash_hex(&[
             pipeline_output_commitment(&self.pipeline_output).as_str(),
             stable_hash_hex(&balances).as_str(),
@@ -221,10 +213,8 @@ impl SpotPipelineExecution {
             stable_hash_hex(&settlements).as_str(),
             stable_hash_hex(&self.settled_trade_ids_appended).as_str(),
             self.next_order_sequence.to_string().as_str(),
-            stable_hash_hex(
-                &self.events.iter().map(super::event_commitment).collect::<Vec<_>>(),
-            )
-            .as_str(),
+            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
+                .as_str(),
         ])
     }
 }
@@ -298,13 +288,8 @@ impl SpotState {
             .iter()
             .map(|(symbol, enabled)| format!("{symbol}:{enabled}"))
             .collect::<Vec<_>>();
-        let balances = self
-            .balances
-            .values()
-            .map(balance_commitment)
-            .collect::<Vec<_>>();
-        let orders =
-            self.orders.values().map(spot_order_commitment).collect::<Vec<_>>();
+        let balances = self.balances.values().map(balance_commitment).collect::<Vec<_>>();
+        let orders = self.orders.values().map(spot_order_commitment).collect::<Vec<_>>();
         let settled = self.settled_trade_ids.iter().cloned().collect::<Vec<_>>();
         let sequences = self
             .next_order_sequence_by_account
@@ -336,18 +321,9 @@ pub struct PerpState {
 
 impl PerpState {
     pub fn commitment(&self) -> String {
-        let orders =
-            self.orders.values().map(perp_order_commitment).collect::<Vec<_>>();
-        let positions = self
-            .positions
-            .values()
-            .map(perp_position_commitment)
-            .collect::<Vec<_>>();
-        let balances = self
-            .balances
-            .values()
-            .map(balance_commitment)
-            .collect::<Vec<_>>();
+        let orders = self.orders.values().map(perp_order_commitment).collect::<Vec<_>>();
+        let positions = self.positions.values().map(perp_position_commitment).collect::<Vec<_>>();
+        let balances = self.balances.values().map(balance_commitment).collect::<Vec<_>>();
         let funding = self
             .funding_settlements
             .values()
@@ -385,18 +361,11 @@ pub struct TreasuryState {
 
 impl TreasuryState {
     pub fn commitment(&self) -> String {
-        let balances = self
-            .balances
-            .values()
-            .map(balance_commitment)
-            .collect::<Vec<_>>();
+        let balances = self.balances.values().map(balance_commitment).collect::<Vec<_>>();
         let transfers = self.processed_transfer_ids.iter().cloned().collect::<Vec<_>>();
         let withdraws = self.processed_withdraw_ids.iter().cloned().collect::<Vec<_>>();
-        let locks = self
-            .withdraw_locks
-            .values()
-            .map(WithdrawLockState::commitment)
-            .collect::<Vec<_>>();
+        let locks =
+            self.withdraw_locks.values().map(WithdrawLockState::commitment).collect::<Vec<_>>();
 
         stable_hash_hex(&[
             stable_hash_hex(&balances).as_str(),
@@ -457,10 +426,8 @@ impl TreasuryBalanceUpdate {
     fn commitment(&self) -> String {
         stable_hash_hex(&[
             balance_commitment(&self.balance_after).as_str(),
-            stable_hash_hex(
-                &self.events.iter().map(super::event_commitment).collect::<Vec<_>>(),
-            )
-            .as_str(),
+            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
+                .as_str(),
         ])
     }
 }
@@ -493,10 +460,10 @@ pub fn build_new_block(
     events: &[EntityReplayableEvent],
     exchange_state: &ExchangeState,
 ) -> super::NewBlock {
-    let commands_root = stable_hash_hex(
-        &commands.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>(),
-    );
-    let events_root = stable_hash_hex(&events.iter().map(super::event_commitment).collect::<Vec<_>>());
+    let commands_root =
+        stable_hash_hex(&commands.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>());
+    let events_root =
+        stable_hash_hex(&events.iter().map(super::event_commitment).collect::<Vec<_>>());
     let post_state_root = exchange_state.commitment();
     super::NewBlock::new(
         block_height,
@@ -515,8 +482,7 @@ fn pipeline_output_commitment(output: &ExecuteImmediateSpotOrderPipelineOutput) 
     let matched = output.match_output.as_ref().map_or_else(
         || stable_hash_hex(&["none"]),
         |match_output| {
-            let trades =
-                match_output.trades.iter().map(spot_trade_commitment).collect::<Vec<_>>();
+            let trades = match_output.trades.iter().map(spot_trade_commitment).collect::<Vec<_>>();
             let makers = match_output
                 .maker_orders_after
                 .iter()

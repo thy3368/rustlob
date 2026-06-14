@@ -16,16 +16,11 @@ use veldra_core::use_case::{
 
 pub fn sample_exchange_state() -> ExchangeState {
     let mut market_rules_by_symbol = BTreeMap::new();
-    market_rules_by_symbol.insert(
-        "BTCUSDT".to_string(),
-        MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
-    );
+    market_rules_by_symbol
+        .insert("BTCUSDT".to_string(), MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 });
 
     let mut asset_pairs_by_symbol = BTreeMap::new();
-    asset_pairs_by_symbol.insert(
-        "BTCUSDT".to_string(),
-        SpotAssetPair::new("BTC", "USDT"),
-    );
+    asset_pairs_by_symbol.insert("BTCUSDT".to_string(), SpotAssetPair::new("BTC", "USDT"));
 
     let mut trading_enabled_by_symbol = BTreeMap::new();
     trading_enabled_by_symbol.insert("BTCUSDT".to_string(), true);
@@ -86,7 +81,9 @@ pub fn sample_spot_command() -> CommandEnvelope<ProductCommand> {
 }
 
 pub fn execute_sample_block() -> Result<
-    cmd_handler::command_use_case_def2::UseCaseOutput<veldra_core::use_case::BuildBlockFromCommandsOutput>,
+    cmd_handler::command_use_case_def2::UseCaseOutput<
+        veldra_core::use_case::BuildBlockFromCommandsOutput,
+    >,
     BuildBlockError,
 > {
     CommandUseCase3::compute_output_and_events(

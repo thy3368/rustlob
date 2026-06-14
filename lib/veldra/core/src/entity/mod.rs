@@ -5,8 +5,8 @@ mod support;
 pub use block::NewBlock;
 pub use exchange::{
     AccountAssetKey, AccountMarketKey, CommandEnvelope, CommandExecutionResult, ExchangeState,
-    PerpCommand, PerpCommandResult, PerpState, ProductCommand, ProductCommandResult, SpotCommand,
-    SpotCommandResult, SpotPipelineExecution, SpotState, SpotAssetPair, TreasuryBalanceUpdate,
+    PerpCommand, PerpCommandResult, PerpState, ProductCommand, ProductCommandResult, SpotAssetPair,
+    SpotCommand, SpotCommandResult, SpotPipelineExecution, SpotState, TreasuryBalanceUpdate,
     TreasuryCommand, TreasuryCommandResult, TreasuryState, WithdrawLockState, build_new_block,
 };
 pub(crate) use support::stable_hash_hex;

@@ -1,7 +1,9 @@
 use cmd_handler::command_use_case_def2::IssuedByParty;
 use thiserror::Error;
 
-use crate::entity::{CommandEnvelope, CommandExecutionResult, ExchangeState, NewBlock, ProductCommand};
+use crate::entity::{
+    CommandEnvelope, CommandExecutionResult, ExchangeState, NewBlock, ProductCommand,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromCommandsCommand {

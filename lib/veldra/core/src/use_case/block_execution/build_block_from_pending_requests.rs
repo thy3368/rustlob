@@ -1,6 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase2;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3, UseCaseOutput};
 use example_core::{
     Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineOutput,
@@ -70,12 +69,8 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let BuildBlockFromCommandsState {
-            parent_block_hash,
-            mut exchange_state,
-            commands,
-            ..
-        } = state;
+        let BuildBlockFromCommandsState { parent_block_hash, mut exchange_state, commands, .. } =
+            state;
 
         let mut command_results = Vec::with_capacity(commands.len());
         let mut events = Vec::new();
@@ -90,9 +85,9 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
                         command_id: envelope.command_id.clone(),
                         command_kind: "spot".to_string(),
                         command_commitment: envelope.commitment(),
-                        result: ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(
-                            result,
-                        )),
+                        result: ProductCommandResult::Spot(
+                            SpotCommandResult::ExecuteImmediateOrderPipeline(result),
+                        ),
                     }
                 }
                 ProductCommand::Treasury(command) => {
@@ -102,9 +97,9 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
                         command_id: envelope.command_id.clone(),
                         command_kind: "treasury".to_string(),
                         command_commitment: envelope.commitment(),
-                        result: ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(
-                            result,
-                        )),
+                        result: ProductCommandResult::Treasury(
+                            TreasuryCommandResult::QuoteBalanceUpdated(result),
+                        ),
                     }
                 }
                 ProductCommand::Perp(_) => return Err(BuildBlockError::UnsupportedPerpCommand),
@@ -142,35 +137,26 @@ fn validate_command_against_exchange_state(
     }
 }
 
-fn validate_spot_command(command: &SpotCommand, spot_state: &SpotState) -> Result<(), BuildBlockError> {
+fn validate_spot_command(
+    command: &SpotCommand,
+    spot_state: &SpotState,
+) -> Result<(), BuildBlockError> {
     match command {
         SpotCommand::ExecuteImmediateOrderPipeline(command) => {
             let symbol = command.place.symbol.as_str();
             let account_id = command.place.party_id.as_str();
-            let rules = spot_state
-                .market_rules_by_symbol
-                .get(symbol)
-                .ok_or_else(|| BuildBlockError::MissingSpotMarketRules {
-                    symbol: symbol.to_string(),
-                })?;
-            let pair = spot_state
-                .asset_pairs_by_symbol
-                .get(symbol)
-                .ok_or_else(|| BuildBlockError::MissingSpotAssetPair {
-                    symbol: symbol.to_string(),
-                })?;
-            let _ = spot_state
-                .trading_enabled_by_symbol
-                .get(symbol)
-                .ok_or_else(|| BuildBlockError::MissingSpotTradingRuntime {
-                    symbol: symbol.to_string(),
-                })?;
-            let _ = spot_state
-                .next_order_sequence_by_account
-                .get(account_id)
-                .ok_or_else(|| BuildBlockError::MissingSpotOrderSequence {
-                    account_id: account_id.to_string(),
-                })?;
+            let rules = spot_state.market_rules_by_symbol.get(symbol).ok_or_else(|| {
+                BuildBlockError::MissingSpotMarketRules { symbol: symbol.to_string() }
+            })?;
+            let pair = spot_state.asset_pairs_by_symbol.get(symbol).ok_or_else(|| {
+                BuildBlockError::MissingSpotAssetPair { symbol: symbol.to_string() }
+            })?;
+            let _ = spot_state.trading_enabled_by_symbol.get(symbol).ok_or_else(|| {
+                BuildBlockError::MissingSpotTradingRuntime { symbol: symbol.to_string() }
+            })?;
+            let _ = spot_state.next_order_sequence_by_account.get(account_id).ok_or_else(|| {
+                BuildBlockError::MissingSpotOrderSequence { account_id: account_id.to_string() }
+            })?;
             let _ = spot_state
                 .balances
                 .get(&AccountAssetKey::new(account_id, pair.base_asset_id.as_str()))
@@ -237,10 +223,9 @@ fn execute_deposit_quote(
 
     let mut balance_after = balance;
     balance_after.apply_after(
-        balance_after
-            .available
-            .checked_add(command.amount)
-            .ok_or_else(|| BuildBlockError::TreasuryExecution("treasury balance overflow".to_string()))?,
+        balance_after.available.checked_add(command.amount).ok_or_else(|| {
+            BuildBlockError::TreasuryExecution("treasury balance overflow".to_string())
+        })?,
         balance_after.frozen,
         balance_after.version + 1,
     );
@@ -262,10 +247,9 @@ fn execute_withdraw_quote(
 
     let mut balance_after = balance;
     balance_after.apply_after(
-        balance_after
-            .available
-            .checked_sub(command.amount)
-            .ok_or_else(|| BuildBlockError::TreasuryExecution("treasury balance underflow".to_string()))?,
+        balance_after.available.checked_sub(command.amount).ok_or_else(|| {
+            BuildBlockError::TreasuryExecution("treasury balance underflow".to_string())
+        })?,
         balance_after.frozen,
         balance_after.version + 1,
     );
@@ -276,14 +260,12 @@ fn treasury_quote_balance(
     treasury_state: &TreasuryState,
     account_id: &str,
 ) -> Result<Balance, BuildBlockError> {
-    treasury_state
-        .balances
-        .get(&AccountAssetKey::new(account_id, "USDT"))
-        .cloned()
-        .ok_or_else(|| BuildBlockError::MissingTreasuryBalance {
+    treasury_state.balances.get(&AccountAssetKey::new(account_id, "USDT")).cloned().ok_or_else(
+        || BuildBlockError::MissingTreasuryBalance {
             account_id: account_id.to_string(),
             asset_id: "USDT".to_string(),
-        })
+        },
+    )
 }
 
 fn execute_immediate_spot_pipeline(
@@ -293,8 +275,12 @@ fn execute_immediate_spot_pipeline(
     let place_state = build_place_state(command, spot_state)?;
     CommandUseCase3::pre_check_command(&PlaceImmediateOrderUseCase, &command.place)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    CommandUseCase3::validate_against_state(&PlaceImmediateOrderUseCase, &command.place, &place_state)
-        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    CommandUseCase3::validate_against_state(
+        &PlaceImmediateOrderUseCase,
+        &command.place,
+        &place_state,
+    )
+    .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let place_result = CommandUseCase3::compute_output_and_events(
         &PlaceImmediateOrderUseCase,
         &command.place,
@@ -304,7 +290,8 @@ fn execute_immediate_spot_pipeline(
 
     let mut all_events = place_result.events;
     let place_output = place_result.output.clone();
-    let PlaceImmediateOrderOutput { order: taker_order, affected_balance_after } = place_result.output;
+    let PlaceImmediateOrderOutput { order: taker_order, affected_balance_after } =
+        place_result.output;
     let next_order_sequence = spot_state
         .next_order_sequence_by_account
         .get(command.place.party_id.as_str())
@@ -313,7 +300,9 @@ fn execute_immediate_spot_pipeline(
             account_id: command.place.party_id.clone(),
         })?
         .checked_add(1)
-        .ok_or_else(|| BuildBlockError::SpotExecution("spot order sequence overflow".to_string()))?;
+        .ok_or_else(|| {
+            BuildBlockError::SpotExecution("spot order sequence overflow".to_string())
+        })?;
 
     let maker_orders = sorted_maker_orders(command, spot_state);
     if !should_enter_matching(&taker_order, &maker_orders) {
@@ -342,16 +331,14 @@ fn execute_immediate_spot_pipeline(
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     CommandUseCase3::validate_against_state(&MatchSpotOrderUseCase, &match_cmd, &match_state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let match_result = CommandUseCase3::compute_output_and_events(
-        &MatchSpotOrderUseCase,
-        &match_cmd,
-        match_state,
-    )
-    .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    let match_result =
+        CommandUseCase3::compute_output_and_events(&MatchSpotOrderUseCase, &match_cmd, match_state)
+            .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     all_events.extend(match_result.events);
 
     let match_output = match_result.output.clone();
-    let MatchSpotOrderOutput { trades, taker_order_after, maker_orders_after } = match_result.output;
+    let MatchSpotOrderOutput { trades, taker_order_after, maker_orders_after } =
+        match_result.output;
     if trades.is_empty() {
         return Ok(SpotPipelineExecution {
             pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
@@ -368,11 +355,9 @@ fn execute_immediate_spot_pipeline(
         });
     }
 
-    let asset_pair = spot_state
-        .asset_pairs_by_symbol
-        .get(command.place.symbol.as_str())
-        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair {
-            symbol: command.place.symbol.clone(),
+    let asset_pair =
+        spot_state.asset_pairs_by_symbol.get(command.place.symbol.as_str()).ok_or_else(|| {
+            BuildBlockError::MissingSpotAssetPair { symbol: command.place.symbol.clone() }
         })?;
     let settle_cmd = SettleSpotTradeCmd {
         party_id: command.place.party_id.clone(),
@@ -402,10 +387,8 @@ fn execute_immediate_spot_pipeline(
     all_events.extend(settle_result.events);
 
     let SettleSpotTradeOutput { settlements, balances_after } = settle_result.output;
-    let settled_trade_ids_appended = settlements
-        .iter()
-        .map(|settlement| settlement.trade_id.clone())
-        .collect::<Vec<_>>();
+    let settled_trade_ids_appended =
+        settlements.iter().map(|settlement| settlement.trade_id.clone()).collect::<Vec<_>>();
 
     Ok(SpotPipelineExecution {
         pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
@@ -428,25 +411,18 @@ fn build_place_state(
 ) -> Result<PlaceImmediateOrderState, BuildBlockError> {
     let symbol = command.place.symbol.as_str();
     let account_id = command.place.party_id.as_str();
-    let market_rules = spot_state
-        .market_rules_by_symbol
-        .get(symbol)
-        .cloned()
-        .ok_or_else(|| BuildBlockError::MissingSpotMarketRules {
-            symbol: symbol.to_string(),
+    let market_rules =
+        spot_state.market_rules_by_symbol.get(symbol).cloned().ok_or_else(|| {
+            BuildBlockError::MissingSpotMarketRules { symbol: symbol.to_string() }
         })?;
     let asset_pair = spot_state
         .asset_pairs_by_symbol
         .get(symbol)
-        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair {
-            symbol: symbol.to_string(),
-        })?;
+        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair { symbol: symbol.to_string() })?;
     let trading_enabled = *spot_state
         .trading_enabled_by_symbol
         .get(symbol)
-        .ok_or_else(|| BuildBlockError::MissingSpotTradingRuntime {
-            symbol: symbol.to_string(),
-        })?;
+        .ok_or_else(|| BuildBlockError::MissingSpotTradingRuntime { symbol: symbol.to_string() })?;
     let base_balance = spot_state
         .balances
         .get(&AccountAssetKey::new(account_id, asset_pair.base_asset_id.as_str()))
@@ -463,11 +439,9 @@ fn build_place_state(
             account_id: account_id.to_string(),
             asset_id: asset_pair.quote_asset_id.clone(),
         })?;
-    let next_order_sequence = *spot_state
-        .next_order_sequence_by_account
-        .get(account_id)
-        .ok_or_else(|| BuildBlockError::MissingSpotOrderSequence {
-            account_id: account_id.to_string(),
+    let next_order_sequence =
+        *spot_state.next_order_sequence_by_account.get(account_id).ok_or_else(|| {
+            BuildBlockError::MissingSpotOrderSequence { account_id: account_id.to_string() }
         })?;
 
     Ok(PlaceImmediateOrderState {
@@ -496,14 +470,15 @@ fn sorted_maker_orders(
     maker_orders
 }
 
-fn compare_maker_orders(left: &SpotOrder, right: &SpotOrder, taker_is_buy: bool) -> std::cmp::Ordering {
+fn compare_maker_orders(
+    left: &SpotOrder,
+    right: &SpotOrder,
+    taker_is_buy: bool,
+) -> std::cmp::Ordering {
     let left_price = left.limit_price().unwrap_or(if taker_is_buy { u64::MAX } else { 0 });
     let right_price = right.limit_price().unwrap_or(if taker_is_buy { u64::MAX } else { 0 });
-    let price_order = if taker_is_buy {
-        left_price.cmp(&right_price)
-    } else {
-        right_price.cmp(&left_price)
-    };
+    let price_order =
+        if taker_is_buy { left_price.cmp(&right_price) } else { right_price.cmp(&left_price) };
     price_order.then_with(|| left.order_id.cmp(&right.order_id))
 }
 
@@ -538,14 +513,21 @@ fn settlement_balances_after_place(
     balances
 }
 
-fn collect_orders_after(taker_order_after: SpotOrder, maker_orders_after: Vec<SpotOrder>) -> Vec<SpotOrder> {
+fn collect_orders_after(
+    taker_order_after: SpotOrder,
+    maker_orders_after: Vec<SpotOrder>,
+) -> Vec<SpotOrder> {
     let mut orders = Vec::with_capacity(1 + maker_orders_after.len());
     orders.push(taker_order_after);
     orders.extend(maker_orders_after);
     orders
 }
 
-fn apply_spot_execution(spot_state: &mut SpotState, command: &SpotCommand, result: &SpotPipelineExecution) {
+fn apply_spot_execution(
+    spot_state: &mut SpotState,
+    command: &SpotCommand,
+    result: &SpotPipelineExecution,
+) {
     let account_id = match command {
         SpotCommand::ExecuteImmediateOrderPipeline(command) => command.place.party_id.as_str(),
     };
