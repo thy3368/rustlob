@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrder};
+use crate::entity::{Balance, SpotOrder, SpotOrderStatus, SpotOrderStatusReason};
 
 /// 撤销现货订单时需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,12 +129,19 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
         _cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        let order = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
+        let mut order = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
         let release_base = order.base_to_release_on_cancel();
         let release_quote = order.quote_to_release_on_cancel();
 
-        let order_deleted =
-            order.track_delete_event().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+        let next_order_version =
+            order.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+        let order_canceled = order
+            .track_update_event(|order| {
+                order.status = SpotOrderStatus::Canceled;
+                order.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
+                order.version = next_order_version;
+            })
+            .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
 
         let balance_released = if release_quote > 0 {
             let mut balance = state.quote_balance;
@@ -162,7 +169,7 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
                 .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
         };
 
-        Ok(vec![order_deleted, balance_released])
+        Ok(vec![order_canceled, balance_released])
     }
 }
 
@@ -174,6 +181,9 @@ mod spot_order_scenarios;
 
 #[cfg(test)]
 mod given_state_scenarios;
+
+#[cfg(test)]
+mod compute_replayable_events_happy_path;
 
 #[cfg(test)]
 mod tests {
@@ -279,28 +289,5 @@ mod tests {
             CancelSpotOrderUseCase.validate_against_state(&cmd, &state),
             Err(CancelSpotOrderError::OrderOwnerMismatch)
         );
-    }
-
-    #[test]
-    fn compute_replayable_events_deletes_order_and_releases_quote() {
-        let state = state(Some(buy_order()));
-
-        let events = CancelSpotOrderUseCase
-            .compute_replayable_events(&cmd(), state)
-            .expect("cancel should emit replayable events");
-
-        assert_eq!(events.len(), 2);
-        assert!(events[0].is_deleted());
-        assert!(events[1].is_updated());
-        assert!(events[1].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("available")
-                && change.old_value_bytes() == b"80"
-                && change.new_value_bytes() == b"100"
-        }));
-        assert!(events[1].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("frozen")
-                && change.old_value_bytes() == b"20"
-                && change.new_value_bytes() == b"0"
-        }));
     }
 }

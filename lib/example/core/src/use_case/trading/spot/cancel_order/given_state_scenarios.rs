@@ -6,6 +6,7 @@ use super::spot_order_scenarios::{
     spot_order_cancel_scenario_strategy,
 };
 use super::*;
+use crate::entity::{SpotOrderStatus, SpotOrderStatusReason};
 
 /// 撤单 given state 场景枚举。
 ///
@@ -94,7 +95,7 @@ proptest! {
     }
 
     #[test]
-    fn cancelable_spot_order_scenarios_emit_order_delete_and_account_release_events(
+    fn cancelable_spot_order_scenarios_emit_order_cancel_update_and_account_release_events(
         scenario in cancelable_given_state_scenario_strategy(),
     ) {
         let use_case = CancelSpotOrderUseCase;
@@ -104,8 +105,13 @@ proptest! {
             .expect("cancelable stored order state should produce events");
 
         prop_assert_eq!(events.len(), 2);
-        prop_assert!(events[0].is_deleted());
+        prop_assert!(events[0].is_updated());
         prop_assert!(events[1].is_updated());
+        prop_assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
+        prop_assert_eq!(
+            event_field(&events[0], "status_reason"),
+            Some(SpotOrderStatusReason::CanceledByUser.as_str())
+        );
 
         let expected_release = match scenario {
             CancelSpotOrderGivenStateScenario::SpotOrder(scenario) => {
