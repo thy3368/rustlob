@@ -1,0 +1,13 @@
+[package]
+name = "starter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+cmd_handler = { path = "../../common/cmd_handler" }
+example_core = { path = "../../example/core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+veldra_core = { package = "core", path = "../core" }

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCase3;
 use example_core::{
-    Balance as ExampleBalance, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput,
-    MatchSpotOrderState, MatchSpotOrderUseCase, MarketRules as ExampleMarketRules,
+    Balance as ExampleBalance, MarketRules as ExampleMarketRules, MatchSpotOrderCmd,
+    MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState, MatchSpotOrderUseCase,
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderOutput,
     PlaceImmediateOrderState, PlaceImmediateOrderUseCase, PlaceOrderError, PlaceOrderTimeInForce,
     SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput, SettleSpotTradeState,
@@ -13,8 +13,8 @@ use example_core::{
     SpotOrderExecution as ExampleSpotOrderExecution, SpotOrderSide as ExampleSpotOrderSide,
     SpotOrderStatus as ExampleSpotOrderStatus,
     SpotOrderStatusReason as ExampleSpotOrderStatusReason,
-    SpotOrderTimeInForce as ExampleSpotOrderTimeInForce,
-    SpotSettlement as ExampleSpotSettlement, SpotTrade as ExampleSpotTrade,
+    SpotOrderTimeInForce as ExampleSpotOrderTimeInForce, SpotSettlement as ExampleSpotSettlement,
+    SpotTrade as ExampleSpotTrade,
 };
 use serde::{Deserialize, Serialize};
 use veldra_core::entity::{
@@ -332,8 +332,12 @@ pub struct SpotPlaceOrderResult {
 
 impl SpotPlaceOrderResult {
     fn commitment(&self) -> String {
-        let matched_trades =
-            self.matched_trades.iter().map(SpotTradeResult::commitment).collect::<Vec<_>>().join("|");
+        let matched_trades = self
+            .matched_trades
+            .iter()
+            .map(SpotTradeResult::commitment)
+            .collect::<Vec<_>>()
+            .join("|");
         let settlements = self
             .settlements
             .iter()
@@ -464,7 +468,8 @@ fn execute_spot_pipeline(
     .map_err(SpotPipelineError::Place)?;
 
     let mut all_events = place_result.events;
-    let PlaceImmediateOrderOutput { order: taker_order, affected_balance_after } = place_result.output;
+    let PlaceImmediateOrderOutput { order: taker_order, affected_balance_after } =
+        place_result.output;
     let mut next_context = context;
     next_context.next_order_sequence = next_context
         .next_order_sequence
@@ -505,21 +510,17 @@ fn execute_spot_pipeline(
         .map_err(SpotPipelineError::Match)?;
     CommandUseCase3::validate_against_state(&MatchSpotOrderUseCase, &match_cmd, &match_state)
         .map_err(SpotPipelineError::Match)?;
-    let match_result = CommandUseCase3::compute_output_and_events(
-        &MatchSpotOrderUseCase,
-        &match_cmd,
-        match_state,
-    )
-    .map_err(SpotPipelineError::Match)?;
+    let match_result =
+        CommandUseCase3::compute_output_and_events(&MatchSpotOrderUseCase, &match_cmd, match_state)
+            .map_err(SpotPipelineError::Match)?;
     all_events.extend(match_result.events);
 
-    let MatchSpotOrderOutput { trades, taker_order_after, maker_orders_after } = match_result.output;
+    let MatchSpotOrderOutput { trades, taker_order_after, maker_orders_after } =
+        match_result.output;
     for maker_order in &maker_orders_after {
         let updated = map_order_back(maker_order);
-        if let Some(existing) = next_context
-            .maker_orders
-            .iter_mut()
-            .find(|order| order.order_id == updated.order_id)
+        if let Some(existing) =
+            next_context.maker_orders.iter_mut().find(|order| order.order_id == updated.order_id)
         {
             *existing = updated;
         }
@@ -570,7 +571,8 @@ fn execute_spot_pipeline(
     all_events.extend(settle_result.events);
 
     let SettleSpotTradeOutput { settlements, balances_after } = settle_result.output;
-    let mut affected_balances_after = balances_after.iter().map(map_balance_back).collect::<Vec<_>>();
+    let mut affected_balances_after =
+        balances_after.iter().map(map_balance_back).collect::<Vec<_>>();
     affected_balances_after.sort_by(|left, right| left.key().cmp(&right.key()));
     for balance in &affected_balances_after {
         next_context.balances.insert(balance.key(), balance.clone());
@@ -602,14 +604,20 @@ fn build_place_state(
             context
                 .balance(context.account_id.as_str(), context.market_rules.base_asset.as_str())
                 .ok_or_else(|| ProductPluginError::MissingRequiredState {
-                    key: balance_key(context.account_id.as_str(), context.market_rules.base_asset.as_str()),
+                    key: balance_key(
+                        context.account_id.as_str(),
+                        context.market_rules.base_asset.as_str(),
+                    ),
                 })?,
         ),
         quote_balance: map_balance(
             context
                 .balance(context.account_id.as_str(), context.market_rules.quote_asset.as_str())
                 .ok_or_else(|| ProductPluginError::MissingRequiredState {
-                    key: balance_key(context.account_id.as_str(), context.market_rules.quote_asset.as_str()),
+                    key: balance_key(
+                        context.account_id.as_str(),
+                        context.market_rules.quote_asset.as_str(),
+                    ),
                 })?,
         ),
         market_rules: ExampleMarketRules {
@@ -826,9 +834,9 @@ fn map_place_order_error(
                 }
             },
         },
-        PlaceOrderError::TradingDisabled => ProductPluginError::BusinessRuleRejected {
-            reason: "trading is disabled".to_string(),
-        },
+        PlaceOrderError::TradingDisabled => {
+            ProductPluginError::BusinessRuleRejected { reason: "trading is disabled".to_string() }
+        }
         PlaceOrderError::SymbolNotTradable => ProductPluginError::ContextMismatch {
             expected: payload.symbol.clone(),
             actual: payload.symbol.clone(),
@@ -849,13 +857,11 @@ fn map_place_order_error(
             };
             ProductPluginError::InsufficientState { key, required, available: 0 }
         }
-        PlaceOrderError::InsufficientBaseBalance => {
-            ProductPluginError::InsufficientState {
-                key: "spot.base_balance".to_string(),
-                required: payload.size,
-                available: 0,
-            }
-        }
+        PlaceOrderError::InsufficientBaseBalance => ProductPluginError::InsufficientState {
+            key: "spot.base_balance".to_string(),
+            required: payload.size,
+            available: 0,
+        },
         PlaceOrderError::ArithmeticOverflow => ProductPluginError::ArithmeticOverflow,
         PlaceOrderError::UnsupportedSide => ProductPluginError::InvalidPayloadField {
             field: "is_buy".to_string(),
@@ -871,17 +877,15 @@ fn map_place_order_error(
 fn map_match_error(error: MatchSpotOrderError) -> ProductPluginError {
     match error {
         MatchSpotOrderError::ArithmeticOverflow => ProductPluginError::ArithmeticOverflow,
-        _ => ProductPluginError::BusinessRuleRejected {
-            reason: error.to_string(),
-        },
+        _ => ProductPluginError::BusinessRuleRejected { reason: error.to_string() },
     }
 }
 
 fn map_settle_error(error: SettleSpotTradeError) -> ProductPluginError {
     match error {
-        SettleSpotTradeError::AccountNotFound => ProductPluginError::MissingRequiredState {
-            key: "settlement_balances".to_string(),
-        },
+        SettleSpotTradeError::AccountNotFound => {
+            ProductPluginError::MissingRequiredState { key: "settlement_balances".to_string() }
+        }
         SettleSpotTradeError::ArithmeticOverflow => ProductPluginError::ArithmeticOverflow,
         SettleSpotTradeError::InsufficientBuyerFrozenQuote => {
             ProductPluginError::BusinessRuleRejected {
@@ -893,16 +897,12 @@ fn map_settle_error(error: SettleSpotTradeError) -> ProductPluginError {
                 reason: "insufficient seller frozen base".to_string(),
             }
         }
-        _ => ProductPluginError::BusinessRuleRejected {
-            reason: error.to_string(),
-        },
+        _ => ProductPluginError::BusinessRuleRejected { reason: error.to_string() },
     }
 }
 
 fn serde_error(error: serde_json::Error) -> ProductPluginError {
-    ProductPluginError::PayloadDecodeFailed {
-        reason: error.to_string(),
-    }
+    ProductPluginError::PayloadDecodeFailed { reason: error.to_string() }
 }
 
 fn balance_key(account_id: &str, asset: &str) -> String {
@@ -1023,218 +1023,4 @@ fn map_balance_back(balance: &ExampleBalance) -> SpotBalanceSnapshot {
 }
 
 #[cfg(test)]
-mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
-    use veldra_core::use_case::{
-        BuildBlockFromPendingRequestsCommand, BuildBlockFromPendingRequestsState,
-        BuildBlockFromPendingRequestsUseCase,
-    };
-
-    use super::*;
-
-    fn balance(account_id: &str, asset: &str, available: u64, reserved: u64, version: u64) -> SpotBalanceSnapshot {
-        SpotBalanceSnapshot {
-            account_id: account_id.to_string(),
-            asset: asset.to_string(),
-            available,
-            reserved,
-            version,
-        }
-    }
-
-    fn maker_order() -> SpotOrder {
-        SpotOrder {
-            order_id: "maker-1".to_string(),
-            asset: 10_001,
-            exchange_oid: None,
-            account_id: "maker-1".to_string(),
-            symbol: "BTCUSDT".to_string(),
-            side: SpotOrderSide::Sell,
-            execution: SpotOrderExecution::Limit { price: 100 },
-            time_in_force: SpotTimeInForce::Gtc,
-            qty: 2,
-            filled_qty: 0,
-            status: SpotOrderStatus::Open,
-            status_reason: None,
-            reserved_base: 2,
-            reserved_quote: 0,
-            client_order_id: None,
-            version: 1,
-        }
-    }
-
-    fn sample_context(with_maker: bool) -> SpotProductContext {
-        let mut balances = BTreeMap::new();
-        for item in [
-            balance("trader-1", "USDT", 10_000, 0, 3),
-            balance("trader-1", "BTC", 0, 0, 2),
-            balance("maker-1", "USDT", 0, 0, 1),
-            balance("maker-1", "BTC", 0, 2, 1),
-        ] {
-            balances.insert(item.key(), item);
-        }
-        SpotProductContext {
-            account_id: "trader-1".to_string(),
-            balances,
-            market_rules: SpotMarketRules {
-                symbol: "BTCUSDT".to_string(),
-                base_asset: "BTC".to_string(),
-                quote_asset: "USDT".to_string(),
-                min_qty: 1,
-            },
-            next_order_sequence: 7,
-            trading_enabled: true,
-            maker_orders: if with_maker { vec![maker_order()] } else { Vec::new() },
-            settled_trade_ids: Vec::new(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-        }
-    }
-
-    fn sample_payload() -> SpotPlaceOrderPayload {
-        SpotPlaceOrderPayload {
-            account_id: "trader-1".to_string(),
-            asset: 10_001,
-            symbol: "BTCUSDT".to_string(),
-            is_buy: true,
-            size: 2,
-            reduce_only: false,
-            order_type: SpotPlaceOrderType::Limit {
-                limit_px: 100,
-                tif: SpotTimeInForce::Gtc,
-            },
-            cloid: Some("cl-1".to_string()),
-        }
-    }
-
-    fn sample_request() -> PendingRequest {
-        PendingRequest {
-            request_id: "req-1".to_string(),
-            product_id: SPOT_PRODUCT_ID.to_string(),
-            action: "place_order".to_string(),
-            payload: serde_json::to_string(&sample_payload()).unwrap(),
-        }
-    }
-
-    fn has_field(event: &EntityReplayableEvent, field_name: &str) -> bool {
-        event.field_changes
-            .iter()
-            .any(|change| change.field_name_as_str().ok() == Some(field_name))
-    }
-
-    #[test]
-    fn adapter_executes_place_only_when_no_maker_exists() {
-        let adapter = ExampleSpotProductPluginAdapter;
-        let result = adapter
-            .execute(&sample_request(), &sample_context(false).into_core().unwrap())
-            .unwrap();
-        let payload: SpotPlaceOrderResult = serde_json::from_str(&result.result_payload).unwrap();
-
-        assert_eq!(result.result_kind, "spot.place_order");
-        assert_eq!(payload.matched_trades.len(), 0);
-        assert_eq!(payload.settlements.len(), 0);
-        assert_eq!(payload.placed_order.status, SpotOrderStatus::Open);
-        assert_eq!(payload.affected_balances_after.len(), 1);
-        assert_eq!(result.events.len(), 2);
-        assert_eq!(result.events[0].timestamp, 0);
-        assert_eq!(result.events[0].sequence, 0);
-        assert_eq!(result.events[1].sequence, 1);
-    }
-
-    #[test]
-    fn adapter_executes_full_pipeline_when_crossing_maker_exists() {
-        let adapter = ExampleSpotProductPluginAdapter;
-        let result = adapter
-            .execute(&sample_request(), &sample_context(true).into_core().unwrap())
-            .unwrap();
-        let payload: SpotPlaceOrderResult = serde_json::from_str(&result.result_payload).unwrap();
-        let next_context: SpotProductContext =
-            serde_json::from_str(&result.next_product_context.snapshot).unwrap();
-
-        assert_eq!(payload.matched_trades.len(), 1);
-        assert_eq!(payload.settlements.len(), 1);
-        assert_eq!(payload.placed_order.status, SpotOrderStatus::Filled);
-        assert!(payload.affected_balances_after.len() >= 4);
-        assert!(next_context.settled_trade_ids.iter().any(|trade_id| trade_id == "req-1:match-1"));
-        assert!(next_context
-            .maker_orders
-            .iter()
-            .any(|order| order.order_id == "maker-1" && order.status == SpotOrderStatus::Filled));
-        assert!(result.events.len() >= 8);
-    }
-
-    #[test]
-    fn adapter_rejects_reduce_only_using_example_business_rule() {
-        let adapter = ExampleSpotProductPluginAdapter;
-        let payload = SpotPlaceOrderPayload {
-            reduce_only: true,
-            ..sample_payload()
-        };
-        let request = PendingRequest {
-            payload: serde_json::to_string(&payload).unwrap(),
-            ..sample_request()
-        };
-
-        let result = adapter.execute(&request, &sample_context(false).into_core().unwrap());
-
-        assert_eq!(
-            result,
-            Err(ProductPluginError::BusinessRuleRejected {
-                reason: "reduce_only is not supported".to_string()
-            })
-        );
-    }
-
-    #[test]
-    fn adapter_maps_unsupported_action() {
-        let adapter = ExampleSpotProductPluginAdapter;
-        let request = PendingRequest {
-            action: "cancel_order".to_string(),
-            ..sample_request()
-        };
-
-        let result = adapter.execute(&request, &sample_context(false).into_core().unwrap());
-
-        assert!(matches!(
-            result,
-            Err(ProductPluginError::UnsupportedAction { product_id, action })
-            if product_id == SPOT_PRODUCT_ID && action == "cancel_order"
-        ));
-    }
-
-    #[test]
-    fn build_block_with_adapter_produces_stable_commitments() -> Result<(), veldra_core::use_case::BuildBlockError> {
-        let mut contexts = BTreeMap::new();
-        contexts.insert(SPOT_PRODUCT_ID.to_string(), sample_context(true).into_core().unwrap());
-        let state = BuildBlockFromPendingRequestsState {
-            parent_height: 1,
-            parent_block_hash: "parent-1".to_string(),
-            pending_requests: vec![sample_request()],
-            product_plugins: build_default_product_registry(),
-            product_contexts: contexts.clone(),
-        };
-        let left = CommandUseCase3::compute_output_and_events(
-            &BuildBlockFromPendingRequestsUseCase,
-            &BuildBlockFromPendingRequestsCommand { block_height: 2 },
-            state,
-        )?;
-        let right = CommandUseCase3::compute_output_and_events(
-            &BuildBlockFromPendingRequestsUseCase,
-            &BuildBlockFromPendingRequestsCommand { block_height: 2 },
-            BuildBlockFromPendingRequestsState {
-                parent_height: 1,
-                parent_block_hash: "parent-1".to_string(),
-                pending_requests: vec![sample_request()],
-                product_plugins: build_default_product_registry(),
-                product_contexts: contexts,
-            },
-        )?;
-
-        assert_eq!(left.output, right.output);
-        assert_eq!(left.events, right.events);
-        assert_eq!(left.output.new_block.events_root, right.output.new_block.events_root);
-        assert_eq!(left.output.new_block.post_state_root, right.output.new_block.post_state_root);
-        assert!(left.events.iter().any(|event| has_field(event, "settlement_id")));
-        Ok(())
-    }
-}
+mod tests;
