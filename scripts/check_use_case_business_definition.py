@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline checker for RustLOB CommandUseCase2 business definition quality."""
+"""Offline checker for RustLOB CommandUseCase3 business definition quality."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ DIRECTORY_CANDIDATE_PARENTS = {"workflow", "execute_flow_l4"}
 REQUIRED_METHODS = (
     "pre_check_command",
     "validate_against_state",
-    "compute_replayable_events",
+    "compute_output_and_events",
 )
 
 INFRA_PATTERNS: dict[str, str] = {
@@ -131,6 +131,7 @@ class UseCaseExtraction:
     command_type: str
     state_type: str
     error_type: str
+    output_type: str
     role: str | None
     role_chunk: str
     command_block: str
@@ -146,7 +147,7 @@ class UseCaseExtraction:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check RustLOB CommandUseCase2 business definition quality."
+        description="Check RustLOB CommandUseCase3 business definition quality."
     )
     parser.add_argument("paths", nargs="*", help="Files or directories to check")
     parser.add_argument("--all", action="store_true", help="Scan all candidate use case files")
@@ -290,7 +291,7 @@ def scan_repo(root: Path) -> list[Path]:
                 text = path.read_text(encoding="utf-8")
             except OSError as exc:
                 raise CheckerError(f"failed to read {path}: {exc}") from exc
-            if "impl CommandUseCase2 for" in text:
+            if "impl CommandUseCase3 for" in text:
                 discovered.append(path.resolve())
     return sorted(set(discovered))
 
@@ -311,9 +312,9 @@ def extract_use_case(path: Path) -> UseCaseExtraction:
     except OSError as exc:
         raise CheckerError(f"failed to read {path}: {exc}") from exc
 
-    impl_match = re.search(r"\bimpl\s+CommandUseCase2\s+for\s+([A-Za-z0-9_]+)", text)
+    impl_match = re.search(r"\bimpl\s+CommandUseCase3\s+for\s+([A-Za-z0-9_]+)", text)
     if not impl_match:
-        raise CheckerError(f"no `impl CommandUseCase2 for` found in {path}")
+        raise CheckerError(f"no `impl CommandUseCase3 for` found in {path}")
 
     use_case_name = impl_match.group(1)
     impl_start = text.find("{", impl_match.end())
@@ -325,6 +326,7 @@ def extract_use_case(path: Path) -> UseCaseExtraction:
     command_type = extract_type_alias(impl_block, "Command", path)
     state_type = extract_type_alias(impl_block, "GivenState", path)
     error_type = extract_type_alias(impl_block, "Error", path)
+    output_type = extract_type_alias(impl_block, "Output", path)
     method_chunks = extract_method_chunks(impl_block)
 
     role_chunk = method_chunks.get("role", "")
@@ -346,6 +348,7 @@ def extract_use_case(path: Path) -> UseCaseExtraction:
         command_type=command_type,
         state_type=state_type,
         error_type=error_type,
+        output_type=output_type,
         role=role,
         role_chunk=role_chunk,
         command_block=command_block,
@@ -523,7 +526,7 @@ def build_result(
     lowered_error_name = normalize(extraction.error_type)
 
     direct_infra_terms = sorted(match_named_patterns(extraction.file_text, INFRA_PATTERNS))
-    compute_chunk = extraction.method_chunks.get("compute_replayable_events", "")
+    compute_chunk = extraction.method_chunks.get("compute_output_and_events", "")
     pre_chunk = extraction.method_chunks.get("pre_check_command", "")
     validate_chunk = extraction.method_chunks.get("validate_against_state", "")
     compute_orchestration_terms = sorted(match_named_patterns(compute_chunk, ORCHESTRATION_PATTERNS))
@@ -575,10 +578,13 @@ def build_result(
     )
     state_is_precomputed = bool(precomputed_state_signals) and compute_uses_state
     state_is_adapterish = bool(adapterish_state_signals)
-    compute_has_event_output = "EntityReplayableEvent" in compute_chunk or "event" in normalize(compute_chunk)
+    compute_has_use_case_output = "UseCaseOutput" in compute_chunk
+    compute_has_event_output = "EntityReplayableEvent" in compute_chunk or "events" in normalize(compute_chunk)
+    compute_has_typed_output = "output" in normalize(compute_chunk)
+    output_is_transport_shaped = bool(re.search(r"\bReply\b|\bResponse\b|\bJson\b", extraction.output_type))
 
     boundary_purity = weights.boundary_purity
-    if direct_infra_terms or returns_transport_reply or compute_orchestration_terms:
+    if direct_infra_terms or returns_transport_reply or compute_orchestration_terms or output_is_transport_shaped:
         boundary_purity = 0
     elif re.search(r"\btracing\b|\bformat!\b|\bserde\b", extraction.impl_block):
         boundary_purity = 8
@@ -590,9 +596,9 @@ def build_result(
         dependency_direction = 8
 
     responsibility_focus = weights.responsibility_focus
-    if not has_all_core_methods or not compute_has_event_output:
+    if not has_all_core_methods or not compute_has_event_output or not compute_has_use_case_output:
         responsibility_focus = 0
-    elif pre_uses_state or not validate_uses_state or compute_uses_self or returns_transport_reply:
+    elif pre_uses_state or not validate_uses_state or compute_uses_self or returns_transport_reply or not compute_has_typed_output:
         responsibility_focus = 8
     if direct_infra_terms and compute_uses_self:
         responsibility_focus = 0
@@ -622,7 +628,7 @@ def build_result(
         party_place_thing_modeling = 5
 
     description_quality = weights.description_quality
-    if trace_id_as_business_identity or names_with_generic_terms:
+    if trace_id_as_business_identity or names_with_generic_terms or output_is_transport_shaped:
         description_quality = 0
     elif command_has_trace_id or role_is_technical or missing_party_id_semantics:
         description_quality = 5
@@ -652,10 +658,18 @@ def build_result(
     if compute_orchestration_terms or returns_transport_reply:
         downgrade_triggers.append("orchestration leakage")
         findings.append(
-            "`compute_replayable_events` leaks outer workflow concerns instead of staying on replayable domain events."
+            "`compute_output_and_events` leaks outer workflow concerns instead of staying on typed business output plus replayable domain events."
         )
         minimal_refactor.append(
-            "Keep load/persist/replay/publish/reply mapping outside `compute_replayable_events` and return only domain events."
+            "Keep load/persist/replay/publish/reply mapping outside `compute_output_and_events` and return only business output plus domain events."
+        )
+    if output_is_transport_shaped:
+        downgrade_triggers.append("transport-shaped output")
+        findings.append(
+            f"`Output` uses transport-shaped naming `{extraction.output_type}` instead of a pure business result type."
+        )
+        minimal_refactor.append(
+            "Rename `Output` to a business result type and keep HTTP/CLI/JSON reply DTOs outside the core use case."
         )
     if state_is_precomputed:
         downgrade_triggers.append("precomputed state / copied answer")
@@ -699,9 +713,9 @@ def build_result(
         )
     if not has_all_core_methods:
         downgrade_triggers.append("missing core method split")
-        findings.append("The `CommandUseCase2` core method split is incomplete.")
+        findings.append("The `CommandUseCase3` core method split is incomplete.")
         minimal_refactor.append(
-            "Implement the full `pre_check_command` / `validate_against_state` / `compute_replayable_events` separation."
+            "Implement the full `pre_check_command` / `validate_against_state` / `compute_output_and_events` separation."
         )
     elif not validate_uses_state:
         downgrade_triggers.append("validate_against_state does not use state")
@@ -714,7 +728,7 @@ def build_result(
     if compute_uses_self and direct_infra_terms:
         downgrade_triggers.append("use case computes through technical collaborators")
         findings.append(
-            "The use case drives technical collaborators from inside `compute_replayable_events`, mixing business rules with execution machinery."
+            "The use case drives technical collaborators from inside `compute_output_and_events`, mixing business rules with execution machinery."
         )
         minimal_refactor.append(
             "Push technical execution to orchestration and feed the use case a business-shaped snapshot instead."
@@ -752,6 +766,7 @@ def build_result(
         "role()": role_value,
         "command_id": "present on command" if command_has_command_id else "not detected on command",
         "trace_id": summarize_trace_semantics(command_has_trace_id, trace_id_as_business_identity),
+        "output": extraction.output_type,
     }
     category_scores = {
         "clean_architecture": clean_architecture,
