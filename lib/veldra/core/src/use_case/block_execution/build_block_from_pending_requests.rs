@@ -1,13 +1,13 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3, UseCaseOutput};
 use example_core::{
-    Balance, CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
-    ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineOutput,
-    MatchSpotOrderCmd, MatchSpotOrderOutput, MatchSpotOrderState, MatchSpotOrderUseCase,
-    PlaceImmediateOrderOutput, PlaceImmediateOrderState, PlaceImmediateOrderUseCase,
-    SettleSpotTradeCmd, SettleSpotTradeOutput, SettleSpotTradeState, SettleSpotTradeUseCase,
-    SpotOrder, SpotOrderSide, SpotOrderTimeInForce, WithdrawQuoteCmd, WithdrawQuoteState,
-    WithdrawQuoteUseCase,
+    Balance, CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase, DepositQuoteCmd,
+    DepositQuoteState, DepositQuoteUseCase, ExecuteImmediateSpotOrderPipelineCmd,
+    ExecuteImmediateSpotOrderPipelineOutput, MatchSpotOrderCmd, MatchSpotOrderOutput,
+    MatchSpotOrderState, MatchSpotOrderUseCase, PlaceImmediateOrderOutput,
+    PlaceImmediateOrderState, PlaceImmediateOrderUseCase, SettleSpotTradeCmd,
+    SettleSpotTradeOutput, SettleSpotTradeState, SettleSpotTradeUseCase, SpotOrder, SpotOrderSide,
+    SpotOrderTimeInForce, WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 
 use super::{
@@ -15,8 +15,9 @@ use super::{
     BuildBlockFromCommandsState,
 };
 use crate::entity::{
-    AccountAssetKey, CommandExecutionResult, ProductCommand, ProductCommandResult, SpotCancelExecution,
-    SpotCommand, SpotCommandResult, SpotPipelineExecution, SpotState, TreasuryBalanceUpdate, TreasuryCommand,
+    AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
+    ProductCommandResult, SpotCancelExecution, SpotCommand, SpotCommandResult,
+    SpotPipelineExecution, SpotState, TreasuryBalanceUpdate, TreasuryCommand,
     TreasuryCommandResult, TreasuryState, build_new_block,
 };
 
@@ -56,12 +57,7 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
                 actual: cmd.block_height,
             });
         }
-
-        for envelope in &state.commands {
-            validate_command_against_exchange_state(&envelope.command, &state.exchange_state.spot)?;
-        }
-
-        Ok(())
+        validate_batch_commands(&state.commands, &state.exchange_state.spot)
     }
 
     fn compute_output_and_events(
@@ -71,57 +67,65 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let BuildBlockFromCommandsState { parent_block_hash, mut exchange_state, commands, .. } =
             state;
-
-        let mut command_results = Vec::with_capacity(commands.len());
-        let mut events = Vec::new();
-        let mut next_sequence = 0_u64;
-
-        for envelope in &commands {
-            let mut execution_result = match &envelope.command {
-                ProductCommand::Spot(command) => {
-                    let result = execute_spot_command(command, &exchange_state.spot)?;
-                    apply_spot_execution(&mut exchange_state.spot, &result);
-                    CommandExecutionResult {
-                        command_id: envelope.command_id.clone(),
-                        command_kind: "spot".to_string(),
-                        command_commitment: envelope.commitment(),
-                        result: ProductCommandResult::Spot(result),
-                    }
-                }
-                ProductCommand::Treasury(command) => {
-                    let result = execute_treasury_command(command, &exchange_state.treasury)?;
-                    apply_treasury_execution(&mut exchange_state.treasury, &result);
-                    CommandExecutionResult {
-                        command_id: envelope.command_id.clone(),
-                        command_kind: "treasury".to_string(),
-                        command_commitment: envelope.commitment(),
-                        result: ProductCommandResult::Treasury(
-                            TreasuryCommandResult::QuoteBalanceUpdated(result),
-                        ),
-                    }
-                }
-                ProductCommand::Perp(_) => return Err(BuildBlockError::UnsupportedPerpCommand),
-            };
-
-            rebase_command_result_events(&mut execution_result, next_sequence);
-            next_sequence += command_result_events_len(&execution_result) as u64;
-            events.extend(command_result_events(&execution_result).iter().cloned());
-            command_results.push(execution_result);
-        }
-
-        let new_block = build_new_block(
+        let (command_results, events) = execute_batch_commands(&commands, &mut exchange_state)?;
+        let output = build_block_output(
             cmd.block_height,
             parent_block_hash,
-            &commands,
-            &events,
-            &exchange_state,
+            commands,
+            events.clone(),
+            exchange_state,
+            command_results,
         );
 
-        Ok(UseCaseOutput {
-            output: BuildBlockFromCommandsOutput { new_block, command_results, exchange_state },
-            events,
-        })
+        Ok(UseCaseOutput { output, events })
     }
+}
+
+fn validate_batch_commands(
+    commands: &[CommandEnvelope<ProductCommand>],
+    spot_state: &SpotState,
+) -> Result<(), BuildBlockError> {
+    for envelope in commands {
+        validate_command_against_exchange_state(&envelope.command, spot_state)?;
+    }
+    Ok(())
+}
+
+fn execute_batch_commands(
+    commands: &[CommandEnvelope<ProductCommand>],
+    exchange_state: &mut ExchangeState,
+) -> Result<(Vec<CommandExecutionResult>, Vec<EntityReplayableEvent>), BuildBlockError> {
+    let mut command_results = Vec::with_capacity(commands.len());
+    let mut events = Vec::new();
+    let mut next_sequence = 0_u64;
+
+    for envelope in commands {
+        // 先基于当前 exchange state 执行单条命令，拿到局部结果和局部事件。
+        let mut result = execute_product_command(envelope, exchange_state)?;
+        // 再把局部事件 rebasing 到整个 batch 的全局 sequence 空间。
+        rebase_command_result_events(&mut result, next_sequence);
+        next_sequence += command_result_events_len(&result) as u64;
+        // 汇总事件后，再把命令结果 apply 回 exchange state，供后续命令串行依赖。
+        events.extend(command_result_events(&result).iter().cloned());
+        apply_command_result(exchange_state, &result);
+        command_results.push(result);
+    }
+
+    Ok((command_results, events))
+}
+
+fn build_block_output(
+    block_height: u64,
+    parent_block_hash: String,
+    commands: Vec<CommandEnvelope<ProductCommand>>,
+    events: Vec<EntityReplayableEvent>,
+    exchange_state: ExchangeState,
+    command_results: Vec<CommandExecutionResult>,
+) -> BuildBlockFromCommandsOutput {
+    let new_block =
+        build_new_block(block_height, parent_block_hash, &commands, &events, &exchange_state);
+
+    BuildBlockFromCommandsOutput { new_block, command_results, exchange_state }
 }
 
 fn validate_command_against_exchange_state(
@@ -189,6 +193,32 @@ fn validate_treasury_command(
     }
 }
 
+fn execute_product_command(
+    envelope: &CommandEnvelope<ProductCommand>,
+    exchange_state: &ExchangeState,
+) -> Result<CommandExecutionResult, BuildBlockError> {
+    let (command_kind, result) = match &envelope.command {
+        ProductCommand::Spot(command) => (
+            "spot",
+            ProductCommandResult::Spot(execute_spot_command(command, &exchange_state.spot)?),
+        ),
+        ProductCommand::Treasury(command) => (
+            "treasury",
+            ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(
+                execute_treasury_command(command, &exchange_state.treasury)?,
+            )),
+        ),
+        ProductCommand::Perp(_) => return Err(BuildBlockError::UnsupportedPerpCommand),
+    };
+
+    Ok(CommandExecutionResult {
+        command_id: envelope.command_id.clone(),
+        command_kind: command_kind.to_string(),
+        command_commitment: envelope.commitment(),
+        result,
+    })
+}
+
 fn execute_spot_command(
     command: &SpotCommand,
     spot_state: &SpotState,
@@ -235,7 +265,7 @@ fn execute_deposit_quote(
         balance_after.frozen,
         balance_after.version + 1,
     );
-    Ok(TreasuryBalanceUpdate { balance_after, events: canonicalize_local_events(events) })
+    Ok(TreasuryBalanceUpdate { balance_after, events: normalize_local_events(events) })
 }
 
 fn execute_withdraw_quote(
@@ -259,7 +289,7 @@ fn execute_withdraw_quote(
         balance_after.frozen,
         balance_after.version + 1,
     );
-    Ok(TreasuryBalanceUpdate { balance_after, events: canonicalize_local_events(events) })
+    Ok(TreasuryBalanceUpdate { balance_after, events: normalize_local_events(events) })
 }
 
 fn treasury_quote_balance(
@@ -312,19 +342,13 @@ fn execute_immediate_spot_pipeline(
 
     let maker_orders = sorted_maker_orders(command, spot_state);
     if !should_enter_matching(&taker_order, &maker_orders) {
-        return Ok(SpotPipelineExecution {
-            pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
-                place_output,
-                match_output: None,
-            },
-            balances_after: vec![affected_balance_after],
-            orders_after: vec![taker_order],
-            trades: Vec::new(),
-            settlements: Vec::new(),
-            settled_trade_ids_appended: Vec::new(),
+        return Ok(build_pipeline_without_match(
+            place_output,
+            affected_balance_after,
+            taker_order,
             next_order_sequence,
-            events: canonicalize_local_events(all_events),
-        });
+            all_events,
+        ));
     }
 
     let match_cmd = MatchSpotOrderCmd {
@@ -346,19 +370,15 @@ fn execute_immediate_spot_pipeline(
     let MatchSpotOrderOutput { trades, taker_order_after, maker_orders_after } =
         match_result.output;
     if trades.is_empty() {
-        return Ok(SpotPipelineExecution {
-            pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
-                place_output,
-                match_output: Some(match_output),
-            },
-            balances_after: vec![affected_balance_after],
-            orders_after: collect_orders_after(taker_order_after, maker_orders_after),
-            trades: Vec::new(),
-            settlements: Vec::new(),
-            settled_trade_ids_appended: Vec::new(),
+        return Ok(build_pipeline_without_settlement(
+            place_output,
+            match_output,
+            affected_balance_after,
+            taker_order_after,
+            maker_orders_after,
             next_order_sequence,
-            events: canonicalize_local_events(all_events),
-        });
+            all_events,
+        ));
     }
 
     let asset_pair =
@@ -396,19 +416,18 @@ fn execute_immediate_spot_pipeline(
     let settled_trade_ids_appended =
         settlements.iter().map(|settlement| settlement.trade_id.clone()).collect::<Vec<_>>();
 
-    Ok(SpotPipelineExecution {
-        pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
-            place_output,
-            match_output: Some(match_output),
-        },
+    Ok(build_pipeline_with_settlement(
+        place_output,
+        match_output,
         balances_after,
-        orders_after: collect_orders_after(taker_order_after, maker_orders_after),
+        taker_order_after,
+        maker_orders_after,
         trades,
         settlements,
         settled_trade_ids_appended,
         next_order_sequence,
-        events: canonicalize_local_events(all_events),
-    })
+        all_events,
+    ))
 }
 
 fn build_cancel_state(
@@ -429,9 +448,7 @@ fn build_cancel_state(
     let asset_pair = spot_state
         .asset_pairs_by_symbol
         .get(order.symbol.as_str())
-        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair {
-            symbol: order.symbol.clone(),
-        })?;
+        .ok_or_else(|| BuildBlockError::MissingSpotAssetPair { symbol: order.symbol.clone() })?;
     let base_balance = spot_state
         .balances
         .get(&AccountAssetKey::new(order.account_id.as_str(), asset_pair.base_asset_id.as_str()))
@@ -466,8 +483,9 @@ fn execute_cancel_spot_order(
     let state = build_cancel_state(command, spot_state)?;
     CommandUseCase2::validate_against_state(&CancelSpotOrderUseCase, command, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let events = CommandUseCase2::compute_replayable_events(&CancelSpotOrderUseCase, command, state.clone())
-        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    let events =
+        CommandUseCase2::compute_replayable_events(&CancelSpotOrderUseCase, command, state.clone())
+            .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
     let mut order_after = state
         .open_order
@@ -479,39 +497,12 @@ fn execute_cancel_spot_order(
         .version
         .checked_add(1)
         .ok_or_else(|| BuildBlockError::SpotExecution("spot order version overflow".to_string()))?;
-
-    let balance_after = if order_after.quote_to_release_on_cancel() > 0 {
-        let mut balance = state.quote_balance.clone();
-        let (next_available, next_frozen) = balance.release_after(order_after.quote_to_release_on_cancel()).ok_or_else(|| {
-            BuildBlockError::SpotExecution("spot quote release overflow".to_string())
-        })?;
-        balance.apply_after(
-            next_available,
-            next_frozen,
-            balance.version.checked_add(1).ok_or_else(|| {
-                BuildBlockError::SpotExecution("spot quote balance version overflow".to_string())
-            })?,
-        );
-        balance
-    } else {
-        let mut balance = state.base_balance.clone();
-        let (next_available, next_frozen) = balance.release_after(order_after.base_to_release_on_cancel()).ok_or_else(|| {
-            BuildBlockError::SpotExecution("spot base release overflow".to_string())
-        })?;
-        balance.apply_after(
-            next_available,
-            next_frozen,
-            balance.version.checked_add(1).ok_or_else(|| {
-                BuildBlockError::SpotExecution("spot base balance version overflow".to_string())
-            })?,
-        );
-        balance
-    };
+    let balance_after = release_cancelled_order_balance(&state, &order_after)?;
 
     Ok(SpotCancelExecution {
         order_after,
         balances_after: vec![balance_after],
-        events: canonicalize_local_events(events),
+        events: normalize_local_events(events),
     })
 }
 
@@ -623,6 +614,79 @@ fn settlement_balances_after_place(
     balances
 }
 
+fn build_pipeline_without_match(
+    place_output: PlaceImmediateOrderOutput,
+    affected_balance_after: Balance,
+    taker_order: SpotOrder,
+    next_order_sequence: u64,
+    events: Vec<EntityReplayableEvent>,
+) -> SpotPipelineExecution {
+    SpotPipelineExecution {
+        pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
+            place_output,
+            match_output: None,
+        },
+        balances_after: vec![affected_balance_after],
+        orders_after: vec![taker_order],
+        trades: Vec::new(),
+        settlements: Vec::new(),
+        settled_trade_ids_appended: Vec::new(),
+        next_order_sequence,
+        events: normalize_local_events(events),
+    }
+}
+
+fn build_pipeline_without_settlement(
+    place_output: PlaceImmediateOrderOutput,
+    match_output: MatchSpotOrderOutput,
+    affected_balance_after: Balance,
+    taker_order_after: SpotOrder,
+    maker_orders_after: Vec<SpotOrder>,
+    next_order_sequence: u64,
+    events: Vec<EntityReplayableEvent>,
+) -> SpotPipelineExecution {
+    SpotPipelineExecution {
+        pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
+            place_output,
+            match_output: Some(match_output),
+        },
+        balances_after: vec![affected_balance_after],
+        orders_after: collect_orders_after(taker_order_after, maker_orders_after),
+        trades: Vec::new(),
+        settlements: Vec::new(),
+        settled_trade_ids_appended: Vec::new(),
+        next_order_sequence,
+        events: normalize_local_events(events),
+    }
+}
+
+fn build_pipeline_with_settlement(
+    place_output: PlaceImmediateOrderOutput,
+    match_output: MatchSpotOrderOutput,
+    balances_after: Vec<Balance>,
+    taker_order_after: SpotOrder,
+    maker_orders_after: Vec<SpotOrder>,
+    trades: Vec<example_core::SpotTrade>,
+    settlements: Vec<example_core::SpotSettlement>,
+    settled_trade_ids_appended: Vec<String>,
+    next_order_sequence: u64,
+    events: Vec<EntityReplayableEvent>,
+) -> SpotPipelineExecution {
+    SpotPipelineExecution {
+        pipeline_output: ExecuteImmediateSpotOrderPipelineOutput {
+            place_output,
+            match_output: Some(match_output),
+        },
+        balances_after,
+        orders_after: collect_orders_after(taker_order_after, maker_orders_after),
+        trades,
+        settlements,
+        settled_trade_ids_appended,
+        next_order_sequence,
+        events: normalize_local_events(events),
+    }
+}
+
 fn collect_orders_after(
     taker_order_after: SpotOrder,
     maker_orders_after: Vec<SpotOrder>,
@@ -633,10 +697,57 @@ fn collect_orders_after(
     orders
 }
 
-fn apply_spot_execution(
-    spot_state: &mut SpotState,
-    result: &SpotCommandResult,
-) {
+fn release_cancelled_order_balance(
+    state: &CancelSpotOrderState,
+    order_after: &SpotOrder,
+) -> Result<Balance, BuildBlockError> {
+    if order_after.quote_to_release_on_cancel() > 0 {
+        return release_balance(
+            state.quote_balance.clone(),
+            order_after.quote_to_release_on_cancel(),
+            "spot quote release overflow",
+            "spot quote balance version overflow",
+        );
+    }
+
+    release_balance(
+        state.base_balance.clone(),
+        order_after.base_to_release_on_cancel(),
+        "spot base release overflow",
+        "spot base balance version overflow",
+    )
+}
+
+fn release_balance(
+    mut balance: Balance,
+    release_amount: u64,
+    release_error: &'static str,
+    version_error: &'static str,
+) -> Result<Balance, BuildBlockError> {
+    let (next_available, next_frozen) = balance
+        .release_after(release_amount)
+        .ok_or_else(|| BuildBlockError::SpotExecution(release_error.to_string()))?;
+    let next_version = balance
+        .version
+        .checked_add(1)
+        .ok_or_else(|| BuildBlockError::SpotExecution(version_error.to_string()))?;
+    balance.apply_after(next_available, next_frozen, next_version);
+    Ok(balance)
+}
+
+fn apply_command_result(exchange_state: &mut ExchangeState, result: &CommandExecutionResult) {
+    match &result.result {
+        ProductCommandResult::Spot(result) => {
+            apply_spot_execution(&mut exchange_state.spot, result)
+        }
+        ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(result)) => {
+            apply_treasury_execution(&mut exchange_state.treasury, result)
+        }
+        ProductCommandResult::Perp(_) => {}
+    }
+}
+
+fn apply_spot_execution(spot_state: &mut SpotState, result: &SpotCommandResult) {
     match result {
         SpotCommandResult::ExecuteImmediateOrderPipeline(result) => {
             let account_id = result.pipeline_output.place_output.order.account_id.as_str();
@@ -714,7 +825,7 @@ fn rebase_command_result_events(result: &mut CommandExecutionResult, base_sequen
     }
 }
 
-fn canonicalize_local_events(events: Vec<EntityReplayableEvent>) -> Vec<EntityReplayableEvent> {
+fn normalize_local_events(events: Vec<EntityReplayableEvent>) -> Vec<EntityReplayableEvent> {
     events
         .into_iter()
         .enumerate()

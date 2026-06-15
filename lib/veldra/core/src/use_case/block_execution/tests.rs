@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use cmd_handler::command_use_case_def2::CommandUseCase3;
 use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce, SpotOrder,
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
+    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
+    MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
+    SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce,
 };
 
 use super::*;
@@ -155,10 +156,7 @@ fn state_with_open_buy_order() -> BuildBlockFromCommandsState {
         AccountAssetKey::new("trader-1", "USDT"),
         Balance::new("trader-1".to_string(), "USDT".to_string(), 9_800, 200, 3),
     );
-    state.exchange_state
-        .spot
-        .orders
-        .insert("order-42".to_string(), open_buy_order());
+    state.exchange_state.spot.orders.insert("order-42".to_string(), open_buy_order());
     state.commands = vec![cancel_envelope()];
     state
 }
@@ -169,10 +167,7 @@ fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
         AccountAssetKey::new("trader-1", "BTC"),
         Balance::new("trader-1".to_string(), "BTC".to_string(), 5, 2, 2),
     );
-    state.exchange_state
-        .spot
-        .orders
-        .insert("order-42".to_string(), open_sell_order());
+    state.exchange_state.spot.orders.insert("order-42".to_string(), open_sell_order());
     state.commands = vec![cancel_envelope()];
     state
 }
@@ -322,8 +317,71 @@ fn spot_cancel_missing_order_returns_spot_execution_error() {
         state,
     );
 
-    assert_eq!(
-        result,
-        Err(BuildBlockError::SpotExecution("open order was not found".to_string()))
+    assert_eq!(result, Err(BuildBlockError::SpotExecution("open order was not found".to_string())));
+}
+
+#[test]
+fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
+    let mut state = sample_state();
+    state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
     );
+    state.commands = vec![treasury_envelope(), sample_envelope()];
+
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    )?;
+
+    assert_eq!(result.output.command_results.len(), 2);
+    assert_eq!(result.events.len(), 3);
+
+    let treasury_usdt = result
+        .output
+        .exchange_state
+        .treasury
+        .balances
+        .get(&AccountAssetKey::new("trader-1", "USDT"))
+        .unwrap();
+    assert_eq!(
+        (treasury_usdt.available, treasury_usdt.frozen, treasury_usdt.version),
+        (1_500, 0, 2)
+    );
+
+    let spot_usdt = result
+        .output
+        .exchange_state
+        .spot
+        .balances
+        .get(&AccountAssetKey::new("trader-1", "USDT"))
+        .unwrap();
+    assert_eq!((spot_usdt.available, spot_usdt.frozen), (9_800, 200));
+
+    let sequences = result.events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    assert_eq!(sequences, vec![0, 1, 2]);
+
+    Ok(())
+}
+
+#[test]
+fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlockError> {
+    let mut state = sample_state();
+    state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+    );
+    state.commands = vec![sample_envelope(), treasury_envelope()];
+
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    )?;
+
+    let sequences = result.events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    assert_eq!(sequences, vec![0, 1, 2]);
+
+    Ok(())
 }
