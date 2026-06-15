@@ -1,4 +1,5 @@
 mod build_block_from_pending_requests;
+mod canonical_batch;
 mod definitions;
 
 pub mod handler;

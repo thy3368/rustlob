@@ -8,11 +8,13 @@ use example_core::{
     SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
 };
 
-use crate::use_case::BuildBlockError;
-use crate::use_case::block_execution::handler::block_command_handler::{BlockCommandHandler, normalize_local_events, rebase_events};
 use crate::entity::{
     AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
     ProductCommandResult, SpotCommandResult, SpotPipelineExecution, SpotState,
+};
+use crate::use_case::BuildBlockError;
+use crate::use_case::block_execution::handler::block_command_handler::{
+    BlockCommandHandler, normalize_local_events, rebase_events,
 };
 
 pub(in crate::use_case::block_execution) static EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER:

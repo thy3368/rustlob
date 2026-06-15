@@ -33,6 +33,22 @@ pub enum BuildBlockError {
     BlockHeightMustBePositive,
     #[error("command batch is empty")]
     EmptyCommands,
+    #[error("duplicate command id '{command_id}' in batch")]
+    DuplicateCommandId { command_id: String },
+    #[error("duplicate nonce {nonce} for account '{account_id}' in batch")]
+    DuplicateAccountNonce { account_id: String, nonce: u64 },
+    #[error("command '{command_id}' has zero timestamp")]
+    ZeroCommandTimestamp { command_id: String },
+    #[error(
+        "command '{command_id}' envelope account '{envelope_account_id}' does not match command party '{command_party_id}'"
+    )]
+    EnvelopeAccountMismatch {
+        command_id: String,
+        envelope_account_id: String,
+        command_party_id: String,
+    },
+    #[error("command batch is not in canonical order")]
+    NonCanonicalCommandOrder,
     #[error("block height {actual} is not continuous after parent height {parent_height}")]
     NonContinuousBlockHeight { parent_height: u64, actual: u64 },
     #[error("missing spot market rules for '{symbol}'")]

@@ -9,6 +9,10 @@ use example_core::{
     SpotOrderTimeInForce, WithdrawQuoteCmd,
 };
 
+use crate::entity::stable_hash_hex;
+use crate::use_case::block_execution::canonical_batch::{
+    canonical_sort_commands, validate_and_clone_canonical_commands,
+};
 use crate::use_case::block_execution::handler::block_command_handler::{
     BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
 };
@@ -28,24 +32,31 @@ fn sample_command() -> BuildBlockFromCommandsCommand {
 }
 
 fn sample_envelope() -> CommandEnvelope<ProductCommand> {
+    sample_spot_envelope_with("cmd-1", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc)
+}
+
+fn sample_spot_envelope_with(
+    command_id: &str,
+    account_id: &str,
+    nonce: u64,
+    timestamp_ns: u64,
+    time_in_force: PlaceOrderTimeInForce,
+) -> CommandEnvelope<ProductCommand> {
     CommandEnvelope {
-        command_id: "cmd-1".to_string(),
-        account_id: "trader-1".to_string(),
-        nonce: 1,
-        timestamp_ns: 1_000,
+        command_id: command_id.to_string(),
+        account_id: account_id.to_string(),
+        nonce,
+        timestamp_ns,
         command: ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(
             ExecuteImmediateSpotOrderPipelineCmd {
                 place: PlaceImmediateOrderCmd {
-                    party_id: "trader-1".to_string(),
+                    party_id: account_id.to_string(),
                     asset: 10_001,
                     symbol: "BTCUSDT".to_string(),
                     is_buy: true,
                     size: 2,
                     reduce_only: false,
-                    execution: PlaceImmediateOrderExecution::Limit {
-                        price: 100,
-                        time_in_force: PlaceOrderTimeInForce::Gtc,
-                    },
+                    execution: PlaceImmediateOrderExecution::Limit { price: 100, time_in_force },
                     cloid: Some("cl-1".to_string()),
                 },
                 match_id: "match-1".to_string(),
@@ -99,26 +110,45 @@ fn sample_state() -> BuildBlockFromCommandsState {
 }
 
 fn treasury_envelope() -> CommandEnvelope<ProductCommand> {
+    treasury_envelope_with("cmd-2", "trader-1", 2, 1_001, 500)
+}
+
+fn treasury_envelope_with(
+    command_id: &str,
+    account_id: &str,
+    nonce: u64,
+    timestamp_ns: u64,
+    amount: u64,
+) -> CommandEnvelope<ProductCommand> {
     CommandEnvelope {
-        command_id: "cmd-2".to_string(),
-        account_id: "trader-1".to_string(),
-        nonce: 2,
-        timestamp_ns: 1_001,
+        command_id: command_id.to_string(),
+        account_id: account_id.to_string(),
+        nonce,
+        timestamp_ns,
         command: ProductCommand::Treasury(TreasuryCommand::DepositQuote(DepositQuoteCmd {
-            party_id: "trader-1".to_string(),
-            amount: 500,
+            party_id: account_id.to_string(),
+            amount,
         })),
     }
 }
 
 fn cancel_envelope() -> CommandEnvelope<ProductCommand> {
+    cancel_envelope_with("cmd-3", "trader-1", 3, 1_002)
+}
+
+fn cancel_envelope_with(
+    command_id: &str,
+    account_id: &str,
+    nonce: u64,
+    timestamp_ns: u64,
+) -> CommandEnvelope<ProductCommand> {
     CommandEnvelope {
-        command_id: "cmd-3".to_string(),
-        account_id: "trader-1".to_string(),
-        nonce: 3,
-        timestamp_ns: 1_002,
+        command_id: command_id.to_string(),
+        account_id: account_id.to_string(),
+        nonce,
+        timestamp_ns,
         command: ProductCommand::Spot(SpotCommand::CancelOrder(CancelSpotOrderCmd {
-            party_id: "trader-1".to_string(),
+            party_id: account_id.to_string(),
             asset: 10_001,
             order_id: 42,
         })),
@@ -349,7 +379,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         AccountAssetKey::new("trader-1", "USDT"),
         Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
     );
-    state.commands = vec![treasury_envelope(), sample_envelope()];
+    state.commands = vec![sample_envelope(), treasury_envelope()];
 
     let result = CommandUseCase3::compute_output_and_events(
         &BuildBlockFromCommandsUseCase,
@@ -555,6 +585,177 @@ fn deposit_and_withdraw_handlers_set_treasury_command_kind() -> Result<(), Build
         withdraw_result.result,
         ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(_))
     ));
+
+    Ok(())
+}
+
+#[test]
+fn validate_rejects_duplicate_command_id_in_batch() {
+    let mut state = sample_state();
+    state.commands = vec![
+        sample_spot_envelope_with("dup-cmd", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc),
+        treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
+    ];
+
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
+
+    assert_eq!(
+        result,
+        Err(BuildBlockError::DuplicateCommandId { command_id: "dup-cmd".to_string() })
+    );
+}
+
+#[test]
+fn validate_rejects_duplicate_account_nonce_in_batch() {
+    let mut state = sample_state();
+    state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+    );
+    state.commands = vec![
+        sample_spot_envelope_with("cmd-a", "trader-1", 7, 1_000, PlaceOrderTimeInForce::Gtc),
+        treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
+    ];
+
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
+
+    assert_eq!(
+        result,
+        Err(BuildBlockError::DuplicateAccountNonce {
+            account_id: "trader-1".to_string(),
+            nonce: 7,
+        })
+    );
+}
+
+#[test]
+fn validate_rejects_zero_timestamp_command() {
+    let mut state = sample_state();
+    state.commands =
+        vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, PlaceOrderTimeInForce::Gtc)];
+
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
+
+    assert_eq!(
+        result,
+        Err(BuildBlockError::ZeroCommandTimestamp { command_id: "cmd-zero".to_string() })
+    );
+}
+
+#[test]
+fn validate_rejects_envelope_account_mismatch() {
+    let mut state = sample_state();
+    let mut mismatched = sample_envelope();
+    mismatched.account_id = "operator-1".to_string();
+    state.commands = vec![mismatched];
+
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
+
+    assert_eq!(
+        result,
+        Err(BuildBlockError::EnvelopeAccountMismatch {
+            command_id: "cmd-1".to_string(),
+            envelope_account_id: "operator-1".to_string(),
+            command_party_id: "trader-1".to_string(),
+        })
+    );
+}
+
+#[test]
+fn validate_rejects_non_canonical_command_order() {
+    let mut state = sample_state();
+    let alo =
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
+    let gtc =
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+    state.commands = vec![gtc, alo];
+
+    let result = CommandUseCase3::validate_against_state(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
+
+    assert_eq!(result, Err(BuildBlockError::NonCanonicalCommandOrder));
+}
+
+#[test]
+fn canonical_sort_prioritizes_alo_before_other_commands() {
+    let gtc =
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+    let alo =
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
+    let cancel = cancel_envelope_with("cmd-cancel", "trader-1", 3, 500);
+
+    let sorted = canonical_sort_commands(&[gtc, cancel, alo]);
+    let sorted_ids = sorted.iter().map(|command| command.command_id.as_str()).collect::<Vec<_>>();
+
+    assert_eq!(sorted_ids, vec!["cmd-alo", "cmd-cancel", "cmd-gtc"]);
+}
+
+#[test]
+fn compute_output_rejects_non_canonical_batch() {
+    let mut state = sample_state();
+    let alo =
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
+    let gtc =
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+    state.commands = vec![gtc, alo];
+
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    );
+
+    assert_eq!(result, Err(BuildBlockError::NonCanonicalCommandOrder));
+}
+
+#[test]
+fn compute_output_uses_canonical_commands_for_block_root() -> Result<(), BuildBlockError> {
+    let mut state = sample_state();
+    state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+    );
+    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 1, 10, PlaceOrderTimeInForce::Alo);
+    let treasury = treasury_envelope_with("cmd-treasury", "trader-1", 2, 30, 500);
+    state.commands = vec![alo.clone(), treasury.clone()];
+
+    let canonical = validate_and_clone_canonical_commands(&state.commands)?;
+    let expected_root =
+        stable_hash_hex(&canonical.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>());
+
+    let result = CommandUseCase3::compute_output_and_events(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        state,
+    )?;
+
+    let result_ids = result
+        .output
+        .command_results
+        .iter()
+        .map(|command| command.command_id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(result_ids, vec!["cmd-alo", "cmd-treasury"]);
+    assert_eq!(result.output.new_block.commands_root, expected_root);
 
     Ok(())
 }

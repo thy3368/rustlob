@@ -1,13 +1,14 @@
-use crate::use_case::BuildBlockError;
 use crate::entity::{CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand};
+use crate::use_case::BuildBlockError;
 
-pub(in crate::use_case::block_execution) static PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER: PerpUnsupportedBlockCommandHandler =
-    PerpUnsupportedBlockCommandHandler;
+pub(in crate::use_case::block_execution) static PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER:
+    PerpUnsupportedBlockCommandHandler = PerpUnsupportedBlockCommandHandler;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::use_case::block_execution) struct PerpUnsupportedBlockCommandHandler;
 
-pub(in crate::use_case::block_execution) fn validate_unsupported_perp() -> Result<(), BuildBlockError> {
+pub(in crate::use_case::block_execution) fn validate_unsupported_perp()
+-> Result<(), BuildBlockError> {
     Err(BuildBlockError::UnsupportedPerpCommand)
 }
 

@@ -1,12 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase3, UseCaseOutput};
 
-use crate::use_case::block_execution::handler::block_command_handler::{
-    BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
-};
-use crate::use_case::block_execution::handler::perp_unsupported_block_command_handler::{
-    execute_unsupported_perp, validate_unsupported_perp,
-};
 use super::{
     BuildBlockError, BuildBlockFromCommandsCommand, BuildBlockFromCommandsOutput,
     BuildBlockFromCommandsState,
@@ -14,6 +8,13 @@ use super::{
 use crate::entity::{
     CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand, ProductCommandResult,
     SpotCommandResult, TreasuryCommandResult, build_new_block,
+};
+use crate::use_case::block_execution::canonical_batch::validate_and_clone_canonical_commands;
+use crate::use_case::block_execution::handler::block_command_handler::{
+    BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
+};
+use crate::use_case::block_execution::handler::perp_unsupported_block_command_handler::{
+    execute_unsupported_perp, validate_unsupported_perp,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -52,7 +53,8 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
                 actual: cmd.block_height,
             });
         }
-        validate_batch_commands(&state.commands, &state.exchange_state)
+        let commands = validate_and_clone_canonical_commands(&state.commands)?;
+        validate_batch_commands(&commands, &state.exchange_state)
     }
 
     fn compute_output_and_events(
@@ -62,6 +64,7 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let BuildBlockFromCommandsState { parent_block_hash, mut exchange_state, commands, .. } =
             state;
+        let commands = validate_and_clone_canonical_commands(&commands)?;
         let (command_results, events) = execute_batch_commands(&commands, &mut exchange_state)?;
         let output = build_block_output(
             cmd.block_height,

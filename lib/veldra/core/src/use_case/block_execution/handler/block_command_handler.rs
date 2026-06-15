@@ -44,21 +44,10 @@ pub(in crate::use_case::block_execution) enum ResolvedBlockCommandHandler<'a> {
         &'static ExecuteImmediateOrderPipelineBlockCommandHandler,
         &'a ExecuteImmediateSpotOrderPipelineCmd,
     ),
-    CancelOrder(
-        &'static CancelOrderBlockCommandHandler,
-        &'a CancelSpotOrderCmd,
-    ),
-    DepositQuote(
-        &'static DepositQuoteBlockCommandHandler,
-        &'a DepositQuoteCmd,
-    ),
-    WithdrawQuote(
-        &'static WithdrawQuoteBlockCommandHandler,
-        &'a WithdrawQuoteCmd,
-    ),
-    PerpUnsupported(
-        &'static PerpUnsupportedBlockCommandHandler,
-    ),
+    CancelOrder(&'static CancelOrderBlockCommandHandler, &'a CancelSpotOrderCmd),
+    DepositQuote(&'static DepositQuoteBlockCommandHandler, &'a DepositQuoteCmd),
+    WithdrawQuote(&'static WithdrawQuoteBlockCommandHandler, &'a WithdrawQuoteCmd),
+    PerpUnsupported(&'static PerpUnsupportedBlockCommandHandler),
 }
 
 pub(in crate::use_case::block_execution) fn resolve_block_command_handler(

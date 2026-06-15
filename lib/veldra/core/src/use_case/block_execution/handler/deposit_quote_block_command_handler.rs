@@ -2,18 +2,18 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCase2;
 use example_core::{DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 
+use crate::entity::{
+    CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand, ProductCommandResult,
+    TreasuryBalanceUpdate, TreasuryCommandResult, TreasuryState,
+};
 use crate::use_case::BuildBlockError;
 use crate::use_case::block_execution::handler::block_command_handler::{
     BlockCommandHandler, apply_treasury_execution, normalize_local_events, rebase_events,
     treasury_quote_balance,
 };
-use crate::entity::{
-    CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand, ProductCommandResult,
-    TreasuryBalanceUpdate, TreasuryCommandResult, TreasuryState,
-};
 
-pub(in crate::use_case::block_execution) static DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER: DepositQuoteBlockCommandHandler =
-    DepositQuoteBlockCommandHandler;
+pub(in crate::use_case::block_execution) static DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER:
+    DepositQuoteBlockCommandHandler = DepositQuoteBlockCommandHandler;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::use_case::block_execution) struct DepositQuoteBlockCommandHandler;

@@ -1,19 +1,18 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase2;
-use example_core::{
-    Balance, CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase, SpotOrder,
-    SpotOrderStatus, SpotOrderStatusReason,
-};
+use cmd_handler::command_use_case_def2::CommandUseCase3;
+use example_core::{CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase};
 
-use crate::use_case::BuildBlockError;
-use crate::use_case::block_execution::handler::block_command_handler::{BlockCommandHandler, normalize_local_events, rebase_events};
 use crate::entity::{
     AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
     ProductCommandResult, SpotCancelExecution, SpotCommandResult, SpotState,
 };
+use crate::use_case::BuildBlockError;
+use crate::use_case::block_execution::handler::block_command_handler::{
+    BlockCommandHandler, normalize_local_events, rebase_events,
+};
 
-pub(in crate::use_case::block_execution) static CANCEL_ORDER_BLOCK_COMMAND_HANDLER: CancelOrderBlockCommandHandler =
-    CancelOrderBlockCommandHandler;
+pub(in crate::use_case::block_execution) static CANCEL_ORDER_BLOCK_COMMAND_HANDLER:
+    CancelOrderBlockCommandHandler = CancelOrderBlockCommandHandler;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::use_case::block_execution) struct CancelOrderBlockCommandHandler;
@@ -116,68 +115,18 @@ fn execute_cancel_spot_order(
     command: &CancelSpotOrderCmd,
     spot_state: &SpotState,
 ) -> Result<SpotCancelExecution, BuildBlockError> {
-    CommandUseCase2::pre_check_command(&CancelSpotOrderUseCase, command)
+    CommandUseCase3::pre_check_command(&CancelSpotOrderUseCase, command)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let state = build_cancel_state(command, spot_state)?;
-    CommandUseCase2::validate_against_state(&CancelSpotOrderUseCase, command, &state)
+    CommandUseCase3::validate_against_state(&CancelSpotOrderUseCase, command, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let events =
-        CommandUseCase2::compute_replayable_events(&CancelSpotOrderUseCase, command, state.clone())
+    let result =
+        CommandUseCase3::compute_output_and_events(&CancelSpotOrderUseCase, command, state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
-    let mut order_after = state
-        .open_order
-        .clone()
-        .ok_or_else(|| BuildBlockError::SpotExecution("open order was not found".to_string()))?;
-    order_after.status = SpotOrderStatus::Canceled;
-    order_after.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-    order_after.version = order_after
-        .version
-        .checked_add(1)
-        .ok_or_else(|| BuildBlockError::SpotExecution("spot order version overflow".to_string()))?;
-    let balance_after = release_cancelled_order_balance(&state, &order_after)?;
-
     Ok(SpotCancelExecution {
-        order_after,
-        balances_after: vec![balance_after],
-        events: normalize_local_events(events),
+        order_after: result.output.order_after,
+        balances_after: result.output.balances_after,
+        events: normalize_local_events(result.events),
     })
-}
-
-fn release_cancelled_order_balance(
-    state: &CancelSpotOrderState,
-    order_after: &SpotOrder,
-) -> Result<Balance, BuildBlockError> {
-    if order_after.quote_to_release_on_cancel() > 0 {
-        return release_balance(
-            state.quote_balance.clone(),
-            order_after.quote_to_release_on_cancel(),
-            "spot quote release overflow",
-            "spot quote balance version overflow",
-        );
-    }
-
-    release_balance(
-        state.base_balance.clone(),
-        order_after.base_to_release_on_cancel(),
-        "spot base release overflow",
-        "spot base balance version overflow",
-    )
-}
-
-fn release_balance(
-    mut balance: Balance,
-    release_amount: u64,
-    release_error: &'static str,
-    version_error: &'static str,
-) -> Result<Balance, BuildBlockError> {
-    let (next_available, next_frozen) = balance
-        .release_after(release_amount)
-        .ok_or_else(|| BuildBlockError::SpotExecution(release_error.to_string()))?;
-    let next_version = balance
-        .version
-        .checked_add(1)
-        .ok_or_else(|| BuildBlockError::SpotExecution(version_error.to_string()))?;
-    balance.apply_after(next_available, next_frozen, next_version);
-    Ok(balance)
 }
