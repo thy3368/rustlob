@@ -40,7 +40,8 @@ pub use spot::place_order::{
     PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };
 pub use spot::{
-    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
+    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput,
+    CancelSpotOrderExecutionUseCase, CancelSpotOrderState, CancelSpotOrderUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
     ExecuteImmediateSpotOrderPipelineUseCase, MatchSpotOrderCmd, MatchSpotOrderError,

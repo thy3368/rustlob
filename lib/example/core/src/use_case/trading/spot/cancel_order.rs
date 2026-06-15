@@ -1,5 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -75,6 +77,19 @@ pub enum CancelSpotOrderError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CancelSpotOrderUseCase;
 
+/// 本次撤单的 typed output。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderExecutionOutput {
+    /// 撤单后的订单快照。
+    pub order_after: SpotOrder,
+    /// 本次撤单实际受影响的余额 after 快照。
+    pub balances_after: Vec<Balance>,
+}
+
+/// Use case that derives both cancel output and replayable events in one path.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CancelSpotOrderExecutionUseCase;
+
 impl CommandUseCase2 for CancelSpotOrderUseCase {
     type Command = CancelSpotOrderCmd;
     type GivenState = CancelSpotOrderState;
@@ -129,48 +144,84 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
         _cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        let mut order = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
-        let release_base = order.base_to_release_on_cancel();
-        let release_quote = order.quote_to_release_on_cancel();
-
-        let next_order_version =
-            order.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-        let order_canceled = order
-            .track_update_event(|order| {
-                order.status = SpotOrderStatus::Canceled;
-                order.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-                order.version = next_order_version;
-            })
-            .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
-
-        let balance_released = if release_quote > 0 {
-            let mut balance = state.quote_balance;
-            let (next_available, next_frozen) = balance
-                .release_after(release_quote)
-                .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-            let next_version =
-                balance.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-            balance
-                .track_update_event(|balance| {
-                    balance.apply_after(next_available, next_frozen, next_version);
-                })
-                .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
-        } else {
-            let mut balance = state.base_balance;
-            let (next_available, next_frozen) = balance
-                .release_after(release_base)
-                .ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-            let next_version =
-                balance.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-            balance
-                .track_update_event(|balance| {
-                    balance.apply_after(next_available, next_frozen, next_version);
-                })
-                .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
-        };
-
-        Ok(vec![order_canceled, balance_released])
+        Ok(derive_cancel_output_and_events(state)?.events)
     }
+}
+
+impl CommandUseCase3 for CancelSpotOrderExecutionUseCase {
+    type Command = CancelSpotOrderCmd;
+    type GivenState = CancelSpotOrderState;
+    type Error = CancelSpotOrderError;
+    type Output = CancelSpotOrderExecutionOutput;
+
+    fn role(&self) -> &'static str {
+        CancelSpotOrderUseCase.role()
+    }
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        CancelSpotOrderUseCase.pre_check_command(cmd)
+    }
+
+    fn validate_against_state(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        CancelSpotOrderUseCase.validate_against_state(cmd, state)
+    }
+
+    fn compute_output_and_events(
+        &self,
+        _cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        derive_cancel_output_and_events(state)
+    }
+}
+
+fn derive_cancel_output_and_events(
+    state: CancelSpotOrderState,
+) -> Result<UseCaseOutput<CancelSpotOrderExecutionOutput>, CancelSpotOrderError> {
+    let mut order_after = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
+    let release_base = order_after.base_to_release_on_cancel();
+    let release_quote = order_after.quote_to_release_on_cancel();
+
+    let next_order_version =
+        order_after.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+    let order_canceled = order_after
+        .track_update_event(|order| {
+            order.status = SpotOrderStatus::Canceled;
+            order.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
+            order.version = next_order_version;
+        })
+        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+
+    let (balance_before, balance_after) = if release_quote > 0 {
+        release_balance(state.quote_balance, release_quote)?
+    } else {
+        release_balance(state.base_balance, release_base)?
+    };
+    let balance_released = balance_after
+        .track_update_event_from(&balance_before)
+        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+
+    Ok(UseCaseOutput {
+        output: CancelSpotOrderExecutionOutput { order_after, balances_after: vec![balance_after] },
+        events: vec![order_canceled, balance_released],
+    })
+}
+
+fn release_balance(
+    mut balance: Balance,
+    release_amount: u64,
+) -> Result<(Balance, Balance), CancelSpotOrderError> {
+    let before = balance.clone();
+    let (next_available, next_frozen) =
+        balance.release_after(release_amount).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+    let next_version =
+        balance.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
+    balance.apply_after(next_available, next_frozen, next_version);
+    Ok((before, balance))
 }
 
 #[cfg(test)]
@@ -184,6 +235,9 @@ mod given_state_scenarios;
 
 #[cfg(test)]
 mod compute_replayable_events_happy_path;
+
+#[cfg(test)]
+mod compute_output_and_events_happy_path;
 
 #[cfg(test)]
 mod tests {
@@ -245,6 +299,7 @@ mod tests {
     #[test]
     fn role_is_trader() {
         assert_eq!(CancelSpotOrderUseCase.role(), "Trader");
+        assert_eq!(CancelSpotOrderExecutionUseCase.role(), "Trader");
     }
 
     #[test]
@@ -287,6 +342,10 @@ mod tests {
 
         assert_eq!(
             CancelSpotOrderUseCase.validate_against_state(&cmd, &state),
+            Err(CancelSpotOrderError::OrderOwnerMismatch)
+        );
+        assert_eq!(
+            CancelSpotOrderExecutionUseCase.validate_against_state(&cmd, &state),
             Err(CancelSpotOrderError::OrderOwnerMismatch)
         );
     }

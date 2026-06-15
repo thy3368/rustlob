@@ -2,8 +2,8 @@ use cmd_handler::EntityReplayableEvent;
 
 use super::*;
 use crate::entity::{
-    Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
-    SpotOrderStatusReason, SpotOrderTimeInForce,
+    Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce,
 };
 
 // 目的:

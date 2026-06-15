@@ -8,7 +8,8 @@ pub use funding::{
 };
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
 pub use trading::{
-    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
+    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput,
+    CancelSpotOrderExecutionUseCase, CancelSpotOrderState, CancelSpotOrderUseCase,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
     ExecuteImmediateSpotOrderPipelineUseCase, HyperliquidPerpLiquidatablePositionAtPriceSnapshot,

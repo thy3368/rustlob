@@ -5,7 +5,8 @@ pub mod place_order;
 mod settle_trade;
 
 pub use cancel_order::{
-    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState, CancelSpotOrderUseCase,
+    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput,
+    CancelSpotOrderExecutionUseCase, CancelSpotOrderState, CancelSpotOrderUseCase,
 };
 pub use execute_immediate_order_pipeline::{
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
