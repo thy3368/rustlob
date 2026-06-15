@@ -1,17 +1,26 @@
 use std::collections::BTreeMap;
 
+use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCase3;
 use example_core::{
     Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
     SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce,
+    SpotOrderTimeInForce, WithdrawQuoteCmd,
 };
 
+use crate::use_case::block_execution::handler::block_command_handler::{
+    BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
+};
+use crate::use_case::block_execution::handler::cancel_order_block_command_handler::CANCEL_ORDER_BLOCK_COMMAND_HANDLER;
+use crate::use_case::block_execution::handler::deposit_quote_block_command_handler::DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER;
+use crate::use_case::block_execution::handler::execute_immediate_order_pipeline_block_command_handler::EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER;
+use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER;
 use super::*;
 use crate::entity::{
-    AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotAssetPair, SpotCommand,
-    TreasuryCommand,
+    AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand,
+    ProductCommandResult, SpotAssetPair, SpotCommand, SpotCommandResult, TreasuryCommand,
+    TreasuryCommandResult,
 };
 
 fn sample_command() -> BuildBlockFromCommandsCommand {
@@ -112,6 +121,19 @@ fn cancel_envelope() -> CommandEnvelope<ProductCommand> {
             party_id: "trader-1".to_string(),
             asset: 10_001,
             order_id: 42,
+        })),
+    }
+}
+
+fn withdraw_envelope() -> CommandEnvelope<ProductCommand> {
+    CommandEnvelope {
+        command_id: "cmd-4".to_string(),
+        account_id: "trader-1".to_string(),
+        nonce: 4,
+        timestamp_ns: 1_003,
+        command: ProductCommand::Treasury(TreasuryCommand::WithdrawQuote(WithdrawQuoteCmd {
+            party_id: "trader-1".to_string(),
+            amount: 250,
         })),
     }
 }
@@ -382,6 +404,157 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
 
     let sequences = result.events.iter().map(|event| event.sequence).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2]);
+
+    Ok(())
+}
+
+fn stub_event(sequence: u64) -> EntityReplayableEvent {
+    EntityReplayableEvent::new(123, sequence, 0, 1, 1, 1, 1)
+}
+
+#[test]
+fn resolve_block_command_handler_maps_all_five_command_families() {
+    assert!(matches!(
+        resolve_block_command_handler(&sample_envelope().command),
+        ResolvedBlockCommandHandler::ExecuteImmediateOrderPipeline(_, _)
+    ));
+    assert!(matches!(
+        resolve_block_command_handler(&cancel_envelope().command),
+        ResolvedBlockCommandHandler::CancelOrder(_, _)
+    ));
+    assert!(matches!(
+        resolve_block_command_handler(&treasury_envelope().command),
+        ResolvedBlockCommandHandler::DepositQuote(_, _)
+    ));
+    assert!(matches!(
+        resolve_block_command_handler(&withdraw_envelope().command),
+        ResolvedBlockCommandHandler::WithdrawQuote(_, _)
+    ));
+    assert!(matches!(
+        resolve_block_command_handler(&ProductCommand::Perp(PerpCommand::Unsupported)),
+        ResolvedBlockCommandHandler::PerpUnsupported(_)
+    ));
+}
+
+#[test]
+fn execute_immediate_order_pipeline_handler_rebases_events() -> Result<(), BuildBlockError> {
+    let state = sample_state();
+    let envelope = sample_envelope();
+    let ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command)) =
+        &envelope.command
+    else {
+        unreachable!();
+    };
+
+    let mut result = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.execute(
+        &envelope,
+        command,
+        &state.exchange_state,
+    )?;
+    let ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(execution)) =
+        &mut result.result
+    else {
+        unreachable!();
+    };
+
+    execution.events = vec![stub_event(0), stub_event(1)];
+    EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.rebase_events(execution, 9);
+
+    let sequences = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER
+        .events(execution)
+        .iter()
+        .map(|event| event.sequence)
+        .collect::<Vec<_>>();
+    assert_eq!(sequences, vec![9, 10]);
+    assert!(
+        EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER
+            .events(execution)
+            .iter()
+            .all(|event| event.timestamp == 0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn cancel_order_handler_rebases_events() -> Result<(), BuildBlockError> {
+    let state = state_with_open_buy_order();
+    let envelope = cancel_envelope();
+    let ProductCommand::Spot(SpotCommand::CancelOrder(command)) = &envelope.command else {
+        unreachable!();
+    };
+
+    let mut result =
+        CANCEL_ORDER_BLOCK_COMMAND_HANDLER.execute(&envelope, command, &state.exchange_state)?;
+    let ProductCommandResult::Spot(SpotCommandResult::CancelOrder(execution)) = &mut result.result
+    else {
+        unreachable!();
+    };
+
+    execution.events = vec![stub_event(0), stub_event(1)];
+    CANCEL_ORDER_BLOCK_COMMAND_HANDLER.rebase_events(execution, 4);
+
+    let sequences = CANCEL_ORDER_BLOCK_COMMAND_HANDLER
+        .events(execution)
+        .iter()
+        .map(|event| event.sequence)
+        .collect::<Vec<_>>();
+    assert_eq!(sequences, vec![4, 5]);
+    assert!(
+        CANCEL_ORDER_BLOCK_COMMAND_HANDLER
+            .events(execution)
+            .iter()
+            .all(|event| event.timestamp == 0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn deposit_and_withdraw_handlers_set_treasury_command_kind() -> Result<(), BuildBlockError> {
+    let mut deposit_state = sample_state();
+    deposit_state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+    );
+    let deposit_envelope = treasury_envelope();
+    let ProductCommand::Treasury(TreasuryCommand::DepositQuote(deposit_command)) =
+        &deposit_envelope.command
+    else {
+        unreachable!();
+    };
+    let deposit_result = DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER.execute(
+        &deposit_envelope,
+        deposit_command,
+        &deposit_state.exchange_state,
+    )?;
+    assert_eq!(deposit_result.command_kind, "treasury");
+    assert!(matches!(
+        deposit_result.result,
+        ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(_))
+    ));
+
+    let mut withdraw_state = sample_state();
+    withdraw_state.exchange_state.treasury.balances.insert(
+        AccountAssetKey::new("trader-1", "USDT"),
+        Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+    );
+    let withdraw_envelope = withdraw_envelope();
+    let ProductCommand::Treasury(TreasuryCommand::WithdrawQuote(withdraw_command)) =
+        &withdraw_envelope.command
+    else {
+        unreachable!();
+    };
+    let withdraw_result = WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER.execute(
+        &withdraw_envelope,
+        withdraw_command,
+        &withdraw_state.exchange_state,
+    )?;
+    assert_eq!(withdraw_result.command_kind, "treasury");
+    assert!(matches!(
+        withdraw_result.result,
+        ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(_))
+    ));
 
     Ok(())
 }
