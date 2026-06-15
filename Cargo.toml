@@ -12,11 +12,14 @@ members = [
     "lib/common/db_repo",
     "lib/common/decimal",
     "lib/common/diff",
+    "lib/common/entity",
     "lib/common/entity_derive",
     "lib/common/fixed_order_cmd",
     "lib/common/fixed_point",
     "lib/common/hotstuff_rs",
     "lib/common/id_generator",
+    "lib/common/inbound_adapter_support",
+    "lib/common/inbound_adapter_support_macros",
     "lib/common/immutable_derive",
     "lib/common/lob_repo",
     "lib/common/repo_def",
@@ -27,27 +30,88 @@ members = [
     "lib/common/sequencer",
     "lib/common/single_thread_derive",
     "lib/common/vector_clock",
-    
     # lib/core
     "lib/core/exchange/prep",
-    
+    "lib/core/l1",
+    "lib/core/l1_adapter",
+    # lib/example
+    "lib/example/core",
+    "lib/example/inbound_adapter",
+    "lib/example/outbound_adapter",
     # app
-    "app/axum_server",
+    "inbound_adapter/axum_server",
     "app/client",
     "app/pingora_gateway",
-    "app/websocket_sockudo",
+    "inbound_adapter/websocket_sockudo",
     "app/xdp_libbpf",
-    
     # proc
-    "proc/operating/cex/exchange/spot",
-    "proc/operating/cex/exchange/derivatives",
-    "proc/operating/cex/exchange/wallet",
-    "proc/operating/cex/exchange/spot_market_data",
-    "proc/operating/cex/push/push",
-    
+    "operating/cex/exchange/spot",
+    "operating/cex/exchange/derivatives",
+    "operating/cex/exchange/wallet",
+    "operating/cex/exchange/spot_market_data",
+    "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "proc/operating/dex/dex", "lib/common/mdbx", "lib/common/bdd",
+    "study/hyperliquid_analyzer", "operating/dex", "lib/common/mdbx", "lib/common/bdd", "operating/l2_prod2", "lib/core/l1_e2e", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
+]
+
+# XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
+default-members = [
+    # lib/common
+    "lib/common/algo",
+    "lib/common/base_types",
+    "lib/common/cache_analyzer_derive",
+    "lib/common/cache_analyzer_types",
+    "lib/common/cmd_handler",
+    "lib/common/cqrs",
+    "lib/common/db_repo",
+    "lib/common/decimal",
+    "lib/common/diff",
+    "lib/common/entity",
+    "lib/common/entity_derive",
+    "lib/common/fixed_order_cmd",
+    "lib/common/fixed_point",
+    "lib/common/hotstuff_rs",
+    "lib/common/id_generator",
+    "lib/common/inbound_adapter_support",
+    "lib/common/inbound_adapter_support_macros",
+    "lib/common/immutable_derive",
+    "lib/common/lob_repo",
+    "lib/common/repo_def",
+    "lib/common/rust_analyzer",
+    "lib/common/rust_queue",
+    "lib/common/sbe",
+    "lib/common/sbe_derive",
+    "lib/common/sequencer",
+    "lib/common/single_thread_derive",
+    "lib/common/vector_clock",
+    # lib/core
+    "lib/core/exchange/prep",
+    "lib/core/l1",
+    "lib/core/l1_adapter",
+    # lib/example
+    "lib/example/core",
+    "lib/example/inbound_adapter",
+    "lib/example/outbound_adapter",
+    # app
+    "inbound_adapter/axum_server",
+    "app/client",
+    "app/pingora_gateway",
+    "inbound_adapter/websocket_sockudo",
+    # proc
+    "operating/cex/exchange/spot",
+    "operating/cex/exchange/derivatives",
+    "operating/cex/exchange/wallet",
+    "operating/cex/exchange/spot_market_data",
+    "operating/cex/push/push",
+    # study
+    "study/web3",
+    "study/hyperliquid_analyzer",
+    "operating/dex",
+    "lib/common/mdbx",
+    "lib/common/bdd",
+    "operating/l2_prod2",
+    "lib/core/l1_e2e",
 ]
 
 resolver = "2"
