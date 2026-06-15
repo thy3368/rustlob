@@ -5,7 +5,7 @@ use base_types::exchange::spot::spot_types::{
 };
 use base_types::{Price, Quantity};
 use cmd_handler::pipe_line_handler::CmdPipeLineHandler;
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use db_repo::adapter::v2::memdb_repo::MemdbRepo;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::adapter::local_lob_impl::LocalLob;

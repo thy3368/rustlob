@@ -1,13 +1,11 @@
+use l1_core::{PendingRequest, VmRuntimeError};
 use serde::Deserialize;
 
-use l1_core::{PendingRequest, VmRuntimeError};
-
+use super::shared::parse_request_ids;
 use crate::core::{
     ExchangeCommand, ExchangeCommandEnvelope, ProductType, SpotCommand, SpotPlaceOrderCmd,
     SpotSide, TradingCommand,
 };
-
-use super::shared::parse_request_ids;
 
 #[derive(Debug, Deserialize)]
 struct SpotPayload {
@@ -26,7 +24,8 @@ fn spot_payload(request: &PendingRequest) -> Result<Option<SpotPayload>, VmRunti
         .payload
         .as_deref()
         .map(|payload| {
-            serde_json::from_str(payload).map_err(|err| VmRuntimeError::ExecutionFailed(err.to_string()))
+            serde_json::from_str(payload)
+                .map_err(|err| VmRuntimeError::ExecutionFailed(err.to_string()))
         })
         .transpose()
 }
@@ -54,14 +53,8 @@ pub(super) fn build_spot_envelope(
                     .as_ref()
                     .and_then(|payload| payload.side.clone())
                     .unwrap_or(SpotSide::Buy),
-                price: payload
-                    .as_ref()
-                    .and_then(|payload| payload.price)
-                    .unwrap_or(100_000),
-                quantity: payload
-                    .as_ref()
-                    .and_then(|payload| payload.quantity)
-                    .unwrap_or(1),
+                price: payload.as_ref().and_then(|payload| payload.price).unwrap_or(100_000),
+                quantity: payload.as_ref().and_then(|payload| payload.quantity).unwrap_or(1),
             },
         ))),
     })

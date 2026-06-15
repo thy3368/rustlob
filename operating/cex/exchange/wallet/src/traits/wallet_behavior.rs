@@ -1,8 +1,8 @@
 // 参考 ## wallet Endpoints  /Users/hongyaotang/src/rustlob/design/other/binance_wallet_docs 定义所有 wallet 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
-use serde::{Deserialize, Serialize};
 use immutable_derive::immutable;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 // ============================================================================
 // CAPITAL ENDPOINTS - 钱包 (充提币)
@@ -15,8 +15,8 @@ use serde_json::Value;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetAllCoinsCmd {
-     metadata: CMetadata,
-     recv_window: Option<u64>,
+    metadata: CMetadata,
+    recv_window: Option<u64>,
 }
 
 /// 提币命令
@@ -26,16 +26,16 @@ pub struct GetAllCoinsCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct WithdrawCmd {
-     metadata: CMetadata,
-     coin: String,
-     address: String,
-     amount: String,
-     network: Option<String>,
-     address_tag: Option<String>,
-     withdraw_order_id: Option<String>,
-     transaction_fee_flag: Option<bool>,
-     name: Option<String>,
-     wallet_type: Option<u32>,
+    metadata: CMetadata,
+    coin: String,
+    address: String,
+    amount: String,
+    network: Option<String>,
+    address_tag: Option<String>,
+    withdraw_order_id: Option<String>,
+    transaction_fee_flag: Option<bool>,
+    name: Option<String>,
+    wallet_type: Option<u32>,
 }
 
 /// 获取提币历史命令
@@ -45,14 +45,14 @@ pub struct WithdrawCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetWithdrawHistoryCmd {
-     metadata: CMetadata,
-     coin: Option<String>,
-     status: Option<u32>,
-     start_time: Option<i64>,
-     end_time: Option<i64>,
-     offset: Option<u32>,
-     limit: Option<u32>,
-     tx_id: Option<String>,
+    metadata: CMetadata,
+    coin: Option<String>,
+    status: Option<u32>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    tx_id: Option<String>,
 }
 
 /// 获取充值历史命令
@@ -62,15 +62,15 @@ pub struct GetWithdrawHistoryCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetDepositHistoryCmd {
-     metadata: CMetadata,
-     coin: Option<String>,
-     status: Option<u32>,
-     start_time: Option<i64>,
-     end_time: Option<i64>,
-     offset: Option<u32>,
-     limit: Option<u32>,
-     tx_id: Option<String>,
-     include_source: Option<bool>,
+    metadata: CMetadata,
+    coin: Option<String>,
+    status: Option<u32>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    tx_id: Option<String>,
+    include_source: Option<bool>,
 }
 
 /// 获取充值地址命令
@@ -80,10 +80,10 @@ pub struct GetDepositHistoryCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetDepositAddressCmd {
-     metadata: CMetadata,
-     coin: String,
-     network: Option<String>,
-     amount: Option<String>,
+    metadata: CMetadata,
+    coin: String,
+    network: Option<String>,
+    amount: Option<String>,
 }
 
 // ============================================================================
@@ -97,8 +97,8 @@ pub struct GetDepositAddressCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetAssetDetailCmd {
-     metadata: CMetadata,
-     asset: Option<String>,
+    metadata: CMetadata,
+    asset: Option<String>,
 }
 
 /// 用户持仓命令
@@ -108,10 +108,9 @@ pub struct GetAssetDetailCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetUserAssetsCmd {
-     metadata: CMetadata,
-     asset: Option<String>,
-     need_btc_valuation: Option<bool>,
-
+    metadata: CMetadata,
+    asset: Option<String>,
+    need_btc_valuation: Option<bool>,
 }
 
 /// 用户万向划转命令
@@ -121,13 +120,12 @@ pub struct GetUserAssetsCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct UniversalTransferCmd {
-     metadata: CMetadata,
-     transfer_type: String,
-     asset: String,
-     amount: String,
-     from_symbol: Option<String>,
-     to_symbol: Option<String>,
-
+    metadata: CMetadata,
+    transfer_type: String,
+    asset: String,
+    amount: String,
+    from_symbol: Option<String>,
+    to_symbol: Option<String>,
 }
 
 /// 查询用户万向划转历史命令
@@ -137,15 +135,14 @@ pub struct UniversalTransferCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetUniversalTransferHistoryCmd {
-     metadata: CMetadata,
-     transfer_type: String,
-     start_time: Option<i64>,
-     end_time: Option<i64>,
-     current: Option<u32>,
-     size: Option<u32>,
-     from_symbol: Option<String>,
-     to_symbol: Option<String>,
-
+    metadata: CMetadata,
+    transfer_type: String,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    current: Option<u32>,
+    size: Option<u32>,
+    from_symbol: Option<String>,
+    to_symbol: Option<String>,
 }
 
 /// 小额资产转换命令
@@ -155,10 +152,10 @@ pub struct GetUniversalTransferHistoryCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct DustTransferCmd {
-     metadata: CMetadata,
-     asset: Vec<String>,
-     account_type: Option<String>,
-     recv_window: Option<u64>,
+    metadata: CMetadata,
+    asset: Vec<String>,
+    account_type: Option<String>,
+    recv_window: Option<u64>,
 }
 
 /// 交易手续费率查询命令
@@ -168,9 +165,8 @@ pub struct DustTransferCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetTradeFeeCmd {
-     metadata: CMetadata,
-     symbol: Option<String>,
-
+    metadata: CMetadata,
+    symbol: Option<String>,
 }
 
 /// 查询资金账户命令
@@ -180,10 +176,9 @@ pub struct GetTradeFeeCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetFundingAssetCmd {
-     metadata: CMetadata,
-     asset: Option<String>,
-     need_btc_valuation: Option<bool>,
-
+    metadata: CMetadata,
+    asset: Option<String>,
+    need_btc_valuation: Option<bool>,
 }
 
 // ============================================================================
@@ -197,8 +192,7 @@ pub struct GetFundingAssetCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetAccountInfoCmd {
-     metadata: CMetadata,
-
+    metadata: CMetadata,
 }
 
 /// 查询每日资产快照命令
@@ -208,12 +202,11 @@ pub struct GetAccountInfoCmd {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[immutable]
 pub struct GetAccountSnapshotCmd {
-     metadata: CMetadata,
-     snapshot_type: String, // "SPOT", "MARGIN", "FUTURES"
-     start_time: Option<i64>,
-     end_time: Option<i64>,
-     limit: Option<u32>,
-
+    metadata: CMetadata,
+    snapshot_type: String, // "SPOT", "MARGIN", "FUTURES"
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    limit: Option<u32>,
 }
 
 // ============================================================================

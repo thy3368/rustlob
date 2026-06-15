@@ -1,10 +1,8 @@
 use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal};
 use db_repo::{CmdRepo2, EventPublisher2};
 
+use crate::proc::usds_m_future::behavior::trade_behavior::{NewOrderCmd, UsdsMFutureTradeCmdError};
 use crate::proc::usds_m_future::handler::trade_handler::EmptyStateSet;
-use crate::proc::usds_m_future::behavior::trade_behavior::{
-    NewOrderCmd, UsdsMFutureTradeCmdError,
-};
 
 pub struct NewOrderCmdHandler<R: CmdRepo2, P: EventPublisher2> {
     pub repo: R,
@@ -21,7 +19,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for NewOrderCmdHandler<
     type Command = NewOrderCmd;
     type Reply = ();
     type GivenStateSet = ();
-    type ThenStateSet = EmptyStateSet;
+    type ThenTraceableEventSet = EmptyStateSet;
     type Error = UsdsMFutureTradeCmdError;
 
     type Repo = R;
@@ -31,11 +29,14 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for NewOrderCmdHandler<
         &self,
         _cmd: &Self::Command,
         _state_set: Self::GivenStateSet,
-    ) -> Result<Self::ThenStateSet, Self::Error> {
+    ) -> Result<Self::ThenTraceableEventSet, Self::Error> {
         todo!()
     }
 
-    fn state_changed_set_to_reply(&self, _state_changed_set: Self::ThenStateSet) -> Self::Reply {
+    fn state_changed_set_to_reply(
+        &self,
+        _state_changed_set: Self::ThenTraceableEventSet,
+    ) -> Self::Reply {
         todo!()
     }
 
@@ -61,7 +62,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for NewOrderCmdHandler<
 
     fn persist_domain_events(
         &self,
-        _domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenTraceableEventSet,
         _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         todo!()
@@ -69,7 +70,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for NewOrderCmdHandler<
 
     fn replay_domain_events_to_state(
         &self,
-        _domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenTraceableEventSet,
         _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         todo!()
@@ -77,7 +78,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for NewOrderCmdHandler<
 
     fn publish_domain_events(
         &self,
-        _domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenTraceableEventSet,
         _publisher: Self::Publisher,
     ) -> Result<(), Self::Error> {
         todo!()

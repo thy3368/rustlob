@@ -1,6 +1,6 @@
-use crate::core::{ExchangeCommandEnvelope, TreasuryCommand};
 use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
 use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, TreasuryCommand};
 
 #[derive(Debug, Default)]
 pub struct TreasuryBatchHandler;

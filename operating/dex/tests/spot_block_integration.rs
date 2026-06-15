@@ -3,9 +3,9 @@
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use cmd_handler::DomainEventSet;
-use cmd_handler::use_case_def::{CommandUseCaseExecutor, DomainEventPipeline, LoadState};
 use base_types::handler::handler_update::CmdHandlerForUpdate;
+use cmd_handler::ReplayableEventSet;
+use cmd_handler::use_case_def::{CommandUseCaseExecutor, DomainEventPipeline, LoadState};
 use l1_adapter::{InMemoryMempool, MempoolReadingLoadPort, MempoolWritingPipeline};
 use l1_core::{
     ChainState, ExecuteAndCommitBlockError, ExecuteAndCommitBlockEvents, IngressDecision,
@@ -17,11 +17,12 @@ struct SpotAdmissionLoadPort {
     capability: &'static str,
 }
 
-impl LoadState<
-    ReceiveAndAdmitTransactionsCmd,
-    ReceiveAndAdmitTransactionsStateSnapshot,
-    ReceiveAndAdmitTransactionsError,
-> for SpotAdmissionLoadPort
+impl
+    LoadState<
+        ReceiveAndAdmitTransactionsCmd,
+        ReceiveAndAdmitTransactionsStateSnapshot,
+        ReceiveAndAdmitTransactionsError,
+    > for SpotAdmissionLoadPort
 {
     fn load_state(
         &self,
@@ -37,6 +38,7 @@ impl LoadState<
                 capability: VmCapability::new(self.capability),
                 action_type: req.action_type.clone(),
                 payload_hash: req.payload_hash.clone(),
+                payload: None,
             })
             .collect();
 
@@ -82,7 +84,7 @@ impl DomainEventPipeline<ExecuteAndCommitBlockEvents, ExecuteAndCommitBlockError
         events: &ExecuteAndCommitBlockEvents,
     ) -> Result<(), ExecuteAndCommitBlockError> {
         self.persist_count.fetch_add(1, Ordering::Relaxed);
-        self.domain_event_count.store(events.domain_event_count(), Ordering::Relaxed);
+        self.domain_event_count.store(events.event_count(), Ordering::Relaxed);
         Ok(())
     }
 
@@ -118,7 +120,11 @@ mod tests {
 
     use super::*;
 
-    fn signed_request(request_id: &str, account: &str, payload_hash: &str) -> SignedTransactionRequest {
+    fn signed_request(
+        request_id: &str,
+        account: &str,
+        payload_hash: &str,
+    ) -> SignedTransactionRequest {
         SignedTransactionRequest {
             request_id: request_id.to_string(),
             account: account.to_string(),
@@ -143,15 +149,15 @@ mod tests {
             nonce: command_id,
             timestamp_ns: 1_000 + command_id,
             product_type: ProductType::Spot,
-            command: ExchangeCommand::TradingCommand(TradingCommand::Spot(SpotCommand::PlaceOrder(
-                SpotPlaceOrderCmd {
+            command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
+                SpotCommand::PlaceOrder(SpotPlaceOrderCmd {
                     trader_id,
                     market: "BTC-USDT".into(),
                     side,
                     price,
                     quantity,
-                },
-            ))),
+                }),
+            )),
         }
     }
 
@@ -171,9 +177,7 @@ mod tests {
                 ReceiveAndAdmitTransactionsCmd {
                     requests: vec![signed_request("req-1", "acct-1", "payload-spot-1")],
                 },
-                &SpotAdmissionLoadPort {
-                    capability: "dex.spot.place_order",
-                },
+                &SpotAdmissionLoadPort { capability: "dex.spot.place_order" },
                 &receive_pipeline,
             )
             .unwrap();
@@ -184,10 +188,7 @@ mod tests {
         let execute_events = executor
             .execute(
                 &execute_use_case,
-                ExecuteAndCommitBlockCmd {
-                    block_height: 42,
-                    pending_requests: vec![],
-                },
+                ExecuteAndCommitBlockCmd { block_height: 42, pending_requests: vec![] },
                 &execute_load_port,
                 &execute_pipeline,
             )
@@ -216,6 +217,15 @@ mod tests {
                     capability: VmCapability::new("dex.spot.place_order"),
                     action_type: "order".to_string(),
                     payload_hash: "payload-sell".to_string(),
+                    payload: Some(
+                        serde_json::json!({
+                            "market": "BTC-USDT",
+                            "side": "sell",
+                            "price": 100_000,
+                            "quantity": 1,
+                        })
+                        .to_string(),
+                    ),
                 },
             ))
             .unwrap();

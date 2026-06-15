@@ -1,25 +1,23 @@
 use base_types::handler::handler_update::ApplyCommandChanges;
 
-use crate::core::use_case::execute_trading_batch::context::SpotCommandState;
-use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
-use crate::core::use_case::execute_trading_batch::RestingSpotOrder;
-use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
-use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, ExecutedOrder};
-use crate::core::SpotPlaceOrderCmd;
-
 use super::shared::{build_spot_order, match_spot_order};
+use crate::core::SpotPlaceOrderCmd;
+use crate::core::use_case::execute_trading_batch::context::SpotCommandState;
+use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
+use crate::core::use_case::execute_trading_batch::{ExecuteTradingBatchError, RestingSpotOrder};
+use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, ExecutedOrder};
 
 pub(in crate::core) struct PlaceOrderApplier;
 
-impl<'a> ApplyCommandChanges<
-    SpotPlaceOrderCmd,
-    SpotCommandState<'a>,
-    ExecutedBatchBlock,
-    crate::core::TradeExecutionLog,
-    ExecuteTradingBatchError,
-> for PlaceOrderApplier
+impl<'a>
+    ApplyCommandChanges<
+        SpotPlaceOrderCmd,
+        SpotCommandState<'a>,
+        ExecutedBatchBlock,
+        crate::core::TradeExecutionLog,
+        ExecuteTradingBatchError,
+    > for PlaceOrderApplier
 {
-
     // Build the incoming order from the command, match it against opposite-side resting orders,
     // return any generated trades/balance deltas, and reinsert the unfilled remainder into the book.
 
@@ -27,7 +25,10 @@ impl<'a> ApplyCommandChanges<
         &self,
         command: &SpotPlaceOrderCmd,
         state: SpotCommandState<'a>,
-    ) -> Result<crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet, ExecuteTradingBatchError> {
+    ) -> Result<
+        crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet,
+        ExecuteTradingBatchError,
+    > {
         let mut writes = ExecutedBatchBlock {
             summary: crate::core::BatchExecutionSummary {
                 accepted_commands: 1,
@@ -68,6 +69,9 @@ impl<'a> ApplyCommandChanges<
         writes.orders.push(ExecutedOrder::SpotOrder(spot_order));
         writes.summary.balance_updates = writes.balance_deltas.len();
 
-        Ok(crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet { writes, changelogs })
+        Ok(crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet {
+            writes,
+            changelogs,
+        })
     }
 }

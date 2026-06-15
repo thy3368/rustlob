@@ -5,10 +5,8 @@ use base_types::handler::handler_update2::{
 };
 use diff::diff_types::DomainEvent;
 
+use crate::proc::behavior::v2::spot_trade_behavior::{CancelReplaceOrderCmd, CancelReplaceResult};
 use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
-use crate::proc::behavior::v2::spot_trade_behavior::{
-    CancelReplaceOrderCmd, CancelReplaceResult,
-};
 
 #[derive(Debug, Clone)]
 pub struct CancelReplaceOrderStateSet {

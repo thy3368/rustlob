@@ -14,18 +14,12 @@ pub struct InprocEventActor<E, H> {
 
 impl<E, H> InprocEventActor<E, H> {
     pub fn new(receiver: Receiver<E>, handler: Arc<H>, actor_name: &'static str) -> Self {
-        Self {
-            receiver,
-            handler,
-            actor_name,
-        }
+        Self { receiver, handler, actor_name }
     }
 
     #[inline]
     fn into_internal_error(message: impl Into<String>) -> SpotApiErrorAny {
-        SpotApiErrorAny::Common(CommonError::Internal {
-            message: message.into(),
-        })
+        SpotApiErrorAny::Common(CommonError::Internal { message: message.into() })
     }
 
     pub fn actor_name(&self) -> &str {
@@ -46,19 +40,13 @@ where
             ))
         })?;
 
-        tracing::info!(
-            actor = self.actor_name,
-            "Received inproc/disruptor event"
-        );
+        tracing::info!(actor = self.actor_name, "Received inproc/disruptor event");
 
         Ok(Some(event))
     }
 
     fn handle_event(&self, event: E) -> Result<(), SpotApiErrorAny> {
-        tracing::info!(
-            actor = self.actor_name,
-            "Handling inproc/disruptor event"
-        );
+        tracing::info!(actor = self.actor_name, "Handling inproc/disruptor event");
 
         self.handler.event_handle(event)?;
         Ok(())

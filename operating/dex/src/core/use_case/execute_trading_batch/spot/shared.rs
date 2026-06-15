@@ -1,18 +1,19 @@
 use base_types::base_types::TraderId;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade, TimeInForce};
 use base_types::{Price, Quantity, TradingPair};
-use base_types::exchange::spot::spot_types::SpotTrade;
-use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
 
+use crate::core::SpotSide;
+use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
 use crate::core::use_case::execute_trading_batch::{
     ExecuteTradingBatchError, RestingSpotOrder, SpotOrderBook,
 };
-use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
 use crate::core::use_case::execute_trading_batch_handler::{
     BalanceDelta, ExecutedBatchBlock, ExecutedTrade, TradeExecutionLog,
 };
-use crate::core::SpotSide;
 
-pub(in crate::core) fn split_spot_market(market: &str) -> Result<TradingPair, ExecuteTradingBatchError> {
+pub(in crate::core) fn split_spot_market(
+    market: &str,
+) -> Result<TradingPair, ExecuteTradingBatchError> {
     TradingPair::from_symbol_str(market)
         .or_else(|| TradingPair::from_symbol_str(&market.replace('-', "")))
         .ok_or_else(|| format!("invalid spot market: {market}"))

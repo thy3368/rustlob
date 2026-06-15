@@ -30,8 +30,10 @@ fn deserialize_settlement_domain_event(
     bytes: &[u8],
 ) -> Result<DomainEvent<SpotTrade>, SpotApiErrorAny> {
     serde_json::from_slice(bytes).map_err(|e| {
-        SpotApiErrorAny::Common(crate::proc::behavior::v2::spot_trade_error::CommonError::Internal {
-            message: format!("Deserialization error: {}", e),
-        })
+        SpotApiErrorAny::Common(
+            crate::proc::behavior::v2::spot_trade_error::CommonError::Internal {
+                message: format!("Deserialization error: {}", e),
+            },
+        )
     })
 }

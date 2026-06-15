@@ -1,6 +1,9 @@
 #![feature(portable_simd)]
 
 pub mod proc;
+pub mod use_case;
+
+pub mod entity;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

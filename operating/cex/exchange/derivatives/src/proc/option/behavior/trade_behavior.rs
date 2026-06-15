@@ -53,6 +53,7 @@ use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
 use base_types::{OrderSide, Price, Quantity, Timestamp};
 use immutable_derive::immutable;
+
 use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 // use crate::proc::behavior::spot_trade_behavior::{CMetadata, SpotCmdErrorAny};
 

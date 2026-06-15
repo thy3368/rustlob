@@ -1,27 +1,50 @@
 pub mod wallet_behavior;
 
 pub use wallet_behavior::{
-    // Commands
-    GetAllCoinsCmd, WithdrawCmd, GetWithdrawHistoryCmd, GetDepositHistoryCmd,
-    GetDepositAddressCmd, GetAssetDetailCmd, GetUserAssetsCmd, UniversalTransferCmd,
-    GetUniversalTransferHistoryCmd, DustTransferCmd, GetTradeFeeCmd, GetFundingAssetCmd,
-    GetAccountInfoCmd, GetAccountSnapshotCmd,
+    AccountInfo,
+    AccountSnapshot,
+    AssetDetail,
+    // Response Types
+    CoinInfo,
+    DepositAddressResponse,
+    DepositRecord,
+    DustTransferCmd,
+    DustTransferResponse,
+    DustTransferResult,
+    FundingAsset,
+    GetAccountInfoCmd,
+    GetAccountSnapshotCmd,
 
+    // Commands
+    GetAllCoinsCmd,
+    GetAssetDetailCmd,
+    GetDepositAddressCmd,
+    GetDepositHistoryCmd,
+    GetFundingAssetCmd,
+    GetTradeFeeCmd,
+    GetUniversalTransferHistoryCmd,
+    GetUserAssetsCmd,
+    GetWithdrawHistoryCmd,
+    NetworkInfo,
+    SnapshotVo,
+
+    TradeFee,
+    UniversalTransferCmd,
+    UniversalTransferRecord,
+    UniversalTransferResponse,
+    UserAsset,
+    // Trait
+    WalletBehavior,
     // Command Enum
     WalletCmdAny,
-
-    // Response Types
-    CoinInfo, NetworkInfo, WithdrawResponse, WithdrawRecord, DepositRecord,
-    DepositAddressResponse, AssetDetail, UserAsset, UniversalTransferResponse,
-    UniversalTransferRecord, DustTransferResponse, DustTransferResult, TradeFee,
-    FundingAsset, AccountInfo, AccountSnapshot, SnapshotVo,
-
-    // Response Enum
-    WalletRes,
 
     // Error
     WalletCmdError,
 
-    // Trait
-    WalletBehavior,
+    // Response Enum
+    WalletRes,
+
+    WithdrawCmd,
+    WithdrawRecord,
+    WithdrawResponse,
 };

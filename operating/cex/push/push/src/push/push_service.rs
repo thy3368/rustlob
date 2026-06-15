@@ -30,10 +30,14 @@ impl PushBehaviorV2Imp {
     /// 订阅并处理: OrderChangeLog + KLineChangeLog + BalanceChangeLog + TradeChangeLog
     async fn run(&self) {
         // 订阅所有变更日志Topic
-        let mut order_receiver = self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
-        let mut kline_receiver = self.change_log_repo.subscribe(SpotTopic::KLineChangeLog.name(), None);
-        let mut balance_receiver = self.change_log_repo.subscribe(SpotTopic::BalanceChangeLog.name(), None);
-        let mut trade_receiver = self.change_log_repo.subscribe(SpotTopic::TradeChangeLog.name(), None);
+        let mut order_receiver =
+            self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
+        let mut kline_receiver =
+            self.change_log_repo.subscribe(SpotTopic::KLineChangeLog.name(), None);
+        let mut balance_receiver =
+            self.change_log_repo.subscribe(SpotTopic::BalanceChangeLog.name(), None);
+        let mut trade_receiver =
+            self.change_log_repo.subscribe(SpotTopic::TradeChangeLog.name(), None);
 
         tracing::info!("PushService 已订阅所有变更日志Topic");
 
@@ -84,10 +88,7 @@ impl PushBehaviorV2Imp {
             return;
         }
 
-        tracing::debug!(
-            "Processing {} events in batch",
-            entity_change_logs.len()
-        );
+        tracing::debug!("Processing {} events in batch", entity_change_logs.len());
 
         let mut total_sent = 0;
         let mut total_skipped = 0;
@@ -98,9 +99,7 @@ impl PushBehaviorV2Imp {
             // 通过 ConnectionRepo 找到对该事件感兴趣的发送器列表
             let interested_senders: Vec<
                 tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>,
-            > = self
-                .connection_repo
-                .get_senders_by_entity(event.entity_type(), event.entity_id());
+            > = self.connection_repo.get_senders_by_entity(event.entity_type(), event.entity_id());
 
             if interested_senders.is_empty() {
                 total_skipped += 1;

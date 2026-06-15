@@ -45,10 +45,8 @@ impl KLineBehaviorV2Imp {
 
     /// 批量处理交易变更日志（性能优化）
     pub fn handle_events(&self, change_logs: &[ChangeLog]) {
-        let trades: Vec<(u64, f64, f64)> = change_logs
-            .iter()
-            .filter_map(|log| Self::extract_trade_data(log))
-            .collect();
+        let trades: Vec<(u64, f64, f64)> =
+            change_logs.iter().filter_map(|log| Self::extract_trade_data(log)).collect();
 
         if trades.is_empty() {
             return;
@@ -65,7 +63,8 @@ impl KLineBehaviorV2Imp {
     /// 从 ChangeLogEntry 提取交易数据 (timestamp, price, volume)
     fn extract_trade_data(change_log: &ChangeLog) -> Option<(u64, f64, f64)> {
         let fields_map: std::collections::HashMap<&str, &str> = match change_log.change_type() {
-            diff::ChangeType::Created { fields } | diff::ChangeType::Updated { changed_fields: fields } => {
+            diff::ChangeType::Created { fields }
+            | diff::ChangeType::Updated { changed_fields: fields } => {
                 fields.iter().map(|f| (f.field_name.as_ref(), f.new_value.as_str())).collect()
             }
             diff::ChangeType::Deleted => {
@@ -74,15 +73,11 @@ impl KLineBehaviorV2Imp {
         };
 
         let price: f64 = fields_map.get("price")?.parse().ok()?;
-        let volume: f64 = fields_map
-            .get("volume")
-            .or_else(|| fields_map.get("amount"))?
-            .parse()
-            .ok()?;
+        let volume: f64 =
+            fields_map.get("volume").or_else(|| fields_map.get("amount"))?.parse().ok()?;
 
         Some((*change_log.timestamp(), price, volume))
     }
-
 }
 
 impl ActorX for KLineBehaviorV2Imp {
@@ -93,25 +88,20 @@ impl ActorX for KLineBehaviorV2Imp {
         // todo 优化性能， lock导致的
         tokio::spawn(async move {
             while let Ok(msg) = receiver.recv().await {
-
                 let trade_change_log = match serde_json::from_slice::<ChangeLog>(&msg) {
-                    Ok(log) =>{
-
-                        log},
+                    Ok(log) => log,
                     Err(e) => {
                         tracing::error!("Failed to deserialize event to ChangeLogEntry: {:?}", e);
                         continue;
                     }
                 };
-                
+
                 // 处理交易变更日志
                 self_clone.handle_event(trade_change_log);
-
             }
         });
     }
 }
-
 
 // 为M100SimdKLineAggregator实现Clone trait
 impl Clone for M100SimdKLineAggregator {

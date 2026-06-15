@@ -3,16 +3,18 @@ use std::collections::BTreeMap;
 use base_types::exchange::prep::perp_types::PrepTrade;
 use base_types::exchange::prep::prep_order::PrepOrder;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use base_types::handler::handler_update::{
-    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
-};
+use base_types::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate};
+
 use crate::core::use_case::execute_trading_batch::option_handler::OptionBatchHandler;
 use crate::core::use_case::execute_trading_batch::perp_handler::PerpBatchHandler;
 use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
 use crate::core::use_case::execute_trading_batch::treasury_handler::TreasuryBatchHandler;
-use crate::core::use_case::execute_trading_batch::{option, perp, treasury, ExecuteTradingBatchError, SpotOrderBook};
-use crate::core::use_case::trading_command::{ExchangeCommand, ExchangeCommandEnvelope, TradingCommand};
-
+use crate::core::use_case::execute_trading_batch::{
+    ExecuteTradingBatchError, SpotOrderBook, option, perp, treasury,
+};
+use crate::core::use_case::trading_command::{
+    ExchangeCommand, ExchangeCommandEnvelope, TradingCommand,
+};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BatchExecutionSummary {
@@ -35,8 +37,6 @@ pub enum ExecutedTrade {
     SpotTrade(SpotTrade),
     PrepTrade(PrepTrade),
 }
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BalanceDelta {
@@ -68,9 +68,10 @@ pub enum TradeExecutionLog {
         price: u64,
         quantity: u64,
     },
-    BatchExecuted { batch_size: usize },
+    BatchExecuted {
+        batch_size: usize,
+    },
 }
-
 
 #[derive(Debug, Default)]
 pub struct ExecuteTradingBatchHandler {
@@ -149,15 +150,15 @@ impl ExecuteTradingBatchHandler {
     }
 }
 
-
 //todo CmdHandlerForUpdate里对 ExchangeCommandEnvelope里面的子command 非常多，怎么做个每个子command的处理 提取到一个单独文件中方便维护？
-impl ApplyCommandChanges<
-    Vec<ExchangeCommandEnvelope>,
-    ExecuteTradingBatchState,
-    ExecutedBatchBlock,
-    TradeExecutionLog,
-    ExecuteTradingBatchError,
-> for ExecuteTradingBatchHandler
+impl
+    ApplyCommandChanges<
+        Vec<ExchangeCommandEnvelope>,
+        ExecuteTradingBatchState,
+        ExecutedBatchBlock,
+        TradeExecutionLog,
+        ExecuteTradingBatchError,
+    > for ExecuteTradingBatchHandler
 {
     fn apply_command_and_collect_changes(
         &self,
@@ -178,21 +179,21 @@ impl ApplyCommandChanges<
 
         writes.summary.balance_updates = writes.balance_deltas.len();
 
-        changelogs.push(TradeExecutionLog::BatchExecuted {
-            batch_size: writes.summary.total_commands,
-        });
+        changelogs
+            .push(TradeExecutionLog::BatchExecuted { batch_size: writes.summary.total_commands });
 
         Ok(ChangeSet { writes, changelogs })
     }
 }
 
-impl CmdHandlerForUpdate<
-    Vec<ExchangeCommandEnvelope>,
-    ExecuteTradingBatchState,
-    ExecutedBatchBlock,
-    TradeExecutionLog,
-    ExecuteTradingBatchError,
-> for ExecuteTradingBatchHandler
+impl
+    CmdHandlerForUpdate<
+        Vec<ExchangeCommandEnvelope>,
+        ExecuteTradingBatchState,
+        ExecutedBatchBlock,
+        TradeExecutionLog,
+        ExecuteTradingBatchError,
+    > for ExecuteTradingBatchHandler
 {
     fn pre_check_command(
         &self,
@@ -246,8 +247,7 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::core::{
-        ExchangeCommand, PerpCommand, PerpPlaceOrderCmd, PerpSide,
-        ProductType, TradingCommand,
+        ExchangeCommand, PerpCommand, PerpPlaceOrderCmd, PerpSide, ProductType, TradingCommand,
     };
 
     fn place_order_envelope(command_id: u64, trader_id: u64) -> ExchangeCommandEnvelope {
@@ -271,7 +271,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn cmd_handler_for_update_emits_batch_log() {
         let handler = ExecuteTradingBatchHandler::new();
@@ -284,9 +283,6 @@ mod tests {
         let (writes, changelogs) = result.unwrap();
         assert_eq!(writes.summary.total_commands, 1);
         assert_eq!(changelogs.len(), 1);
-        assert_eq!(
-            changelogs[0],
-            TradeExecutionLog::BatchExecuted { batch_size: 1 }
-        );
+        assert_eq!(changelogs[0], TradeExecutionLog::BatchExecuted { batch_size: 1 });
     }
 }

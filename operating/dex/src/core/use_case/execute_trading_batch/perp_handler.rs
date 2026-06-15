@@ -1,6 +1,6 @@
-use crate::core::{ExchangeCommandEnvelope, PerpCommand};
 use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
 use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, PerpCommand};
 
 #[derive(Debug, Default)]
 pub struct PerpBatchHandler;

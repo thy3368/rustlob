@@ -1,11 +1,10 @@
 use l1_core::{PendingRequest, VmRuntimeError};
 
+use super::shared::parse_request_ids;
 use crate::core::{
     ExchangeCommand, ExchangeCommandEnvelope, OptionCommand, OptionKind, OptionPlaceOrderCmd,
     OptionSide, ProductType, TradingCommand,
 };
-
-use super::shared::parse_request_ids;
 
 pub(super) fn build_option_envelope(
     request: &PendingRequest,

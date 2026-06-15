@@ -31,7 +31,6 @@ pub enum OptionKind {
     Put,
 }
 
-
 /// 现货下单：用户在 spot 市场提交一个新的限价单。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotPlaceOrderCmd {

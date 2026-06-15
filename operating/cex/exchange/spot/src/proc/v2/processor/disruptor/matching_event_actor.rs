@@ -1,9 +1,8 @@
 use base_types::exchange::spot::spot_types::SpotOrder;
 use crossbeam_channel::Receiver;
-use diff::diff_types::DomainEvent;
-
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
+use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::v2::processor::disruptor::inproc_event_actor::InprocEventActor;

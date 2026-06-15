@@ -1,7 +1,7 @@
-use crate::core::{ExchangeCommandEnvelope, OptionCommand};
 use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
 use crate::core::use_case::execute_trading_batch::option_handler::OptionBatchHandler;
 use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, OptionCommand};
 
 pub fn handle_option_command(
     handler: &OptionBatchHandler,

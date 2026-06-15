@@ -1,4 +1,5 @@
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
+
 use crate::proc::option::behavior::option_error::OptionCmdErrorAny;
 // ============================================================================
 // REST API Commands - User Data Stream Management
@@ -345,4 +346,3 @@ pub trait OptionUserDataStreamBehavior: Send + Sync {
         let _ = event;
     }
 }
-

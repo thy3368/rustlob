@@ -1,9 +1,9 @@
 // 参考 ## v1 Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/v1
 // 定义所有trade 接口
 
+use base_types::OrderSide;
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 use base_types::exchange::spot::spot_types::TimeInForce;
-use base_types::OrderSide;
 // ============================================================================
 // 枚举类型定义
 // ============================================================================

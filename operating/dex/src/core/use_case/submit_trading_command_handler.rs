@@ -1,8 +1,7 @@
-use std::{collections::VecDeque, sync::Mutex};
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
-use base_types::handler::handler_update::{
-    ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate,
-};
+use base_types::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerForUpdate};
 
 use crate::core::use_case::trading_command::ExchangeCommandEnvelope;
 
@@ -17,10 +16,7 @@ pub struct SubmitCommandResult {
 impl SubmitCommandResult {
     #[inline]
     fn accepted(queue_len: usize) -> Self {
-        Self {
-            accepted: true,
-            queue_len,
-        }
+        Self { accepted: true, queue_len }
     }
 }
 
@@ -31,10 +27,7 @@ pub struct SubmitTradingCommandState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubmitTradingCommandLog {
-    CommandQueued {
-        command_id: u64,
-        queue_len: usize,
-    },
+    CommandQueued { command_id: u64, queue_len: usize },
 }
 
 #[derive(Debug, Default)]
@@ -63,13 +56,14 @@ impl SubmitTradingCommandHandler {
     }
 }
 
-impl ApplyCommandChanges<
-    ExchangeCommandEnvelope,
-    SubmitTradingCommandState,
-    SubmitCommandResult,
-    SubmitTradingCommandLog,
-    SubmitTradingCommandError,
-> for SubmitTradingCommandHandler
+impl
+    ApplyCommandChanges<
+        ExchangeCommandEnvelope,
+        SubmitTradingCommandState,
+        SubmitCommandResult,
+        SubmitTradingCommandLog,
+        SubmitTradingCommandError,
+    > for SubmitTradingCommandHandler
 {
     fn apply_command_and_collect_changes(
         &self,
@@ -89,13 +83,14 @@ impl ApplyCommandChanges<
     }
 }
 
-impl CmdHandlerForUpdate<
-    ExchangeCommandEnvelope,
-    SubmitTradingCommandState,
-    SubmitCommandResult,
-    SubmitTradingCommandLog,
-    SubmitTradingCommandError,
-> for SubmitTradingCommandHandler
+impl
+    CmdHandlerForUpdate<
+        ExchangeCommandEnvelope,
+        SubmitTradingCommandState,
+        SubmitCommandResult,
+        SubmitTradingCommandLog,
+        SubmitTradingCommandError,
+    > for SubmitTradingCommandHandler
 {
     fn pre_check_command(
         &self,
@@ -108,9 +103,7 @@ impl CmdHandlerForUpdate<
         &self,
         _cmd: &ExchangeCommandEnvelope,
     ) -> Result<SubmitTradingCommandState, SubmitTradingCommandError> {
-        Ok(SubmitTradingCommandState {
-            pending_len: self.pending_commands.lock().unwrap().len(),
-        })
+        Ok(SubmitTradingCommandState { pending_len: self.pending_commands.lock().unwrap().len() })
     }
 
     fn validate_command_in_lock(
@@ -169,8 +162,8 @@ impl CmdHandlerForUpdate<
 mod tests {
     use super::*;
     use crate::core::{
-        ExchangeCommand, PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide,
-        ProductType, SpotCancelOrderCmd, SpotCommand, TradingCommand,
+        ExchangeCommand, PerpAmendOrderCmd, PerpCommand, PerpPlaceOrderCmd, PerpSide, ProductType,
+        SpotCancelOrderCmd, SpotCommand, TradingCommand,
     };
 
     fn place_order_envelope(command_id: u64) -> ExchangeCommandEnvelope {
@@ -210,9 +203,7 @@ mod tests {
     #[test]
     fn drain_pending_commands_limits_batch_size() {
         let handler = SubmitTradingCommandHandler::new();
-        handler
-            .cmd_handle(place_order_envelope(1), |writes, _| writes.clone())
-            .unwrap();
+        handler.cmd_handle(place_order_envelope(1), |writes, _| writes.clone()).unwrap();
         handler
             .cmd_handle(
                 ExchangeCommandEnvelope {
@@ -222,10 +213,7 @@ mod tests {
                     timestamp_ns: 1_002,
                     product_type: ProductType::Spot,
                     command: ExchangeCommand::TradingCommand(TradingCommand::Spot(
-                        SpotCommand::CancelOrder(SpotCancelOrderCmd {
-                            trader_id: 1,
-                            order_id: 42,
-                        }),
+                        SpotCommand::CancelOrder(SpotCancelOrderCmd { trader_id: 1, order_id: 42 }),
                     )),
                 },
                 |writes, _| writes.clone(),

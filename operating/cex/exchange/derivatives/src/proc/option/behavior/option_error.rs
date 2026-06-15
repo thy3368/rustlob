@@ -1,4 +1,1 @@
-
-pub enum OptionCmdErrorAny{
-    
-}
+pub enum OptionCmdErrorAny {}

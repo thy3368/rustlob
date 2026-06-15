@@ -1,7 +1,7 @@
-use crate::core::{ExchangeCommandEnvelope, TreasuryCommand};
 use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
 use crate::core::use_case::execute_trading_batch::treasury_handler::TreasuryBatchHandler;
 use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, TreasuryCommand};
 
 pub fn handle_treasury_command(
     handler: &TreasuryBatchHandler,

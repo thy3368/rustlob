@@ -1,7 +1,7 @@
-use crate::core::{ExchangeCommandEnvelope, PerpCommand};
 use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
 use crate::core::use_case::execute_trading_batch::perp_handler::PerpBatchHandler;
 use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, PerpCommand};
 
 pub fn handle_perp_command(
     handler: &PerpBatchHandler,

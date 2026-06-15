@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use base_types::account::balance::{Balance as AccountBalance, Balance};
 use base_types::exchange::spot::spot_types::SpotTrade;
-use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, DomainEventSet};
+use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
-use diff::diff_types::DomainEvent;
 use diff::Entity;
+use diff::diff_types::DomainEvent;
 
 use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 
@@ -20,9 +20,9 @@ pub struct SettStateChangedSet {
     pub balances: Option<Vec<DomainEvent<AccountBalance>>>,
 }
 
-impl DomainEventSet for SettStateChangedSet {
+impl ReplayableEventSet for SettStateChangedSet {
     #[inline]
-    fn domain_event_count(&self) -> usize {
+    fn event_count(&self) -> usize {
         self.balances.as_ref().map(|balances| balances.len()).unwrap_or(0)
     }
 }
@@ -47,7 +47,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     type Command = SettlementCmd;
     type Reply = Option<Vec<DomainEvent<AccountBalance>>>;
     type GivenStateSet = SettStateSet;
-    type ThenStateSet = SettStateChangedSet;
+    type ThenTraceableEventSet = SettStateChangedSet;
     type Error = SpotApiErrorAny;
 
     type Repo = R;
@@ -57,7 +57,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         &self,
         _cmd: &Self::Command,
         state_set: Self::GivenStateSet,
-    ) -> Result<Self::ThenStateSet, Self::Error> {
+    ) -> Result<Self::ThenTraceableEventSet, Self::Error> {
         if state_set.trades.is_empty() {
             return Ok(SettStateChangedSet { balances: None });
         }
@@ -104,7 +104,10 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         Ok(SettStateChangedSet { balances: Some(balance_events) })
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
+    fn state_changed_set_to_reply(
+        &self,
+        state_changed_set: Self::ThenTraceableEventSet,
+    ) -> Self::Reply {
         state_changed_set.balances
     }
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
@@ -129,7 +132,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
 
     fn persist_domain_events(
         &self,
-        _domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenTraceableEventSet,
         _repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -137,7 +140,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::ThenStateSet,
+        domain_events: &Self::ThenTraceableEventSet,
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
@@ -152,7 +155,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
 
     fn publish_domain_events(
         &self,
-        domain_events: &Self::ThenStateSet,
+        domain_events: &Self::ThenTraceableEventSet,
         publisher: Self::Publisher,
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
@@ -234,20 +237,15 @@ mod tests {
         }
 
         let repo = MemdbRepo::default();
-        let handler = SettOrderCmdHandler::<MemdbRepo, MockPublisher>::new(
-            repo.clone(),
-            MockPublisher,
-        );
+        let handler =
+            SettOrderCmdHandler::<MemdbRepo, MockPublisher>::new(repo.clone(), MockPublisher);
         let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
 
-        let state = handler
-            .give(&cmd, &repo)
-            .expect("load_state_set_for_update should succeed");
-        let changes =
-            handler.then(&cmd, state).expect("apply should succeed");
+        let state = handler.give(&cmd, &repo).expect("load_state_set_for_update should succeed");
+        let changes = handler.then(&cmd, state).expect("apply should succeed");
 
         assert!(changes.balances.is_none());
-        assert_eq!(changes.domain_event_count(), 0);
+        assert_eq!(changes.event_count(), 0);
         assert_eq!(repo.count().unwrap(), 0);
     }
 

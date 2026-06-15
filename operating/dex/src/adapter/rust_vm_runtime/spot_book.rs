@@ -1,11 +1,12 @@
-use db_repo::{KvStore, StorageError};
-use mdbx::MdbxKvStore;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::core::use_case::execute_trading_batch::{RestingSpotOrder, SpotOrderBook};
+use db_repo::{KvStore, StorageError};
+use mdbx::MdbxKvStore;
+
 use crate::core::SpotSide;
+use crate::core::use_case::execute_trading_batch::{RestingSpotOrder, SpotOrderBook};
 
 const SPOT_ORDER_BOOK_KEY: &[u8] = b"spot_order_book";
 
@@ -61,9 +62,7 @@ pub struct MdbxSpotOrderBookRepository {
 
 impl MdbxSpotOrderBookRepository {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        Ok(Self {
-            store: Arc::new(MdbxKvStore::open(path, "dex_spot_product_state")?),
-        })
+        Ok(Self { store: Arc::new(MdbxKvStore::open(path, "dex_spot_product_state")?) })
     }
 
     fn decode_snapshot(bytes: &[u8]) -> Result<SpotOrderBookSnapshot, String> {
@@ -93,8 +92,9 @@ impl SpotOrderBookRepository for MdbxSpotOrderBookRepository {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    use super::*;
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(1);
 

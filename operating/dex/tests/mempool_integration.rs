@@ -3,12 +3,15 @@
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use cmd_handler::DomainEventSet;
+use cmd_handler::ReplayableEventSet;
 use cmd_handler::use_case_def::{CommandUseCaseExecutor, DomainEventPipeline, LoadState};
 use l1_adapter::{InMemoryMempool, MempoolReadingLoadPort, MempoolWritingPipeline};
-use l1_core::{BlockStateChanges, ChainState, ExecuteAndCommitBlockError, ExecuteAndCommitBlockEvents, IngressDecision, MempoolPort, PendingRequest, ReceiveAndAdmitTransactionsCmd, ReceiveAndAdmitTransactionsError, ReceiveAndAdmitTransactionsStateSnapshot, StateRoot, VmCapability, VmKind};
-
-
+use l1_core::{
+    BlockStateChanges, ChainState, ExecuteAndCommitBlockError, ExecuteAndCommitBlockEvents,
+    IngressDecision, MempoolPort, PendingRequest, ReceiveAndAdmitTransactionsCmd,
+    ReceiveAndAdmitTransactionsError, ReceiveAndAdmitTransactionsStateSnapshot, StateRoot,
+    VmCapability, VmKind,
+};
 
 struct StubReceiveAdmissionLoadPort;
 
@@ -33,6 +36,7 @@ impl
                 capability: VmCapability::new("dex.perp.place_order"),
                 action_type: req.action_type.clone(),
                 payload_hash: req.payload_hash.clone(),
+                payload: None,
             })
             .collect();
 
@@ -78,7 +82,7 @@ impl DomainEventPipeline<ExecuteAndCommitBlockEvents, ExecuteAndCommitBlockError
         events: &ExecuteAndCommitBlockEvents,
     ) -> Result<(), ExecuteAndCommitBlockError> {
         self.persist_count.fetch_add(1, Ordering::Relaxed);
-        self.domain_event_count.store(events.domain_event_count(), Ordering::Relaxed);
+        self.domain_event_count.store(events.event_count(), Ordering::Relaxed);
         Ok(())
     }
 
@@ -102,7 +106,11 @@ impl DomainEventPipeline<ExecuteAndCommitBlockEvents, ExecuteAndCommitBlockError
 #[cfg(test)]
 mod tests {
     use dex::core::use_case::execute_and_commit_block::default_execute_and_commit_block_use_case;
-    use l1_core::{ExecuteAndCommitBlockCmd, ReceiveAndAdmitTransactionsEvents, ReceiveAndAdmitTransactionsUseCase, SignedTransactionRequest};
+    use l1_core::{
+        ExecuteAndCommitBlockCmd, ReceiveAndAdmitTransactionsEvents,
+        ReceiveAndAdmitTransactionsUseCase, SignedTransactionRequest,
+    };
+
     use super::*;
 
     #[test]
@@ -152,12 +160,7 @@ mod tests {
 
         let execute_cmd = ExecuteAndCommitBlockCmd { block_height: 42, pending_requests: vec![] };
         let execute_events = executor
-            .execute(
-                &execute_use_case,
-                execute_cmd,
-                &execute_load_port,
-                &execute_pipeline,
-            )
+            .execute(&execute_use_case, execute_cmd, &execute_load_port, &execute_pipeline)
             .unwrap();
 
         assert_eq!(execute_events.committed_block.block_height, 42);
@@ -224,12 +227,7 @@ mod tests {
 
         let execute_cmd = ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![] };
         let execute_events = executor
-            .execute(
-                &execute_use_case,
-                execute_cmd,
-                &execute_load_port,
-                &execute_pipeline,
-            )
+            .execute(&execute_use_case, execute_cmd, &execute_load_port, &execute_pipeline)
             .unwrap();
 
         assert_eq!(execute_events.block_events.len(), 2);
@@ -245,12 +243,8 @@ mod tests {
         let executor = CommandUseCaseExecutor;
 
         let execute_cmd = ExecuteAndCommitBlockCmd { block_height: 1, pending_requests: vec![] };
-        let result = executor.execute(
-            &execute_use_case,
-            execute_cmd,
-            &execute_load_port,
-            &execute_pipeline,
-        );
+        let result =
+            executor.execute(&execute_use_case, execute_cmd, &execute_load_port, &execute_pipeline);
 
         assert_eq!(result.unwrap_err(), ExecuteAndCommitBlockError::EmptyPendingRequests);
     }
@@ -271,17 +265,13 @@ mod tests {
                 capability: VmCapability::new("evm.settlement.release"),
                 action_type: "settlement_release".to_string(),
                 payload_hash: "payload-evm-release".to_string(),
+                payload: None,
             }])
             .unwrap();
 
         let execute_cmd = ExecuteAndCommitBlockCmd { block_height: 7, pending_requests: vec![] };
         let execute_events = executor
-            .execute(
-                &execute_use_case,
-                execute_cmd,
-                &execute_load_port,
-                &execute_pipeline,
-            )
+            .execute(&execute_use_case, execute_cmd, &execute_load_port, &execute_pipeline)
             .unwrap();
 
         assert_eq!(execute_events.block_events.len(), 1);

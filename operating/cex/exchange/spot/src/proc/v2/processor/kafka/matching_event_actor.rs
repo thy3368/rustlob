@@ -12,7 +12,7 @@ use rdkafka::message::Message;
 
 use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::v2::processor::kafka::base::{
-    create_kafka_consumer, KafkaConsumerConfig, KafkaProcessorConfig,
+    KafkaConsumerConfig, KafkaProcessorConfig, create_kafka_consumer,
 };
 use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
@@ -27,8 +27,11 @@ pub struct KafkaMatchingEventActor<
     topic: String,
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
-    KafkaMatchingEventActor<R, P, L>
+impl<
+    R: CmdRepo2 + Clone,
+    P: EventPublisher2 + Clone,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
+> KafkaMatchingEventActor<R, P, L>
 {
     pub fn new(
         handler: Arc<NewOrderPlaceEventHandler<R, P, L>>,
@@ -65,8 +68,11 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Orde
     }
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone, L: MultiSymbolLobRepo<Order = SpotOrder> + Send>
-    EventRecvActor<DomainEvent<SpotOrder>, SpotApiErrorAny> for KafkaMatchingEventActor<R, P, L>
+impl<
+    R: CmdRepo2 + Clone,
+    P: EventPublisher2 + Clone,
+    L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
+> EventRecvActor<DomainEvent<SpotOrder>, SpotApiErrorAny> for KafkaMatchingEventActor<R, P, L>
 {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotOrder>>, SpotApiErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {

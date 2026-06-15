@@ -39,9 +39,7 @@ impl<
 > EventHandler2<DomainEvent<SpotOrder>, SpotApiErrorAny> for NewOrderPlaceEventHandler<R, P, L>
 {
     fn event_handle(&self, event: DomainEvent<SpotOrder>) -> Result<(), SpotApiErrorAny> {
-        let cmd = MatchCmd {
-            taker_order: event.object().clone(),
-        };
+        let cmd = MatchCmd { taker_order: event.object().clone() };
         let _ = self.matching_handler.cmd_handle(
             cmd,
             self.matching_handler.repo.clone(),

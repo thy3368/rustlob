@@ -1,8 +1,7 @@
-pub mod use_case;
 pub mod entity;
+pub mod use_case;
 
 pub use entity::ProductType;
-
 pub use use_case::execute_trading_batch_handler::{
     BalanceDelta, BatchExecutionSummary, ExecuteTradingBatchHandler, ExecuteTradingBatchState,
     ExecutedBatchBlock, ExecutedOrder, ExecutedTrade, TradeExecutionLog,

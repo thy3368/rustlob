@@ -7,8 +7,8 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
-use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
+use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
     MatchCmd, MatchOrderCmdHandler,
 };
@@ -84,7 +84,8 @@ impl<
     R: CmdRepo2 + Clone,
     P: EventPublisher2 + Clone,
     L: MultiSymbolLobRepo<Order = SpotOrder> + Send,
-> CmdPipeLineHandler for PlaceOrderPipelineHandler<R, P, L> {
+> CmdPipeLineHandler for PlaceOrderPipelineHandler<R, P, L>
+{
     type Command = NewOrderCmd;
     type Reply = PlaceOrderPipelineReply;
     type Error = SpotApiErrorAny;
@@ -103,8 +104,8 @@ mod tests {
     use bdd::bdd_test;
     use db_repo::adapter::v2::memdb_repo::MemdbRepo;
     use db_repo::core::db_repo2::QueryRepo2;
-    use diff::diff_types::{ChangeLog, ChangeType, DomainEvent};
     use diff::Entity;
+    use diff::diff_types::{ChangeLog, ChangeType, DomainEvent};
     use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
     use lob_repo::adapter::local_lob_impl::LocalLob;
     use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
@@ -362,7 +363,8 @@ mod tests {
 
         assert_eq!(trades.len(), 2);
         assert_ne!(trades[0].object().trade_id, trades[1].object().trade_id);
-        let maker_order_ids: Vec<_> = trades.iter().map(|trade| trade.object().maker_order_id).collect();
+        let maker_order_ids: Vec<_> =
+            trades.iter().map(|trade| trade.object().maker_order_id).collect();
         assert!(maker_order_ids.contains(&maker_order_one.order_id));
         assert!(maker_order_ids.contains(&maker_order_two.order_id));
         for trade in &trades {
@@ -370,9 +372,8 @@ mod tests {
             assert_eq!(trade.object().price, Price::from_f64(50000.0));
             assert_eq!(trade.object().base_qty, Quantity::from_f64(1.0));
         }
-        let total_base_qty = trades
-            .iter()
-            .fold(Quantity::default(), |acc, trade| acc + trade.object().base_qty);
+        let total_base_qty =
+            trades.iter().fold(Quantity::default(), |acc, trade| acc + trade.object().base_qty);
         assert_eq!(total_base_qty, Quantity::from_f64(2.0));
 
         let stored_first_trade = repo
@@ -388,15 +389,27 @@ mod tests {
 
         assert_eq!(balances.len(), 3);
         let taker_btc = repo
-            .find_by_id::<AccountBalance>(&format!("{}:{}", reply.order.object().order_id, u32::from(AssetId::Btc)))
+            .find_by_id::<AccountBalance>(&format!(
+                "{}:{}",
+                reply.order.object().order_id,
+                u32::from(AssetId::Btc)
+            ))
             .expect("taker btc query should succeed")
             .expect("taker btc balance should exist");
         let maker_one_usdt = repo
-            .find_by_id::<AccountBalance>(&format!("{}:{}", maker_order_one.order_id, u32::from(AssetId::Usdt)))
+            .find_by_id::<AccountBalance>(&format!(
+                "{}:{}",
+                maker_order_one.order_id,
+                u32::from(AssetId::Usdt)
+            ))
             .expect("maker one usdt query should succeed")
             .expect("maker one usdt balance should exist");
         let maker_two_usdt = repo
-            .find_by_id::<AccountBalance>(&format!("{}:{}", maker_order_two.order_id, u32::from(AssetId::Usdt)))
+            .find_by_id::<AccountBalance>(&format!(
+                "{}:{}",
+                maker_order_two.order_id,
+                u32::from(AssetId::Usdt)
+            ))
             .expect("maker two usdt query should succeed")
             .expect("maker two usdt balance should exist");
         assert_eq!(taker_btc.available, Quantity::from_f64(2.0));

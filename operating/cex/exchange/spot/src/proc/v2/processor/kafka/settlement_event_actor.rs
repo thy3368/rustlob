@@ -58,8 +58,8 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> KafkaSettlementEventActor<
     }
 }
 
-impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> EventRecvActor<DomainEvent<SpotTrade>, SpotApiErrorAny>
-    for KafkaSettlementEventActor<R, P>
+impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone>
+    EventRecvActor<DomainEvent<SpotTrade>, SpotApiErrorAny> for KafkaSettlementEventActor<R, P>
 {
     fn recv_event(&mut self) -> Result<Option<DomainEvent<SpotTrade>>, SpotApiErrorAny> {
         let rt = tokio::runtime::Runtime::new().map_err(|e| {

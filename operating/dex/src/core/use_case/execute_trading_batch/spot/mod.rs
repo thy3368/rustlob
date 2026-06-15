@@ -6,16 +6,14 @@ mod shared;
 
 use base_types::handler::handler_update::ApplyCommandChanges;
 
-use crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet;
-use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
-use crate::core::use_case::execute_trading_batch::SpotOrderBook;
-use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
-use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
-use crate::core::{ExchangeCommandEnvelope, SpotCommand};
-
 use self::amend_order::AmendOrderApplier;
 use self::cancel_order::CancelOrderApplier;
 use self::place_order::PlaceOrderApplier;
+use crate::core::use_case::execute_trading_batch::context::SpotCommandChangeSet;
+use crate::core::use_case::execute_trading_batch::spot::handler::SpotBatchHandler;
+use crate::core::use_case::execute_trading_batch::{ExecuteTradingBatchError, SpotOrderBook};
+use crate::core::use_case::execute_trading_batch_handler::{ExecutedBatchBlock, TradeExecutionLog};
+use crate::core::{ExchangeCommandEnvelope, SpotCommand};
 
 pub(crate) fn handle_spot_command(
     handler: &SpotBatchHandler,
@@ -27,24 +25,18 @@ pub(crate) fn handle_spot_command(
 ) -> Result<(), ExecuteTradingBatchError> {
     match command {
         SpotCommand::PlaceOrder(command) => {
-            let changes = PlaceOrderApplier.apply_command_and_collect_changes(
-                command,
-                (handler, envelope, spot_order_book),
-            )?;
+            let changes = PlaceOrderApplier
+                .apply_command_and_collect_changes(command, (handler, envelope, spot_order_book))?;
             apply_changeset(changes, writes, changelogs)
         }
         SpotCommand::CancelOrder(command) => {
-            let changes = CancelOrderApplier.apply_command_and_collect_changes(
-                command,
-                (handler, envelope, spot_order_book),
-            )?;
+            let changes = CancelOrderApplier
+                .apply_command_and_collect_changes(command, (handler, envelope, spot_order_book))?;
             apply_changeset(changes, writes, changelogs)
         }
         SpotCommand::AmendOrder(command) => {
-            let changes = AmendOrderApplier.apply_command_and_collect_changes(
-                command,
-                (handler, envelope, spot_order_book),
-            )?;
+            let changes = AmendOrderApplier
+                .apply_command_and_collect_changes(command, (handler, envelope, spot_order_book))?;
             apply_changeset(changes, writes, changelogs)
         }
     }

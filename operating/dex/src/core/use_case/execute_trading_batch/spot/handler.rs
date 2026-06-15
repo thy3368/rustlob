@@ -1,15 +1,10 @@
-use std::{
-    collections::BTreeMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex,
-    },
-};
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 
-use crate::core::use_case::execute_trading_batch::{ExecuteTradingBatchError, SpotOrderBook};
-use crate::core::use_case::execute_trading_batch::spot;
+use crate::core::use_case::execute_trading_batch::{ExecuteTradingBatchError, SpotOrderBook, spot};
 use crate::core::use_case::execute_trading_batch_handler::{
     BalanceDelta, BatchExecutionSummary, ExecutedBatchBlock, ExecutedOrder, ExecutedTrade,
     TradeExecutionLog,
@@ -24,10 +19,7 @@ pub struct SpotBatchHandler {
 
 impl SpotBatchHandler {
     pub fn new() -> Self {
-        Self {
-            spot_order_book: Mutex::new(BTreeMap::new()),
-            next_order_id: AtomicU64::new(1),
-        }
+        Self { spot_order_book: Mutex::new(BTreeMap::new()), next_order_id: AtomicU64::new(1) }
     }
 
     pub(crate) fn next_order_id(&self) -> u64 {

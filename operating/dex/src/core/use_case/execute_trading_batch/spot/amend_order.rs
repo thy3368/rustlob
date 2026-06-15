@@ -1,19 +1,22 @@
 use base_types::handler::handler_update::ApplyCommandChanges;
 
-use crate::core::use_case::execute_trading_batch::context::{SpotCommandChangeSet, SpotCommandState};
-use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
-use crate::core::use_case::execute_trading_batch_handler::ExecutedBatchBlock;
 use crate::core::SpotAmendOrderCmd;
+use crate::core::use_case::execute_trading_batch::ExecuteTradingBatchError;
+use crate::core::use_case::execute_trading_batch::context::{
+    SpotCommandChangeSet, SpotCommandState,
+};
+use crate::core::use_case::execute_trading_batch_handler::ExecutedBatchBlock;
 
 pub(in crate::core) struct AmendOrderApplier;
 
-impl<'a> ApplyCommandChanges<
-    SpotAmendOrderCmd,
-    SpotCommandState<'a>,
-    ExecutedBatchBlock,
-    crate::core::TradeExecutionLog,
-    ExecuteTradingBatchError,
-> for AmendOrderApplier
+impl<'a>
+    ApplyCommandChanges<
+        SpotAmendOrderCmd,
+        SpotCommandState<'a>,
+        ExecutedBatchBlock,
+        crate::core::TradeExecutionLog,
+        ExecuteTradingBatchError,
+    > for AmendOrderApplier
 {
     fn apply_command_and_collect_changes(
         &self,

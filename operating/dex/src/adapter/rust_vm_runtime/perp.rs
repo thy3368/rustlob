@@ -1,11 +1,10 @@
 use l1_core::{PendingRequest, VmRuntimeError};
 
+use super::shared::parse_request_ids;
 use crate::core::{
     ExchangeCommand, ExchangeCommandEnvelope, PerpCommand, PerpPlaceOrderCmd, PerpSide,
     ProductType, TradingCommand,
 };
-
-use super::shared::parse_request_ids;
 
 pub(super) fn build_perp_envelope(
     request: &PendingRequest,

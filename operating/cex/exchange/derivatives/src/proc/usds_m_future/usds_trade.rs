@@ -14,9 +14,8 @@ use crate::proc::usds_m_future::handler::trade_handler::{
     AutoCancelAllOpenOrdersCmdHandler, CancelAllOpenOrdersCmdHandler,
     CancelMultipleOrdersCmdHandler, CancelOrderCmdHandler, ChangeInitialLeverageCmdHandler,
     ChangeMarginTypeCmdHandler, ChangeMultiAssetsModeCmdHandler, ChangePositionModeCmdHandler,
-    ModifyIsolatedPositionMarginCmdHandler, ModifyMultipleOrdersCmdHandler,
-    ModifyOrderCmdHandler, NewOrderCmdHandler, NewOrderTestCmdHandler,
-    PlaceMultipleOrdersCmdHandler,
+    ModifyIsolatedPositionMarginCmdHandler, ModifyMultipleOrdersCmdHandler, ModifyOrderCmdHandler,
+    NewOrderCmdHandler, NewOrderTestCmdHandler, PlaceMultipleOrdersCmdHandler,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -64,7 +63,8 @@ impl UsdsMFutureTradeBehaviorImpl {
             side: base_types::OrderSide::Buy,
             position_side: crate::proc::usds_m_future::behavior::trade_behavior::PositionSide::BOTH,
             stop_price: None,
-            working_type: crate::proc::usds_m_future::behavior::trade_behavior::WorkingType::MARK_PRICE,
+            working_type:
+                crate::proc::usds_m_future::behavior::trade_behavior::WorkingType::MARK_PRICE,
             price_protect: false,
             orig_type: crate::proc::usds_m_future::behavior::trade_behavior::OrderType::LIMIT,
             price_match: None,
@@ -92,56 +92,86 @@ impl UsdsMFutureTradeBehavior for UsdsMFutureTradeBehaviorImpl {
         match cmd {
             UsdsMFutureTradeCmdOrQuery::Cmd(cmd) => match cmd {
                 UsdsMFutureTradeCmd::NewOrder(cmd) => {
-                    NewOrderCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    NewOrderCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Order(Self::todo_order_response())))
                 }
                 UsdsMFutureTradeCmd::NewOrderTest(cmd) => {
-                    NewOrderTestCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    NewOrderTestCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Order(Self::todo_order_response())))
                 }
                 UsdsMFutureTradeCmd::PlaceMultipleOrders(cmd) => {
-                    PlaceMultipleOrdersCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    PlaceMultipleOrdersCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::BatchOrders(vec![])))
                 }
                 UsdsMFutureTradeCmd::CancelOrder(cmd) => {
-                    CancelOrderCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    CancelOrderCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Order(Self::todo_order_response())))
                 }
                 UsdsMFutureTradeCmd::ModifyOrder(cmd) => {
-                    ModifyOrderCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ModifyOrderCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Order(Self::todo_order_response())))
                 }
                 UsdsMFutureTradeCmd::CancelMultipleOrders(cmd) => {
-                    CancelMultipleOrdersCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    CancelMultipleOrdersCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::BatchOrders(vec![])))
                 }
                 UsdsMFutureTradeCmd::ModifyMultipleOrders(cmd) => {
-                    ModifyMultipleOrdersCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ModifyMultipleOrdersCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::BatchOrders(vec![])))
                 }
                 UsdsMFutureTradeCmd::CancelAllOpenOrders(cmd) => {
-                    CancelAllOpenOrdersCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    CancelAllOpenOrdersCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Success(Self::todo_success_response())))
                 }
                 UsdsMFutureTradeCmd::AutoCancelAllOpenOrders(cmd) => {
-                    AutoCancelAllOpenOrdersCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    AutoCancelAllOpenOrdersCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::CountdownResponse(CountdownResponse {
                         symbol: String::new(),
                         countdown_time: 0,
                     })))
                 }
                 UsdsMFutureTradeCmd::ChangeInitialLeverage(cmd) => {
-                    ChangeInitialLeverageCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ChangeInitialLeverageCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Leverage(LeverageResponse {
                         leverage: 0,
                         max_notional_value: String::new(),
@@ -149,8 +179,11 @@ impl UsdsMFutureTradeBehavior for UsdsMFutureTradeBehaviorImpl {
                     })))
                 }
                 UsdsMFutureTradeCmd::ChangeMarginType(cmd) => {
-                    ChangeMarginTypeCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ChangeMarginTypeCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::MarginType(MarginTypeResponse {
                         code: 0,
                         msg: "todo".to_string(),
@@ -167,13 +200,19 @@ impl UsdsMFutureTradeBehavior for UsdsMFutureTradeBehaviorImpl {
                     })))
                 }
                 UsdsMFutureTradeCmd::ChangePositionMode(cmd) => {
-                    ChangePositionModeCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ChangePositionModeCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Success(Self::todo_success_response())))
                 }
                 UsdsMFutureTradeCmd::ChangeMultiAssetsMode(cmd) => {
-                    ChangeMultiAssetsModeCmdHandler::new(repo.clone(), publisher)
-                        .cmd_handle(cmd, repo.clone(), publisher)?;
+                    ChangeMultiAssetsModeCmdHandler::new(repo.clone(), publisher).cmd_handle(
+                        cmd,
+                        repo.clone(),
+                        publisher,
+                    )?;
                     Ok(Self::response(UsdsMFutureTradeRes::Success(Self::todo_success_response())))
                 }
             },

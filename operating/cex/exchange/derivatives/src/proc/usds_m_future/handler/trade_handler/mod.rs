@@ -1,5 +1,3 @@
-use cmd_handler::DomainEventSet;
-
 pub use cmd::auto_cancel_all_open_orders_handler::AutoCancelAllOpenOrdersCmdHandler;
 pub use cmd::cancel_all_open_orders_handler::CancelAllOpenOrdersCmdHandler;
 pub use cmd::cancel_multiple_orders_handler::CancelMultipleOrdersCmdHandler;
@@ -14,14 +12,15 @@ pub use cmd::modify_order_handler::ModifyOrderCmdHandler;
 pub use cmd::new_order_handler::NewOrderCmdHandler;
 pub use cmd::new_order_test_handler::NewOrderTestCmdHandler;
 pub use cmd::place_multiple_orders_handler::PlaceMultipleOrdersCmdHandler;
+use cmd_handler::ReplayableEventSet;
 
 pub mod cmd;
 pub mod query;
 #[derive(Debug, Clone, Default)]
 pub struct EmptyStateSet;
 
-impl DomainEventSet for EmptyStateSet {
-    fn domain_event_count(&self) -> usize {
+impl ReplayableEventSet for EmptyStateSet {
+    fn event_count(&self) -> usize {
         0
     }
 }

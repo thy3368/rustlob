@@ -5,16 +5,14 @@ mod spot;
 pub mod spot_book;
 mod treasury;
 
+use std::sync::Arc;
+
 use alloy_primitives::{Address, B256, U256};
 use base_types::handler::handler_update::CmdHandlerForUpdate;
 use l1_core::{
     Account, AccountDelta, BlockStateChanges, CodeBlob, CodeDelta, PendingRequest, ProductEvent,
     Receipt, StorageDelta, VmExecutionInput, VmExecutionOutput, VmKind, VmRuntime, VmRuntimeError,
 };
-
-use std::sync::Arc;
-
-use crate::core::{ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ProductType};
 
 use self::option::build_option_envelope;
 use self::perp::build_perp_envelope;
@@ -25,6 +23,7 @@ use self::spot_book::{
     SpotOrderBookSnapshot,
 };
 use self::treasury::build_treasury_envelope;
+use crate::core::{ExchangeCommandEnvelope, ExecuteTradingBatchHandler, ProductType};
 
 pub struct RustVmRuntimeAdapter {
     handler: ExecuteTradingBatchHandler,
@@ -44,10 +43,7 @@ pub struct SpotBookOrderView {
 
 impl RustVmRuntimeAdapter {
     pub fn new() -> Self {
-        Self {
-            handler: ExecuteTradingBatchHandler::new(),
-            spot_order_book_repository: None,
-        }
+        Self { handler: ExecuteTradingBatchHandler::new(), spot_order_book_repository: None }
     }
 
     pub fn with_spot_order_book_repository(
@@ -66,7 +62,9 @@ impl RustVmRuntimeAdapter {
         Ok(Self::with_spot_order_book_repository(repository))
     }
 
-    fn snapshot_to_live_order_book(snapshot: SpotOrderBookSnapshot) -> crate::core::use_case::execute_trading_batch::SpotOrderBook {
+    fn snapshot_to_live_order_book(
+        snapshot: SpotOrderBookSnapshot,
+    ) -> crate::core::use_case::execute_trading_batch::SpotOrderBook {
         snapshot
             .into_iter()
             .map(|(market, orders)| (market, orders.into_iter().map(Into::into).collect()))
@@ -102,9 +100,7 @@ impl RustVmRuntimeAdapter {
 
     pub fn spot_book_orders(&self, market: &str) -> Result<Vec<SpotBookOrderView>, VmRuntimeError> {
         if let Some(repository) = &self.spot_order_book_repository {
-            let snapshot = repository
-                .load()
-                .map_err(VmRuntimeError::ExecutionFailed)?;
+            let snapshot = repository.load().map_err(VmRuntimeError::ExecutionFailed)?;
             return Ok(Self::snapshot_orders(snapshot, market));
         }
 
@@ -116,11 +112,8 @@ impl RustVmRuntimeAdapter {
         let Some(repository) = &self.spot_order_book_repository else {
             return Ok(());
         };
-        let snapshot = repository
-            .load()
-            .map_err(VmRuntimeError::ExecutionFailed)?;
-        self.handler
-            .restore_spot_order_book(Self::snapshot_to_live_order_book(snapshot));
+        let snapshot = repository.load().map_err(VmRuntimeError::ExecutionFailed)?;
+        self.handler.restore_spot_order_book(Self::snapshot_to_live_order_book(snapshot));
         Ok(())
     }
 
@@ -154,7 +147,9 @@ impl RustVmRuntimeAdapter {
         let storage_key = Self::hash_to_b256(&input.transaction.request_id);
         let storage_value = Self::hash_to_b256(&format!(
             "{}:{}:{}",
-            input.transaction.performer, input.transaction.action_type, input.transaction.payload_hash
+            input.transaction.performer,
+            input.transaction.action_type,
+            input.transaction.payload_hash
         ));
 
         BlockStateChanges {
@@ -183,7 +178,9 @@ impl RustVmRuntimeAdapter {
                     vm_kind: input.vm_kind,
                     bytes: format!(
                         "rustvm:{}:{}:{}",
-                        input.capability.0, input.transaction.action_type, input.transaction.payload_hash
+                        input.capability.0,
+                        input.transaction.action_type,
+                        input.transaction.payload_hash
                     )
                     .into_bytes(),
                 }),
@@ -268,8 +265,9 @@ impl VmRuntime<PendingRequest> for RustVmRuntimeAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use l1_core::VmCapability;
+
+    use super::*;
 
     fn pending_request() -> PendingRequest {
         PendingRequest {
