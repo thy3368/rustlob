@@ -61,6 +61,7 @@ class UseCaseSpec:
     command_name: str
     state_name: str
     error_name: str
+    output_name: str
     reply_name: str
     reply_mapper_name: str
 
@@ -238,6 +239,7 @@ def build_use_cases(actions: list[str], role: str) -> list[UseCaseSpec]:
                 command_name=f"{base}{'Query' if kind == 'query' else 'Cmd'}",
                 state_name=f"{base}StateSnapshot",
                 error_name=f"{base}Error",
+                output_name=f"{base}Output",
                 reply_name=f"{base}Reply",
                 reply_mapper_name=f"{base}ReplyMapper",
             )
@@ -321,7 +323,7 @@ def discover_review_targets(paths: list[str], *, scan_all: bool) -> list[Path]:
 
 def fallback_score_file(path: Path, *, min_score: int) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
-    use_case_name = first_match(text, r"impl\s+CommandUseCase2\s+for\s+([A-Za-z0-9_]+)") or path.stem
+    use_case_name = first_match(text, r"impl\s+CommandUseCase3\s+for\s+([A-Za-z0-9_]+)") or path.stem
     command_type = first_match(text, r"type\s+Command\s*=\s*([A-Za-z0-9_]+)")
     state_type = first_match(text, r"type\s+GivenState\s*=\s*([A-Za-z0-9_]+)")
     error_type = first_match(text, r"type\s+Error\s*=\s*([A-Za-z0-9_]+)")
@@ -498,7 +500,7 @@ def render_mod_rs(workflow: WorkflowSpec) -> str:
         lines.append(
             "pub use "
             f"{use_case.file_name}::{{{use_case.command_name}, {use_case.state_name}, "
-            f"{use_case.error_name}, {use_case.reply_name}, {use_case.reply_mapper_name}, "
+            f"{use_case.error_name}, {use_case.output_name}, {use_case.reply_name}, {use_case.reply_mapper_name}, "
             f"{use_case.use_case_name}}};"
         )
     return "\n".join(lines) + "\n"
@@ -506,13 +508,19 @@ def render_mod_rs(workflow: WorkflowSpec) -> str:
 
 def render_use_case_rs(workflow: WorkflowSpec, use_case: UseCaseSpec) -> str:
     role = workflow.role
-    accepted_field = "rows" if use_case.kind == "query" else "accepted"
-    accepted_value = "0" if use_case.kind == "query" else "false"
+    reply_field = "rows" if use_case.kind == "query" else "accepted"
+    reply_value = f"result.output.{reply_field}"
+    output_value = "0" if use_case.kind == "query" else "true"
     reply_body = "pub rows: usize," if use_case.kind == "query" else "pub accepted: bool,"
-    mapper_body = "rows: events.len()," if use_case.kind == "query" else "accepted: !events.is_empty(),"
+    output_body = (
+        "pub rows: usize,"
+        if use_case.kind == "query"
+        else "pub accepted: bool,"
+    )
 
-    return f"""use cmd_handler::use_case_def2::{{CommandUseCase2, IssuedByParty, UseCaseReplyMapper}};
-use cmd_handler::EntityReplayableEvent;
+    return f"""use cmd_handler::command_use_case_def2::{{
+    CommandUseCase3, IssuedByParty, UseCaseOutput, UseCaseReplyMapper3,
+}};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum {use_case.error_name} {{
@@ -536,6 +544,11 @@ impl IssuedByParty for {use_case.command_name} {{
 pub struct {use_case.state_name} {{}}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct {use_case.output_name} {{
+    {output_body}
+}}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct {use_case.reply_name} {{
     {reply_body}
 }}
@@ -543,12 +556,13 @@ pub struct {use_case.reply_name} {{
 #[derive(Debug, Clone, Copy, Default)]
 pub struct {use_case.reply_mapper_name};
 
-impl UseCaseReplyMapper for {use_case.reply_mapper_name} {{
+impl UseCaseReplyMapper3 for {use_case.reply_mapper_name} {{
+    type Output = {use_case.output_name};
     type Reply = {use_case.reply_name};
 
-    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {{
+    fn map(&self, result: UseCaseOutput<Self::Output>) -> Self::Reply {{
         {use_case.reply_name} {{
-            {mapper_body}
+            {reply_field}: {reply_value},
         }}
     }}
 }}
@@ -556,10 +570,11 @@ impl UseCaseReplyMapper for {use_case.reply_mapper_name} {{
 #[derive(Debug, Clone, Copy, Default)]
 pub struct {use_case.use_case_name};
 
-impl CommandUseCase2 for {use_case.use_case_name} {{
+impl CommandUseCase3 for {use_case.use_case_name} {{
     type Command = {use_case.command_name};
     type GivenState = {use_case.state_name};
     type Error = {use_case.error_name};
+    type Output = {use_case.output_name};
 
     fn role(&self) -> &'static str {{
         "{role}"
@@ -580,12 +595,15 @@ impl CommandUseCase2 for {use_case.use_case_name} {{
         Ok(())
     }}
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         _cmd: &Self::Command,
         _state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {{
-        Ok(Vec::new())
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {{
+        let output = {use_case.output_name} {{
+            {reply_field}: {output_value},
+        }};
+        Ok(UseCaseOutput {{ output, events: Vec::new() }})
     }}
 }}
 
@@ -614,27 +632,30 @@ mod tests {{
     }}
 
     #[test]
-    fn compute_replayable_events_returns_business_event_set() {{
+    fn compute_output_and_events_returns_business_result_and_events() {{
         let cmd = {use_case.command_name} {{ party_id: "party-1".to_string() }};
         let state = {use_case.state_name}::default();
-        let result = {use_case.use_case_name}.compute_replayable_events(&cmd, state);
-        assert!(matches!(result, Ok(events) if events.is_empty()));
+        let result = {use_case.use_case_name}.compute_output_and_events(&cmd, state);
+        assert!(matches!(result, Ok(result) if result.events.is_empty()));
     }}
 
     #[test]
     fn reply_mapper_maps_events_to_reply() {{
-        let reply = {use_case.reply_mapper_name}.map(Vec::new());
-        assert_eq!(reply.{accepted_field}, {accepted_value});
+        let reply = {use_case.reply_mapper_name}.map(UseCaseOutput {{
+            output: {use_case.output_name} {{ {reply_field}: {output_value} }},
+            events: Vec::new(),
+        }});
+        assert_eq!(reply.{reply_field}, {output_value});
     }}
 
     #[test]
     fn executor_happy_path_is_stubbed_for_follow_up() {{
-        // Fill this with CommandUseCaseExecutor2 + stub outbound once the domain state is known.
+        // Fill this with CommandUseCaseExecutor3 + stub outbound once the domain state is known.
     }}
 
     #[test]
     fn executor_rejection_path_is_stubbed_for_follow_up() {{
-        // Fill this with CommandUseCaseExecutor2 rejection behavior once the domain state is known.
+        // Fill this with CommandUseCaseExecutor3 rejection behavior once the domain state is known.
     }}
 }}
 """

@@ -4,7 +4,7 @@ Use `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_e
 
 ## What Makes It A Good Reference
 
-It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_replayable_events`.
+It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_output_and_events(...).events`.
 
 The file has five important layers:
 1. file header
@@ -108,7 +108,7 @@ If a scenario emits more than one event and order matters, assert it directly.
 
 ## 7. How To Reuse This Pattern On Another Use Case
 
-When you move to another `compute_replayable_events` implementation:
+When you move to another `compute_output_and_events` implementation:
 1. read the use case and entity methods
 2. identify scenario axes
 3. write the matrix at the top of the file

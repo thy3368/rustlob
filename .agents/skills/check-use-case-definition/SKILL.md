@@ -1,11 +1,11 @@
 ---
 name: check-use-case-definition
-description: Check whether RustLOB `CommandUseCase2` use cases are correctly defined as business use cases. Use when Codex should run the offline checker script, score files or directories, or explain why a use case failed the business-definition rubric.
+description: Check whether RustLOB `CommandUseCase3` use cases are correctly defined as business use cases. Use when Codex should run the offline checker script, score files or directories, or explain why a use case failed the business-definition rubric.
 ---
 
 # Check Use Case Definition
 
-Use this skill for RustLOB `CommandUseCase2` business-definition checks. Prefer the offline checker script over freeform scoring.
+Use this skill for RustLOB `CommandUseCase3` business-definition checks. Prefer the offline checker script over freeform scoring.
 
 ## Workflow
 

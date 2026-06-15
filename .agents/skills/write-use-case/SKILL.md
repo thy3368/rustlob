@@ -1,13 +1,13 @@
 ---
 name: write-use-case
-description: Write RustLOB command-style use cases around `CommandUseCase2`. Use when Codex needs to add or refactor files such as `*/workflow/*.rs`, define command/state/event/reply types, implement `pre_check_command` or `validate_against_state`, wire `UseCaseReplyMapper`, or keep persistence/load/publish logic out of the core use case.
+description: Write RustLOB command-style use cases around `CommandUseCase3`. Use when Codex needs to add or refactor files such as `*/workflow/*.rs`, define command/state/output/reply types, implement `pre_check_command` or `validate_against_state`, wire `UseCaseReplyMapper3`, or keep persistence/load/publish logic out of the core use case.
 ---
 
 # Write Use Case
 
 ## Overview
 
-Implement use cases the way this repository expects: business rules live in `CommandUseCase2`, orchestration lives in `CommandUseCaseExecutor2`, and state loading, persistence, replay, publish, and reply mapping stay outside the core.
+Implement use cases the way this repository now expects: business rules live in `CommandUseCase3`, orchestration lives in `CommandUseCaseExecutor3`, and state loading, persistence, replay, publish, and reply mapping stay outside the core.
 
 Treat the source code as the contract of truth. This skill summarizes the expected shape, but if the skill and the trait differ, follow the current code under `lib/common/cmd_handler/src/command_use_case_def2/`.
 
@@ -27,33 +27,35 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - `Error`
 - `Cmd`
 - `StateSnapshot` or `GivenState`
+- `Output`
 - optional `Reply`
-- optional `ReplyMapper`
+- optional `ReplyMapper3`
 - `UseCase`
 
-2. Shape the replayable output around the current contract.
-- `compute_replayable_events()` returns `Result<Vec<EntityReplayableEvent>, Self::Error>`.
-- Do not invent a wrapper event-set trait unless the surrounding module truly needs one.
-- Keep emitted events replayable and derived from `cmd + state`, not from a prebuilt transport reply.
+2. Shape business output around the current contract.
+- `compute_output_and_events()` returns `Result<UseCaseOutput<Self::Output>, Self::Error>`.
+- `output` is the current use case's strong typed business result for internal reuse.
+- `events` are the only facts meant for persist / replay / publish.
+- Do not maintain two unrelated derivation paths for `output` and `events`.
 
-3. Implement `CommandUseCase2`.
+3. Implement `CommandUseCase3`.
 - `role()` returns the business-game role, not a framework or module name.
 - `type Command` should implement `IssuedByParty` when a business party issues the command.
 - `pre_check_command()` only does cheap checks on the command itself.
 - `validate_against_state()` checks business invariants that need loaded state.
-- `compute_replayable_events()` derives replayable domain events from command and state.
+- `compute_output_and_events()` derives typed business output first, then the replayable domain events implied by that output.
 
 4. Keep these concerns out of the core use case.
 - Do not call DB, cache, broker, HTTP, filesystem, or VM registry lookup directly from the use case unless the state was already injected as part of `GivenState`.
 - Do not persist, replay, or publish events inside the use case.
-- Do not map domain events to HTTP or API replies inside the use case.
+- Do not map domain output or events to HTTP or API replies inside the use case.
 - Do not measure latency inside the business logic. The executor does that.
-- Do not call another `use_case` from inside the current `use_case`. If multiple business actions must cooperate, move that coordination to a higher orchestration layer.
+- Do not call another `use_case` from inside the current `use_case` unless the current use case is intentionally modeling a higher-level business pipeline in core and still returns one `UseCaseOutput`.
 
 5. Put adapter concerns in the right places.
 - `CommandUseCaseOutbound<Command, State>` belongs to the execution side and loads state from ports or adapters.
 - The outbound implementation owns `load_state`, `persist`, `replay`, and `publish`.
-- `UseCaseReplyMapper` maps replayable events to external reply DTOs.
+- `UseCaseReplyMapper3` maps `UseCaseOutput<Self::Output>` to external reply DTOs.
 - `CommandEnvelope.meta` owns technical metadata such as `trace_id` and `command_id`.
 - `command_id` is the stable business command identity for idempotency and deduplication.
 
@@ -62,12 +64,13 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - Prefer names that read as a business sentence:
   - `ReceiveAndAdmitTransactionsCmd`
   - `ReceiveAndAdmitTransactionsStateSnapshot`
+  - `ReceiveAndAdmitTransactionsOutput`
   - `ReceiveAndAdmitTransactionsReplyMapper`
   - `ReceiveAndAdmitTransactionsUseCase`
 - `GivenState` should be a domain snapshot, not a repository handle.
-- `Vec<EntityReplayableEvent>` should represent replayable business outputs, not transport responses.
+- `UseCaseOutput<Self::Output>` should represent a pure business result plus replayable business facts, not transport responses.
 - Keep `Error` domain-specific. Avoid stringly typed `Result<_, String>` as the main API.
-- Keep `compute_replayable_events()` deterministic for the same command and state.
+- Keep `compute_output_and_events()` deterministic for the same command and state.
 - `party_id` belongs to the business command, not to `CommandMeta`.
 - `trace_id` is only for tracing. Do not use it as the idempotency key.
 - Treat `entity` as a reusable core collaborator, not a private struct owned by one use case.
@@ -81,12 +84,13 @@ Required tests:
 - `role()` returns the intended actor.
 - `pre_check_command()` rejects malformed command-only input.
 - `validate_against_state()` rejects invalid state transitions.
-- `compute_replayable_events()` produces the expected replayable events.
-- `ReplyMapper` maps domain events correctly if a reply mapper exists.
-- `CommandUseCaseExecutor2::execute()` covers one happy path and one rejection path using stub `CommandUseCaseOutbound`.
+- `compute_output_and_events()` produces the expected typed output and replayable events.
+- `ReplyMapper3` maps business output to external reply correctly if a reply mapper exists.
+- `CommandUseCaseExecutor3::execute()` covers one happy path and one rejection path using stub `CommandUseCaseOutbound`.
+- `CommandUseCaseExecutor3::execute_and_map_reply()` covers typed output to reply mapping once the reply surface exists.
 
 Testing split:
-- `compute_replayable_events()` happy-path tests must use the sibling skill `write-use-case-happy-path-tests` and stay as business specification tests.
+- `compute_output_and_events().events` happy-path tests must use the sibling skill `write-use-case-happy-path-tests` and stay as business specification tests.
 - Keep `pre_check_command()` and `validate_against_state()` tests separate from the happy-path spec file.
 - Use `proptest` only to add invariant coverage; do not replace happy-path spec tests with it.
 
@@ -94,9 +98,11 @@ Testing split:
 
 Before finishing, verify:
 - The use case type only encodes business logic.
+- `Output` is a pure business result, not an adapter or transport DTO.
+- `events` are derived from the same business decision as `output`.
 - External state loading happens through `CommandUseCaseOutbound::load_state`.
 - Side effects happen through outbound `persist` / `replay` / `publish`.
-- Reply shaping happens through `UseCaseReplyMapper`.
-- The use case does not directly invoke another use case.
+- Reply shaping happens through `UseCaseReplyMapper3`.
+- The use case does not directly invoke outer technical workflow machinery.
 - Any reusable business rule that belongs on an entity is not duplicated inline in the use case.
 - Tests cover both direct method behavior and executor orchestration.

@@ -1,6 +1,6 @@
 ---
 name: workflow-use-case-modeling
-description: Generate RustLOB workflow modules and CommandUseCase2 use case skeletons from business text by following lib/example exactly. Use when Codex should map business text to example_core / example_inbound_adapter / example_outbound_adapter / example_composition_root, generate code-first skeletons, or review whether a design matches the example architecture.
+description: Generate RustLOB workflow modules and `CommandUseCase3` use case skeletons from business text by following `lib/example` exactly. Use when Codex should map business text to `example_core` / `example_inbound_adapter` / `example_outbound_adapter` / `example_composition_root`, generate code-first skeletons, or review whether a design matches the example architecture.
 ---
 
 # Workflow Use Case Modeling
@@ -39,11 +39,12 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 只放：
 
 - entity
-- `CommandUseCase2`
+- `CommandUseCase3`
 - command
 - `GivenState`
+- `Output`
 - domain error
-- replayable event 计算
+- business output 与 replayable event 计算
 
 不要放：
 
@@ -135,9 +136,9 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 先做最小建模：
 
 - `Role` -> `role()`
-- `Moment-Interval` -> 1 个 `CommandUseCase2`
-- `Party/Place/Thing` -> `GivenState` / entity / replayable event
-- `Description` -> command / error / event 命名
+- `Moment-Interval` -> 1 个 `CommandUseCase3`
+- `Party/Place/Thing` -> `GivenState` / entity / `UseCaseOutput.events`
+- `Description` -> command / error / output / event 命名
 
 然后强制分配到 4 个 crate。
 
@@ -164,11 +165,12 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 2. `Cmd`
 3. `IssuedByParty impl`
 4. `GivenState`
-5. optional `Reply`
-6. optional `ReplyMapper`
-7. `UseCase`
-8. `impl CommandUseCase2`
-9. tests
+5. `Output`
+6. optional `Reply`
+7. optional `ReplyMapper3`
+8. `UseCase`
+9. `impl CommandUseCase3`
+10. tests
 
 ## Minimum Tests
 
@@ -177,25 +179,22 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 - `role()`
 - `pre_check_command()`
 - `validate_against_state()`
-- `compute_replayable_events()`
-- happy path
-- rejection path
+- `compute_output_and_events()`
+- `ReplyMapper3`
+- `CommandUseCaseExecutor3::execute()`
+- `CommandUseCaseExecutor3::execute_and_map_reply()`
 
 ## Exact Repo Patterns
 
 直接参考这些真实文件：
 
 - core
-  - `lib/example/core/src/use_case/trading/place_order.rs`
-  - `lib/example/core/src/use_case/funding/deposit_quote.rs`
-  - `lib/example/core/src/use_case/funding/withdraw_quote.rs`
+  - `lib/example/core/src/use_case/trading/spot/place_order/immediate_order.rs`
+  - `lib/example/core/src/use_case/trading/spot/match_order.rs`
+  - `lib/example/core/src/use_case/trading/spot/settle_trade.rs`
+  - `lib/example/core/src/use_case/trading/spot/execute_immediate_order_pipeline.rs`
 - inbound
-  - `lib/example/inbound_adapter/src/trading/http.rs`
-  - `lib/example/inbound_adapter/src/trading/cli.rs`
-  - `lib/example/inbound_adapter/src/funding/deposit_http.rs`
-  - `lib/example/inbound_adapter/src/funding/deposit_cli.rs`
-  - `lib/example/inbound_adapter/src/funding/withdraw_http.rs`
-  - `lib/example/inbound_adapter/src/funding/withdraw_cli.rs`
+  - `lib/example/inbound_adapter/src/common.rs`
 - outbound
   - `lib/example/outbound_adapter/src/trading/place_order_in_memory.rs`
   - `lib/example/outbound_adapter/src/trading/place_order_mysql.rs`
@@ -213,15 +212,16 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 
 ## Concrete Mapping
 
-按 `PlaceOrder` 理解：
+按 `PlaceImmediateOrder` 理解：
 
 - `example_core`
-  - `PlaceOrderCmd`
-  - `PlaceOrderState`
-  - `PlaceOrderUseCase`
+  - `PlaceImmediateOrderCmd`
+  - `PlaceImmediateOrderState`
+  - `PlaceImmediateOrderOutput`
+  - `PlaceImmediateOrderUseCase`
 - `example_inbound_adapter`
   - HTTP payload / CLI args
-  - `CommandEnvelope<PlaceOrderCmd>`
+  - `CommandEnvelope<PlaceImmediateOrderCmd>`
   - HTTP/CLI reply mapping
 - `example_outbound_adapter`
   - `InMemoryPlaceOrderOutbound`
@@ -257,4 +257,4 @@ description: Generate RustLOB workflow modules and CommandUseCase2 use case skel
 ## References
 
 - `../../../lib/example/README.md`
-- `../../../lib/common/cmd_handler/src/use_case_def2.rs`
+- `../../../lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`

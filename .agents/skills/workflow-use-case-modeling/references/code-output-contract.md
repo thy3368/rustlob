@@ -11,14 +11,15 @@ Treat generated Rust code as the design artifact.
 
 ## Use Case Skeleton
 
-Each generated `CommandUseCase2` file should contain:
+Each generated `CommandUseCase3` file should contain:
 - domain error
 - command
 - `IssuedByParty`
 - given state snapshot
+- typed output
 - optional reply and mapper
 - use case type
-- `impl CommandUseCase2`
+- `impl CommandUseCase3`
 - tests
 
 ## Test Lock
@@ -27,6 +28,6 @@ Tests should express the design before full implementation:
 - actor role
 - invalid command-only input
 - invalid state transition
-- emitted business events
+- typed business output and emitted business events
 - orchestration happy path
 - orchestration rejection path

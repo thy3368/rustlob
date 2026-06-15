@@ -1,4 +1,4 @@
 interface:
   display_name: "Write Use Case"
   short_description: "Help write RustLOB command use cases"
-  default_prompt: "Implement RustLOB command use cases with CommandUseCase2, keep business logic in the use case, and keep loading, persistence, replay, publish, and reply mapping outside the core."
+  default_prompt: "Implement RustLOB command use cases with CommandUseCase3, keep business logic in the use case, derive typed output plus replayable events together, and keep loading, persistence, replay, publish, and reply mapping outside the core."

@@ -1,10 +1,10 @@
 # Happy Path Spec Test Checklist
 
-Use this checklist before finishing a `compute_replayable_events` happy-path test file.
+Use this checklist before finishing a `compute_output_and_events(...).events` happy-path test file.
 
 ## Read Path
 
-- Read the actual `compute_replayable_events()` implementation first.
+- Read the actual `compute_output_and_events()` implementation first.
 - Read the related command, given state, error, and entity methods.
 - Read existing helpers and test terminology before inventing new names.
 
@@ -48,7 +48,7 @@ Use this checklist before finishing a `compute_replayable_events` happy-path tes
 
 ## Scope Discipline
 
-- The file only covers happy-path `compute_replayable_events`.
+- The file only covers happy-path `compute_output_and_events(...).events`.
 - `pre_check_command()` tests are elsewhere.
 - `validate_against_state()` tests are elsewhere.
 - Property-test concerns are elsewhere.

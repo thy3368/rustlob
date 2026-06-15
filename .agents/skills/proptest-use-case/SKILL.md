@@ -1,6 +1,6 @@
 ---
 name: proptest-use-case
-description: Write property-based tests for RustLOB command-style use cases with `proptest`. Use when Codex needs to add or review `proptest!` tests for `CommandUseCase2`, design generators for commands or state snapshots, verify executor and pipeline invariants, or distinguish strong business properties from weak tautological tests.
+description: Write property-based tests for RustLOB command-style use cases with `proptest`. Use when Codex needs to add or review `proptest!` tests for `CommandUseCase3`, design generators for commands or state snapshots, verify executor and pipeline invariants, or distinguish strong business properties from weak tautological tests.
 disabled: true
 ---
 
@@ -8,13 +8,13 @@ disabled: true
 
 ## Overview
 
-Use `proptest` to verify business invariants of RustLOB use cases, not just sample inputs. Good properties start from happy paths to validate that the command design can express required business scenarios and that `compute_replayable_events` maps those scenarios into complete business events. Rejection paths and boundary failures come after that.
+Use `proptest` to verify business invariants of RustLOB use cases, not just sample inputs. Good properties start from happy paths to validate that the command design can express required business scenarios and that `compute_output_and_events` maps those scenarios into complete business outputs and events. Rejection paths and boundary failures come after that.
 
 For independent entity scenario coverage under `core/src/entity`, use `proptest-entity`.
 This skill stays focused on command/use-case properties and executor behavior.
 
 Start from these source files:
-- Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
+- Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Real property-test examples:
   - `lib/core/l1/src/use_case/command_handler/receive_and_admit_transactions.rs`
   - `lib/core/l1/src/use_case/command_handler/execute_and_commit_block.rs`
@@ -39,7 +39,8 @@ Read the shared good and bad examples before writing new properties.
 - Generate those scenarios as valid commands and states before adding invalid-command or invalid-state generators.
 - Use the happy-path property to check two things:
   - command completeness: the command shape can express each required scenario without adapter-specific hacks or missing fields.
-  - event completeness: `compute_replayable_events` emits all business facts and state changes required by that scenario.
+  - output completeness: `compute_output_and_events` returns the business result required by that scenario.
+  - event completeness: `compute_output_and_events().events` emits all business facts and state changes required by that scenario.
 - If a required successful scenario cannot be generated naturally, treat it as a command design gap.
 - Domain-specific fields are examples, not universal rules. For example, order commands may need supported execution intent, time-in-force, trigger behavior, side, or client order id; funding commands may need amount, account, currency, or balance-state scenarios.
 
@@ -59,8 +60,8 @@ Read the shared good and bad examples before writing new properties.
 - Keep generators business-aware: generate realistic `party_id`, amounts, statuses, limits, and counts.
 
 4. Test the right level.
-- Use direct method properties for pure logic in `pre_check_command`, `validate_against_state`, or `compute_replayable_events`.
-- Use `CommandUseCaseExecutor2` properties when orchestration matters:
+- Use direct method properties for pure logic in `pre_check_command`, `validate_against_state`, or `compute_output_and_events`.
+- Use `CommandUseCaseExecutor3` properties when orchestration matters:
   - load is or is not called
   - pipeline is or is not called
   - event counts and output shapes match the business rules
@@ -78,7 +79,7 @@ Read the shared good and bad examples before writing new properties.
 ## Good vs Bad
 
 - Good example characteristics:
-  - happy-path properties validate command design completeness and `compute_replayable_events` completeness
+  - happy-path properties validate command design completeness and `compute_output_and_events` completeness
   - property covers both acceptance and rejection branches
   - property checks side effects and emitted events
   - use case actually computes business outcomes

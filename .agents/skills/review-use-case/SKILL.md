@@ -7,10 +7,10 @@ description: Review and score RustLOB command-style use cases. Use when Codex ne
 
 ## Overview
 
-Review a RustLOB use case as design, not just syntax. The job is to determine whether the use case keeps business logic in `CommandUseCase2`, keeps orchestration outside, and models the business action cleanly under Clean Architecture and four-color modeling.
+Review a RustLOB use case as design, not just syntax. The job is to determine whether the use case keeps business logic in `CommandUseCase3`, keeps orchestration outside, and models the business action cleanly under Clean Architecture and four-color modeling.
 
 Start from these source files:
-- Contract: `lib/common/cmd_handler/src/use_case_def2.rs`
+- Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
 - Real L1 examples:
@@ -24,11 +24,11 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 ## Workflow
 
 1. Identify the use case surface.
-- Find the `CommandUseCase2` implementation.
-- Identify the command, state snapshot, events, error, reply mapper, load port, event pipeline, and any `CommandEnvelope` metadata around it.
+- Find the `CommandUseCase3` implementation.
+- Identify the command, state snapshot, typed output, replayable events, error, reply mapper, load port, event pipeline, and any `CommandEnvelope` metadata around it.
 
 2. Produce layer mapping with Clean Architecture terms.
-- `core.use_case`: the `CommandUseCase2` implementation
+- `core.use_case`: the `CommandUseCase3` implementation
 - `core.entity`: the domain state and invariants it depends on
 - `adapter.outbound`: load, persist, replay, publish, and reply mapping collaborators
 - `infra`: DB, broker, HTTP, runtime, SDK, filesystem, VM engine, tracing backend
@@ -42,6 +42,7 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 4. Check actor semantics before scoring.
 - `party_id` belongs to the business command, not to technical metadata.
 - `role()` should describe the business-game role, not a technical component or module.
+- `output` should stay a pure business result, not a transport DTO or adapter type.
 - Read the relationship as:
   - `party_id` = which business party
   - `role()` = which business role that party is playing
@@ -64,6 +65,7 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 - Score down when the use case directly calls repositories, clients, HTTP, DB, SDK, filesystem, or runtime machinery.
 - Score down when one use case directly calls another use case.
 - Score down when state snapshots already contain precomputed answers, so the use case is only copying results out.
+- Score down when `output` and `events` are produced by separate unrelated logic paths.
 - Score down when entity logic is missing and reusable business rules are duplicated inline in the use case.
 - Score down when an entity appears to exist only for one use case instead of serving as a reusable business object.
 - Score down when `role()` names a technical component instead of a business-game role.

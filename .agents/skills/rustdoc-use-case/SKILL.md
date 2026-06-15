@@ -1,6 +1,6 @@
 ---
 name: rustdoc-use-case
-description: Write Rustdoc for RustLOB `CommandUseCase2` use cases. Use when Codex needs to document command structs, business error enums, or use case types in files such as `*/use_case/**/*.rs`, add field-level docs, explain `pre_check_command` vs `validate_against_state`, or add minimal doctest examples without turning Rustdoc into the main test harness.
+description: Write Rustdoc for RustLOB `CommandUseCase3` use cases. Use when Codex needs to document command structs, business error enums, or use case types in files such as `*/use_case/**/*.rs`, add field-level docs, explain `pre_check_command` vs `validate_against_state`, or add minimal doctest examples without turning Rustdoc into the main test harness.
 ---
 
 # Rustdoc Use Case
@@ -124,10 +124,10 @@ Avoid these Rustdoc mistakes:
 
 For RustLOB use cases:
 
-- `CommandUseCase2` is the business boundary
+- `CommandUseCase3` is the business boundary
 - `pre_check_command()` is for cheap command-only validation
 - `validate_against_state()` is for loaded-state business checks
-- `compute_replayable_events()` is the business derivation core
+- `compute_output_and_events()` is the business derivation core
 
 Reflect that split in the docs when it helps the reader.
 
