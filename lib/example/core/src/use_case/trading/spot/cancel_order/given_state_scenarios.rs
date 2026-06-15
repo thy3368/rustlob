@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
+use cmd_handler::command_use_case_def2::CommandUseCase3;
 use proptest::prelude::*;
 
 use super::spot_order_scenarios::{
@@ -101,8 +101,9 @@ proptest! {
         let use_case = CancelSpotOrderUseCase;
         let state = scenario.state();
         let events = use_case
-            .compute_replayable_events(&cmd(), state)
-            .expect("cancelable stored order state should produce events");
+            .compute_output_and_events(&cmd(), state)
+            .expect("cancelable stored order state should produce events")
+            .events;
 
         prop_assert_eq!(events.len(), 2);
         prop_assert!(events[0].is_updated());

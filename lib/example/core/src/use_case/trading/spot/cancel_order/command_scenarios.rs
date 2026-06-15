@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
+use cmd_handler::command_use_case_def2::CommandUseCase3;
 use proptest::prelude::*;
 
 use super::*;

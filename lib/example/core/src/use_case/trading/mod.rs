@@ -41,8 +41,8 @@ pub use spot::place_order::{
 };
 pub use spot::{
     CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput,
-    CancelSpotOrderExecutionUseCase, CancelSpotOrderState, CancelSpotOrderUseCase,
-    ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
+    CancelSpotOrderState, CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineCmd,
+    ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
     ExecuteImmediateSpotOrderPipelineUseCase, MatchSpotOrderCmd, MatchSpotOrderError,
     MatchSpotOrderOutput, MatchSpotOrderState, MatchSpotOrderUseCase, SettleSpotTradeCmd,

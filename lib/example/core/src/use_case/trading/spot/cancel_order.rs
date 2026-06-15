@@ -1,7 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
-};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -86,14 +84,11 @@ pub struct CancelSpotOrderExecutionOutput {
     pub balances_after: Vec<Balance>,
 }
 
-/// Use case that derives both cancel output and replayable events in one path.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CancelSpotOrderExecutionUseCase;
-
-impl CommandUseCase2 for CancelSpotOrderUseCase {
+impl CommandUseCase3 for CancelSpotOrderUseCase {
     type Command = CancelSpotOrderCmd;
     type GivenState = CancelSpotOrderState;
     type Error = CancelSpotOrderError;
+    type Output = CancelSpotOrderExecutionOutput;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -137,37 +132,6 @@ impl CommandUseCase2 for CancelSpotOrderUseCase {
         }
 
         Ok(())
-    }
-
-    fn compute_replayable_events(
-        &self,
-        _cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        Ok(derive_cancel_output_and_events(state)?.events)
-    }
-}
-
-impl CommandUseCase3 for CancelSpotOrderExecutionUseCase {
-    type Command = CancelSpotOrderCmd;
-    type GivenState = CancelSpotOrderState;
-    type Error = CancelSpotOrderError;
-    type Output = CancelSpotOrderExecutionOutput;
-
-    fn role(&self) -> &'static str {
-        CancelSpotOrderUseCase.role()
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        CancelSpotOrderUseCase.pre_check_command(cmd)
-    }
-
-    fn validate_against_state(
-        &self,
-        cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<(), Self::Error> {
-        CancelSpotOrderUseCase.validate_against_state(cmd, state)
     }
 
     fn compute_output_and_events(
@@ -234,9 +198,6 @@ mod spot_order_scenarios;
 mod given_state_scenarios;
 
 #[cfg(test)]
-mod compute_replayable_events_happy_path;
-
-#[cfg(test)]
 mod compute_output_and_events_happy_path;
 
 #[cfg(test)]
@@ -299,7 +260,6 @@ mod tests {
     #[test]
     fn role_is_trader() {
         assert_eq!(CancelSpotOrderUseCase.role(), "Trader");
-        assert_eq!(CancelSpotOrderExecutionUseCase.role(), "Trader");
     }
 
     #[test]
@@ -342,10 +302,6 @@ mod tests {
 
         assert_eq!(
             CancelSpotOrderUseCase.validate_against_state(&cmd, &state),
-            Err(CancelSpotOrderError::OrderOwnerMismatch)
-        );
-        assert_eq!(
-            CancelSpotOrderExecutionUseCase.validate_against_state(&cmd, &state),
             Err(CancelSpotOrderError::OrderOwnerMismatch)
         );
     }
