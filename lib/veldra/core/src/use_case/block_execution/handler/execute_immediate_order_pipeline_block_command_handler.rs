@@ -163,7 +163,7 @@ fn execute_immediate_spot_pipeline(
         quote_asset_id: asset_pair.quote_asset_id.clone(),
         balances: settlement_balances_after_place(
             spot_state.balances.values().cloned().collect(),
-            place_output.affected_balance_after.clone(),
+            place_output.affected_balance.after.clone(),
         ),
         settled_trade_ids: spot_state.settled_trade_ids.iter().cloned().collect(),
     };
@@ -297,9 +297,10 @@ fn settlement_balances_after_place(
 }
 
 fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<Balance> {
-    let mut balances = vec![changes.place_output.affected_balance_after.clone()];
+    let mut balances = vec![changes.place_output.affected_balance.after.clone()];
     if let Some(settle_changes) = &changes.settle_changes {
-        balances.extend(settle_changes.balances_after.iter().cloned());
+        balances
+            .extend(settle_changes.updated_balances.iter().map(|balance| balance.after.clone()));
     }
     balances
 }
@@ -307,8 +308,8 @@ fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Ve
 fn spot_orders_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<SpotOrder> {
     let mut orders = vec![changes.place_output.order.clone()];
     if let Some(match_output) = &changes.match_output {
-        orders.extend(match_output.maker_orders_after.iter().cloned());
-        orders.push(match_output.taker_order_after.clone());
+        orders.extend(match_output.updated_maker_orders.iter().map(|order| order.after.clone()));
+        orders.push(match_output.updated_taker_order.after.clone());
     }
     orders
 }

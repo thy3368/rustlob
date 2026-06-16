@@ -537,8 +537,8 @@ fn deposit_and_withdraw_handlers_return_quote_changes() -> Result<(), BuildBlock
         deposit_command,
         &deposit_state.exchange_state,
     )?;
-    assert_eq!(deposit_result.quote_balance_before.available, 1_000);
-    assert_eq!(deposit_result.quote_balance_after.available, 1_500);
+    assert_eq!(deposit_result.updated_quote_balance.before.available, 1_000);
+    assert_eq!(deposit_result.updated_quote_balance.after.available, 1_500);
 
     let mut withdraw_state = sample_state();
     withdraw_state.exchange_state.treasury.balances.insert(
@@ -556,8 +556,8 @@ fn deposit_and_withdraw_handlers_return_quote_changes() -> Result<(), BuildBlock
         withdraw_command,
         &withdraw_state.exchange_state,
     )?;
-    assert_eq!(withdraw_result.quote_balance_before.available, 1_000);
-    assert_eq!(withdraw_result.quote_balance_after.available, 750);
+    assert_eq!(withdraw_result.updated_quote_balance.before.available, 1_000);
+    assert_eq!(withdraw_result.updated_quote_balance.after.available, 750);
 
     Ok(())
 }

@@ -91,10 +91,10 @@ pub(in crate::use_case::block_execution) fn apply_deposit_quote_changes(
 ) {
     treasury_state.balances.insert(
         AccountAssetKey::new(
-            result.quote_balance_after.account_id.as_str(),
-            result.quote_balance_after.asset_id.as_str(),
+            result.updated_quote_balance.after.account_id.as_str(),
+            result.updated_quote_balance.after.asset_id.as_str(),
         ),
-        result.quote_balance_after.clone(),
+        result.updated_quote_balance.after.clone(),
     );
 }
 
@@ -104,9 +104,9 @@ pub(in crate::use_case::block_execution) fn apply_withdraw_quote_changes(
 ) {
     treasury_state.balances.insert(
         AccountAssetKey::new(
-            result.quote_balance_after.account_id.as_str(),
-            result.quote_balance_after.asset_id.as_str(),
+            result.updated_quote_balance.after.account_id.as_str(),
+            result.updated_quote_balance.after.asset_id.as_str(),
         ),
-        result.quote_balance_after.clone(),
+        result.updated_quote_balance.after.clone(),
     );
 }

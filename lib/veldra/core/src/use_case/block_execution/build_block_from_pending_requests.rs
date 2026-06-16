@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges, UpdatedEntityPair};
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use example_core::{
     CancelSpotOrderChanges, DepositQuoteChanges, ExecuteImmediateSpotOrderPipelineChanges,
     WithdrawQuoteChanges,
@@ -165,29 +165,24 @@ fn extract_spot_pipeline_changes(
     let mut ordered_changes = Vec::new();
     let place_output = &execution.place_output;
     ordered_changes.push(BlockEntityChange::SpotOrderCreated(place_output.order.clone()));
-    ordered_changes.push(BlockEntityChange::BalanceUpdated(UpdatedEntityPair {
-        before: place_output.affected_balance_before.clone(),
-        after: place_output.affected_balance_after.clone(),
-    }));
+    ordered_changes.push(BlockEntityChange::BalanceUpdated(place_output.affected_balance.clone()));
 
     if let Some(match_output) = &execution.match_output {
         for (trade, maker_update) in
-            match_output.trades.iter().zip(&match_output.maker_orders_updated)
+            match_output.trades.iter().zip(&match_output.updated_maker_orders)
         {
             ordered_changes.push(BlockEntityChange::SpotTradeCreated(trade.clone()));
             ordered_changes.push(BlockEntityChange::SpotOrderUpdated(maker_update.clone()));
         }
-        ordered_changes.push(BlockEntityChange::SpotOrderUpdated(UpdatedEntityPair {
-            before: match_output.taker_order_before.clone(),
-            after: match_output.taker_order_after.clone(),
-        }));
+        ordered_changes
+            .push(BlockEntityChange::SpotOrderUpdated(match_output.updated_taker_order.clone()));
     }
 
     if let Some(settle_changes) = &execution.settle_changes {
         for settlement in &settle_changes.settlements {
             ordered_changes.push(BlockEntityChange::SpotSettlementCreated(settlement.clone()));
         }
-        for balance in &settle_changes.balances_updated {
+        for balance in &settle_changes.updated_balances {
             ordered_changes.push(BlockEntityChange::BalanceUpdated(balance.clone()));
         }
     }
@@ -205,15 +200,9 @@ fn extract_spot_cancel_changes(execution: &CancelSpotOrderChanges) -> Vec<BlockE
 }
 
 fn extract_deposit_quote_change(execution: &DepositQuoteChanges) -> BlockEntityChange {
-    BlockEntityChange::BalanceUpdated(UpdatedEntityPair {
-        before: execution.quote_balance_before.clone(),
-        after: execution.quote_balance_after.clone(),
-    })
+    BlockEntityChange::BalanceUpdated(execution.updated_quote_balance.clone())
 }
 
 fn extract_withdraw_quote_change(execution: &WithdrawQuoteChanges) -> BlockEntityChange {
-    BlockEntityChange::BalanceUpdated(UpdatedEntityPair {
-        before: execution.quote_balance_before.clone(),
-        after: execution.quote_balance_after.clone(),
-    })
+    BlockEntityChange::BalanceUpdated(execution.updated_quote_balance.clone())
 }
