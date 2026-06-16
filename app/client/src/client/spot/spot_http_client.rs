@@ -1,13 +1,13 @@
+use base_types::cqrs::cqrs_types::CmdResp;
 use base_types::handler::handler::Handler;
 use reqwest::Client;
-use base_types::cqrs::cqrs_types::CmdResp;
-use spot_behavior::proc::behavior::spot_trade_behavior::{CommonError, SpotCmdErrorAny};
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataBehavior, SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
-use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
+use spot_behavior::proc::behavior::v2::spot_trade_behavior::{
     SpotTradeBehaviorV2, SpotTradeCmdOrQuery, SpotTradeResAny,
 };
+use spot_behavior::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
     SpotUserDataBehavior, SpotUserDataCmdAny, SpotUserDataResAny,
 };
@@ -33,7 +33,7 @@ impl SpotHttpClient {
         &self,
         cmd: C,
         path: &str,
-    ) -> Result<CmdResp<R>, SpotCmdErrorAny>
+    ) -> Result<CmdResp<R>, SpotApiErrorAny>
     where
         C: serde::Serialize + std::fmt::Debug,
         R: serde::de::DeserializeOwned + std::fmt::Debug,
@@ -44,7 +44,7 @@ impl SpotHttpClient {
         println!("🔧 请求命令: {:?}", cmd);
 
         let response = self.http_client.post(&url).json(&cmd).send().await.map_err(|e| {
-            SpotCmdErrorAny::Common(CommonError::Internal {
+            SpotApiErrorAny::Common(CommonError::Internal {
                 message: format!("HTTP请求失败: {}", e),
             })
         })?;
@@ -55,13 +55,13 @@ impl SpotHttpClient {
         if !status.is_success() {
             let error_text =
                 response.text().await.unwrap_or_else(|_| "无法读取错误响应".to_string());
-            return Err(SpotCmdErrorAny::Common(CommonError::Internal {
+            return Err(SpotApiErrorAny::Common(CommonError::Internal {
                 message: format!("服务器返回错误状态: {} - {}", status, error_text),
             }));
         }
 
         let cmd_resp: CmdResp<R> = response.json().await.map_err(|e| {
-            SpotCmdErrorAny::Common(CommonError::Internal {
+            SpotApiErrorAny::Common(CommonError::Internal {
                 message: format!("响应解析失败: {}", e),
             })
         })?;
@@ -73,42 +73,42 @@ impl SpotHttpClient {
 }
 
 // 实现SpotTradeBehaviorV2
-impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotCmdErrorAny> for SpotHttpClient {
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny> for SpotHttpClient {
     async fn handle(
         &self,
         cmd: SpotTradeCmdOrQuery,
-    ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotTradeResAny>, SpotApiErrorAny> {
         self.send_generic_command(cmd, "v2").await
     }
 }
 
 // 实现SpotUserDataBehavior
-impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotCmdErrorAny> for SpotHttpClient {
+impl Handler<SpotUserDataCmdAny, SpotUserDataResAny, SpotApiErrorAny> for SpotHttpClient {
     async fn handle(
         &self,
         cmd: SpotUserDataCmdAny,
-    ) -> Result<CmdResp<SpotUserDataResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotUserDataResAny>, SpotApiErrorAny> {
         self.send_generic_command(cmd, "user_data").await
     }
 }
 
 // 实现SpotMarketDataBehavior
-impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotCmdErrorAny> for SpotHttpClient {
+impl Handler<SpotMarketDataCmdAny, SpotMarketDataResAny, SpotApiErrorAny> for SpotHttpClient {
     async fn handle(
         &self,
         cmd: SpotMarketDataCmdAny,
-    ) -> Result<CmdResp<SpotMarketDataResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotMarketDataResAny>, SpotApiErrorAny> {
         self.send_generic_command(cmd, "market_data").await
     }
 }
 
-impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotCmdErrorAny>
+impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotApiErrorAny>
     for SpotHttpClient
 {
     async fn handle(
         &self,
         cmd: SpotUserDataListenKeyCmdAny,
-    ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotUserDataListenKeyResAny>, SpotApiErrorAny> {
         self.send_generic_command(cmd, "listen_key").await
     }
 }
@@ -130,7 +130,7 @@ mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::OrderType;
     use base_types::{OrderSide, Timestamp, TradingPair};
-    use spot_behavior::proc::behavior::v2::spot_trade_behavior_v2::{
+    use spot_behavior::proc::behavior::v2::spot_trade_behavior::{
         NewOrderCmd, SpotTradeCmd, SpotTradeCmdOrQuery, TestNewOrderCmd,
     };
 

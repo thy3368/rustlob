@@ -1,6 +1,6 @@
 use reqwest::Client;
-use spot_behavior::proc::behavior::spot_trade_behavior::{
-    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotCmdErrorAny, SpotTradeBehavior,
+use spot_behavior::proc::behavior::v2::spot_trade_error::{
+    CmdResp, CommonError, IdemSpotResult, LimitOrder, SpotApiErrorAny, SpotTradeBehavior,
     SpotTradeCmdAny, SpotTradeResAny,
 };
 
@@ -44,7 +44,7 @@ impl RestfulClient {
     async fn post_cmd(
         &self,
         cmd: SpotTradeCmdAny,
-    ) -> Result<CmdResp<SpotTradeResAny>, SpotCmdErrorAny> {
+    ) -> Result<CmdResp<SpotTradeResAny>, SpotApiErrorAny> {
         let url = format!("{}/api/spot/order/", self.base_url);
 
         self.client
@@ -53,14 +53,14 @@ impl RestfulClient {
             .send()
             .await
             .map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal {
+                SpotApiErrorAny::Common(CommonError::Internal {
                     message: format!("HTTP request failed: {}", e),
                 })
             })?
             .json::<CmdResp<SpotTradeResAny>>()
             .await
             .map_err(|e| {
-                SpotCmdErrorAny::Common(CommonError::Internal {
+                SpotApiErrorAny::Common(CommonError::Internal {
                     message: format!("Failed to parse response: {}", e),
                 })
             })
@@ -76,7 +76,7 @@ impl SpotTradeBehavior for RestfulClient {
     fn handle(&mut self, cmd: SpotTradeCmdAny) -> IdemSpotResult {
         // 使用 tokio runtime 执行异步调用
         let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            SpotCmdErrorAny::Common(CommonError::Internal {
+            SpotApiErrorAny::Common(CommonError::Internal {
                 message: format!("Failed to create runtime: {}", e),
             })
         })?;
@@ -90,7 +90,7 @@ mod tests {
     use base_types::base_types::TraderId;
     use base_types::exchange::spot::spot_types::TimeInForce;
     use base_types::{AccountId, Decimal, OrderSide, TradingPair};
-    use spot_behavior::proc::behavior::spot_trade_behavior::CMetadata;
+    use spot_behavior::proc::behavior::v2::spot_trade_error::CMetadata;
 
     use super::*;
 
