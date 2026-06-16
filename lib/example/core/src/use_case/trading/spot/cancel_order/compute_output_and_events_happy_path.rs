@@ -107,15 +107,19 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_events()
     let events =
         result.to_replayable_events().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(result.order_after.status, SpotOrderStatus::Canceled);
-    assert_eq!(result.order_after.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-    assert_eq!(result.order_after.version, 2);
-    assert_eq!(result.balances_after.len(), 1);
+    assert_eq!(result.canceled_order.after.status, SpotOrderStatus::Canceled);
     assert_eq!(
-        result.balances_after[0],
+        result.canceled_order.after.status_reason,
+        Some(SpotOrderStatusReason::CanceledByUser)
+    );
+    assert_eq!(result.canceled_order.after.version, 2);
+    assert_eq!(result.released_balances.len(), 1);
+    assert_eq!(
+        result.released_balances[0].after,
         Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 0, 4)
     );
     assert_eq!(events.len(), 2);
+    assert_eq!(result.released_balances.len(), events.len() - 1);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
     assert_eq!(events[0].old_version, 1);
@@ -130,6 +134,18 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_events()
     assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
     assert_eq!(event_field_u64(&events[1], "available"), Some(100));
     assert_eq!(event_field_u64(&events[1], "frozen"), Some(0));
+    assert_eq!(
+        event_field(&events[1], "asset_id"),
+        Some(result.released_balances[0].after.asset_id.as_str())
+    );
+    assert_eq!(
+        event_field_u64(&events[1], "available"),
+        Some(result.released_balances[0].after.available)
+    );
+    assert_eq!(
+        event_field_u64(&events[1], "frozen"),
+        Some(result.released_balances[0].after.frozen)
+    );
 
     Ok(())
 }
@@ -143,15 +159,19 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_events()
     let events =
         result.to_replayable_events().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(result.order_after.status, SpotOrderStatus::Canceled);
-    assert_eq!(result.order_after.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-    assert_eq!(result.order_after.version, 2);
-    assert_eq!(result.balances_after.len(), 1);
+    assert_eq!(result.canceled_order.after.status, SpotOrderStatus::Canceled);
     assert_eq!(
-        result.balances_after[0],
+        result.canceled_order.after.status_reason,
+        Some(SpotOrderStatusReason::CanceledByUser)
+    );
+    assert_eq!(result.canceled_order.after.version, 2);
+    assert_eq!(result.released_balances.len(), 1);
+    assert_eq!(
+        result.released_balances[0].after,
         Balance::new("trader-1".to_string(), "BTC".to_string(), 7, 0, 4)
     );
     assert_eq!(events.len(), 2);
+    assert_eq!(result.released_balances.len(), events.len() - 1);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
     assert_eq!(events[0].old_version, 1);
@@ -166,6 +186,18 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_events()
     assert_eq!(event_field(&events[1], "asset_id"), Some("BTC"));
     assert_eq!(event_field_u64(&events[1], "available"), Some(7));
     assert_eq!(event_field_u64(&events[1], "frozen"), Some(0));
+    assert_eq!(
+        event_field(&events[1], "asset_id"),
+        Some(result.released_balances[0].after.asset_id.as_str())
+    );
+    assert_eq!(
+        event_field_u64(&events[1], "available"),
+        Some(result.released_balances[0].after.available)
+    );
+    assert_eq!(
+        event_field_u64(&events[1], "frozen"),
+        Some(result.released_balances[0].after.frozen)
+    );
 
     Ok(())
 }

@@ -77,23 +77,27 @@ pub enum CancelSpotOrderError {
 pub struct CancelSpotOrderUseCase;
 
 /// 本次撤单的业务 changes。
+///
+/// `Changes` 是业务变化的唯一真相：
+/// - create 场景直接保留新实体；
+/// - update 场景优先保留 `UpdatedEntityPair<T>`；
+/// - 不再并列维护可由 pair 的 `after` 直接投影出的重复 after 快照。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderChanges {
-    /// 撤单后的订单快照。
-    pub order_after: SpotOrder,
-    /// 本次撤单实际受影响的余额 after 快照。
-    pub balances_after: Vec<Balance>,
-    pub order_before: SpotOrder,
-    pub balances_updated: Vec<UpdatedEntityPair<Balance>>,
+    /// 被撤销订单的 before/after 对。
+    pub canceled_order: UpdatedEntityPair<SpotOrder>,
+    /// 本次撤单释放的余额 before/after 对。
+    pub released_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
 impl ReplayableChanges for CancelSpotOrderChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::with_capacity(1 + self.balances_updated.len());
-        events.push(self.order_after.track_update_event_from(&self.order_before)?);
-        for balance in &self.balances_updated {
+        let mut events = Vec::with_capacity(1 + self.released_balances.len());
+        events
+            .push(self.canceled_order.after.track_update_event_from(&self.canceled_order.before)?);
+        for balance in &self.released_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
         }
         Ok(events)
@@ -179,10 +183,8 @@ fn derive_cancel_changes(
         release_balance(state.base_balance, release_base)?
     };
     Ok(CancelSpotOrderChanges {
-        order_after,
-        balances_after: vec![balance_after.clone()],
-        order_before,
-        balances_updated: vec![UpdatedEntityPair { before: balance_before, after: balance_after }],
+        canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
+        released_balances: vec![UpdatedEntityPair { before: balance_before, after: balance_after }],
     })
 }
 
