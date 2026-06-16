@@ -67,7 +67,7 @@ fn event_pipeline_matches_and_settles_after_http_place() -> Result<(), Box<dyn s
         },
         &match_outbound,
     )?;
-    assert_eq!(match_result.output.trades.len(), 1);
+    assert_eq!(match_result.changes.trades.len(), 1);
 
     let Some(SpotPipelineMessage::SpotTradeMatched(matched)) = broker.pop()? else {
         panic!("expected SpotTradeMatched message");
@@ -82,7 +82,7 @@ fn event_pipeline_matches_and_settles_after_http_place() -> Result<(), Box<dyn s
         },
         &settle_outbound,
     )?;
-    assert_eq!(settle_result.output.settlements.len(), 1);
+    assert_eq!(settle_result.changes.settlements.len(), 1);
 
     let snapshot = store.snapshot_with_broker_depth(broker.len()?)?;
     assert_eq!(snapshot.trades.len(), 1);
