@@ -1,9 +1,9 @@
 use cmd_handler::command_use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError,
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, UseCaseChanges,
 };
 use example_core::{
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput, SettleSpotTradeState,
+    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
+    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
 };
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +57,7 @@ pub fn handle_spot_order_placed_event<OB>(
     request: MatchSpotOrderEventRequest,
     outbound: &OB,
 ) -> Result<
-    cmd_handler::command_use_case_def2::UseCaseOutput<MatchSpotOrderOutput>,
+    UseCaseChanges<MatchSpotOrderChanges>,
     CommandUseCaseExecutionError<MatchSpotOrderError, OB::Error>,
 >
 where
@@ -77,7 +77,7 @@ pub fn handle_spot_trade_matched_event<OB>(
     request: SettleSpotTradeEventRequest,
     outbound: &OB,
 ) -> Result<
-    cmd_handler::command_use_case_def2::UseCaseOutput<SettleSpotTradeOutput>,
+    UseCaseChanges<SettleSpotTradeChanges>,
     CommandUseCaseExecutionError<SettleSpotTradeError, OB::Error>,
 >
 where
