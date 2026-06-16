@@ -16,9 +16,11 @@ Start from these source files:
 - Executor: `lib/common/cmd_handler/src/command_use_case_def2/executor.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
+- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
 Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case.
+Read `.agents/skills/shared/changes_pair_first_rule.md` before shaping `Changes`.
 If the task is to critique or score a use case, use the sibling skill `review-use-case` instead.
 优先参考现有 V4 真实现例：
 - `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
@@ -40,6 +42,8 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - `compute_changes()` returns `Result<Self::Changes, Self::Error>`.
 - replayable events are a projection of `changes`, not a sibling derivation path.
 - `Changes` must carry business semantics, not just wrap `Vec<EntityReplayableEvent>`.
+- update 场景按 shared 规范默认 pair-first，优先使用 `UpdatedEntityPair<T>` 表达业务变化。
+- 避免并列维护可由 pair `after` 直接投影出的重复 `*_after` 快照。
 
 3. Implement `CommandUseCase4`.
 - `role()` returns the business-game role, not a framework or module name.
@@ -74,6 +78,7 @@ If the task is to critique or score a use case, use the sibling skill `review-us
   - `ReceiveAndAdmitTransactionsUseCase`
 - `GivenState` should be a domain snapshot, not a repository handle.
 - `Changes` should represent pure business facts before projection, not transport responses and not a raw event bag.
+- update 型 `Changes` 默认先建模 authoritative pair，再考虑是否真的需要额外业务结果字段。
 - Keep `Error` domain-specific. Avoid stringly typed `Result<_, String>` as the main API.
 - Keep `compute_changes()` deterministic for the same command and state.
 - Keep `to_replayable_events()` deterministic for the same changes.

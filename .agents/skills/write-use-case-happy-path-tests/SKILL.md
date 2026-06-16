@@ -25,10 +25,13 @@ Load these files before writing tests:
 - Main calibration example: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_happy_path.rs`
 - Style template: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_spec_style_template.rs`
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
+- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 
 Read these references from this skill when needed:
 - `references/example_breakdown.md`
 - `references/checklist.md`
+
+Read `.agents/skills/shared/changes_pair_first_rule.md` before deriving assertions from `Changes`.
 
 ## Workflow
 
@@ -74,6 +77,7 @@ The comments should explain business meaning, not Rust mechanics.
 
 8. Assert business facts and event order.
 - Assert `Changes` first when the business truth lives there.
+- For update scenarios, assert pair-first semantics before touching projected event fields.
 - Assert whether a trade event exists when a trade must happen.
 - Assert maker update events for makers whose state changes.
 - Assert taker update events for the taker finish state.
@@ -90,6 +94,7 @@ The comments should explain business meaning, not Rust mechanics.
 - If the scenario ends with a business reject/cancel reason, assert `status_reason`.
 - If the scenario ends as a normal successful fill or partial fill without reject semantics, assert `status_reason == None`.
 - When event projection matters, assert `changes.to_replayable_events()` after asserting the business fields inside `changes`.
+- When `Changes` uses a pair, verify pair `after` and the corresponding update event describe the same business result.
 
 Prefer helpers that encode business facts, such as:
 - `assert_trade_event_for_accounts(...)`
@@ -106,6 +111,7 @@ Before finishing, verify:
 - Every test uses `Rule/Given/When/Then`.
 - Every test body uses `arrange/act/assert`.
 - Every test asserts `Changes` business semantics before event projection details when both are relevant.
+- Update-scenario tests verify pair `after` and projected update events one by one.
 - Event order is asserted when multiple events are emitted.
 - `filled_qty` and `status_reason` assertions match the business semantics.
 - Each test clearly protects one matrix cell or one core happy-path rule.

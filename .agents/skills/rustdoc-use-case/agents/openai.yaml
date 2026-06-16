@@ -1,4 +1,4 @@
 interface:
   display_name: "Rustdoc Use Case"
   short_description: "Document RustLOB use cases with Rustdoc and doctest"
-  default_prompt: "Use this skill when documenting RustLOB CommandUseCase4 use cases with Rustdoc, including field docs, error docs, changes docs, projection-boundary docs, and minimal doctest examples."
+  default_prompt: "Use this skill when documenting RustLOB CommandUseCase4 use cases with Rustdoc, including field docs, error docs, changes docs, projection-boundary docs, pair-first changes for update scenarios, authoritative-truth wording, and minimal doctest examples while avoiding duplicate after snapshots."

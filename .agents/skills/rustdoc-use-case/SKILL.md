@@ -20,6 +20,9 @@ Keep Rustdoc short, business-oriented, and example-driven.
 Start from these files:
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Example with Rustdoc: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
+- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
+
+Read `.agents/skills/shared/changes_pair_first_rule.md` before documenting public `*Changes`.
 
 ## What To Document
 
@@ -48,6 +51,8 @@ Document these items first:
 - What business facts this strong typed changes object carries
 - Which fields are authoritative business truth
 - That replayable events come from `ReplayableChanges::to_replayable_events()`
+- For update scenarios, document pair-first fields as the primary business semantics
+- Avoid docs that normalize duplicate pair + `*_after` fields as if both were equal truths
 
 Field docs are useful when a field name is too generic or has business semantics that are not obvious from the type alone.
 
@@ -147,6 +152,7 @@ Before finishing:
 - important public fields have concise field docs
 - `*Error` has top-level docs plus per-variant docs where useful
 - `*Changes` has a short business-truth doc block when it is public
+- update-style `*Changes` docs clearly mark which pair field is authoritative
 - `*UseCase` has a short purpose statement
 - doctest examples are minimal and likely to stay stable
 - unit tests remain the main business harness

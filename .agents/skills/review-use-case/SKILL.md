@@ -13,12 +13,14 @@ Start from these source files:
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
+- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 - Real V4 examples:
   - `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
   - `lib/example/core/src/use_case/trading/spot/cancel_order.rs`
 
 Load [references/scorecard.md](references/scorecard.md) before scoring.
 Read `.agents/skills/shared/use_case_entity_constraints.md` before reviewing.
+Load `.agents/skills/shared/changes_pair_first_rule.md` before scoring `Changes`.
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need a fast good-vs-bad calibration before reviewing a real use case.
 
 ## Workflow
@@ -43,6 +45,7 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 - `party_id` belongs to the business command, not to technical metadata.
 - `role()` should describe the business-game role, not a technical component or module.
 - `Changes` should stay a pure business result, not a transport DTO, adapter type, or raw event bag.
+- update 场景默认应该是 pair-first；如果同时维护 `UpdatedEntityPair<T>` 和重复 `*_after`，应视为 violation。
 - Read the relationship as:
   - `party_id` = which business party
   - `role()` = which business role that party is playing
@@ -68,6 +71,7 @@ Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_
 - Score down when the use case directly hand-builds `EntityReplayableEvent` instead of deriving strong typed `Changes` first.
 - Score down when `Changes` is only an event container and does not encode real business meaning.
 - Score down when business derivation and replayable-event projection are mixed into one opaque step.
+- Score down when update `Changes` violates the shared pair-first rule by keeping both `UpdatedEntityPair<T>` and a duplicate `*_after` snapshot.
 - Score down when entity logic is missing and reusable business rules are duplicated inline in the use case.
 - Score down when an entity appears to exist only for one use case instead of serving as a reusable business object.
 - Score down when `role()` names a technical component instead of a business-game role.
@@ -87,3 +91,8 @@ Always return these sections:
 - `Minimal Refactor`
 
 Keep the summary brief. The main value is the score rationale and the findings.
+
+When pair-first violations exist:
+- call them out explicitly in `Findings`
+- explain why the duplicate `after` field creates double-truth ambiguity
+- include removing the duplicate `after` snapshot in `Minimal Refactor`
