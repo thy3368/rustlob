@@ -1,5 +1,3 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
-
 use super::test_support::sample_cmd;
 use super::*;
 

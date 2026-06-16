@@ -2,7 +2,8 @@ mod conditional_order;
 mod immediate_order;
 
 pub use conditional_order::{
-    PlaceConditionalOrderCmd, PlaceConditionalOrderState, PlaceConditionalOrderUseCase,
+    PlaceConditionalOrderCmd, PlaceConditionalOrderOutput, PlaceConditionalOrderState,
+    PlaceConditionalOrderUseCase,
 };
 pub use immediate_order::{
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderOutput,

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -102,10 +102,22 @@ pub struct SettleHyperliquidPerpTradeState {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleHyperliquidPerpTradeUseCase;
 
-impl CommandUseCase2 for SettleHyperliquidPerpTradeUseCase {
+/// 批量清结算成交后的业务产出。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleHyperliquidPerpTradeOutput {
+    /// 本批次新创建的清结算事实。
+    pub settlements: Vec<HyperliquidPerpSettlement>,
+    /// 本批次受影响仓位的 after 快照，顺序与输入状态稳定对齐。
+    pub positions_after: Vec<HyperliquidPerpPosition>,
+    /// 本批次受影响保证金余额的 after 快照，顺序与输入状态稳定对齐。
+    pub margin_balances_after: Vec<Balance>,
+}
+
+impl CommandUseCase3 for SettleHyperliquidPerpTradeUseCase {
     type Command = SettleHyperliquidPerpTradeCmd;
     type GivenState = SettleHyperliquidPerpTradeState;
     type Error = SettleHyperliquidPerpTradeError;
+    type Output = SettleHyperliquidPerpTradeOutput;
 
     fn role(&self) -> &'static str {
         "ClearingHouse"
@@ -135,53 +147,25 @@ impl CommandUseCase2 for SettleHyperliquidPerpTradeUseCase {
         validate_balances_can_apply(state, &outcome.balance_deltas)
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let outcome = derive_settlement_outcome(cmd, &state)?;
         validate_balances_can_apply(&state, &outcome.balance_deltas)?;
 
-        let mut events = Vec::new();
-        for settlement in outcome.settlements {
-            events.push(
-                settlement
-                    .track_create_event()
-                    .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-            );
-        }
-
-        let original_positions = position_map(state.positions.into_iter());
-        for (key, next_position) in outcome.positions {
-            let Some(mut old_position) = original_positions.get(&key).cloned() else {
-                return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
-            };
-            if old_position.version == 0 && !next_position.is_flat() {
-                events.push(
-                    next_position
-                        .track_create_event()
-                        .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-                );
-            } else if old_position != next_position {
-                events.push(
-                    old_position
-                        .track_update_event(|position| {
-                            position.apply_after(
-                                next_position.side,
-                                next_position.qty,
-                                next_position.entry_price,
-                                next_position.margin,
-                                next_position.realized_pnl,
-                                next_position.version,
-                            );
-                        })
-                        .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-                );
-            }
-        }
-
-        for mut balance in state.margin_balances {
+        let positions_after = state
+            .positions
+            .iter()
+            .filter_map(|position| {
+                let key =
+                    position_key(&position.account_id, position.asset, position.symbol.as_str());
+                outcome.positions.get(&key).cloned()
+            })
+            .collect::<Vec<_>>();
+        let mut margin_balances_after = Vec::new();
+        for balance in &state.margin_balances {
             let key = balance_key(&balance.account_id, &balance.asset_id);
             let Some(delta) = outcome.balance_deltas.get(&key) else {
                 continue;
@@ -192,16 +176,19 @@ impl CommandUseCase2 for SettleHyperliquidPerpTradeUseCase {
                 .version
                 .checked_add(1)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            events.push(
-                balance
-                    .track_update_event(|balance| {
-                        balance.apply_after(next_available, next_frozen, next_version);
-                    })
-                    .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-            );
+            let mut next_balance = balance.clone();
+            next_balance.apply_after(next_available, next_frozen, next_version);
+            margin_balances_after.push(next_balance);
         }
 
-        Ok(events)
+        let output = SettleHyperliquidPerpTradeOutput {
+            settlements: outcome.settlements,
+            positions_after,
+            margin_balances_after,
+        };
+        let events = settlement_output_into_events(&state, &output)?;
+
+        Ok(UseCaseOutput { output, events })
     }
 }
 
@@ -237,6 +224,60 @@ struct PositionAfter {
     entry_price: u64,
     margin: u64,
     realized_pnl_delta: i64,
+}
+
+fn settlement_output_into_events(
+    state: &SettleHyperliquidPerpTradeState,
+    output: &SettleHyperliquidPerpTradeOutput,
+) -> Result<Vec<EntityReplayableEvent>, SettleHyperliquidPerpTradeError> {
+    let mut events = Vec::new();
+    for settlement in &output.settlements {
+        events.push(
+            settlement
+                .track_create_event()
+                .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
+        );
+    }
+
+    let original_positions = position_map(state.positions.clone().into_iter());
+    for next_position in &output.positions_after {
+        let key = position_key(
+            &next_position.account_id,
+            next_position.asset,
+            next_position.symbol.as_str(),
+        );
+        let Some(old_position) = original_positions.get(&key) else {
+            return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
+        };
+        if old_position.version == 0 && !next_position.is_flat() {
+            events.push(
+                next_position
+                    .track_create_event()
+                    .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
+            );
+        } else if old_position != next_position {
+            events.push(
+                next_position
+                    .track_update_event_from(old_position)
+                    .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
+            );
+        }
+    }
+
+    let original_balances = balance_map(&state.margin_balances);
+    for next_balance in &output.margin_balances_after {
+        let key = balance_key(&next_balance.account_id, &next_balance.asset_id);
+        let Some(old_balance) = original_balances.get(&key) else {
+            return Err(SettleHyperliquidPerpTradeError::MarginBalanceNotFound);
+        };
+        events.push(
+            next_balance
+                .track_update_event_from(old_balance)
+                .map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
+        );
+    }
+
+    Ok(events)
 }
 
 fn validate_trade_ids_match(
@@ -565,7 +606,7 @@ fn balance_key(account_id: &str, asset_id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase2;
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
     use proptest::prelude::*;
 
     use super::*;
@@ -786,10 +827,14 @@ mod tests {
             vec![balance("buyer", 1_000, 0), balance("seller", 1_000, 0)],
         );
 
-        let events = SettleHyperliquidPerpTradeUseCase
-            .compute_replayable_events(&cmd(vec!["trade-1"]), state)?;
+        let result = SettleHyperliquidPerpTradeUseCase
+            .compute_output_and_events(&cmd(vec!["trade-1"]), state)?;
+        let events = result.events;
 
         assert_eq!(events.len(), 5);
+        assert_eq!(result.output.settlements.len(), 1);
+        assert_eq!(result.output.positions_after.len(), 2);
+        assert_eq!(result.output.margin_balances_after.len(), 2);
         assert!(events[0].is_created());
         assert_eq!(event_field(&events[0], "settlement_id"), Some("settle-1-1"));
         assert_eq!(field_as_u64(&events[0], "notional"), Some(200));
@@ -827,8 +872,9 @@ mod tests {
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
-        let events = SettleHyperliquidPerpTradeUseCase
-            .compute_replayable_events(&cmd(vec!["trade-1"]), state)?;
+        let result = SettleHyperliquidPerpTradeUseCase
+            .compute_output_and_events(&cmd(vec!["trade-1"]), state)?;
+        let events = result.events;
         let buyer_position = updated_event_with_field(&events, "entry_price").unwrap();
 
         assert_eq!(event_field(buyer_position, "qty"), Some("4"));
@@ -850,8 +896,9 @@ mod tests {
             vec![balance("buyer", 1_000, 30), balance("seller", 1_000, 0)],
         );
 
-        let events = SettleHyperliquidPerpTradeUseCase
-            .compute_replayable_events(&cmd(vec!["trade-1"]), state)?;
+        let result = SettleHyperliquidPerpTradeUseCase
+            .compute_output_and_events(&cmd(vec!["trade-1"]), state)?;
+        let events = result.events;
         let buyer_position = updated_event_with_field(&events, "realized_pnl").unwrap();
 
         assert_eq!(event_field(&events[0], "taker_realized_pnl"), Some("30"));
@@ -877,8 +924,9 @@ mod tests {
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
-        let events = SettleHyperliquidPerpTradeUseCase
-            .compute_replayable_events(&cmd(vec!["trade-1"]), state)?;
+        let result = SettleHyperliquidPerpTradeUseCase
+            .compute_output_and_events(&cmd(vec!["trade-1"]), state)?;
+        let events = result.events;
         let buyer_position = updated_event_with_field(&events, "side").unwrap();
 
         assert_eq!(event_field(&events[0], "taker_realized_pnl"), Some("-20"));
@@ -917,9 +965,10 @@ mod tests {
                 vec![balance("buyer", u64::MAX / 4, 0), balance("seller", u64::MAX / 4, 0)],
             );
 
-            let events = SettleHyperliquidPerpTradeUseCase
-                .compute_replayable_events(&cmd(vec!["trade-1"]), state)
+            let result = SettleHyperliquidPerpTradeUseCase
+                .compute_output_and_events(&cmd(vec!["trade-1"]), state)
                 .expect("generated safe opening scenario settles");
+            let events = result.events;
             let notional = price * qty;
             let margin = required_position_margin(qty, price, leverage).unwrap();
 

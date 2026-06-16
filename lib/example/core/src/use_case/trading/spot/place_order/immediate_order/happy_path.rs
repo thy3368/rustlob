@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{CommandUseCase2, CommandUseCase3};
+use cmd_handler::command_use_case_def2::CommandUseCase3;
 use proptest::prelude::*;
 
 use super::command_examples::{ImmediateCommandExample, supported_command_examples};
@@ -22,7 +22,7 @@ fn required_happy_path_scenarios(
 ) -> Vec<ImmediateHappyPathCase> {
     // 覆盖充分性判断：
     // command 业务组合由 `command_examples.rs` 单独枚举；本文件只验证这些成功组合
-    // 进入 `compute_replayable_events` 后，是否完整产出订单创建事件和账户冻结事件。
+    // 进入 `compute_output_and_events` 后，是否完整产出订单创建事件和账户冻结事件。
     supported_command_examples(base_cmd)
         .into_iter()
         .map(|(scenario, cmd)| {
@@ -83,13 +83,14 @@ fn required_happy_path_compute_cases_strategy() -> impl Strategy<Value = Vec<Imm
 #[test]
 fn role_is_trader() {
     let use_case = PlaceImmediateOrderUseCase;
-    assert_eq!(CommandUseCase2::role(&use_case), "Trader");
+    assert_eq!(use_case.role(), "Trader");
 }
 
 #[test]
-fn compute_replayable_events_produces_order_and_account_events() -> Result<(), PlaceOrderError> {
+fn compute_output_and_events_produces_order_and_account_events() -> Result<(), PlaceOrderError> {
     let use_case = PlaceImmediateOrderUseCase;
-    let events = use_case.compute_replayable_events(&sample_cmd(), sample_state())?;
+    let result = use_case.compute_output_and_events(&sample_cmd(), sample_state())?;
+    let events = result.events;
 
     assert_eq!(events.len(), 2);
     assert!(events[0].is_created());
@@ -132,27 +133,6 @@ fn compute_output_and_events_keeps_output_and_events_consistent() -> Result<(), 
         field_as_u64(&result.events[1], "frozen"),
         Some(result.output.affected_balance_after.frozen)
     );
-
-    Ok(())
-}
-
-#[test]
-fn v2_compatibility_returns_same_events_as_v3() -> Result<(), PlaceOrderError> {
-    let use_case = PlaceImmediateOrderUseCase;
-    let state = sample_state();
-
-    let v2_events = use_case.compute_replayable_events(&sample_cmd(), state.clone())?;
-    let v3_result = CommandUseCase3::compute_output_and_events(&use_case, &sample_cmd(), state)?;
-
-    assert_eq!(v2_events.len(), v3_result.events.len());
-    for (v2_event, v3_event) in v2_events.iter().zip(v3_result.events.iter()) {
-        assert_eq!(v2_event.entity_id, v3_event.entity_id);
-        assert_eq!(v2_event.entity_type, v3_event.entity_type);
-        assert_eq!(v2_event.change_type, v3_event.change_type);
-        assert_eq!(v2_event.old_version, v3_event.old_version);
-        assert_eq!(v2_event.new_version, v3_event.new_version);
-        assert_eq!(v2_event.field_changes, v3_event.field_changes);
-    }
 
     Ok(())
 }
@@ -202,9 +182,10 @@ proptest! {
             let expected_cloid = cmd.cloid.clone().unwrap_or_default();
             let expected_side = case.scenario.expected_side().as_str();
 
-            prop_assert_eq!(CommandUseCase2::pre_check_command(&use_case, &cmd), Ok(()));
+            prop_assert_eq!(use_case.pre_check_command(&cmd), Ok(()));
 
-            let events = use_case.compute_replayable_events(&cmd, state)?;
+            let result = use_case.compute_output_and_events(&cmd, state.clone())?;
+            let events = result.events;
 
             prop_assert_eq!(events.len(), 2);
             prop_assert!(events[0].is_created());
@@ -249,6 +230,15 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
+                prop_assert_eq!(result.output.affected_balance_after.asset_id, "USDT");
+                prop_assert_eq!(
+                    result.output.affected_balance_after.available,
+                    state.quote_balance.available - reserved_quote
+                );
+                prop_assert_eq!(
+                    result.output.affected_balance_after.frozen,
+                    state.quote_balance.frozen + reserved_quote
+                );
             } else {
                 prop_assert_eq!(
                     event_field(&events[1], "asset_id"),
@@ -262,7 +252,21 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
+                prop_assert_eq!(result.output.affected_balance_after.asset_id, "BTC");
+                prop_assert_eq!(
+                    result.output.affected_balance_after.available,
+                    state.base_balance.available - reserved_base
+                );
+                prop_assert_eq!(
+                    result.output.affected_balance_after.frozen,
+                    state.base_balance.frozen + reserved_base
+                );
             }
+            prop_assert_eq!(result.output.order.order_id, expected_order_id);
+            prop_assert_eq!(
+                result.output.order.client_order_id.as_deref().unwrap_or_default(),
+                expected_cloid
+            );
         }
     }
 }

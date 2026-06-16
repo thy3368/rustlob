@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -172,10 +172,20 @@ pub struct PlaceHyperliquidPerpOrderState {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceHyperliquidPerpOrderUseCase;
 
-impl CommandUseCase2 for PlaceHyperliquidPerpOrderUseCase {
+/// 创建 Hyperliquid perp 订单后的业务产出。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHyperliquidPerpOrderOutput {
+    /// 下单后订单快照。
+    pub order_after: HyperliquidPerpOrder,
+    /// 本次实际受影响的保证金余额 after 快照；reduce-only 路径为空。
+    pub balances_after: Vec<Balance>,
+}
+
+impl CommandUseCase3 for PlaceHyperliquidPerpOrderUseCase {
     type Command = PlaceHyperliquidPerpOrderCmd;
     type GivenState = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;
+    type Output = PlaceHyperliquidPerpOrderOutput;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -244,15 +254,15 @@ impl CommandUseCase2 for PlaceHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
-        let order = HyperliquidPerpOrder::new(
+        let order_after = HyperliquidPerpOrder::new(
             order_id,
             None,
             cmd.asset,
@@ -265,17 +275,21 @@ impl CommandUseCase2 for PlaceHyperliquidPerpOrderUseCase {
             cmd.reduce_only,
             cmd.cloid.clone(),
         );
-        let order_event = order
+        let order_event = order_after
             .track_create_event()
             .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
         if cmd.reduce_only {
-            return Ok(vec![order_event]);
+            return Ok(UseCaseOutput {
+                output: PlaceHyperliquidPerpOrderOutput { order_after, balances_after: Vec::new() },
+                events: vec![order_event],
+            });
         }
 
         let margin = required_position_margin(size, price, state.position.leverage)
             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
         let mut next_balance = state.margin_balance.clone();
+        let previous_balance = next_balance.clone();
         let (next_available, next_frozen) = state
             .margin_balance
             .reserve_after(margin)
@@ -285,13 +299,18 @@ impl CommandUseCase2 for PlaceHyperliquidPerpOrderUseCase {
             .version
             .checked_add(1)
             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
+        next_balance.apply_after(next_available, next_frozen, next_version);
         let balance_event = next_balance
-            .track_update_event(|balance| {
-                balance.apply_after(next_available, next_frozen, next_version);
-            })
+            .track_update_event_from(&previous_balance)
             .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
-        Ok(vec![order_event, balance_event])
+        Ok(UseCaseOutput {
+            output: PlaceHyperliquidPerpOrderOutput {
+                order_after,
+                balances_after: vec![next_balance],
+            },
+            events: vec![order_event, balance_event],
+        })
     }
 }
 
@@ -312,6 +331,7 @@ fn validate_reduce_only(
 
 #[cfg(test)]
 mod tests {
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
     use common_entity::EntityChangeType;
     use proptest::prelude::*;
 
@@ -534,9 +554,11 @@ mod tests {
                 execution: PlaceHyperliquidPerpOrderExecution::Limit { price: 101, time_in_force },
                 ..limit_cmd()
             };
-            let events = use_case().compute_replayable_events(&cmd, state()).unwrap();
+            let result = use_case().compute_output_and_events(&cmd, state()).unwrap();
+            let events = result.events;
 
             assert_eq!(events.len(), 2);
+            assert_eq!(result.output.balances_after.len(), 1);
             assert_eq!(events[0].change_type, EntityChangeType::Created.as_tag());
             assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTC-PERP-7"));
             assert_eq!(event_field_u64(&events[0], "asset"), Some(0));
@@ -560,9 +582,11 @@ mod tests {
 
     #[test]
     fn compute_market_order_uses_aggressive_price_and_ioc() {
-        let events = use_case().compute_replayable_events(&market_cmd(), state()).unwrap();
+        let result = use_case().compute_output_and_events(&market_cmd(), state()).unwrap();
+        let events = result.events;
 
         assert_eq!(events.len(), 2);
+        assert_eq!(result.output.order_after.time_in_force, HyperliquidPerpOrderTimeInForce::Ioc);
         assert_eq!(event_field(&events[0], "execution"), Some("market"));
         assert_eq!(event_field(&events[0], "time_in_force"), Some("ioc"));
         assert_eq!(event_field_u64(&events[0], "price"), Some(111));
@@ -580,8 +604,10 @@ mod tests {
             ..state()
         };
         assert_eq!(use_case().validate_against_state(&sell_cmd, &long_state), Ok(()));
-        let events = use_case().compute_replayable_events(&sell_cmd, long_state).unwrap();
+        let result = use_case().compute_output_and_events(&sell_cmd, long_state).unwrap();
+        let events = result.events;
         assert_eq!(events.len(), 1);
+        assert!(result.output.balances_after.is_empty());
         assert_eq!(event_field(&events[0], "side"), Some("sell"));
         assert_eq!(event_field(&events[0], "reduce_only"), Some("true"));
 
@@ -592,8 +618,10 @@ mod tests {
             ..state()
         };
         assert_eq!(use_case().validate_against_state(&buy_cmd, &short_state), Ok(()));
-        let events = use_case().compute_replayable_events(&buy_cmd, short_state).unwrap();
+        let result = use_case().compute_output_and_events(&buy_cmd, short_state).unwrap();
+        let events = result.events;
         assert_eq!(events.len(), 1);
+        assert!(result.output.balances_after.is_empty());
         assert_eq!(event_field(&events[0], "side"), Some("buy"));
         assert_eq!(event_field(&events[0], "reduce_only"), Some("true"));
     }
@@ -672,7 +700,8 @@ mod tests {
                 ..state()
             };
 
-            let events = use_case().compute_replayable_events(&cmd, state).unwrap();
+            let result = use_case().compute_output_and_events(&cmd, state).unwrap();
+            let events = result.events;
             let next_available = event_field_u64(&events[1], "available").unwrap();
             let next_frozen = event_field_u64(&events[1], "frozen").unwrap();
 
@@ -719,7 +748,8 @@ mod tests {
                 ..state()
             };
 
-            let events = use_case().compute_replayable_events(&cmd, state).unwrap();
+            let result = use_case().compute_output_and_events(&cmd, state).unwrap();
+            let events = result.events;
             let expected_side = if is_buy { "buy" } else { "sell" };
 
             prop_assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTC-PERP-99"));

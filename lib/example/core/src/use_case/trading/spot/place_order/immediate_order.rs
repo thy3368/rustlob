@@ -1,7 +1,4 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
-};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 
 use super::{
@@ -294,36 +291,6 @@ impl CommandUseCase3 for PlaceImmediateOrderUseCase {
             .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
         Ok(UseCaseOutput { output, events: vec![order_event, tracked_balance_event] })
-    }
-}
-
-impl CommandUseCase2 for PlaceImmediateOrderUseCase {
-    type Command = PlaceImmediateOrderCmd;
-    type GivenState = PlaceImmediateOrderState;
-    type Error = PlaceOrderError;
-
-    fn role(&self) -> &'static str {
-        <Self as CommandUseCase3>::role(self)
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        <Self as CommandUseCase3>::pre_check_command(self, cmd)
-    }
-
-    fn validate_against_state(
-        &self,
-        cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<(), Self::Error> {
-        <Self as CommandUseCase3>::validate_against_state(self, cmd, state)
-    }
-
-    fn compute_replayable_events(
-        &self,
-        cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        Ok(<Self as CommandUseCase3>::compute_output_and_events(self, cmd, state)?.events)
     }
 }
 

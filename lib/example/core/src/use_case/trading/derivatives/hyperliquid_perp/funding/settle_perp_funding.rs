@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -106,10 +106,20 @@ pub enum SettleHyperliquidPerpFundingError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleHyperliquidPerpFundingUseCase;
 
-impl CommandUseCase2 for SettleHyperliquidPerpFundingUseCase {
+/// 结算一批资金费后的业务产出。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleHyperliquidPerpFundingOutput {
+    /// 本批次新创建的资金费事实。
+    pub settlements: Vec<HyperliquidPerpFundingSettlement>,
+    /// 本批次受影响保证金余额的 after 快照。
+    pub margin_balances_after: Vec<Balance>,
+}
+
+impl CommandUseCase3 for SettleHyperliquidPerpFundingUseCase {
     type Command = SettleHyperliquidPerpFundingCmd;
     type GivenState = SettleHyperliquidPerpFundingState;
     type Error = SettleHyperliquidPerpFundingError;
+    type Output = SettleHyperliquidPerpFundingOutput;
 
     fn role(&self) -> &'static str {
         "ClearingHouse"
@@ -148,18 +158,43 @@ impl CommandUseCase2 for SettleHyperliquidPerpFundingUseCase {
         }
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let outcome = match state.margin_mode {
             HyperliquidPerpMarginMode::Cross => derive_cross_outcome(cmd, &state)?,
             HyperliquidPerpMarginMode::Isolated => {
                 return Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode);
             }
         };
-        outcome_into_events(state, outcome)
+        let mut margin_balances_after = Vec::new();
+        for balance in &state.margin_balances {
+            let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
+            let Some(delta) = outcome.balance_deltas.get(&key) else {
+                continue;
+            };
+            if delta.available_delta == 0 {
+                continue;
+            }
+            let next_available = apply_available_delta(balance, delta.available_delta)?;
+            let next_version = balance
+                .version
+                .checked_add(1)
+                .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
+            let mut next_balance = balance.clone();
+            next_balance.apply_after(next_available, balance.frozen, next_version);
+            margin_balances_after.push(next_balance);
+        }
+
+        let output = SettleHyperliquidPerpFundingOutput {
+            settlements: outcome.settlements,
+            margin_balances_after,
+        };
+        let events = funding_output_into_events(&state, &output)?;
+
+        Ok(UseCaseOutput { output, events })
     }
 }
 
@@ -284,15 +319,14 @@ fn derive_cross_outcome(
     Ok(outcome)
 }
 
-fn outcome_into_events(
-    state: SettleHyperliquidPerpFundingState,
-    outcome: FundingOutcome,
+fn funding_output_into_events(
+    state: &SettleHyperliquidPerpFundingState,
+    output: &SettleHyperliquidPerpFundingOutput,
 ) -> Result<Vec<EntityReplayableEvent>, SettleHyperliquidPerpFundingError> {
-    let original_balances = state.margin_balances.clone();
-    let balances = balance_map(&original_balances, state.margin_asset_id.as_str())?;
+    let balances = balance_map(&state.margin_balances, state.margin_asset_id.as_str())?;
     let mut events = Vec::new();
 
-    for settlement in outcome.settlements {
+    for settlement in &output.settlements {
         events.push(
             settlement
                 .track_create_event()
@@ -300,26 +334,15 @@ fn outcome_into_events(
         );
     }
 
-    for mut balance in state.margin_balances {
+    for balance in &output.margin_balances_after {
         let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
-        let Some(delta) = outcome.balance_deltas.get(&key) else {
-            continue;
-        };
         let original = balances
             .get(&key)
             .copied()
             .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
-        let next_available = apply_available_delta(original, delta.available_delta)?;
-        let next_version = balance
-            .version
-            .checked_add(1)
-            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-        let frozen = balance.frozen;
         events.push(
             balance
-                .track_update_event(|balance| {
-                    balance.apply_after(next_available, frozen, next_version);
-                })
+                .track_update_event_from(original)
                 .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?,
         );
     }
@@ -368,6 +391,8 @@ fn balance_key(account_id: &str, asset_id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
+
     use super::*;
     use crate::entity::HyperliquidPerpPositionSide;
 
@@ -464,13 +489,16 @@ mod tests {
     }
 
     #[test]
-    fn compute_replayable_events_updates_cross_balances_only() {
+    fn compute_output_and_events_updates_cross_balances_only() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
         let state = cross_state();
         let cmd = cross_cmd();
 
-        let events = use_case.compute_replayable_events(&cmd, state).unwrap();
+        let result = use_case.compute_output_and_events(&cmd, state).unwrap();
+        let events = result.events;
         assert_eq!(events.len(), 4);
+        assert_eq!(result.output.settlements.len(), 2);
+        assert_eq!(result.output.margin_balances_after.len(), 2);
         assert_eq!(events.iter().filter(|event| event.is_created()).count(), 2);
         assert_eq!(events.iter().filter(|event| event.is_updated()).count(), 2);
         assert!(events.iter().filter(|event| event.is_updated()).any(|event| {
@@ -500,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_replayable_events_rejects_insufficient_balance() {
+    fn compute_output_and_events_rejects_insufficient_balance() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
         let mut state = cross_state();
         state.positions.truncate(1);

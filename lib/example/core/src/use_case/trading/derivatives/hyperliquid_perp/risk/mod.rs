@@ -4,7 +4,8 @@ pub mod start_liquidation;
 
 pub use place_liquidation_order::{
     PlaceHyperliquidPerpLiquidationOrderCmd, PlaceHyperliquidPerpLiquidationOrderError,
-    PlaceHyperliquidPerpLiquidationOrderState, PlaceHyperliquidPerpLiquidationOrderUseCase,
+    PlaceHyperliquidPerpLiquidationOrderOutput, PlaceHyperliquidPerpLiquidationOrderState,
+    PlaceHyperliquidPerpLiquidationOrderUseCase,
 };
 pub use scan_liquidation_candidates::{
     HyperliquidPerpLiquidationCandidate, HyperliquidPerpRiskSnapshot,
@@ -14,5 +15,6 @@ pub use scan_liquidation_candidates::{
 };
 pub use start_liquidation::{
     StartHyperliquidPerpLiquidationCmd, StartHyperliquidPerpLiquidationError,
-    StartHyperliquidPerpLiquidationState, StartHyperliquidPerpLiquidationUseCase,
+    StartHyperliquidPerpLiquidationOutput, StartHyperliquidPerpLiquidationState,
+    StartHyperliquidPerpLiquidationUseCase,
 };

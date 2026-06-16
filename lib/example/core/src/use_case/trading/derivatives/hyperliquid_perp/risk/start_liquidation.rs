@@ -1,5 +1,4 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -83,10 +82,18 @@ pub enum StartHyperliquidPerpLiquidationError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StartHyperliquidPerpLiquidationUseCase;
 
-impl CommandUseCase2 for StartHyperliquidPerpLiquidationUseCase {
+/// 启动强平后的业务产出。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartHyperliquidPerpLiquidationOutput {
+    /// 新创建的强平事实。
+    pub liquidation: HyperliquidPerpLiquidation,
+}
+
+impl CommandUseCase3 for StartHyperliquidPerpLiquidationUseCase {
     type Command = StartHyperliquidPerpLiquidationCmd;
     type GivenState = StartHyperliquidPerpLiquidationState;
     type Error = StartHyperliquidPerpLiquidationError;
+    type Output = StartHyperliquidPerpLiquidationOutput;
 
     fn role(&self) -> &'static str {
         "RiskEngine"
@@ -119,11 +126,11 @@ impl CommandUseCase2 for StartHyperliquidPerpLiquidationUseCase {
         validate_state(cmd, state)
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         validate_state(cmd, &state)?;
 
         let liquidation = HyperliquidPerpLiquidation::new(
@@ -143,11 +150,14 @@ impl CommandUseCase2 for StartHyperliquidPerpLiquidationUseCase {
             HyperliquidPerpLiquidationStatus::Started,
         );
 
-        Ok(vec![
-            liquidation
-                .track_create_event()
-                .map_err(|_| StartHyperliquidPerpLiquidationError::ArithmeticOverflow)?,
-        ])
+        Ok(UseCaseOutput {
+            output: StartHyperliquidPerpLiquidationOutput { liquidation: liquidation.clone() },
+            events: vec![
+                liquidation
+                    .track_create_event()
+                    .map_err(|_| StartHyperliquidPerpLiquidationError::ArithmeticOverflow)?,
+            ],
+        })
     }
 }
 
@@ -190,7 +200,7 @@ fn liquidation_id(batch_id: &str, position_id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase2;
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
 
     use super::*;
     use crate::entity::HyperliquidPerpPositionSide;
@@ -276,11 +286,13 @@ mod tests {
 
     #[test]
     fn compute_creates_single_liquidation_event() {
-        let events = StartHyperliquidPerpLiquidationUseCase
-            .compute_replayable_events(&cmd(), state())
+        let result = StartHyperliquidPerpLiquidationUseCase
+            .compute_output_and_events(&cmd(), state())
             .unwrap();
+        let events = result.events;
 
         assert_eq!(events.len(), 1);
+        assert_eq!(result.output.liquidation.status, HyperliquidPerpLiquidationStatus::Started);
         assert!(events[0].is_created());
         assert!(events[0].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("liquidation_id")

@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -91,10 +91,22 @@ pub enum MatchHyperliquidPerpOrderError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchHyperliquidPerpOrderUseCase;
 
-impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
+/// 完成一轮撮合后的业务产出。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchHyperliquidPerpOrderOutput {
+    /// 本批次新创建的成交事实。
+    pub trades: Vec<HyperliquidPerpTrade>,
+    /// 撮合后的 taker 订单快照。
+    pub taker_order_after: HyperliquidPerpOrder,
+    /// 按撮合发生顺序返回的 maker after 快照。
+    pub maker_orders_after: Vec<HyperliquidPerpOrder>,
+}
+
+impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
     type Command = MatchHyperliquidPerpOrderCmd;
     type GivenState = MatchHyperliquidPerpOrderState;
     type Error = MatchHyperliquidPerpOrderError;
+    type Output = MatchHyperliquidPerpOrderOutput;
 
     fn role(&self) -> &'static str {
         "MatchingEngine"
@@ -149,17 +161,18 @@ impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
-        let mut taker_order = state.taker_order;
-        let mut taker_remaining = remaining_qty(&taker_order)?;
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let mut taker_order_after = state.taker_order.clone();
+        let mut taker_remaining = remaining_qty(&taker_order_after)?;
         let mut total_taker_fill = 0_u64;
-        let mut events = Vec::new();
+        let mut trades = Vec::new();
+        let mut maker_orders_after = Vec::new();
 
-        for (trade_index, maker_order) in state.maker_orders.into_iter().enumerate() {
+        for (trade_index, maker_order) in state.maker_orders.iter().enumerate() {
             if taker_remaining == 0 {
                 break;
             }
@@ -167,11 +180,11 @@ impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
             let maker_price = maker_order
                 .limit_price()
                 .ok_or(MatchHyperliquidPerpOrderError::MakerMustBeLimit)?;
-            if !can_cross(taker_order.side, taker_order.order_price(), maker_price) {
+            if !can_cross(taker_order_after.side, taker_order_after.order_price(), maker_price) {
                 break;
             }
 
-            let maker_remaining = remaining_qty(&maker_order)?;
+            let maker_remaining = remaining_qty(maker_order)?;
             let trade_qty = taker_remaining.min(maker_remaining);
             if trade_qty == 0 {
                 continue;
@@ -180,23 +193,19 @@ impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
             let trade = HyperliquidPerpTrade::new(
                 format!("{}-{}", cmd.match_id, trade_index + 1),
                 cmd.match_id.clone(),
-                taker_order.asset,
-                taker_order.symbol.clone(),
-                taker_order.order_id.clone(),
+                taker_order_after.asset,
+                taker_order_after.symbol.clone(),
+                taker_order_after.order_id.clone(),
                 maker_order.order_id.clone(),
-                taker_order.account_id.clone(),
+                taker_order_after.account_id.clone(),
                 maker_order.account_id.clone(),
-                taker_order.side,
+                taker_order_after.side,
                 maker_price,
                 trade_qty,
             );
-            events.push(
-                trade
-                    .track_create_event()
-                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
-            );
+            trades.push(trade);
 
-            let mut next_maker_order = maker_order;
+            let mut next_maker_order = maker_order.clone();
             let next_maker_filled = next_maker_order
                 .filled_qty
                 .checked_add(trade_qty)
@@ -206,15 +215,10 @@ impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
                 .version
                 .checked_add(1)
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            events.push(
-                next_maker_order
-                    .track_update_event(|order| {
-                        order.filled_qty = next_maker_filled;
-                        order.status = next_maker_status;
-                        order.version = next_maker_version;
-                    })
-                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
-            );
+            next_maker_order.filled_qty = next_maker_filled;
+            next_maker_order.status = next_maker_status;
+            next_maker_order.version = next_maker_version;
+            maker_orders_after.push(next_maker_order);
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -228,26 +232,51 @@ impl CommandUseCase2 for MatchHyperliquidPerpOrderUseCase {
             return Err(MatchHyperliquidPerpOrderError::NoTradesMatched);
         }
 
-        let next_taker_filled = taker_order
+        let next_taker_filled = taker_order_after
             .filled_qty
             .checked_add(total_taker_fill)
             .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        let next_taker_status = matched_status(taker_order.qty, next_taker_filled);
-        let next_taker_version = taker_order
+        let next_taker_status = matched_status(taker_order_after.qty, next_taker_filled);
+        let next_taker_version = taker_order_after
             .version
             .checked_add(1)
             .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+        taker_order_after.filled_qty = next_taker_filled;
+        taker_order_after.status = next_taker_status;
+        taker_order_after.version = next_taker_version;
+
+        let mut events = Vec::new();
+        for (trade, maker_after) in trades.iter().zip(&maker_orders_after) {
+            events.push(
+                trade
+                    .track_create_event()
+                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
+            );
+            let maker_before = state
+                .maker_orders
+                .iter()
+                .find(|maker| maker.order_id == maker_after.order_id)
+                .ok_or(MatchHyperliquidPerpOrderError::MakerIsTaker)?;
+            events.push(
+                maker_after
+                    .track_update_event_from(maker_before)
+                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
+            );
+        }
         events.push(
-            taker_order
-                .track_update_event(|order| {
-                    order.filled_qty = next_taker_filled;
-                    order.status = next_taker_status;
-                    order.version = next_taker_version;
-                })
+            taker_order_after
+                .track_update_event_from(&state.taker_order)
                 .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
         );
 
-        Ok(events)
+        Ok(UseCaseOutput {
+            output: MatchHyperliquidPerpOrderOutput {
+                trades,
+                taker_order_after,
+                maker_orders_after,
+            },
+            events,
+        })
     }
 }
 
@@ -284,7 +313,7 @@ fn matched_status(qty: u64, filled_qty: u64) -> HyperliquidPerpOrderStatus {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase2;
+    use cmd_handler::command_use_case_def2::CommandUseCase3;
     use proptest::prelude::*;
 
     use super::*;
@@ -478,9 +507,12 @@ mod tests {
             maker_orders: vec![maker_sell("maker-1", 1, 99), maker_sell("maker-2", 2, 100)],
         };
 
-        let events = MatchHyperliquidPerpOrderUseCase.compute_replayable_events(&cmd(), state)?;
+        let result = MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state)?;
+        let events = result.events;
 
         assert_eq!(events.len(), 5);
+        assert_eq!(result.output.trades.len(), 2);
+        assert_eq!(result.output.taker_order_after.filled_qty, 3);
         assert!(events[0].is_created());
         assert_eq!(event_field(&events[0], "trade_id"), Some("match-1-1"));
         assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
@@ -512,9 +544,11 @@ mod tests {
             ],
         };
 
-        let events = MatchHyperliquidPerpOrderUseCase.compute_replayable_events(&cmd(), state)?;
+        let result = MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state)?;
+        let events = result.events;
 
         assert_eq!(events.len(), 3);
+        assert_eq!(result.output.maker_orders_after.len(), 1);
         assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
         assert_eq!(event_field(&events[2], "filled_qty"), Some("1"));
         assert_eq!(event_field(&events[2], "status"), Some("partially_filled"));
@@ -530,7 +564,7 @@ mod tests {
         };
 
         assert_eq!(
-            MatchHyperliquidPerpOrderUseCase.compute_replayable_events(&cmd(), state),
+            MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state),
             Err(MatchHyperliquidPerpOrderError::NoTradesMatched)
         );
     }
@@ -551,9 +585,10 @@ mod tests {
                 maker_orders: makers,
             };
 
-            let events = MatchHyperliquidPerpOrderUseCase
-                .compute_replayable_events(&cmd(), state)
+            let result = MatchHyperliquidPerpOrderUseCase
+                .compute_output_and_events(&cmd(), state)
                 .expect("generated makers cross the taker price");
+            let events = result.events;
 
             let trade_events: Vec<_> = events.iter().filter(|event| event.is_created()).collect();
             let trade_qty_sum: u64 = trade_events

@@ -1,5 +1,3 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
-
 use super::test_support::sample_cmd;
 use super::*;
 
@@ -10,7 +8,7 @@ const EXAMPLE_MARKET_AGGRESSIVE_PRICE: u64 = 101;
 /// 这个枚举不是为了测试 Rust enum 本身，而是把 use case 目前承诺支持的 command
 /// 业务面固定下来。写 proptest 时应优先复用这里的场景矩阵：如果新增市价单、卖单、
 /// 新的 time-in-force 或其他成功业务形态，需要先扩展这里，再让 happy path 验证
-/// `compute_replayable_events` 是否完整表达这些业务事实。
+/// `compute_output_and_events().events` 是否完整表达这些业务事实。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ImmediateCommandExample {
     /// 限价 GTC，不带客户端订单号。
@@ -327,7 +325,7 @@ fn supported_command_examples_are_accepted_by_pre_check() {
 
     for (example, cmd) in supported_command_examples(sample_cmd()) {
         assert_eq!(
-            CommandUseCase2::pre_check_command(&use_case, &cmd),
+            use_case.pre_check_command(&cmd),
             Ok(()),
             "immediate command example should be accepted: {example:?}",
         );

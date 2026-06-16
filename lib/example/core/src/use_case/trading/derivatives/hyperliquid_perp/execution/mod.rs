@@ -3,15 +3,16 @@ pub mod place_perp_order;
 pub mod settle_perp_trade;
 
 pub use match_perp_order::{
-    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
-    MatchHyperliquidPerpOrderUseCase,
+    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderOutput,
+    MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase,
 };
 pub use place_perp_order::{
     PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
-    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
-    PlaceHyperliquidPerpOrderUseCase,
+    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderOutput,
+    PlaceHyperliquidPerpOrderState, PlaceHyperliquidPerpOrderUseCase,
 };
 pub use settle_perp_trade::{
     SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
-    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
+    SettleHyperliquidPerpTradeOutput, SettleHyperliquidPerpTradeState,
+    SettleHyperliquidPerpTradeUseCase,
 };

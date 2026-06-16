@@ -1,5 +1,4 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use common_entity::Entity;
 
 use super::{
@@ -85,13 +84,20 @@ impl IssuedByParty for PlaceConditionalOrderCmd {
 ///
 /// 条件单创建时不冻结资金。它只保存触发条件和触发后的执行意图；触发时再进入执行流程，
 /// 根据当时账户余额、市场规则和成交保护规则决定是否冻结和成交。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceConditionalOrderOutput {
+    /// 本次创建出来的条件单快照。
+    pub order: SpotConditionalOrder,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceConditionalOrderUseCase;
 
-impl CommandUseCase2 for PlaceConditionalOrderUseCase {
+impl CommandUseCase3 for PlaceConditionalOrderUseCase {
     type Command = PlaceConditionalOrderCmd;
     type GivenState = PlaceConditionalOrderState;
     type Error = PlaceOrderError;
+    type Output = PlaceConditionalOrderOutput;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -125,11 +131,11 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
         )
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let qty = cmd.qty()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
 
@@ -150,7 +156,10 @@ impl CommandUseCase2 for PlaceConditionalOrderUseCase {
         let order_event =
             order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-        Ok(vec![order_event])
+        Ok(UseCaseOutput {
+            output: PlaceConditionalOrderOutput { order },
+            events: vec![order_event],
+        })
     }
 }
 

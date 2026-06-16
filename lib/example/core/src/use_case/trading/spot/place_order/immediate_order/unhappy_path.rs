@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase2;
+use cmd_handler::command_use_case_def2::CommandUseCase3;
 use proptest::prelude::*;
 
 use super::test_support::{
@@ -25,7 +25,7 @@ fn pre_check_rejects_zero_qty() {
     let mut cmd = sample_cmd();
     cmd.size = 0;
 
-    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
+    let result = use_case.pre_check_command(&cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidQty));
 }
 
@@ -36,7 +36,7 @@ fn pre_check_rejects_zero_price() {
     cmd.execution =
         PlaceImmediateOrderExecution::Limit { price: 0, time_in_force: PlaceOrderTimeInForce::Gtc };
 
-    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
+    let result = use_case.pre_check_command(&cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidPrice));
 }
 
@@ -46,7 +46,7 @@ fn pre_check_rejects_zero_market_aggressive_price() {
     let mut cmd = sample_cmd();
     cmd.execution = PlaceImmediateOrderExecution::Market { aggressive_price: 0 };
 
-    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
+    let result = use_case.pre_check_command(&cmd);
     assert_eq!(result, Err(PlaceOrderError::InvalidPrice));
 }
 
@@ -56,7 +56,7 @@ fn pre_check_rejects_reduce_only_for_spot_order() {
     let mut cmd = sample_cmd();
     cmd.reduce_only = true;
 
-    let result = CommandUseCase2::pre_check_command(&use_case, &cmd);
+    let result = use_case.pre_check_command(&cmd);
     assert_eq!(result, Err(PlaceOrderError::UnsupportedReduceOnly));
 }
 
@@ -66,7 +66,7 @@ fn validate_against_state_rejects_insufficient_balance() {
     let mut state = sample_state();
     state.quote_balance.available = 10;
 
-    let result = CommandUseCase2::validate_against_state(&use_case, &sample_cmd(), &state);
+    let result = use_case.validate_against_state(&sample_cmd(), &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientQuoteBalance));
 }
 
@@ -78,17 +78,17 @@ fn validate_against_state_rejects_insufficient_base_for_sell_order() {
     let mut state = sample_state();
     state.base_balance.available = 1;
 
-    let result = CommandUseCase2::validate_against_state(&use_case, &cmd, &state);
+    let result = use_case.validate_against_state(&cmd, &state);
     assert_eq!(result, Err(PlaceOrderError::InsufficientBaseBalance));
 }
 
 proptest! {
     #[test]
-    fn property_compute_replayable_events_rejects_zero_price_or_size(
+    fn property_compute_output_and_events_rejects_zero_price_or_size(
         cmd in zero_price_or_size_cmd_strategy(),
     ) {
         let use_case = PlaceImmediateOrderUseCase;
-        let result = use_case.compute_replayable_events(&cmd, sample_state());
+        let result = use_case.compute_output_and_events(&cmd, sample_state());
 
         if cmd.size == 0 {
             prop_assert_eq!(result, Err(PlaceOrderError::InvalidQty));
@@ -98,12 +98,12 @@ proptest! {
     }
 
     #[test]
-    fn property_compute_replayable_events_rejects_notional_overflow(
+    fn property_compute_output_and_events_rejects_notional_overflow(
         price in 2_u64..=u64::MAX,
     ) {
         let use_case = PlaceImmediateOrderUseCase;
         let cmd = cmd_with_price_and_size(price, u64::MAX);
-        let result = use_case.compute_replayable_events(&cmd, sample_state());
+        let result = use_case.compute_output_and_events(&cmd, sample_state());
 
         prop_assert_eq!(result, Err(PlaceOrderError::ArithmeticOverflow));
     }
