@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use example_core::{
     Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
@@ -22,9 +21,8 @@ use crate::use_case::block_execution::handler::execute_immediate_order_pipeline_
 use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER;
 use super::*;
 use crate::entity::{
-    AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand,
-    ProductCommandResult, SpotAssetPair, SpotCommand, SpotCommandResult, TreasuryCommand,
-    TreasuryCommandResult,
+    AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotAssetPair,
+    SpotCommand, TreasuryCommand,
 };
 
 fn sample_command() -> BuildBlockFromCommandsCommand {
@@ -453,10 +451,6 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     Ok(())
 }
 
-fn stub_event(sequence: u64) -> EntityReplayableEvent {
-    EntityReplayableEvent::new(123, sequence, 0, 1, 1, 1, 1)
-}
-
 #[test]
 fn resolve_block_command_handler_maps_all_five_command_families() {
     assert!(matches!(
@@ -482,7 +476,8 @@ fn resolve_block_command_handler_maps_all_five_command_families() {
 }
 
 #[test]
-fn execute_immediate_order_pipeline_handler_rebases_events() -> Result<(), BuildBlockError> {
+fn execute_immediate_order_pipeline_handler_returns_changes_and_apply_patch()
+-> Result<(), BuildBlockError> {
     let state = sample_state();
     let envelope = sample_envelope();
     let ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command)) =
@@ -491,72 +486,42 @@ fn execute_immediate_order_pipeline_handler_rebases_events() -> Result<(), Build
         unreachable!();
     };
 
-    let mut result = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.execute(
+    let result = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.execute(
         &envelope,
         command,
         &state.exchange_state,
     )?;
-    let ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(execution)) =
-        &mut result.result
-    else {
-        unreachable!();
-    };
-
-    execution.events = vec![stub_event(0), stub_event(1)];
-    EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.rebase_events(execution, 9);
-
-    let sequences = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER
-        .events(execution)
-        .iter()
-        .map(|event| event.sequence)
-        .collect::<Vec<_>>();
-    assert_eq!(sequences, vec![9, 10]);
-    assert!(
-        EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER
-            .events(execution)
-            .iter()
-            .all(|event| event.timestamp == 0)
-    );
+    assert_eq!(result.apply_patch.next_order_sequence, 8);
+    assert!(result.apply_patch.settled_trade_ids_appended.is_empty());
+    assert!(result.changes.match_output.is_none());
+    assert!(result.changes.settle_changes.is_none());
+    assert_eq!(result.changes.place_output.order.order_id, "trader-1-BTCUSDT-7");
 
     Ok(())
 }
 
 #[test]
-fn cancel_order_handler_rebases_events() -> Result<(), BuildBlockError> {
+fn cancel_order_handler_returns_example_core_changes() -> Result<(), BuildBlockError> {
     let state = state_with_open_buy_order();
     let envelope = cancel_envelope();
     let ProductCommand::Spot(SpotCommand::CancelOrder(command)) = &envelope.command else {
         unreachable!();
     };
 
-    let mut result =
+    let result =
         CANCEL_ORDER_BLOCK_COMMAND_HANDLER.execute(&envelope, command, &state.exchange_state)?;
-    let ProductCommandResult::Spot(SpotCommandResult::CancelOrder(execution)) = &mut result.result
-    else {
-        unreachable!();
-    };
-
-    execution.events = vec![stub_event(0), stub_event(1)];
-    CANCEL_ORDER_BLOCK_COMMAND_HANDLER.rebase_events(execution, 4);
-
-    let sequences = CANCEL_ORDER_BLOCK_COMMAND_HANDLER
-        .events(execution)
-        .iter()
-        .map(|event| event.sequence)
-        .collect::<Vec<_>>();
-    assert_eq!(sequences, vec![4, 5]);
-    assert!(
-        CANCEL_ORDER_BLOCK_COMMAND_HANDLER
-            .events(execution)
-            .iter()
-            .all(|event| event.timestamp == 0)
-    );
+    assert_eq!(result.order_before.status, SpotOrderStatus::Open);
+    assert_eq!(result.order_after.status, SpotOrderStatus::Canceled);
+    assert_eq!(result.balances_updated.len(), 1);
+    assert_eq!(result.balances_after.len(), 1);
+    assert_eq!(result.balances_updated[0].before.frozen, 200);
+    assert_eq!(result.balances_updated[0].after.frozen, 0);
 
     Ok(())
 }
 
 #[test]
-fn deposit_and_withdraw_handlers_set_treasury_command_kind() -> Result<(), BuildBlockError> {
+fn deposit_and_withdraw_handlers_return_quote_changes() -> Result<(), BuildBlockError> {
     let mut deposit_state = sample_state();
     deposit_state.exchange_state.treasury.balances.insert(
         AccountAssetKey::new("trader-1", "USDT"),
@@ -573,11 +538,8 @@ fn deposit_and_withdraw_handlers_set_treasury_command_kind() -> Result<(), Build
         deposit_command,
         &deposit_state.exchange_state,
     )?;
-    assert_eq!(deposit_result.command_kind, "treasury");
-    assert!(matches!(
-        deposit_result.result,
-        ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(_))
-    ));
+    assert_eq!(deposit_result.quote_balance_before.available, 1_000);
+    assert_eq!(deposit_result.quote_balance_after.available, 1_500);
 
     let mut withdraw_state = sample_state();
     withdraw_state.exchange_state.treasury.balances.insert(
@@ -595,11 +557,8 @@ fn deposit_and_withdraw_handlers_set_treasury_command_kind() -> Result<(), Build
         withdraw_command,
         &withdraw_state.exchange_state,
     )?;
-    assert_eq!(withdraw_result.command_kind, "treasury");
-    assert!(matches!(
-        withdraw_result.result,
-        ProductCommandResult::Treasury(TreasuryCommandResult::QuoteBalanceUpdated(_))
-    ));
+    assert_eq!(withdraw_result.quote_balance_before.available, 1_000);
+    assert_eq!(withdraw_result.quote_balance_after.available, 750);
 
     Ok(())
 }

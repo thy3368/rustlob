@@ -2,9 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cmd_handler::EntityReplayableEvent;
 use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineChanges,
-    ExecuteImmediateSpotOrderPipelineCmd, HyperliquidPerpFundingSettlement, HyperliquidPerpOrder,
-    HyperliquidPerpPosition, MarketRules, SpotOrder, SpotSettlement, SpotTrade, WithdrawQuoteCmd,
+    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
+    HyperliquidPerpFundingSettlement, HyperliquidPerpOrder, HyperliquidPerpPosition, MarketRules,
+    SpotOrder, WithdrawQuoteCmd,
 };
 
 use super::stable_hash_hex;
@@ -139,133 +139,6 @@ impl TreasuryCommand {
                 command.party_id.as_str(),
                 command.amount.to_string().as_str(),
             ]),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommandExecutionResult {
-    pub command_id: String,
-    pub command_kind: String,
-    pub command_commitment: String,
-    pub result: ProductCommandResult,
-}
-
-impl CommandExecutionResult {
-    pub fn commitment(&self) -> String {
-        stable_hash_hex(&[
-            self.command_id.as_str(),
-            self.command_kind.as_str(),
-            self.command_commitment.as_str(),
-            self.result.commitment().as_str(),
-        ])
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProductCommandResult {
-    Spot(SpotCommandResult),
-    Perp(PerpCommandResult),
-    Treasury(TreasuryCommandResult),
-}
-
-impl ProductCommandResult {
-    pub fn commitment(&self) -> String {
-        match self {
-            Self::Spot(result) => result.commitment(),
-            Self::Perp(result) => result.commitment(),
-            Self::Treasury(result) => result.commitment(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotCommandResult {
-    ExecuteImmediateOrderPipeline(SpotPipelineExecution),
-    CancelOrder(SpotCancelExecution),
-}
-
-impl SpotCommandResult {
-    pub fn commitment(&self) -> String {
-        match self {
-            Self::ExecuteImmediateOrderPipeline(result) => result.commitment(),
-            Self::CancelOrder(result) => result.commitment(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotCancelExecution {
-    pub order_after: SpotOrder,
-    pub balances_after: Vec<Balance>,
-    pub events: Vec<EntityReplayableEvent>,
-}
-
-impl SpotCancelExecution {
-    pub fn commitment(&self) -> String {
-        let balances = self.balances_after.iter().map(balance_commitment).collect::<Vec<_>>();
-        stable_hash_hex(&[
-            spot_order_commitment(&self.order_after).as_str(),
-            stable_hash_hex(&balances).as_str(),
-            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
-                .as_str(),
-        ])
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotPipelineExecution {
-    pub pipeline_output: ExecuteImmediateSpotOrderPipelineChanges,
-    pub balances_after: Vec<Balance>,
-    pub orders_after: Vec<SpotOrder>,
-    pub trades: Vec<SpotTrade>,
-    pub settlements: Vec<SpotSettlement>,
-    pub settled_trade_ids_appended: Vec<String>,
-    pub next_order_sequence: u64,
-    pub events: Vec<EntityReplayableEvent>,
-}
-
-impl SpotPipelineExecution {
-    pub fn commitment(&self) -> String {
-        let balances = self.balances_after.iter().map(balance_commitment).collect::<Vec<_>>();
-        let orders = self.orders_after.iter().map(spot_order_commitment).collect::<Vec<_>>();
-        let trades = self.trades.iter().map(spot_trade_commitment).collect::<Vec<_>>();
-        let settlements =
-            self.settlements.iter().map(spot_settlement_commitment).collect::<Vec<_>>();
-        stable_hash_hex(&[
-            pipeline_output_commitment(&self.pipeline_output).as_str(),
-            stable_hash_hex(&balances).as_str(),
-            stable_hash_hex(&orders).as_str(),
-            stable_hash_hex(&trades).as_str(),
-            stable_hash_hex(&settlements).as_str(),
-            stable_hash_hex(&self.settled_trade_ids_appended).as_str(),
-            self.next_order_sequence.to_string().as_str(),
-            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
-                .as_str(),
-        ])
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PerpCommandResult {
-    Unsupported,
-}
-
-impl PerpCommandResult {
-    pub fn commitment(&self) -> String {
-        stable_hash_hex(&["perp.unsupported"])
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TreasuryCommandResult {
-    QuoteBalanceUpdated(TreasuryBalanceUpdate),
-}
-
-impl TreasuryCommandResult {
-    pub fn commitment(&self) -> String {
-        match self {
-            Self::QuoteBalanceUpdated(result) => result.commitment(),
         }
     }
 }
@@ -444,22 +317,6 @@ impl SpotAssetPair {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TreasuryBalanceUpdate {
-    pub balance_after: Balance,
-    pub events: Vec<EntityReplayableEvent>,
-}
-
-impl TreasuryBalanceUpdate {
-    fn commitment(&self) -> String {
-        stable_hash_hex(&[
-            balance_commitment(&self.balance_after).as_str(),
-            stable_hash_hex(&self.events.iter().map(super::event_commitment).collect::<Vec<_>>())
-                .as_str(),
-        ])
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WithdrawLockState {
     pub account_id: String,
     pub asset: String,
@@ -501,30 +358,6 @@ pub fn build_new_block(
     )
 }
 
-fn pipeline_output_commitment(output: &ExecuteImmediateSpotOrderPipelineChanges) -> String {
-    let place = stable_hash_hex(&[
-        spot_order_commitment(&output.place_output.order).as_str(),
-        balance_commitment(&output.place_output.affected_balance_after).as_str(),
-    ]);
-    let matched = output.match_output.as_ref().map_or_else(
-        || stable_hash_hex(&["none"]),
-        |match_output| {
-            let trades = match_output.trades.iter().map(spot_trade_commitment).collect::<Vec<_>>();
-            let makers = match_output
-                .maker_orders_after
-                .iter()
-                .map(spot_order_commitment)
-                .collect::<Vec<_>>();
-            stable_hash_hex(&[
-                stable_hash_hex(&trades).as_str(),
-                spot_order_commitment(&match_output.taker_order_after).as_str(),
-                stable_hash_hex(&makers).as_str(),
-            ])
-        },
-    );
-    stable_hash_hex(&[place.as_str(), matched.as_str()])
-}
-
 pub fn market_rules_commitment(rules: &MarketRules) -> String {
     stable_hash_hex(&[rules.symbol.as_str(), rules.min_qty.to_string().as_str()])
 }
@@ -564,35 +397,6 @@ pub fn spot_order_commitment(order: &SpotOrder) -> String {
         order.reserved_quote.to_string().as_str(),
         order.client_order_id.as_deref().unwrap_or_default(),
         order.version.to_string().as_str(),
-    ])
-}
-
-pub fn spot_trade_commitment(trade: &SpotTrade) -> String {
-    stable_hash_hex(&[
-        trade.trade_id.as_str(),
-        trade.match_id.as_str(),
-        trade.asset.to_string().as_str(),
-        trade.symbol.as_str(),
-        trade.taker_order_id.as_str(),
-        trade.maker_order_id.as_str(),
-        trade.taker_account_id.as_str(),
-        trade.maker_account_id.as_str(),
-        trade.taker_side.as_str(),
-        trade.price.to_string().as_str(),
-        trade.qty.to_string().as_str(),
-    ])
-}
-
-pub fn spot_settlement_commitment(settlement: &SpotSettlement) -> String {
-    stable_hash_hex(&[
-        settlement.settlement_id.as_str(),
-        settlement.trade_id.as_str(),
-        settlement.match_id.as_str(),
-        settlement.buyer_account_id.as_str(),
-        settlement.seller_account_id.as_str(),
-        settlement.base_qty.to_string().as_str(),
-        settlement.quote_qty.to_string().as_str(),
-        settlement.price.to_string().as_str(),
     ])
 }
 

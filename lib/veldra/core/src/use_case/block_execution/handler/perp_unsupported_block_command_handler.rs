@@ -1,4 +1,4 @@
-use crate::entity::{CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand};
+use crate::entity::{CommandEnvelope, ExchangeState, ProductCommand};
 use crate::use_case::BuildBlockError;
 
 pub(in crate::use_case::block_execution) static PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER:
@@ -16,6 +16,6 @@ pub(in crate::use_case::block_execution) fn execute_unsupported_perp(
     _handler: &PerpUnsupportedBlockCommandHandler,
     _envelope: &CommandEnvelope<ProductCommand>,
     _exchange_state: &ExchangeState,
-) -> Result<CommandExecutionResult, BuildBlockError> {
+) -> Result<(), BuildBlockError> {
     Err(BuildBlockError::UnsupportedPerpCommand)
 }

@@ -1,7 +1,6 @@
-use cmd_handler::EntityReplayableEvent;
 use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
-    WithdrawQuoteCmd,
+    Balance, CancelSpotOrderCmd, DepositQuoteChanges, DepositQuoteCmd,
+    ExecuteImmediateSpotOrderPipelineCmd, WithdrawQuoteChanges, WithdrawQuoteCmd,
 };
 
 use crate::use_case::BuildBlockError;
@@ -11,8 +10,8 @@ use crate::use_case::block_execution::handler::execute_immediate_order_pipeline_
 use crate::use_case::block_execution::handler::perp_unsupported_block_command_handler::{PerpUnsupportedBlockCommandHandler, PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER};
 use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::{WithdrawQuoteBlockCommandHandler, WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER};
 use crate::entity::{
-    AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
-    SpotCommand, TreasuryBalanceUpdate, TreasuryCommand, TreasuryState,
+    AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotCommand,
+    TreasuryCommand, TreasuryState,
 };
 
 pub(in crate::use_case::block_execution) trait BlockCommandHandler {
@@ -30,13 +29,9 @@ pub(in crate::use_case::block_execution) trait BlockCommandHandler {
         envelope: &CommandEnvelope<ProductCommand>,
         command: &Self::Command,
         exchange_state: &ExchangeState,
-    ) -> Result<CommandExecutionResult, BuildBlockError>;
+    ) -> Result<Self::Execution, BuildBlockError>;
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution);
-
-    fn events<'a>(&self, execution: &'a Self::Execution) -> &'a [EntityReplayableEvent];
-
-    fn rebase_events(&self, execution: &mut Self::Execution, base_sequence: u64);
 }
 
 pub(in crate::use_case::block_execution) enum ResolvedBlockCommandHandler<'a> {
@@ -78,36 +73,6 @@ pub(in crate::use_case::block_execution) fn resolve_block_command_handler(
     }
 }
 
-pub(in crate::use_case::block_execution) fn normalize_local_events(
-    events: Vec<EntityReplayableEvent>,
-) -> Vec<EntityReplayableEvent> {
-    events
-        .into_iter()
-        .enumerate()
-        .map(|(index, mut event)| {
-            event.timestamp = 0;
-            event.sequence = index as u64;
-            event
-        })
-        .collect()
-}
-
-pub(in crate::use_case::block_execution) fn rebase_events(
-    events: &[EntityReplayableEvent],
-    base_sequence: u64,
-) -> Vec<EntityReplayableEvent> {
-    events
-        .iter()
-        .enumerate()
-        .map(|(index, event)| {
-            let mut cloned = event.clone();
-            cloned.timestamp = 0;
-            cloned.sequence = base_sequence + index as u64;
-            cloned
-        })
-        .collect()
-}
-
 pub(in crate::use_case::block_execution) fn treasury_quote_balance(
     treasury_state: &TreasuryState,
     account_id: &str,
@@ -120,15 +85,28 @@ pub(in crate::use_case::block_execution) fn treasury_quote_balance(
     )
 }
 
-pub(in crate::use_case::block_execution) fn apply_treasury_execution(
+pub(in crate::use_case::block_execution) fn apply_deposit_quote_changes(
     treasury_state: &mut TreasuryState,
-    result: &TreasuryBalanceUpdate,
+    result: &DepositQuoteChanges,
 ) {
     treasury_state.balances.insert(
         AccountAssetKey::new(
-            result.balance_after.account_id.as_str(),
-            result.balance_after.asset_id.as_str(),
+            result.quote_balance_after.account_id.as_str(),
+            result.quote_balance_after.asset_id.as_str(),
         ),
-        result.balance_after.clone(),
+        result.quote_balance_after.clone(),
+    );
+}
+
+pub(in crate::use_case::block_execution) fn apply_withdraw_quote_changes(
+    treasury_state: &mut TreasuryState,
+    result: &WithdrawQuoteChanges,
+) {
+    treasury_state.balances.insert(
+        AccountAssetKey::new(
+            result.quote_balance_after.account_id.as_str(),
+            result.quote_balance_after.asset_id.as_str(),
+        ),
+        result.quote_balance_after.clone(),
     );
 }

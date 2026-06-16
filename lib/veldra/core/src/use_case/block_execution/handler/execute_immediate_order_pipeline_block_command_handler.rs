@@ -1,21 +1,14 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
+use cmd_handler::command_use_case_def2::CommandUseCase4;
 use example_core::{
     Balance, ExecuteImmediateSpotOrderPipelineChanges, ExecuteImmediateSpotOrderPipelineCmd,
-    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderState, MatchSpotOrderUseCase,
-    PlaceImmediateOrderChanges, PlaceImmediateOrderState, PlaceImmediateOrderUseCase,
-    SettleSpotTradeCmd, SettleSpotTradeState, SettleSpotTradeUseCase, SpotOrder, SpotOrderSide,
-    SpotOrderTimeInForce,
+    MatchSpotOrderCmd, MatchSpotOrderState, MatchSpotOrderUseCase, PlaceImmediateOrderState,
+    PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState, SettleSpotTradeUseCase,
+    SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
 };
 
-use crate::entity::{
-    AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
-    ProductCommandResult, SpotCommandResult, SpotPipelineExecution, SpotState,
-};
+use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
 use crate::use_case::BuildBlockError;
-use crate::use_case::block_execution::handler::block_command_handler::{
-    BlockCommandHandler, normalize_local_events, rebase_events,
-};
+use crate::use_case::block_execution::handler::block_command_handler::BlockCommandHandler;
 
 pub(in crate::use_case::block_execution) static EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER:
     ExecuteImmediateOrderPipelineBlockCommandHandler =
@@ -24,9 +17,21 @@ pub(in crate::use_case::block_execution) static EXECUTE_IMMEDIATE_ORDER_PIPELINE
 #[derive(Debug, Clone, Copy, Default)]
 pub(in crate::use_case::block_execution) struct ExecuteImmediateOrderPipelineBlockCommandHandler;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::use_case::block_execution) struct SpotPipelineExecutionBundle {
+    pub changes: ExecuteImmediateSpotOrderPipelineChanges,
+    pub apply_patch: SpotPipelineApplyPatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::use_case::block_execution) struct SpotPipelineApplyPatch {
+    pub next_order_sequence: u64,
+    pub settled_trade_ids_appended: Vec<String>,
+}
+
 impl BlockCommandHandler for ExecuteImmediateOrderPipelineBlockCommandHandler {
     type Command = ExecuteImmediateSpotOrderPipelineCmd;
-    type Execution = SpotPipelineExecution;
+    type Execution = SpotPipelineExecutionBundle;
 
     fn validate(
         &self,
@@ -39,54 +44,41 @@ impl BlockCommandHandler for ExecuteImmediateOrderPipelineBlockCommandHandler {
 
     fn execute(
         &self,
-        envelope: &CommandEnvelope<ProductCommand>,
+        _envelope: &CommandEnvelope<ProductCommand>,
         command: &Self::Command,
         exchange_state: &ExchangeState,
-    ) -> Result<CommandExecutionResult, BuildBlockError> {
-        let execution = execute_immediate_spot_pipeline(command, &exchange_state.spot)?;
-        Ok(CommandExecutionResult {
-            command_id: envelope.command_id.clone(),
-            command_kind: "spot".to_string(),
-            command_commitment: envelope.commitment(),
-            result: ProductCommandResult::Spot(SpotCommandResult::ExecuteImmediateOrderPipeline(
-                execution,
-            )),
-        })
+    ) -> Result<Self::Execution, BuildBlockError> {
+        execute_immediate_spot_pipeline(command, &exchange_state.spot)
     }
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution) {
-        let account_id = execution.pipeline_output.place_output.order.account_id.as_str();
+        let account_id = execution.changes.place_output.order.account_id.as_str();
         exchange_state
             .spot
             .next_order_sequence_by_account
-            .insert(account_id.to_string(), execution.next_order_sequence);
-        for balance in &execution.balances_after {
+            .insert(account_id.to_string(), execution.apply_patch.next_order_sequence);
+
+        for balance in spot_balances_after(&execution.changes) {
             exchange_state.spot.balances.insert(
                 AccountAssetKey::new(balance.account_id.as_str(), balance.asset_id.as_str()),
-                balance.clone(),
+                balance,
             );
         }
-        for order in &execution.orders_after {
-            exchange_state.spot.orders.insert(order.order_id.clone(), order.clone());
+
+        for order in spot_orders_after(&execution.changes) {
+            exchange_state.spot.orders.insert(order.order_id.clone(), order);
         }
-        for trade_id in &execution.settled_trade_ids_appended {
+
+        for trade_id in &execution.apply_patch.settled_trade_ids_appended {
             exchange_state.spot.settled_trade_ids.insert(trade_id.clone());
         }
-    }
-
-    fn events<'a>(&self, execution: &'a Self::Execution) -> &'a [EntityReplayableEvent] {
-        execution.events.as_slice()
-    }
-
-    fn rebase_events(&self, execution: &mut Self::Execution, base_sequence: u64) {
-        execution.events = rebase_events(&execution.events, base_sequence);
     }
 }
 
 fn execute_immediate_spot_pipeline(
     command: &ExecuteImmediateSpotOrderPipelineCmd,
     spot_state: &SpotState,
-) -> Result<SpotPipelineExecution, BuildBlockError> {
+) -> Result<SpotPipelineExecutionBundle, BuildBlockError> {
     let place_state = build_place_state(command, spot_state)?;
     CommandUseCase4::pre_check_command(&PlaceImmediateOrderUseCase, &command.place)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
@@ -96,16 +88,10 @@ fn execute_immediate_spot_pipeline(
         &place_state,
     )
     .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let place_changes =
+    let place_output =
         CommandUseCase4::compute_changes(&PlaceImmediateOrderUseCase, &command.place, place_state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
-    let mut all_events = place_changes
-        .to_replayable_events()
-        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let place_output = place_changes.clone();
-    let taker_order = place_changes.order.clone();
-    let affected_balance_after = place_changes.affected_balance_after.clone();
     let next_order_sequence = spot_state
         .next_order_sequence_by_account
         .get(command.place.party_id.as_str())
@@ -118,15 +104,20 @@ fn execute_immediate_spot_pipeline(
             BuildBlockError::SpotExecution("spot order sequence overflow".to_string())
         })?;
 
+    let taker_order = place_output.order.clone();
     let maker_orders = sorted_maker_orders(command, spot_state);
     if !should_enter_matching(&taker_order, &maker_orders) {
-        return Ok(build_pipeline_without_match(
-            place_output,
-            affected_balance_after,
-            taker_order,
-            next_order_sequence,
-            all_events,
-        ));
+        return Ok(SpotPipelineExecutionBundle {
+            changes: ExecuteImmediateSpotOrderPipelineChanges {
+                place_output,
+                match_output: None,
+                settle_changes: None,
+            },
+            apply_patch: SpotPipelineApplyPatch {
+                next_order_sequence,
+                settled_trade_ids_appended: Vec::new(),
+            },
+        });
     }
 
     let match_cmd = MatchSpotOrderCmd {
@@ -139,29 +130,22 @@ fn execute_immediate_spot_pipeline(
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     CommandUseCase4::validate_against_state(&MatchSpotOrderUseCase, &match_cmd, &match_state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let match_changes =
+    let match_output =
         CommandUseCase4::compute_changes(&MatchSpotOrderUseCase, &match_cmd, match_state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    all_events.extend(
-        match_changes
-            .to_replayable_events()
-            .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?,
-    );
 
-    let match_output = match_changes.clone();
-    let trades = match_changes.trades.clone();
-    let taker_order_after = match_changes.taker_order_after.clone();
-    let maker_orders_after = match_changes.maker_orders_after.clone();
-    if trades.is_empty() {
-        return Ok(build_pipeline_without_settlement(
-            place_output,
-            match_output,
-            affected_balance_after,
-            taker_order_after,
-            maker_orders_after,
-            next_order_sequence,
-            all_events,
-        ));
+    if match_output.trades.is_empty() {
+        return Ok(SpotPipelineExecutionBundle {
+            changes: ExecuteImmediateSpotOrderPipelineChanges {
+                place_output,
+                match_output: Some(match_output),
+                settle_changes: None,
+            },
+            apply_patch: SpotPipelineApplyPatch {
+                next_order_sequence,
+                settled_trade_ids_appended: Vec::new(),
+            },
+        });
     }
 
     let asset_pair =
@@ -171,15 +155,15 @@ fn execute_immediate_spot_pipeline(
     let settle_cmd = SettleSpotTradeCmd {
         party_id: command.place.party_id.clone(),
         settlement_batch_id: command.settlement_batch_id.clone(),
-        trade_ids: trades.iter().map(|trade| trade.trade_id.clone()).collect(),
+        trade_ids: match_output.trades.iter().map(|trade| trade.trade_id.clone()).collect(),
     };
     let settle_state = SettleSpotTradeState {
-        trades: trades.clone(),
+        trades: match_output.trades.clone(),
         base_asset_id: asset_pair.base_asset_id.clone(),
         quote_asset_id: asset_pair.quote_asset_id.clone(),
         balances: settlement_balances_after_place(
             spot_state.balances.values().cloned().collect(),
-            affected_balance_after.clone(),
+            place_output.affected_balance_after.clone(),
         ),
         settled_trade_ids: spot_state.settled_trade_ids.iter().cloned().collect(),
     };
@@ -190,29 +174,18 @@ fn execute_immediate_spot_pipeline(
     let settle_changes =
         CommandUseCase4::compute_changes(&SettleSpotTradeUseCase, &settle_cmd, settle_state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    all_events.extend(
-        settle_changes
-            .to_replayable_events()
-            .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?,
-    );
 
-    let settlements = settle_changes.settlements.clone();
-    let balances_after = settle_changes.balances_after.clone();
     let settled_trade_ids_appended =
-        settlements.iter().map(|settlement| settlement.trade_id.clone()).collect::<Vec<_>>();
+        settle_changes.settlements.iter().map(|settlement| settlement.trade_id.clone()).collect();
 
-    Ok(build_pipeline_with_settlement(
-        place_output,
-        match_output,
-        balances_after,
-        taker_order_after,
-        maker_orders_after,
-        trades,
-        settlements,
-        settled_trade_ids_appended,
-        next_order_sequence,
-        all_events,
-    ))
+    Ok(SpotPipelineExecutionBundle {
+        changes: ExecuteImmediateSpotOrderPipelineChanges {
+            place_output,
+            match_output: Some(match_output),
+            settle_changes: Some(settle_changes),
+        },
+        apply_patch: SpotPipelineApplyPatch { next_order_sequence, settled_trade_ids_appended },
+    })
 }
 
 fn build_place_state(
@@ -323,88 +296,19 @@ fn settlement_balances_after_place(
     balances
 }
 
-fn build_pipeline_without_match(
-    place_output: PlaceImmediateOrderChanges,
-    affected_balance_after: Balance,
-    taker_order: SpotOrder,
-    next_order_sequence: u64,
-    events: Vec<EntityReplayableEvent>,
-) -> SpotPipelineExecution {
-    SpotPipelineExecution {
-        pipeline_output: ExecuteImmediateSpotOrderPipelineChanges {
-            place_output,
-            match_output: None,
-            settle_changes: None,
-        },
-        balances_after: vec![affected_balance_after],
-        orders_after: vec![taker_order],
-        trades: Vec::new(),
-        settlements: Vec::new(),
-        settled_trade_ids_appended: Vec::new(),
-        next_order_sequence,
-        events: normalize_local_events(events),
+fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<Balance> {
+    let mut balances = vec![changes.place_output.affected_balance_after.clone()];
+    if let Some(settle_changes) = &changes.settle_changes {
+        balances.extend(settle_changes.balances_after.iter().cloned());
     }
+    balances
 }
 
-fn build_pipeline_without_settlement(
-    place_output: PlaceImmediateOrderChanges,
-    match_output: MatchSpotOrderChanges,
-    affected_balance_after: Balance,
-    taker_order_after: SpotOrder,
-    maker_orders_after: Vec<SpotOrder>,
-    next_order_sequence: u64,
-    events: Vec<EntityReplayableEvent>,
-) -> SpotPipelineExecution {
-    SpotPipelineExecution {
-        pipeline_output: ExecuteImmediateSpotOrderPipelineChanges {
-            place_output,
-            match_output: Some(match_output),
-            settle_changes: None,
-        },
-        balances_after: vec![affected_balance_after],
-        orders_after: collect_orders_after(taker_order_after, maker_orders_after),
-        trades: Vec::new(),
-        settlements: Vec::new(),
-        settled_trade_ids_appended: Vec::new(),
-        next_order_sequence,
-        events: normalize_local_events(events),
+fn spot_orders_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<SpotOrder> {
+    let mut orders = vec![changes.place_output.order.clone()];
+    if let Some(match_output) = &changes.match_output {
+        orders.extend(match_output.maker_orders_after.iter().cloned());
+        orders.push(match_output.taker_order_after.clone());
     }
-}
-
-fn build_pipeline_with_settlement(
-    place_output: PlaceImmediateOrderChanges,
-    match_output: MatchSpotOrderChanges,
-    balances_after: Vec<Balance>,
-    taker_order_after: SpotOrder,
-    maker_orders_after: Vec<SpotOrder>,
-    trades: Vec<example_core::SpotTrade>,
-    settlements: Vec<example_core::SpotSettlement>,
-    settled_trade_ids_appended: Vec<String>,
-    next_order_sequence: u64,
-    events: Vec<EntityReplayableEvent>,
-) -> SpotPipelineExecution {
-    SpotPipelineExecution {
-        pipeline_output: ExecuteImmediateSpotOrderPipelineChanges {
-            place_output,
-            match_output: Some(match_output),
-            settle_changes: None,
-        },
-        balances_after,
-        orders_after: collect_orders_after(taker_order_after, maker_orders_after),
-        trades,
-        settlements,
-        settled_trade_ids_appended,
-        next_order_sequence,
-        events: normalize_local_events(events),
-    }
-}
-
-fn collect_orders_after(
-    taker_order_after: SpotOrder,
-    maker_orders_after: Vec<SpotOrder>,
-) -> Vec<SpotOrder> {
-    let mut orders = Vec::with_capacity(1 + maker_orders_after.len());
-    orders.push(taker_order_after);
-    orders.extend(maker_orders_after);
     orders
 }

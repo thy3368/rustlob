@@ -1,15 +1,11 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
-use example_core::{CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase};
+use cmd_handler::command_use_case_def2::CommandUseCase4;
+use example_core::{
+    CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase,
+};
 
-use crate::entity::{
-    AccountAssetKey, CommandEnvelope, CommandExecutionResult, ExchangeState, ProductCommand,
-    ProductCommandResult, SpotCancelExecution, SpotCommandResult, SpotState,
-};
+use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
 use crate::use_case::BuildBlockError;
-use crate::use_case::block_execution::handler::block_command_handler::{
-    BlockCommandHandler, normalize_local_events, rebase_events,
-};
+use crate::use_case::block_execution::handler::block_command_handler::BlockCommandHandler;
 
 pub(in crate::use_case::block_execution) static CANCEL_ORDER_BLOCK_COMMAND_HANDLER:
     CancelOrderBlockCommandHandler = CancelOrderBlockCommandHandler;
@@ -19,7 +15,7 @@ pub(in crate::use_case::block_execution) struct CancelOrderBlockCommandHandler;
 
 impl BlockCommandHandler for CancelOrderBlockCommandHandler {
     type Command = CancelSpotOrderCmd;
-    type Execution = SpotCancelExecution;
+    type Execution = CancelSpotOrderChanges;
 
     fn validate(
         &self,
@@ -32,17 +28,11 @@ impl BlockCommandHandler for CancelOrderBlockCommandHandler {
 
     fn execute(
         &self,
-        envelope: &CommandEnvelope<ProductCommand>,
+        _envelope: &CommandEnvelope<ProductCommand>,
         command: &Self::Command,
         exchange_state: &ExchangeState,
-    ) -> Result<CommandExecutionResult, BuildBlockError> {
-        let execution = execute_cancel_spot_order(command, &exchange_state.spot)?;
-        Ok(CommandExecutionResult {
-            command_id: envelope.command_id.clone(),
-            command_kind: "spot".to_string(),
-            command_commitment: envelope.commitment(),
-            result: ProductCommandResult::Spot(SpotCommandResult::CancelOrder(execution)),
-        })
+    ) -> Result<Self::Execution, BuildBlockError> {
+        execute_cancel_spot_order(command, &exchange_state.spot)
     }
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution) {
@@ -56,14 +46,6 @@ impl BlockCommandHandler for CancelOrderBlockCommandHandler {
             .spot
             .orders
             .insert(execution.order_after.order_id.clone(), execution.order_after.clone());
-    }
-
-    fn events<'a>(&self, execution: &'a Self::Execution) -> &'a [EntityReplayableEvent] {
-        execution.events.as_slice()
-    }
-
-    fn rebase_events(&self, execution: &mut Self::Execution, base_sequence: u64) {
-        execution.events = rebase_events(&execution.events, base_sequence);
     }
 }
 
@@ -114,7 +96,7 @@ fn build_cancel_state(
 fn execute_cancel_spot_order(
     command: &CancelSpotOrderCmd,
     spot_state: &SpotState,
-) -> Result<SpotCancelExecution, BuildBlockError> {
+) -> Result<CancelSpotOrderChanges, BuildBlockError> {
     CommandUseCase4::pre_check_command(&CancelSpotOrderUseCase, command)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let state = build_cancel_state(command, spot_state)?;
@@ -123,13 +105,5 @@ fn execute_cancel_spot_order(
     let changes = CommandUseCase4::compute_changes(&CancelSpotOrderUseCase, command, state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
-    Ok(SpotCancelExecution {
-        order_after: changes.order_after.clone(),
-        balances_after: changes.balances_after.clone(),
-        events: normalize_local_events(
-            changes
-                .to_replayable_events()
-                .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?,
-        ),
-    })
+    Ok(changes)
 }
