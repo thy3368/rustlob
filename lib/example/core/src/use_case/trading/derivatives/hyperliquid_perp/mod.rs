@@ -4,7 +4,7 @@ pub mod query;
 pub mod risk;
 
 pub use execution::{
-    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderOutput,
+    MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,
     MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderCmd,
     PlaceHyperliquidPerpOrderError, PlaceHyperliquidPerpOrderExecution,
     PlaceHyperliquidPerpOrderOutput, PlaceHyperliquidPerpOrderState,

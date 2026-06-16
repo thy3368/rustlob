@@ -1,5 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -91,22 +93,38 @@ pub enum MatchHyperliquidPerpOrderError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchHyperliquidPerpOrderUseCase;
 
-/// 完成一轮撮合后的业务产出。
+/// 完成一轮撮合后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchHyperliquidPerpOrderOutput {
+pub struct MatchHyperliquidPerpOrderChanges {
     /// 本批次新创建的成交事实。
-    pub trades: Vec<HyperliquidPerpTrade>,
-    /// 撮合后的 taker 订单快照。
-    pub taker_order_after: HyperliquidPerpOrder,
-    /// 按撮合发生顺序返回的 maker after 快照。
-    pub maker_orders_after: Vec<HyperliquidPerpOrder>,
+    pub created_trades: Vec<HyperliquidPerpTrade>,
+    /// 按撮合发生顺序返回的 maker before/after。
+    pub updated_maker_orders: Vec<UpdatedEntityPair<HyperliquidPerpOrder>>,
+    /// 撮合后的 taker before/after。
+    pub updated_taker_order: UpdatedEntityPair<HyperliquidPerpOrder>,
 }
 
-impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
+impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+        let mut events = Vec::new();
+        for (trade, maker_order) in self.created_trades.iter().zip(&self.updated_maker_orders) {
+            events.push(trade.track_create_event()?);
+            events.push(maker_order.after.track_update_event_from(&maker_order.before)?);
+        }
+        events.push(
+            self.updated_taker_order
+                .after
+                .track_update_event_from(&self.updated_taker_order.before)?,
+        );
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
     type Command = MatchHyperliquidPerpOrderCmd;
     type GivenState = MatchHyperliquidPerpOrderState;
     type Error = MatchHyperliquidPerpOrderError;
-    type Output = MatchHyperliquidPerpOrderOutput;
+    type Changes = MatchHyperliquidPerpOrderChanges;
 
     fn role(&self) -> &'static str {
         "MatchingEngine"
@@ -161,16 +179,16 @@ impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let mut taker_order_after = state.taker_order.clone();
         let mut taker_remaining = remaining_qty(&taker_order_after)?;
         let mut total_taker_fill = 0_u64;
-        let mut trades = Vec::new();
-        let mut maker_orders_after = Vec::new();
+        let mut created_trades = Vec::new();
+        let mut updated_maker_orders = Vec::new();
 
         for (trade_index, maker_order) in state.maker_orders.iter().enumerate() {
             if taker_remaining == 0 {
@@ -203,7 +221,7 @@ impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
                 maker_price,
                 trade_qty,
             );
-            trades.push(trade);
+            created_trades.push(trade);
 
             let mut next_maker_order = maker_order.clone();
             let next_maker_filled = next_maker_order
@@ -218,7 +236,8 @@ impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
             next_maker_order.filled_qty = next_maker_filled;
             next_maker_order.status = next_maker_status;
             next_maker_order.version = next_maker_version;
-            maker_orders_after.push(next_maker_order);
+            updated_maker_orders
+                .push(UpdatedEntityPair { before: maker_order.clone(), after: next_maker_order });
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -245,37 +264,13 @@ impl CommandUseCase3 for MatchHyperliquidPerpOrderUseCase {
         taker_order_after.status = next_taker_status;
         taker_order_after.version = next_taker_version;
 
-        let mut events = Vec::new();
-        for (trade, maker_after) in trades.iter().zip(&maker_orders_after) {
-            events.push(
-                trade
-                    .track_create_event()
-                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
-            );
-            let maker_before = state
-                .maker_orders
-                .iter()
-                .find(|maker| maker.order_id == maker_after.order_id)
-                .ok_or(MatchHyperliquidPerpOrderError::MakerIsTaker)?;
-            events.push(
-                maker_after
-                    .track_update_event_from(maker_before)
-                    .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
-            );
-        }
-        events.push(
-            taker_order_after
-                .track_update_event_from(&state.taker_order)
-                .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?,
-        );
-
-        Ok(UseCaseOutput {
-            output: MatchHyperliquidPerpOrderOutput {
-                trades,
-                taker_order_after,
-                maker_orders_after,
+        Ok(MatchHyperliquidPerpOrderChanges {
+            created_trades,
+            updated_maker_orders,
+            updated_taker_order: UpdatedEntityPair {
+                before: state.taker_order,
+                after: taker_order_after,
             },
-            events,
         })
     }
 }
@@ -313,12 +308,28 @@ fn matched_status(qty: u64, filled_qty: u64) -> HyperliquidPerpOrderStatus {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
     use proptest::prelude::*;
 
     use super::*;
     use crate::entity::{HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce};
     use crate::use_case::support::field_as_u64;
+
+    // 规格矩阵:
+    // - taker side: buy / sell
+    // - maker count: single / multiple
+    // - outcome: taker filled / taker partially filled / maker partially filled / stop scanning
+    // - event expectation: trade count / maker update count / taker update count / event order
+    //
+    // current coverage:
+    // - buy taker + multiple makers + taker filled
+    // - buy taker + multiple makers + stop at first non-crossing maker
+    // - buy taker + single maker + taker partially filled
+    // - buy taker + single maker + maker partially filled
+    // - buy taker + multiple makers + last maker partially filled
+    // - sell taker + single maker + taker filled
+    // - sell taker + multiple makers + taker filled
+    // - sell taker + stop at first non-crossing maker
 
     fn cmd() -> MatchHyperliquidPerpOrderCmd {
         MatchHyperliquidPerpOrderCmd {
@@ -354,8 +365,16 @@ mod tests {
         order("taker-1", "buyer", HyperliquidPerpOrderSide::Buy, price, qty)
     }
 
+    fn taker_sell(qty: u64, price: u64) -> HyperliquidPerpOrder {
+        order("taker-1", "seller", HyperliquidPerpOrderSide::Sell, price, qty)
+    }
+
     fn maker_sell(order_id: &str, qty: u64, price: u64) -> HyperliquidPerpOrder {
         order(order_id, "seller", HyperliquidPerpOrderSide::Sell, price, qty)
+    }
+
+    fn maker_buy(order_id: &str, qty: u64, price: u64) -> HyperliquidPerpOrder {
+        order(order_id, "buyer", HyperliquidPerpOrderSide::Buy, price, qty)
     }
 
     fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
@@ -365,6 +384,42 @@ mod tests {
             }
             std::str::from_utf8(change.new_value_bytes()).ok()
         })
+    }
+
+    fn assert_trade_event(
+        event: &EntityReplayableEvent,
+        expected_trade_id: &str,
+        expected_maker_order_id: &str,
+        expected_taker_account_id: &str,
+        expected_maker_account_id: &str,
+        expected_taker_side: HyperliquidPerpOrderSide,
+        expected_price: u64,
+        expected_qty: u64,
+    ) {
+        assert!(event.is_created());
+        assert_eq!(event_field(event, "trade_id"), Some(expected_trade_id));
+        assert_eq!(event_field(event, "match_id"), Some("match-1"));
+        assert_eq!(event_field(event, "taker_order_id"), Some("taker-1"));
+        assert_eq!(event_field(event, "maker_order_id"), Some(expected_maker_order_id));
+        assert_eq!(event_field(event, "taker_account_id"), Some(expected_taker_account_id));
+        assert_eq!(event_field(event, "maker_account_id"), Some(expected_maker_account_id));
+        assert_eq!(event_field(event, "taker_side"), Some(expected_taker_side.as_str()));
+        assert_eq!(field_as_u64(event, "price"), Some(expected_price));
+        assert_eq!(field_as_u64(event, "qty"), Some(expected_qty));
+    }
+
+    fn assert_order_update_event(
+        event: &EntityReplayableEvent,
+        expected_filled_qty: u64,
+        expected_status: HyperliquidPerpOrderStatus,
+        expected_old_version: u64,
+        expected_new_version: u64,
+    ) {
+        assert!(event.is_updated());
+        assert_eq!(event.old_version, expected_old_version);
+        assert_eq!(event.new_version, expected_new_version);
+        assert_eq!(field_as_u64(event, "filled_qty"), Some(expected_filled_qty));
+        assert_eq!(event_field(event, "status"), Some(expected_status.as_str()));
     }
 
     #[test]
@@ -502,39 +557,81 @@ mod tests {
     #[test]
     fn compute_matches_multiple_makers_and_updates_orders()
     -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - buy taker 可以按 maker 顺序连续成交，直到自身完全成交。
+        //
+        // Given:
+        // - 两个 sell maker 都与 taker 穿价。
+        // - 两档 maker 数量之和刚好填满 taker。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 事件顺序必须是 trade -> maker update -> trade -> maker update -> taker update。
+        // - maker 与 taker 都变成 `Filled`。
+
+        // arrange
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100),
             maker_orders: vec![maker_sell("maker-1", 1, 99), maker_sell("maker-2", 2, 100)],
         };
 
-        let result = MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state)?;
-        let events = result.events;
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
+        // assert
         assert_eq!(events.len(), 5);
-        assert_eq!(result.output.trades.len(), 2);
-        assert_eq!(result.output.taker_order_after.filled_qty, 3);
-        assert!(events[0].is_created());
-        assert_eq!(event_field(&events[0], "trade_id"), Some("match-1-1"));
-        assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
-        assert_eq!(field_as_u64(&events[0], "price"), Some(99));
-        assert_eq!(field_as_u64(&events[0], "qty"), Some(1));
-        assert!(events[1].is_updated());
-        assert_eq!(event_field(&events[1], "filled_qty"), Some("1"));
-        assert_eq!(event_field(&events[1], "status"), Some("filled"));
-        assert!(events[2].is_created());
-        assert_eq!(event_field(&events[2], "trade_id"), Some("match-1-2"));
-        assert!(events[3].is_updated());
-        assert_eq!(event_field(&events[3], "filled_qty"), Some("2"));
-        assert_eq!(event_field(&events[3], "status"), Some("filled"));
-        assert!(events[4].is_updated());
-        assert_eq!(event_field(&events[4], "filled_qty"), Some("3"));
-        assert_eq!(event_field(&events[4], "status"), Some("filled"));
+        assert_eq!(changes.created_trades.len(), 2);
+        assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            99,
+            1,
+        );
+        assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_trade_event(
+            &events[2],
+            "match-1-2",
+            "maker-2",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            100,
+            2,
+        );
+        assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
 
         Ok(())
     }
 
     #[test]
     fn compute_stops_at_first_non_crossing_maker() -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - buy taker 遇到首个不穿价 maker 后必须立即停止扫描。
+        //
+        // Given:
+        // - maker-1 可成交。
+        // - maker-2 是首个不穿价档位。
+        // - maker-3 即使穿价，也不应继续处理。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 只处理 maker-1。
+        // - taker 以 `PartiallyFilled` 收尾。
+
+        // arrange
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100),
             maker_orders: vec![
@@ -544,14 +641,351 @@ mod tests {
             ],
         };
 
-        let result = MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state)?;
-        let events = result.events;
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
+        // assert
         assert_eq!(events.len(), 3);
-        assert_eq!(result.output.maker_orders_after.len(), 1);
-        assert_eq!(event_field(&events[0], "maker_order_id"), Some("maker-1"));
-        assert_eq!(event_field(&events[2], "filled_qty"), Some("1"));
-        assert_eq!(event_field(&events[2], "status"), Some("partially_filled"));
+        assert_eq!(changes.updated_maker_orders.len(), 1);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            99,
+            1,
+        );
+        assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_matches_sell_taker_against_single_buy_maker_fully()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - sell taker 在 `taker_price <= maker_price` 时可以与 buy maker 成交。
+        //
+        // Given:
+        // - 单个 buy maker 与 taker 穿价，且数量刚好足够。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 生成 1 条 trade、1 条 maker update、1 条 taker update。
+        // - 成交价取 maker 限价。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_sell(2, 100),
+            maker_orders: vec![maker_buy("maker-1", 2, 101)],
+        };
+        let mut sell_cmd = cmd();
+        sell_cmd.party_id = "seller".to_string();
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&sell_cmd, state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 3);
+        assert_eq!(changes.created_trades.len(), 1);
+        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "seller",
+            "buyer",
+            HyperliquidPerpOrderSide::Sell,
+            101,
+            2,
+        );
+        assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_partially_fills_taker_when_single_maker_qty_is_smaller()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - 单档 maker 数量不足时，taker 只能部分成交。
+        //
+        // Given:
+        // - buy taker 数量大于单个 sell maker 剩余数量。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - maker 变成 `Filled`。
+        // - taker 变成 `PartiallyFilled`，`filled_qty` 等于实际成交量。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_buy(5, 100),
+            maker_orders: vec![maker_sell("maker-1", 2, 99)],
+        };
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 3);
+        assert_eq!(
+            changes.updated_taker_order.after.status,
+            HyperliquidPerpOrderStatus::PartiallyFilled
+        );
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            99,
+            2,
+        );
+        assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_matches_sell_taker_against_multiple_buy_makers_until_filled()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - sell taker 可以按顺序吃掉多个 buy maker，直到自身完全成交。
+        //
+        // Given:
+        // - 两个 buy maker 都穿价。
+        // - 两档 maker 数量之和刚好填满 sell taker。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 依次生成 `match-1-1`、`match-1-2`。
+        // - 最终 taker 为 `Filled`。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_sell(3, 100),
+            maker_orders: vec![maker_buy("maker-1", 1, 102), maker_buy("maker-2", 2, 101)],
+        };
+        let mut sell_cmd = cmd();
+        sell_cmd.party_id = "seller".to_string();
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&sell_cmd, state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 5);
+        assert_eq!(changes.created_trades.len(), 2);
+        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "seller",
+            "buyer",
+            HyperliquidPerpOrderSide::Sell,
+            102,
+            1,
+        );
+        assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_trade_event(
+            &events[2],
+            "match-1-2",
+            "maker-2",
+            "seller",
+            "buyer",
+            HyperliquidPerpOrderSide::Sell,
+            101,
+            2,
+        );
+        assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_stops_sell_taker_at_first_non_crossing_buy_maker()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - sell taker 也必须在首个不穿价 buy maker 处停止。
+        //
+        // Given:
+        // - maker-1 可成交。
+        // - maker-2 的价格低于 taker 限价，不再穿价。
+        // - maker-3 即使等于限价，也不应再被处理。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 只处理 maker-1。
+        // - taker 以 `PartiallyFilled` 收尾。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_sell(3, 100),
+            maker_orders: vec![
+                maker_buy("maker-1", 1, 101),
+                maker_buy("maker-2", 1, 99),
+                maker_buy("maker-3", 1, 100),
+            ],
+        };
+        let mut sell_cmd = cmd();
+        sell_cmd.party_id = "seller".to_string();
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&sell_cmd, state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 3);
+        assert_eq!(changes.updated_maker_orders.len(), 1);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "seller",
+            "buyer",
+            HyperliquidPerpOrderSide::Sell,
+            101,
+            1,
+        );
+        assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_partially_fills_maker_when_taker_qty_is_smaller()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - 当 maker 数量更大时，maker 保留未成交挂单并进入部分成交状态。
+        //
+        // Given:
+        // - buy taker 数量小于单个 sell maker 数量。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - maker 为 `PartiallyFilled`。
+        // - taker 为 `Filled`。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_buy(2, 100),
+            maker_orders: vec![maker_sell("maker-1", 5, 99)],
+        };
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 3);
+        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            99,
+            2,
+        );
+        assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_consumes_multiple_makers_and_leaves_last_maker_partially_filled()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        // Rule:
+        // - taker 连续吃多档时，最后一档 maker 可以只部分成交。
+        //
+        // Given:
+        // - buy taker 会先吃满 maker-1。
+        // - 随后只吃掉 maker-2 的一部分。
+        //
+        // When:
+        // - 调用 `compute_changes` 并投影 events。
+        //
+        // Then:
+        // - 每笔 trade 后紧跟对应 maker update。
+        // - 最后 taker 为 `Filled`，maker-2 为 `PartiallyFilled`。
+
+        // arrange
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_buy(3, 100),
+            maker_orders: vec![maker_sell("maker-1", 1, 98), maker_sell("maker-2", 5, 99)],
+        };
+
+        // act
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        // assert
+        assert_eq!(events.len(), 5);
+        assert_eq!(changes.created_trades.len(), 2);
+        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_trade_event(
+            &events[0],
+            "match-1-1",
+            "maker-1",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            98,
+            1,
+        );
+        assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
+        assert_trade_event(
+            &events[2],
+            "match-1-2",
+            "maker-2",
+            "buyer",
+            "seller",
+            HyperliquidPerpOrderSide::Buy,
+            99,
+            2,
+        );
+        assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
 
         Ok(())
     }
@@ -564,9 +998,34 @@ mod tests {
         };
 
         assert_eq!(
-            MatchHyperliquidPerpOrderUseCase.compute_output_and_events(&cmd(), state),
+            MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state),
             Err(MatchHyperliquidPerpOrderError::NoTradesMatched)
         );
+    }
+
+    #[test]
+    fn changes_can_be_read_directly_as_business_result()
+    -> Result<(), MatchHyperliquidPerpOrderError> {
+        let state = MatchHyperliquidPerpOrderState {
+            taker_order: taker_buy(3, 100),
+            maker_orders: vec![maker_sell("maker-1", 1, 99), maker_sell("maker-2", 2, 100)],
+        };
+
+        let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
+
+        assert_eq!(changes.created_trades.len(), 2);
+        assert_eq!(changes.updated_taker_order.after.order_id, "taker-1");
+        assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
+        assert_eq!(
+            changes
+                .updated_maker_orders
+                .iter()
+                .map(|pair| pair.after.order_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["maker-1", "maker-2"]
+        );
+
+        Ok(())
     }
 
     proptest! {
@@ -585,10 +1044,12 @@ mod tests {
                 maker_orders: makers,
             };
 
-            let result = MatchHyperliquidPerpOrderUseCase
-                .compute_output_and_events(&cmd(), state)
+            let changes = MatchHyperliquidPerpOrderUseCase
+                .compute_changes(&cmd(), state)
                 .expect("generated makers cross the taker price");
-            let events = result.events;
+            let events = changes
+                .to_replayable_events()
+                .expect("generated changes should project to replayable events");
 
             let trade_events: Vec<_> = events.iter().filter(|event| event.is_created()).collect();
             let trade_qty_sum: u64 = trade_events

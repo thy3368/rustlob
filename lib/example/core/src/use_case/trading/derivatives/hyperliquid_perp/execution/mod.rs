@@ -3,7 +3,7 @@ pub mod place_perp_order;
 pub mod settle_perp_trade;
 
 pub use match_perp_order::{
-    MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderOutput,
+    MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,
     MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase,
 };
 pub use place_perp_order::{
