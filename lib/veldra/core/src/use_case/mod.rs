@@ -1,6 +1,6 @@
 mod block_execution;
 
 pub use block_execution::{
-    BuildBlockError, BuildBlockFromCommandsCommand, BuildBlockFromCommandsOutput,
+    BuildBlockError, BuildBlockFromCommandsChanges, BuildBlockFromCommandsCommand,
     BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase,
 };

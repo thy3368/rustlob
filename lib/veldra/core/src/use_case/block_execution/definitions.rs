@@ -1,4 +1,5 @@
-use cmd_handler::command_use_case_def2::IssuedByParty;
+use cmd_handler::EntityReplayableEvent;
+use cmd_handler::command_use_case_def2::{EventProjectError, IssuedByParty, ReplayableChanges};
 use thiserror::Error;
 
 use crate::entity::{
@@ -21,10 +22,17 @@ pub struct BuildBlockFromCommandsState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BuildBlockFromCommandsOutput {
+pub struct BuildBlockFromCommandsChanges {
     pub new_block: NewBlock,
     pub command_results: Vec<CommandExecutionResult>,
     pub exchange_state: ExchangeState,
+    pub replayable_events: Vec<EntityReplayableEvent>,
+}
+
+impl ReplayableChanges for BuildBlockFromCommandsChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+        Ok(self.replayable_events.clone())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

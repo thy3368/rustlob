@@ -1,8 +1,8 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, UseCaseOutput};
+use cmd_handler::command_use_case_def2::CommandUseCase4;
 
 use super::{
-    BuildBlockError, BuildBlockFromCommandsCommand, BuildBlockFromCommandsOutput,
+    BuildBlockError, BuildBlockFromCommandsChanges, BuildBlockFromCommandsCommand,
     BuildBlockFromCommandsState,
 };
 use crate::entity::{
@@ -20,11 +20,11 @@ use crate::use_case::block_execution::handler::perp_unsupported_block_command_ha
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BuildBlockFromCommandsUseCase;
 
-impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
+impl CommandUseCase4 for BuildBlockFromCommandsUseCase {
     type Command = BuildBlockFromCommandsCommand;
     type GivenState = BuildBlockFromCommandsState;
     type Error = BuildBlockError;
-    type Output = BuildBlockFromCommandsOutput;
+    type Changes = BuildBlockFromCommandsChanges;
 
     fn role(&self) -> &'static str {
         "BlockBuilder"
@@ -57,25 +57,23 @@ impl CommandUseCase3 for BuildBlockFromCommandsUseCase {
         validate_batch_commands(&commands, &state.exchange_state)
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let BuildBlockFromCommandsState { parent_block_hash, mut exchange_state, commands, .. } =
             state;
         let commands = validate_and_clone_canonical_commands(&commands)?;
         let (command_results, events) = execute_batch_commands(&commands, &mut exchange_state)?;
-        let output = build_block_output(
+        Ok(build_block_changes(
             cmd.block_height,
             parent_block_hash,
             commands,
-            events.clone(),
+            events,
             exchange_state,
             command_results,
-        );
-
-        Ok(UseCaseOutput { output, events })
+        ))
     }
 }
 
@@ -178,16 +176,21 @@ fn execute_batch_commands(
     Ok((command_results, events))
 }
 
-fn build_block_output(
+fn build_block_changes(
     block_height: u64,
     parent_block_hash: String,
     commands: Vec<CommandEnvelope<ProductCommand>>,
     events: Vec<EntityReplayableEvent>,
     exchange_state: ExchangeState,
     command_results: Vec<CommandExecutionResult>,
-) -> BuildBlockFromCommandsOutput {
+) -> BuildBlockFromCommandsChanges {
     let new_block =
         build_new_block(block_height, parent_block_hash, &commands, &events, &exchange_state);
 
-    BuildBlockFromCommandsOutput { new_block, command_results, exchange_state }
+    BuildBlockFromCommandsChanges {
+        new_block,
+        command_results,
+        exchange_state,
+        replayable_events: events,
+    }
 }

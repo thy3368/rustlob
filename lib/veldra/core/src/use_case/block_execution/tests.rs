@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use example_core::{
     Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
@@ -226,13 +226,13 @@ fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
 
 #[test]
 fn role_is_block_builder() {
-    assert_eq!(CommandUseCase3::role(&BuildBlockFromCommandsUseCase), "BlockBuilder");
+    assert_eq!(CommandUseCase4::role(&BuildBlockFromCommandsUseCase), "BlockBuilder");
 }
 
 #[test]
 fn pre_check_rejects_zero_block_height() {
     let cmd = BuildBlockFromCommandsCommand { block_height: 0 };
-    let result = CommandUseCase3::pre_check_command(&BuildBlockFromCommandsUseCase, &cmd);
+    let result = CommandUseCase4::pre_check_command(&BuildBlockFromCommandsUseCase, &cmd);
     assert_eq!(result, Err(BuildBlockError::BlockHeightMustBePositive));
 }
 
@@ -240,7 +240,7 @@ fn pre_check_rejects_zero_block_height() {
 fn validate_rejects_empty_batch() {
     let mut state = sample_state();
     state.commands.clear();
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -250,29 +250,29 @@ fn validate_rejects_empty_batch() {
 
 #[test]
 fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
-    let result = CommandUseCase3::compute_output_and_events(
+    let changes = CommandUseCase4::compute_changes(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         sample_state(),
     )?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(result.output.command_results.len(), 1);
-    assert_eq!(result.output.new_block.block_height, 2);
-    assert_eq!(result.output.new_block.parent_block_hash, "parent-1");
-    assert!(!result.output.new_block.commands_root.is_empty());
-    assert!(!result.output.new_block.events_root.is_empty());
-    assert!(!result.output.new_block.post_state_root.is_empty());
-    assert_eq!(result.events.len(), 2);
+    assert_eq!(changes.command_results.len(), 1);
+    assert_eq!(changes.new_block.block_height, 2);
+    assert_eq!(changes.new_block.parent_block_hash, "parent-1");
+    assert!(!changes.new_block.commands_root.is_empty());
+    assert!(!changes.new_block.events_root.is_empty());
+    assert!(!changes.new_block.post_state_root.is_empty());
+    assert_eq!(events.len(), 2);
 
-    let next_usdt = result
-        .output
+    let next_usdt = changes
         .exchange_state
         .spot
         .balances
         .get(&AccountAssetKey::new("trader-1", "USDT"))
         .unwrap();
     assert_eq!((next_usdt.available, next_usdt.frozen), (9_800, 200));
-    assert_eq!(result.output.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
+    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
 
     Ok(())
 }
@@ -286,73 +286,65 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![treasury_envelope()];
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    )?;
+    let changes =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
 
-    let next_usdt = result
-        .output
+    let next_usdt = changes
         .exchange_state
         .treasury
         .balances
         .get(&AccountAssetKey::new("trader-1", "USDT"))
         .unwrap();
     assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (1_500, 0, 2));
-    assert_eq!(result.events.len(), 1);
+    assert_eq!(events.len(), 1);
 
     Ok(())
 }
 
 #[test]
 fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
-    let result = CommandUseCase3::compute_output_and_events(
+    let changes = CommandUseCase4::compute_changes(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         state_with_open_buy_order(),
     )?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(result.output.command_results.len(), 1);
-    assert_eq!(result.events.len(), 2);
+    assert_eq!(changes.command_results.len(), 1);
+    assert_eq!(events.len(), 2);
 
-    let next_order = result.output.exchange_state.spot.orders.get("order-42").unwrap();
+    let next_order = changes.exchange_state.spot.orders.get("order-42").unwrap();
     assert_eq!(next_order.status, SpotOrderStatus::Canceled);
     assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
     assert_eq!(next_order.version, 2);
 
-    let next_usdt = result
-        .output
+    let next_usdt = changes
         .exchange_state
         .spot
         .balances
         .get(&AccountAssetKey::new("trader-1", "USDT"))
         .unwrap();
     assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (10_000, 0, 4));
-    assert_eq!(result.output.exchange_state.spot.next_order_sequence_by_account["trader-1"], 7);
+    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 7);
 
     Ok(())
 }
 
 #[test]
 fn spot_cancel_sell_order_releases_base_balance() -> Result<(), BuildBlockError> {
-    let result = CommandUseCase3::compute_output_and_events(
+    let changes = CommandUseCase4::compute_changes(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         state_with_open_sell_order(),
     )?;
 
-    let next_order = result.output.exchange_state.spot.orders.get("order-42").unwrap();
+    let next_order = changes.exchange_state.spot.orders.get("order-42").unwrap();
     assert_eq!(next_order.status, SpotOrderStatus::Canceled);
     assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
 
-    let next_btc = result
-        .output
-        .exchange_state
-        .spot
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "BTC"))
-        .unwrap();
+    let next_btc =
+        changes.exchange_state.spot.balances.get(&AccountAssetKey::new("trader-1", "BTC")).unwrap();
     assert_eq!((next_btc.available, next_btc.frozen, next_btc.version), (7, 0, 3));
 
     Ok(())
@@ -363,11 +355,8 @@ fn spot_cancel_missing_order_returns_spot_execution_error() {
     let mut state = sample_state();
     state.commands = vec![cancel_envelope()];
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    );
+    let result =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state);
 
     assert_eq!(result, Err(BuildBlockError::SpotExecution("open order was not found".to_string())));
 }
@@ -381,17 +370,14 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    )?;
+    let changes =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(result.output.command_results.len(), 2);
-    assert_eq!(result.events.len(), 3);
+    assert_eq!(changes.command_results.len(), 2);
+    assert_eq!(events.len(), 3);
 
-    let treasury_usdt = result
-        .output
+    let treasury_usdt = changes
         .exchange_state
         .treasury
         .balances
@@ -402,8 +388,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         (1_500, 0, 2)
     );
 
-    let spot_usdt = result
-        .output
+    let spot_usdt = changes
         .exchange_state
         .spot
         .balances
@@ -411,7 +396,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         .unwrap();
     assert_eq!((spot_usdt.available, spot_usdt.frozen), (9_800, 200));
 
-    let sequences = result.events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2]);
 
     Ok(())
@@ -426,13 +411,11 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    )?;
+    let changes =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
 
-    let sequences = result.events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2]);
 
     Ok(())
@@ -597,7 +580,7 @@ fn validate_rejects_duplicate_command_id_in_batch() {
         treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
     ];
 
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -621,7 +604,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
         treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
     ];
 
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -642,7 +625,7 @@ fn validate_rejects_zero_timestamp_command() {
     state.commands =
         vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, PlaceOrderTimeInForce::Gtc)];
 
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -661,7 +644,7 @@ fn validate_rejects_envelope_account_mismatch() {
     mismatched.account_id = "operator-1".to_string();
     state.commands = vec![mismatched];
 
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -686,7 +669,7 @@ fn validate_rejects_non_canonical_command_order() {
         sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = CommandUseCase3::validate_against_state(
+    let result = CommandUseCase4::validate_against_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -710,7 +693,7 @@ fn canonical_sort_prioritizes_alo_before_other_commands() {
 }
 
 #[test]
-fn compute_output_rejects_non_canonical_batch() {
+fn compute_changes_rejects_non_canonical_batch() {
     let mut state = sample_state();
     let alo =
         sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
@@ -718,17 +701,14 @@ fn compute_output_rejects_non_canonical_batch() {
         sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    );
+    let result =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state);
 
     assert_eq!(result, Err(BuildBlockError::NonCanonicalCommandOrder));
 }
 
 #[test]
-fn compute_output_uses_canonical_commands_for_block_root() -> Result<(), BuildBlockError> {
+fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildBlockError> {
     let mut state = sample_state();
     state.exchange_state.treasury.balances.insert(
         AccountAssetKey::new("trader-1", "USDT"),
@@ -742,20 +722,35 @@ fn compute_output_uses_canonical_commands_for_block_root() -> Result<(), BuildBl
     let expected_root =
         stable_hash_hex(&canonical.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>());
 
-    let result = CommandUseCase3::compute_output_and_events(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        state,
-    )?;
+    let changes =
+        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
 
-    let result_ids = result
-        .output
+    let result_ids = changes
         .command_results
         .iter()
         .map(|command| command.command_id.as_str())
         .collect::<Vec<_>>();
     assert_eq!(result_ids, vec!["cmd-alo", "cmd-treasury"]);
-    assert_eq!(result.output.new_block.commands_root, expected_root);
+    assert_eq!(changes.new_block.commands_root, expected_root);
+
+    Ok(())
+}
+
+#[test]
+fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
+-> Result<(), BuildBlockError> {
+    let changes = CommandUseCase4::compute_changes(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        sample_state(),
+    )?;
+    let events = changes.to_replayable_events().expect("changes should project to events");
+
+    assert_eq!(changes.new_block.block_height, 2);
+    assert_eq!(changes.command_results.len(), 1);
+    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events, changes.replayable_events);
 
     Ok(())
 }

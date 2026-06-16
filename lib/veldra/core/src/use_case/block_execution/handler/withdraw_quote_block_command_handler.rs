@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase2;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use example_core::{WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase};
 
 use crate::entity::{
@@ -65,21 +65,18 @@ fn execute_withdraw_quote(
     treasury_state: &TreasuryState,
 ) -> Result<TreasuryBalanceUpdate, BuildBlockError> {
     let balance = treasury_quote_balance(treasury_state, command.party_id.as_str())?;
-    CommandUseCase2::pre_check_command(&WithdrawQuoteUseCase, command)
+    CommandUseCase4::pre_check_command(&WithdrawQuoteUseCase, command)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
     let state = WithdrawQuoteState { quote_balance: balance.clone() };
-    CommandUseCase2::validate_against_state(&WithdrawQuoteUseCase, command, &state)
+    CommandUseCase4::validate_against_state(&WithdrawQuoteUseCase, command, &state)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
-    let events = CommandUseCase2::compute_replayable_events(&WithdrawQuoteUseCase, command, state)
+    let changes = CommandUseCase4::compute_changes(&WithdrawQuoteUseCase, command, state)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
-
-    let mut balance_after = balance;
-    balance_after.apply_after(
-        balance_after.available.checked_sub(command.amount).ok_or_else(|| {
-            BuildBlockError::TreasuryExecution("treasury balance underflow".to_string())
-        })?,
-        balance_after.frozen,
-        balance_after.version + 1,
-    );
-    Ok(TreasuryBalanceUpdate { balance_after, events: normalize_local_events(events) })
+    let events = changes
+        .to_replayable_events()
+        .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
+    Ok(TreasuryBalanceUpdate {
+        balance_after: changes.quote_balance_after,
+        events: normalize_local_events(events),
+    })
 }

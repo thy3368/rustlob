@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use example_core::{CancelSpotOrderCmd, CancelSpotOrderState, CancelSpotOrderUseCase};
 
 use crate::entity::{
@@ -115,18 +115,21 @@ fn execute_cancel_spot_order(
     command: &CancelSpotOrderCmd,
     spot_state: &SpotState,
 ) -> Result<SpotCancelExecution, BuildBlockError> {
-    CommandUseCase3::pre_check_command(&CancelSpotOrderUseCase, command)
+    CommandUseCase4::pre_check_command(&CancelSpotOrderUseCase, command)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let state = build_cancel_state(command, spot_state)?;
-    CommandUseCase3::validate_against_state(&CancelSpotOrderUseCase, command, &state)
+    CommandUseCase4::validate_against_state(&CancelSpotOrderUseCase, command, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
-    let result =
-        CommandUseCase3::compute_output_and_events(&CancelSpotOrderUseCase, command, state)
-            .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
+    let changes = CommandUseCase4::compute_changes(&CancelSpotOrderUseCase, command, state)
+        .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
     Ok(SpotCancelExecution {
-        order_after: result.output.order_after,
-        balances_after: result.output.balances_after,
-        events: normalize_local_events(result.events),
+        order_after: changes.order_after.clone(),
+        balances_after: changes.balances_after.clone(),
+        events: normalize_local_events(
+            changes
+                .to_replayable_events()
+                .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?,
+        ),
     })
 }

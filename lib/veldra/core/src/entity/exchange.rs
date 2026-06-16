@@ -2,10 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cmd_handler::EntityReplayableEvent;
 use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
-    ExecuteImmediateSpotOrderPipelineOutput, HyperliquidPerpFundingSettlement,
-    HyperliquidPerpOrder, HyperliquidPerpPosition, MarketRules, SpotOrder, SpotSettlement,
-    SpotTrade, WithdrawQuoteCmd,
+    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineChanges,
+    ExecuteImmediateSpotOrderPipelineCmd, HyperliquidPerpFundingSettlement, HyperliquidPerpOrder,
+    HyperliquidPerpPosition, MarketRules, SpotOrder, SpotSettlement, SpotTrade, WithdrawQuoteCmd,
 };
 
 use super::stable_hash_hex;
@@ -216,7 +215,7 @@ impl SpotCancelExecution {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotPipelineExecution {
-    pub pipeline_output: ExecuteImmediateSpotOrderPipelineOutput,
+    pub pipeline_output: ExecuteImmediateSpotOrderPipelineChanges,
     pub balances_after: Vec<Balance>,
     pub orders_after: Vec<SpotOrder>,
     pub trades: Vec<SpotTrade>,
@@ -502,7 +501,7 @@ pub fn build_new_block(
     )
 }
 
-fn pipeline_output_commitment(output: &ExecuteImmediateSpotOrderPipelineOutput) -> String {
+fn pipeline_output_commitment(output: &ExecuteImmediateSpotOrderPipelineChanges) -> String {
     let place = stable_hash_hex(&[
         spot_order_commitment(&output.place_output.order).as_str(),
         balance_commitment(&output.place_output.affected_balance_after).as_str(),
