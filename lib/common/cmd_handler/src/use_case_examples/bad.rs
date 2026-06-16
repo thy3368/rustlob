@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use crate::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 2;
@@ -28,7 +28,7 @@ fn string_field(name: &str, value: &str) -> ReplayFieldChange {
 // - `party_id` is missing even though a business party is clearly issuing the command.
 // - `trace_id` is placed on the business command, which encourages identity confusion.
 // - `GivenState` already contains the decision result and final event, so the use case
-//   does very little business work and mostly copies a precomputed answer.
+//   mostly copies a precomputed answer into output and events.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubmitCmd {
@@ -50,12 +50,19 @@ pub struct SubmitState {
     pub generated_status: &'static str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmitOutput {
+    pub accepted: bool,
+    pub generated_status: &'static str,
+}
+
 pub struct OrderCheckingEngineUseCase;
 
-impl CommandUseCase2 for OrderCheckingEngineUseCase {
+impl CommandUseCase3 for OrderCheckingEngineUseCase {
     type Command = SubmitCmd;
     type GivenState = SubmitState;
     type Error = SubmitError;
+    type Output = SubmitOutput;
 
     fn role(&self) -> &'static str {
         "OrderCheckingEngine"
@@ -73,11 +80,14 @@ impl CommandUseCase2 for OrderCheckingEngineUseCase {
         if state.accepted { Ok(()) } else { Err(SubmitError::Rejected) }
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let output =
+            SubmitOutput { accepted: state.accepted, generated_status: state.generated_status };
+
         let mut event = EntityReplayableEvent::new_created(
             0,
             0,
@@ -85,6 +95,7 @@ impl CommandUseCase2 for OrderCheckingEngineUseCase {
             SUBMIT_ENTITY_TYPE,
         );
         event.add_field_change(string_field("status", state.generated_status));
-        Ok(vec![event])
+
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }

@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::command_use_case_def2::{CommandUseCase2, IssuedByParty, UseCaseReplyMapper};
+use crate::command_use_case_def2::{
+    CommandUseCase3, IssuedByParty, UseCaseOutput, UseCaseReplyMapper3,
+};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const PLACE_ORDER_ENTITY_TYPE: u8 = 1;
@@ -45,9 +47,9 @@ fn event_has_symbol(events: &[EntityReplayableEvent], symbol: &str) -> bool {
 // Shared good example for both writing and reviewing use cases:
 // - `party_id` is carried by the business command.
 // - `role()` names the business-game role, not a technical component.
-// - `pre_check_command`, `validate_against_state`, and `compute_replayable_events`
+// - `pre_check_command`, `validate_against_state`, and `compute_output_and_events`
 //   each do one job.
-// - emitted events are derived from command + state, not copied from a prepared answer.
+// - typed output and emitted events come from the same business decision.
 // - reply mapping stays outside the core use case.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +79,12 @@ pub struct PlaceOrderState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceOrderOutput {
+    pub order_key: String,
+    pub accepted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceOrderReply {
     pub accepted: bool,
 }
@@ -84,20 +92,24 @@ pub struct PlaceOrderReply {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceOrderReplyMapper;
 
-impl UseCaseReplyMapper for PlaceOrderReplyMapper {
+impl UseCaseReplyMapper3 for PlaceOrderReplyMapper {
+    type Output = PlaceOrderOutput;
     type Reply = PlaceOrderReply;
 
-    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
-        PlaceOrderReply { accepted: event_has_symbol(&events, "BTCUSDT") || !events.is_empty() }
+    fn map(&self, result: UseCaseOutput<Self::Output>) -> Self::Reply {
+        PlaceOrderReply {
+            accepted: result.output.accepted && event_has_symbol(&result.events, "BTCUSDT"),
+        }
     }
 }
 
 pub struct PlaceOrderUseCase;
 
-impl CommandUseCase2 for PlaceOrderUseCase {
+impl CommandUseCase3 for PlaceOrderUseCase {
     type Command = PlaceOrderCmd;
     type GivenState = PlaceOrderState;
     type Error = PlaceOrderError;
+    type Output = PlaceOrderOutput;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -118,20 +130,24 @@ impl CommandUseCase2 for PlaceOrderUseCase {
         if state.trading_enabled { Ok(()) } else { Err(PlaceOrderError::TradingDisabled) }
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         _state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let order_key = format!("{}:{}", cmd.party_id, cmd.symbol);
+        let output = PlaceOrderOutput { order_key: order_key.clone(), accepted: true };
+
         let mut event = EntityReplayableEvent::new_created(
             0,
             0,
-            stable_entity_id(&format!("{}:{}", cmd.party_id, cmd.symbol)),
+            stable_entity_id(&order_key),
             PLACE_ORDER_ENTITY_TYPE,
         );
         event.add_field_change(string_field("party_id", &cmd.party_id));
         event.add_field_change(string_field("symbol", &cmd.symbol));
         event.add_field_change(int_field("qty", cmd.qty));
-        Ok(vec![event])
+
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }

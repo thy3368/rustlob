@@ -4,8 +4,8 @@ use proptest::prelude::*;
 use thiserror::Error;
 
 use crate::command_use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutionError,
-    CommandUseCaseExecutor2, CommandUseCaseOutbound, IssuedByParty,
+    CommandEnvelope, CommandMeta, CommandUseCase3, CommandUseCaseExecutionError,
+    CommandUseCaseExecutor3, CommandUseCaseOutbound, IssuedByParty, UseCaseOutput,
 };
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
@@ -52,7 +52,7 @@ fn event_field<'a>(event: &'a EntityReplayableEvent, name: &str) -> Option<&'a s
 // Good proptest example:
 // - properties express business invariants, not syntax trivia
 // - generated input space covers both success and rejection paths
-// - assertions check side effects and executor behavior, not just returned values
+// - assertions check typed output, side effects, and executor behavior
 // - the test proves pipeline methods do not run when validation fails
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,13 +83,20 @@ struct DepositState {
     max_amount: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DepositOutput {
+    party_id: String,
+    accepted_amount: u64,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct DepositUseCase;
 
-impl CommandUseCase2 for DepositUseCase {
+impl CommandUseCase3 for DepositUseCase {
     type Command = DepositCmd;
     type GivenState = DepositState;
     type Error = DepositError;
+    type Output = DepositOutput;
 
     fn role(&self) -> &'static str {
         "WalletOwner"
@@ -116,11 +123,12 @@ impl CommandUseCase2 for DepositUseCase {
         Ok(())
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         cmd: &Self::Command,
         _state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let output = DepositOutput { party_id: cmd.party_id.clone(), accepted_amount: cmd.amount };
         let mut event = EntityReplayableEvent::new_created(
             0,
             0,
@@ -129,7 +137,7 @@ impl CommandUseCase2 for DepositUseCase {
         );
         event.add_field_change(string_field("party_id", &cmd.party_id));
         event.add_field_change(int_field("amount", cmd.amount));
-        Ok(vec![event])
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }
 
@@ -182,7 +190,7 @@ proptest! {
     fn property_executor_respects_business_invariants(
         (cmd, state) in deposit_case_strategy(),
     ) {
-        let executor = CommandUseCaseExecutor2;
+        let executor = CommandUseCaseExecutor3;
         let use_case = DepositUseCase;
         let outbound = CountingOutbound {
             state: state.clone(),
@@ -217,11 +225,14 @@ proptest! {
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else {
-            let events = result.unwrap();
+            let result = result.unwrap();
             let expected_amount = cmd.amount.to_string();
-            prop_assert_eq!(events.len(), 1);
-            prop_assert_eq!(event_field(&events[0], "party_id"), Some(cmd.party_id.as_str()));
-            prop_assert_eq!(event_field(&events[0], "amount"), Some(expected_amount.as_str()));
+            let output_party_id = result.output.party_id.clone();
+            prop_assert_eq!(output_party_id.as_str(), cmd.party_id.as_str());
+            prop_assert_eq!(result.output.accepted_amount, cmd.amount);
+            prop_assert_eq!(result.events.len(), 1);
+            prop_assert_eq!(event_field(&result.events[0], "party_id"), Some(output_party_id.as_str()));
+            prop_assert_eq!(event_field(&result.events[0], "amount"), Some(expected_amount.as_str()));
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 1);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 1);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 1);

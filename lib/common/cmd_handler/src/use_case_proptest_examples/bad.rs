@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 use thiserror::Error;
 
-use crate::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use crate::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 4;
@@ -57,13 +57,19 @@ struct SubmitState {
     accepted: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SubmitOutput {
+    accepted: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct OrderCheckingEngineUseCase;
 
-impl CommandUseCase2 for OrderCheckingEngineUseCase {
+impl CommandUseCase3 for OrderCheckingEngineUseCase {
     type Command = SubmitCmd;
     type GivenState = SubmitState;
     type Error = SubmitError;
+    type Output = SubmitOutput;
 
     fn role(&self) -> &'static str {
         "OrderCheckingEngine"
@@ -81,11 +87,12 @@ impl CommandUseCase2 for OrderCheckingEngineUseCase {
         if state.accepted { Ok(()) } else { Err(SubmitError::Rejected) }
     }
 
-    fn compute_replayable_events(
+    fn compute_output_and_events(
         &self,
         _cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        let output = SubmitOutput { accepted: state.accepted };
         let mut event = EntityReplayableEvent::new_created(
             0,
             0,
@@ -93,7 +100,7 @@ impl CommandUseCase2 for OrderCheckingEngineUseCase {
             SUBMIT_ENTITY_TYPE,
         );
         event.add_field_change(bool_field("accepted", state.accepted));
-        Ok(vec![event])
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }
 
@@ -111,8 +118,9 @@ proptest! {
         let use_case = OrderCheckingEngineUseCase;
 
         if state.accepted {
-            let events = use_case.compute_replayable_events(&cmd, state.clone()).unwrap();
-            prop_assert_eq!(event_accepted(&events), Some(state.accepted));
+            let result = use_case.compute_output_and_events(&cmd, state.clone()).unwrap();
+            prop_assert_eq!(result.output.accepted, state.accepted);
+            prop_assert_eq!(event_accepted(&result.events), Some(state.accepted));
         } else {
             prop_assert_eq!(use_case.validate_against_state(&cmd, &state), Err(SubmitError::Rejected));
         }

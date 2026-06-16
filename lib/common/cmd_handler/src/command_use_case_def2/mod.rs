@@ -5,11 +5,13 @@ mod use_case;
 
 pub use executor::{
     CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,
+    CommandUseCaseExecutor4,
 };
 pub use outbound::{CommandUseCaseOutbound, CommandUseCaseOutboundPhase};
 pub use use_case::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, IssuedByParty, UseCaseOutput,
-    UseCaseReplyMapper, UseCaseReplyMapper3,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, CommandUseCase4,
+    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair, UseCaseChanges,
+    UseCaseOutput, UseCaseReplyMapper, UseCaseReplyMapper3,
 };
 
 use crate::HandlerLatencyMetrics;

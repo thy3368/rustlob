@@ -6,9 +6,10 @@ use super::trace::{
     use_case_command_summary,
 };
 use super::{
-    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, CommandUseCaseOutbound,
-    CommandUseCaseOutboundPhase, IssuedByParty, ObserveHandlerLatency, UseCaseOutput,
-    UseCaseReplyMapper, UseCaseReplyMapper3,
+    CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, CommandUseCase4,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, IssuedByParty,
+    ObserveHandlerLatency, ReplayableChanges, UseCaseChanges, UseCaseOutput, UseCaseReplyMapper,
+    UseCaseReplyMapper3,
 };
 use crate::HandlerLatencyMetrics;
 
@@ -19,7 +20,9 @@ where
     OutboundError: std::error::Error + 'static,
 {
     #[error(transparent)]
-    Business(#[from] BusinessError),
+    Business(BusinessError),
+    #[error("project replayable events failed: {0}")]
+    EventProject(EventProjectError),
     #[error("outbound {phase} failed: {source}")]
     Outbound {
         phase: CommandUseCaseOutboundPhase,
@@ -33,6 +36,12 @@ where
     BusinessError: std::error::Error + 'static,
     OutboundError: std::error::Error + 'static,
 {
+    pub fn event_project(
+        source: EventProjectError,
+    ) -> CommandUseCaseExecutionError<BusinessError, OutboundError> {
+        Self::EventProject(source)
+    }
+
     pub fn outbound(
         phase: CommandUseCaseOutboundPhase,
         source: OutboundError,
@@ -453,5 +462,188 @@ impl CommandUseCaseExecutor3 {
     {
         let result = self.execute(use_case, envelope, outbound, latency_observer)?;
         Ok(mapper.map(result))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CommandUseCaseExecutor4;
+
+impl CommandUseCaseExecutor4 {
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    where
+        U: CommandUseCase4,
+        O: ?Sized
+            + Send
+            + Sync
+            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+        O::Error: 'static,
+    {
+        if !tracing::enabled!(tracing::Level::TRACE) {
+            return tracing::Span::none();
+        }
+
+        tracing::span!(
+            tracing::Level::TRACE,
+            "command_use_case_execute",
+            use_case = std::any::type_name::<U>(),
+            command_summary = ?use_case_command_summary::<U>(),
+            role = use_case.role(),
+            command_type = std::any::type_name::<U::Command>(),
+            business_error_type = std::any::type_name::<U::Error>(),
+            changes_type = std::any::type_name::<U::Changes>(),
+            outbound_error_type = std::any::type_name::<O::Error>(),
+            outbound = std::any::type_name::<O>(),
+            trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
+            command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
+            party_id = trace_field_or_placeholder(command.party_id()),
+        )
+    }
+
+    /// V4 标准编排：
+    /// 1. pre_check_command
+    /// 2. load_state
+    /// 3. validate_against_state
+    /// 4. compute_changes
+    /// 5. changes.to_replayable_events()
+    /// 6. persist(events)
+    /// 7. replay(events)
+    /// 8. publish(events)
+    pub fn execute<U, OB, O>(
+        &self,
+        use_case: &U,
+        envelope: CommandEnvelope<U::Command>,
+        outbound: &OB,
+        latency_observer: &O,
+    ) -> Result<UseCaseChanges<U::Changes>, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    where
+        U: CommandUseCase4,
+        OB: ?Sized
+            + Send
+            + Sync
+            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+        O: ?Sized + ObserveHandlerLatency,
+        OB::Error: 'static,
+    {
+        use minstant::Instant;
+
+        let CommandEnvelope { meta, command } = envelope;
+        let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
+        let total_start = Instant::now();
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
+        let _execution_guard = execution_span.enter();
+
+        if trace_enabled {
+            trace_command_use_case_started!();
+        }
+
+        let execution = (|| -> Result<
+            (UseCaseChanges<U::Changes>, HandlerLatencyMetrics),
+            CommandUseCaseExecutionError<U::Error, OB::Error>,
+        > {
+            let ((), pre_check_ns) = trace_phase(
+                "pre_check",
+                "workflow.pre_check_command(&command)",
+                || use_case.pre_check_command(&command),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let (state, load_state_ns) =
+                trace_phase("load_state", "outbound.load_state(&command)", || {
+                    outbound.load_state(&command)
+                })
+                .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::LoadState,
+                        error,
+                    )
+                })?;
+            let ((), validate_in_lock_ns) = trace_phase(
+                "validate_against_state",
+                "workflow.validate_against_state(&command, &state)",
+                || use_case.validate_against_state(&command, &state),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let (changes, apply_changes_ns) = trace_phase(
+                "compute_changes",
+                "workflow.compute_changes(&command, state)",
+                || use_case.compute_changes(&command, state),
+            )
+            .map_err(CommandUseCaseExecutionError::Business)?;
+            let (events, event_project_ns) = trace_phase(
+                "project_replayable_events",
+                "changes.to_replayable_events()",
+                || changes.to_replayable_events(),
+            )
+            .map_err(CommandUseCaseExecutionError::event_project)?;
+            let apply_changes_ns = apply_changes_ns.saturating_add(event_project_ns);
+            let domain_event_count = events.len();
+
+            let ((), persist_domain_events_ns) =
+                trace_phase("persist", "outbound.persist(&events)", || outbound.persist(&events))
+                    .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Persist,
+                        error,
+                    )
+                })?;
+            let ((), replay_domain_events_ns) =
+                trace_phase("replay", "outbound.replay(&events)", || outbound.replay(&events))
+                    .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Replay,
+                        error,
+                    )
+                })?;
+            let ((), publish_domain_events_ns) =
+                trace_phase("publish", "outbound.publish(&events)", || outbound.publish(&events))
+                    .map_err(|error| {
+                    CommandUseCaseExecutionError::outbound(
+                        CommandUseCaseOutboundPhase::Publish,
+                        error,
+                    )
+                })?;
+
+            let metrics = HandlerLatencyMetrics {
+                total_ns: total_start.elapsed().as_nanos(),
+                pre_check_ns,
+                load_state_ns,
+                validate_in_lock_ns,
+                apply_changes_ns,
+                persist_domain_events_ns,
+                replay_domain_events_ns,
+                publish_domain_events_ns,
+                domain_event_count,
+            };
+
+            Ok((UseCaseChanges { changes, events }, metrics))
+        })();
+
+        match execution {
+            Ok((result, metrics)) => {
+                if trace_enabled {
+                    trace_command_use_case_completed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        metrics
+                    );
+                }
+                latency_observer.observe_latency(&metrics);
+                Ok(result)
+            }
+            Err(error) => {
+                if trace_enabled {
+                    trace_command_use_case_failed!(
+                        use_case_command_summary::<U>(),
+                        use_case.role(),
+                        command.party_id(),
+                        std::any::type_name::<OB>(),
+                        total_start.elapsed().as_nanos(),
+                        error
+                    );
+                }
+                Err(error)
+            }
+        }
     }
 }
