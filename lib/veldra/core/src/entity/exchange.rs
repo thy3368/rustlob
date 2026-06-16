@@ -3,10 +3,11 @@ use example_core::{
     CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     PlaceOrderTimeInForce, WithdrawQuoteCmd,
 };
+use serde::{Deserialize, Serialize};
 
 use super::{PerpState, SpotState, TreasuryState, stable_hash_hex};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandEnvelope<T> {
     pub command_id: String,
     pub account_id: String,
@@ -39,7 +40,7 @@ impl CommandEnvelope<ProductCommand> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProductCommand {
     Spot(SpotCommand),
     Perp(PerpCommand),
@@ -64,7 +65,7 @@ impl ProductCommand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotCommand {
     ExecuteImmediateOrderPipeline(ExecuteImmediateSpotOrderPipelineCmd),
     CancelOrder(CancelSpotOrderCmd),
@@ -106,7 +107,7 @@ impl SpotCommand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PerpCommand {
     Unsupported,
 }
@@ -117,7 +118,7 @@ impl PerpCommand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TreasuryCommand {
     DepositQuote(DepositQuoteCmd),
     WithdrawQuote(WithdrawQuoteCmd),

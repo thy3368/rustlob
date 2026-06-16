@@ -1,7 +1,11 @@
+use cmd_handler::EntityReplayableEvent;
+use serde::{Deserialize, Serialize};
+
 use super::stable_hash_hex;
+use crate::entity::{CommandEnvelope, ProductCommand};
 
 /// 新区块的业务承诺快照。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewBlock {
     /// 区块高度。
     pub block_height: u64,
@@ -15,6 +19,19 @@ pub struct NewBlock {
     pub post_state_root: String,
     /// 当前区块头字段的稳定哈希。
     pub block_hash: String,
+}
+
+/// 区块执行体，保留可用于回放和持久化的规范事实。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockExecutionBody {
+    /// 当前区块哈希，必须与区块头承诺一致。
+    pub block_hash: String,
+    /// 当前区块高度，必须与区块头一致。
+    pub block_height: u64,
+    /// 本区块按 canonical 顺序执行的命令。
+    pub commands: Vec<CommandEnvelope<ProductCommand>>,
+    /// 本区块按稳定 sequence 排列的可重放事件。
+    pub replayable_events: Vec<EntityReplayableEvent>,
 }
 
 impl NewBlock {

@@ -9,7 +9,9 @@ use super::{
     BlockEntityChange, BuildBlockError, BuildBlockFromCommandsChanges,
     BuildBlockFromCommandsCommand, BuildBlockFromCommandsState,
 };
-use crate::entity::{CommandEnvelope, ExchangeState, ProductCommand, build_new_block};
+use crate::entity::{
+    BlockExecutionBody, CommandEnvelope, ExchangeState, ProductCommand, build_new_block,
+};
 use crate::use_case::block_execution::canonical_batch::validate_and_clone_canonical_commands;
 use crate::use_case::block_execution::handler::block_command_handler::{
     BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
@@ -69,6 +71,7 @@ impl CommandUseCase4 for BuildBlockFromCommandsUseCase {
         let ordered_changes = execute_batch_commands(&commands, &mut exchange_state)?;
         let events = BuildBlockFromCommandsChanges {
             new_block: None,
+            execution_body: None,
             ordered_changes: ordered_changes.clone(),
         }
         .to_replayable_events()
@@ -155,8 +158,18 @@ fn build_block_changes(
 ) -> BuildBlockFromCommandsChanges {
     let new_block =
         build_new_block(block_height, parent_block_hash, &commands, &events, &exchange_state);
+    let execution_body = BlockExecutionBody {
+        block_hash: new_block.block_hash.clone(),
+        block_height: new_block.block_height,
+        commands,
+        replayable_events: events,
+    };
 
-    BuildBlockFromCommandsChanges { new_block: Some(new_block), ordered_changes }
+    BuildBlockFromCommandsChanges {
+        new_block: Some(new_block),
+        execution_body: Some(execution_body),
+        ordered_changes,
+    }
 }
 
 fn extract_spot_pipeline_changes(

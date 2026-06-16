@@ -6,7 +6,7 @@ use common_entity::Entity;
 use example_core::{Balance, SpotOrder, SpotSettlement, SpotTrade};
 use thiserror::Error;
 
-use crate::entity::{CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
+use crate::entity::{BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromCommandsCommand {
@@ -35,6 +35,7 @@ pub enum BlockEntityChange {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BuildBlockFromCommandsChanges {
     pub new_block: Option<NewBlock>,
+    pub execution_body: Option<BlockExecutionBody>,
     pub ordered_changes: Vec<BlockEntityChange>,
 }
 

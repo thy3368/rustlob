@@ -6,7 +6,7 @@ mod spot;
 mod support;
 mod treasury;
 
-pub use block::NewBlock;
+pub use block::{BlockExecutionBody, NewBlock};
 pub use exchange::{
     CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotCommand, TreasuryCommand,
     build_new_block,

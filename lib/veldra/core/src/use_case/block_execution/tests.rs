@@ -226,6 +226,10 @@ fn block(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::NewBlock {
     changes.new_block.as_ref().expect("block builder should always produce a block")
 }
 
+fn execution_body(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::BlockExecutionBody {
+    changes.execution_body.as_ref().expect("block builder should always produce an execution body")
+}
+
 fn spot_balance_after<'a>(
     changes: &'a BuildBlockFromCommandsChanges,
     account_id: &str,
@@ -297,6 +301,7 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
     let new_block = block(&changes);
+    let body = execution_body(&changes);
 
     assert_eq!(changes.ordered_changes.len(), 2);
     assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
@@ -306,10 +311,33 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     assert!(!new_block.commands_root.is_empty());
     assert!(!new_block.events_root.is_empty());
     assert!(!new_block.post_state_root.is_empty());
+    assert_eq!(body.block_height, new_block.block_height);
+    assert_eq!(body.block_hash, new_block.block_hash);
+    assert_eq!(body.commands.len(), 1);
     assert_eq!(events.len(), 2);
+    assert_eq!(body.replayable_events, events);
 
     let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!((next_usdt.available, next_usdt.frozen), (9_800, 200));
+
+    Ok(())
+}
+
+#[test]
+fn same_input_produces_same_block_commitment() -> Result<(), BuildBlockError> {
+    let first = CommandUseCase4::compute_changes(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        sample_state(),
+    )?;
+    let second = CommandUseCase4::compute_changes(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        sample_state(),
+    )?;
+
+    assert_eq!(block(&first), block(&second));
+    assert_eq!(execution_body(&first), execution_body(&second));
 
     Ok(())
 }
@@ -731,6 +759,7 @@ fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     assert_eq!(block(&changes).block_height, 2);
+    assert_eq!(execution_body(&changes).block_height, 2);
     assert_eq!(changes.ordered_changes.len(), 2);
     assert_eq!(events.len(), 2);
     assert_eq!(events.len(), changes.ordered_changes.len());
