@@ -196,12 +196,9 @@ fn extract_spot_pipeline_changes(
 }
 
 fn extract_spot_cancel_changes(execution: &CancelSpotOrderChanges) -> Vec<BlockEntityChange> {
-    let mut ordered_changes = Vec::with_capacity(1 + execution.balances_updated.len());
-    ordered_changes.push(BlockEntityChange::SpotOrderUpdated(UpdatedEntityPair {
-        before: execution.order_before.clone(),
-        after: execution.order_after.clone(),
-    }));
-    for balance in &execution.balances_updated {
+    let mut ordered_changes = Vec::with_capacity(1 + execution.released_balances.len());
+    ordered_changes.push(BlockEntityChange::SpotOrderUpdated(execution.canceled_order.clone()));
+    for balance in &execution.released_balances {
         ordered_changes.push(BlockEntityChange::BalanceUpdated(balance.clone()));
     }
     ordered_changes

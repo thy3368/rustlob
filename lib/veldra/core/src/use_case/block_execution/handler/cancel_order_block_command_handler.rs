@@ -36,16 +36,22 @@ impl BlockCommandHandler for CancelOrderBlockCommandHandler {
     }
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution) {
-        for balance in &execution.balances_after {
+        for balance in &execution.released_balances {
             exchange_state.spot.balances.insert(
-                AccountAssetKey::new(balance.account_id.as_str(), balance.asset_id.as_str()),
-                balance.clone(),
+                AccountAssetKey::new(
+                    balance.after.account_id.as_str(),
+                    balance.after.asset_id.as_str(),
+                ),
+                balance.after.clone(),
             );
         }
         exchange_state
             .spot
             .orders
-            .insert(execution.order_after.order_id.clone(), execution.order_after.clone());
+            .insert(
+                execution.canceled_order.after.order_id.clone(),
+                execution.canceled_order.after.clone(),
+            );
     }
 }
 

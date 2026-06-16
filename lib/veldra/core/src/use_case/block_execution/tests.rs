@@ -510,12 +510,11 @@ fn cancel_order_handler_returns_example_core_changes() -> Result<(), BuildBlockE
 
     let result =
         CANCEL_ORDER_BLOCK_COMMAND_HANDLER.execute(&envelope, command, &state.exchange_state)?;
-    assert_eq!(result.order_before.status, SpotOrderStatus::Open);
-    assert_eq!(result.order_after.status, SpotOrderStatus::Canceled);
-    assert_eq!(result.balances_updated.len(), 1);
-    assert_eq!(result.balances_after.len(), 1);
-    assert_eq!(result.balances_updated[0].before.frozen, 200);
-    assert_eq!(result.balances_updated[0].after.frozen, 0);
+    assert_eq!(result.canceled_order.before.status, SpotOrderStatus::Open);
+    assert_eq!(result.canceled_order.after.status, SpotOrderStatus::Canceled);
+    assert_eq!(result.released_balances.len(), 1);
+    assert_eq!(result.released_balances[0].before.frozen, 200);
+    assert_eq!(result.released_balances[0].after.frozen, 0);
 
     Ok(())
 }
