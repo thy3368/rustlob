@@ -1,14 +1,21 @@
 mod block;
 mod exchange;
+mod perp;
+mod shared;
+mod spot;
 mod support;
+mod treasury;
 
 pub use block::NewBlock;
 pub use exchange::{
-    AccountAssetKey, AccountMarketKey, CommandEnvelope, ExchangeState, PerpCommand, PerpState,
-    ProductCommand, SpotAssetPair, SpotCommand, SpotState, TreasuryCommand, TreasuryState,
-    WithdrawLockState, build_new_block,
+    CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotCommand, TreasuryCommand,
+    build_new_block,
 };
+pub use perp::PerpState;
+pub use shared::{AccountAssetKey, AccountMarketKey};
+pub use spot::{SpotAssetPair, SpotState};
 pub(crate) use support::stable_hash_hex;
+pub use treasury::{TreasuryState, WithdrawLockState};
 
 pub(crate) fn event_commitment(event: &cmd_handler::EntityReplayableEvent) -> String {
     let fields = event
@@ -32,4 +39,23 @@ pub(crate) fn event_commitment(event: &cmd_handler::EntityReplayableEvent) -> St
         event.change_type.to_string(),
         fields,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AccountAssetKey, ExchangeState, PerpState, SpotAssetPair, SpotState, TreasuryState,
+        WithdrawLockState,
+    };
+
+    #[test]
+    fn top_level_entity_exports_still_cover_core_state_types() {
+        let _: ExchangeState = ExchangeState::default();
+        let _: SpotState = SpotState::default();
+        let _: PerpState = PerpState::default();
+        let _: TreasuryState = TreasuryState::default();
+        let _: AccountAssetKey = AccountAssetKey::new("account-1", "USDT");
+        let _: SpotAssetPair = SpotAssetPair::new("BTC", "USDT");
+        let _: WithdrawLockState = WithdrawLockState::default();
+    }
 }

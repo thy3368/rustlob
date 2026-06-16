@@ -45,13 +45,10 @@ impl BlockCommandHandler for CancelOrderBlockCommandHandler {
                 balance.after.clone(),
             );
         }
-        exchange_state
-            .spot
-            .orders
-            .insert(
-                execution.canceled_order.after.order_id.clone(),
-                execution.canceled_order.after.clone(),
-            );
+        exchange_state.spot.orders.insert(
+            execution.canceled_order.after.order_id.clone(),
+            execution.canceled_order.after.clone(),
+        );
     }
 }
 
