@@ -43,7 +43,6 @@ members = [
     "app/client",
     "app/pingora_gateway",
     "inbound_adapter/websocket_sockudo",
-    "app/xdp_libbpf",
     # proc
     "operating/cex/exchange/spot",
     "operating/cex/exchange/derivatives",
@@ -52,7 +51,7 @@ members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "operating/dex", "lib/common/mdbx", "lib/common/bdd", "operating/l2_prod2", "lib/core/l1_e2e", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
+    "study/hyperliquid_analyzer", "operating/dex", "lib/common/mdbx", "lib/common/bdd", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
 ]
 
 # XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
@@ -110,8 +109,6 @@ default-members = [
     "operating/dex",
     "lib/common/mdbx",
     "lib/common/bdd",
-    "operating/l2_prod2",
-    "lib/core/l1_e2e",
 ]
 
 resolver = "2"
