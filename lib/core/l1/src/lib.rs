@@ -1,6 +1,5 @@
 pub mod execution;
 pub mod ports;
-pub mod workflow;
 
 pub mod entity;
 
@@ -11,4 +10,3 @@ pub use entity::state::*;
 pub use execution::*;
 pub use ports::*;
 pub use vm::*;
-pub use workflow::*;
