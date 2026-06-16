@@ -51,7 +51,7 @@ members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "operating/dex", "lib/common/mdbx", "lib/common/bdd", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
+    "study/hyperliquid_analyzer", "operating/dex", "lib/common/bdd", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
 ]
 
 # XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
@@ -107,7 +107,6 @@ default-members = [
     "study/web3",
     "study/hyperliquid_analyzer",
     "operating/dex",
-    "lib/common/mdbx",
     "lib/common/bdd",
 ]
 
