@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
 
@@ -146,9 +146,8 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 pub struct PlaceImmediateOrderChanges {
     /// 本次立即单创建出来的 taker 订单。
     pub order: SpotOrder,
-    /// 本次下单影响到的那条余额冻结后快照。
-    pub affected_balance_after: Balance,
-    pub affected_balance_before: Balance,
+    /// 本次下单影响到的那条余额 before/after。
+    pub affected_balance: UpdatedEntityPair<Balance>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -187,7 +186,7 @@ impl PlaceImmediateOrderUseCase {
             cmd.cloid.clone(),
         );
 
-        let (affected_balance_before, affected_balance_after) = match side {
+        let affected_balance = match side {
             PlaceOrderSide::Buy => {
                 let mut next_balance = state.quote_balance;
                 let previous_balance = next_balance.clone();
@@ -199,7 +198,7 @@ impl PlaceImmediateOrderUseCase {
                     .checked_add(1)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
                 next_balance.apply_after(next_available, next_frozen, next_version);
-                (previous_balance, next_balance)
+                UpdatedEntityPair { before: previous_balance, after: next_balance }
             }
             PlaceOrderSide::Sell => {
                 let mut next_balance = state.base_balance;
@@ -212,11 +211,11 @@ impl PlaceImmediateOrderUseCase {
                     .checked_add(1)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
                 next_balance.apply_after(next_available, next_frozen, next_version);
-                (previous_balance, next_balance)
+                UpdatedEntityPair { before: previous_balance, after: next_balance }
             }
         };
 
-        Ok(PlaceImmediateOrderChanges { order, affected_balance_after, affected_balance_before })
+        Ok(PlaceImmediateOrderChanges { order, affected_balance })
     }
 }
 
@@ -226,7 +225,7 @@ impl ReplayableChanges for PlaceImmediateOrderChanges {
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         Ok(vec![
             self.order.track_create_event()?,
-            self.affected_balance_after.track_update_event_from(&self.affected_balance_before)?,
+            self.affected_balance.after.track_update_event_from(&self.affected_balance.before)?,
         ])
     }
 }

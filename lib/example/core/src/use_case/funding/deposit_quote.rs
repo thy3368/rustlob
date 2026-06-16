@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
 use thiserror::Error;
@@ -33,15 +33,18 @@ pub enum DepositQuoteError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositQuoteChanges {
-    pub quote_balance_before: Balance,
-    pub quote_balance_after: Balance,
+    pub updated_quote_balance: UpdatedEntityPair<Balance>,
 }
 
 impl ReplayableChanges for DepositQuoteChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        Ok(vec![self.quote_balance_after.track_update_event_from(&self.quote_balance_before)?])
+        Ok(vec![
+            self.updated_quote_balance
+                .after
+                .track_update_event_from(&self.updated_quote_balance.before)?,
+        ])
     }
 }
 
@@ -91,7 +94,12 @@ impl CommandUseCase4 for DepositQuoteUseCase {
 
         balance.apply_after(next_available, next_frozen, next_version);
 
-        Ok(DepositQuoteChanges { quote_balance_before, quote_balance_after: balance })
+        Ok(DepositQuoteChanges {
+            updated_quote_balance: UpdatedEntityPair {
+                before: quote_balance_before,
+                after: balance,
+            },
+        })
     }
 }
 
@@ -155,7 +163,7 @@ mod tests {
         assert_eq!(event_field(&events[0], "asset_id"), Some("USDT"));
         assert_eq!(field_as_u64(&events[0], "available"), Some(1_200));
         assert_eq!(field_as_u64(&events[0], "frozen"), None);
-        assert_eq!(changes.quote_balance_after.available, 1_200);
+        assert_eq!(changes.updated_quote_balance.after.available, 1_200);
 
         Ok(())
     }

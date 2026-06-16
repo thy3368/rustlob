@@ -1,5 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -172,20 +174,31 @@ pub struct PlaceHyperliquidPerpOrderState {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceHyperliquidPerpOrderUseCase;
 
-/// 创建 Hyperliquid perp 订单后的业务产出。
+/// 创建 Hyperliquid perp 订单后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceHyperliquidPerpOrderOutput {
-    /// 下单后订单快照。
-    pub order_after: HyperliquidPerpOrder,
-    /// 本次实际受影响的保证金余额 after 快照；reduce-only 路径为空。
-    pub balances_after: Vec<Balance>,
+pub struct PlaceHyperliquidPerpOrderChanges {
+    /// 本次新创建的订单事实。
+    pub created_order: HyperliquidPerpOrder,
+    /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
+    pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
-impl CommandUseCase3 for PlaceHyperliquidPerpOrderUseCase {
+impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+        let mut events = Vec::with_capacity(1 + self.updated_margin_balances.len());
+        events.push(self.created_order.track_create_event()?);
+        for balance in &self.updated_margin_balances {
+            events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
     type Command = PlaceHyperliquidPerpOrderCmd;
     type GivenState = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;
-    type Output = PlaceHyperliquidPerpOrderOutput;
+    type Changes = PlaceHyperliquidPerpOrderChanges;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -258,15 +271,15 @@ impl CommandUseCase3 for PlaceHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
-        let order_after = HyperliquidPerpOrder::new(
+        let created_order = HyperliquidPerpOrder::new(
             order_id,
             None,
             cmd.asset,
@@ -279,22 +292,19 @@ impl CommandUseCase3 for PlaceHyperliquidPerpOrderUseCase {
             cmd.reduce_only,
             cmd.cloid.clone(),
         );
-        let order_event = order_after
-            .track_create_event()
-            .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
         if cmd.reduce_only {
-            return Ok(UseCaseOutput {
-                output: PlaceHyperliquidPerpOrderOutput { order_after, balances_after: Vec::new() },
-                events: vec![order_event],
+            return Ok(PlaceHyperliquidPerpOrderChanges {
+                created_order,
+                updated_margin_balances: Vec::new(),
             });
         }
 
         let margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
         if margin == 0 {
-            return Ok(UseCaseOutput {
-                output: PlaceHyperliquidPerpOrderOutput { order_after, balances_after: Vec::new() },
-                events: vec![order_event],
+            return Ok(PlaceHyperliquidPerpOrderChanges {
+                created_order,
+                updated_margin_balances: Vec::new(),
             });
         }
         let mut next_balance = state.margin_balance.clone();
@@ -309,16 +319,13 @@ impl CommandUseCase3 for PlaceHyperliquidPerpOrderUseCase {
             .checked_add(1)
             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
         next_balance.apply_after(next_available, next_frozen, next_version);
-        let balance_event = next_balance
-            .track_update_event_from(&previous_balance)
-            .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
-        Ok(UseCaseOutput {
-            output: PlaceHyperliquidPerpOrderOutput {
-                order_after,
-                balances_after: vec![next_balance],
-            },
-            events: vec![order_event, balance_event],
+        Ok(PlaceHyperliquidPerpOrderChanges {
+            created_order,
+            updated_margin_balances: vec![UpdatedEntityPair {
+                before: previous_balance,
+                after: next_balance,
+            }],
         })
     }
 }
@@ -362,7 +369,7 @@ fn validate_reduce_only(
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
     use common_entity::EntityChangeType;
     use proptest::prelude::*;
 
@@ -690,7 +697,7 @@ mod tests {
             // - tif 在 gtc / ioc / alo 三种 Hyperliquid 成功路径内切换。
             //
             // When:
-            // - 调用 `compute_output_and_events(...)`。
+            // - 调用 `compute_changes()`，再投影 events。
             //
             // Then:
             // - 先产出 order create event，再产出 balance update event。
@@ -704,20 +711,21 @@ mod tests {
             assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
 
             // act
-            let result = use_case().compute_output_and_events(&cmd, state()).unwrap();
-            let events = result.events;
+            let changes = use_case().compute_changes(&cmd, state()).unwrap();
+            let events = changes.to_replayable_events().unwrap();
 
             // assert
             assert_order_snapshot(
-                &result.output.order_after,
+                &changes.created_order,
                 HyperliquidPerpOrderSide::Buy,
                 HyperliquidPerpOrderExecution::Limit { price: 101 },
                 time_in_force,
                 3,
                 false,
             );
-            assert_eq!(result.output.balances_after.len(), 1);
-            assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+            assert_eq!(changes.updated_margin_balances.len(), 1);
+            assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+            assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
             assert_eq!(events.len(), 2);
             assert_order_created_event(&events[0], "buy", "limit", expected_tif, 101, false);
             assert_balance_updated_event(&events[1], 9_939, 561);
@@ -734,7 +742,7 @@ mod tests {
         // - 命令是 sell limit。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 先创建 sell open order，再生成 balance update。
@@ -744,20 +752,21 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, state()).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, state()).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Sell,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             false,
         );
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
         assert_eq!(events.len(), 2);
         assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
         assert_balance_updated_event(&events[1], 9_939, 561);
@@ -773,7 +782,7 @@ mod tests {
         // - 命令是 market buy，aggressive price 为 111。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 订单事件记录 execution=market、tif=ioc、price=111。
@@ -784,20 +793,21 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, state()).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, state()).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Buy,
             HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
             HyperliquidPerpOrderTimeInForce::Ioc,
             3,
             false,
         );
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_933, 567, 5);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_933, 567, 5);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
         assert_eq!(events.len(), 2);
         assert_order_created_event(&events[0], "buy", "market", "ioc", 111, false);
         assert_balance_updated_event(&events[1], 9_933, 567);
@@ -813,7 +823,7 @@ mod tests {
         // - 命令是 market sell，aggressive price 为 111。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 订单事件记录 sell / market / ioc。
@@ -824,20 +834,21 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, state()).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, state()).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Sell,
             HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
             HyperliquidPerpOrderTimeInForce::Ioc,
             3,
             false,
         );
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_933, 567, 5);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_933, 567, 5);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
         assert_eq!(events.len(), 2);
         assert_order_created_event(&events[0], "sell", "market", "ioc", 111, false);
         assert_balance_updated_event(&events[1], 9_933, 567);
@@ -853,7 +864,7 @@ mod tests {
         // - 命令继续 buy，同向增加敞口。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 仍然创建订单并冻结整单保证金。
@@ -867,20 +878,21 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, long_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Buy,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             false,
         );
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances[0].before.frozen, 500);
         assert_eq!(events.len(), 2);
         assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, false);
         assert_balance_updated_event(&events[1], 9_939, 561);
@@ -896,7 +908,7 @@ mod tests {
         // - 命令继续 sell，同向增加敞口。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 仍然创建订单并冻结整单保证金。
@@ -910,20 +922,21 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, short_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Sell,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             false,
         );
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances[0].before.available, 10_000);
         assert_eq!(events.len(), 2);
         assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
         assert_balance_updated_event(&events[1], 9_939, 561);
@@ -939,7 +952,7 @@ mod tests {
         // - 命令是 sell reduce_only。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 只产生一条 order create event。
@@ -955,19 +968,19 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, long_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Sell,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             true,
         );
-        assert!(result.output.balances_after.is_empty());
+        assert!(changes.updated_margin_balances.is_empty());
         assert_eq!(events.len(), 1);
         assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, true);
     }
@@ -982,7 +995,7 @@ mod tests {
         // - 命令是 buy reduce_only。
         //
         // When:
-        // - 调用 `compute_output_and_events(...)`。
+        // - 调用 `compute_changes()`，再投影 events。
         //
         // Then:
         // - 只产生一条 order create event。
@@ -998,19 +1011,19 @@ mod tests {
         assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
 
         // act
-        let result = use_case().compute_output_and_events(&cmd, short_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         // assert
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Buy,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             true,
         );
-        assert!(result.output.balances_after.is_empty());
+        assert!(changes.updated_margin_balances.is_empty());
         assert_eq!(events.len(), 1);
         assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, true);
     }
@@ -1026,18 +1039,18 @@ mod tests {
 
         assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
 
-        let result = use_case().compute_output_and_events(&cmd, long_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Sell,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             false,
         );
-        assert!(result.output.balances_after.is_empty());
+        assert!(changes.updated_margin_balances.is_empty());
         assert_eq!(events.len(), 1);
         assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
     }
@@ -1054,12 +1067,13 @@ mod tests {
 
         assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
 
-        let result = use_case().compute_output_and_events(&cmd, long_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
-        assert_eq!(result.output.order_after.qty, 8);
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+        assert_eq!(changes.created_order.qty, 8);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances[0].before.available, 10_000);
         assert_eq!(events.len(), 2);
         assert_eq!(event_field_u64(&events[0], "qty"), Some(8));
         assert_balance_updated_event(&events[1], 9_939, 561);
@@ -1076,18 +1090,18 @@ mod tests {
 
         assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
 
-        let result = use_case().compute_output_and_events(&cmd, short_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
         assert_order_snapshot(
-            &result.output.order_after,
+            &changes.created_order,
             HyperliquidPerpOrderSide::Buy,
             HyperliquidPerpOrderExecution::Limit { price: 101 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             3,
             false,
         );
-        assert!(result.output.balances_after.is_empty());
+        assert!(changes.updated_margin_balances.is_empty());
         assert_eq!(events.len(), 1);
         assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, false);
     }
@@ -1104,12 +1118,13 @@ mod tests {
 
         assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
 
-        let result = use_case().compute_output_and_events(&cmd, short_state).unwrap();
-        let events = result.events;
+        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
+        let events = changes.to_replayable_events().unwrap();
 
-        assert_eq!(result.output.order_after.qty, 8);
-        assert_eq!(result.output.balances_after.len(), 1);
-        assert_balance_snapshot(&result.output.balances_after[0], 9_939, 561, 5);
+        assert_eq!(changes.created_order.qty, 8);
+        assert_eq!(changes.updated_margin_balances.len(), 1);
+        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
+        assert_eq!(changes.updated_margin_balances[0].before.frozen, 500);
         assert_eq!(events.len(), 2);
         assert_eq!(event_field_u64(&events[0], "qty"), Some(8));
         assert_balance_updated_event(&events[1], 9_939, 561);
@@ -1203,8 +1218,8 @@ mod tests {
                 ..state()
             };
 
-            let result = use_case().compute_output_and_events(&cmd, state).unwrap();
-            let events = result.events;
+            let changes = use_case().compute_changes(&cmd, state).unwrap();
+            let events = changes.to_replayable_events().unwrap();
             let next_available = event_field_u64(&events[1], "available").unwrap();
             let next_frozen = event_field_u64(&events[1], "frozen").unwrap();
 
@@ -1251,8 +1266,8 @@ mod tests {
                 ..state()
             };
 
-            let result = use_case().compute_output_and_events(&cmd, state).unwrap();
-            let events = result.events;
+            let changes = use_case().compute_changes(&cmd, state).unwrap();
+            let events = changes.to_replayable_events().unwrap();
             let expected_side = if is_buy { "buy" } else { "sell" };
 
             prop_assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTC-PERP-99"));

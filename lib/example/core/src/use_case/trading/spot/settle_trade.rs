@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+#[cfg(test)]
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
@@ -78,9 +79,8 @@ pub enum SettleSpotTradeError {
 pub struct SettleSpotTradeChanges {
     /// 本批次创建出的 settlement 事实。
     pub settlements: Vec<SpotSettlement>,
-    /// 本批次实际受影响的余额 after 快照。
-    pub balances_after: Vec<Balance>,
-    pub balances_updated: Vec<UpdatedEntityPair<Balance>>,
+    /// 本批次实际受影响的余额 before/after。
+    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
 /// Use case that settles matched spot trades into account balance changes.
@@ -93,11 +93,11 @@ impl ReplayableChanges for SettleSpotTradeChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::with_capacity(self.settlements.len() + self.balances_updated.len());
+        let mut events = Vec::with_capacity(self.settlements.len() + self.updated_balances.len());
         for settlement in &self.settlements {
             events.push(settlement.track_create_event()?);
         }
-        for balance in &self.balances_updated {
+        for balance in &self.updated_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
         }
         Ok(events)
@@ -152,8 +152,7 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
         let mut settlements = Vec::new();
-        let mut balances_after = Vec::new();
-        let mut balances_updated = Vec::new();
+        let mut updated_balances = Vec::new();
 
         for (index, trade) in state.trades.iter().enumerate() {
             let parties = settlement_parties(trade);
@@ -189,12 +188,10 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
                 balance.version.checked_add(1).ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
             balance.apply_after(next_available, next_frozen, next_version);
-            balances_updated
-                .push(UpdatedEntityPair { before: previous_balance, after: balance.clone() });
-            balances_after.push(balance);
+            updated_balances.push(UpdatedEntityPair { before: previous_balance, after: balance });
         }
 
-        Ok(SettleSpotTradeChanges { settlements, balances_after, balances_updated })
+        Ok(SettleSpotTradeChanges { settlements, updated_balances })
     }
 }
 
@@ -559,8 +556,10 @@ mod tests {
 
         assert_eq!(result.settlements.len(), 1);
         assert_eq!(result.settlements[0].settlement_id, "settle-1-1");
-        assert!(result.balances_after.iter().any(|balance| {
-            balance.account_id == "buyer" && balance.asset_id == "BTC" && balance.available == 2
+        assert!(result.updated_balances.iter().any(|balance| {
+            balance.after.account_id == "buyer"
+                && balance.after.asset_id == "BTC"
+                && balance.after.available == 2
         }));
         assert!(
             events.iter().any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))

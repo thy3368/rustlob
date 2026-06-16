@@ -1,3 +1,4 @@
+#[cfg(test)]
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
@@ -141,7 +142,7 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
         let place_output =
             PlaceImmediateOrderUseCase.compute_changes(&cmd.place, state.place_state)?;
         let taker_order = place_output.order.clone();
-        let affected_balance_after = place_output.affected_balance_after.clone();
+        let affected_balance_after = place_output.affected_balance.after.clone();
 
         if !should_enter_matching(&taker_order, &state.maker_orders)? {
             return Ok(ExecuteImmediateSpotOrderPipelineChanges {

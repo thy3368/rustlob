@@ -102,13 +102,10 @@ impl From<SpotOrderMatchError> for MatchSpotOrderError {
 pub struct MatchSpotOrderChanges {
     /// 本次撮合新生成的成交事实。
     pub trades: Vec<SpotTrade>,
-    /// 本次撮合后 taker 订单状态。
-    pub taker_order_after: SpotOrder,
-    /// 本次撮合中实际发生变化的 maker 订单 after 快照，顺序与撮合顺序一致。
-    pub maker_orders_after: Vec<SpotOrder>,
-    pub taker_order_before: SpotOrder,
-    pub maker_orders_updated: Vec<UpdatedEntityPair<SpotOrder>>,
-    trade_maker_updates: Vec<(SpotTrade, UpdatedEntityPair<SpotOrder>)>,
+    /// 本次撮合中实际发生变化的 maker 订单 before/after，顺序与撮合顺序一致。
+    pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrder>>,
+    /// 本次撮合后的 taker 订单 before/after。
+    pub updated_taker_order: UpdatedEntityPair<SpotOrder>,
 }
 
 /// Use case that matches one spot taker order against pre-sorted maker orders.
@@ -122,12 +119,16 @@ impl ReplayableChanges for MatchSpotOrderChanges {
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events =
-            Vec::with_capacity(self.trades.len() + self.maker_orders_updated.len() + 1);
-        for (trade, maker) in &self.trade_maker_updates {
+            Vec::with_capacity(self.trades.len() + self.updated_maker_orders.len() + 1);
+        for (trade, maker) in self.trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
             events.push(maker.after.track_update_event_from(&maker.before)?);
         }
-        events.push(self.taker_order_after.track_update_event_from(&self.taker_order_before)?);
+        events.push(
+            self.updated_taker_order
+                .after
+                .track_update_event_from(&self.updated_taker_order.before)?,
+        );
         Ok(events)
     }
 }
@@ -201,9 +202,7 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
         let mut taker_remaining = taker_order.remaining_qty()?;
         let mut total_taker_fill = 0_u64;
         let mut trades = Vec::new();
-        let mut maker_orders_after = Vec::new();
-        let mut maker_orders_updated = Vec::new();
-        let mut trade_maker_updates = Vec::new();
+        let mut updated_maker_orders = Vec::new();
         let best_maker = state.maker_orders.first();
 
         if taker_order.would_be_rejected_as_alo(best_maker)? {
@@ -216,11 +215,11 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
             )?;
             return Ok(MatchSpotOrderChanges {
                 trades,
-                taker_order_after: taker_order,
-                maker_orders_after,
-                taker_order_before,
-                maker_orders_updated,
-                trade_maker_updates,
+                updated_maker_orders,
+                updated_taker_order: UpdatedEntityPair {
+                    before: taker_order_before,
+                    after: taker_order,
+                },
             });
         }
 
@@ -255,8 +254,6 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
                 trade_qty,
             );
             trades.push(trade);
-            let trade_for_projection =
-                trades.last().cloned().ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
 
             let mut next_maker_order = maker_order;
             let previous_maker_order = next_maker_order.clone();
@@ -272,11 +269,8 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
             next_maker_order.filled_qty = next_maker_filled;
             next_maker_order.status = next_maker_status;
             next_maker_order.version = next_maker_version;
-            let maker_update =
-                UpdatedEntityPair { before: previous_maker_order, after: next_maker_order.clone() };
-            maker_orders_after.push(next_maker_order);
-            maker_orders_updated.push(maker_update.clone());
-            trade_maker_updates.push((trade_for_projection, maker_update));
+            updated_maker_orders
+                .push(UpdatedEntityPair { before: previous_maker_order, after: next_maker_order });
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -291,11 +285,11 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
 
         Ok(MatchSpotOrderChanges {
             trades,
-            taker_order_after: taker_order,
-            maker_orders_after,
-            taker_order_before,
-            maker_orders_updated,
-            trade_maker_updates,
+            updated_maker_orders,
+            updated_taker_order: UpdatedEntityPair {
+                before: taker_order_before,
+                after: taker_order,
+            },
         })
     }
 }

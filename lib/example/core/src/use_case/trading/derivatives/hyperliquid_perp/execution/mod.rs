@@ -7,12 +7,12 @@ pub use match_perp_order::{
     MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase,
 };
 pub use place_perp_order::{
-    PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
-    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderOutput,
-    PlaceHyperliquidPerpOrderState, PlaceHyperliquidPerpOrderUseCase,
+    PlaceHyperliquidPerpOrderChanges, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
+    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
+    PlaceHyperliquidPerpOrderUseCase,
 };
 pub use settle_perp_trade::{
-    SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
-    SettleHyperliquidPerpTradeOutput, SettleHyperliquidPerpTradeState,
+    SettleHyperliquidPerpTradeChanges, SettleHyperliquidPerpTradeCmd,
+    SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
     SettleHyperliquidPerpTradeUseCase,
 };

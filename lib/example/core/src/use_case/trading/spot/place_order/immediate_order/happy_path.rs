@@ -115,19 +115,19 @@ fn compute_output_and_events_keeps_output_and_events_consistent() -> Result<(), 
 
     assert_eq!(result.order.order_id, "trader-1-BTCUSDT-7");
     assert_eq!(result.order.reserved_quote, 200);
-    assert_eq!(result.affected_balance_after.asset_id, "USDT");
-    assert_eq!(result.affected_balance_after.available, 800);
-    assert_eq!(result.affected_balance_after.frozen, 200);
+    assert_eq!(result.affected_balance.after.asset_id, "USDT");
+    assert_eq!(result.affected_balance.after.available, 800);
+    assert_eq!(result.affected_balance.after.frozen, 200);
     assert_eq!(event_field(&events[0], "order_id"), Some(result.order.order_id.as_str()));
     assert_eq!(
         event_field(&events[1], "asset_id"),
-        Some(result.affected_balance_after.asset_id.as_str())
+        Some(result.affected_balance.after.asset_id.as_str())
     );
     assert_eq!(
         field_as_u64(&events[1], "available"),
-        Some(result.affected_balance_after.available)
+        Some(result.affected_balance.after.available)
     );
-    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.affected_balance_after.frozen));
+    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.affected_balance.after.frozen));
 
     Ok(())
 }
@@ -225,13 +225,13 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
-                prop_assert_eq!(result.affected_balance_after.asset_id, "USDT");
+                prop_assert_eq!(result.affected_balance.after.asset_id, "USDT");
                 prop_assert_eq!(
-                    result.affected_balance_after.available,
+                    result.affected_balance.after.available,
                     state.quote_balance.available - reserved_quote
                 );
                 prop_assert_eq!(
-                    result.affected_balance_after.frozen,
+                    result.affected_balance.after.frozen,
                     state.quote_balance.frozen + reserved_quote
                 );
             } else {
@@ -247,13 +247,13 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
-                prop_assert_eq!(result.affected_balance_after.asset_id, "BTC");
+                prop_assert_eq!(result.affected_balance.after.asset_id, "BTC");
                 prop_assert_eq!(
-                    result.affected_balance_after.available,
+                    result.affected_balance.after.available,
                     state.base_balance.available - reserved_base
                 );
                 prop_assert_eq!(
-                    result.affected_balance_after.frozen,
+                    result.affected_balance.after.frozen,
                     state.base_balance.frozen + reserved_base
                 );
             }
