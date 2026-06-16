@@ -224,6 +224,48 @@ fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
     state
 }
 
+fn block(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::NewBlock {
+    changes.new_block.as_ref().expect("block builder should always produce a block")
+}
+
+fn spot_balance_after<'a>(
+    changes: &'a BuildBlockFromCommandsChanges,
+    account_id: &str,
+    asset_id: &str,
+) -> &'a Balance {
+    changes
+        .ordered_changes
+        .iter()
+        .rev()
+        .find_map(|change| match change {
+            BlockEntityChange::BalanceUpdated(balance)
+                if balance.after.account_id == account_id && balance.after.asset_id == asset_id =>
+            {
+                Some(&balance.after)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
+fn spot_order_after<'a>(
+    changes: &'a BuildBlockFromCommandsChanges,
+    order_id: &str,
+) -> &'a SpotOrder {
+    changes
+        .ordered_changes
+        .iter()
+        .rev()
+        .find_map(|change| match change {
+            BlockEntityChange::SpotOrderCreated(order) if order.order_id == order_id => Some(order),
+            BlockEntityChange::SpotOrderUpdated(order) if order.after.order_id == order_id => {
+                Some(&order.after)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
 #[test]
 fn role_is_block_builder() {
     assert_eq!(CommandUseCase4::role(&BuildBlockFromCommandsUseCase), "BlockBuilder");
@@ -256,23 +298,20 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
         sample_state(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
+    let new_block = block(&changes);
 
-    assert_eq!(changes.command_results.len(), 1);
-    assert_eq!(changes.new_block.block_height, 2);
-    assert_eq!(changes.new_block.parent_block_hash, "parent-1");
-    assert!(!changes.new_block.commands_root.is_empty());
-    assert!(!changes.new_block.events_root.is_empty());
-    assert!(!changes.new_block.post_state_root.is_empty());
+    assert_eq!(changes.ordered_changes.len(), 2);
+    assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
+    assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
+    assert_eq!(new_block.block_height, 2);
+    assert_eq!(new_block.parent_block_hash, "parent-1");
+    assert!(!new_block.commands_root.is_empty());
+    assert!(!new_block.events_root.is_empty());
+    assert!(!new_block.post_state_root.is_empty());
     assert_eq!(events.len(), 2);
 
-    let next_usdt = changes
-        .exchange_state
-        .spot
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "USDT"))
-        .unwrap();
+    let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!((next_usdt.available, next_usdt.frozen), (9_800, 200));
-    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
 
     Ok(())
 }
@@ -290,12 +329,9 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
         CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    let next_usdt = changes
-        .exchange_state
-        .treasury
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "USDT"))
-        .unwrap();
+    assert_eq!(changes.ordered_changes.len(), 1);
+    assert!(matches!(changes.ordered_changes[0], BlockEntityChange::BalanceUpdated(_)));
+    let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (1_500, 0, 2));
     assert_eq!(events.len(), 1);
 
@@ -311,22 +347,18 @@ fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.command_results.len(), 1);
+    assert_eq!(changes.ordered_changes.len(), 2);
+    assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderUpdated(_)));
+    assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
     assert_eq!(events.len(), 2);
 
-    let next_order = changes.exchange_state.spot.orders.get("order-42").unwrap();
+    let next_order = spot_order_after(&changes, "order-42");
     assert_eq!(next_order.status, SpotOrderStatus::Canceled);
     assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
     assert_eq!(next_order.version, 2);
 
-    let next_usdt = changes
-        .exchange_state
-        .spot
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "USDT"))
-        .unwrap();
+    let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (10_000, 0, 4));
-    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 7);
 
     Ok(())
 }
@@ -339,12 +371,11 @@ fn spot_cancel_sell_order_releases_base_balance() -> Result<(), BuildBlockError>
         state_with_open_sell_order(),
     )?;
 
-    let next_order = changes.exchange_state.spot.orders.get("order-42").unwrap();
+    let next_order = spot_order_after(&changes, "order-42");
     assert_eq!(next_order.status, SpotOrderStatus::Canceled);
     assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
 
-    let next_btc =
-        changes.exchange_state.spot.balances.get(&AccountAssetKey::new("trader-1", "BTC")).unwrap();
+    let next_btc = spot_balance_after(&changes, "trader-1", "BTC");
     assert_eq!((next_btc.available, next_btc.frozen, next_btc.version), (7, 0, 3));
 
     Ok(())
@@ -374,27 +405,28 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.command_results.len(), 2);
+    assert_eq!(changes.ordered_changes.len(), 3);
     assert_eq!(events.len(), 3);
 
-    let treasury_usdt = changes
-        .exchange_state
-        .treasury
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "USDT"))
-        .unwrap();
+    let treasury_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!(
         (treasury_usdt.available, treasury_usdt.frozen, treasury_usdt.version),
         (1_500, 0, 2)
     );
 
-    let spot_usdt = changes
-        .exchange_state
-        .spot
-        .balances
-        .get(&AccountAssetKey::new("trader-1", "USDT"))
+    let spot_usdt_change = changes
+        .ordered_changes
+        .iter()
+        .find_map(|change| match change {
+            BlockEntityChange::BalanceUpdated(balance)
+                if balance.before.available == 10_000 && balance.after.available == 9_800 =>
+            {
+                Some(&balance.after)
+            }
+            _ => None,
+        })
         .unwrap();
-    assert_eq!((spot_usdt.available, spot_usdt.frozen), (9_800, 200));
+    assert_eq!((spot_usdt_change.available, spot_usdt_change.frozen), (9_800, 200));
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2]);
@@ -725,13 +757,7 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
     let changes =
         CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
 
-    let result_ids = changes
-        .command_results
-        .iter()
-        .map(|command| command.command_id.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(result_ids, vec!["cmd-alo", "cmd-treasury"]);
-    assert_eq!(changes.new_block.commands_root, expected_root);
+    assert_eq!(block(&changes).commands_root, expected_root);
 
     Ok(())
 }
@@ -746,11 +772,10 @@ fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.new_block.block_height, 2);
-    assert_eq!(changes.command_results.len(), 1);
-    assert_eq!(changes.exchange_state.spot.next_order_sequence_by_account["trader-1"], 8);
+    assert_eq!(block(&changes).block_height, 2);
+    assert_eq!(changes.ordered_changes.len(), 2);
     assert_eq!(events.len(), 2);
-    assert_eq!(events, changes.replayable_events);
+    assert_eq!(events.len(), changes.ordered_changes.len());
 
     Ok(())
 }

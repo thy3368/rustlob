@@ -1,10 +1,12 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{EventProjectError, IssuedByParty, ReplayableChanges};
+use cmd_handler::command_use_case_def2::{
+    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
+use common_entity::Entity;
+use example_core::{Balance, SpotOrder, SpotSettlement, SpotTrade};
 use thiserror::Error;
 
-use crate::entity::{
-    CommandEnvelope, CommandExecutionResult, ExchangeState, NewBlock, ProductCommand,
-};
+use crate::entity::{CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromCommandsCommand {
@@ -22,16 +24,53 @@ pub struct BuildBlockFromCommandsState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockEntityChange {
+    SpotOrderCreated(SpotOrder),
+    SpotOrderUpdated(UpdatedEntityPair<SpotOrder>),
+    BalanceUpdated(UpdatedEntityPair<Balance>),
+    SpotTradeCreated(SpotTrade),
+    SpotSettlementCreated(SpotSettlement),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BuildBlockFromCommandsChanges {
-    pub new_block: NewBlock,
-    pub command_results: Vec<CommandExecutionResult>,
-    pub exchange_state: ExchangeState,
-    pub replayable_events: Vec<EntityReplayableEvent>,
+    pub new_block: Option<NewBlock>,
+    pub ordered_changes: Vec<BlockEntityChange>,
 }
 
 impl ReplayableChanges for BuildBlockFromCommandsChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
-        Ok(self.replayable_events.clone())
+        let mut events = Vec::with_capacity(self.ordered_changes.len());
+
+        for change in &self.ordered_changes {
+            match change {
+                BlockEntityChange::SpotOrderCreated(order) => {
+                    events.push(order.track_create_event()?);
+                }
+                BlockEntityChange::SpotOrderUpdated(order) => {
+                    events.push(order.after.track_update_event_from(&order.before)?);
+                }
+                BlockEntityChange::BalanceUpdated(balance) => {
+                    events.push(balance.after.track_update_event_from(&balance.before)?);
+                }
+                BlockEntityChange::SpotTradeCreated(trade) => {
+                    events.push(trade.track_create_event()?);
+                }
+                BlockEntityChange::SpotSettlementCreated(settlement) => {
+                    events.push(settlement.track_create_event()?);
+                }
+            }
+        }
+
+        Ok(events
+            .into_iter()
+            .enumerate()
+            .map(|(sequence, mut event)| {
+                event.timestamp = 0;
+                event.sequence = sequence as u64;
+                event
+            })
+            .collect())
     }
 }
 
