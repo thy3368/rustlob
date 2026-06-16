@@ -1,6 +1,6 @@
 ---
 name: rustdoc-use-case
-description: Write Rustdoc for RustLOB `CommandUseCase3` use cases. Use when Codex needs to document command structs, business error enums, or use case types in files such as `*/use_case/**/*.rs`, add field-level docs, explain `pre_check_command` vs `validate_against_state`, or add minimal doctest examples without turning Rustdoc into the main test harness.
+description: Write Rustdoc for RustLOB `CommandUseCase4` use cases. Use when Codex needs to document command structs, business error enums, changes types, or use case types in files such as `*/use_case/**/*.rs`, add field-level docs, explain `pre_check_command` vs `validate_against_state`, or add minimal doctest examples without turning Rustdoc into the main test harness.
 ---
 
 # Rustdoc Use Case
@@ -18,8 +18,8 @@ Target the public surface that a reader or adapter author needs to understand:
 Keep Rustdoc short, business-oriented, and example-driven.
 
 Start from these files:
-- Contract: `lib/common/cmd_handler/src/use_case_def2/mod.rs`
-- Example with Rustdoc: `lib/example/core/src/use_case/trading/spot/place_order.rs`
+- Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
+- Example with Rustdoc: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
 
 ## What To Document
 
@@ -38,11 +38,16 @@ Document these items first:
 - If the error is public, ensure `Display` is useful; default to `thiserror::Error`
 
 3. `*UseCase`
-- One short paragraph describing what events it derives
+- One short paragraph describing what business changes it derives
 - Mention what it does **not** do:
   - no DB access
   - no publish/persist
   - no HTTP reply shaping
+
+4. `*Changes`
+- What business facts this strong typed changes object carries
+- Which fields are authoritative business truth
+- That replayable events come from `ReplayableChanges::to_replayable_events()`
 
 Field docs are useful when a field name is too generic or has business semantics that are not obvious from the type alone.
 
@@ -84,7 +89,7 @@ pub enum SomeError {
 For the use case type:
 
 ```rust
-/// Use case that validates X and derives replayable Y events.
+/// Use case that validates X and derives strong typed Y changes.
 ///
 /// It is deterministic for the same command and loaded state.
 #[derive(Debug, Clone, Copy, Default)]
@@ -98,7 +103,7 @@ Use doctest as a lightweight harness, not the main harness.
 Good doctest targets:
 - construct a command
 - show one expected error string
-- show the public API shape
+- show the `compute_changes()` API shape
 
 Do not push complex business flow into doctest when normal `#[test]` is clearer.
 
@@ -124,10 +129,11 @@ Avoid these Rustdoc mistakes:
 
 For RustLOB use cases:
 
-- `CommandUseCase3` is the business boundary
+- `CommandUseCase4` is the business boundary
 - `pre_check_command()` is for cheap command-only validation
 - `validate_against_state()` is for loaded-state business checks
-- `compute_output_and_events()` is the business derivation core
+- `compute_changes()` is the business derivation core
+- `ReplayableChanges::to_replayable_events()` is the projection boundary
 
 Reflect that split in the docs when it helps the reader.
 
@@ -140,6 +146,7 @@ Before finishing:
 - `*Cmd` has a top-level Rustdoc block
 - important public fields have concise field docs
 - `*Error` has top-level docs plus per-variant docs where useful
+- `*Changes` has a short business-truth doc block when it is public
 - `*UseCase` has a short purpose statement
 - doctest examples are minimal and likely to stay stable
 - unit tests remain the main business harness

@@ -15,7 +15,7 @@ Use this rubric to score a RustLOB use case.
 - `0`: depends directly on repositories, clients, SDK types, or framework details
 
 ### 1.3 Responsibility focus: 15
-- `15`: `pre_check_command`, `validate_against_state`, and `compute_output_and_events` are sharply separated
+- `15`: `pre_check_command`, `validate_against_state`, `compute_changes`, and `to_replayable_events()` are sharply separated
 - `8`: some duplication or mixed concerns, but still understandable
 - `0`: validation, state loading, mutation, and side effects are tangled
 
@@ -43,12 +43,12 @@ Use this rubric to score a RustLOB use case.
 - `0`: use case bundles multiple unrelated business moments
 
 ### 2.3 Party/Place/Thing modeling: 10
-- `10`: `GivenState` and events center on real domain objects and state
+- `10`: `GivenState` and `Changes` center on real domain objects and state
 - `5`: partial domain modeling mixed with transport or storage shapes
 - `0`: state is mostly repositories, raw payloads, or infrastructure containers
 
 ### 2.4 Description quality: 10
-- `10`: command, error, event, and policy names use clear domain language
+- `10`: command, error, changes, event, and policy names use clear domain language
 - `5`: naming is mixed between business and implementation terms
 - `0`: names are generic, technical, or hide business meaning
 
@@ -107,7 +107,9 @@ Minimal Refactor
 
 Subtract aggressively when you see these:
 - use case calls repository, client, HTTP, or DB directly
-- use case returns transport replies instead of business output + domain events
+- use case returns transport replies instead of strong typed business changes
+- use case directly assembles replayable events in `compute_changes()` instead of projecting from `Changes`
+- `Changes` is only `Vec<EntityReplayableEvent>` with a business name wrapper
 - state type is just a bag of adapters
 - one method both validates and persists
 - business actor is unnamed

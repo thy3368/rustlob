@@ -1,16 +1,16 @@
 ---
 name: write-use-case-happy-path-tests
-description: Write RustLOB happy-path specification tests for `CommandUseCase3::compute_output_and_events(...).events`. Use when Codex should add or rewrite use case tests that prove covered business scenarios from existing use case code, using a business matrix, `Rule/Given/When/Then`, and event-order assertions.
+description: Write RustLOB happy-path specification tests for `CommandUseCase4::compute_changes(...)` and `ReplayableChanges::to_replayable_events()`. Use when Codex should add or rewrite use case tests that prove covered business scenarios from existing use case code, using a business matrix, `Rule/Given/When/Then`, and event-order assertions.
 ---
 
 # Write Use Case Happy Path Tests
 
-Use this skill when the task is to add or rewrite happy-path tests for `compute_output_and_events(...).events`.
+Use this skill when the task is to add or rewrite happy-path tests for `compute_changes()` and, when needed, its replayable-event projection contract.
 
 This is a single-entry skill:
 - Start from existing use case code.
 - Do not start from a freeform user prompt.
-- Do not invent business rules that cannot be read from the current command, state, entity, output, and event logic.
+- Do not invent business rules that cannot be read from the current command, state, entity, changes, and event-projection logic.
 
 This skill only covers use case happy-path specification tests. It does not cover:
 - `pre_check_command()`
@@ -33,14 +33,15 @@ Read these references from this skill when needed:
 ## Workflow
 
 1. Read the real use case before naming any test.
-- Inspect `compute_output_and_events()`.
-- Inspect the command, given state, error type, output type, and entity methods it relies on.
-- Identify the emitted event kinds and their business order.
+- Inspect `compute_changes()`.
+- Inspect the command, given state, error type, changes type, `to_replayable_events()`, and entity methods it relies on.
+- Identify the business facts inside `Changes`, then the emitted event kinds and their business order.
 
 2. Derive business scenarios from code, not branch names.
 - Extract the business action, actors, success outcomes, and finish states.
 - Identify scenario dimensions such as side, execution intent, time-in-force, or equivalent domain axes.
-- Identify the observable business facts in emitted replayable events.
+- Identify the observable business facts in `Changes`.
+- Identify which replayable-event facts are contractually important enough to assert.
 
 3. Write the happy-path matrix first.
 - At the top of the test file, list:
@@ -72,6 +73,7 @@ The comments should explain business meaning, not Rust mechanics.
 - `assert`
 
 8. Assert business facts and event order.
+- Assert `Changes` first when the business truth lives there.
 - Assert whether a trade event exists when a trade must happen.
 - Assert maker update events for makers whose state changes.
 - Assert taker update events for the taker finish state.
@@ -87,7 +89,7 @@ The comments should explain business meaning, not Rust mechanics.
 - If `filled_qty` did not change, assert `None`, not `Some(0)`.
 - If the scenario ends with a business reject/cancel reason, assert `status_reason`.
 - If the scenario ends as a normal successful fill or partial fill without reject semantics, assert `status_reason == None`.
-- When output semantics matter, assert `result.output` before asserting `result.events`.
+- When event projection matters, assert `changes.to_replayable_events()` after asserting the business fields inside `changes`.
 
 Prefer helpers that encode business facts, such as:
 - `assert_trade_event_for_accounts(...)`
@@ -98,11 +100,12 @@ Do not add helpers that only rename a trivial `assert_eq!`.
 ## Output Checklist
 
 Before finishing, verify:
-- You read the real `compute_output_and_events()` first.
+- You read the real `compute_changes()` and `to_replayable_events()` first.
 - The file header includes a scenario matrix and `current coverage`.
 - Every test name is a business sentence.
 - Every test uses `Rule/Given/When/Then`.
 - Every test body uses `arrange/act/assert`.
+- Every test asserts `Changes` business semantics before event projection details when both are relevant.
 - Event order is asserted when multiple events are emitted.
 - `filled_qty` and `status_reason` assertions match the business semantics.
 - Each test clearly protects one matrix cell or one core happy-path rule.

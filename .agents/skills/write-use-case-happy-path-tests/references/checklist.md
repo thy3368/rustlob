@@ -1,10 +1,11 @@
 # Happy Path Spec Test Checklist
 
-Use this checklist before finishing a `compute_output_and_events(...).events` happy-path test file.
+Use this checklist before finishing a `compute_changes()` happy-path test file.
 
 ## Read Path
 
-- Read the actual `compute_output_and_events()` implementation first.
+- Read the actual `compute_changes()` implementation first.
+- Read the `Changes` type and `to_replayable_events()` projection logic.
 - Read the related command, given state, error, and entity methods.
 - Read existing helpers and test terminology before inventing new names.
 
@@ -37,6 +38,7 @@ Use this checklist before finishing a `compute_output_and_events(...).events` ha
 
 ## Assertions
 
+- `Changes` business facts are asserted before replayable-event projection details when both matter.
 - `events.len()` is asserted, but not used as the only proof.
 - Trade event existence is asserted when a trade must happen.
 - Maker update events are asserted when maker state changes.
@@ -48,7 +50,7 @@ Use this checklist before finishing a `compute_output_and_events(...).events` ha
 
 ## Scope Discipline
 
-- The file only covers happy-path `compute_output_and_events(...).events`.
+- The file only covers happy-path `compute_changes()` and relevant `to_replayable_events()` contracts.
 - `pre_check_command()` tests are elsewhere.
 - `validate_against_state()` tests are elsewhere.
 - Property-test concerns are elsewhere.

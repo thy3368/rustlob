@@ -4,12 +4,12 @@ Use `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_e
 
 ## What Makes It A Good Reference
 
-It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_output_and_events(...).events`.
+It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_changes()` first, then `to_replayable_events()` where event projection is part of the contract.
 
 The file has five important layers:
 1. file header
 2. scenario builders
-3. event assertion helpers
+3. changes and event assertion helpers
 4. business-sentence tests
 5. explicit event-order assertions
 
@@ -60,6 +60,11 @@ Bad builder properties:
 
 These helpers keep the tests focused on business meaning rather than event parsing boilerplate.
 
+When a V4 use case has rich `Changes`, add helpers that assert:
+- created domain facts
+- updated entity before/after pairs
+- finish-state semantics before any event projection details
+
 ## 4. Test Names Must Read Like Business Rules
 
 Examples from the file:
@@ -95,7 +100,17 @@ Do not waste these blocks on Rust trivia such as:
 
 Those are mechanics. The comments should explain why this scenario exists.
 
-## 6. Event Order Is Part Of The Spec
+## 6. Changes First, Event Order Second
+
+For `CommandUseCase4`, the first assertion target is `Changes`:
+- created trades
+- updated maker/taker entities
+- before/after snapshots
+- finish-state semantics
+
+Only after the business truth is asserted should the test project replayable events when event shape or order is part of the contract.
+
+## 7. Event Order Is Part Of The Spec
 
 For multi-event happy paths, the file asserts exact order:
 - trade first
@@ -106,14 +121,15 @@ This is not ornamental. For event-sourced use cases, order often encodes busines
 
 If a scenario emits more than one event and order matters, assert it directly.
 
-## 7. How To Reuse This Pattern On Another Use Case
+## 8. How To Reuse This Pattern On Another Use Case
 
-When you move to another `compute_output_and_events` implementation:
+When you move to another `compute_changes` implementation:
 1. read the use case and entity methods
-2. identify scenario axes
-3. write the matrix at the top of the file
-4. build small domain helpers
-5. write tests as business rules
-6. assert emitted event facts and order
+2. read the `Changes` type and `to_replayable_events()` projection
+3. identify scenario axes
+4. write the matrix at the top of the file
+5. build small domain helpers
+6. write tests as business rules
+7. assert `Changes` first, then emitted event facts and order when needed
 
 If you cannot complete step 2 cleanly, stop and inspect the domain model again. The problem is usually unclear business semantics, not missing test syntax.
