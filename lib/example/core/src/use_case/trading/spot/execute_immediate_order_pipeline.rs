@@ -1,13 +1,15 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+};
 use thiserror::Error;
 
 use super::place_order::{
-    PlaceImmediateOrderCmd, PlaceImmediateOrderOutput, PlaceImmediateOrderState,
+    PlaceImmediateOrderChanges, PlaceImmediateOrderCmd, PlaceImmediateOrderState,
     PlaceImmediateOrderUseCase, PlaceOrderError,
 };
 use super::{
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
+    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
     MatchSpotOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
     SettleSpotTradeUseCase,
 };
@@ -69,22 +71,38 @@ pub enum ExecuteImmediateSpotOrderPipelineError {
 
 /// 立即下单执行流水线的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecuteImmediateSpotOrderPipelineOutput {
+pub struct ExecuteImmediateSpotOrderPipelineChanges {
     /// 第 1 段立即下单产出的 taker 订单与受影响余额。
-    pub place_output: PlaceImmediateOrderOutput,
+    pub place_output: PlaceImmediateOrderChanges,
     /// 第 2 段撮合结果；未进入撮合时为空。
-    pub match_output: Option<MatchSpotOrderOutput>,
+    pub match_output: Option<MatchSpotOrderChanges>,
+    pub settle_changes: Option<super::SettleSpotTradeChanges>,
 }
 
 /// 用于示例目录的同步现货执行编排 use case。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ExecuteImmediateSpotOrderPipelineUseCase;
 
-impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
+impl ReplayableChanges for ExecuteImmediateSpotOrderPipelineChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        let mut events = self.place_output.to_replayable_events()?;
+        if let Some(match_output) = &self.match_output {
+            events.extend(match_output.to_replayable_events()?);
+        }
+        if let Some(settle_changes) = &self.settle_changes {
+            events.extend(settle_changes.to_replayable_events()?);
+        }
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
     type Command = ExecuteImmediateSpotOrderPipelineCmd;
     type GivenState = ExecuteImmediateSpotOrderPipelineState;
     type Error = ExecuteImmediateSpotOrderPipelineError;
-    type Output = ExecuteImmediateSpotOrderPipelineOutput;
+    type Changes = ExecuteImmediateSpotOrderPipelineChanges;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -98,7 +116,7 @@ impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
             return Err(ExecuteImmediateSpotOrderPipelineError::InvalidSettlementBatchId);
         }
 
-        CommandUseCase3::pre_check_command(&PlaceImmediateOrderUseCase, &cmd.place)?;
+        CommandUseCase4::pre_check_command(&PlaceImmediateOrderUseCase, &cmd.place)?;
         Ok(())
     }
 
@@ -107,7 +125,7 @@ impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        CommandUseCase3::validate_against_state(
+        CommandUseCase4::validate_against_state(
             &PlaceImmediateOrderUseCase,
             &cmd.place,
             &state.place_state,
@@ -115,24 +133,21 @@ impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let place_result =
-            PlaceImmediateOrderUseCase.compute_output_and_events(&cmd.place, state.place_state)?;
-        let place_output = place_result.output.clone();
-        let PlaceImmediateOrderOutput { order: taker_order, affected_balance_after } =
-            place_result.output;
+    ) -> Result<Self::Changes, Self::Error> {
+        let place_output =
+            PlaceImmediateOrderUseCase.compute_changes(&cmd.place, state.place_state)?;
+        let taker_order = place_output.order.clone();
+        let affected_balance_after = place_output.affected_balance_after.clone();
 
         if !should_enter_matching(&taker_order, &state.maker_orders)? {
-            return Ok(UseCaseOutput {
-                output: ExecuteImmediateSpotOrderPipelineOutput {
-                    place_output,
-                    match_output: None,
-                },
-                events: place_result.events,
+            return Ok(ExecuteImmediateSpotOrderPipelineChanges {
+                place_output,
+                match_output: None,
+                settle_changes: None,
             });
         }
 
@@ -143,26 +158,17 @@ impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
         };
         let match_state = MatchSpotOrderState { taker_order, maker_orders: state.maker_orders };
 
-        CommandUseCase3::pre_check_command(&MatchSpotOrderUseCase, &match_cmd)?;
-        CommandUseCase3::validate_against_state(&MatchSpotOrderUseCase, &match_cmd, &match_state)?;
-        let match_result = CommandUseCase3::compute_output_and_events(
-            &MatchSpotOrderUseCase,
-            &match_cmd,
-            match_state,
-        )?;
-        let match_output = match_result.output.clone();
-        let MatchSpotOrderOutput { trades, .. } = match_result.output;
-
-        let mut all_events = place_result.events;
-        all_events.extend(match_result.events);
+        CommandUseCase4::pre_check_command(&MatchSpotOrderUseCase, &match_cmd)?;
+        CommandUseCase4::validate_against_state(&MatchSpotOrderUseCase, &match_cmd, &match_state)?;
+        let match_output =
+            CommandUseCase4::compute_changes(&MatchSpotOrderUseCase, &match_cmd, match_state)?;
+        let trades = match_output.trades.clone();
 
         if trades.is_empty() {
-            return Ok(UseCaseOutput {
-                output: ExecuteImmediateSpotOrderPipelineOutput {
-                    place_output,
-                    match_output: Some(match_output),
-                },
-                events: all_events,
+            return Ok(ExecuteImmediateSpotOrderPipelineChanges {
+                place_output,
+                match_output: Some(match_output),
+                settle_changes: None,
             });
         }
 
@@ -182,25 +188,19 @@ impl CommandUseCase3 for ExecuteImmediateSpotOrderPipelineUseCase {
             settled_trade_ids: state.settled_trade_ids,
         };
 
-        CommandUseCase3::pre_check_command(&SettleSpotTradeUseCase, &settle_cmd)?;
-        CommandUseCase3::validate_against_state(
+        CommandUseCase4::pre_check_command(&SettleSpotTradeUseCase, &settle_cmd)?;
+        CommandUseCase4::validate_against_state(
             &SettleSpotTradeUseCase,
             &settle_cmd,
             &settle_state,
         )?;
-        let settle_result = CommandUseCase3::compute_output_and_events(
-            &SettleSpotTradeUseCase,
-            &settle_cmd,
-            settle_state,
-        )?;
-        all_events.extend(settle_result.events);
+        let settle_changes =
+            CommandUseCase4::compute_changes(&SettleSpotTradeUseCase, &settle_cmd, settle_state)?;
 
-        Ok(UseCaseOutput {
-            output: ExecuteImmediateSpotOrderPipelineOutput {
-                place_output,
-                match_output: Some(match_output),
-            },
-            events: all_events,
+        Ok(ExecuteImmediateSpotOrderPipelineChanges {
+            place_output,
+            match_output: Some(match_output),
+            settle_changes: Some(settle_changes),
         })
     }
 }
@@ -249,7 +249,7 @@ fn upsert_balance(balances: &mut Vec<Balance>, next_balance: Balance) {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
     use crate::entity::{SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason};
@@ -333,7 +333,14 @@ mod tests {
         cmd: &ExecuteImmediateSpotOrderPipelineCmd,
         state: ExecuteImmediateSpotOrderPipelineState,
     ) -> Result<Vec<EntityReplayableEvent>, ExecuteImmediateSpotOrderPipelineError> {
-        Ok(ExecuteImmediateSpotOrderPipelineUseCase.compute_output_and_events(cmd, state)?.events)
+        Ok(ExecuteImmediateSpotOrderPipelineUseCase
+            .compute_changes(cmd, state)?
+            .to_replayable_events()
+            .map_err(|_| {
+                ExecuteImmediateSpotOrderPipelineError::Settle(
+                    SettleSpotTradeError::ArithmeticOverflow,
+                )
+            })?)
     }
 
     #[test]

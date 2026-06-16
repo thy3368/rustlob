@@ -1,5 +1,6 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -30,13 +31,28 @@ pub enum DepositQuoteError {
     ArithmeticOverflow,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DepositQuoteChanges {
+    pub quote_balance_before: Balance,
+    pub quote_balance_after: Balance,
+}
+
+impl ReplayableChanges for DepositQuoteChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        Ok(vec![self.quote_balance_after.track_update_event_from(&self.quote_balance_before)?])
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DepositQuoteUseCase;
 
-impl CommandUseCase2 for DepositQuoteUseCase {
+impl CommandUseCase4 for DepositQuoteUseCase {
     type Command = DepositQuoteCmd;
     type GivenState = DepositQuoteState;
     type Error = DepositQuoteError;
+    type Changes = DepositQuoteChanges;
 
     fn role(&self) -> &'static str {
         "Treasury"
@@ -58,12 +74,13 @@ impl CommandUseCase2 for DepositQuoteUseCase {
         Ok(())
     }
 
-    fn compute_replayable_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<Vec<EntityReplayableEvent>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let mut balance = state.quote_balance;
+        let quote_balance_before = balance.clone();
         let next_available = balance
             .available
             .checked_add(cmd.amount)
@@ -72,13 +89,9 @@ impl CommandUseCase2 for DepositQuoteUseCase {
             balance.version.checked_add(1).ok_or(DepositQuoteError::ArithmeticOverflow)?;
         let next_frozen = balance.frozen;
 
-        let balance_event = balance
-            .track_update_event(|balance| {
-                balance.apply_after(next_available, next_frozen, next_version);
-            })
-            .map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
+        balance.apply_after(next_available, next_frozen, next_version);
 
-        Ok(vec![balance_event])
+        Ok(DepositQuoteChanges { quote_balance_before, quote_balance_after: balance })
     }
 }
 
@@ -87,7 +100,10 @@ mod tests {
     use super::*;
     use crate::use_case::support::field_as_u64;
 
-    fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
+    fn event_field<'a>(
+        event: &'a common_entity::EntityReplayableEvent,
+        field_name: &str,
+    ) -> Option<&'a str> {
         event.field_changes.iter().find_map(|change| {
             if change.field_name_as_str().ok() != Some(field_name) {
                 return None;
@@ -126,10 +142,12 @@ mod tests {
     #[test]
     fn compute_replayable_events_updates_available_quote() -> Result<(), DepositQuoteError> {
         let use_case = DepositQuoteUseCase;
-        let events = use_case.compute_replayable_events(
+        let changes = use_case.compute_changes(
             &DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
             sample_state(),
         )?;
+        let events =
+            changes.to_replayable_events().map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
@@ -137,6 +155,7 @@ mod tests {
         assert_eq!(event_field(&events[0], "asset_id"), Some("USDT"));
         assert_eq!(field_as_u64(&events[0], "available"), Some(1_200));
         assert_eq!(field_as_u64(&events[0], "frozen"), None);
+        assert_eq!(changes.quote_balance_after.available, 1_200);
 
         Ok(())
     }

@@ -6,7 +6,7 @@ pub use conditional_order::{
     PlaceConditionalOrderUseCase,
 };
 pub use immediate_order::{
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderOutput,
+    PlaceImmediateOrderChanges, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution,
     PlaceImmediateOrderState, PlaceImmediateOrderUseCase,
 };
 use thiserror::Error;

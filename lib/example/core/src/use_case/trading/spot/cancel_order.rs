@@ -1,5 +1,6 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -75,20 +76,35 @@ pub enum CancelSpotOrderError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CancelSpotOrderUseCase;
 
-/// 本次撤单的 typed output。
+/// 本次撤单的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderExecutionOutput {
+pub struct CancelSpotOrderChanges {
     /// 撤单后的订单快照。
     pub order_after: SpotOrder,
     /// 本次撤单实际受影响的余额 after 快照。
     pub balances_after: Vec<Balance>,
+    pub order_before: SpotOrder,
+    pub balances_updated: Vec<UpdatedEntityPair<Balance>>,
 }
 
-impl CommandUseCase3 for CancelSpotOrderUseCase {
+impl ReplayableChanges for CancelSpotOrderChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        let mut events = Vec::with_capacity(1 + self.balances_updated.len());
+        events.push(self.order_after.track_update_event_from(&self.order_before)?);
+        for balance in &self.balances_updated {
+            events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for CancelSpotOrderUseCase {
     type Command = CancelSpotOrderCmd;
     type GivenState = CancelSpotOrderState;
     type Error = CancelSpotOrderError;
-    type Output = CancelSpotOrderExecutionOutput;
+    type Changes = CancelSpotOrderChanges;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -134,44 +150,39 @@ impl CommandUseCase3 for CancelSpotOrderUseCase {
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         _cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        derive_cancel_output_and_events(state)
+    ) -> Result<Self::Changes, Self::Error> {
+        derive_cancel_changes(state)
     }
 }
 
-fn derive_cancel_output_and_events(
+fn derive_cancel_changes(
     state: CancelSpotOrderState,
-) -> Result<UseCaseOutput<CancelSpotOrderExecutionOutput>, CancelSpotOrderError> {
+) -> Result<CancelSpotOrderChanges, CancelSpotOrderError> {
     let mut order_after = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
+    let order_before = order_after.clone();
     let release_base = order_after.base_to_release_on_cancel();
     let release_quote = order_after.quote_to_release_on_cancel();
 
     let next_order_version =
         order_after.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-    let order_canceled = order_after
-        .track_update_event(|order| {
-            order.status = SpotOrderStatus::Canceled;
-            order.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-            order.version = next_order_version;
-        })
-        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+    order_after.status = SpotOrderStatus::Canceled;
+    order_after.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
+    order_after.version = next_order_version;
 
     let (balance_before, balance_after) = if release_quote > 0 {
         release_balance(state.quote_balance, release_quote)?
     } else {
         release_balance(state.base_balance, release_base)?
     };
-    let balance_released = balance_after
-        .track_update_event_from(&balance_before)
-        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
-
-    Ok(UseCaseOutput {
-        output: CancelSpotOrderExecutionOutput { order_after, balances_after: vec![balance_after] },
-        events: vec![order_canceled, balance_released],
+    Ok(CancelSpotOrderChanges {
+        order_after,
+        balances_after: vec![balance_after.clone()],
+        order_before,
+        balances_updated: vec![UpdatedEntityPair { before: balance_before, after: balance_after }],
     })
 }
 

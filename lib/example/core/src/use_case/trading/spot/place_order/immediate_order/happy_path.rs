@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 use proptest::prelude::*;
 
 use super::command_examples::{ImmediateCommandExample, supported_command_examples};
@@ -89,8 +89,8 @@ fn role_is_trader() {
 #[test]
 fn compute_output_and_events_produces_order_and_account_events() -> Result<(), PlaceOrderError> {
     let use_case = PlaceImmediateOrderUseCase;
-    let result = use_case.compute_output_and_events(&sample_cmd(), sample_state())?;
-    let events = result.events;
+    let result = use_case.compute_changes(&sample_cmd(), sample_state())?;
+    let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
     assert_eq!(events.len(), 2);
     assert!(events[0].is_created());
@@ -110,29 +110,24 @@ fn compute_output_and_events_keeps_output_and_events_consistent() -> Result<(), 
     let use_case = PlaceImmediateOrderUseCase;
     let state = sample_state();
 
-    let result = CommandUseCase3::compute_output_and_events(&use_case, &sample_cmd(), state)?;
+    let result = CommandUseCase4::compute_changes(&use_case, &sample_cmd(), state)?;
+    let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(result.output.order.order_id, "trader-1-BTCUSDT-7");
-    assert_eq!(result.output.order.reserved_quote, 200);
-    assert_eq!(result.output.affected_balance_after.asset_id, "USDT");
-    assert_eq!(result.output.affected_balance_after.available, 800);
-    assert_eq!(result.output.affected_balance_after.frozen, 200);
+    assert_eq!(result.order.order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(result.order.reserved_quote, 200);
+    assert_eq!(result.affected_balance_after.asset_id, "USDT");
+    assert_eq!(result.affected_balance_after.available, 800);
+    assert_eq!(result.affected_balance_after.frozen, 200);
+    assert_eq!(event_field(&events[0], "order_id"), Some(result.order.order_id.as_str()));
     assert_eq!(
-        event_field(&result.events[0], "order_id"),
-        Some(result.output.order.order_id.as_str())
+        event_field(&events[1], "asset_id"),
+        Some(result.affected_balance_after.asset_id.as_str())
     );
     assert_eq!(
-        event_field(&result.events[1], "asset_id"),
-        Some(result.output.affected_balance_after.asset_id.as_str())
+        field_as_u64(&events[1], "available"),
+        Some(result.affected_balance_after.available)
     );
-    assert_eq!(
-        field_as_u64(&result.events[1], "available"),
-        Some(result.output.affected_balance_after.available)
-    );
-    assert_eq!(
-        field_as_u64(&result.events[1], "frozen"),
-        Some(result.output.affected_balance_after.frozen)
-    );
+    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.affected_balance_after.frozen));
 
     Ok(())
 }
@@ -184,8 +179,8 @@ proptest! {
 
             prop_assert_eq!(use_case.pre_check_command(&cmd), Ok(()));
 
-            let result = use_case.compute_output_and_events(&cmd, state.clone())?;
-            let events = result.events;
+            let result = use_case.compute_changes(&cmd, state.clone())?;
+            let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
             prop_assert_eq!(events.len(), 2);
             prop_assert!(events[0].is_created());
@@ -230,13 +225,13 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
-                prop_assert_eq!(result.output.affected_balance_after.asset_id, "USDT");
+                prop_assert_eq!(result.affected_balance_after.asset_id, "USDT");
                 prop_assert_eq!(
-                    result.output.affected_balance_after.available,
+                    result.affected_balance_after.available,
                     state.quote_balance.available - reserved_quote
                 );
                 prop_assert_eq!(
-                    result.output.affected_balance_after.frozen,
+                    result.affected_balance_after.frozen,
                     state.quote_balance.frozen + reserved_quote
                 );
             } else {
@@ -252,19 +247,19 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
-                prop_assert_eq!(result.output.affected_balance_after.asset_id, "BTC");
+                prop_assert_eq!(result.affected_balance_after.asset_id, "BTC");
                 prop_assert_eq!(
-                    result.output.affected_balance_after.available,
+                    result.affected_balance_after.available,
                     state.base_balance.available - reserved_base
                 );
                 prop_assert_eq!(
-                    result.output.affected_balance_after.frozen,
+                    result.affected_balance_after.frozen,
                     state.base_balance.frozen + reserved_base
                 );
             }
-            prop_assert_eq!(result.output.order.order_id, expected_order_id);
+            prop_assert_eq!(result.order.order_id, expected_order_id);
             prop_assert_eq!(
-                result.output.order.client_order_id.as_deref().unwrap_or_default(),
+                result.order.client_order_id.as_deref().unwrap_or_default(),
                 expected_cloid
             );
         }

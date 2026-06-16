@@ -1,5 +1,6 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -98,13 +99,16 @@ impl From<SpotOrderMatchError> for MatchSpotOrderError {
 
 /// 本次撮合的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchSpotOrderOutput {
+pub struct MatchSpotOrderChanges {
     /// 本次撮合新生成的成交事实。
     pub trades: Vec<SpotTrade>,
     /// 本次撮合后 taker 订单状态。
     pub taker_order_after: SpotOrder,
     /// 本次撮合中实际发生变化的 maker 订单 after 快照，顺序与撮合顺序一致。
     pub maker_orders_after: Vec<SpotOrder>,
+    pub taker_order_before: SpotOrder,
+    pub maker_orders_updated: Vec<UpdatedEntityPair<SpotOrder>>,
+    trade_maker_updates: Vec<(SpotTrade, UpdatedEntityPair<SpotOrder>)>,
 }
 
 /// Use case that matches one spot taker order against pre-sorted maker orders.
@@ -113,11 +117,26 @@ pub struct MatchSpotOrderOutput {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderUseCase;
 
-impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCase {
+impl ReplayableChanges for MatchSpotOrderChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        let mut events =
+            Vec::with_capacity(self.trades.len() + self.maker_orders_updated.len() + 1);
+        for (trade, maker) in &self.trade_maker_updates {
+            events.push(trade.track_create_event()?);
+            events.push(maker.after.track_update_event_from(&maker.before)?);
+        }
+        events.push(self.taker_order_after.track_update_event_from(&self.taker_order_before)?);
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for MatchSpotOrderUseCase {
     type Command = MatchSpotOrderCmd;
     type GivenState = MatchSpotOrderState;
     type Error = MatchSpotOrderError;
-    type Output = MatchSpotOrderOutput;
+    type Changes = MatchSpotOrderChanges;
 
     fn role(&self) -> &'static str {
         "MatchingEngine"
@@ -172,34 +191,36 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCa
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let mut taker_order = state.taker_order;
+        let taker_order_before = taker_order.clone();
         let mut taker_remaining = taker_order.remaining_qty()?;
         let mut total_taker_fill = 0_u64;
-        let mut events = Vec::new();
         let mut trades = Vec::new();
         let mut maker_orders_after = Vec::new();
+        let mut maker_orders_updated = Vec::new();
+        let mut trade_maker_updates = Vec::new();
         let best_maker = state.maker_orders.first();
 
         if taker_order.would_be_rejected_as_alo(best_maker)? {
             let current_filled_qty = taker_order.filled_qty;
-            events.push(update_taker_order(
+            apply_taker_order_update(
                 &mut taker_order,
                 current_filled_qty,
                 SpotOrderStatus::Rejected,
                 Some(SpotOrderStatusReason::BadAloPxRejected),
-            )?);
-            return Ok(UseCaseOutput {
-                output: MatchSpotOrderOutput {
-                    trades,
-                    taker_order_after: taker_order,
-                    maker_orders_after,
-                },
-                events,
+            )?;
+            return Ok(MatchSpotOrderChanges {
+                trades,
+                taker_order_after: taker_order,
+                maker_orders_after,
+                taker_order_before,
+                maker_orders_updated,
+                trade_maker_updates,
             });
         }
 
@@ -233,12 +254,12 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCa
                 maker_price,
                 trade_qty,
             );
-            events.push(
-                trade.track_create_event().map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?,
-            );
             trades.push(trade);
+            let trade_for_projection =
+                trades.last().cloned().ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
 
             let mut next_maker_order = maker_order;
+            let previous_maker_order = next_maker_order.clone();
             let next_maker_filled = next_maker_order
                 .filled_qty
                 .checked_add(trade_qty)
@@ -248,16 +269,14 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCa
                 .version
                 .checked_add(1)
                 .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-            events.push(
-                next_maker_order
-                    .track_update_event(|order| {
-                        order.filled_qty = next_maker_filled;
-                        order.status = next_maker_status;
-                        order.version = next_maker_version;
-                    })
-                    .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?,
-            );
+            next_maker_order.filled_qty = next_maker_filled;
+            next_maker_order.status = next_maker_status;
+            next_maker_order.version = next_maker_version;
+            let maker_update =
+                UpdatedEntityPair { before: previous_maker_order, after: next_maker_order.clone() };
             maker_orders_after.push(next_maker_order);
+            maker_orders_updated.push(maker_update.clone());
+            trade_maker_updates.push((trade_for_projection, maker_update));
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -268,15 +287,15 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for MatchSpotOrderUseCa
         }
 
         let finalization = taker_order.finalize_after_match(total_taker_fill)?;
-        events.push(update_taker_order_with_finalization(&mut taker_order, finalization)?);
+        apply_taker_order_with_finalization(&mut taker_order, finalization)?;
 
-        Ok(UseCaseOutput {
-            output: MatchSpotOrderOutput {
-                trades,
-                taker_order_after: taker_order,
-                maker_orders_after,
-            },
-            events,
+        Ok(MatchSpotOrderChanges {
+            trades,
+            taker_order_after: taker_order,
+            maker_orders_after,
+            taker_order_before,
+            maker_orders_updated,
+            trade_maker_updates,
         })
     }
 }
@@ -294,29 +313,26 @@ fn validate_matchable_order(order: &SpotOrder) -> Result<(), MatchSpotOrderError
     Ok(())
 }
 
-fn update_taker_order(
+fn apply_taker_order_update(
     taker_order: &mut SpotOrder,
     next_taker_filled: u64,
     next_taker_status: SpotOrderStatus,
     next_taker_status_reason: Option<SpotOrderStatusReason>,
-) -> Result<EntityReplayableEvent, MatchSpotOrderError> {
+) -> Result<(), MatchSpotOrderError> {
     let next_taker_version =
         taker_order.version.checked_add(1).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-    taker_order
-        .track_update_event(|order| {
-            order.filled_qty = next_taker_filled;
-            order.status = next_taker_status;
-            order.status_reason = next_taker_status_reason;
-            order.version = next_taker_version;
-        })
-        .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)
+    taker_order.filled_qty = next_taker_filled;
+    taker_order.status = next_taker_status;
+    taker_order.status_reason = next_taker_status_reason;
+    taker_order.version = next_taker_version;
+    Ok(())
 }
 
-fn update_taker_order_with_finalization(
+fn apply_taker_order_with_finalization(
     taker_order: &mut SpotOrder,
     finalization: SpotOrderFinalization,
-) -> Result<EntityReplayableEvent, MatchSpotOrderError> {
-    update_taker_order(
+) -> Result<(), MatchSpotOrderError> {
+    apply_taker_order_update(
         taker_order,
         finalization.next_filled_qty,
         finalization.status,

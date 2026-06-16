@@ -1,4 +1,6 @@
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+};
 use common_entity::Entity;
 
 use super::{
@@ -141,11 +143,12 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 /// The use case itself is deterministic for the same command and loaded state. It does not talk to
 /// storage, publish events, or shape HTTP replies.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceImmediateOrderOutput {
+pub struct PlaceImmediateOrderChanges {
     /// 本次立即单创建出来的 taker 订单。
     pub order: SpotOrder,
     /// 本次下单影响到的那条余额冻结后快照。
     pub affected_balance_after: Balance,
+    pub affected_balance_before: Balance,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -156,7 +159,7 @@ impl PlaceImmediateOrderUseCase {
         &self,
         cmd: &PlaceImmediateOrderCmd,
         state: PlaceImmediateOrderState,
-    ) -> Result<PlaceImmediateOrderOutput, PlaceOrderError> {
+    ) -> Result<PlaceImmediateOrderChanges, PlaceOrderError> {
         let qty = cmd.qty()?;
         let reserve_price = cmd.reserve_price()?;
         let notional_quote = state
@@ -184,9 +187,10 @@ impl PlaceImmediateOrderUseCase {
             cmd.cloid.clone(),
         );
 
-        let affected_balance_after = match side {
+        let (affected_balance_before, affected_balance_after) = match side {
             PlaceOrderSide::Buy => {
                 let mut next_balance = state.quote_balance;
+                let previous_balance = next_balance.clone();
                 let (next_available, next_frozen) = next_balance
                     .reserve_after(reserved_quote)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
@@ -195,10 +199,11 @@ impl PlaceImmediateOrderUseCase {
                     .checked_add(1)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
                 next_balance.apply_after(next_available, next_frozen, next_version);
-                next_balance
+                (previous_balance, next_balance)
             }
             PlaceOrderSide::Sell => {
                 let mut next_balance = state.base_balance;
+                let previous_balance = next_balance.clone();
                 let (next_available, next_frozen) = next_balance
                     .reserve_after(reserved_base)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
@@ -207,19 +212,30 @@ impl PlaceImmediateOrderUseCase {
                     .checked_add(1)
                     .ok_or(PlaceOrderError::ArithmeticOverflow)?;
                 next_balance.apply_after(next_available, next_frozen, next_version);
-                next_balance
+                (previous_balance, next_balance)
             }
         };
 
-        Ok(PlaceImmediateOrderOutput { order, affected_balance_after })
+        Ok(PlaceImmediateOrderChanges { order, affected_balance_after, affected_balance_before })
     }
 }
 
-impl CommandUseCase3 for PlaceImmediateOrderUseCase {
+impl ReplayableChanges for PlaceImmediateOrderChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        Ok(vec![
+            self.order.track_create_event()?,
+            self.affected_balance_after.track_update_event_from(&self.affected_balance_before)?,
+        ])
+    }
+}
+
+impl CommandUseCase4 for PlaceImmediateOrderUseCase {
     type Command = PlaceImmediateOrderCmd;
     type GivenState = PlaceImmediateOrderState;
     type Error = PlaceOrderError;
-    type Output = PlaceImmediateOrderOutput;
+    type Changes = PlaceImmediateOrderChanges;
 
     fn role(&self) -> &'static str {
         "Trader"
@@ -272,25 +288,12 @@ impl CommandUseCase3 for PlaceImmediateOrderUseCase {
         Ok(())
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let previous_affected_balance = match cmd.side() {
-            PlaceOrderSide::Buy => state.quote_balance.clone(),
-            PlaceOrderSide::Sell => state.base_balance.clone(),
-        };
-        let output = self.derive_output(cmd, state)?;
-        let order = output.order.clone();
-        let affected_balance = output.affected_balance_after.clone();
-        let order_event =
-            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
-        let tracked_balance_event = affected_balance
-            .track_update_event_from(&previous_affected_balance)
-            .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
-
-        Ok(UseCaseOutput { output, events: vec![order_event, tracked_balance_event] })
+    ) -> Result<Self::Changes, Self::Error> {
+        self.derive_output(cmd, state)
     }
 }
 

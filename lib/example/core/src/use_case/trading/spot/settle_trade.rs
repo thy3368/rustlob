@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -73,11 +75,12 @@ pub enum SettleSpotTradeError {
 
 /// 本批次清结算的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleSpotTradeOutput {
+pub struct SettleSpotTradeChanges {
     /// 本批次创建出的 settlement 事实。
     pub settlements: Vec<SpotSettlement>,
     /// 本批次实际受影响的余额 after 快照。
     pub balances_after: Vec<Balance>,
+    pub balances_updated: Vec<UpdatedEntityPair<Balance>>,
 }
 
 /// Use case that settles matched spot trades into account balance changes.
@@ -86,11 +89,26 @@ pub struct SettleSpotTradeOutput {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleSpotTradeUseCase;
 
-impl cmd_handler::command_use_case_def2::CommandUseCase3 for SettleSpotTradeUseCase {
+impl ReplayableChanges for SettleSpotTradeChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        let mut events = Vec::with_capacity(self.settlements.len() + self.balances_updated.len());
+        for settlement in &self.settlements {
+            events.push(settlement.track_create_event()?);
+        }
+        for balance in &self.balances_updated {
+            events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        Ok(events)
+    }
+}
+
+impl CommandUseCase4 for SettleSpotTradeUseCase {
     type Command = SettleSpotTradeCmd;
     type GivenState = SettleSpotTradeState;
     type Error = SettleSpotTradeError;
-    type Output = SettleSpotTradeOutput;
+    type Changes = SettleSpotTradeChanges;
 
     fn role(&self) -> &'static str {
         "ClearingHouse"
@@ -127,15 +145,15 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for SettleSpotTradeUseC
         )
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+    ) -> Result<Self::Changes, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
         let mut settlements = Vec::new();
-        let mut balances_before = Vec::new();
         let mut balances_after = Vec::new();
+        let mut balances_updated = Vec::new();
 
         for (index, trade) in state.trades.iter().enumerate() {
             let parties = settlement_parties(trade);
@@ -151,15 +169,6 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for SettleSpotTradeUseC
                 quote_qty,
                 trade.price,
             ));
-        }
-
-        let mut events = Vec::new();
-        for settlement in &settlements {
-            events.push(
-                settlement
-                    .track_create_event()
-                    .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
-            );
         }
 
         for mut balance in state.balances {
@@ -180,17 +189,12 @@ impl cmd_handler::command_use_case_def2::CommandUseCase3 for SettleSpotTradeUseC
                 balance.version.checked_add(1).ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
             balance.apply_after(next_available, next_frozen, next_version);
-            events.push(
-                balance
-                    .track_update_event_from(&previous_balance)
-                    .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
-            );
-            balances_before.push(previous_balance);
+            balances_updated
+                .push(UpdatedEntityPair { before: previous_balance, after: balance.clone() });
             balances_after.push(balance);
         }
 
-        let _ = balances_before;
-        Ok(UseCaseOutput { output: SettleSpotTradeOutput { settlements, balances_after }, events })
+        Ok(SettleSpotTradeChanges { settlements, balances_after, balances_updated })
     }
 }
 
@@ -437,19 +441,19 @@ mod compute_replayable_events_happy_path;
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
 
     #[test]
     fn role_is_clearing_house() {
-        assert_eq!(CommandUseCase3::role(&SettleSpotTradeUseCase), "ClearingHouse");
+        assert_eq!(CommandUseCase4::role(&SettleSpotTradeUseCase), "ClearingHouse");
     }
 
     #[test]
     fn pre_check_rejects_empty_trade_ids() {
         assert_eq!(
-            CommandUseCase3::pre_check_command(&SettleSpotTradeUseCase, &cmd(Vec::new())),
+            CommandUseCase4::pre_check_command(&SettleSpotTradeUseCase, &cmd(Vec::new())),
             Err(SettleSpotTradeError::EmptyTradeIds)
         );
     }
@@ -462,7 +466,7 @@ mod tests {
         );
 
         assert_eq!(
-            CommandUseCase3::validate_against_state(
+            CommandUseCase4::validate_against_state(
                 &SettleSpotTradeUseCase,
                 &cmd(vec!["different"]),
                 &state,
@@ -480,7 +484,7 @@ mod tests {
         state.settled_trade_ids = vec!["trade-1".to_string()];
 
         assert_eq!(
-            CommandUseCase3::validate_against_state(
+            CommandUseCase4::validate_against_state(
                 &SettleSpotTradeUseCase,
                 &cmd(vec!["trade-1"]),
                 &state,
@@ -502,7 +506,7 @@ mod tests {
         );
 
         assert_eq!(
-            CommandUseCase3::validate_against_state(
+            CommandUseCase4::validate_against_state(
                 &SettleSpotTradeUseCase,
                 &cmd(vec!["trade-1"]),
                 &state,
@@ -524,7 +528,7 @@ mod tests {
         );
 
         assert_eq!(
-            CommandUseCase3::validate_against_state(
+            CommandUseCase4::validate_against_state(
                 &SettleSpotTradeUseCase,
                 &cmd(vec!["trade-1"]),
                 &state,
@@ -534,8 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_output_and_events_keeps_output_and_events_consistent()
-    -> Result<(), SettleSpotTradeError> {
+    fn compute_changes_keeps_changes_and_events_consistent() -> Result<(), SettleSpotTradeError> {
         let state = state(
             vec![trade("trade-1", SpotOrderSide::Buy, "buyer", "seller", 100, 2)],
             vec![
@@ -546,23 +549,21 @@ mod tests {
             ],
         );
 
-        let result =
-            cmd_handler::command_use_case_def2::CommandUseCase3::compute_output_and_events(
-                &SettleSpotTradeUseCase,
-                &cmd(vec!["trade-1"]),
-                state,
-            )?;
+        let result = cmd_handler::command_use_case_def2::CommandUseCase4::compute_changes(
+            &SettleSpotTradeUseCase,
+            &cmd(vec!["trade-1"]),
+            state,
+        )?;
+        let events =
+            result.to_replayable_events().map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?;
 
-        assert_eq!(result.output.settlements.len(), 1);
-        assert_eq!(result.output.settlements[0].settlement_id, "settle-1-1");
-        assert!(result.output.balances_after.iter().any(|balance| {
+        assert_eq!(result.settlements.len(), 1);
+        assert_eq!(result.settlements[0].settlement_id, "settle-1-1");
+        assert!(result.balances_after.iter().any(|balance| {
             balance.account_id == "buyer" && balance.asset_id == "BTC" && balance.available == 2
         }));
         assert!(
-            result
-                .events
-                .iter()
-                .any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
+            events.iter().any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
         );
 
         Ok(())
@@ -576,11 +577,7 @@ mod tests {
         );
 
         assert_eq!(
-            CommandUseCase3::compute_output_and_events(
-                &SettleSpotTradeUseCase,
-                &cmd(vec!["trade-1"]),
-                state,
-            ),
+            CommandUseCase4::compute_changes(&SettleSpotTradeUseCase, &cmd(vec!["trade-1"]), state,),
             Err(SettleSpotTradeError::ArithmeticOverflow)
         );
     }

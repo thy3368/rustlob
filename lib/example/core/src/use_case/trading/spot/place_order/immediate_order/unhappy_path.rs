@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::CommandUseCase4;
 use proptest::prelude::*;
 
 use super::test_support::{
@@ -88,7 +88,7 @@ proptest! {
         cmd in zero_price_or_size_cmd_strategy(),
     ) {
         let use_case = PlaceImmediateOrderUseCase;
-        let result = use_case.compute_output_and_events(&cmd, sample_state());
+        let result = use_case.compute_changes(&cmd, sample_state());
 
         if cmd.size == 0 {
             prop_assert_eq!(result, Err(PlaceOrderError::InvalidQty));
@@ -103,7 +103,7 @@ proptest! {
     ) {
         let use_case = PlaceImmediateOrderUseCase;
         let cmd = cmd_with_price_and_size(price, u64::MAX);
-        let result = use_case.compute_output_and_events(&cmd, sample_state());
+        let result = use_case.compute_changes(&cmd, sample_state());
 
         prop_assert_eq!(result, Err(PlaceOrderError::ArithmeticOverflow));
     }

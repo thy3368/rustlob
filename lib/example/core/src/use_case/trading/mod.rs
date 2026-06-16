@@ -34,18 +34,18 @@ pub use derivatives::{
 };
 pub use spot::place_order::{
     PlaceConditionalOrderCmd, PlaceConditionalOrderOutput, PlaceConditionalOrderState,
-    PlaceConditionalOrderUseCase, PlaceImmediateOrderCmd, PlaceImmediateOrderCmd as PlaceOrderCmd,
-    PlaceImmediateOrderExecution, PlaceImmediateOrderOutput, PlaceImmediateOrderState,
-    PlaceImmediateOrderState as PlaceOrderState, PlaceImmediateOrderUseCase,
-    PlaceImmediateOrderUseCase as PlaceOrderUseCase, PlaceOrderError, PlaceOrderExecution,
-    PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
+    PlaceConditionalOrderUseCase, PlaceImmediateOrderChanges, PlaceImmediateOrderCmd,
+    PlaceImmediateOrderCmd as PlaceOrderCmd, PlaceImmediateOrderExecution,
+    PlaceImmediateOrderState, PlaceImmediateOrderState as PlaceOrderState,
+    PlaceImmediateOrderUseCase, PlaceImmediateOrderUseCase as PlaceOrderUseCase, PlaceOrderError,
+    PlaceOrderExecution, PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };
 pub use spot::{
-    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput, CancelSpotOrderState,
-    CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineCmd,
-    ExecuteImmediateSpotOrderPipelineError, ExecuteImmediateSpotOrderPipelineOutput,
+    CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
+    CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
+    ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
-    MatchSpotOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput,
+    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
+    MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };

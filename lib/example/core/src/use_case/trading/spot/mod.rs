@@ -5,19 +5,19 @@ pub mod place_order;
 mod settle_trade;
 
 pub use cancel_order::{
-    CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderExecutionOutput, CancelSpotOrderState,
+    CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
     CancelSpotOrderUseCase,
 };
 pub use execute_immediate_order_pipeline::{
-    ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
-    ExecuteImmediateSpotOrderPipelineOutput, ExecuteImmediateSpotOrderPipelineState,
+    ExecuteImmediateSpotOrderPipelineChanges, ExecuteImmediateSpotOrderPipelineCmd,
+    ExecuteImmediateSpotOrderPipelineError, ExecuteImmediateSpotOrderPipelineState,
     ExecuteImmediateSpotOrderPipelineUseCase,
 };
 pub use match_order::{
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderOutput, MatchSpotOrderState,
+    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
     MatchSpotOrderUseCase,
 };
 pub use settle_trade::{
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeOutput, SettleSpotTradeState,
+    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
     SettleSpotTradeUseCase,
 };

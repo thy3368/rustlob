@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
 
@@ -31,7 +31,9 @@ fn compute_events(
     cmd: &SettleSpotTradeCmd,
     state: SettleSpotTradeState,
 ) -> Result<Vec<cmd_handler::EntityReplayableEvent>, SettleSpotTradeError> {
-    Ok(CommandUseCase3::compute_output_and_events(&SettleSpotTradeUseCase, cmd, state)?.events)
+    Ok(CommandUseCase4::compute_changes(&SettleSpotTradeUseCase, cmd, state)?
+        .to_replayable_events()
+        .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?)
 }
 
 #[test]

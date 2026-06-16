@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
 use crate::entity::{
@@ -43,7 +43,9 @@ fn compute_events(
     cmd: &MatchSpotOrderCmd,
     state: MatchSpotOrderState,
 ) -> Result<Vec<EntityReplayableEvent>, MatchSpotOrderError> {
-    Ok(CommandUseCase3::compute_output_and_events(&MatchSpotOrderUseCase, cmd, state)?.events)
+    Ok(CommandUseCase4::compute_changes(&MatchSpotOrderUseCase, cmd, state)?
+        .to_replayable_events()
+        .map_err(|_| MatchSpotOrderError::ArithmeticOverflow)?)
 }
 
 fn sample_cmd() -> MatchSpotOrderCmd {
