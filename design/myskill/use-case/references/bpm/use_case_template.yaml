@@ -70,7 +70,7 @@ field_rules:
       查询类 use case 使用 []，不要写 '-'
 
 conventions:
-  - 每个 command_handler 对应一个业务 use case
+  - 每个 execute_flow_l4 对应一个业务 use case
   - given_state 只写实体名，不展开字段
   - then_state 只写真正会持久化 / 回放 / 发布 DomainEvent 的实体
   - 查询类 use case 使用 then_state: []
