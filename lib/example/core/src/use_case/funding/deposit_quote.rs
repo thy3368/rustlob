@@ -2,11 +2,12 @@ use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::Balance;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositQuoteCmd {
     pub party_id: String,
     pub amount: u64,

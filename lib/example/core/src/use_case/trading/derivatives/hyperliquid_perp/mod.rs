@@ -13,8 +13,8 @@ pub use execution::{
     SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
 };
 pub use funding::{
-    SettleHyperliquidPerpFundingCmd, SettleHyperliquidPerpFundingError,
-    SettleHyperliquidPerpFundingOutput, SettleHyperliquidPerpFundingState,
+    SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingCmd,
+    SettleHyperliquidPerpFundingError, SettleHyperliquidPerpFundingState,
     SettleHyperliquidPerpFundingUseCase,
 };
 pub use query::{

@@ -2,6 +2,7 @@ use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
+use serde::{Deserialize, Serialize};
 
 use super::{
     PlaceOrderError, PlaceOrderSide, PlaceOrderTimeInForce, check_common_command, checked_price,
@@ -28,7 +29,7 @@ pub struct PlaceImmediateOrderState {
 }
 
 /// 立即执行现货订单的执行意图。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceImmediateOrderExecution {
     /// 限价单，直接对齐 Hyperliquid `orderType.limit.tif`。
     Limit {
@@ -98,7 +99,7 @@ impl PlaceImmediateOrderExecution {
 /// assert_eq!(cmd.symbol, "BTCUSDT");
 /// assert_eq!(cmd.size, 2);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceImmediateOrderCmd {
     /// 发起下单的交易账户 ID，也是立即买单冻结 quote 余额的账户。
     pub party_id: String,

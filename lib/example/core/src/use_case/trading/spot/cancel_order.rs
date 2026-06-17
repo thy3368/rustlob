@@ -2,6 +2,7 @@ use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{Balance, SpotOrder, SpotOrderStatus, SpotOrderStatusReason};
@@ -24,7 +25,7 @@ pub struct CancelSpotOrderState {
 /// 字段对齐 Hyperliquid exchange endpoint 的 cancel action：
 /// `{"type": "cancel", "cancels": [{"a": asset, "o": oid}]}`。
 /// `party_id` 是 core 层业务发起方，adapter 负责从签名地址或会话身份映射而来。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderCmd {
     /// 发起撤单的交易账户 ID。
     pub party_id: String,

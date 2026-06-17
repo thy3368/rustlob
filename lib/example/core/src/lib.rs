@@ -2,14 +2,16 @@ pub mod entity;
 pub mod use_case;
 
 pub use entity::{
-    Account, Balance, HyperliquidPerpFundingDirection, HyperliquidPerpFundingSettlement,
-    HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
+    Account, Balance, HyperliquidPerpBookLevel, HyperliquidPerpFundingDirection,
+    HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
+    HyperliquidPerpFundingSettlement, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpOrder,
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus,
     HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
     HyperliquidPerpSettlement, HyperliquidPerpTrade, MarketRules, SpotConditionalOrder,
     SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
     SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole, SpotSettlement, SpotTrade,
+    compute_hourly_funding_rate_e8, compute_impact_ask_price, compute_impact_bid_price,
     required_position_margin,
 };
 pub use use_case::{
@@ -45,12 +47,13 @@ pub use use_case::{
     QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
     QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
-    QueryHyperliquidPerpOrderDetailUseCase, SettleHyperliquidPerpFundingCmd,
-    SettleHyperliquidPerpFundingError, SettleHyperliquidPerpFundingState,
-    SettleHyperliquidPerpFundingUseCase, SettleHyperliquidPerpTradeChanges,
-    SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
-    SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase, SettleSpotTradeChanges,
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
+    QueryHyperliquidPerpOrderDetailUseCase, SettleHyperliquidPerpFundingChanges,
+    SettleHyperliquidPerpFundingCmd, SettleHyperliquidPerpFundingError,
+    SettleHyperliquidPerpFundingState, SettleHyperliquidPerpFundingUseCase,
+    SettleHyperliquidPerpTradeChanges, SettleHyperliquidPerpTradeCmd,
+    SettleHyperliquidPerpTradeError, SettleHyperliquidPerpTradeState,
+    SettleHyperliquidPerpTradeUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd,
+    SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
     StartHyperliquidPerpLiquidationCmd, StartHyperliquidPerpLiquidationError,
     StartHyperliquidPerpLiquidationState, StartHyperliquidPerpLiquidationUseCase,
     WithdrawQuoteChanges, WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState,

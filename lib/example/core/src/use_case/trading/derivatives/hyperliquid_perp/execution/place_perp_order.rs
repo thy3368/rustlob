@@ -368,177 +368,192 @@ fn validate_reduce_only(
 }
 
 #[cfg(test)]
+fn use_case() -> PlaceHyperliquidPerpOrderUseCase {
+    PlaceHyperliquidPerpOrderUseCase
+}
+
+#[cfg(test)]
+fn limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
+    PlaceHyperliquidPerpOrderCmd {
+        party_id: "trader-1".to_string(),
+        asset: 0,
+        symbol: "BTC-PERP".to_string(),
+        is_buy: true,
+        size: 3,
+        reduce_only: false,
+        execution: PlaceHyperliquidPerpOrderExecution::Limit {
+            price: 101,
+            time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
+        },
+        cloid: Some("client-1".to_string()),
+    }
+}
+
+#[cfg(test)]
+fn market_cmd() -> PlaceHyperliquidPerpOrderCmd {
+    PlaceHyperliquidPerpOrderCmd {
+        execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
+        ..limit_cmd()
+    }
+}
+
+#[cfg(test)]
+fn position() -> HyperliquidPerpPosition {
+    HyperliquidPerpPosition::empty_slot(
+        "trader-1:0:BTC-PERP".to_string(),
+        "trader-1".to_string(),
+        0,
+        "BTC-PERP".to_string(),
+        5,
+    )
+}
+
+#[cfg(test)]
+fn state() -> PlaceHyperliquidPerpOrderState {
+    PlaceHyperliquidPerpOrderState {
+        trading_enabled: true,
+        next_order_sequence: 7,
+        account_id: "trader-1".to_string(),
+        margin_balance: Balance::new("trader-1".to_string(), "USDC".to_string(), 10_000, 500, 4),
+        margin_asset_id: "USDC".to_string(),
+        market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
+        position: position(),
+    }
+}
+
+#[cfg(test)]
+fn non_flat_position(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpPosition {
+    HyperliquidPerpPosition::new(
+        "trader-1:0:BTC-PERP".to_string(),
+        "trader-1".to_string(),
+        0,
+        "BTC-PERP".to_string(),
+        side,
+        qty,
+        100,
+        5,
+        required_position_margin(qty, 100, 5).unwrap(),
+        0,
+        2,
+    )
+}
+
+#[cfg(test)]
+fn sell_limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
+    let mut cmd = limit_cmd();
+    cmd.is_buy = false;
+    cmd
+}
+
+#[cfg(test)]
+fn sell_market_cmd() -> PlaceHyperliquidPerpOrderCmd {
+    let mut cmd = market_cmd();
+    cmd.is_buy = false;
+    cmd
+}
+
+#[cfg(test)]
+fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
+    event.field_changes.iter().find_map(|change| {
+        if change.field_name_as_str().ok() == Some(field_name) {
+            std::str::from_utf8(change.new_value_bytes()).ok()
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(test)]
+fn event_field_u64(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
+    event_field(event, field_name)?.parse().ok()
+}
+
+#[cfg(test)]
+fn assert_order_snapshot(
+    order: &HyperliquidPerpOrder,
+    expected_side: HyperliquidPerpOrderSide,
+    expected_execution: HyperliquidPerpOrderExecution,
+    expected_tif: HyperliquidPerpOrderTimeInForce,
+    expected_qty: u64,
+    expected_reduce_only: bool,
+) {
+    assert_eq!(order.order_id, "trader-1-BTC-PERP-7");
+    assert_eq!(order.asset, 0);
+    assert_eq!(order.account_id, "trader-1");
+    assert_eq!(order.symbol, "BTC-PERP");
+    assert_eq!(order.side, expected_side);
+    assert_eq!(order.execution, expected_execution);
+    assert_eq!(order.time_in_force, expected_tif);
+    assert_eq!(order.qty, expected_qty);
+    assert_eq!(order.filled_qty, 0);
+    assert_eq!(order.status.as_str(), "open");
+    assert_eq!(order.reduce_only, expected_reduce_only);
+    assert_eq!(order.client_order_id.as_deref(), Some("client-1"));
+    assert_eq!(order.version, 1);
+}
+
+#[cfg(test)]
+fn assert_balance_snapshot(balance: &Balance, available: u64, frozen: u64, version: u64) {
+    assert_eq!(balance.account_id, "trader-1");
+    assert_eq!(balance.asset_id, "USDC");
+    assert_eq!(balance.available, available);
+    assert_eq!(balance.frozen, frozen);
+    assert_eq!(balance.version, version);
+}
+
+#[cfg(test)]
+fn assert_order_created_event(
+    event: &EntityReplayableEvent,
+    expected_side: &str,
+    expected_execution: &str,
+    expected_tif: &str,
+    expected_qty: u64,
+    expected_price: u64,
+    expected_reduce_only: bool,
+) {
+    use common_entity::EntityChangeType;
+
+    assert_eq!(event.change_type, EntityChangeType::Created.as_tag());
+    assert_eq!(event_field(event, "order_id"), Some("trader-1-BTC-PERP-7"));
+    assert_eq!(event_field_u64(event, "asset"), Some(0));
+    assert_eq!(event_field(event, "account_id"), Some("trader-1"));
+    assert_eq!(event_field(event, "symbol"), Some("BTC-PERP"));
+    assert_eq!(event_field(event, "side"), Some(expected_side));
+    assert_eq!(event_field(event, "execution"), Some(expected_execution));
+    assert_eq!(event_field(event, "time_in_force"), Some(expected_tif));
+    assert_eq!(event_field_u64(event, "qty"), Some(expected_qty));
+    assert_eq!(event_field_u64(event, "price"), Some(expected_price));
+    assert_eq!(
+        event_field(event, "reduce_only"),
+        Some(if expected_reduce_only { "true" } else { "false" })
+    );
+    assert_eq!(event_field(event, "client_order_id"), Some("client-1"));
+}
+
+#[cfg(test)]
+fn assert_balance_updated_event(
+    event: &EntityReplayableEvent,
+    expected_available: u64,
+    expected_frozen: u64,
+) {
+    use common_entity::EntityChangeType;
+
+    assert_eq!(event.change_type, EntityChangeType::Updated.as_tag());
+    assert_eq!(event_field_u64(event, "available"), Some(expected_available));
+    assert_eq!(event_field_u64(event, "frozen"), Some(expected_frozen));
+    assert_eq!(event.old_version, 4);
+    assert_eq!(event.new_version, 5);
+}
+
+#[cfg(test)]
+mod compute_replayable_events_happy_path;
+
+#[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
-    use common_entity::EntityChangeType;
     use proptest::prelude::*;
 
     use super::*;
-
-    fn use_case() -> PlaceHyperliquidPerpOrderUseCase {
-        PlaceHyperliquidPerpOrderUseCase
-    }
-
-    fn limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
-        PlaceHyperliquidPerpOrderCmd {
-            party_id: "trader-1".to_string(),
-            asset: 0,
-            symbol: "BTC-PERP".to_string(),
-            is_buy: true,
-            size: 3,
-            reduce_only: false,
-            execution: PlaceHyperliquidPerpOrderExecution::Limit {
-                price: 101,
-                time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-            },
-            cloid: Some("client-1".to_string()),
-        }
-    }
-
-    fn market_cmd() -> PlaceHyperliquidPerpOrderCmd {
-        PlaceHyperliquidPerpOrderCmd {
-            execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
-            ..limit_cmd()
-        }
-    }
-
-    fn position() -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::empty_slot(
-            "trader-1:0:BTC-PERP".to_string(),
-            "trader-1".to_string(),
-            0,
-            "BTC-PERP".to_string(),
-            5,
-        )
-    }
-
-    fn state() -> PlaceHyperliquidPerpOrderState {
-        PlaceHyperliquidPerpOrderState {
-            trading_enabled: true,
-            next_order_sequence: 7,
-            account_id: "trader-1".to_string(),
-            margin_balance: Balance::new(
-                "trader-1".to_string(),
-                "USDC".to_string(),
-                10_000,
-                500,
-                4,
-            ),
-            margin_asset_id: "USDC".to_string(),
-            market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
-            position: position(),
-        }
-    }
-
-    fn non_flat_position(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
-            "trader-1:0:BTC-PERP".to_string(),
-            "trader-1".to_string(),
-            0,
-            "BTC-PERP".to_string(),
-            side,
-            qty,
-            100,
-            5,
-            required_position_margin(qty, 100, 5).unwrap(),
-            0,
-            2,
-        )
-    }
-
-    fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
-        event.field_changes.iter().find_map(|change| {
-            if change.field_name_as_str().ok() == Some(field_name) {
-                std::str::from_utf8(change.new_value_bytes()).ok()
-            } else {
-                None
-            }
-        })
-    }
-
-    fn event_field_u64(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
-        event_field(event, field_name)?.parse().ok()
-    }
-
-    fn sell_limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
-        let mut cmd = limit_cmd();
-        cmd.is_buy = false;
-        cmd
-    }
-
-    fn sell_market_cmd() -> PlaceHyperliquidPerpOrderCmd {
-        let mut cmd = market_cmd();
-        cmd.is_buy = false;
-        cmd
-    }
-
-    fn assert_order_snapshot(
-        order: &HyperliquidPerpOrder,
-        expected_side: HyperliquidPerpOrderSide,
-        expected_execution: HyperliquidPerpOrderExecution,
-        expected_tif: HyperliquidPerpOrderTimeInForce,
-        expected_qty: u64,
-        expected_reduce_only: bool,
-    ) {
-        assert_eq!(order.order_id, "trader-1-BTC-PERP-7");
-        assert_eq!(order.asset, 0);
-        assert_eq!(order.account_id, "trader-1");
-        assert_eq!(order.symbol, "BTC-PERP");
-        assert_eq!(order.side, expected_side);
-        assert_eq!(order.execution, expected_execution);
-        assert_eq!(order.time_in_force, expected_tif);
-        assert_eq!(order.qty, expected_qty);
-        assert_eq!(order.filled_qty, 0);
-        assert_eq!(order.status.as_str(), "open");
-        assert_eq!(order.reduce_only, expected_reduce_only);
-        assert_eq!(order.client_order_id.as_deref(), Some("client-1"));
-        assert_eq!(order.version, 1);
-    }
-
-    fn assert_balance_snapshot(balance: &Balance, available: u64, frozen: u64, version: u64) {
-        assert_eq!(balance.account_id, "trader-1");
-        assert_eq!(balance.asset_id, "USDC");
-        assert_eq!(balance.available, available);
-        assert_eq!(balance.frozen, frozen);
-        assert_eq!(balance.version, version);
-    }
-
-    fn assert_order_created_event(
-        event: &EntityReplayableEvent,
-        expected_side: &str,
-        expected_execution: &str,
-        expected_tif: &str,
-        expected_price: u64,
-        expected_reduce_only: bool,
-    ) {
-        assert_eq!(event.change_type, EntityChangeType::Created.as_tag());
-        assert_eq!(event_field(event, "order_id"), Some("trader-1-BTC-PERP-7"));
-        assert_eq!(event_field_u64(event, "asset"), Some(0));
-        assert_eq!(event_field(event, "account_id"), Some("trader-1"));
-        assert_eq!(event_field(event, "symbol"), Some("BTC-PERP"));
-        assert_eq!(event_field(event, "side"), Some(expected_side));
-        assert_eq!(event_field(event, "execution"), Some(expected_execution));
-        assert_eq!(event_field(event, "time_in_force"), Some(expected_tif));
-        assert_eq!(event_field_u64(event, "qty"), Some(3));
-        assert_eq!(event_field_u64(event, "price"), Some(expected_price));
-        assert_eq!(
-            event_field(event, "reduce_only"),
-            Some(if expected_reduce_only { "true" } else { "false" })
-        );
-        assert_eq!(event_field(event, "client_order_id"), Some("client-1"));
-    }
-
-    fn assert_balance_updated_event(
-        event: &EntityReplayableEvent,
-        expected_available: u64,
-        expected_frozen: u64,
-    ) {
-        assert_eq!(event.change_type, EntityChangeType::Updated.as_tag());
-        assert_eq!(event_field_u64(event, "available"), Some(expected_available));
-        assert_eq!(event_field_u64(event, "frozen"), Some(expected_frozen));
-        assert_eq!(event.old_version, 4);
-        assert_eq!(event.new_version, 5);
-    }
 
     #[test]
     fn role_is_trader() {
@@ -659,475 +674,6 @@ mod tests {
             use_case().validate_against_state(&cmd, &insufficient),
             Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance)
         );
-    }
-
-    // 规格矩阵:
-    // - 仓位意图: flat open / same-side increase / opposite reduce or flip / reduce_only
-    // - 执行意图: limit / market
-    // - 业务结果: freeze full order margin / freeze net new margin only / freeze zero
-    // - 事件期望: order create 一定存在；balance update 仅在余额真实变化时存在
-    //
-    // current coverage:
-    // - flat + buy limit
-    // - flat + sell limit
-    // - flat + buy market
-    // - flat + sell market
-    // - long + buy increase
-    // - short + sell increase
-    // - long + sell reduce_only
-    // - short + buy reduce_only
-    // - long + sell opposite partial reduce
-    // - long + sell opposite flip
-    // - short + buy opposite partial reduce
-    // - short + buy opposite flip
-
-    #[test]
-    fn flat_account_buys_limit_order_and_freezes_margin_for_gtc_ioc_and_alo() {
-        for (time_in_force, expected_tif) in [
-            (HyperliquidPerpOrderTimeInForce::Gtc, "gtc"),
-            (HyperliquidPerpOrderTimeInForce::Ioc, "ioc"),
-            (HyperliquidPerpOrderTimeInForce::Alo, "alo"),
-        ] {
-            // Rule:
-            // - 空仓账户提交 buy limit 时，应创建 open 订单并冻结整单所需 Cross 保证金。
-            //
-            // Given:
-            // - 账户当前是 flat position。
-            // - 执行方式是 buy limit。
-            // - tif 在 gtc / ioc / alo 三种 Hyperliquid 成功路径内切换。
-            //
-            // When:
-            // - 调用 `compute_changes()`，再投影 events。
-            //
-            // Then:
-            // - 先产出 order create event，再产出 balance update event。
-            // - output 中保留 order_after 和单条 balance after。
-
-            // arrange
-            let cmd = PlaceHyperliquidPerpOrderCmd {
-                execution: PlaceHyperliquidPerpOrderExecution::Limit { price: 101, time_in_force },
-                ..limit_cmd()
-            };
-            assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
-
-            // act
-            let changes = use_case().compute_changes(&cmd, state()).unwrap();
-            let events = changes.to_replayable_events().unwrap();
-
-            // assert
-            assert_order_snapshot(
-                &changes.created_order,
-                HyperliquidPerpOrderSide::Buy,
-                HyperliquidPerpOrderExecution::Limit { price: 101 },
-                time_in_force,
-                3,
-                false,
-            );
-            assert_eq!(changes.updated_margin_balances.len(), 1);
-            assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-            assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
-            assert_eq!(events.len(), 2);
-            assert_order_created_event(&events[0], "buy", "limit", expected_tif, 101, false);
-            assert_balance_updated_event(&events[1], 9_939, 561);
-        }
-    }
-
-    #[test]
-    fn flat_account_sells_limit_order_and_freezes_margin() {
-        // Rule:
-        // - 空仓账户提交 sell limit 时，也按整单名义价值冻结 Cross 保证金。
-        //
-        // Given:
-        // - 账户当前是 flat position。
-        // - 命令是 sell limit。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 先创建 sell open order，再生成 balance update。
-
-        // arrange
-        let cmd = sell_limit_cmd();
-        assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, state()).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-        );
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
-        assert_eq!(events.len(), 2);
-        assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
-        assert_balance_updated_event(&events[1], 9_939, 561);
-    }
-
-    #[test]
-    fn flat_account_buys_market_order_and_stores_aggressive_price_as_ioc() {
-        // Rule:
-        // - 空仓账户提交 market buy 意图时，订单快照应固化为 market + ioc，并按 aggressive price 冻结保证金。
-        //
-        // Given:
-        // - 账户当前是 flat position。
-        // - 命令是 market buy，aggressive price 为 111。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 订单事件记录 execution=market、tif=ioc、price=111。
-        // - 余额事件反映按 111 计算的冻结金额。
-
-        // arrange
-        let cmd = market_cmd();
-        assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, state()).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Buy,
-            HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
-            HyperliquidPerpOrderTimeInForce::Ioc,
-            3,
-            false,
-        );
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_933, 567, 5);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
-        assert_eq!(events.len(), 2);
-        assert_order_created_event(&events[0], "buy", "market", "ioc", 111, false);
-        assert_balance_updated_event(&events[1], 9_933, 567);
-    }
-
-    #[test]
-    fn flat_account_sells_market_order_and_stores_aggressive_price_as_ioc() {
-        // Rule:
-        // - 空仓账户提交 market sell 意图时，也应固化为 market + ioc，并按 aggressive price 冻结保证金。
-        //
-        // Given:
-        // - 账户当前是 flat position。
-        // - 命令是 market sell，aggressive price 为 111。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 订单事件记录 sell / market / ioc。
-        // - 余额事件反映按 111 计算的冻结金额。
-
-        // arrange
-        let cmd = sell_market_cmd();
-        assert_eq!(use_case().validate_against_state(&cmd, &state()), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, state()).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
-            HyperliquidPerpOrderTimeInForce::Ioc,
-            3,
-            false,
-        );
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_933, 567, 5);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].before, 10_000, 500, 4);
-        assert_eq!(events.len(), 2);
-        assert_order_created_event(&events[0], "sell", "market", "ioc", 111, false);
-        assert_balance_updated_event(&events[1], 9_933, 567);
-    }
-
-    #[test]
-    fn long_position_buys_and_increases_exposure_with_reserved_cross_margin() {
-        // Rule:
-        // - 同向加仓仍按整单新下单数量冻结新增保证金。
-        //
-        // Given:
-        // - 当前已有 long position。
-        // - 命令继续 buy，同向增加敞口。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 仍然创建订单并冻结整单保证金。
-
-        // arrange
-        let cmd = limit_cmd();
-        let long_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-            ..state()
-        };
-        assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Buy,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-        );
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-        assert_eq!(changes.updated_margin_balances[0].before.frozen, 500);
-        assert_eq!(events.len(), 2);
-        assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, false);
-        assert_balance_updated_event(&events[1], 9_939, 561);
-    }
-
-    #[test]
-    fn short_position_sells_and_increases_exposure_with_reserved_cross_margin() {
-        // Rule:
-        // - 同向加空仓时也按整单新下单数量冻结新增保证金。
-        //
-        // Given:
-        // - 当前已有 short position。
-        // - 命令继续 sell，同向增加敞口。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 仍然创建订单并冻结整单保证金。
-
-        // arrange
-        let cmd = sell_limit_cmd();
-        let short_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-            ..state()
-        };
-        assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-        );
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-        assert_eq!(changes.updated_margin_balances[0].before.available, 10_000);
-        assert_eq!(events.len(), 2);
-        assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
-        assert_balance_updated_event(&events[1], 9_939, 561);
-    }
-
-    #[test]
-    fn long_position_places_sell_reduce_only_order_without_freezing_margin() {
-        // Rule:
-        // - long 仓位上的 sell reduce_only 只允许减仓，不应新增冻结保证金。
-        //
-        // Given:
-        // - 当前已有 long position。
-        // - 命令是 sell reduce_only。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 只产生一条 order create event。
-        // - balances_after 为空。
-
-        // arrange
-        let mut cmd = sell_limit_cmd();
-        cmd.reduce_only = true;
-        let long_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-            ..state()
-        };
-        assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            true,
-        );
-        assert!(changes.updated_margin_balances.is_empty());
-        assert_eq!(events.len(), 1);
-        assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, true);
-    }
-
-    #[test]
-    fn short_position_places_buy_reduce_only_order_without_freezing_margin() {
-        // Rule:
-        // - short 仓位上的 buy reduce_only 只允许减仓，不应新增冻结保证金。
-        //
-        // Given:
-        // - 当前已有 short position。
-        // - 命令是 buy reduce_only。
-        //
-        // When:
-        // - 调用 `compute_changes()`，再投影 events。
-        //
-        // Then:
-        // - 只产生一条 order create event。
-        // - balances_after 为空。
-
-        // arrange
-        let mut cmd = limit_cmd();
-        cmd.reduce_only = true;
-        let short_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-            ..state()
-        };
-        assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
-
-        // act
-        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        // assert
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Buy,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            true,
-        );
-        assert!(changes.updated_margin_balances.is_empty());
-        assert_eq!(events.len(), 1);
-        assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, true);
-    }
-
-    #[test]
-    fn long_position_places_opposite_non_reduce_only_sell_order_that_only_reduces_and_does_not_reserve_new_margin()
-     {
-        let cmd = sell_limit_cmd();
-        let long_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-            ..state()
-        };
-
-        assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
-
-        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-        );
-        assert!(changes.updated_margin_balances.is_empty());
-        assert_eq!(events.len(), 1);
-        assert_order_created_event(&events[0], "sell", "limit", "gtc", 101, false);
-    }
-
-    #[test]
-    fn long_position_places_opposite_non_reduce_only_sell_order_and_only_reserves_margin_for_net_new_short_exposure()
-     {
-        let mut cmd = sell_limit_cmd();
-        cmd.size = 8;
-        let long_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-            ..state()
-        };
-
-        assert_eq!(use_case().validate_against_state(&cmd, &long_state), Ok(()));
-
-        let changes = use_case().compute_changes(&cmd, long_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        assert_eq!(changes.created_order.qty, 8);
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-        assert_eq!(changes.updated_margin_balances[0].before.available, 10_000);
-        assert_eq!(events.len(), 2);
-        assert_eq!(event_field_u64(&events[0], "qty"), Some(8));
-        assert_balance_updated_event(&events[1], 9_939, 561);
-    }
-
-    #[test]
-    fn short_position_places_opposite_non_reduce_only_buy_order_that_only_reduces_and_does_not_reserve_new_margin()
-     {
-        let cmd = limit_cmd();
-        let short_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-            ..state()
-        };
-
-        assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
-
-        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        assert_order_snapshot(
-            &changes.created_order,
-            HyperliquidPerpOrderSide::Buy,
-            HyperliquidPerpOrderExecution::Limit { price: 101 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-        );
-        assert!(changes.updated_margin_balances.is_empty());
-        assert_eq!(events.len(), 1);
-        assert_order_created_event(&events[0], "buy", "limit", "gtc", 101, false);
-    }
-
-    #[test]
-    fn short_position_places_opposite_non_reduce_only_buy_order_and_only_reserves_margin_for_net_new_long_exposure()
-     {
-        let mut cmd = limit_cmd();
-        cmd.size = 8;
-        let short_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-            ..state()
-        };
-
-        assert_eq!(use_case().validate_against_state(&cmd, &short_state), Ok(()));
-
-        let changes = use_case().compute_changes(&cmd, short_state).unwrap();
-        let events = changes.to_replayable_events().unwrap();
-
-        assert_eq!(changes.created_order.qty, 8);
-        assert_eq!(changes.updated_margin_balances.len(), 1);
-        assert_balance_snapshot(&changes.updated_margin_balances[0].after, 9_939, 561, 5);
-        assert_eq!(changes.updated_margin_balances[0].before.frozen, 500);
-        assert_eq!(events.len(), 2);
-        assert_eq!(event_field_u64(&events[0], "qty"), Some(8));
-        assert_balance_updated_event(&events[1], 9_939, 561);
     }
 
     #[test]

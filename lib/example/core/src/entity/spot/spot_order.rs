@@ -1,4 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use super::spot_conditional_order::{
@@ -20,7 +21,7 @@ pub(crate) mod spot_order_scenarios;
 const SPOT_ORDER_ENTITY_TYPE: u8 = 3;
 
 /// 现货订单方向。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderSide {
     /// 买入订单。
     Buy,
@@ -38,7 +39,7 @@ impl SpotOrderSide {
 }
 
 /// 现货订单执行方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderExecution {
     /// 市价意图。Hyperliquid adapter 可映射为 IOC + 激进限价。
     Market {
@@ -80,7 +81,7 @@ impl SpotOrderExecution {
 }
 
 /// 现货限价订单有效方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderTimeInForce {
     /// 一直有效，直到成交或取消。
     Gtc,
@@ -101,7 +102,7 @@ impl SpotOrderTimeInForce {
 }
 
 /// 已进入执行流程的现货订单生命周期状态。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderStatus {
     /// 订单已进入执行流程，尚未成交。
     Open,
@@ -135,7 +136,7 @@ impl SpotOrderStatus {
 ///
 /// 该枚举对齐 `orderStatus` 返回的细分状态；其中部分状态只会出现在 perp，
 /// 但保留枚举值可以让 adapter 无损回放交易所状态。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderStatusReason {
     /// 完全成交后终止。
     Filled,
@@ -239,7 +240,7 @@ impl SpotOrderStatusReason {
 /// 立即单创建后直接成为 `SpotOrder`；条件单只有触发后才转换为 `SpotOrder`。
 /// `qty`、`filled_qty`、`price`、`reserved_base`、`reserved_quote` 都使用 core
 /// fixed-point 整数；adapter 负责和 Hyperliquid 字符串数字互转。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrder {
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,

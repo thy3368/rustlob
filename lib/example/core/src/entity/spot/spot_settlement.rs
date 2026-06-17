@@ -1,4 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
+use serde::{Deserialize, Serialize};
 
 const SPOT_SETTLEMENT_ENTITY_TYPE: u8 = 6;
 
@@ -6,7 +7,7 @@ const SPOT_SETTLEMENT_ENTITY_TYPE: u8 = 6;
 ///
 /// `SpotSettlement` 表达 trade 已经完成 base/quote 资产交割，不包含手续费、
 /// 返佣或税费。构造器假定输入已经由清结算 use case 校验。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotSettlement {
     /// 本系统稳定清算记录 ID。
     pub settlement_id: String,

@@ -1,4 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod balance_scenarios;
@@ -8,7 +9,7 @@ const BALANCE_ENTITY_TYPE: u8 = 7;
 /// 某个账户在单一资产上的余额快照。
 ///
 /// 一个账户可以拥有多条 `Balance`：例如 BTC、USDT、USDC 各一条。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Balance {
     /// 账户 ID。
     pub account_id: String,
@@ -76,6 +77,17 @@ impl Balance {
     /// 返回直接扣减可用余额后的新可用余额。
     pub fn debit_available_after(&self, amount: u64) -> Option<u64> {
         self.available.checked_sub(amount)
+    }
+
+    /// 返回应用 signed 可用余额增量后的新可用余额。
+    pub fn available_after_signed_delta(&self, delta: i128) -> Option<u64> {
+        if delta >= 0 {
+            let amount = u64::try_from(delta).ok()?;
+            self.credit_available_after(amount)
+        } else {
+            let amount = delta.checked_neg().and_then(|value| u64::try_from(value).ok())?;
+            self.debit_available_after(amount)
+        }
     }
 
     /// 返回扣减冻结后的冻结余额。
@@ -177,5 +189,14 @@ mod tests {
             Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 4).release_after(50),
             Some((850, 150))
         );
+    }
+
+    #[test]
+    fn available_after_signed_delta_handles_credit_and_debit() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
+
+        assert_eq!(balance.available_after_signed_delta(200), Some(1_200));
+        assert_eq!(balance.available_after_signed_delta(-300), Some(700));
+        assert_eq!(balance.available_after_signed_delta(-2_000), None);
     }
 }

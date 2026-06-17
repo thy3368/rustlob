@@ -3,6 +3,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::place_order::{
@@ -17,7 +18,7 @@ use super::{
 use crate::entity::{Balance, SpotOrder, SpotOrderTimeInForce};
 
 /// 串联立即下单、撮合、清结算三段现货执行流程的业务命令。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecuteImmediateSpotOrderPipelineCmd {
     /// 第 1 段立即下单命令。
     pub place: PlaceImmediateOrderCmd,

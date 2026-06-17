@@ -1,4 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
+use serde::{Deserialize, Serialize};
 
 use crate::SpotOrderSide;
 
@@ -8,7 +9,7 @@ const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 ///
 /// `SpotTrade` 只记录订单撮合结果，不表达账户清算、手续费或资产划转。
 /// 构造器假定输入已经由撮合 use case 校验。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotTrade {
     /// 本系统稳定成交 ID。
     pub trade_id: String,

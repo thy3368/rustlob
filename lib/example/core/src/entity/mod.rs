@@ -9,6 +9,10 @@ pub mod account;
 pub use account::account::Account;
 pub use account::balance::Balance;
 pub use market_rules::MarketRules;
+pub use perp::hyperliquid_perp_funding_rate::{
+    HyperliquidPerpBookLevel, HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
+    compute_hourly_funding_rate_e8, compute_impact_ask_price, compute_impact_bid_price,
+};
 pub use perp::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
 pub use perp::hyperliquid_perp_liquidation::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
