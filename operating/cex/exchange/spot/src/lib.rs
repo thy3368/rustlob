@@ -1,7 +1,6 @@
 #![feature(portable_simd)]
 
 pub mod proc;
-pub mod use_case;
 
 pub mod entity;
 
