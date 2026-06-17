@@ -11,6 +11,9 @@ pub use execution::{
     PlaceHyperliquidPerpOrderUseCase, SettleHyperliquidPerpTradeChanges,
     SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
     SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase,
+    UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
+    UpdateHyperliquidPerpLeverageError, UpdateHyperliquidPerpLeverageState,
+    UpdateHyperliquidPerpLeverageUseCase,
 };
 pub use funding::{
     SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingCmd,

@@ -14,6 +14,7 @@ pub use perp::hyperliquid_perp_funding_rate::{
     compute_hourly_funding_rate_e8, compute_impact_ask_price, compute_impact_bid_price,
 };
 pub use perp::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
+pub use perp::hyperliquid_perp_leverage_setting::HyperliquidPerpLeverageSetting;
 pub use perp::hyperliquid_perp_liquidation::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason,
