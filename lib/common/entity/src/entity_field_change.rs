@@ -2,10 +2,13 @@ use std::borrow::Cow;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
 use crate::{EVENT_SEQUENCE, EntityError};
 
 /// Logical entity change kind used before encoding into compact replay tags.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntityChangeType {
     Created,
     Updated,
@@ -24,11 +27,13 @@ impl EntityChangeType {
 }
 
 /// Compact field change carried by an [`EntityReplayableEvent`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReplayFieldChange {
     pub field_name: [u8; 32],
+    #[serde(with = "BigArray")]
     pub old_value: [u8; 64],
     pub old_value_len: u16,
+    #[serde(with = "BigArray")]
     pub new_value: [u8; 64],
     pub new_value_len: u16,
     pub field_type: u8,
@@ -94,7 +99,7 @@ impl ReplayFieldChange {
 }
 
 /// Entity event optimized for deterministic replay and optimistic locking.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
     pub timestamp: u64,
     pub sequence: u64,

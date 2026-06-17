@@ -64,6 +64,12 @@ impl HttpInboundError {
                 let (status_code, code) = map_business(&error);
                 Self::new(status_code, code, error.to_string())
             }
+            CommandUseCaseExecutionError::EventProject(error) => Self {
+                status_code: 500,
+                code: "event_project_failed",
+                message: error.to_string(),
+                source: Some(AnyError::new(error)),
+            },
             CommandUseCaseExecutionError::Outbound { phase, source } => {
                 let code = outbound_phase_code(phase);
                 Self {
@@ -172,6 +178,13 @@ impl CliInboundError {
                 exit_code: 3,
                 source: Some(AnyError::new(error)),
             },
+            CommandUseCaseExecutionError::EventProject(error) => Self {
+                category: CliInboundErrorCategory::Runtime,
+                code: "event_project_failed",
+                message: error.to_string(),
+                exit_code: 1,
+                source: Some(AnyError::new(error)),
+            },
             CommandUseCaseExecutionError::Outbound { phase, source } => Self {
                 category: CliInboundErrorCategory::Outbound,
                 code: outbound_phase_code(phase),
@@ -224,7 +237,7 @@ pub fn outbound_phase_code(phase: CommandUseCaseOutboundPhase) -> &'static str {
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::{
-        CommandUseCaseExecutionError, CommandUseCaseOutboundPhase,
+        CommandUseCaseExecutionError, CommandUseCaseOutboundPhase, EventProjectError,
     };
 
     use super::*;
@@ -324,6 +337,18 @@ mod tests {
     }
 
     #[test]
+    fn http_inbound_error_maps_event_project_error() {
+        let error =
+            HttpInboundError::from_execution_error_with::<StubBusinessError, StubOutboundError, _>(
+                CommandUseCaseExecutionError::event_project(stub_event_project_error()),
+                stub_business_mapping,
+            );
+
+        assert_eq!(error.status_code(), 500);
+        assert!(error.to_string().starts_with("event_project_failed: "));
+    }
+
+    #[test]
     fn cli_inbound_error_maps_parse_business_outbound_and_runtime_errors() {
         let parse = CliInboundError::from_parse_error(StubParseError::InvalidFlag);
         let business =
@@ -353,6 +378,22 @@ mod tests {
             outbound.to_string(),
             "outbound outbound_publish_failed: test store unavailable"
         );
+    }
+
+    #[test]
+    fn cli_inbound_error_maps_event_project_error() {
+        let error =
+            CliInboundError::from_execution_error_with::<StubBusinessError, StubOutboundError, _>(
+                CommandUseCaseExecutionError::event_project(stub_event_project_error()),
+                stub_business_code,
+            );
+
+        assert_eq!(error.exit_code(), 1);
+        assert_eq!(error.to_string(), "runtime event_project_failed: no replayable events");
+    }
+
+    fn stub_event_project_error() -> EventProjectError {
+        "no replayable events".into()
     }
 
     #[test]
