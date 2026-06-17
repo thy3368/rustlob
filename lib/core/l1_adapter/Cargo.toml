@@ -11,7 +11,6 @@ cmd_handler = { path = "../../common/cmd_handler" }
 db_repo = { path = "../../common/db_repo" }
 l1_core = { path = "../l1" }
 md5 = "0.8"
-mdbx = { path = "../../common/mdbx" }
 minstant = "0.1"
 revm = "19"
 sha3 = "0.10"

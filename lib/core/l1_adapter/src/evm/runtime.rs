@@ -4,7 +4,7 @@ use l1_core::{
     Receipt, StorageDelta, VmExecutionInput, VmExecutionOutput, VmKind, VmRuntime, VmRuntimeError,
 };
 
-use crate::{RevmExecutor, contracts};
+use super::{RevmExecutor, contracts};
 
 pub struct EvmRuntimeAdapter;
 
