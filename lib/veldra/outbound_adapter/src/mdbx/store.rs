@@ -49,6 +49,7 @@ impl VeldraMdbxBlockStore {
         body: &BlockExecutionBody,
         changes: &[BlockEntityChange],
     ) -> Result<(), VeldraMdbxStorageError> {
+        // 先保证 header 与 execution body 描述的是同一个 block，避免写入后出现主记录与明细不一致。
         if header.block_height != body.block_height || header.block_hash != body.block_hash {
             return Err(VeldraMdbxStorageError::HeaderBodyMismatch {
                 header_height: header.block_height,
@@ -58,10 +59,12 @@ impl VeldraMdbxBlockStore {
             });
         }
 
+        // 在单个写事务里完成整笔落库，后续任一步失败都应整体回滚。
         let txn = self
             .db
             .begin_rw_txn()
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
+        // 打开本次 append 会写到的全部表：header/hash 索引、commands/events、以及当前快照投影。
         let block_headers = txn
             .open_table(Some(TABLE_BLOCK_HEADERS))
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
@@ -82,6 +85,7 @@ impl VeldraMdbxBlockStore {
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
 
         let height_key = encode_u64_be(header.block_height);
+        // 先检查高度主键是否已存在，防止覆盖历史 block。
         if txn
             .get::<Vec<u8>>(&block_headers, &height_key)
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?
@@ -90,6 +94,7 @@ impl VeldraMdbxBlockStore {
             return Err(VeldraMdbxStorageError::DuplicateBlockHeight(header.block_height));
         }
 
+        // 再检查 hash 反向索引，保证不同高度也不能复用同一个 block hash。
         if txn
             .get::<Vec<u8>>(&block_hash_to_height, header.block_hash.as_bytes())
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?
@@ -98,6 +103,7 @@ impl VeldraMdbxBlockStore {
             return Err(VeldraMdbxStorageError::DuplicateBlockHash(header.block_hash.clone()));
         }
 
+        // 先写 block header 本体，再写 hash -> height 的查找索引，支撑按高度和按 hash 两种读取路径。
         let header_record = BlockHeaderRecord::from(header);
         txn.put(&block_headers, &height_key, &encode_record(&header_record)?, WriteFlags::empty())
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
@@ -109,6 +115,7 @@ impl VeldraMdbxBlockStore {
         )
         .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
 
+        // 将 block 内命令按 (height, command_index) 顺序编码后落盘，保留回放顺序。
         for (command_index, command) in body.commands.iter().enumerate() {
             let record = StoredCommandEnvelope::from_command(
                 header.block_height,
@@ -120,6 +127,7 @@ impl VeldraMdbxBlockStore {
                 .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         }
 
+        // 将 replayable events 按 (height, event_sequence) 落盘，供事件重放和核对使用。
         for event in &body.replayable_events {
             let record = StoredReplayableEvent::from_event(header.block_height, event)?;
             let key = encode_block_sequence_key(header.block_height, event.sequence);
@@ -127,6 +135,7 @@ impl VeldraMdbxBlockStore {
                 .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         }
 
+        // 把本 block 产生的实体变化投影到“当前快照”表里，形成最新订单/余额视图。
         for change in changes {
             match change {
                 BlockEntityChange::SpotOrderCreated(order) => {
@@ -140,6 +149,7 @@ impl VeldraMdbxBlockStore {
                     .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
                 }
                 BlockEntityChange::SpotOrderUpdated(order) => {
+                    // 更新订单前先校验 identity 不变，避免把不同订单错误投影到同一快照键。
                     if order.before.order_id != order.after.order_id {
                         return Err(VeldraMdbxStorageError::SpotOrderProjectionMismatch);
                     }
@@ -154,6 +164,7 @@ impl VeldraMdbxBlockStore {
                     .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
                 }
                 BlockEntityChange::BalanceUpdated(balance) => {
+                    // 更新余额前先校验账户+资产维度不变，避免把快照写到错误的账户资产键。
                     if balance.before.account_id != balance.after.account_id
                         || balance.before.asset_id != balance.after.asset_id
                     {
@@ -177,6 +188,7 @@ impl VeldraMdbxBlockStore {
             }
         }
 
+        // 所有明细和投影都成功后再一次性提交事务，保证 block 级原子性。
         txn.commit().map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         Ok(())
     }
