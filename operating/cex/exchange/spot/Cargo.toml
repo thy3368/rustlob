@@ -17,8 +17,6 @@ serde = ["base_types/serde", "dep:uuid"]
 lob_repo = { path = "../../../../lib/common/lob_repo" }
 rust_queue = { path = "../../../../lib/common/rust_queue" }
 
-cqrs = { path = "../../../../lib/common/cqrs" }
-
 base_types = { path = "../../../../lib/common/base_types", features = ["serde"] }
 
 # Diff tracking
