@@ -8,6 +8,8 @@ use crate::hyperliquid_ws::error::HyperliquidWsError;
 
 type ExtraFields = BTreeMap<String, JsonValue>;
 
+/// 客户端主动发给 Hyperliquid WebSocket 的四类方法。
+/// 这里直接对齐官方 wire 形状，不引入额外 command 抽象层。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum WsClientMessageWire {
@@ -490,6 +492,9 @@ pub enum WsPostResponseTypeWire {
     Action,
 }
 
+/// 所有服务端文本消息都先过这一个入口做外层判型。
+/// 设计上先识别 channel，再把 data 下沉到对应 payload，
+/// 未知 channel 不报 fatal，保留 raw 以便前向兼容。
 pub struct HyperliquidWsMessageParser;
 
 impl HyperliquidWsMessageParser {
@@ -505,6 +510,8 @@ impl HyperliquidWsMessageParser {
             ));
         };
 
+        // Hyperliquid 的服务端推送外层靠 `channel` 做总分流。
+        // 如果连这个关键字段都没有，就先落到 Unknown，让上层自己决定如何处理。
         let Some(channel) = object.get("channel").and_then(JsonValue::as_str) else {
             return Ok(WsServerMessageWire::Unknown { raw: value });
         };
@@ -601,6 +608,8 @@ fn from_data<T>(
 where
     T: for<'de> Deserialize<'de>,
 {
+    // 已知 channel 默认要求存在 `data`；真正的兼容策略放在 payload 自身的 extra 字段里，
+    // 而不是把缺少关键字段也默默吞掉。
     let value = object.get(field).cloned().ok_or_else(|| {
         HyperliquidWsError::Protocol(format!("channel payload is missing `{field}`"))
     })?;
@@ -610,6 +619,8 @@ where
 fn parse_post_response(
     object: &serde_json::Map<String, JsonValue>,
 ) -> Result<WsPostResponseWire, HyperliquidWsError> {
+    // `post` 是少数需要二次解包的服务端消息：
+    // 外层是 channel=post，内层 `data` 再带 id/response。
     let data = object.get("data").and_then(JsonValue::as_object).ok_or_else(|| {
         HyperliquidWsError::Protocol("channel `post` must contain object `data`".to_string())
     })?;
@@ -623,6 +634,8 @@ fn parse_post_response(
 }
 
 fn classify_post_response(response: JsonValue) -> WsPostResponsePayloadWire {
+    // `post` 的成功响应目前按 `type=info|action` 归类；
+    // 错误响应优先识别 `error`，其余未知形状全部保留 raw，避免误判成功。
     let Some(object) = response.as_object() else {
         return WsPostResponsePayloadWire::Unknown { raw: response };
     };

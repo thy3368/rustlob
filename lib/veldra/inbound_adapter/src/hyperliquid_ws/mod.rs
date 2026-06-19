@@ -9,7 +9,7 @@ pub use wire::{
     CandleIntervalWire, CandleWire, ClearinghouseStateWire, HyperliquidWsMessageParser,
     NotificationWire, OpenOrdersWire, PingWire, SubscriptionWire, WebData2Wire,
     WsActiveAssetCtxWire, WsActiveAssetDataWire, WsBasicOrder, WsBboWire, WsBookWire,
-    WsChannelMessageWire, WsClientMessageWire, WsLevelWire, WsPostRequestTypeWire,
+    WsChannelMessageWire, WsClientMessageWire, WsFillWire, WsLevelWire, WsPostRequestTypeWire,
     WsPostRequestWire, WsPostResponseTypeWire, WsPostResponseWire, WsServerMessageWire,
     WsSpotStateWire, WsTradeWire, WsTwapHistoryWire, WsTwapSliceFillWire, WsUserEventWire,
     WsUserFillsWire, WsUserFundingWire, WsUserFundingsWire, WsUserNonFundingLedgerUpdateWire,
