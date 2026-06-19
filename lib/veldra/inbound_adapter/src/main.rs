@@ -1,10 +1,7 @@
-mod exchange;
-
 use std::io;
 
 use actix_web::{App, HttpServer};
-
-use crate::exchange::http::build_exchange_scope;
+use inbound_adapter::exchange::http::build_exchange_scope;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {

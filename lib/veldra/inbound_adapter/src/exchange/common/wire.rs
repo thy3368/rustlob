@@ -1,13 +1,16 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommonExchangeFields {
     pub nonce: u64,
     pub signature: SignatureWire,
-    #[serde(rename = "vaultAddress")]
+    #[serde(rename = "vaultAddress", skip_serializing_if = "Option::is_none")]
     pub vault_address: Option<String>,
-    #[serde(rename = "expiresAfter")]
+    #[serde(rename = "expiresAfter", skip_serializing_if = "Option::is_none")]
     pub expires_after: Option<u64>,
 }
 
@@ -17,6 +20,18 @@ pub struct SignatureWire {
     pub r: String,
     pub s: String,
     pub v: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct JsonObjectWire(pub BTreeMap<String, JsonValue>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExchangeRequestEnvelopeWire<TAction> {
+    pub action: TAction,
+    #[serde(flatten)]
+    pub common: CommonExchangeFields,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
