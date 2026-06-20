@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
@@ -50,15 +53,29 @@ struct Withdraw3ActionWire {
     destination: String,
 }
 
+struct Withdraw3Action;
+
+impl ExchangeActionHandler for Withdraw3Action {
+    type Request = Withdraw3RequestWire;
+    type Reply = reply::Withdraw3ResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        _request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::Withdraw3ResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |_, deps| Box::pin(execute(deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<Withdraw3RequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<Withdraw3Action>(body, deps).await
 }
 
 fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
@@ -109,13 +126,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<Withdraw3RequestWire>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.amount, "1");
     }
 
     #[test]
     fn rejects_empty_amount() {
-        let request = parse(
+        let request = parse_json_request::<Withdraw3RequestWire>(
             br#"{
                 "action": {
                     "type": "withdraw3",
@@ -143,7 +161,7 @@ mod tests {
 
     #[test]
     fn allows_vault_address_like_sdk_post_payload() {
-        let request = parse(
+        let request = parse_json_request::<Withdraw3RequestWire>(
             br#"{
                 "action": {
                     "type": "withdraw3",

@@ -6,8 +6,11 @@ use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
 };
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
@@ -102,15 +105,29 @@ struct TriggerWire {
     tpsl: String,
 }
 
+struct BatchModifyAction;
+
+impl ExchangeActionHandler for BatchModifyAction {
+    type Request = RequestWire;
+    type Reply = reply::BatchModifyResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(request, deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |request, deps| Box::pin(execute(request, deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<RequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<BatchModifyAction>(body, deps).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -211,13 +228,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.modifies.len(), 2);
     }
 
     #[test]
     fn rejects_empty_modifies() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": { "type": "batchModify", "modifies": [] },
                 "nonce": 1710000000000,
@@ -239,7 +257,7 @@ mod tests {
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
         let response = execute(
-            parse(valid_request_json()).expect("request parses"),
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request parses"),
             &ExchangeActionDeps::default(),
         )
         .await

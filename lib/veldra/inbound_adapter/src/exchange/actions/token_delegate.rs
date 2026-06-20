@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
@@ -50,15 +53,29 @@ struct TokenDelegateActionWire {
     nonce: u64,
 }
 
+struct TokenDelegateAction;
+
+impl ExchangeActionHandler for TokenDelegateAction {
+    type Request = TokenDelegateRequestWire;
+    type Reply = reply::TokenDelegateResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        _request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |_, deps| Box::pin(execute(deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<TokenDelegateRequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<TokenDelegateAction>(body, deps).await
 }
 
 fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError> {
@@ -106,13 +123,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<TokenDelegateRequestWire>(valid_request_json())
+            .expect("request should parse");
         assert!(!request.action.is_undelegate);
     }
 
     #[test]
     fn rejects_nonce_mismatch() {
-        let request = parse(
+        let request = parse_json_request::<TokenDelegateRequestWire>(
             br#"{
                 "action": {
                     "type": "tokenDelegate",
@@ -141,7 +159,7 @@ mod tests {
 
     #[test]
     fn allows_vault_address_like_sdk_post_payload() {
-        let request = parse(
+        let request = parse_json_request::<TokenDelegateRequestWire>(
             br#"{
                 "action": {
                     "type": "tokenDelegate",

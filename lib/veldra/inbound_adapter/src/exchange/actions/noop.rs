@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeEmptyResponseWire, ExchangeRequestEnvelopeWire,
@@ -28,15 +31,29 @@ struct ActionWire {
     type_: String,
 }
 
+struct NoopAction;
+
+impl ExchangeActionHandler for NoopAction {
+    type Request = RequestWire;
+    type Reply = reply::NoopResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        _request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::NoopResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |_, deps| Box::pin(execute(deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<RequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<NoopAction>(body, deps).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -68,7 +85,8 @@ mod tests {
 
     #[test]
     fn parses_noop_request() {
-        let request = parse(valid_noop_request_json()).expect("noop request should parse");
+        let request = parse_json_request::<RequestWire>(valid_noop_request_json())
+            .expect("noop request should parse");
         assert_eq!(request.action.type_, "noop");
     }
 
@@ -84,7 +102,8 @@ mod tests {
 
     #[test]
     fn validates_noop_request() {
-        let request = parse(valid_noop_request_json()).expect("noop request should parse");
+        let request = parse_json_request::<RequestWire>(valid_noop_request_json())
+            .expect("noop request should parse");
         validate(&request).expect("noop validation should pass");
     }
 

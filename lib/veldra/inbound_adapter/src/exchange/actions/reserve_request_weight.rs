@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -33,15 +36,29 @@ struct ActionWire {
     weight: u64,
 }
 
+struct ReserveRequestWeightAction;
+
+impl ExchangeActionHandler for ReserveRequestWeightAction {
+    type Request = RequestWire;
+    type Reply = reply::ReserveRequestWeightResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        _request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::ReserveRequestWeightResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |_, deps| Box::pin(execute(deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<RequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<ReserveRequestWeightAction>(body, deps).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -84,13 +101,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.weight, 1);
     }
 
     #[test]
     fn rejects_zero_weight() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": { "type": "reserveRequestWeight", "weight": 0 },
                 "nonce": 1710000000000,

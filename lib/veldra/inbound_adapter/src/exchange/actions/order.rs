@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::{
     validate_cloid, validate_common_fields, validate_hex_address,
 };
@@ -155,15 +158,29 @@ struct BuilderWire {
     f: u64,
 }
 
+struct OrderAction;
+
+impl ExchangeActionHandler for OrderAction {
+    type Request = RequestWire;
+    type Reply = reply::OrderResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(request, deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |request, deps| Box::pin(execute(request, deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<RequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<OrderAction>(body, deps).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -279,7 +296,8 @@ mod tests {
 
     #[test]
     fn parses_minimal_order_request() {
-        let request = parse(valid_order_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire>(valid_order_request_json())
+            .expect("request should parse");
 
         assert_eq!(request.action.type_, "order");
         assert_eq!(request.action.orders.len(), 1);
@@ -290,7 +308,7 @@ mod tests {
 
     #[test]
     fn parses_order_request_with_optional_fields() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": {
                     "type": "order",
@@ -342,7 +360,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_orders() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": {
                     "type": "order",
@@ -364,7 +382,9 @@ mod tests {
 
     #[test]
     fn rejects_invalid_grouping() {
-        let request = parse(&valid_request_with_grouping_json("unknown")).expect("request parses");
+        let request =
+            parse_json_request::<RequestWire>(&valid_request_with_grouping_json("unknown"))
+                .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
         assert!(matches!(
             error,
@@ -374,7 +394,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_signature_shape() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": {
                     "type": "order",
@@ -406,7 +426,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_order_type_shape() {
-        let request = parse(
+        let request = parse_json_request::<RequestWire>(
             br#"{
                 "action": {
                     "type": "order",
@@ -445,7 +465,8 @@ mod tests {
 
     #[actix_web::test]
     async fn success_json_snapshot_is_stable() {
-        let request = parse(valid_order_request_json()).expect("request parses");
+        let request = parse_json_request::<RequestWire>(valid_order_request_json())
+            .expect("request parses");
         let response =
             execute(request, &ExchangeActionDeps::default()).await.expect("response builds");
 
@@ -525,7 +546,8 @@ mod tests {
 
     #[test]
     fn request_parse_snapshot_is_stable() {
-        let request = parse(valid_order_request_json()).expect("request parses");
+        let request = parse_json_request::<RequestWire>(valid_order_request_json())
+            .expect("request parses");
         let actual = serde_json::to_string_pretty(&request).expect("request serializes");
         let expected = r#"{
   "action": {

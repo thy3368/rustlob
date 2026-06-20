@@ -2,8 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
 use crate::exchange::actions::ExchangeActionDeps;
+#[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::run_action;
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -40,15 +43,29 @@ struct VaultTransferActionWire {
     usd: Number,
 }
 
+struct VaultTransferAction;
+
+impl ExchangeActionHandler for VaultTransferAction {
+    type Request = VaultTransferRequestWire;
+    type Reply = reply::VaultTransferResponseWire;
+
+    fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError> {
+        validate(request)
+    }
+
+    fn execute<'a>(
+        _request: Self::Request,
+        deps: &'a ExchangeActionDeps,
+    ) -> ExchangeActionFuture<'a, Self::Reply> {
+        Box::pin(execute(deps))
+    }
+}
+
 pub async fn handle(
     body: &[u8],
     deps: &ExchangeActionDeps,
 ) -> Result<reply::VaultTransferResponseWire, ExchangeHttpError> {
-    run_action(body, deps, parse, validate, |_, deps| Box::pin(execute(deps))).await
-}
-
-fn parse(body: &[u8]) -> Result<VaultTransferRequestWire, ExchangeHttpError> {
-    parse_json_request(body)
+    run_exchange_action::<VaultTransferAction>(body, deps).await
 }
 
 fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError> {
@@ -95,13 +112,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<VaultTransferRequestWire>(valid_request_json())
+            .expect("request should parse");
         assert!(request.action.is_deposit);
     }
 
     #[test]
     fn rejects_invalid_action_vault_address() {
-        let request = parse(
+        let request = parse_json_request::<VaultTransferRequestWire>(
             br#"{
                 "action": {
                     "type": "vaultTransfer",
