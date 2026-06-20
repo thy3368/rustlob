@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -19,7 +19,7 @@ pub enum ValidatorL1StreamContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as ValidatorL1StreamResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as ValidatorL1StreamResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,7 +83,7 @@ async fn execute(
 ) -> Result<reply::ValidatorL1StreamResponseWire, ExchangeHttpError> {
     Ok(reply::ValidatorL1StreamResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

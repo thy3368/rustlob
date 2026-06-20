@@ -21,23 +21,13 @@ pub enum CancelContractError {
 pub mod reply {
     use serde::Serialize;
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct CancelResponseWire {
-        pub status: &'static str,
-        pub response: CancelResponseEnvelopeWire,
-    }
+    use crate::exchange::common::wire::{
+        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusesDataWire,
+    };
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct CancelResponseEnvelopeWire {
-        #[serde(rename = "type")]
-        pub type_: &'static str,
-        pub data: CancelResponseDataWire,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct CancelResponseDataWire {
-        pub statuses: Vec<CancelStatusWire>,
-    }
+    pub type CancelResponseWire = ExchangeResponseWire<CancelResponseDataWire>;
+    pub type CancelResponseEnvelopeWire = ExchangeResponseEnvelopeWire<CancelResponseDataWire>;
+    pub type CancelResponseDataWire = ExchangeStatusesDataWire<CancelStatusWire>;
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(untagged)]

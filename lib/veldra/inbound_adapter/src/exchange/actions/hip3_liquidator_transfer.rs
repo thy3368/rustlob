@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +17,7 @@ pub enum Hip3LiquidatorTransferContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as Hip3LiquidatorTransferResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as Hip3LiquidatorTransferResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ async fn execute(
 ) -> Result<reply::Hip3LiquidatorTransferResponseWire, ExchangeHttpError> {
     Ok(reply::Hip3LiquidatorTransferResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

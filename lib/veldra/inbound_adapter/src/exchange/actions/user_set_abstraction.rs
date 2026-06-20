@@ -7,7 +7,7 @@ use crate::exchange::common::validate::{
     validate_signature_chain_id,
 };
 use crate::exchange::common::wire::{
-    CommonExchangeFields, DefaultExchangeResponseEnvelopeWire, DefaultExchangeResponseWire,
+    CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire, ExchangeEmptyResponseWire,
 };
 use crate::exchange::error::ExchangeHttpError;
 
@@ -32,7 +32,7 @@ pub enum UserSetAbstractionContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as UserSetAbstractionResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as UserSetAbstractionResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,9 +108,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     _deps: &ExchangeActionDeps,
 ) -> Result<reply::UserSetAbstractionResponseWire, ExchangeHttpError> {
-    Ok(DefaultExchangeResponseWire {
+    Ok(ExchangeEmptyResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

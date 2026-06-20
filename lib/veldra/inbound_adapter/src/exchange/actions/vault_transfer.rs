@@ -4,7 +4,7 @@ use serde_json::Number;
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,7 +20,7 @@ pub enum VaultTransferContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as VaultTransferResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as VaultTransferResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,7 +88,7 @@ async fn execute(
 ) -> Result<reply::VaultTransferResponseWire, ExchangeHttpError> {
     Ok(reply::VaultTransferResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

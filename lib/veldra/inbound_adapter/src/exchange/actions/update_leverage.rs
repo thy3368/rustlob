@@ -4,7 +4,7 @@ use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
-    CommonExchangeFields, DefaultExchangeResponseEnvelopeWire, DefaultExchangeResponseWire,
+    CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire, ExchangeEmptyResponseWire,
 };
 use crate::exchange::error::ExchangeHttpError;
 
@@ -17,7 +17,7 @@ pub enum UpdateLeverageContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as UpdateLeverageResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as UpdateLeverageResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,9 +75,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     _deps: &ExchangeActionDeps,
 ) -> Result<reply::UpdateLeverageResponseWire, ExchangeHttpError> {
-    Ok(DefaultExchangeResponseWire {
+    Ok(ExchangeEmptyResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

@@ -52,13 +52,109 @@ pub struct ExchangeErrorResponseWire {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct DefaultExchangeResponseWire {
+pub struct ExchangeResponseWire<TData> {
     pub status: &'static str,
-    pub response: DefaultExchangeResponseEnvelopeWire,
+    pub response: ExchangeResponseEnvelopeWire<TData>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct DefaultExchangeResponseEnvelopeWire {
+pub struct ExchangeResponseEnvelopeWire<TData> {
     #[serde(rename = "type")]
     pub type_: &'static str,
+    pub data: TData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeStatusesDataWire<TStatus> {
+    pub statuses: Vec<TStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeStatusDataWire<TStatus> {
+    pub status: TStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeEmptyResponseWire {
+    pub status: &'static str,
+    pub response: ExchangeEmptyResponseEnvelopeWire,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeEmptyResponseEnvelopeWire {
+    #[serde(rename = "type")]
+    pub type_: &'static str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn statuses_template_serializes_to_expected_shape() {
+        let response = ExchangeResponseWire {
+            status: "ok",
+            response: ExchangeResponseEnvelopeWire {
+                type_: "order",
+                data: ExchangeStatusesDataWire { statuses: vec!["success"] },
+            },
+        };
+
+        let actual = serde_json::to_string_pretty(&response).expect("response serializes");
+        let expected = r#"{
+  "status": "ok",
+  "response": {
+    "type": "order",
+    "data": {
+      "statuses": [
+        "success"
+      ]
+    }
+  }
+}"#;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn status_template_serializes_to_expected_shape() {
+        let response = ExchangeResponseWire {
+            status: "ok",
+            response: ExchangeResponseEnvelopeWire {
+                type_: "twapCancel",
+                data: ExchangeStatusDataWire { status: "success" },
+            },
+        };
+
+        let actual = serde_json::to_string_pretty(&response).expect("response serializes");
+        let expected = r#"{
+  "status": "ok",
+  "response": {
+    "type": "twapCancel",
+    "data": {
+      "status": "success"
+    }
+  }
+}"#;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn empty_template_serializes_to_expected_shape() {
+        let response = ExchangeEmptyResponseWire {
+            status: "ok",
+            response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
+        };
+
+        let actual = serde_json::to_string_pretty(&response).expect("response serializes");
+        let expected = r#"{
+  "status": "ok",
+  "response": {
+    "type": "default"
+  }
+}"#;
+
+        assert_eq!(actual, expected);
+    }
 }

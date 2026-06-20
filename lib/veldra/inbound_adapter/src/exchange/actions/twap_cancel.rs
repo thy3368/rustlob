@@ -17,23 +17,14 @@ pub enum TwapCancelContractError {
 pub mod reply {
     use serde::Serialize;
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapCancelResponseWire {
-        pub status: &'static str,
-        pub response: TwapCancelResponseEnvelopeWire,
-    }
+    use crate::exchange::common::wire::{
+        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusDataWire,
+    };
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapCancelResponseEnvelopeWire {
-        #[serde(rename = "type")]
-        pub type_: &'static str,
-        pub data: TwapCancelResponseDataWire,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapCancelResponseDataWire {
-        pub status: TwapCancelStatusWire,
-    }
+    pub type TwapCancelResponseWire = ExchangeResponseWire<TwapCancelResponseDataWire>;
+    pub type TwapCancelResponseEnvelopeWire =
+        ExchangeResponseEnvelopeWire<TwapCancelResponseDataWire>;
+    pub type TwapCancelResponseDataWire = ExchangeStatusDataWire<TwapCancelStatusWire>;
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(untagged)]

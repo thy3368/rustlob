@@ -19,23 +19,14 @@ pub enum TwapOrderContractError {
 pub mod reply {
     use serde::Serialize;
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapOrderResponseWire {
-        pub status: &'static str,
-        pub response: TwapOrderResponseEnvelopeWire,
-    }
+    use crate::exchange::common::wire::{
+        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusDataWire,
+    };
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapOrderResponseEnvelopeWire {
-        #[serde(rename = "type")]
-        pub type_: &'static str,
-        pub data: TwapOrderResponseDataWire,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct TwapOrderResponseDataWire {
-        pub status: TwapOrderStatusWire,
-    }
+    pub type TwapOrderResponseWire = ExchangeResponseWire<TwapOrderResponseDataWire>;
+    pub type TwapOrderResponseEnvelopeWire =
+        ExchangeResponseEnvelopeWire<TwapOrderResponseDataWire>;
+    pub type TwapOrderResponseDataWire = ExchangeStatusDataWire<TwapOrderStatusWire>;
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(untagged)]

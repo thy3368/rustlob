@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -15,7 +15,7 @@ pub enum ScheduleCancelContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as ScheduleCancelResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as ScheduleCancelResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,7 +76,7 @@ async fn execute(
     // 官方 Python SDK 的 basic_schedule_cancel.py 仅原样打印结果，没有约束 response shape。
     Ok(reply::ScheduleCancelResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

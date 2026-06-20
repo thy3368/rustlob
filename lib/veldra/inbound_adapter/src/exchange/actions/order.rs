@@ -8,6 +8,9 @@ use crate::exchange::common::validate::{
 use crate::exchange::common::wire::CommonExchangeFields;
 use crate::exchange::error::ExchangeHttpError;
 
+/// `order` 动作的入站 contract 错误。
+///
+/// 这一层只负责 HTTP/wire 形状校验，不承载撮合或风控业务规则。
 #[derive(Debug, thiserror::Error)]
 pub enum OrderContractError {
     #[error("Unexpected `action.type` for order handler: `{0}`.")]
@@ -37,24 +40,22 @@ pub enum OrderContractError {
 pub mod reply {
     use serde::Serialize;
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct OrderResponseWire {
-        pub status: &'static str,
-        pub response: OrderResponseEnvelopeWire,
-    }
+    use crate::exchange::common::wire::{
+        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusesDataWire,
+    };
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct OrderResponseEnvelopeWire {
-        #[serde(rename = "type")]
-        pub type_: &'static str,
-        pub data: OrderResponseDataWire,
-    }
+    /// `/exchange` 下单动作的顶层成功响应。
+    pub type OrderResponseWire = ExchangeResponseWire<OrderResponseDataWire>;
 
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-    pub struct OrderResponseDataWire {
-        pub statuses: Vec<OrderStatusWire>,
-    }
+    /// `order` 响应体，按请求中的订单顺序返回逐笔状态。
+    pub type OrderResponseEnvelopeWire = ExchangeResponseEnvelopeWire<OrderResponseDataWire>;
+    pub type OrderResponseDataWire = ExchangeStatusesDataWire<OrderStatusWire>;
 
+    /// 单笔订单回执。
+    ///
+    /// - `Resting`: 订单成功挂入订单簿
+    /// - `Filled`: 订单立即成交
+    /// - `Error`: 该笔订单被拒绝
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(untagged)]
     pub enum OrderStatusWire {
@@ -63,11 +64,13 @@ pub mod reply {
         Error { error: String },
     }
 
+    /// 挂单成功时仅返回订单 id。
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     pub struct RestingOrderStatusWire {
         pub oid: u64,
     }
 
+    /// 成交回执，字段命名保持外部 API 兼容。
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     pub struct FilledOrderStatusWire {
         #[serde(rename = "totalSz")]
@@ -81,8 +84,10 @@ pub mod reply {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RequestWire {
+    /// 动作本体，必须是 `type = "order"`。
     action: ActionWire,
     #[serde(flatten)]
+    /// 交易所通用字段，如 nonce、签名、vault 地址等。
     common: CommonExchangeFields,
 }
 
@@ -90,34 +95,48 @@ struct RequestWire {
 #[serde(deny_unknown_fields)]
 struct ActionWire {
     #[serde(rename = "type")]
+    /// 动作类型，当前 handler 固定接收 `order`。
     type_: String,
+    /// 本次批量提交的订单列表；即使只有一笔，也走数组协议。
     orders: Vec<OrderWire>,
+    /// 订单分组策略，沿用上游 `na` / `normalTpsl` / `positionTpsl`。
     grouping: String,
+    /// 可选 builder 费用信息。
     builder: Option<BuilderWire>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OrderWire {
+    /// `a`: 资产或市场标识。
     a: u32,
+    /// `b`: `true` 表示买，`false` 表示卖。
     b: bool,
+    /// `p`: 价格，按外部接口约定保留为十进制字符串。
     p: String,
+    /// `s`: 数量，按外部接口约定保留为十进制字符串。
     s: String,
+    /// `r`: 是否 reduce-only。
     r: bool,
+    /// `t`: 订单类型，limit / trigger 二选一。
     t: OrderTypeWire,
+    /// `c`: client order id，可选。
     c: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OrderTypeWire {
+    /// 限价单配置。
     limit: Option<LimitOrderTypeWire>,
+    /// 条件单配置。
     trigger: Option<TriggerOrderTypeWire>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LimitOrderTypeWire {
+    /// `tif`: Time In Force。
     tif: String,
 }
 
@@ -125,16 +144,21 @@ struct LimitOrderTypeWire {
 #[serde(deny_unknown_fields)]
 struct TriggerOrderTypeWire {
     #[serde(rename = "isMarket")]
+    /// 触发后是否以市价执行。
     is_market: bool,
     #[serde(rename = "triggerPx")]
+    /// 触发价格，保持字符串形态，避免在 adapter 层提前引入精度语义。
     trigger_px: String,
+    /// `tp` 或 `sl`。
     tpsl: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BuilderWire {
+    /// builder 地址。
     b: String,
+    /// builder fee。
     f: u64,
 }
 
@@ -153,6 +177,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "order" {
         return Err(OrderContractError::UnexpectedActionType(request.action.type_.clone()).into());
     }
+    // 通用字段校验统一复用 shared validator，避免各 action 分叉签名语义。
     validate_common_fields(
         request.common.nonce,
         request.common.expires_after,
@@ -174,6 +199,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         })?;
     }
     for order in &request.action.orders {
+        // 这里仅检查 wire 最小合法性；价格/数量的业务精度约束留给更内层 use case。
         if order.p.trim().is_empty() {
             return Err(OrderContractError::InvalidPrice.into());
         }
@@ -213,6 +239,8 @@ async fn execute(
     request: RequestWire,
     _deps: &ExchangeActionDeps,
 ) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
+    // 当前 inbound adapter 先返回稳定的 stub 形状，便于前后端与协议快照测试对齐。
+    // 后续接入真实下单 use case 时，应由 core/operating 层决定回执状态。
     let statuses = request
         .action
         .orders

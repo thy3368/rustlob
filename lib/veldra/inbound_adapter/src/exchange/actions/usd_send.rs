@@ -6,7 +6,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -28,7 +28,7 @@ pub enum UsdSendContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as UsdSendResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as UsdSendResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ async fn execute(
 ) -> Result<reply::UsdSendResponseWire, ExchangeHttpError> {
     Ok(reply::UsdSendResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +17,7 @@ pub enum AgentSetAbstractionContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as AgentSetAbstractionResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as AgentSetAbstractionResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,7 +77,7 @@ async fn execute(
 ) -> Result<reply::AgentSetAbstractionResponseWire, ExchangeHttpError> {
     Ok(reply::AgentSetAbstractionResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 

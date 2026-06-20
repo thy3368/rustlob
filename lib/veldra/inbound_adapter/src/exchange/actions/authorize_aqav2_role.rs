@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{CommonExchangeFields, DefaultExchangeResponseEnvelopeWire};
+use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -19,7 +19,7 @@ pub enum AuthorizeAqav2RoleContractError {
 }
 
 pub mod reply {
-    pub use crate::exchange::common::wire::DefaultExchangeResponseWire as AuthorizeAqav2RoleResponseWire;
+    pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as AuthorizeAqav2RoleResponseWire;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,7 +83,7 @@ async fn execute(
 ) -> Result<reply::AuthorizeAqav2RoleResponseWire, ExchangeHttpError> {
     Ok(reply::AuthorizeAqav2RoleResponseWire {
         status: "ok",
-        response: DefaultExchangeResponseEnvelopeWire { type_: "default" },
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
     })
 }
 
