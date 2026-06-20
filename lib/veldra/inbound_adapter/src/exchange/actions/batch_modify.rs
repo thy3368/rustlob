@@ -6,9 +6,10 @@ use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
 };
+use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
-use crate::exchange::common::wire::CommonExchangeFields;
+use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
 
 const STUB_BATCH_MODIFIED_OID_BASE: u64 = 77738400;
@@ -47,13 +48,7 @@ pub mod reply {
     pub use crate::exchange::actions::order::reply::OrderResponseWire as BatchModifyResponseWire;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RequestWire {
-    action: ActionWire,
-    #[serde(flatten)]
-    common: CommonExchangeFields,
-}
+type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -115,7 +110,7 @@ pub async fn handle(
 }
 
 fn parse(body: &[u8]) -> Result<RequestWire, ExchangeHttpError> {
-    serde_json::from_slice(body).map_err(ExchangeHttpError::from_json_error)
+    parse_json_request(body)
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

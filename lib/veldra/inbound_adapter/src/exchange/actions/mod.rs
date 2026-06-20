@@ -34,6 +34,7 @@ pub mod validator_l1_stream;
 pub mod vault_transfer;
 pub mod withdraw3;
 
+use serde::{Serialize, Serializer};
 use serde_json::Value as JsonValue;
 
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, JsonObjectWire};
@@ -476,6 +477,51 @@ pub enum ExchangeActionReply {
     ValidatorL1Stream(validator_l1_stream::reply::ValidatorL1StreamResponseWire),
     VaultTransfer(vault_transfer::reply::VaultTransferResponseWire),
     Withdraw3(withdraw3::reply::Withdraw3ResponseWire),
+}
+
+impl Serialize for ExchangeActionReply {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::AgentEnableDexAbstraction(response) => response.serialize(serializer),
+            Self::AgentSendAsset(response) => response.serialize(serializer),
+            Self::AgentSetAbstraction(response) => response.serialize(serializer),
+            Self::ApproveAgent(response) => response.serialize(serializer),
+            Self::ApproveBuilderFee(response) => response.serialize(serializer),
+            Self::AuthorizeAqav2Role(response) => response.serialize(serializer),
+            Self::BatchModify(response) => response.serialize(serializer),
+            Self::Cancel(response) => response.serialize(serializer),
+            Self::CancelByCloid(response) => response.serialize(serializer),
+            Self::CDeposit(response) => response.serialize(serializer),
+            Self::CWithdraw(response) => response.serialize(serializer),
+            Self::ClaimRewards(response) => response.serialize(serializer),
+            Self::Hip3LiquidatorTransfer(response) => response.serialize(serializer),
+            Self::Modify(response) => response.serialize(serializer),
+            Self::Noop(response) => response.serialize(serializer),
+            Self::Order(response) => response.serialize(serializer),
+            Self::ReserveRequestWeight(response) => response.serialize(serializer),
+            Self::ScheduleCancel(response) => response.serialize(serializer),
+            Self::SendAsset(response) => response.serialize(serializer),
+            Self::SendToEvmWithData(response) => response.serialize(serializer),
+            Self::SpotSend(response) => response.serialize(serializer),
+            Self::TopUpIsolatedOnlyMargin(response) => response.serialize(serializer),
+            Self::TwapCancel(response) => response.serialize(serializer),
+            Self::TwapOrder(response) => response.serialize(serializer),
+            Self::TokenDelegate(response) => response.serialize(serializer),
+            Self::UpdateIsolatedMargin(response) => response.serialize(serializer),
+            Self::UpdateLeverage(response) => response.serialize(serializer),
+            Self::UsdClassTransfer(response) => response.serialize(serializer),
+            Self::UsdSend(response) => response.serialize(serializer),
+            Self::UserOutcome(response) => response.serialize(serializer),
+            Self::UserDexAbstraction(response) => response.serialize(serializer),
+            Self::UserSetAbstraction(response) => response.serialize(serializer),
+            Self::ValidatorL1Stream(response) => response.serialize(serializer),
+            Self::VaultTransfer(response) => response.serialize(serializer),
+            Self::Withdraw3(response) => response.serialize(serializer),
+        }
+    }
 }
 
 pub async fn dispatch_exchange_action(

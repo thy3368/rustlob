@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, Scope, web};
 
 use crate::exchange::actions::{ExchangeActionDeps, ExchangeActionReply, dispatch_exchange_action};
+use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::wire::ExchangeActionTypeProbe;
 use crate::exchange::error::ExchangeHttpError;
 
@@ -22,49 +23,11 @@ async fn dispatch_exchange_action_from_body(
 }
 
 fn parse_action_type_probe(body: &[u8]) -> Result<ExchangeActionTypeProbe, ExchangeHttpError> {
-    serde_json::from_slice(body).map_err(ExchangeHttpError::from_json_error)
+    parse_json_request(body)
 }
 
 fn action_reply_to_http(reply: ExchangeActionReply) -> HttpResponse {
-    match reply {
-        ExchangeActionReply::AgentEnableDexAbstraction(response) => {
-            HttpResponse::Ok().json(response)
-        }
-        ExchangeActionReply::AgentSendAsset(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::AgentSetAbstraction(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ApproveAgent(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ApproveBuilderFee(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::AuthorizeAqav2Role(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::BatchModify(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Cancel(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::CancelByCloid(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::CDeposit(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::CWithdraw(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ClaimRewards(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Hip3LiquidatorTransfer(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Modify(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Noop(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Order(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ReserveRequestWeight(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ScheduleCancel(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::SendAsset(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::SendToEvmWithData(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::SpotSend(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::TopUpIsolatedOnlyMargin(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::TokenDelegate(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::TwapCancel(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::TwapOrder(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UpdateIsolatedMargin(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UpdateLeverage(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UsdClassTransfer(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UsdSend(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UserOutcome(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UserDexAbstraction(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::UserSetAbstraction(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::ValidatorL1Stream(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::VaultTransfer(response) => HttpResponse::Ok().json(response),
-        ExchangeActionReply::Withdraw3(response) => HttpResponse::Ok().json(response),
-    }
+    HttpResponse::Ok().json(reply)
 }
 
 #[cfg(test)]

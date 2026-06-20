@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::exchange::actions::ExchangeActionDeps;
+use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::run_action;
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{CommonExchangeFields, ExchangeEmptyResponseEnvelopeWire};
+use crate::exchange::common::wire::{
+    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
+};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -33,13 +36,7 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as SpotSendResponseWire;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SpotSendRequestWire {
-    action: SpotSendActionWire,
-    #[serde(flatten)]
-    common: CommonExchangeFields,
-}
+type SpotSendRequestWire = ExchangeRequestEnvelopeWire<SpotSendActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -64,7 +61,7 @@ pub async fn handle(
 }
 
 fn parse(body: &[u8]) -> Result<SpotSendRequestWire, ExchangeHttpError> {
-    serde_json::from_slice(body).map_err(ExchangeHttpError::from_json_error)
+    parse_json_request(body)
 }
 
 fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
