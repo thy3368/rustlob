@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -27,18 +25,18 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as AuthorizeAqav2RoleResponseWire;
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     token: u64,
     role: String,
 }
 
-struct AuthorizeAqav2RoleAction;
+pub(crate) struct AuthorizeAqav2RoleAction;
 
 impl ExchangeActionHandler for AuthorizeAqav2RoleAction {
     type Request = RequestWire;
@@ -51,12 +49,6 @@ impl ExchangeActionHandler for AuthorizeAqav2RoleAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(
-    body: &[u8],
-) -> Result<reply::AuthorizeAqav2RoleResponseWire, ExchangeHttpError> {
-    run_exchange_action::<AuthorizeAqav2RoleAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

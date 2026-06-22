@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_cloid, validate_common_fields, validate_hex_address,
 };
@@ -84,11 +82,11 @@ pub mod reply {
     }
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     /// 动作类型，当前 handler 固定接收 `order`。
     type_: String,
@@ -157,7 +155,7 @@ struct BuilderWire {
     f: u64,
 }
 
-struct OrderAction;
+pub(crate) struct OrderAction;
 
 impl ExchangeActionHandler for OrderAction {
     type Request = RequestWire;
@@ -170,10 +168,6 @@ impl ExchangeActionHandler for OrderAction {
     fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute(request))
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
-    run_exchange_action::<OrderAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

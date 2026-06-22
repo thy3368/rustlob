@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -23,17 +21,17 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as ScheduleCancelResponseWire;
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     time: Option<u64>,
 }
 
-struct ScheduleCancelAction;
+pub(crate) struct ScheduleCancelAction;
 
 impl ExchangeActionHandler for ScheduleCancelAction {
     type Request = RequestWire;
@@ -46,10 +44,6 @@ impl ExchangeActionHandler for ScheduleCancelAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::ScheduleCancelResponseWire, ExchangeHttpError> {
-    run_exchange_action::<ScheduleCancelAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

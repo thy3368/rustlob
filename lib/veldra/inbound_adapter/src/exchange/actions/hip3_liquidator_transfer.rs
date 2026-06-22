@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -25,11 +23,11 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as Hip3LiquidatorTransferResponseWire;
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     dex: String,
@@ -38,7 +36,7 @@ struct ActionWire {
     is_deposit: bool,
 }
 
-struct Hip3LiquidatorTransferAction;
+pub(crate) struct Hip3LiquidatorTransferAction;
 
 impl ExchangeActionHandler for Hip3LiquidatorTransferAction {
     type Request = RequestWire;
@@ -51,12 +49,6 @@ impl ExchangeActionHandler for Hip3LiquidatorTransferAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(
-    body: &[u8],
-) -> Result<reply::Hip3LiquidatorTransferResponseWire, ExchangeHttpError> {
-    run_exchange_action::<Hip3LiquidatorTransferAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

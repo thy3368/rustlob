@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
@@ -37,18 +35,18 @@ pub mod reply {
     }
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     a: u32,
     t: u64,
 }
 
-struct TwapCancelAction;
+pub(crate) struct TwapCancelAction;
 
 impl ExchangeActionHandler for TwapCancelAction {
     type Request = RequestWire;
@@ -61,10 +59,6 @@ impl ExchangeActionHandler for TwapCancelAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
-    run_exchange_action::<TwapCancelAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

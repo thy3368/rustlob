@@ -7,9 +7,7 @@ use crate::exchange::actions::order::reply::{
 };
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
@@ -50,11 +48,11 @@ pub mod reply {
     pub use crate::exchange::actions::order::reply::OrderResponseWire as BatchModifyResponseWire;
 }
 
-type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
+pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ActionWire {
+pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     modifies: Vec<ModifyWire>,
@@ -104,7 +102,7 @@ struct TriggerWire {
     tpsl: String,
 }
 
-struct BatchModifyAction;
+pub(crate) struct BatchModifyAction;
 
 impl ExchangeActionHandler for BatchModifyAction {
     type Request = RequestWire;
@@ -117,10 +115,6 @@ impl ExchangeActionHandler for BatchModifyAction {
     fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute(request))
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    run_exchange_action::<BatchModifyAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {

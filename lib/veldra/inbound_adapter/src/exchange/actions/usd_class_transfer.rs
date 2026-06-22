@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
@@ -35,11 +33,12 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as UsdClassTransferResponseWire;
 }
 
-type UsdClassTransferRequestWire = ExchangeRequestEnvelopeWire<UsdClassTransferActionWire>;
+pub(crate) type UsdClassTransferRequestWire =
+    ExchangeRequestEnvelopeWire<UsdClassTransferActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct UsdClassTransferActionWire {
+pub(crate) struct UsdClassTransferActionWire {
     #[serde(rename = "type")]
     type_: String,
     #[serde(rename = "hyperliquidChain")]
@@ -52,7 +51,7 @@ struct UsdClassTransferActionWire {
     nonce: u64,
 }
 
-struct UsdClassTransferAction;
+pub(crate) struct UsdClassTransferAction;
 
 impl ExchangeActionHandler for UsdClassTransferAction {
     type Request = UsdClassTransferRequestWire;
@@ -65,10 +64,6 @@ impl ExchangeActionHandler for UsdClassTransferAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::UsdClassTransferResponseWire, ExchangeHttpError> {
-    run_exchange_action::<UsdClassTransferAction>(body).await
 }
 
 fn validate(request: &UsdClassTransferRequestWire) -> Result<(), ExchangeHttpError> {

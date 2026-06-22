@@ -1,9 +1,66 @@
 use actix_web::{HttpResponse, Scope, web};
+use futures_util::future::{FutureExt, LocalBoxFuture};
 
-use crate::exchange::actions::{ExchangeActionReply, dispatch_exchange_action};
+use crate::exchange::actions::{self, SUPPORTED_ACTION_TYPES};
 use crate::exchange::common::parse::parse_json_request;
+use crate::exchange::common::runner::run_exchange_action_http;
 use crate::exchange::common::wire::ExchangeActionTypeProbe;
 use crate::exchange::error::ExchangeHttpError;
+
+type ExchangeActionDispatch =
+    for<'a> fn(&'a [u8]) -> LocalBoxFuture<'a, Result<HttpResponse, ExchangeHttpError>>;
+
+struct ExchangeActionRegistration {
+    action_type: &'static str,
+    dispatch: ExchangeActionDispatch,
+}
+
+macro_rules! action_registration {
+    ($index:expr, $action:path) => {
+        ExchangeActionRegistration {
+            action_type: SUPPORTED_ACTION_TYPES[$index],
+            dispatch: |body| run_exchange_action_http::<$action>(body).boxed_local(),
+        }
+    };
+}
+
+static ACTION_REGISTRY: &[ExchangeActionRegistration] = &[
+    action_registration!(0, actions::agent_enable_dex_abstraction::AgentEnableDexAbstractionAction),
+    action_registration!(1, actions::agent_send_asset::AgentSendAssetAction),
+    action_registration!(2, actions::agent_set_abstraction::AgentSetAbstractionAction),
+    action_registration!(3, actions::approve_agent::ApproveAgentAction),
+    action_registration!(4, actions::approve_builder_fee::ApproveBuilderFeeAction),
+    action_registration!(5, actions::authorize_aqav2_role::AuthorizeAqav2RoleAction),
+    action_registration!(6, actions::batch_modify::BatchModifyAction),
+    action_registration!(7, actions::c_deposit::CDepositAction),
+    action_registration!(8, actions::c_withdraw::CWithdrawAction),
+    action_registration!(9, actions::cancel::CancelAction),
+    action_registration!(10, actions::cancel_by_cloid::CancelByCloidAction),
+    action_registration!(11, actions::claim_rewards::ClaimRewardsAction),
+    action_registration!(12, actions::hip3_liquidator_transfer::Hip3LiquidatorTransferAction),
+    action_registration!(13, actions::modify::ModifyAction),
+    action_registration!(14, actions::noop::NoopAction),
+    action_registration!(15, actions::order::OrderAction),
+    action_registration!(16, actions::reserve_request_weight::ReserveRequestWeightAction),
+    action_registration!(17, actions::schedule_cancel::ScheduleCancelAction),
+    action_registration!(18, actions::send_asset::SendAssetAction),
+    action_registration!(19, actions::send_to_evm_with_data::SendToEvmWithDataAction),
+    action_registration!(20, actions::spot_send::SpotSendAction),
+    action_registration!(21, actions::token_delegate::TokenDelegateAction),
+    action_registration!(22, actions::top_up_isolated_only_margin::TopUpIsolatedOnlyMarginAction),
+    action_registration!(23, actions::twap_cancel::TwapCancelAction),
+    action_registration!(24, actions::twap_order::TwapOrderAction),
+    action_registration!(25, actions::update_isolated_margin::UpdateIsolatedMarginAction),
+    action_registration!(26, actions::update_leverage::UpdateLeverageAction),
+    action_registration!(27, actions::usd_class_transfer::UsdClassTransferAction),
+    action_registration!(28, actions::usd_send::UsdSendAction),
+    action_registration!(29, actions::user_dex_abstraction::UserDexAbstractionAction),
+    action_registration!(30, actions::user_outcome::UserOutcomeAction),
+    action_registration!(31, actions::user_set_abstraction::UserSetAbstractionAction),
+    action_registration!(32, actions::validator_l1_stream::ValidatorL1StreamAction),
+    action_registration!(33, actions::vault_transfer::VaultTransferAction),
+    action_registration!(34, actions::withdraw3::Withdraw3Action),
+];
 
 pub fn build_exchange_scope() -> Scope {
     web::scope("").route("/exchange", web::post().to(post_exchange))
@@ -17,16 +74,15 @@ async fn dispatch_exchange_action_from_body(
     body: &[u8],
 ) -> Result<HttpResponse, ExchangeHttpError> {
     let probe = parse_action_type_probe(body)?;
-    let reply = dispatch_exchange_action(&probe.action.type_, body).await?;
-    Ok(action_reply_to_http(reply))
+    let registration = ACTION_REGISTRY
+        .iter()
+        .find(|registration| registration.action_type == probe.action.type_)
+        .ok_or_else(|| ExchangeHttpError::UnsupportedActionType(probe.action.type_.clone()))?;
+    (registration.dispatch)(body).await
 }
 
 fn parse_action_type_probe(body: &[u8]) -> Result<ExchangeActionTypeProbe, ExchangeHttpError> {
     parse_json_request(body)
-}
-
-fn action_reply_to_http(reply: ExchangeActionReply) -> HttpResponse {
-    HttpResponse::Ok().json(reply)
 }
 
 #[cfg(test)]
@@ -37,6 +93,13 @@ mod tests {
 
     use super::*;
     use crate::exchange::test_support::valid_order_request_value;
+
+    #[test]
+    fn registry_action_types_match_supported_action_types() {
+        let registry_action_types: Vec<_> =
+            ACTION_REGISTRY.iter().map(|registration| registration.action_type).collect();
+        assert_eq!(registry_action_types, SUPPORTED_ACTION_TYPES);
+    }
 
     #[actix_web::test]
     async fn order_action_is_dispatched_to_order_handler() {

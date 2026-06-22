@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
@@ -36,11 +34,11 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as UsdSendResponseWire;
 }
 
-type UsdSendRequestWire = ExchangeRequestEnvelopeWire<UsdSendActionWire>;
+pub(crate) type UsdSendRequestWire = ExchangeRequestEnvelopeWire<UsdSendActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct UsdSendActionWire {
+pub(crate) struct UsdSendActionWire {
     #[serde(rename = "type")]
     type_: String,
     #[serde(rename = "hyperliquidChain")]
@@ -52,7 +50,7 @@ struct UsdSendActionWire {
     time: u64,
 }
 
-struct UsdSendAction;
+pub(crate) struct UsdSendAction;
 
 impl ExchangeActionHandler for UsdSendAction {
     type Request = UsdSendRequestWire;
@@ -65,10 +63,6 @@ impl ExchangeActionHandler for UsdSendAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::UsdSendResponseWire, ExchangeHttpError> {
-    run_exchange_action::<UsdSendAction>(body).await
 }
 
 fn validate(request: &UsdSendRequestWire) -> Result<(), ExchangeHttpError> {

@@ -3,9 +3,7 @@ use serde_json::Number;
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -28,11 +26,11 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as VaultTransferResponseWire;
 }
 
-type VaultTransferRequestWire = ExchangeRequestEnvelopeWire<VaultTransferActionWire>;
+pub(crate) type VaultTransferRequestWire = ExchangeRequestEnvelopeWire<VaultTransferActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct VaultTransferActionWire {
+pub(crate) struct VaultTransferActionWire {
     #[serde(rename = "type")]
     type_: String,
     #[serde(rename = "vaultAddress")]
@@ -42,7 +40,7 @@ struct VaultTransferActionWire {
     usd: Number,
 }
 
-struct VaultTransferAction;
+pub(crate) struct VaultTransferAction;
 
 impl ExchangeActionHandler for VaultTransferAction {
     type Request = VaultTransferRequestWire;
@@ -55,10 +53,6 @@ impl ExchangeActionHandler for VaultTransferAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::VaultTransferResponseWire, ExchangeHttpError> {
-    run_exchange_action::<VaultTransferAction>(body).await
 }
 
 fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError> {

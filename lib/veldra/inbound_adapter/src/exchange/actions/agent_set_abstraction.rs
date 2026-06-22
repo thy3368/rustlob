@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{
     ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
@@ -25,17 +23,18 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as AgentSetAbstractionResponseWire;
 }
 
-type AgentSetAbstractionRequestWire = ExchangeRequestEnvelopeWire<AgentSetAbstractionActionWire>;
+pub(crate) type AgentSetAbstractionRequestWire =
+    ExchangeRequestEnvelopeWire<AgentSetAbstractionActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct AgentSetAbstractionActionWire {
+pub(crate) struct AgentSetAbstractionActionWire {
     #[serde(rename = "type")]
     type_: String,
     abstraction: String,
 }
 
-struct AgentSetAbstractionAction;
+pub(crate) struct AgentSetAbstractionAction;
 
 impl ExchangeActionHandler for AgentSetAbstractionAction {
     type Request = AgentSetAbstractionRequestWire;
@@ -48,12 +47,6 @@ impl ExchangeActionHandler for AgentSetAbstractionAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(
-    body: &[u8],
-) -> Result<reply::AgentSetAbstractionResponseWire, ExchangeHttpError> {
-    run_exchange_action::<AgentSetAbstractionAction>(body).await
 }
 
 fn validate(request: &AgentSetAbstractionRequestWire) -> Result<(), ExchangeHttpError> {

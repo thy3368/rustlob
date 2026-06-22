@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
@@ -34,11 +32,11 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as TokenDelegateResponseWire;
 }
 
-type TokenDelegateRequestWire = ExchangeRequestEnvelopeWire<TokenDelegateActionWire>;
+pub(crate) type TokenDelegateRequestWire = ExchangeRequestEnvelopeWire<TokenDelegateActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TokenDelegateActionWire {
+pub(crate) struct TokenDelegateActionWire {
     #[serde(rename = "type")]
     type_: String,
     #[serde(rename = "hyperliquidChain")]
@@ -52,7 +50,7 @@ struct TokenDelegateActionWire {
     nonce: u64,
 }
 
-struct TokenDelegateAction;
+pub(crate) struct TokenDelegateAction;
 
 impl ExchangeActionHandler for TokenDelegateAction {
     type Request = TokenDelegateRequestWire;
@@ -65,10 +63,6 @@ impl ExchangeActionHandler for TokenDelegateAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
-    run_exchange_action::<TokenDelegateAction>(body).await
 }
 
 fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError> {

@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
-use crate::exchange::common::runner::{
-    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
-};
+use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
@@ -38,11 +36,11 @@ pub mod reply {
     pub use crate::exchange::common::wire::ExchangeEmptyResponseWire as SpotSendResponseWire;
 }
 
-type SpotSendRequestWire = ExchangeRequestEnvelopeWire<SpotSendActionWire>;
+pub(crate) type SpotSendRequestWire = ExchangeRequestEnvelopeWire<SpotSendActionWire>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SpotSendActionWire {
+pub(crate) struct SpotSendActionWire {
     #[serde(rename = "type")]
     type_: String,
     #[serde(rename = "hyperliquidChain")]
@@ -55,7 +53,7 @@ struct SpotSendActionWire {
     time: u64,
 }
 
-struct SpotSendAction;
+pub(crate) struct SpotSendAction;
 
 impl ExchangeActionHandler for SpotSendAction {
     type Request = SpotSendRequestWire;
@@ -68,10 +66,6 @@ impl ExchangeActionHandler for SpotSendAction {
     fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
         Box::pin(execute())
     }
-}
-
-pub async fn handle(body: &[u8]) -> Result<reply::SpotSendResponseWire, ExchangeHttpError> {
-    run_exchange_action::<SpotSendAction>(body).await
 }
 
 fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
