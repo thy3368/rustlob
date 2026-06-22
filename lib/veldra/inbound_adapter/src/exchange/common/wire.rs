@@ -46,12 +46,6 @@ pub struct ExchangeActionTypeField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ExchangeErrorResponseWire {
-    pub status: &'static str,
-    pub error: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExchangeResponseWire<TData> {
     pub status: &'static str,
     pub response: ExchangeResponseEnvelopeWire<TData>,

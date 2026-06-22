@@ -1,3 +1,4 @@
+pub use crate::common::validate::{validate_cloid, validate_hex_address};
 use crate::exchange::common::wire::CommonExchangeFields;
 use crate::exchange::error::SharedFieldError;
 
@@ -36,18 +37,13 @@ pub fn validate_common_fields(
 }
 
 pub fn validate_signature(r: &str, s: &str, v: u64) -> Result<(), SharedFieldError> {
-    if !(is_prefixed_hex_with_len(r, 64) && is_prefixed_hex_with_len(s, 64) && v <= 255) {
+    if !(crate::common::validate::validate_prefixed_hex_with_len(r, 64).is_ok()
+        && crate::common::validate::validate_prefixed_hex_with_len(s, 64).is_ok()
+        && v <= 255)
+    {
         return Err(SharedFieldError::InvalidSignature);
     }
     Ok(())
-}
-
-pub fn validate_hex_address(value: &str) -> Result<(), ()> {
-    if is_prefixed_hex_with_len(value, 40) { Ok(()) } else { Err(()) }
-}
-
-pub fn validate_cloid(value: &str) -> Result<(), ()> {
-    if is_prefixed_hex_with_len(value, 32) { Ok(()) } else { Err(()) }
 }
 
 pub fn validate_hyperliquid_chain(value: &str) -> Result<(), ()> {
@@ -62,11 +58,4 @@ pub fn validate_signature_chain_id(value: &str) -> Result<(), ()> {
         return Err(());
     }
     Ok(())
-}
-
-fn is_prefixed_hex_with_len(value: &str, hex_len: usize) -> bool {
-    let Some(rest) = value.strip_prefix("0x") else {
-        return false;
-    };
-    rest.len() == hex_len && rest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

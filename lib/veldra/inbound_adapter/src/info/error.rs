@@ -2,7 +2,8 @@ use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
 use thiserror::Error;
 
-use crate::info::common::wire::InfoErrorResponseWire;
+use crate::common::parse::{JsonRequestError, classify_json_error};
+use crate::common::wire::ErrorResponseWire;
 
 #[derive(Debug, Error)]
 pub enum InfoHttpError {
@@ -20,18 +21,21 @@ pub enum InfoHttpError {
 
 impl InfoHttpError {
     pub fn from_json_error(error: serde_json::Error) -> Self {
-        match error.classify() {
-            serde_json::error::Category::Syntax | serde_json::error::Category::Eof => {
-                Self::MalformedJson
-            }
-            serde_json::error::Category::Data | serde_json::error::Category::Io => {
-                Self::InvalidJsonShape(error.to_string())
-            }
-        }
+        classify_json_error(error)
     }
 
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation(message.into())
+    }
+}
+
+impl JsonRequestError for InfoHttpError {
+    fn malformed_json() -> Self {
+        Self::MalformedJson
+    }
+
+    fn invalid_json_shape(message: String) -> Self {
+        Self::InvalidJsonShape(message)
     }
 }
 
@@ -42,6 +46,6 @@ impl ResponseError for InfoHttpError {
 
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code())
-            .json(InfoErrorResponseWire { status: "err", error: self.to_string() })
+            .json(ErrorResponseWire { status: "err", error: self.to_string() })
     }
 }

@@ -21,15 +21,6 @@ pub struct InfoRequestTypeProbe {
     pub type_: String,
 }
 
-/// `/info` 统一错误响应。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct InfoErrorResponseWire {
-    /// 固定错误状态，当前约定为 `"err"`。
-    pub status: &'static str,
-    /// 面向客户端的稳定错误文案。
-    pub error: String,
-}
-
 /// `candleSnapshot.req` 的内层请求体。
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CandleSnapshotReqWire {

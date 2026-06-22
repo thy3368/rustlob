@@ -20,7 +20,7 @@ async fn dispatch_info_query_from_body(body: &[u8]) -> Result<HttpResponse, Info
 }
 
 fn parse_query_type_probe(body: &[u8]) -> Result<InfoRequestTypeProbe, InfoHttpError> {
-    serde_json::from_slice(body).map_err(InfoHttpError::from_json_error)
+    crate::common::parse::parse_json_request(body)
 }
 
 fn reply_to_http(reply: InfoQueryReply) -> HttpResponse {

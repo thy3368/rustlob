@@ -18,8 +18,7 @@ pub async fn handle(
     body: &[u8],
     _deps: &InfoQueryDeps,
 ) -> Result<reply::ResponseWire, InfoHttpError> {
-    let request: RequestWire =
-        serde_json::from_slice(body).map_err(InfoHttpError::from_json_error)?;
+    let request: RequestWire = crate::common::parse::parse_json_request(body)?;
     ensure_type(&request.type_, "borrowLendUserState")?;
     validate_hex_address_field("user", &request.user)?;
     Ok(stub_response())

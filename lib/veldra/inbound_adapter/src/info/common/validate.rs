@@ -1,3 +1,4 @@
+use crate::common::validate::{validate_cloid, validate_hex_address};
 use crate::info::common::wire::OidWire;
 use crate::info::error::InfoHttpError;
 
@@ -91,19 +92,4 @@ pub fn validate_oid_field(field: &str, oid: &OidWire) -> Result<(), InfoHttpErro
             ))
         }),
     }
-}
-
-fn validate_hex_address(value: &str) -> Result<(), ()> {
-    if is_prefixed_hex_with_len(value, 40) { Ok(()) } else { Err(()) }
-}
-
-fn validate_cloid(value: &str) -> Result<(), ()> {
-    if is_prefixed_hex_with_len(value, 32) { Ok(()) } else { Err(()) }
-}
-
-fn is_prefixed_hex_with_len(value: &str, hex_len: usize) -> bool {
-    let Some(rest) = value.strip_prefix("0x") else {
-        return false;
-    };
-    rest.len() == hex_len && rest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

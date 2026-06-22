@@ -6,7 +6,7 @@ pub fn parse_json_request<T>(body: &[u8]) -> Result<T, ExchangeHttpError>
 where
     T: DeserializeOwned,
 {
-    serde_json::from_slice(body).map_err(ExchangeHttpError::from_json_error)
+    crate::common::parse::parse_json_request(body)
 }
 
 #[cfg(test)]
