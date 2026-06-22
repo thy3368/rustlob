@@ -8,6 +8,7 @@ pub mod account;
 
 pub use account::account::Account;
 pub use account::balance::Balance;
+pub use account::balance_ledger_entry::{BalanceLedgerEntry, BalanceLedgerReason};
 pub use market_rules::MarketRules;
 pub use perp::hyperliquid_perp_funding_rate::{
     HyperliquidPerpBookLevel, HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,

@@ -99,7 +99,7 @@ fn event_field_u64(event: &EntityReplayableEvent, field_name: &str) -> Option<u6
 }
 
 #[test]
-fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_events()
+fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_then_ledger_events()
 -> Result<(), CancelSpotOrderError> {
     let state = state(buy_open_order(), base_balance(5, 0), quote_balance(80, 20));
 
@@ -114,14 +114,21 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_events()
     );
     assert_eq!(result.canceled_order.after.version, 2);
     assert_eq!(result.released_balances.len(), 1);
+    assert_eq!(result.created_balance_ledger_entries.len(), 1);
     assert_eq!(
         result.released_balances[0].after,
         Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 0, 4)
     );
-    assert_eq!(events.len(), 2);
-    assert_eq!(result.released_balances.len(), events.len() - 1);
+    assert_eq!(
+        result.created_balance_ledger_entries[0].reason,
+        crate::BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+            order_id: result.canceled_order.after.order_id.clone()
+        }
+    );
+    assert_eq!(events.len(), 3);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
+    assert!(events[2].is_created());
     assert_eq!(events[0].old_version, 1);
     assert_eq!(events[0].new_version, 2);
     assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
@@ -146,12 +153,15 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_events()
         event_field_u64(&events[1], "frozen"),
         Some(result.released_balances[0].after.frozen)
     );
+    assert_eq!(event_field(&events[2], "asset_id"), Some("USDT"));
+    assert_eq!(event_field(&events[2], "reason"), Some("cancel_spot_order_release_quote"));
+    assert_eq!(event_field(&events[2], "reason_order_id"), Some("42"));
 
     Ok(())
 }
 
 #[test]
-fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_events()
+fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_then_ledger_events()
 -> Result<(), CancelSpotOrderError> {
     let state = state(sell_open_order(), base_balance(5, 2), quote_balance(80, 0));
 
@@ -166,14 +176,21 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_events()
     );
     assert_eq!(result.canceled_order.after.version, 2);
     assert_eq!(result.released_balances.len(), 1);
+    assert_eq!(result.created_balance_ledger_entries.len(), 1);
     assert_eq!(
         result.released_balances[0].after,
         Balance::new("trader-1".to_string(), "BTC".to_string(), 7, 0, 4)
     );
-    assert_eq!(events.len(), 2);
-    assert_eq!(result.released_balances.len(), events.len() - 1);
+    assert_eq!(
+        result.created_balance_ledger_entries[0].reason,
+        crate::BalanceLedgerReason::CancelSpotOrderReleaseBase {
+            order_id: result.canceled_order.after.order_id.clone()
+        }
+    );
+    assert_eq!(events.len(), 3);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
+    assert!(events[2].is_created());
     assert_eq!(events[0].old_version, 1);
     assert_eq!(events[0].new_version, 2);
     assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
@@ -198,6 +215,9 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_events()
         event_field_u64(&events[1], "frozen"),
         Some(result.released_balances[0].after.frozen)
     );
+    assert_eq!(event_field(&events[2], "asset_id"), Some("BTC"));
+    assert_eq!(event_field(&events[2], "reason"), Some("cancel_spot_order_release_base"));
+    assert_eq!(event_field(&events[2], "reason_order_id"), Some("42"));
 
     Ok(())
 }
