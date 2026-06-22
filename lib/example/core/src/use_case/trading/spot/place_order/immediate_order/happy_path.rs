@@ -92,42 +92,100 @@ fn compute_output_and_events_produces_order_and_account_events() -> Result<(), P
     let result = use_case.compute_changes(&sample_cmd(), sample_state())?;
     let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(events.len(), 2);
+    assert_eq!(events.len(), 3);
     assert!(events[0].is_created());
     assert!(events[1].is_updated());
+    assert!(events[2].is_created());
     assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTCUSDT-7"));
     assert_eq!(field_as_u64(&events[0], "asset"), Some(10_001));
     assert_eq!(field_as_u64(&events[0], "reserved_quote"), Some(200));
     assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
     assert_eq!(field_as_u64(&events[1], "available"), Some(800));
     assert_eq!(field_as_u64(&events[1], "frozen"), Some(200));
+    assert_eq!(event_field(&events[2], "reason"), Some("reserve_for_immediate_order"));
+    assert_eq!(event_field(&events[2], "reason_order_id"), Some("trader-1-BTCUSDT-7"));
+    assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:USDT"));
 
     Ok(())
 }
 
 #[test]
-fn compute_output_and_events_keeps_output_and_events_consistent() -> Result<(), PlaceOrderError> {
+fn buy_order_updates_quote_balance_and_creates_matching_ledger_entry() -> Result<(), PlaceOrderError>
+{
     let use_case = PlaceImmediateOrderUseCase;
     let state = sample_state();
 
     let result = CommandUseCase4::compute_changes(&use_case, &sample_cmd(), state)?;
     let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(result.order.order_id, "trader-1-BTCUSDT-7");
-    assert_eq!(result.order.reserved_quote, 200);
-    assert_eq!(result.affected_balance.after.asset_id, "USDT");
-    assert_eq!(result.affected_balance.after.available, 800);
-    assert_eq!(result.affected_balance.after.frozen, 200);
-    assert_eq!(event_field(&events[0], "order_id"), Some(result.order.order_id.as_str()));
+    assert_eq!(result.created_order.order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(result.created_order.reserved_quote, 200);
+    assert_eq!(result.updated_balance.after.asset_id, "USDT");
+    assert_eq!(result.updated_balance.after.available, 800);
+    assert_eq!(result.updated_balance.after.frozen, 200);
+    assert_eq!(
+        result.created_balance_ledger_entry.reason,
+        crate::BalanceLedgerReason::ReserveForImmediateOrder {
+            order_id: result.created_order.order_id.clone(),
+        }
+    );
+    assert!(result.created_balance_ledger_entry.matches_balance_update(&result.updated_balance));
+    assert_eq!(event_field(&events[0], "order_id"), Some(result.created_order.order_id.as_str()));
     assert_eq!(
         event_field(&events[1], "asset_id"),
-        Some(result.affected_balance.after.asset_id.as_str())
+        Some(result.updated_balance.after.asset_id.as_str())
+    );
+    assert_eq!(field_as_u64(&events[1], "available"), Some(result.updated_balance.after.available));
+    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.updated_balance.after.frozen));
+    assert_eq!(
+        event_field(&events[2], "reason_order_id"),
+        Some(result.created_order.order_id.as_str())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn sell_order_updates_base_balance_and_creates_matching_ledger_entry() -> Result<(), PlaceOrderError>
+{
+    let use_case = PlaceImmediateOrderUseCase;
+    let mut cmd = sample_cmd();
+    cmd.is_buy = false;
+
+    let result = CommandUseCase4::compute_changes(&use_case, &cmd, sample_state())?;
+
+    assert_eq!(result.created_order.reserved_base, 2);
+    assert_eq!(result.created_order.reserved_quote, 0);
+    assert_eq!(result.updated_balance.after.asset_id, "BTC");
+    assert_eq!(result.updated_balance.after.available, 998);
+    assert_eq!(result.updated_balance.after.frozen, 2);
+    assert_eq!(
+        result.created_balance_ledger_entry.reason,
+        crate::BalanceLedgerReason::ReserveForImmediateOrder {
+            order_id: result.created_order.order_id.clone(),
+        }
+    );
+    assert!(result.created_balance_ledger_entry.matches_balance_update(&result.updated_balance));
+
+    Ok(())
+}
+
+#[test]
+fn replayable_events_follow_order_then_balance_then_ledger() -> Result<(), PlaceOrderError> {
+    let use_case = PlaceImmediateOrderUseCase;
+    let changes = CommandUseCase4::compute_changes(&use_case, &sample_cmd(), sample_state())?;
+    let events = changes.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
+
+    assert_eq!(events.len(), 3);
+    assert_eq!(event_field(&events[0], "order_id"), Some(changes.created_order.order_id.as_str()));
+    assert_eq!(
+        event_field(&events[1], "asset_id"),
+        Some(changes.updated_balance.after.asset_id.as_str())
     );
     assert_eq!(
-        field_as_u64(&events[1], "available"),
-        Some(result.affected_balance.after.available)
+        event_field(&events[2], "entry_id"),
+        Some(changes.created_balance_ledger_entry.entry_id.as_str())
     );
-    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.affected_balance.after.frozen));
 
     Ok(())
 }
@@ -182,9 +240,10 @@ proptest! {
             let result = use_case.compute_changes(&cmd, state.clone())?;
             let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-            prop_assert_eq!(events.len(), 2);
+            prop_assert_eq!(events.len(), 3);
             prop_assert!(events[0].is_created());
             prop_assert!(events[1].is_updated());
+            prop_assert!(events[2].is_created());
             prop_assert_eq!(
                 event_field(&events[0], "order_id"),
                 Some(expected_order_id.as_str())
@@ -212,6 +271,14 @@ proptest! {
                 event_field(&events[0], "client_order_id"),
                 Some(expected_cloid.as_str())
             );
+            prop_assert_eq!(
+                event_field(&events[2], "reason"),
+                Some("reserve_for_immediate_order")
+            );
+            prop_assert_eq!(
+                event_field(&events[2], "reason_order_id"),
+                Some(expected_order_id.as_str())
+            );
             if case.scenario.expected_side() == PlaceOrderSide::Buy {
                 prop_assert_eq!(
                     event_field(&events[1], "asset_id"),
@@ -225,13 +292,14 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
-                prop_assert_eq!(result.affected_balance.after.asset_id, "USDT");
+                prop_assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:USDT"));
+                prop_assert_eq!(result.updated_balance.after.asset_id.as_str(), "USDT");
                 prop_assert_eq!(
-                    result.affected_balance.after.available,
+                    result.updated_balance.after.available,
                     state.quote_balance.available - reserved_quote
                 );
                 prop_assert_eq!(
-                    result.affected_balance.after.frozen,
+                    result.updated_balance.after.frozen,
                     state.quote_balance.frozen + reserved_quote
                 );
             } else {
@@ -247,19 +315,29 @@ proptest! {
                     event_field(&events[1], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
-                prop_assert_eq!(result.affected_balance.after.asset_id, "BTC");
+                prop_assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:BTC"));
+                prop_assert_eq!(result.updated_balance.after.asset_id.as_str(), "BTC");
                 prop_assert_eq!(
-                    result.affected_balance.after.available,
+                    result.updated_balance.after.available,
                     state.base_balance.available - reserved_base
                 );
                 prop_assert_eq!(
-                    result.affected_balance.after.frozen,
+                    result.updated_balance.after.frozen,
                     state.base_balance.frozen + reserved_base
                 );
             }
-            prop_assert_eq!(result.order.order_id, expected_order_id);
             prop_assert_eq!(
-                result.order.client_order_id.as_deref().unwrap_or_default(),
+                result.created_balance_ledger_entry.reason.clone(),
+                crate::BalanceLedgerReason::ReserveForImmediateOrder {
+                    order_id: result.created_order.order_id.clone(),
+                }
+            );
+            prop_assert!(result
+                .created_balance_ledger_entry
+                .matches_balance_update(&result.updated_balance));
+            prop_assert_eq!(result.created_order.order_id, expected_order_id);
+            prop_assert_eq!(
+                result.created_order.client_order_id.as_deref().unwrap_or_default(),
                 expected_cloid
             );
         }

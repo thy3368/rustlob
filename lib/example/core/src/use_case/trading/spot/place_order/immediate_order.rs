@@ -9,7 +9,7 @@ use super::{
     checked_qty, validate_market_state,
 };
 use crate::MarketRules;
-use crate::entity::{Balance, SpotOrder, SpotOrderExecution};
+use crate::entity::{Balance, BalanceLedgerEntry, SpotOrder, SpotOrderExecution};
 
 /// 立即执行单需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,9 +146,11 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceImmediateOrderChanges {
     /// 本次立即单创建出来的 taker 订单。
-    pub order: SpotOrder,
+    pub created_order: SpotOrder,
     /// 本次下单影响到的那条余额 before/after。
-    pub affected_balance: UpdatedEntityPair<Balance>,
+    pub updated_balance: UpdatedEntityPair<Balance>,
+    /// 本次余额冻结对应的余额流水。
+    pub created_balance_ledger_entry: BalanceLedgerEntry,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -172,8 +174,8 @@ impl PlaceImmediateOrderUseCase {
             PlaceOrderSide::Buy => (0, notional_quote),
             PlaceOrderSide::Sell => (qty, 0),
         };
-        let order = SpotOrder::new(
-            order_id,
+        let created_order = SpotOrder::new(
+            order_id.clone(),
             cmd.asset,
             None,
             cmd.party_id.clone(),
@@ -187,7 +189,7 @@ impl PlaceImmediateOrderUseCase {
             cmd.cloid.clone(),
         );
 
-        let affected_balance = match side {
+        let updated_balance = match side {
             PlaceOrderSide::Buy => {
                 let mut next_balance = state.quote_balance;
                 let previous_balance = next_balance.clone();
@@ -216,7 +218,21 @@ impl PlaceImmediateOrderUseCase {
             }
         };
 
-        Ok(PlaceImmediateOrderChanges { order, affected_balance })
+        let created_balance_ledger_entry = BalanceLedgerEntry::reserve_for_immediate_order(
+            format!(
+                "balance-ledger:{}:{}",
+                created_order.order_id,
+                updated_balance.after.entity_id()
+            ),
+            &updated_balance,
+            created_order.order_id.clone(),
+        );
+
+        Ok(PlaceImmediateOrderChanges {
+            created_order,
+            updated_balance,
+            created_balance_ledger_entry,
+        })
     }
 }
 
@@ -225,8 +241,9 @@ impl ReplayableChanges for PlaceImmediateOrderChanges {
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         Ok(vec![
-            self.order.track_create_event()?,
-            self.affected_balance.after.track_update_event_from(&self.affected_balance.before)?,
+            self.created_order.track_create_event()?,
+            self.updated_balance.after.track_update_event_from(&self.updated_balance.before)?,
+            self.created_balance_ledger_entry.track_create_event()?,
         ])
     }
 }

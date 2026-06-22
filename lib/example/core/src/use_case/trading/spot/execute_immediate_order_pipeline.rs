@@ -74,7 +74,7 @@ pub enum ExecuteImmediateSpotOrderPipelineError {
 /// 立即下单执行流水线的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecuteImmediateSpotOrderPipelineChanges {
-    /// 第 1 段立即下单产出的 taker 订单与受影响余额。
+    /// 第 1 段立即下单产出的 taker 订单、余额更新和余额流水。
     pub place_output: PlaceImmediateOrderChanges,
     /// 第 2 段撮合结果；未进入撮合时为空。
     pub match_output: Option<MatchSpotOrderChanges>,
@@ -142,8 +142,8 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let place_output =
             PlaceImmediateOrderUseCase.compute_changes(&cmd.place, state.place_state)?;
-        let taker_order = place_output.order.clone();
-        let affected_balance_after = place_output.affected_balance.after.clone();
+        let taker_order = place_output.created_order.clone();
+        let affected_balance_after = place_output.updated_balance.after.clone();
 
         if !should_enter_matching(&taker_order, &state.maker_orders)? {
             return Ok(ExecuteImmediateSpotOrderPipelineChanges {
@@ -391,8 +391,12 @@ mod tests {
 
         let events = pipeline_events(&pipeline_cmd(), state)?;
 
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 3);
         assert!(events.iter().all(|event| !has_field(event, "trade_id")));
+        assert!(events.iter().any(|event| {
+            event.is_created()
+                && event_field(event, "reason") == Some("reserve_for_immediate_order")
+        }));
 
         Ok(())
     }
@@ -406,7 +410,7 @@ mod tests {
 
         let events = pipeline_events(&cmd, state)?;
 
-        assert_eq!(events.len(), 3);
+        assert_eq!(events.len(), 4);
         let taker_update = events
             .iter()
             .find(|event| event.is_updated() && event_field(event, "status") == Some("rejected"))
