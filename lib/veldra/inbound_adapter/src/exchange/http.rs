@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, Scope, web};
 
-use crate::exchange::actions::{ExchangeActionDeps, ExchangeActionReply, dispatch_exchange_action};
+use crate::exchange::actions::{ExchangeActionReply, dispatch_exchange_action};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::wire::ExchangeActionTypeProbe;
 use crate::exchange::error::ExchangeHttpError;
@@ -17,8 +17,7 @@ async fn dispatch_exchange_action_from_body(
     body: &[u8],
 ) -> Result<HttpResponse, ExchangeHttpError> {
     let probe = parse_action_type_probe(body)?;
-    let deps = ExchangeActionDeps::default();
-    let reply = dispatch_exchange_action(&probe.action.type_, body, &deps).await?;
+    let reply = dispatch_exchange_action(&probe.action.type_, body).await?;
     Ok(action_reply_to_http(reply))
 }
 

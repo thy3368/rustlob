@@ -40,9 +40,6 @@ use serde_json::Value as JsonValue;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, JsonObjectWire};
 use crate::exchange::error::ExchangeHttpError;
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ExchangeActionDeps;
-
 pub const SUPPORTED_ACTION_TYPES: &[&str] = &[
     "agentEnableDexAbstraction",
     "agentSendAsset",
@@ -527,90 +524,81 @@ impl Serialize for ExchangeActionReply {
 pub async fn dispatch_exchange_action(
     action_type: &str,
     body: &[u8],
-    deps: &ExchangeActionDeps,
 ) -> Result<ExchangeActionReply, ExchangeHttpError> {
     match action_type {
-        "agentEnableDexAbstraction" => agent_enable_dex_abstraction::handle(body, deps)
+        "agentEnableDexAbstraction" => agent_enable_dex_abstraction::handle(body)
             .await
             .map(ExchangeActionReply::AgentEnableDexAbstraction),
         "agentSendAsset" => {
-            agent_send_asset::handle(body, deps).await.map(ExchangeActionReply::AgentSendAsset)
+            agent_send_asset::handle(body).await.map(ExchangeActionReply::AgentSendAsset)
         }
-        "agentSetAbstraction" => agent_set_abstraction::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::AgentSetAbstraction),
-        "approveAgent" => {
-            approve_agent::handle(body, deps).await.map(ExchangeActionReply::ApproveAgent)
+        "agentSetAbstraction" => {
+            agent_set_abstraction::handle(body).await.map(ExchangeActionReply::AgentSetAbstraction)
         }
-        "approveBuilderFee" => approve_builder_fee::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::ApproveBuilderFee),
-        "authorizeAqav2Role" => authorize_aqav2_role::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::AuthorizeAqav2Role),
-        "batchModify" => {
-            batch_modify::handle(body, deps).await.map(ExchangeActionReply::BatchModify)
+        "approveAgent" => approve_agent::handle(body).await.map(ExchangeActionReply::ApproveAgent),
+        "approveBuilderFee" => {
+            approve_builder_fee::handle(body).await.map(ExchangeActionReply::ApproveBuilderFee)
         }
-        "cancel" => cancel::handle(body, deps).await.map(ExchangeActionReply::Cancel),
+        "authorizeAqav2Role" => {
+            authorize_aqav2_role::handle(body).await.map(ExchangeActionReply::AuthorizeAqav2Role)
+        }
+        "batchModify" => batch_modify::handle(body).await.map(ExchangeActionReply::BatchModify),
+        "cancel" => cancel::handle(body).await.map(ExchangeActionReply::Cancel),
         "cancelByCloid" => {
-            cancel_by_cloid::handle(body, deps).await.map(ExchangeActionReply::CancelByCloid)
+            cancel_by_cloid::handle(body).await.map(ExchangeActionReply::CancelByCloid)
         }
-        "cDeposit" => c_deposit::handle(body, deps).await.map(ExchangeActionReply::CDeposit),
-        "cWithdraw" => c_withdraw::handle(body, deps).await.map(ExchangeActionReply::CWithdraw),
-        "claimRewards" => {
-            claim_rewards::handle(body, deps).await.map(ExchangeActionReply::ClaimRewards)
-        }
-        "hip3LiquidatorTransfer" => hip3_liquidator_transfer::handle(body, deps)
+        "cDeposit" => c_deposit::handle(body).await.map(ExchangeActionReply::CDeposit),
+        "cWithdraw" => c_withdraw::handle(body).await.map(ExchangeActionReply::CWithdraw),
+        "claimRewards" => claim_rewards::handle(body).await.map(ExchangeActionReply::ClaimRewards),
+        "hip3LiquidatorTransfer" => hip3_liquidator_transfer::handle(body)
             .await
             .map(ExchangeActionReply::Hip3LiquidatorTransfer),
-        "modify" => modify::handle(body, deps).await.map(ExchangeActionReply::Modify),
-        "noop" => noop::handle(body, deps).await.map(ExchangeActionReply::Noop),
-        "order" => order::handle(body, deps).await.map(ExchangeActionReply::Order),
-        "reserveRequestWeight" => reserve_request_weight::handle(body, deps)
+        "modify" => modify::handle(body).await.map(ExchangeActionReply::Modify),
+        "noop" => noop::handle(body).await.map(ExchangeActionReply::Noop),
+        "order" => order::handle(body).await.map(ExchangeActionReply::Order),
+        "reserveRequestWeight" => reserve_request_weight::handle(body)
             .await
             .map(ExchangeActionReply::ReserveRequestWeight),
         "scheduleCancel" => {
-            schedule_cancel::handle(body, deps).await.map(ExchangeActionReply::ScheduleCancel)
+            schedule_cancel::handle(body).await.map(ExchangeActionReply::ScheduleCancel)
         }
-        "sendAsset" => send_asset::handle(body, deps).await.map(ExchangeActionReply::SendAsset),
-        "sendToEvmWithData" => send_to_evm_with_data::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::SendToEvmWithData),
-        "spotSend" => spot_send::handle(body, deps).await.map(ExchangeActionReply::SpotSend),
-        "topUpIsolatedOnlyMargin" => top_up_isolated_only_margin::handle(body, deps)
+        "sendAsset" => send_asset::handle(body).await.map(ExchangeActionReply::SendAsset),
+        "sendToEvmWithData" => {
+            send_to_evm_with_data::handle(body).await.map(ExchangeActionReply::SendToEvmWithData)
+        }
+        "spotSend" => spot_send::handle(body).await.map(ExchangeActionReply::SpotSend),
+        "topUpIsolatedOnlyMargin" => top_up_isolated_only_margin::handle(body)
             .await
             .map(ExchangeActionReply::TopUpIsolatedOnlyMargin),
-        "twapCancel" => twap_cancel::handle(body, deps).await.map(ExchangeActionReply::TwapCancel),
-        "twapOrder" => twap_order::handle(body, deps).await.map(ExchangeActionReply::TwapOrder),
+        "twapCancel" => twap_cancel::handle(body).await.map(ExchangeActionReply::TwapCancel),
+        "twapOrder" => twap_order::handle(body).await.map(ExchangeActionReply::TwapOrder),
         "tokenDelegate" => {
-            token_delegate::handle(body, deps).await.map(ExchangeActionReply::TokenDelegate)
+            token_delegate::handle(body).await.map(ExchangeActionReply::TokenDelegate)
         }
-        "updateIsolatedMargin" => update_isolated_margin::handle(body, deps)
+        "updateIsolatedMargin" => update_isolated_margin::handle(body)
             .await
             .map(ExchangeActionReply::UpdateIsolatedMargin),
         "updateLeverage" => {
-            update_leverage::handle(body, deps).await.map(ExchangeActionReply::UpdateLeverage)
+            update_leverage::handle(body).await.map(ExchangeActionReply::UpdateLeverage)
         }
         "usdClassTransfer" => {
-            usd_class_transfer::handle(body, deps).await.map(ExchangeActionReply::UsdClassTransfer)
+            usd_class_transfer::handle(body).await.map(ExchangeActionReply::UsdClassTransfer)
         }
-        "usdSend" => usd_send::handle(body, deps).await.map(ExchangeActionReply::UsdSend),
-        "userOutcome" => {
-            user_outcome::handle(body, deps).await.map(ExchangeActionReply::UserOutcome)
+        "usdSend" => usd_send::handle(body).await.map(ExchangeActionReply::UsdSend),
+        "userOutcome" => user_outcome::handle(body).await.map(ExchangeActionReply::UserOutcome),
+        "userDexAbstraction" => {
+            user_dex_abstraction::handle(body).await.map(ExchangeActionReply::UserDexAbstraction)
         }
-        "userDexAbstraction" => user_dex_abstraction::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::UserDexAbstraction),
-        "userSetAbstraction" => user_set_abstraction::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::UserSetAbstraction),
-        "validatorL1Stream" => validator_l1_stream::handle(body, deps)
-            .await
-            .map(ExchangeActionReply::ValidatorL1Stream),
+        "userSetAbstraction" => {
+            user_set_abstraction::handle(body).await.map(ExchangeActionReply::UserSetAbstraction)
+        }
+        "validatorL1Stream" => {
+            validator_l1_stream::handle(body).await.map(ExchangeActionReply::ValidatorL1Stream)
+        }
         "vaultTransfer" => {
-            vault_transfer::handle(body, deps).await.map(ExchangeActionReply::VaultTransfer)
+            vault_transfer::handle(body).await.map(ExchangeActionReply::VaultTransfer)
         }
-        "withdraw3" => withdraw3::handle(body, deps).await.map(ExchangeActionReply::Withdraw3),
+        "withdraw3" => withdraw3::handle(body).await.map(ExchangeActionReply::Withdraw3),
         other => Err(ExchangeHttpError::UnsupportedActionType(other.to_string())),
     }
 }

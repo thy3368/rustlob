@@ -3,7 +3,6 @@ use std::pin::Pin;
 
 use serde::de::DeserializeOwned;
 
-use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::error::ExchangeHttpError;
 
@@ -16,23 +15,17 @@ pub trait ExchangeActionHandler {
 
     fn validate(request: &Self::Request) -> Result<(), ExchangeHttpError>;
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply>;
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply>;
 }
 
-pub async fn run_exchange_action<T>(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<T::Reply, ExchangeHttpError>
+pub async fn run_exchange_action<T>(body: &[u8]) -> Result<T::Reply, ExchangeHttpError>
 where
     T: ExchangeActionHandler,
     T::Request: DeserializeOwned,
 {
     let request = parse_json_request::<T::Request>(body)?;
     T::validate(&request)?;
-    T::execute(request, deps).await
+    T::execute(request).await
 }
 
 #[cfg(test)]
@@ -41,7 +34,6 @@ mod tests {
 
     use serde::Deserialize;
 
-    use crate::exchange::actions::ExchangeActionDeps;
     use crate::exchange::common::runner::{
         ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
     };
@@ -63,10 +55,7 @@ mod tests {
             Ok(())
         }
 
-        fn execute<'a>(
-            _request: Self::Request,
-            _deps: &'a ExchangeActionDeps,
-        ) -> ExchangeActionFuture<'a, Self::Reply> {
+        fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
             Box::pin(async { Ok(()) })
         }
     }
@@ -81,10 +70,7 @@ mod tests {
             Ok(())
         }
 
-        fn execute<'a>(
-            _request: Self::Request,
-            _deps: &'a ExchangeActionDeps,
-        ) -> ExchangeActionFuture<'a, Self::Reply> {
+        fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
             Box::pin(async {
                 Err(ExchangeHttpError::InvalidJsonShape("missing field".to_string()))
             })
@@ -104,18 +90,14 @@ mod tests {
             Ok(())
         }
 
-        fn execute<'a>(
-            _request: Self::Request,
-            _deps: &'a ExchangeActionDeps,
-        ) -> ExchangeActionFuture<'a, Self::Reply> {
+        fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
             Box::pin(async { Ok("ok") })
         }
     }
 
     #[actix_web::test]
     async fn parse_error_returns_immediately() {
-        let deps = ExchangeActionDeps::default();
-        let result = run_exchange_action::<ParseErrorAction>(br#"{"value":}"#, &deps).await;
+        let result = run_exchange_action::<ParseErrorAction>(br#"{"value":}"#).await;
 
         assert!(matches!(result, Err(ExchangeHttpError::MalformedJson)));
     }
@@ -133,10 +115,7 @@ mod tests {
                 Err(ExchangeHttpError::UnsupportedActionType("order".to_string()))
             }
 
-            fn execute<'a>(
-                _request: Self::Request,
-                _deps: &'a ExchangeActionDeps,
-            ) -> ExchangeActionFuture<'a, Self::Reply> {
+            fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
                 Box::pin(async {
                     EXECUTED.store(true, Ordering::SeqCst);
                     Ok(())
@@ -144,11 +123,9 @@ mod tests {
             }
         }
 
-        let deps = ExchangeActionDeps::default();
         EXECUTED.store(false, Ordering::SeqCst);
         let result =
-            run_exchange_action::<ValidateErrorSkipExecuteAction>(br#"{"value":true}"#, &deps)
-                .await;
+            run_exchange_action::<ValidateErrorSkipExecuteAction>(br#"{"value":true}"#).await;
 
         assert!(matches!(result, Err(ExchangeHttpError::UnsupportedActionType(_))));
         assert!(!EXECUTED.load(Ordering::SeqCst));
@@ -156,9 +133,8 @@ mod tests {
 
     #[actix_web::test]
     async fn execute_error_is_returned_as_is() {
-        let deps = ExchangeActionDeps::default();
         let result: Result<(), ExchangeHttpError> =
-            run_exchange_action::<ExecuteErrorAction>(br#"{"value":true}"#, &deps).await;
+            run_exchange_action::<ExecuteErrorAction>(br#"{"value":true}"#).await;
 
         assert!(
             matches!(result, Err(ExchangeHttpError::InvalidJsonShape(message)) if message == "missing field")
@@ -167,8 +143,7 @@ mod tests {
 
     #[actix_web::test]
     async fn requestless_action_runs_through_shared_runner() {
-        let deps = ExchangeActionDeps::default();
-        let result = run_exchange_action::<RequestlessAction>(br#"{}"#, &deps).await;
+        let result = run_exchange_action::<RequestlessAction>(br#"{}"#).await;
 
         assert_eq!(result.expect("requestless action should run"), "ok");
     }

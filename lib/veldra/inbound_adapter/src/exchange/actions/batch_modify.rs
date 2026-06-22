@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
@@ -115,19 +114,13 @@ impl ExchangeActionHandler for BatchModifyAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(request, deps))
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute(request))
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    run_exchange_action::<BatchModifyAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
+    run_exchange_action::<BatchModifyAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -200,7 +193,6 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
 
 async fn execute(
     request: RequestWire,
-    _deps: &ExchangeActionDeps,
 ) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
     // 官方文档未给出 batchModify 成功响应示例。
     // 官方 Python SDK 的 modify_order() 实际组装的是 batchModify action，但示例仅打印返回值。
@@ -228,8 +220,8 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
         assert_eq!(request.action.modifies.len(), 2);
     }
 
@@ -258,7 +250,6 @@ mod tests {
     async fn reply_snapshot_is_stable() {
         let response = execute(
             parse_json_request::<RequestWire>(valid_request_json()).expect("request parses"),
-            &ExchangeActionDeps::default(),
         )
         .await
         .expect("response should build");

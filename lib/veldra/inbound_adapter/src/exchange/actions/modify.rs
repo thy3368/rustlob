@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::exchange::actions::ExchangeActionDeps;
 use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
@@ -106,19 +105,13 @@ impl ExchangeActionHandler for ModifyAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(request, deps))
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute(request))
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
-    run_exchange_action::<ModifyAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
+    run_exchange_action::<ModifyAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -185,10 +178,7 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-async fn execute(
-    _request: RequestWire,
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
+async fn execute(_request: RequestWire) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
     // 官方文档未给出 modify 成功响应示例。
     // 官方 Python SDK 的 basic_order_modify.py 只打印 modify_result，没有对 shape 做任何断言。
     // 这里先采用与 order 一致的最小成功形状并固定在测试中。
@@ -211,8 +201,8 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
         assert_eq!(request.action.order.p, "1891.4");
     }
 
@@ -250,7 +240,6 @@ mod tests {
     async fn reply_snapshot_is_stable() {
         let response = execute(
             parse_json_request::<RequestWire>(valid_request_json()).expect("request parses"),
-            &ExchangeActionDeps::default(),
         )
         .await
         .expect("response should build");

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -69,19 +68,13 @@ impl ExchangeActionHandler for CancelAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(request, deps))
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute(request))
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
-    run_exchange_action::<CancelAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
+    run_exchange_action::<CancelAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -109,10 +102,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-async fn execute(
-    request: RequestWire,
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
+async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
     let statuses = request
         .action
         .cancels
@@ -172,8 +162,7 @@ mod tests {
     async fn cancel_reply_snapshot_is_stable() {
         let request = parse_json_request::<RequestWire>(valid_cancel_request_json())
             .expect("cancel request parses");
-        let response =
-            execute(request, &ExchangeActionDeps::default()).await.expect("cancel response builds");
+        let response = execute(request).await.expect("cancel response builds");
 
         let actual = serde_json::to_string_pretty(&response).expect("cancel response serializes");
         let expected = r#"{

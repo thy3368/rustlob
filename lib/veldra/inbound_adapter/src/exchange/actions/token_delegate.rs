@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -63,19 +62,13 @@ impl ExchangeActionHandler for TokenDelegateAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        _request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(deps))
+    fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute())
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
-    run_exchange_action::<TokenDelegateAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
+    run_exchange_action::<TokenDelegateAction>(body).await
 }
 
 fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError> {
@@ -108,9 +101,7 @@ fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError>
     Ok(())
 }
 
-async fn execute(
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
+async fn execute() -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
     Ok(reply::TokenDelegateResponseWire {
         status: "ok",
         response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
@@ -185,8 +176,7 @@ mod tests {
 
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
-        let response =
-            execute(&ExchangeActionDeps::default()).await.expect("response should build");
+        let response = execute().await.expect("response should build");
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,

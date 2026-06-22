@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -45,19 +44,15 @@ impl ExchangeActionHandler for TopUpIsolatedOnlyMarginAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        _request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(deps))
+    fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute())
     }
 }
 
 pub async fn handle(
     body: &[u8],
-    deps: &ExchangeActionDeps,
 ) -> Result<reply::TopUpIsolatedOnlyMarginResponseWire, ExchangeHttpError> {
-    run_exchange_action::<TopUpIsolatedOnlyMarginAction>(body, deps).await
+    run_exchange_action::<TopUpIsolatedOnlyMarginAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -82,9 +77,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-async fn execute(
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::TopUpIsolatedOnlyMarginResponseWire, ExchangeHttpError> {
+async fn execute() -> Result<reply::TopUpIsolatedOnlyMarginResponseWire, ExchangeHttpError> {
     Ok(reply::TopUpIsolatedOnlyMarginResponseWire {
         status: "ok",
         response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
@@ -97,8 +90,8 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
         assert_eq!(request.action.leverage, "2.5");
     }
 
@@ -125,8 +118,7 @@ mod tests {
 
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
-        let response =
-            execute(&ExchangeActionDeps::default()).await.expect("response should build");
+        let response = execute().await.expect("response should build");
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,

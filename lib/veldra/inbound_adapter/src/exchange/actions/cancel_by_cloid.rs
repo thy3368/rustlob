@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -59,19 +58,13 @@ impl ExchangeActionHandler for CancelByCloidAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(request, deps))
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute(request))
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
-    run_exchange_action::<CancelByCloidAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
+    run_exchange_action::<CancelByCloidAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -103,7 +96,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 
 async fn execute(
     request: RequestWire,
-    _deps: &ExchangeActionDeps,
 ) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
     // 官方 exchange 文档没有给出 cancelByCloid 的成功响应示例。
     // 当前采用与 cancel 一致的最小成功形状，后续若拿到官方响应样例再收敛。
@@ -128,8 +120,8 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
         assert_eq!(request.action.cancels.len(), 1);
     }
 
@@ -159,7 +151,6 @@ mod tests {
     async fn reply_snapshot_is_stable() {
         let response = execute(
             parse_json_request::<RequestWire>(valid_request_json()).expect("request parses"),
-            &ExchangeActionDeps::default(),
         )
         .await
         .expect("response should build");

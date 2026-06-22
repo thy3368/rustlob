@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -59,19 +58,13 @@ impl ExchangeActionHandler for TwapCancelAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        _request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(deps))
+    fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute())
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
-    run_exchange_action::<TwapCancelAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
+    run_exchange_action::<TwapCancelAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -95,9 +88,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-async fn execute(
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
+async fn execute() -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
     Ok(reply::TwapCancelResponseWire {
         status: "ok",
         response: reply::TwapCancelResponseEnvelopeWire {
@@ -115,8 +106,8 @@ mod tests {
 
     #[test]
     fn parses_twap_cancel_request() {
-        let request = parse_json_request::<RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
         assert_eq!(request.action.type_, "twapCancel");
         assert_eq!(request.action.t, 77738308);
     }
@@ -142,8 +133,7 @@ mod tests {
 
     #[actix_web::test]
     async fn twap_cancel_reply_snapshot_is_stable() {
-        let response =
-            execute(&ExchangeActionDeps::default()).await.expect("response should build");
+        let response = execute().await.expect("response should build");
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         let expected = r#"{
   "status": "ok",

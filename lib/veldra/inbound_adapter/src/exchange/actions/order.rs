@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::actions::ExchangeActionDeps;
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{
@@ -168,19 +167,13 @@ impl ExchangeActionHandler for OrderAction {
         validate(request)
     }
 
-    fn execute<'a>(
-        request: Self::Request,
-        deps: &'a ExchangeActionDeps,
-    ) -> ExchangeActionFuture<'a, Self::Reply> {
-        Box::pin(execute(request, deps))
+    fn execute(request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
+        Box::pin(execute(request))
     }
 }
 
-pub async fn handle(
-    body: &[u8],
-    deps: &ExchangeActionDeps,
-) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
-    run_exchange_action::<OrderAction>(body, deps).await
+pub async fn handle(body: &[u8]) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
+    run_exchange_action::<OrderAction>(body).await
 }
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
@@ -245,10 +238,7 @@ const STUB_ERROR_PREFIX: &str = "stub-error";
 const STUB_ERROR_MESSAGE: &str = "Order must have minimum value of $10.";
 const STUB_OID_BASE: u64 = 77738308;
 
-async fn execute(
-    request: RequestWire,
-    _deps: &ExchangeActionDeps,
-) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
+async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
     // 当前 inbound adapter 先返回稳定的 stub 形状，便于前后端与协议快照测试对齐。
     // 后续接入真实下单 use case 时，应由 core/operating 层决定回执状态。
     let statuses = request
@@ -465,10 +455,9 @@ mod tests {
 
     #[actix_web::test]
     async fn success_json_snapshot_is_stable() {
-        let request = parse_json_request::<RequestWire>(valid_order_request_json())
-            .expect("request parses");
-        let response =
-            execute(request, &ExchangeActionDeps::default()).await.expect("response builds");
+        let request =
+            parse_json_request::<RequestWire>(valid_order_request_json()).expect("request parses");
+        let response = execute(request).await.expect("response builds");
 
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         let expected = r#"{
@@ -546,8 +535,8 @@ mod tests {
 
     #[test]
     fn request_parse_snapshot_is_stable() {
-        let request = parse_json_request::<RequestWire>(valid_order_request_json())
-            .expect("request parses");
+        let request =
+            parse_json_request::<RequestWire>(valid_order_request_json()).expect("request parses");
         let actual = serde_json::to_string_pretty(&request).expect("request serializes");
         let expected = r#"{
   "action": {
