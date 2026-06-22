@@ -3,10 +3,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeEmptyResponseWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::validate::validate_envelope_common;
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -45,25 +43,16 @@ impl ExchangeActionHandler for NoopAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "noop" {
-        return Err(NoopContractError::UnexpectedActionType(request.action.type_.clone()).into());
+        return Err(ExchangeHttpError::contract(NoopContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     Ok(())
 }
 
 async fn execute() -> Result<reply::NoopResponseWire, ExchangeHttpError> {
-    Ok(ExchangeEmptyResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

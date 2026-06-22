@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -51,10 +49,9 @@ impl ExchangeActionHandler for AgentSetAbstractionAction {
 
 fn validate(request: &AgentSetAbstractionRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "agentSetAbstraction" {
-        return Err(AgentSetAbstractionContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            AgentSetAbstractionContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -66,19 +63,20 @@ fn validate(request: &AgentSetAbstractionRequestWire) -> Result<(), ExchangeHttp
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(AgentSetAbstractionContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AgentSetAbstractionContractError::ExpiresAfterNotSupported,
+        ));
     }
     if !matches!(request.action.abstraction.as_str(), "i" | "u" | "p") {
-        return Err(AgentSetAbstractionContractError::InvalidAbstraction.into());
+        return Err(ExchangeHttpError::contract(
+            AgentSetAbstractionContractError::InvalidAbstraction,
+        ));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::AgentSetAbstractionResponseWire, ExchangeHttpError> {
-    Ok(reply::AgentSetAbstractionResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

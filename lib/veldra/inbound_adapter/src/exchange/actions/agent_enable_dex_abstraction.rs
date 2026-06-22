@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -47,10 +45,11 @@ impl ExchangeActionHandler for AgentEnableDexAbstractionAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "agentEnableDexAbstraction" {
-        return Err(AgentEnableDexAbstractionContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            AgentEnableDexAbstractionContractError::UnexpectedActionType(
+                request.action.type_.clone(),
+            ),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -62,16 +61,15 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(AgentEnableDexAbstractionContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AgentEnableDexAbstractionContractError::ExpiresAfterNotSupported,
+        ));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::AgentEnableDexAbstractionResponseWire, ExchangeHttpError> {
-    Ok(reply::AgentEnableDexAbstractionResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

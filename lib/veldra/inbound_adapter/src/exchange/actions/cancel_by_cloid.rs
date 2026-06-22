@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
+use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
 
@@ -63,27 +63,20 @@ impl ExchangeActionHandler for CancelByCloidAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cancelByCloid" {
-        return Err(
-            CancelByCloidContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(CancelByCloidContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.cancels.is_empty() {
-        return Err(CancelByCloidContractError::EmptyCancels.into());
+        return Err(ExchangeHttpError::contract(CancelByCloidContractError::EmptyCancels));
     }
     if matches!(request.action.f, Some(false)) {
-        return Err(CancelByCloidContractError::InvalidFastFlag.into());
+        return Err(ExchangeHttpError::contract(CancelByCloidContractError::InvalidFastFlag));
     }
     for cancel in &request.action.cancels {
-        validate_cloid(&cancel.cloid).map_err(|_| CancelByCloidContractError::InvalidCloid)?;
+        validate_cloid(&cancel.cloid)
+            .map_err(|_| ExchangeHttpError::contract(CancelByCloidContractError::InvalidCloid))?;
     }
     Ok(())
 }

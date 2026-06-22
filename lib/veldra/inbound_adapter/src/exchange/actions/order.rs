@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
-    validate_cloid, validate_common_fields, validate_hex_address,
+    validate_cloid, validate_envelope_common, validate_hex_address,
 };
-use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
 use crate::exchange::error::ExchangeHttpError;
 
 /// `order` 动作的入站 contract 错误。
@@ -172,56 +172,55 @@ impl ExchangeActionHandler for OrderAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "order" {
-        return Err(OrderContractError::UnexpectedActionType(request.action.type_.clone()).into());
+        return Err(ExchangeHttpError::contract(OrderContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     // 通用字段校验统一复用 shared validator，避免各 action 分叉签名语义。
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.orders.is_empty() {
-        return Err(OrderContractError::EmptyOrders.into());
+        return Err(ExchangeHttpError::contract(OrderContractError::EmptyOrders));
     }
     if !matches!(request.action.grouping.as_str(), "na" | "normalTpsl" | "positionTpsl") {
-        return Err(OrderContractError::InvalidGrouping.into());
+        return Err(ExchangeHttpError::contract(OrderContractError::InvalidGrouping));
     }
     if let Some(builder) = &request.action.builder {
-        validate_hex_address(&builder.b).map_err(|_| {
-            ExchangeHttpError::OrderContract(OrderContractError::InvalidBuilderAddress)
-        })?;
+        validate_hex_address(&builder.b)
+            .map_err(|_| ExchangeHttpError::contract(OrderContractError::InvalidBuilderAddress))?;
     }
     for order in &request.action.orders {
         // 这里仅检查 wire 最小合法性；价格/数量的业务精度约束留给更内层 use case。
         if order.p.trim().is_empty() {
-            return Err(OrderContractError::InvalidPrice.into());
+            return Err(ExchangeHttpError::contract(OrderContractError::InvalidPrice));
         }
         if order.s.trim().is_empty() {
-            return Err(OrderContractError::InvalidSize.into());
+            return Err(ExchangeHttpError::contract(OrderContractError::InvalidSize));
         }
         if let Some(cloid) = &order.c {
             validate_cloid(cloid)
-                .map_err(|_| ExchangeHttpError::OrderContract(OrderContractError::InvalidCloid))?;
+                .map_err(|_| ExchangeHttpError::contract(OrderContractError::InvalidCloid))?;
         }
         match (&order.t.limit, &order.t.trigger) {
             (Some(limit), None) => {
                 if !matches!(limit.tif.as_str(), "Alo" | "Ioc" | "Gtc") {
-                    return Err(OrderContractError::InvalidTimeInForce.into());
+                    return Err(ExchangeHttpError::contract(
+                        OrderContractError::InvalidTimeInForce,
+                    ));
                 }
             }
             (None, Some(trigger)) => {
                 if trigger.trigger_px.trim().is_empty() {
-                    return Err(OrderContractError::InvalidTriggerPrice.into());
+                    return Err(ExchangeHttpError::contract(
+                        OrderContractError::InvalidTriggerPrice,
+                    ));
                 }
                 if !matches!(trigger.tpsl.as_str(), "tp" | "sl") {
-                    return Err(OrderContractError::InvalidTriggerKind.into());
+                    return Err(ExchangeHttpError::contract(
+                        OrderContractError::InvalidTriggerKind,
+                    ));
                 }
             }
-            _ => return Err(OrderContractError::InvalidOrderType.into()),
+            _ => return Err(ExchangeHttpError::contract(OrderContractError::InvalidOrderType)),
         }
     }
     Ok(())
@@ -262,13 +261,7 @@ async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, Excha
         })
         .collect();
 
-    Ok(reply::OrderResponseWire {
-        status: "ok",
-        response: reply::OrderResponseEnvelopeWire {
-            type_: "order",
-            data: reply::OrderResponseDataWire { statuses },
-        },
-    })
+    Ok(ok_statuses_response("order", statuses))
 }
 
 #[cfg(test)]
@@ -361,7 +354,7 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert!(matches!(error, ExchangeHttpError::OrderContract(OrderContractError::EmptyOrders)));
+        assert_eq!(error.to_string(), "`action.orders` must contain at least one order.");
     }
 
     #[test]
@@ -370,10 +363,10 @@ mod tests {
             parse_json_request::<RequestWire>(&valid_request_with_grouping_json("unknown"))
                 .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert!(matches!(
-            error,
-            ExchangeHttpError::OrderContract(OrderContractError::InvalidGrouping)
-        ));
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.grouping`. Expected one of `na`, `normalTpsl`, `positionTpsl`."
+        );
     }
 
     #[test]
@@ -441,10 +434,10 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert!(matches!(
-            error,
-            ExchangeHttpError::OrderContract(OrderContractError::InvalidOrderType)
-        ));
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.orders[].t`. Expected exactly one of `limit` or `trigger`."
+        );
     }
 
     #[actix_web::test]

@@ -6,9 +6,7 @@ use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandle
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -68,10 +66,9 @@ impl ExchangeActionHandler for UsdClassTransferAction {
 
 fn validate(request: &UsdClassTransferRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "usdClassTransfer" {
-        return Err(UsdClassTransferContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            UsdClassTransferContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -83,29 +80,32 @@ fn validate(request: &UsdClassTransferRequestWire) -> Result<(), ExchangeHttpErr
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(UsdClassTransferContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            UsdClassTransferContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(UsdClassTransferContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            UsdClassTransferContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| UsdClassTransferContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| UsdClassTransferContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(UsdClassTransferContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(UsdClassTransferContractError::InvalidSignatureChainId)
+    })?;
     if request.action.amount.trim().is_empty() {
-        return Err(UsdClassTransferContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(UsdClassTransferContractError::InvalidAmount));
     }
     if request.action.nonce != request.common.nonce {
-        return Err(UsdClassTransferContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(UsdClassTransferContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::UsdClassTransferResponseWire, ExchangeHttpError> {
-    Ok(reply::UsdClassTransferResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

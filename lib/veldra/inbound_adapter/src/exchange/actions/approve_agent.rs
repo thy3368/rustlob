@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeEmptyResponseWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -67,9 +65,9 @@ impl ExchangeActionHandler for ApproveAgentAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "approveAgent" {
-        return Err(
-            ApproveAgentContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(ApproveAgentContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -81,25 +79,26 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(ApproveAgentContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ApproveAgentContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| ApproveAgentContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| ApproveAgentContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(ApproveAgentContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(ApproveAgentContractError::InvalidSignatureChainId)
+    })?;
     validate_hex_address(&request.action.agent_address)
-        .map_err(|_| ApproveAgentContractError::InvalidAgentAddress)?;
+        .map_err(|_| ExchangeHttpError::contract(ApproveAgentContractError::InvalidAgentAddress))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ApproveAgentContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(ApproveAgentContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::ApproveAgentResponseWire, ExchangeHttpError> {
-    Ok(ExchangeEmptyResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

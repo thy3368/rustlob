@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -53,10 +51,9 @@ impl ExchangeActionHandler for ValidatorL1StreamAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "validatorL1Stream" {
-        return Err(ValidatorL1StreamContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            ValidatorL1StreamContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -68,22 +65,25 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(ValidatorL1StreamContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ValidatorL1StreamContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(ValidatorL1StreamContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ValidatorL1StreamContractError::ExpiresAfterNotSupported,
+        ));
     }
     if request.action.risk_free_rate.trim().is_empty() {
-        return Err(ValidatorL1StreamContractError::InvalidRiskFreeRate.into());
+        return Err(ExchangeHttpError::contract(
+            ValidatorL1StreamContractError::InvalidRiskFreeRate,
+        ));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::ValidatorL1StreamResponseWire, ExchangeHttpError> {
-    Ok(reply::ValidatorL1StreamResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

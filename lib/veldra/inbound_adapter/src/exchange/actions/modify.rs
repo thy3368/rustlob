@@ -8,7 +8,7 @@ use crate::exchange::actions::order::reply::{
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
+use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
 
@@ -110,20 +110,14 @@ impl ExchangeActionHandler for ModifyAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "modify" {
-        return Err(ModifyContractError::UnexpectedActionType(request.action.type_.clone()).into());
+        return Err(ExchangeHttpError::contract(ModifyContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     validate_oid(&request.action.oid)?;
     if matches!(request.action.always_place, Some(false)) {
-        return Err(ModifyContractError::InvalidAlwaysPlaceFlag.into());
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidAlwaysPlaceFlag));
     }
     validate_order(&request.action.order)?;
     Ok(())
@@ -134,40 +128,42 @@ fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
         return Ok(());
     }
     if let Some(cloid) = oid.as_str() {
-        validate_cloid(cloid).map_err(|_| ModifyContractError::InvalidOid)?;
+        validate_cloid(cloid)
+            .map_err(|_| ExchangeHttpError::contract(ModifyContractError::InvalidOid))?;
         return Ok(());
     }
-    Err(ModifyContractError::InvalidOid.into())
+    Err(ExchangeHttpError::contract(ModifyContractError::InvalidOid))
 }
 
 fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     if order.builder.is_some() {
-        return Err(ModifyContractError::BuilderNotSupported.into());
+        return Err(ExchangeHttpError::contract(ModifyContractError::BuilderNotSupported));
     }
     if order.p.trim().is_empty() {
-        return Err(ModifyContractError::InvalidPrice.into());
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidPrice));
     }
     if order.s.trim().is_empty() {
-        return Err(ModifyContractError::InvalidSize.into());
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidSize));
     }
     if let Some(cloid) = &order.c {
-        validate_cloid(cloid).map_err(|_| ModifyContractError::InvalidOrderCloid)?;
+        validate_cloid(cloid)
+            .map_err(|_| ExchangeHttpError::contract(ModifyContractError::InvalidOrderCloid))?;
     }
     match (&order.t.limit, &order.t.trigger) {
         (Some(limit), None) => {
             if !matches!(limit.tif.as_str(), "Alo" | "Ioc" | "Gtc") {
-                return Err(ModifyContractError::InvalidTimeInForce.into());
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTimeInForce));
             }
         }
         (None, Some(trigger)) => {
             if trigger.trigger_px.trim().is_empty() {
-                return Err(ModifyContractError::InvalidTriggerPrice.into());
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTriggerPrice));
             }
             if !matches!(trigger.tpsl.as_str(), "tp" | "sl") {
-                return Err(ModifyContractError::InvalidTriggerKind.into());
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTriggerKind));
             }
         }
-        _ => return Err(ModifyContractError::InvalidOrderType.into()),
+        _ => return Err(ExchangeHttpError::contract(ModifyContractError::InvalidOrderType)),
     }
     Ok(())
 }

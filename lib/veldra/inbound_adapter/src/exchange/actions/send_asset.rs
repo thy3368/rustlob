@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -90,9 +88,9 @@ impl ExchangeActionHandler for SendAssetAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "sendAsset" {
-        return Err(
-            SendAssetContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(SendAssetContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -104,44 +102,44 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(SendAssetContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::VaultAddressNotSupported));
     }
     if request.common.expires_after.is_some() {
-        return Err(SendAssetContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::ExpiresAfterNotSupported));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| SendAssetContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| SendAssetContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(SendAssetContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(SendAssetContractError::InvalidSignatureChainId)
+    })?;
     validate_hex_address(&request.action.destination)
-        .map_err(|_| SendAssetContractError::InvalidDestination)?;
+        .map_err(|_| ExchangeHttpError::contract(SendAssetContractError::InvalidDestination))?;
     if request.action.source_dex.trim() != request.action.source_dex {
-        return Err(SendAssetContractError::InvalidSourceDex.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidSourceDex));
     }
     if request.action.destination_dex.trim() != request.action.destination_dex {
-        return Err(SendAssetContractError::InvalidDestinationDex.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidDestinationDex));
     }
     if request.action.token.trim().is_empty() {
-        return Err(SendAssetContractError::InvalidToken.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(SendAssetContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidAmount));
     }
     if !request.action.from_sub_account.is_empty() {
-        validate_hex_address(&request.action.from_sub_account)
-            .map_err(|_| SendAssetContractError::InvalidFromSubAccount)?;
+        validate_hex_address(&request.action.from_sub_account).map_err(|_| {
+            ExchangeHttpError::contract(SendAssetContractError::InvalidFromSubAccount)
+        })?;
     }
     if request.action.nonce != request.common.nonce {
-        return Err(SendAssetContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(SendAssetContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::SendAssetResponseWire, ExchangeHttpError> {
-    Ok(reply::SendAssetResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

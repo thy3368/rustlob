@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -67,9 +65,9 @@ impl ExchangeActionHandler for TokenDelegateAction {
 
 fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "tokenDelegate" {
-        return Err(
-            TokenDelegateContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(TokenDelegateContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -81,25 +79,26 @@ fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError>
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(TokenDelegateContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            TokenDelegateContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| TokenDelegateContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| TokenDelegateContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(TokenDelegateContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(TokenDelegateContractError::InvalidSignatureChainId)
+    })?;
     validate_hex_address(&request.action.validator)
-        .map_err(|_| TokenDelegateContractError::InvalidValidator)?;
+        .map_err(|_| ExchangeHttpError::contract(TokenDelegateContractError::InvalidValidator))?;
     if request.action.nonce != request.common.nonce {
-        return Err(TokenDelegateContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(TokenDelegateContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::TokenDelegateResponseWire, ExchangeHttpError> {
-    Ok(reply::TokenDelegateResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

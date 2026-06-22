@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -68,10 +66,9 @@ impl ExchangeActionHandler for ApproveBuilderFeeAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "approveBuilderFee" {
-        return Err(ApproveBuilderFeeContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            ApproveBuilderFeeContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -83,28 +80,29 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(ApproveBuilderFeeContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ApproveBuilderFeeContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| ApproveBuilderFeeContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| ApproveBuilderFeeContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidSignatureChainId)
+    })?;
     if request.action.max_fee_rate.trim().is_empty() {
-        return Err(ApproveBuilderFeeContractError::InvalidMaxFeeRate.into());
+        return Err(ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidMaxFeeRate));
     }
     validate_hex_address(&request.action.builder)
-        .map_err(|_| ApproveBuilderFeeContractError::InvalidBuilder)?;
+        .map_err(|_| ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidBuilder))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ApproveBuilderFeeContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(ApproveBuilderFeeContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::ApproveBuilderFeeResponseWire, ExchangeHttpError> {
-    Ok(reply::ApproveBuilderFeeResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

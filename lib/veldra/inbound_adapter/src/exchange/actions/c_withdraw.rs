@@ -6,9 +6,7 @@ use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandle
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -63,9 +61,9 @@ impl ExchangeActionHandler for CWithdrawAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cWithdraw" {
-        return Err(
-            CWithdrawContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -77,26 +75,25 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(CWithdrawContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::VaultAddressNotSupported));
     }
     if request.common.expires_after.is_some() {
-        return Err(CWithdrawContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::ExpiresAfterNotSupported));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| CWithdrawContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| CWithdrawContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(CWithdrawContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(CWithdrawContractError::InvalidSignatureChainId)
+    })?;
     if request.action.nonce != request.common.nonce {
-        return Err(CWithdrawContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::CWithdrawResponseWire, ExchangeHttpError> {
-    Ok(reply::CWithdrawResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

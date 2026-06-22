@@ -8,7 +8,7 @@ use crate::exchange::actions::order::reply::{
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::{validate_cloid, validate_common_fields};
+use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
 
@@ -119,24 +119,16 @@ impl ExchangeActionHandler for BatchModifyAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "batchModify" {
-        return Err(
-            BatchModifyContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.modifies.is_empty() {
-        return Err(BatchModifyContractError::EmptyModifies.into());
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::EmptyModifies));
     }
     if matches!(request.action.always_place, Some(false)) {
-        return Err(BatchModifyContractError::InvalidAlwaysPlaceFlag.into());
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidAlwaysPlaceFlag));
     }
     for modify in &request.action.modifies {
         validate_oid(&modify.oid)?;
@@ -150,37 +142,46 @@ fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
         return Ok(());
     }
     if let Some(cloid) = oid.as_str() {
-        validate_cloid(cloid).map_err(|_| BatchModifyContractError::InvalidOid)?;
+        validate_cloid(cloid)
+            .map_err(|_| ExchangeHttpError::contract(BatchModifyContractError::InvalidOid))?;
         return Ok(());
     }
-    Err(BatchModifyContractError::InvalidOid.into())
+    Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOid))
 }
 
 fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     if order.p.trim().is_empty() {
-        return Err(BatchModifyContractError::InvalidPrice.into());
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidPrice));
     }
     if order.s.trim().is_empty() {
-        return Err(BatchModifyContractError::InvalidSize.into());
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidSize));
     }
     if let Some(cloid) = &order.c {
-        validate_cloid(cloid).map_err(|_| BatchModifyContractError::InvalidOrderCloid)?;
+        validate_cloid(cloid).map_err(|_| {
+            ExchangeHttpError::contract(BatchModifyContractError::InvalidOrderCloid)
+        })?;
     }
     match (&order.t.limit, &order.t.trigger) {
         (Some(limit), None) => {
             if !matches!(limit.tif.as_str(), "Alo" | "Ioc" | "Gtc") {
-                return Err(BatchModifyContractError::InvalidTimeInForce.into());
+                return Err(ExchangeHttpError::contract(
+                    BatchModifyContractError::InvalidTimeInForce,
+                ));
             }
         }
         (None, Some(trigger)) => {
             if trigger.trigger_px.trim().is_empty() {
-                return Err(BatchModifyContractError::InvalidTriggerPrice.into());
+                return Err(ExchangeHttpError::contract(
+                    BatchModifyContractError::InvalidTriggerPrice,
+                ));
             }
             if !matches!(trigger.tpsl.as_str(), "tp" | "sl") {
-                return Err(BatchModifyContractError::InvalidTriggerKind.into());
+                return Err(ExchangeHttpError::contract(
+                    BatchModifyContractError::InvalidTriggerKind,
+                ));
             }
         }
-        _ => return Err(BatchModifyContractError::InvalidOrderType.into()),
+        _ => return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOrderType)),
     }
     Ok(())
 }

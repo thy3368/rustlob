@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
+use crate::exchange::common::validate::validate_envelope_common;
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_status_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,13 +20,9 @@ pub enum TwapOrderContractError {
 pub mod reply {
     use serde::Serialize;
 
-    use crate::exchange::common::wire::{
-        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusDataWire,
-    };
+    use crate::exchange::common::wire::{ExchangeResponseWire, ExchangeStatusDataWire};
 
     pub type TwapOrderResponseWire = ExchangeResponseWire<TwapOrderResponseDataWire>;
-    pub type TwapOrderResponseEnvelopeWire =
-        ExchangeResponseEnvelopeWire<TwapOrderResponseDataWire>;
     pub type TwapOrderResponseDataWire = ExchangeStatusDataWire<TwapOrderStatusWire>;
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -81,24 +77,16 @@ impl ExchangeActionHandler for TwapOrderAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "twapOrder" {
-        return Err(
-            TwapOrderContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.twap.s.trim().is_empty() {
-        return Err(TwapOrderContractError::InvalidSize.into());
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::InvalidSize));
     }
     if request.action.twap.m == 0 {
-        return Err(TwapOrderContractError::InvalidMinutes.into());
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::InvalidMinutes));
     }
     Ok(())
 }
@@ -106,17 +94,12 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 const STUB_TWAP_ID: u64 = 77738308;
 
 async fn execute() -> Result<reply::TwapOrderResponseWire, ExchangeHttpError> {
-    Ok(reply::TwapOrderResponseWire {
-        status: "ok",
-        response: reply::TwapOrderResponseEnvelopeWire {
-            type_: "twapOrder",
-            data: reply::TwapOrderResponseDataWire {
-                status: reply::TwapOrderStatusWire::Running {
-                    running: reply::TwapRunningStatusWire { twap_id: STUB_TWAP_ID },
-                },
-            },
+    Ok(ok_status_response(
+        "twapOrder",
+        reply::TwapOrderStatusWire::Running {
+            running: reply::TwapRunningStatusWire { twap_id: STUB_TWAP_ID },
         },
-    })
+    ))
 }
 
 #[cfg(test)]
@@ -179,17 +162,12 @@ mod tests {
 
     #[test]
     fn twap_order_error_snapshot_is_stable() {
-        let response = reply::TwapOrderResponseWire {
-            status: "ok",
-            response: reply::TwapOrderResponseEnvelopeWire {
-                type_: "twapOrder",
-                data: reply::TwapOrderResponseDataWire {
-                    status: reply::TwapOrderStatusWire::Error {
-                        error: "Invalid TWAP duration: 1 min(s)".to_string(),
-                    },
-                },
+        let response = ok_status_response(
+            "twapOrder",
+            reply::TwapOrderStatusWire::Error {
+                error: "Invalid TWAP duration: 1 min(s)".to_string(),
             },
-        };
+        );
 
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         let expected = r#"{

@@ -6,9 +6,7 @@ use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandle
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -87,10 +85,9 @@ impl ExchangeActionHandler for SendToEvmWithDataAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "sendToEvmWithData" {
-        return Err(SendToEvmWithDataContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            SendToEvmWithDataContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -102,44 +99,51 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(SendToEvmWithDataContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            SendToEvmWithDataContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(SendToEvmWithDataContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            SendToEvmWithDataContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| SendToEvmWithDataContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| SendToEvmWithDataContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidSignatureChainId)
+    })?;
     if request.action.token.trim().is_empty() {
-        return Err(SendToEvmWithDataContractError::InvalidToken.into());
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(SendToEvmWithDataContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidAmount));
     }
     if request.action.source_dex.trim().is_empty() {
-        return Err(SendToEvmWithDataContractError::InvalidSourceDex.into());
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidSourceDex));
     }
     if request.action.destination_recipient.trim().is_empty() {
-        return Err(SendToEvmWithDataContractError::InvalidDestinationRecipient.into());
+        return Err(ExchangeHttpError::contract(
+            SendToEvmWithDataContractError::InvalidDestinationRecipient,
+        ));
     }
     if !matches!(request.action.address_encoding.as_str(), "hex" | "base58") {
-        return Err(SendToEvmWithDataContractError::InvalidAddressEncoding.into());
+        return Err(ExchangeHttpError::contract(
+            SendToEvmWithDataContractError::InvalidAddressEncoding,
+        ));
     }
     if request.action.data.trim().is_empty() {
-        return Err(SendToEvmWithDataContractError::InvalidData.into());
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidData));
     }
     if request.action.nonce != request.common.nonce {
-        return Err(SendToEvmWithDataContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::SendToEvmWithDataResponseWire, ExchangeHttpError> {
-    Ok(reply::SendToEvmWithDataResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

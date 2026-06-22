@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -92,9 +90,9 @@ impl ExchangeActionHandler for UserOutcomeAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "userOutcome" {
-        return Err(
-            UserOutcomeContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(UserOutcomeContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -106,10 +104,14 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(UserOutcomeContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            UserOutcomeContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(UserOutcomeContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            UserOutcomeContractError::ExpiresAfterNotSupported,
+        ));
     }
     let variant_count = [
         request.action.split_outcome.is_some(),
@@ -121,36 +123,33 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     .filter(|present| *present)
     .count();
     if variant_count != 1 {
-        return Err(UserOutcomeContractError::InvalidVariant.into());
+        return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidVariant));
     }
     if let Some(split) = &request.action.split_outcome {
         if split.amount.trim().is_empty() {
-            return Err(UserOutcomeContractError::InvalidAmount.into());
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(merge) = &request.action.merge_outcome {
         if matches!(merge.amount.as_deref(), Some(amount) if amount.trim().is_empty()) {
-            return Err(UserOutcomeContractError::InvalidAmount.into());
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(merge) = &request.action.merge_question {
         if matches!(merge.amount.as_deref(), Some(amount) if amount.trim().is_empty()) {
-            return Err(UserOutcomeContractError::InvalidAmount.into());
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(negate) = &request.action.negate_outcome {
         if negate.amount.trim().is_empty() {
-            return Err(UserOutcomeContractError::InvalidAmount.into());
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::UserOutcomeResponseWire, ExchangeHttpError> {
-    Ok(reply::UserOutcomeResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

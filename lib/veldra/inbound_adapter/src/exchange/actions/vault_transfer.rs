@@ -5,9 +5,7 @@ use serde_json::Number;
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -57,9 +55,9 @@ impl ExchangeActionHandler for VaultTransferAction {
 
 fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "vaultTransfer" {
-        return Err(
-            VaultTransferContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(VaultTransferContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -71,24 +69,24 @@ fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError>
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(VaultTransferContractError::OuterVaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            VaultTransferContractError::OuterVaultAddressNotSupported,
+        ));
     }
-    validate_hex_address(&request.action.vault_address)
-        .map_err(|_| VaultTransferContractError::InvalidVaultAddress)?;
+    validate_hex_address(&request.action.vault_address).map_err(|_| {
+        ExchangeHttpError::contract(VaultTransferContractError::InvalidVaultAddress)
+    })?;
     if request.action.usd.as_i64().is_none()
         && request.action.usd.as_u64().is_none()
         && request.action.usd.as_f64().is_none()
     {
-        return Err(VaultTransferContractError::InvalidUsd.into());
+        return Err(ExchangeHttpError::contract(VaultTransferContractError::InvalidUsd));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::VaultTransferResponseWire, ExchangeHttpError> {
-    Ok(reply::VaultTransferResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

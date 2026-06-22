@@ -1,4 +1,16 @@
+use crate::exchange::common::wire::CommonExchangeFields;
 use crate::exchange::error::SharedFieldError;
+
+pub fn validate_envelope_common(common: &CommonExchangeFields) -> Result<(), SharedFieldError> {
+    validate_common_fields(
+        common.nonce,
+        common.expires_after,
+        &common.signature.r,
+        &common.signature.s,
+        common.signature.v,
+        common.vault_address.as_deref(),
+    )
+}
 
 pub fn validate_common_fields(
     nonce: u64,

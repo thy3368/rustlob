@@ -3,10 +3,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::validate::validate_envelope_common;
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -48,23 +46,14 @@ impl ExchangeActionHandler for ScheduleCancelAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "scheduleCancel" {
-        return Err(ScheduleCancelContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            ScheduleCancelContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if let Some(time) = request.action.time {
         if time < request.common.nonce.saturating_add(5_000) {
-            return Err(ScheduleCancelContractError::InvalidTime.into());
+            return Err(ExchangeHttpError::contract(ScheduleCancelContractError::InvalidTime));
         }
     }
     Ok(())
@@ -73,10 +62,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute() -> Result<reply::ScheduleCancelResponseWire, ExchangeHttpError> {
     // 官方文档未展示 scheduleCancel 成功响应。
     // 官方 Python SDK 的 basic_schedule_cancel.py 仅原样打印结果，没有约束 response shape。
-    Ok(reply::ScheduleCancelResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -49,9 +47,9 @@ impl ExchangeActionHandler for ClaimRewardsAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "claimRewards" {
-        return Err(
-            ClaimRewardsContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(ClaimRewardsContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -63,19 +61,20 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(ClaimRewardsContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ClaimRewardsContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(ClaimRewardsContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            ClaimRewardsContractError::ExpiresAfterNotSupported,
+        ));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::ClaimRewardsResponseWire, ExchangeHttpError> {
-    Ok(reply::ClaimRewardsResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

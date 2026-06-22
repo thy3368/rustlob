@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -70,9 +68,9 @@ impl ExchangeActionHandler for SpotSendAction {
 
 fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "spotSend" {
-        return Err(
-            SpotSendContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(SpotSendContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -84,31 +82,28 @@ fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(SpotSendContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(SpotSendContractError::ExpiresAfterNotSupported));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| SpotSendContractError::InvalidHyperliquidChain)?;
+        .map_err(|_| ExchangeHttpError::contract(SpotSendContractError::InvalidHyperliquidChain))?;
     validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| SpotSendContractError::InvalidSignatureChainId)?;
+        .map_err(|_| ExchangeHttpError::contract(SpotSendContractError::InvalidSignatureChainId))?;
     validate_hex_address(&request.action.destination)
-        .map_err(|_| SpotSendContractError::InvalidDestination)?;
+        .map_err(|_| ExchangeHttpError::contract(SpotSendContractError::InvalidDestination))?;
     if request.action.token.trim().is_empty() {
-        return Err(SpotSendContractError::InvalidToken.into());
+        return Err(ExchangeHttpError::contract(SpotSendContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(SpotSendContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(SpotSendContractError::InvalidAmount));
     }
     if request.action.time != request.common.nonce {
-        return Err(SpotSendContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(SpotSendContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::SpotSendResponseWire, ExchangeHttpError> {
-    Ok(reply::SpotSendResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

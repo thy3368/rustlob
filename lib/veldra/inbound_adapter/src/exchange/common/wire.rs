@@ -86,6 +86,36 @@ pub struct ExchangeEmptyResponseEnvelopeWire {
     pub type_: &'static str,
 }
 
+pub fn ok_default_response() -> ExchangeEmptyResponseWire {
+    ExchangeEmptyResponseWire {
+        status: "ok",
+        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
+    }
+}
+
+pub fn ok_status_response<TStatus>(
+    type_: &'static str,
+    status: TStatus,
+) -> ExchangeResponseWire<ExchangeStatusDataWire<TStatus>> {
+    ExchangeResponseWire {
+        status: "ok",
+        response: ExchangeResponseEnvelopeWire { type_, data: ExchangeStatusDataWire { status } },
+    }
+}
+
+pub fn ok_statuses_response<TStatus>(
+    type_: &'static str,
+    statuses: Vec<TStatus>,
+) -> ExchangeResponseWire<ExchangeStatusesDataWire<TStatus>> {
+    ExchangeResponseWire {
+        status: "ok",
+        response: ExchangeResponseEnvelopeWire {
+            type_,
+            data: ExchangeStatusesDataWire { statuses },
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

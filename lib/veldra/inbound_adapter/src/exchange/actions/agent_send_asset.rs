@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -75,10 +73,9 @@ impl ExchangeActionHandler for AgentSendAssetAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "agentSendAsset" {
-        return Err(AgentSendAssetContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            AgentSendAssetContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -90,40 +87,45 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(AgentSendAssetContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AgentSendAssetContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(AgentSendAssetContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AgentSendAssetContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hex_address(&request.action.destination)
-        .map_err(|_| AgentSendAssetContractError::InvalidDestination)?;
+    validate_hex_address(&request.action.destination).map_err(|_| {
+        ExchangeHttpError::contract(AgentSendAssetContractError::InvalidDestination)
+    })?;
     if request.action.source_dex.trim().is_empty() {
-        return Err(AgentSendAssetContractError::InvalidSourceDex.into());
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidSourceDex));
     }
     if request.action.destination_dex.trim().is_empty() {
-        return Err(AgentSendAssetContractError::InvalidDestinationDex.into());
+        return Err(ExchangeHttpError::contract(
+            AgentSendAssetContractError::InvalidDestinationDex,
+        ));
     }
     if request.action.token.trim().is_empty() {
-        return Err(AgentSendAssetContractError::InvalidToken.into());
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(AgentSendAssetContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidAmount));
     }
     if !request.action.from_sub_account.is_empty() {
-        validate_hex_address(&request.action.from_sub_account)
-            .map_err(|_| AgentSendAssetContractError::InvalidFromSubAccount)?;
+        validate_hex_address(&request.action.from_sub_account).map_err(|_| {
+            ExchangeHttpError::contract(AgentSendAssetContractError::InvalidFromSubAccount)
+        })?;
     }
     if request.action.nonce != request.common.nonce {
-        return Err(AgentSendAssetContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::AgentSendAssetResponseWire, ExchangeHttpError> {
-    Ok(reply::AgentSendAssetResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

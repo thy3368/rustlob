@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -65,10 +63,9 @@ impl ExchangeActionHandler for UserDexAbstractionAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "userDexAbstraction" {
-        return Err(UserDexAbstractionContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            UserDexAbstractionContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -80,25 +77,26 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(UserDexAbstractionContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            UserDexAbstractionContractError::ExpiresAfterNotSupported,
+        ));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| UserDexAbstractionContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| UserDexAbstractionContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(UserDexAbstractionContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(UserDexAbstractionContractError::InvalidSignatureChainId)
+    })?;
     validate_hex_address(&request.action.user)
-        .map_err(|_| UserDexAbstractionContractError::InvalidUser)?;
+        .map_err(|_| ExchangeHttpError::contract(UserDexAbstractionContractError::InvalidUser))?;
     if request.action.nonce != request.common.nonce {
-        return Err(UserDexAbstractionContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(UserDexAbstractionContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::UserDexAbstractionResponseWire, ExchangeHttpError> {
-    Ok(reply::UserDexAbstractionResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

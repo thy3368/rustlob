@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -53,10 +51,9 @@ impl ExchangeActionHandler for AuthorizeAqav2RoleAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "authorizeAqav2Role" {
-        return Err(AuthorizeAqav2RoleContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )
-        .into());
+        return Err(ExchangeHttpError::contract(
+            AuthorizeAqav2RoleContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -68,22 +65,23 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(AuthorizeAqav2RoleContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AuthorizeAqav2RoleContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(AuthorizeAqav2RoleContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(
+            AuthorizeAqav2RoleContractError::ExpiresAfterNotSupported,
+        ));
     }
     if !matches!(request.action.role.as_str(), "technical" | "treasury") {
-        return Err(AuthorizeAqav2RoleContractError::InvalidRole.into());
+        return Err(ExchangeHttpError::contract(AuthorizeAqav2RoleContractError::InvalidRole));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::AuthorizeAqav2RoleResponseWire, ExchangeHttpError> {
-    Ok(reply::AuthorizeAqav2RoleResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

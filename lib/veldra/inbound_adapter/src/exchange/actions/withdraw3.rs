@@ -7,9 +7,7 @@ use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
     validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -67,9 +65,9 @@ impl ExchangeActionHandler for Withdraw3Action {
 
 fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "withdraw3" {
-        return Err(
-            Withdraw3ContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(Withdraw3ContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -81,28 +79,27 @@ fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(Withdraw3ContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(Withdraw3ContractError::ExpiresAfterNotSupported));
     }
-    validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| Withdraw3ContractError::InvalidHyperliquidChain)?;
-    validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| Withdraw3ContractError::InvalidSignatureChainId)?;
+    validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
+        ExchangeHttpError::contract(Withdraw3ContractError::InvalidHyperliquidChain)
+    })?;
+    validate_signature_chain_id(&request.action.signature_chain_id).map_err(|_| {
+        ExchangeHttpError::contract(Withdraw3ContractError::InvalidSignatureChainId)
+    })?;
     validate_hex_address(&request.action.destination)
-        .map_err(|_| Withdraw3ContractError::InvalidDestination)?;
+        .map_err(|_| ExchangeHttpError::contract(Withdraw3ContractError::InvalidDestination))?;
     if request.action.amount.trim().is_empty() {
-        return Err(Withdraw3ContractError::InvalidAmount.into());
+        return Err(ExchangeHttpError::contract(Withdraw3ContractError::InvalidAmount));
     }
     if request.action.time != request.common.nonce {
-        return Err(Withdraw3ContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(Withdraw3ContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::Withdraw3ResponseWire, ExchangeHttpError> {
-    Ok(reply::Withdraw3ResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

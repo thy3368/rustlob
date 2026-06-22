@@ -6,9 +6,7 @@ use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandle
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
-use crate::exchange::common::wire::{
-    ExchangeEmptyResponseEnvelopeWire, ExchangeRequestEnvelopeWire,
-};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -63,9 +61,9 @@ impl ExchangeActionHandler for CDepositAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cDeposit" {
-        return Err(
-            CDepositContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(CDepositContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -77,26 +75,23 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(CDepositContractError::VaultAddressNotSupported.into());
+        return Err(ExchangeHttpError::contract(CDepositContractError::VaultAddressNotSupported));
     }
     if request.common.expires_after.is_some() {
-        return Err(CDepositContractError::ExpiresAfterNotSupported.into());
+        return Err(ExchangeHttpError::contract(CDepositContractError::ExpiresAfterNotSupported));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain)
-        .map_err(|_| CDepositContractError::InvalidHyperliquidChain)?;
+        .map_err(|_| ExchangeHttpError::contract(CDepositContractError::InvalidHyperliquidChain))?;
     validate_signature_chain_id(&request.action.signature_chain_id)
-        .map_err(|_| CDepositContractError::InvalidSignatureChainId)?;
+        .map_err(|_| ExchangeHttpError::contract(CDepositContractError::InvalidSignatureChainId))?;
     if request.action.nonce != request.common.nonce {
-        return Err(CDepositContractError::NonceMismatch.into());
+        return Err(ExchangeHttpError::contract(CDepositContractError::NonceMismatch));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::CDepositResponseWire, ExchangeHttpError> {
-    Ok(reply::CDepositResponseWire {
-        status: "ok",
-        response: ExchangeEmptyResponseEnvelopeWire { type_: "default" },
-    })
+    Ok(ok_default_response())
 }
 
 #[cfg(test)]

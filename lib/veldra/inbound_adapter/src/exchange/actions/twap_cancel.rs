@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::exchange::common::validate::validate_common_fields;
-use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
+use crate::exchange::common::validate::validate_envelope_common;
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_status_response};
 use crate::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]
@@ -18,13 +18,9 @@ pub enum TwapCancelContractError {
 pub mod reply {
     use serde::Serialize;
 
-    use crate::exchange::common::wire::{
-        ExchangeResponseEnvelopeWire, ExchangeResponseWire, ExchangeStatusDataWire,
-    };
+    use crate::exchange::common::wire::{ExchangeResponseWire, ExchangeStatusDataWire};
 
     pub type TwapCancelResponseWire = ExchangeResponseWire<TwapCancelResponseDataWire>;
-    pub type TwapCancelResponseEnvelopeWire =
-        ExchangeResponseEnvelopeWire<TwapCancelResponseDataWire>;
     pub type TwapCancelResponseDataWire = ExchangeStatusDataWire<TwapCancelStatusWire>;
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -63,35 +59,19 @@ impl ExchangeActionHandler for TwapCancelAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "twapCancel" {
-        return Err(
-            TwapCancelContractError::UnexpectedActionType(request.action.type_.clone()).into()
-        );
+        return Err(ExchangeHttpError::contract(TwapCancelContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
-    validate_common_fields(
-        request.common.nonce,
-        request.common.expires_after,
-        &request.common.signature.r,
-        &request.common.signature.s,
-        request.common.signature.v,
-        request.common.vault_address.as_deref(),
-    )
-    .map_err(ExchangeHttpError::SharedFields)?;
+    validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.t == 0 {
-        return Err(TwapCancelContractError::InvalidTwapId.into());
+        return Err(ExchangeHttpError::contract(TwapCancelContractError::InvalidTwapId));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
-    Ok(reply::TwapCancelResponseWire {
-        status: "ok",
-        response: reply::TwapCancelResponseEnvelopeWire {
-            type_: "twapCancel",
-            data: reply::TwapCancelResponseDataWire {
-                status: reply::TwapCancelStatusWire::Success("success"),
-            },
-        },
-    })
+    Ok(ok_status_response("twapCancel", reply::TwapCancelStatusWire::Success("success")))
 }
 
 #[cfg(test)]
@@ -144,17 +124,12 @@ mod tests {
 
     #[test]
     fn twap_cancel_error_snapshot_is_stable() {
-        let response = reply::TwapCancelResponseWire {
-            status: "ok",
-            response: reply::TwapCancelResponseEnvelopeWire {
-                type_: "twapCancel",
-                data: reply::TwapCancelResponseDataWire {
-                    status: reply::TwapCancelStatusWire::Error {
-                        error: "TWAP was never placed, already canceled, or filled.".to_string(),
-                    },
-                },
+        let response = ok_status_response(
+            "twapCancel",
+            reply::TwapCancelStatusWire::Error {
+                error: "TWAP was never placed, already canceled, or filled.".to_string(),
             },
-        };
+        );
 
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         let expected = r#"{
