@@ -30,6 +30,7 @@ pub use perp::hyperliquid_perp_position::{
 };
 pub use perp::hyperliquid_perp_settlement::HyperliquidPerpSettlement;
 pub use perp::hyperliquid_perp_trade::HyperliquidPerpTrade;
+pub(crate) use spot::spot_order::SpotOrderMatchError;
 #[cfg(test)]
 pub(crate) use spot::spot_order::spot_order_scenarios::{
     ActiveSpotOrderScenario, active_spot_order_scenario_strategy,
@@ -38,6 +39,5 @@ pub use spot::spot_order::{
     SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole,
 };
-pub(crate) use spot::spot_order::{SpotOrderFinalization, SpotOrderMatchError};
 pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;

@@ -1,7 +1,7 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
 use serde::{Deserialize, Serialize};
 
-use crate::SpotOrderSide;
+use crate::{SpotOrderSide, SpotSettlement};
 
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
@@ -68,6 +68,37 @@ impl SpotTrade {
     /// 返回成交 quote 名义价值；乘法溢出时返回 `None`。
     pub fn notional_quote(&self) -> Option<u64> {
         self.price.checked_mul(self.qty)
+    }
+
+    /// 返回清结算中的买方账户 ID。
+    pub fn buyer_account_id(&self) -> &str {
+        match self.taker_side {
+            SpotOrderSide::Buy => self.taker_account_id.as_str(),
+            SpotOrderSide::Sell => self.maker_account_id.as_str(),
+        }
+    }
+
+    /// 返回清结算中的卖方账户 ID。
+    pub fn seller_account_id(&self) -> &str {
+        match self.taker_side {
+            SpotOrderSide::Buy => self.maker_account_id.as_str(),
+            SpotOrderSide::Sell => self.taker_account_id.as_str(),
+        }
+    }
+
+    /// 将撮合事实转换为一条清结算事实；quote 名义价值溢出时返回 `None`。
+    pub fn to_settlement(&self, settlement_id: String) -> Option<SpotSettlement> {
+        let quote_qty = self.notional_quote()?;
+        Some(SpotSettlement::new(
+            settlement_id,
+            self.trade_id.clone(),
+            self.match_id.clone(),
+            self.buyer_account_id().to_string(),
+            self.seller_account_id().to_string(),
+            self.qty,
+            quote_qty,
+            self.price,
+        ))
     }
 }
 
@@ -158,6 +189,64 @@ mod tests {
         assert_eq!(trade.match_id, "match-1");
         assert_eq!(trade.taker_side, SpotOrderSide::Buy);
         assert_eq!(trade.notional_quote(), Some(200));
+        assert_eq!(trade.buyer_account_id(), "buyer");
+        assert_eq!(trade.seller_account_id(), "seller");
+    }
+
+    #[test]
+    fn buyer_and_seller_account_ids_follow_taker_side() {
+        let buy_taker = trade();
+        assert_eq!(buy_taker.buyer_account_id(), "buyer");
+        assert_eq!(buy_taker.seller_account_id(), "seller");
+
+        let sell_taker = SpotTrade::new(
+            "match-2-1".to_string(),
+            "match-2".to_string(),
+            10_001,
+            "BTCUSDT".to_string(),
+            "taker-2".to_string(),
+            "maker-2".to_string(),
+            "seller".to_string(),
+            "buyer".to_string(),
+            SpotOrderSide::Sell,
+            100,
+            2,
+        );
+        assert_eq!(sell_taker.buyer_account_id(), "buyer");
+        assert_eq!(sell_taker.seller_account_id(), "seller");
+    }
+
+    #[test]
+    fn to_settlement_builds_settlement_fact() {
+        let settlement = trade().to_settlement("settle-1-1".to_string()).unwrap();
+
+        assert_eq!(settlement.settlement_id, "settle-1-1");
+        assert_eq!(settlement.trade_id, "match-1-1");
+        assert_eq!(settlement.match_id, "match-1");
+        assert_eq!(settlement.buyer_account_id, "buyer");
+        assert_eq!(settlement.seller_account_id, "seller");
+        assert_eq!(settlement.base_qty, 2);
+        assert_eq!(settlement.quote_qty, 200);
+        assert_eq!(settlement.price, 100);
+    }
+
+    #[test]
+    fn to_settlement_returns_none_when_notional_overflows() {
+        let trade = SpotTrade::new(
+            "match-overflow-1".to_string(),
+            "match-overflow".to_string(),
+            10_001,
+            "BTCUSDT".to_string(),
+            "taker-overflow".to_string(),
+            "maker-overflow".to_string(),
+            "buyer".to_string(),
+            "seller".to_string(),
+            SpotOrderSide::Buy,
+            u64::MAX,
+            2,
+        );
+
+        assert_eq!(trade.to_settlement("settle-overflow-1".to_string()), None);
     }
 
     #[test]

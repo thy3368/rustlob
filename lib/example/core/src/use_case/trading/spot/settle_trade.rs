@@ -165,19 +165,10 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
         let mut updated_balances = Vec::new();
 
         for (index, trade) in state.trades.iter().enumerate() {
-            let parties = settlement_parties(trade);
-            let quote_qty =
-                trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            settlements.push(SpotSettlement::new(
-                format!("{}-{}", cmd.settlement_batch_id, index + 1),
-                trade.trade_id.clone(),
-                trade.match_id.clone(),
-                parties.buyer_account_id.to_string(),
-                parties.seller_account_id.to_string(),
-                trade.qty,
-                quote_qty,
-                trade.price,
-            ));
+            let settlement = trade
+                .to_settlement(format!("{}-{}", cmd.settlement_batch_id, index + 1))
+                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+            settlements.push(settlement);
         }
 
         let balance_ledger_reasons = settlement_balance_ledger_reasons(
@@ -237,12 +228,6 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct SettlementParties<'a> {
-    buyer_account_id: &'a str,
-    seller_account_id: &'a str,
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 struct BalanceSettlementDelta {
     available_add: u64,
@@ -285,32 +270,31 @@ fn settlement_deltas(
 ) -> Result<HashMap<String, BalanceSettlementDelta>, SettleSpotTradeError> {
     let mut deltas: HashMap<String, BalanceSettlementDelta> = HashMap::new();
     for trade in trades {
-        let parties = settlement_parties(trade);
         let quote_qty = trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
         let buyer_base_delta =
-            deltas.entry(balance_key(parties.buyer_account_id, base_asset_id)).or_default();
+            deltas.entry(balance_key(trade.buyer_account_id(), base_asset_id)).or_default();
         buyer_base_delta.available_add = buyer_base_delta
             .available_add
             .checked_add(trade.qty)
             .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
         let buyer_quote_delta =
-            deltas.entry(balance_key(parties.buyer_account_id, quote_asset_id)).or_default();
+            deltas.entry(balance_key(trade.buyer_account_id(), quote_asset_id)).or_default();
         buyer_quote_delta.frozen_sub = buyer_quote_delta
             .frozen_sub
             .checked_add(quote_qty)
             .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
         let seller_quote_delta =
-            deltas.entry(balance_key(parties.seller_account_id, quote_asset_id)).or_default();
+            deltas.entry(balance_key(trade.seller_account_id(), quote_asset_id)).or_default();
         seller_quote_delta.available_add = seller_quote_delta
             .available_add
             .checked_add(quote_qty)
             .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
 
         let seller_base_delta =
-            deltas.entry(balance_key(parties.seller_account_id, base_asset_id)).or_default();
+            deltas.entry(balance_key(trade.seller_account_id(), base_asset_id)).or_default();
         seller_base_delta.frozen_sub = seller_base_delta
             .frozen_sub
             .checked_add(trade.qty)
@@ -342,22 +326,21 @@ fn settlement_balance_ledger_reasons(
     let mut refs: HashMap<(String, BalanceLedgerKind), BalanceLedgerRefBatch> = HashMap::new();
 
     for (trade, settlement) in trades.iter().zip(settlements) {
-        let parties = settlement_parties(trade);
         let keys = [
             (
-                balance_key(parties.buyer_account_id, base_asset_id),
+                balance_key(trade.buyer_account_id(), base_asset_id),
                 BalanceLedgerKind::BuyerReceiveBase,
             ),
             (
-                balance_key(parties.buyer_account_id, quote_asset_id),
+                balance_key(trade.buyer_account_id(), quote_asset_id),
                 BalanceLedgerKind::BuyerReleaseFrozenQuote,
             ),
             (
-                balance_key(parties.seller_account_id, quote_asset_id),
+                balance_key(trade.seller_account_id(), quote_asset_id),
                 BalanceLedgerKind::SellerReceiveQuote,
             ),
             (
-                balance_key(parties.seller_account_id, base_asset_id),
+                balance_key(trade.seller_account_id(), base_asset_id),
                 BalanceLedgerKind::SellerReleaseFrozenBase,
             ),
         ];
@@ -400,19 +383,6 @@ fn settlement_balance_ledger_reasons(
             (balance_id, reason)
         })
         .collect()
-}
-
-fn settlement_parties(trade: &SpotTrade) -> SettlementParties<'_> {
-    match trade.taker_side {
-        SpotOrderSide::Buy => SettlementParties {
-            buyer_account_id: trade.taker_account_id.as_str(),
-            seller_account_id: trade.maker_account_id.as_str(),
-        },
-        SpotOrderSide::Sell => SettlementParties {
-            buyer_account_id: trade.maker_account_id.as_str(),
-            seller_account_id: trade.taker_account_id.as_str(),
-        },
-    }
 }
 
 fn validate_balances_can_settle(

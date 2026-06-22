@@ -281,12 +281,24 @@ pub(crate) enum SpotOrderMatchError {
     /// 订单状态和已成交数量不一致。
     #[error("order execution state is inconsistent")]
     InconsistentExecutionState,
+    /// 订单当前生命周期状态不允许继续撮合。
+    #[error("order is not matchable")]
+    OrderNotMatchable,
+    /// maker 和 taker 不能是同一张订单。
+    #[error("maker order must not be the taker order")]
+    MakerIsTaker,
     /// maker 和 taker 必须方向相反。
     #[error("maker order has the same side as taker")]
     SameSideMaker,
     /// maker 必须是限价单，成交价取 maker 限价。
     #[error("maker order must be a limit order")]
     MakerMustBeLimit,
+    /// maker 和 taker 必须交易同一现货 asset。
+    #[error("maker order trades a different asset")]
+    AssetMismatch,
+    /// maker 和 taker 必须交易同一展示交易对。
+    #[error("maker order trades a different symbol")]
+    SymbolMismatch,
     /// 按当前 maker 顺序没有任何可成交结果。
     #[error("no spot trades were matched")]
     NoTradesMatched,
@@ -424,6 +436,43 @@ impl SpotOrder {
         self.qty.checked_sub(self.filled_qty).ok_or(SpotOrderMatchError::InconsistentExecutionState)
     }
 
+    /// 校验订单当前是否仍然允许进入撮合。
+    pub(crate) fn ensure_matchable(&self) -> Result<(), SpotOrderMatchError> {
+        if !self.has_consistent_execution_state() {
+            return Err(SpotOrderMatchError::InconsistentExecutionState);
+        }
+        if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+            return Err(SpotOrderMatchError::OrderNotMatchable);
+        }
+        if self.remaining_qty()? == 0 {
+            return Err(SpotOrderMatchError::OrderNotMatchable);
+        }
+        Ok(())
+    }
+
+    /// 校验该 maker 是否可以作为给定 taker 的撮合对手方。
+    pub(crate) fn ensure_compatible_maker_for(
+        &self,
+        taker: &SpotOrder,
+    ) -> Result<(), SpotOrderMatchError> {
+        if self.order_id == taker.order_id {
+            return Err(SpotOrderMatchError::MakerIsTaker);
+        }
+        if self.side == taker.side {
+            return Err(SpotOrderMatchError::SameSideMaker);
+        }
+        if self.limit_price().is_none() {
+            return Err(SpotOrderMatchError::MakerMustBeLimit);
+        }
+        if !self.trades_asset(taker.asset) {
+            return Err(SpotOrderMatchError::AssetMismatch);
+        }
+        if !self.trades_symbol(taker.symbol.as_str()) {
+            return Err(SpotOrderMatchError::SymbolMismatch);
+        }
+        Ok(())
+    }
+
     /// 返回该订单是否会以当前价格和 maker 价格交叉成交。
     pub(crate) fn crosses_maker_price(&self, maker_price: u64) -> bool {
         match self.side {
@@ -461,6 +510,20 @@ impl SpotOrder {
         } else {
             SpotOrderStatus::PartiallyFilled
         }
+    }
+
+    /// 应用一次 maker 成交推进。
+    pub(crate) fn apply_fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderMatchError> {
+        let next_filled_qty = self
+            .filled_qty
+            .checked_add(added_fill_qty)
+            .ok_or(SpotOrderMatchError::ArithmeticOverflow)?;
+        let next_version =
+            self.version.checked_add(1).ok_or(SpotOrderMatchError::ArithmeticOverflow)?;
+        self.filled_qty = next_filled_qty;
+        self.status = self.matched_status_for(next_filled_qty);
+        self.version = next_version;
+        Ok(())
     }
 
     /// 返回本轮撮合结束后 taker 订单应进入的生命周期状态。
@@ -508,6 +571,30 @@ impl SpotOrder {
                 })
             }
         }
+    }
+
+    /// 应用 taker 撮合结束后的目标状态。
+    pub(crate) fn apply_finalization(
+        &mut self,
+        finalization: SpotOrderFinalization,
+    ) -> Result<(), SpotOrderMatchError> {
+        let next_version =
+            self.version.checked_add(1).ok_or(SpotOrderMatchError::ArithmeticOverflow)?;
+        self.filled_qty = finalization.next_filled_qty;
+        self.status = finalization.status;
+        self.status_reason = finalization.status_reason;
+        self.version = next_version;
+        Ok(())
+    }
+
+    /// 将 ALO 订单按“会立即吃单”语义拒绝。
+    pub(crate) fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderMatchError> {
+        let next_version =
+            self.version.checked_add(1).ok_or(SpotOrderMatchError::ArithmeticOverflow)?;
+        self.status = SpotOrderStatus::Rejected;
+        self.status_reason = Some(SpotOrderStatusReason::BadAloPxRejected);
+        self.version = next_version;
+        Ok(())
     }
 
     /// 返回冻结 quote 余额是否符合买卖方向。

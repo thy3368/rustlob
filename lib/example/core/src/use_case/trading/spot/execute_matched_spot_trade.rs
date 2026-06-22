@@ -10,7 +10,7 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };
-use crate::entity::{Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotTrade};
+use crate::entity::{Balance, SpotOrder, SpotOrderExecution, SpotOrderSide};
 
 /// 执行一次“撮合后立即清结算”的现货成交命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +205,7 @@ fn build_limit_order(
     account_id: &str,
     side: SpotOrderSide,
     price: u64,
+    time_in_force: crate::entity::SpotOrderTimeInForce,
     qty: u64,
 ) -> SpotOrder {
     let (reserved_base, reserved_quote) = match side {
@@ -219,7 +220,7 @@ fn build_limit_order(
         "BTCUSDT".to_string(),
         side,
         SpotOrderExecution::Limit { price },
-        crate::entity::SpotOrderTimeInForce::Gtc,
+        time_in_force,
         qty,
         reserved_base,
         reserved_quote,
@@ -229,17 +230,50 @@ fn build_limit_order(
 
 #[cfg(test)]
 fn taker_buy_limit(qty: u64, price: u64) -> SpotOrder {
-    build_limit_order("taker-1", "buyer", SpotOrderSide::Buy, price, qty)
+    build_limit_order(
+        "taker-1",
+        "buyer",
+        SpotOrderSide::Buy,
+        price,
+        crate::entity::SpotOrderTimeInForce::Gtc,
+        qty,
+    )
+}
+
+#[cfg(test)]
+fn taker_buy_alo(qty: u64, price: u64) -> SpotOrder {
+    build_limit_order(
+        "taker-1",
+        "buyer",
+        SpotOrderSide::Buy,
+        price,
+        crate::entity::SpotOrderTimeInForce::Alo,
+        qty,
+    )
 }
 
 #[cfg(test)]
 fn maker_sell(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrder {
-    build_limit_order(order_id, account_id, SpotOrderSide::Sell, price, qty)
+    build_limit_order(
+        order_id,
+        account_id,
+        SpotOrderSide::Sell,
+        price,
+        crate::entity::SpotOrderTimeInForce::Gtc,
+        qty,
+    )
 }
 
 #[cfg(test)]
 fn maker_buy(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrder {
-    build_limit_order(order_id, account_id, SpotOrderSide::Buy, price, qty)
+    build_limit_order(
+        order_id,
+        account_id,
+        SpotOrderSide::Buy,
+        price,
+        crate::entity::SpotOrderTimeInForce::Gtc,
+        qty,
+    )
 }
 
 #[cfg(test)]

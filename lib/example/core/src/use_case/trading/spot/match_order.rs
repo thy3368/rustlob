@@ -4,10 +4,7 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{
-    SpotOrder, SpotOrderFinalization, SpotOrderMatchError, SpotOrderStatus, SpotOrderStatusReason,
-    SpotTrade,
-};
+use crate::entity::{SpotOrder, SpotOrderMatchError, SpotOrderStatus, SpotTrade};
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
 ///
@@ -89,8 +86,12 @@ impl From<SpotOrderMatchError> for MatchSpotOrderError {
     fn from(value: SpotOrderMatchError) -> Self {
         match value {
             SpotOrderMatchError::InconsistentExecutionState => Self::InconsistentOrderState,
+            SpotOrderMatchError::OrderNotMatchable => Self::OrderNotMatchable,
+            SpotOrderMatchError::MakerIsTaker => Self::MakerIsTaker,
             SpotOrderMatchError::SameSideMaker => Self::SameSideMaker,
             SpotOrderMatchError::MakerMustBeLimit => Self::MakerMustBeLimit,
+            SpotOrderMatchError::AssetMismatch => Self::AssetMismatch,
+            SpotOrderMatchError::SymbolMismatch => Self::SymbolMismatch,
             SpotOrderMatchError::NoTradesMatched => Self::NoTradesMatched,
             SpotOrderMatchError::ArithmeticOverflow => Self::ArithmeticOverflow,
         }
@@ -168,25 +169,11 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
         if !taker.belongs_to_account(&cmd.party_id) {
             return Err(MatchSpotOrderError::TakerOwnerMismatch);
         }
-        validate_matchable_order(taker)?;
+        taker.ensure_matchable()?;
 
         for maker in &state.maker_orders {
-            validate_matchable_order(maker)?;
-            if maker.order_id == taker.order_id {
-                return Err(MatchSpotOrderError::MakerIsTaker);
-            }
-            if maker.side == taker.side {
-                return Err(MatchSpotOrderError::SameSideMaker);
-            }
-            if maker.limit_price().is_none() {
-                return Err(MatchSpotOrderError::MakerMustBeLimit);
-            }
-            if !maker.trades_asset(taker.asset) {
-                return Err(MatchSpotOrderError::AssetMismatch);
-            }
-            if !maker.trades_symbol(taker.symbol.as_str()) {
-                return Err(MatchSpotOrderError::SymbolMismatch);
-            }
+            maker.ensure_matchable()?;
+            maker.ensure_compatible_maker_for(taker)?;
         }
 
         Ok(())
@@ -206,13 +193,7 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
         let best_maker = state.maker_orders.first();
 
         if taker_order.would_be_rejected_as_alo(best_maker)? {
-            let current_filled_qty = taker_order.filled_qty;
-            apply_taker_order_update(
-                &mut taker_order,
-                current_filled_qty,
-                SpotOrderStatus::Rejected,
-                Some(SpotOrderStatusReason::BadAloPxRejected),
-            )?;
+            taker_order.reject_as_bad_alo()?;
             return Ok(MatchSpotOrderChanges {
                 trades,
                 updated_maker_orders,
@@ -257,18 +238,7 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
 
             let mut next_maker_order = maker_order;
             let previous_maker_order = next_maker_order.clone();
-            let next_maker_filled = next_maker_order
-                .filled_qty
-                .checked_add(trade_qty)
-                .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-            let next_maker_status = next_maker_order.matched_status_for(next_maker_filled);
-            let next_maker_version = next_maker_order
-                .version
-                .checked_add(1)
-                .ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-            next_maker_order.filled_qty = next_maker_filled;
-            next_maker_order.status = next_maker_status;
-            next_maker_order.version = next_maker_version;
+            next_maker_order.apply_fill(trade_qty)?;
             updated_maker_orders
                 .push(UpdatedEntityPair { before: previous_maker_order, after: next_maker_order });
 
@@ -281,7 +251,7 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
         }
 
         let finalization = taker_order.finalize_after_match(total_taker_fill)?;
-        apply_taker_order_with_finalization(&mut taker_order, finalization)?;
+        taker_order.apply_finalization(finalization)?;
 
         Ok(MatchSpotOrderChanges {
             trades,
@@ -292,46 +262,6 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
             },
         })
     }
-}
-
-fn validate_matchable_order(order: &SpotOrder) -> Result<(), MatchSpotOrderError> {
-    if !order.has_consistent_execution_state() {
-        return Err(MatchSpotOrderError::InconsistentOrderState);
-    }
-    if !matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-        return Err(MatchSpotOrderError::OrderNotMatchable);
-    }
-    if order.remaining_qty()? == 0 {
-        return Err(MatchSpotOrderError::OrderNotMatchable);
-    }
-    Ok(())
-}
-
-fn apply_taker_order_update(
-    taker_order: &mut SpotOrder,
-    next_taker_filled: u64,
-    next_taker_status: SpotOrderStatus,
-    next_taker_status_reason: Option<SpotOrderStatusReason>,
-) -> Result<(), MatchSpotOrderError> {
-    let next_taker_version =
-        taker_order.version.checked_add(1).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
-    taker_order.filled_qty = next_taker_filled;
-    taker_order.status = next_taker_status;
-    taker_order.status_reason = next_taker_status_reason;
-    taker_order.version = next_taker_version;
-    Ok(())
-}
-
-fn apply_taker_order_with_finalization(
-    taker_order: &mut SpotOrder,
-    finalization: SpotOrderFinalization,
-) -> Result<(), MatchSpotOrderError> {
-    apply_taker_order_update(
-        taker_order,
-        finalization.next_filled_qty,
-        finalization.status,
-        finalization.status_reason,
-    )
 }
 
 #[cfg(test)]
