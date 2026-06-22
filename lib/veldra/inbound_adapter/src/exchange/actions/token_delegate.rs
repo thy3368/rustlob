@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
@@ -107,14 +107,15 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<TokenDelegateRequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<TokenDelegateRequestWire, ExchangeHttpError>(valid_request_json())
+                .expect("request should parse");
         assert!(!request.action.is_undelegate);
     }
 
     #[test]
     fn rejects_nonce_mismatch() {
-        let request = parse_json_request::<TokenDelegateRequestWire>(
+        let request = parse_json_request::<TokenDelegateRequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "tokenDelegate",
@@ -143,7 +144,7 @@ mod tests {
 
     #[test]
     fn allows_vault_address_like_sdk_post_payload() {
-        let request = parse_json_request::<TokenDelegateRequestWire>(
+        let request = parse_json_request::<TokenDelegateRequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "tokenDelegate",

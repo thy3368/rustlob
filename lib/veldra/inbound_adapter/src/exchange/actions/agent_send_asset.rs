@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
@@ -134,14 +134,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request =
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.source_dex, "spot");
     }
 
     #[test]
     fn rejects_invalid_from_sub_account() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "agentSendAsset",

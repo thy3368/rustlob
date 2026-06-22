@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
@@ -114,14 +114,16 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<UsdClassTransferRequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request = parse_json_request::<UsdClassTransferRequestWire, ExchangeHttpError>(
+            valid_request_json(),
+        )
+        .expect("request should parse");
         assert!(request.action.to_perp);
     }
 
     #[test]
     fn rejects_empty_amount() {
-        let request = parse_json_request::<UsdClassTransferRequestWire>(
+        let request = parse_json_request::<UsdClassTransferRequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "usdClassTransfer",

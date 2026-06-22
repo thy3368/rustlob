@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hex_address, validate_hyperliquid_chain,
@@ -108,14 +108,15 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<Withdraw3RequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<Withdraw3RequestWire, ExchangeHttpError>(valid_request_json())
+                .expect("request should parse");
         assert_eq!(request.action.amount, "1");
     }
 
     #[test]
     fn rejects_empty_amount() {
-        let request = parse_json_request::<Withdraw3RequestWire>(
+        let request = parse_json_request::<Withdraw3RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "withdraw3",
@@ -143,7 +144,7 @@ mod tests {
 
     #[test]
     fn allows_vault_address_like_sdk_post_payload() {
-        let request = parse_json_request::<Withdraw3RequestWire>(
+        let request = parse_json_request::<Withdraw3RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "withdraw3",

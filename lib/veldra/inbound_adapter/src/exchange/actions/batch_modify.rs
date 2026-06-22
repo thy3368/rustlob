@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[cfg(test)]
+use crate::common::parse::parse_json_request;
 use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
 };
-#[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
@@ -215,14 +215,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request =
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.modifies.len(), 2);
     }
 
     #[test]
     fn rejects_empty_modifies() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": { "type": "batchModify", "modifies": [] },
                 "nonce": 1710000000000,
@@ -244,7 +244,8 @@ mod tests {
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
         let response = execute(
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request parses"),
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+                .expect("request parses"),
         )
         .await
         .expect("response should build");

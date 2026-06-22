@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, Scope, web};
 
+use crate::common::parse::parse_json_request;
 use crate::exchange::action_registry::ACTION_REGISTRY;
-use crate::exchange::common::parse::parse_json_request;
 use crate::exchange::common::wire::ExchangeActionTypeProbe;
 use crate::exchange::error::ExchangeHttpError;
 

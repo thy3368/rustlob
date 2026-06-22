@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_envelope_common;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_status_response};
@@ -80,15 +80,15 @@ mod tests {
 
     #[test]
     fn parses_twap_cancel_request() {
-        let request =
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.type_, "twapCancel");
         assert_eq!(request.action.t, 77738308);
     }
 
     #[test]
     fn rejects_zero_twap_id() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": { "type": "twapCancel", "a": 7, "t": 0 },
                 "nonce": 1710000000000,

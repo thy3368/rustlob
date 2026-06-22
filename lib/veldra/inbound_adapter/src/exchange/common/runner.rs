@@ -5,7 +5,7 @@ use actix_web::HttpResponse;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::error::ExchangeHttpError;
 
 pub(crate) type ExchangeActionFuture<'a, Reply> =
@@ -25,7 +25,7 @@ where
     T: ExchangeActionHandler,
     T::Request: DeserializeOwned,
 {
-    let request = parse_json_request::<T::Request>(body)?;
+    let request = parse_json_request::<T::Request, ExchangeHttpError>(body)?;
     T::validate(&request)?;
     T::execute(request).await
 }

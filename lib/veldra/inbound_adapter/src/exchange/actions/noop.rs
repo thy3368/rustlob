@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_envelope_common;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
@@ -61,8 +61,9 @@ mod tests {
 
     #[test]
     fn parses_noop_request() {
-        let request = parse_json_request::<RequestWire>(valid_noop_request_json())
-            .expect("noop request should parse");
+        let request =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_noop_request_json())
+                .expect("noop request should parse");
         assert_eq!(request.action.type_, "noop");
     }
 
@@ -78,8 +79,9 @@ mod tests {
 
     #[test]
     fn validates_noop_request() {
-        let request = parse_json_request::<RequestWire>(valid_noop_request_json())
-            .expect("noop request should parse");
+        let request =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_noop_request_json())
+                .expect("noop request should parse");
         validate(&request).expect("noop validation should pass");
     }
 

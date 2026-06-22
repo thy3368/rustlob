@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_common_fields, validate_hex_address};
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
@@ -95,14 +95,15 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<VaultTransferRequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<VaultTransferRequestWire, ExchangeHttpError>(valid_request_json())
+                .expect("request should parse");
         assert!(request.action.is_deposit);
     }
 
     #[test]
     fn rejects_invalid_action_vault_address() {
-        let request = parse_json_request::<VaultTransferRequestWire>(
+        let request = parse_json_request::<VaultTransferRequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "vaultTransfer",

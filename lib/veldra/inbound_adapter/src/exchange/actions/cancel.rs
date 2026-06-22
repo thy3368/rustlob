@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_envelope_common;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
@@ -106,8 +106,9 @@ mod tests {
 
     #[test]
     fn parses_cancel_request() {
-        let request = parse_json_request::<RequestWire>(valid_cancel_request_json())
-            .expect("cancel request should parse");
+        let request =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_cancel_request_json())
+                .expect("cancel request should parse");
 
         assert_eq!(request.action.type_, "cancel");
         assert_eq!(request.action.cancels.len(), 1);
@@ -116,7 +117,7 @@ mod tests {
 
     #[test]
     fn rejects_false_fast_flag() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "cancel",
@@ -142,8 +143,9 @@ mod tests {
 
     #[actix_web::test]
     async fn cancel_reply_snapshot_is_stable() {
-        let request = parse_json_request::<RequestWire>(valid_cancel_request_json())
-            .expect("cancel request parses");
+        let request =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_cancel_request_json())
+                .expect("cancel request parses");
         let response = execute(request).await.expect("cancel response builds");
 
         let actual = serde_json::to_string_pretty(&response).expect("cancel response serializes");

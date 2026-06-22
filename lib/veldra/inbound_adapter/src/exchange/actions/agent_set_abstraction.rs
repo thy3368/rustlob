@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
@@ -85,14 +85,16 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request = parse_json_request::<AgentSetAbstractionRequestWire>(valid_request_json())
-            .expect("request should parse");
+        let request = parse_json_request::<AgentSetAbstractionRequestWire, ExchangeHttpError>(
+            valid_request_json(),
+        )
+        .expect("request should parse");
         assert_eq!(request.action.abstraction, "u");
     }
 
     #[test]
     fn rejects_invalid_abstraction() {
-        let request = parse_json_request::<AgentSetAbstractionRequestWire>(
+        let request = parse_json_request::<AgentSetAbstractionRequestWire, ExchangeHttpError>(
             br#"{
                 "action": { "type": "agentSetAbstraction", "abstraction": "x" },
                 "nonce": 1710000000000,

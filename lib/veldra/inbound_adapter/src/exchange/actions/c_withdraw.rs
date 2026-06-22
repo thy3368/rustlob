@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
@@ -102,14 +102,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request =
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.wei, 1000);
     }
 
     #[test]
     fn rejects_nonce_mismatch() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "cWithdraw",

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::validate_common_fields;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
@@ -92,14 +92,14 @@ mod tests {
 
     #[test]
     fn parses_request() {
-        let request =
-            parse_json_request::<RequestWire>(valid_request_json()).expect("request should parse");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request should parse");
         assert_eq!(request.action.risk_free_rate, "0.04");
     }
 
     #[test]
     fn rejects_empty_rate() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": { "type": "validatorL1Stream", "riskFreeRate": "" },
                 "nonce": 1710000000000,

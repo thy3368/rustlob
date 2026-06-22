@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::exchange::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_cloid, validate_envelope_common, validate_hex_address,
@@ -273,8 +273,9 @@ mod tests {
 
     #[test]
     fn parses_minimal_order_request() {
-        let request = parse_json_request::<RequestWire>(valid_order_request_json())
-            .expect("request should parse");
+        let request =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_order_request_json())
+                .expect("request should parse");
 
         assert_eq!(request.action.type_, "order");
         assert_eq!(request.action.orders.len(), 1);
@@ -285,7 +286,7 @@ mod tests {
 
     #[test]
     fn parses_order_request_with_optional_fields() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "order",
@@ -337,7 +338,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_orders() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "order",
@@ -359,9 +360,10 @@ mod tests {
 
     #[test]
     fn rejects_invalid_grouping() {
-        let request =
-            parse_json_request::<RequestWire>(&valid_request_with_grouping_json("unknown"))
-                .expect("request parses");
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            &valid_request_with_grouping_json("unknown"),
+        )
+        .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
         assert_eq!(
             error.to_string(),
@@ -371,7 +373,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_signature_shape() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "order",
@@ -403,7 +405,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_order_type_shape() {
-        let request = parse_json_request::<RequestWire>(
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
             br#"{
                 "action": {
                     "type": "order",
@@ -443,7 +445,8 @@ mod tests {
     #[actix_web::test]
     async fn success_json_snapshot_is_stable() {
         let request =
-            parse_json_request::<RequestWire>(valid_order_request_json()).expect("request parses");
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_order_request_json())
+                .expect("request parses");
         let response = execute(request).await.expect("response builds");
 
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
@@ -523,7 +526,8 @@ mod tests {
     #[test]
     fn request_parse_snapshot_is_stable() {
         let request =
-            parse_json_request::<RequestWire>(valid_order_request_json()).expect("request parses");
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_order_request_json())
+                .expect("request parses");
         let actual = serde_json::to_string_pretty(&request).expect("request serializes");
         let expected = r#"{
   "action": {
