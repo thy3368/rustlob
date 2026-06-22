@@ -9,6 +9,7 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{Balance, SpotOrderSide, SpotSettlement, SpotTrade};
+use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
 /// 批量清结算现货成交的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +82,8 @@ pub struct SettleSpotTradeChanges {
     pub settlements: Vec<SpotSettlement>,
     /// 本批次实际受影响的余额 before/after。
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
+    /// 本批次对应的余额流水。
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntry>,
 }
 
 /// Use case that settles matched spot trades into account balance changes.
@@ -93,12 +96,19 @@ impl ReplayableChanges for SettleSpotTradeChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::with_capacity(self.settlements.len() + self.updated_balances.len());
+        let mut events = Vec::with_capacity(
+            self.settlements.len()
+                + self.updated_balances.len()
+                + self.created_balance_ledger_entries.len(),
+        );
         for settlement in &self.settlements {
             events.push(settlement.track_create_event()?);
         }
         for balance in &self.updated_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        for ledger_entry in &self.created_balance_ledger_entries {
+            events.push(ledger_entry.track_create_event()?);
         }
         Ok(events)
     }
@@ -170,6 +180,13 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             ));
         }
 
+        let balance_ledger_reasons = settlement_balance_ledger_reasons(
+            &state.trades,
+            &settlements,
+            &state.base_asset_id,
+            &state.quote_asset_id,
+        );
+
         for mut balance in state.balances {
             let Some(delta) = deltas.get(&balance_key(&balance.account_id, &balance.asset_id))
             else {
@@ -191,7 +208,32 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             updated_balances.push(UpdatedEntityPair { before: previous_balance, after: balance });
         }
 
-        Ok(SettleSpotTradeChanges { settlements, updated_balances })
+        let mut created_balance_ledger_entries = Vec::with_capacity(updated_balances.len());
+        for updated_balance in &updated_balances {
+            let balance_id =
+                balance_key(&updated_balance.after.account_id, &updated_balance.after.asset_id);
+            let reason = balance_ledger_reasons
+                .get(&balance_id)
+                .cloned()
+                .ok_or(SettleSpotTradeError::AccountNotFound)?;
+            created_balance_ledger_entries.push(BalanceLedgerEntry::new(
+                format!(
+                    "balance-ledger:{}:{}",
+                    cmd.settlement_batch_id,
+                    updated_balance.after.entity_id()
+                ),
+                updated_balance.after.account_id.clone(),
+                updated_balance.after.asset_id.clone(),
+                updated_balance.after.entity_id(),
+                updated_balance.before.available,
+                updated_balance.before.frozen,
+                updated_balance.after.available,
+                updated_balance.after.frozen,
+                reason,
+            ));
+        }
+
+        Ok(SettleSpotTradeChanges { settlements, updated_balances, created_balance_ledger_entries })
     }
 }
 
@@ -275,6 +317,89 @@ fn settlement_deltas(
             .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
     }
     Ok(deltas)
+}
+
+fn settlement_balance_ledger_reasons(
+    trades: &[SpotTrade],
+    settlements: &[SpotSettlement],
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> HashMap<String, BalanceLedgerReason> {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    enum BalanceLedgerKind {
+        BuyerReceiveBase,
+        BuyerReleaseFrozenQuote,
+        SellerReceiveQuote,
+        SellerReleaseFrozenBase,
+    }
+
+    #[derive(Debug, Clone, Default)]
+    struct BalanceLedgerRefBatch {
+        trade_ids: Vec<String>,
+        settlement_ids: Vec<String>,
+    }
+
+    let mut refs: HashMap<(String, BalanceLedgerKind), BalanceLedgerRefBatch> = HashMap::new();
+
+    for (trade, settlement) in trades.iter().zip(settlements) {
+        let parties = settlement_parties(trade);
+        let keys = [
+            (
+                balance_key(parties.buyer_account_id, base_asset_id),
+                BalanceLedgerKind::BuyerReceiveBase,
+            ),
+            (
+                balance_key(parties.buyer_account_id, quote_asset_id),
+                BalanceLedgerKind::BuyerReleaseFrozenQuote,
+            ),
+            (
+                balance_key(parties.seller_account_id, quote_asset_id),
+                BalanceLedgerKind::SellerReceiveQuote,
+            ),
+            (
+                balance_key(parties.seller_account_id, base_asset_id),
+                BalanceLedgerKind::SellerReleaseFrozenBase,
+            ),
+        ];
+
+        for (balance_id, kind) in keys {
+            let batch = refs.entry((balance_id, kind)).or_default();
+            batch.trade_ids.push(trade.trade_id.clone());
+            batch.settlement_ids.push(settlement.settlement_id.clone());
+        }
+    }
+
+    refs.into_iter()
+        .map(|((balance_id, kind), batch)| {
+            let reason = match kind {
+                BalanceLedgerKind::BuyerReceiveBase => {
+                    BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
+                        trade_ids: batch.trade_ids,
+                        settlement_ids: batch.settlement_ids,
+                    }
+                }
+                BalanceLedgerKind::BuyerReleaseFrozenQuote => {
+                    BalanceLedgerReason::SettleSpotTradeBuyerReleaseFrozenQuote {
+                        trade_ids: batch.trade_ids,
+                        settlement_ids: batch.settlement_ids,
+                    }
+                }
+                BalanceLedgerKind::SellerReceiveQuote => {
+                    BalanceLedgerReason::SettleSpotTradeSellerReceiveQuote {
+                        trade_ids: batch.trade_ids,
+                        settlement_ids: batch.settlement_ids,
+                    }
+                }
+                BalanceLedgerKind::SellerReleaseFrozenBase => {
+                    BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase {
+                        trade_ids: batch.trade_ids,
+                        settlement_ids: batch.settlement_ids,
+                    }
+                }
+            };
+            (balance_id, reason)
+        })
+        .collect()
 }
 
 fn settlement_parties(trade: &SpotTrade) -> SettlementParties<'_> {
@@ -393,6 +518,20 @@ fn balance_event<'a>(
 }
 
 #[cfg(test)]
+fn ledger_event<'a>(
+    events: &'a [EntityReplayableEvent],
+    account_id: &str,
+    asset_id: &str,
+) -> Option<&'a EntityReplayableEvent> {
+    events.iter().find(|event| {
+        event.is_created()
+            && event_field(event, "account_id") == Some(account_id)
+            && event_field(event, "asset_id") == Some(asset_id)
+            && event_field(event, "entry_id").is_some()
+    })
+}
+
+#[cfg(test)]
 fn assert_settlement_event(
     event: &EntityReplayableEvent,
     expected_settlement_id: &str,
@@ -431,6 +570,23 @@ fn assert_balance_update_event(
     assert_eq!(event_field(event, "asset_id"), Some(expected_asset_id));
     assert_eq!(event_field_u64(event, "available"), expected_available);
     assert_eq!(event_field_u64(event, "frozen"), expected_frozen);
+}
+
+#[cfg(test)]
+fn assert_balance_ledger_event(
+    event: &EntityReplayableEvent,
+    expected_account_id: &str,
+    expected_asset_id: &str,
+    expected_reason: &str,
+    expected_trade_ids: &str,
+    expected_settlement_ids: &str,
+) {
+    assert!(event.is_created());
+    assert_eq!(event_field(event, "account_id"), Some(expected_account_id));
+    assert_eq!(event_field(event, "asset_id"), Some(expected_asset_id));
+    assert_eq!(event_field(event, "reason"), Some(expected_reason));
+    assert_eq!(event_field(event, "reason_trade_ids"), Some(expected_trade_ids));
+    assert_eq!(event_field(event, "reason_settlement_ids"), Some(expected_settlement_ids));
 }
 
 #[cfg(test)]
@@ -561,9 +717,22 @@ mod tests {
                 && balance.after.asset_id == "BTC"
                 && balance.after.available == 2
         }));
+        assert_eq!(result.created_balance_ledger_entries.len(), 4);
+        assert!(result.created_balance_ledger_entries.iter().any(|entry| {
+            entry.account_id == "buyer"
+                && entry.asset_id == "BTC"
+                && entry.reason
+                    == BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
+                        trade_ids: vec!["trade-1".to_string()],
+                        settlement_ids: vec!["settle-1-1".to_string()],
+                    }
+        }));
         assert!(
             events.iter().any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
         );
+        assert!(events.iter().any(|event| {
+            event_field(event, "reason") == Some("settle_spot_trade_buyer_receive_base")
+        }));
 
         Ok(())
     }
