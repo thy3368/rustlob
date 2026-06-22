@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{Balance, SpotOrder, SpotOrderStatus, SpotOrderStatusReason};
+use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
 /// 撤销现货订单时需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,17 +90,24 @@ pub struct CancelSpotOrderChanges {
     pub canceled_order: UpdatedEntityPair<SpotOrder>,
     /// 本次撤单释放的余额 before/after 对。
     pub released_balances: Vec<UpdatedEntityPair<Balance>>,
+    /// 本次撤单生成的余额流水。
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntry>,
 }
 
 impl ReplayableChanges for CancelSpotOrderChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::with_capacity(1 + self.released_balances.len());
+        let mut events = Vec::with_capacity(
+            1 + self.released_balances.len() + self.created_balance_ledger_entries.len(),
+        );
         events
             .push(self.canceled_order.after.track_update_event_from(&self.canceled_order.before)?);
         for balance in &self.released_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        for ledger_entry in &self.created_balance_ledger_entries {
+            events.push(ledger_entry.track_create_event()?);
         }
         Ok(events)
     }
@@ -183,9 +191,27 @@ fn derive_cancel_changes(
     } else {
         release_balance(state.base_balance, release_base)?
     };
+    let released_balance = UpdatedEntityPair { before: balance_before, after: balance_after };
+    let reason = if release_quote > 0 {
+        BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order_after.order_id.clone() }
+    } else {
+        BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order_after.order_id.clone() }
+    };
+    let balance_ledger_entry = BalanceLedgerEntry::new(
+        format!("balance-ledger:cancel:{}", released_balance.after.entity_id()),
+        released_balance.after.account_id.clone(),
+        released_balance.after.asset_id.clone(),
+        released_balance.after.entity_id(),
+        released_balance.before.available,
+        released_balance.before.frozen,
+        released_balance.after.available,
+        released_balance.after.frozen,
+        reason,
+    );
     Ok(CancelSpotOrderChanges {
         canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
-        released_balances: vec![UpdatedEntityPair { before: balance_before, after: balance_after }],
+        released_balances: vec![released_balance],
+        created_balance_ledger_entries: vec![balance_ledger_entry],
     })
 }
 
