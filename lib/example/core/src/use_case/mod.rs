@@ -13,6 +13,8 @@ pub use trading::{
     CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
+    ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
+    ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase,
     HyperliquidPerpLiquidatablePositionAtPriceSnapshot,
     HyperliquidPerpLiquidatablePositionAtPriceView, HyperliquidPerpLiquidationCandidate,
     HyperliquidPerpMarginMode, HyperliquidPerpOpenOrderView, HyperliquidPerpOrderDetailView,

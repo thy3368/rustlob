@@ -46,7 +46,9 @@ pub use spot::{
     CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
-    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
-    MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
-    SettleSpotTradeState, SettleSpotTradeUseCase,
+    ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
+    ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase, MatchSpotOrderChanges,
+    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase,
+    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
+    SettleSpotTradeUseCase,
 };
