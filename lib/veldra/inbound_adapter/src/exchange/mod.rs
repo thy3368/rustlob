@@ -1,3 +1,4 @@
+mod action_registry;
 mod actions;
 mod common;
 pub mod error;

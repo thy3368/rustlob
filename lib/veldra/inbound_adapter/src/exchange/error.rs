@@ -2,6 +2,7 @@ use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
 use thiserror::Error;
 
+use crate::exchange::action_registry::SUPPORTED_ACTION_TYPES_DISPLAY;
 use crate::exchange::actions::agent_enable_dex_abstraction::AgentEnableDexAbstractionContractError;
 use crate::exchange::actions::agent_send_asset::AgentSendAssetContractError;
 use crate::exchange::actions::agent_set_abstraction::AgentSetAbstractionContractError;
@@ -45,9 +46,7 @@ pub enum ExchangeHttpError {
     MalformedJson,
     #[error("Missing or invalid request fields: {0}")]
     InvalidJsonShape(String),
-    #[error(
-        "Unsupported action.type `{0}`. Supported actions: `agentEnableDexAbstraction`, `agentSendAsset`, `agentSetAbstraction`, `approveAgent`, `approveBuilderFee`, `authorizeAqav2Role`, `batchModify`, `cDeposit`, `cWithdraw`, `cancel`, `cancelByCloid`, `claimRewards`, `hip3LiquidatorTransfer`, `modify`, `noop`, `order`, `reserveRequestWeight`, `scheduleCancel`, `sendAsset`, `sendToEvmWithData`, `spotSend`, `tokenDelegate`, `topUpIsolatedOnlyMargin`, `twapCancel`, `twapOrder`, `updateIsolatedMargin`, `updateLeverage`, `usdClassTransfer`, `usdSend`, `userDexAbstraction`, `userOutcome`, `userSetAbstraction`, `validatorL1Stream`, `vaultTransfer`, `withdraw3`."
-    )]
+    #[error("Unsupported action.type `{0}`. Supported actions: {SUPPORTED_ACTION_TYPES_DISPLAY}")]
     UnsupportedActionType(String),
     #[error(transparent)]
     SharedFields(#[from] SharedFieldError),
@@ -200,5 +199,18 @@ impl ResponseError for ExchangeHttpError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code())
             .json(ExchangeErrorResponseWire { status: "err", error: self.to_string() })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExchangeHttpError;
+
+    #[test]
+    fn unsupported_action_error_message_stays_stable() {
+        assert_eq!(
+            ExchangeHttpError::UnsupportedActionType("doesNotExist".to_string()).to_string(),
+            "Unsupported action.type `doesNotExist`. Supported actions: `agentEnableDexAbstraction`, `agentSendAsset`, `agentSetAbstraction`, `approveAgent`, `approveBuilderFee`, `authorizeAqav2Role`, `batchModify`, `cDeposit`, `cWithdraw`, `cancel`, `cancelByCloid`, `claimRewards`, `hip3LiquidatorTransfer`, `modify`, `noop`, `order`, `reserveRequestWeight`, `scheduleCancel`, `sendAsset`, `sendToEvmWithData`, `spotSend`, `tokenDelegate`, `topUpIsolatedOnlyMargin`, `twapCancel`, `twapOrder`, `updateIsolatedMargin`, `updateLeverage`, `usdClassTransfer`, `usdSend`, `userDexAbstraction`, `userOutcome`, `userSetAbstraction`, `validatorL1Stream`, `vaultTransfer`, `withdraw3`."
+        );
     }
 }

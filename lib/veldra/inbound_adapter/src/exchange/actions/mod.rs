@@ -37,43 +37,6 @@ pub mod withdraw3;
 use serde_json::Value as JsonValue;
 
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, JsonObjectWire};
-pub const SUPPORTED_ACTION_TYPES: &[&str] = &[
-    "agentEnableDexAbstraction",
-    "agentSendAsset",
-    "agentSetAbstraction",
-    "approveAgent",
-    "approveBuilderFee",
-    "authorizeAqav2Role",
-    "batchModify",
-    "cDeposit",
-    "cWithdraw",
-    "cancel",
-    "cancelByCloid",
-    "claimRewards",
-    "hip3LiquidatorTransfer",
-    "modify",
-    "noop",
-    "order",
-    "reserveRequestWeight",
-    "scheduleCancel",
-    "sendAsset",
-    "sendToEvmWithData",
-    "spotSend",
-    "tokenDelegate",
-    "topUpIsolatedOnlyMargin",
-    "twapCancel",
-    "twapOrder",
-    "updateIsolatedMargin",
-    "updateLeverage",
-    "usdClassTransfer",
-    "usdSend",
-    "userDexAbstraction",
-    "userOutcome",
-    "userSetAbstraction",
-    "validatorL1Stream",
-    "vaultTransfer",
-    "withdraw3",
-];
 
 pub type ExchangeActionRequestWire = ExchangeRequestEnvelopeWire<ExchangeActionWire>;
 

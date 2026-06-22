@@ -1,4 +1,4 @@
-use crate::exchange::actions::SUPPORTED_ACTION_TYPES;
+use crate::exchange::action_registry::SUPPORTED_ACTION_TYPES;
 
 #[test]
 fn supported_actions_match_official_exchange_endpoint_spec() {
