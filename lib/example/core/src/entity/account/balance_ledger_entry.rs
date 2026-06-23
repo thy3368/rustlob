@@ -52,6 +52,15 @@ pub enum BalanceLedgerReason {
         /// 本次余额变化对应的 settlement id 列表。
         settlement_ids: Vec<String>,
     },
+    /// perp funding 结算按账户聚合后的保证金余额流水。
+    SettlePerpFunding {
+        /// 资金费批次 ID。
+        funding_batch_id: String,
+        /// 本次余额变化对应的 funding settlement id 列表。
+        settlement_ids: Vec<String>,
+        /// 本次余额变化涉及的仓位 ID 列表。
+        position_ids: Vec<String>,
+    },
 }
 
 impl BalanceLedgerReason {
@@ -71,6 +80,7 @@ impl BalanceLedgerReason {
             Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => {
                 "settle_spot_trade_seller_release_frozen_base"
             }
+            Self::SettlePerpFunding { .. } => "settle_perp_funding",
         }
     }
 
@@ -83,7 +93,8 @@ impl BalanceLedgerReason {
             Self::SettleSpotTradeBuyerReceiveBase { .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
-            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => None,
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
+            | Self::SettlePerpFunding { .. } => None,
         }
     }
 
@@ -92,7 +103,8 @@ impl BalanceLedgerReason {
         match self {
             Self::ReserveForImmediateOrder { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
-            | Self::CancelSpotOrderReleaseBase { .. } => &[],
+            | Self::CancelSpotOrderReleaseBase { .. }
+            | Self::SettlePerpFunding { .. } => &[],
             Self::SettleSpotTradeBuyerReceiveBase { trade_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { trade_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { trade_ids, .. }
@@ -109,7 +121,36 @@ impl BalanceLedgerReason {
             Self::SettleSpotTradeBuyerReceiveBase { settlement_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { settlement_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { settlement_ids, .. }
-            | Self::SettleSpotTradeSellerReleaseFrozenBase { settlement_ids, .. } => settlement_ids,
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { settlement_ids, .. }
+            | Self::SettlePerpFunding { settlement_ids, .. } => settlement_ids,
+        }
+    }
+
+    /// 返回 funding batch id；非 funding 场景返回 `None`。
+    pub fn funding_batch_id(&self) -> Option<&str> {
+        match self {
+            Self::SettlePerpFunding { funding_batch_id, .. } => Some(funding_batch_id.as_str()),
+            Self::ReserveForImmediateOrder { .. }
+            | Self::CancelSpotOrderReleaseQuote { .. }
+            | Self::CancelSpotOrderReleaseBase { .. }
+            | Self::SettleSpotTradeBuyerReceiveBase { .. }
+            | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
+            | Self::SettleSpotTradeSellerReceiveQuote { .. }
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => None,
+        }
+    }
+
+    /// 返回 funding 涉及的 position id 列表；非 funding 场景返回空切片。
+    pub fn position_ids(&self) -> &[String] {
+        match self {
+            Self::SettlePerpFunding { position_ids, .. } => position_ids,
+            Self::ReserveForImmediateOrder { .. }
+            | Self::CancelSpotOrderReleaseQuote { .. }
+            | Self::CancelSpotOrderReleaseBase { .. }
+            | Self::SettleSpotTradeBuyerReceiveBase { .. }
+            | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
+            | Self::SettleSpotTradeSellerReceiveQuote { .. }
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => &[],
         }
     }
 }
@@ -238,6 +279,12 @@ impl Entity for BalanceLedgerEntry {
                 "",
                 self.reason.settlement_ids().join(","),
             ),
+            EntityFieldChange::new(
+                "reason_funding_batch_id",
+                "",
+                self.reason.funding_batch_id().unwrap_or_default(),
+            ),
+            EntityFieldChange::new("reason_position_ids", "", self.reason.position_ids().join(",")),
         ]
     }
 
@@ -254,7 +301,9 @@ impl Entity for BalanceLedgerEntry {
             | "reason"
             | "reason_order_id"
             | "reason_trade_ids"
-            | "reason_settlement_ids" => 0,
+            | "reason_settlement_ids"
+            | "reason_funding_batch_id"
+            | "reason_position_ids" => 0,
             "before_available" | "before_frozen" | "after_available" | "after_frozen" => 1,
             _ => 0,
         }
@@ -379,6 +428,47 @@ mod tests {
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("reason_settlement_ids")
                 && change.new_value_bytes() == b"settle-1-1,settle-1-2"
+        }));
+    }
+
+    #[test]
+    fn create_event_contains_funding_reason_references() {
+        let entry = BalanceLedgerEntry::new(
+            "balance-ledger:funding:funding-1:trader-1:USDC".to_string(),
+            "trader-1".to_string(),
+            "USDC".to_string(),
+            "trader-1:USDC".to_string(),
+            1_000,
+            0,
+            990,
+            0,
+            BalanceLedgerReason::SettlePerpFunding {
+                funding_batch_id: "funding-1".to_string(),
+                settlement_ids: vec![
+                    "funding-1-position-1".to_string(),
+                    "funding-1-position-2".to_string(),
+                ],
+                position_ids: vec!["position-1".to_string(), "position-2".to_string()],
+            },
+        );
+
+        let event = entry.track_create_event().unwrap();
+
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("reason")
+                && change.new_value_bytes() == b"settle_perp_funding"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("reason_settlement_ids")
+                && change.new_value_bytes() == b"funding-1-position-1,funding-1-position-2"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("reason_funding_batch_id")
+                && change.new_value_bytes() == b"funding-1"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("reason_position_ids")
+                && change.new_value_bytes() == b"position-1,position-2"
         }));
     }
 }

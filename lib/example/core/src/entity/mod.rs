@@ -10,12 +10,18 @@ pub use account::account::Account;
 pub use account::balance::Balance;
 pub use account::balance_ledger_entry::{BalanceLedgerEntry, BalanceLedgerReason};
 pub use market_rules::MarketRules;
+pub use perp::hyperliquid_perp_adl_batch::{
+    HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,
+};
+pub use perp::hyperliquid_perp_adl_deleveraging_entry::HyperliquidPerpAdlDeleveragingEntry;
 pub use perp::hyperliquid_perp_funding_rate::{
     HyperliquidPerpBookLevel, HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
     compute_hourly_funding_rate_e8, compute_impact_ask_price, compute_impact_bid_price,
 };
+pub use perp::hyperliquid_perp_insurance_fund_allocation::HyperliquidPerpInsuranceFundAllocation;
 pub use perp::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
 pub use perp::hyperliquid_perp_leverage_setting::HyperliquidPerpLeverageSetting;
+pub use perp::hyperliquid_perp_liquidation_fill::HyperliquidPerpLiquidationFill;
 pub use perp::hyperliquid_perp_liquidation::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason,
@@ -27,6 +33,9 @@ pub use perp::hyperliquid_perp_order::{
 pub use perp::hyperliquid_perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
     HyperliquidPerpPositionSide, required_position_margin,
+};
+pub use perp::hyperliquid_perp_shortfall::{
+    HyperliquidPerpShortfall, HyperliquidPerpShortfallStatus,
 };
 pub use perp::hyperliquid_perp_settlement::HyperliquidPerpSettlement;
 pub use perp::hyperliquid_perp_trade::HyperliquidPerpTrade;

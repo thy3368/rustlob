@@ -27,21 +27,30 @@ impl HyperliquidPerpLiquidationTriggerReason {
 pub enum HyperliquidPerpLiquidationStatus {
     /// 已进入强平流程。
     Started,
-    /// 已经发出至少一张强平单。
-    OrderPlaced,
-    /// 当前强平流程已经完成。
-    Resolved,
-    /// 当前强平流程需要升级到更高风险处置路径。
-    Escalated,
+    /// 已经进入执行中，至少观察到一笔强平成交。
+    Executing,
+    /// 已经确认缺口事实。
+    ShortfallAssessed,
+    /// 已进入保险基金覆盖阶段。
+    FundCovering,
+    /// 已进入 ADL 覆盖阶段。
+    AdlCovering,
+    /// 当前强平流程已经正常闭环。
+    Closed,
+    /// 当前强平流程在本组边界内已穷尽，后续需要转交更高风险处置路径。
+    Exhausted,
 }
 
 impl HyperliquidPerpLiquidationStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Started => "started",
-            Self::OrderPlaced => "order_placed",
-            Self::Resolved => "resolved",
-            Self::Escalated => "escalated",
+            Self::Executing => "executing",
+            Self::ShortfallAssessed => "shortfall_assessed",
+            Self::FundCovering => "fund_covering",
+            Self::AdlCovering => "adl_covering",
+            Self::Closed => "closed",
+            Self::Exhausted => "exhausted",
         }
     }
 }
@@ -138,7 +147,7 @@ impl HyperliquidPerpLiquidation {
         matches!(
             self.status,
             HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::OrderPlaced
+                | HyperliquidPerpLiquidationStatus::Executing
         ) && self.remaining_qty > 0
     }
 
@@ -162,18 +171,31 @@ impl HyperliquidPerpLiquidation {
         Some(next_qty.max(1).min(effective_qty))
     }
 
-    /// 应用一次强平单发出后的会话推进。
-    pub fn apply_order_placed(
+    /// 应用一次强平成交事实后的会话推进。
+    pub fn mark_executing(
         &mut self,
         last_order_id: String,
-        placed_qty: u64,
+        fill_qty: u64,
         version: u64,
     ) -> Option<()> {
-        let next_count = self.placed_order_count.checked_add(1)?;
-        let next_total = self.placed_qty_total.checked_add(placed_qty)?;
-        let next_remaining = self.remaining_qty.checked_sub(placed_qty)?;
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::Started
+                | HyperliquidPerpLiquidationStatus::Executing
+        ) || fill_qty == 0
+        {
+            return None;
+        }
 
-        self.status = HyperliquidPerpLiquidationStatus::OrderPlaced;
+        let next_count = if self.last_order_id.as_deref() == Some(last_order_id.as_str()) {
+            self.placed_order_count
+        } else {
+            self.placed_order_count.checked_add(1)?
+        };
+        let next_total = self.placed_qty_total.checked_add(fill_qty)?;
+        let next_remaining = self.remaining_qty.checked_sub(fill_qty)?;
+
+        self.status = HyperliquidPerpLiquidationStatus::Executing;
         self.placed_order_count = next_count;
         self.placed_qty_total = next_total;
         self.remaining_qty = next_remaining;
@@ -182,33 +204,86 @@ impl HyperliquidPerpLiquidation {
         Some(())
     }
 
-    /// 在剩余待处置数量归零后，将强平会话推进为已解决。
-    pub fn apply_resolved(&mut self, version: u64) -> Option<()> {
+    /// 在执行数量归零后确认缺口已评估。
+    pub fn mark_shortfall_assessed(&mut self, version: u64) -> Option<()> {
         if !matches!(
             self.status,
             HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::OrderPlaced
+                | HyperliquidPerpLiquidationStatus::Executing
         ) || self.remaining_qty != 0
         {
             return None;
         }
 
-        self.status = HyperliquidPerpLiquidationStatus::Resolved;
+        self.status = HyperliquidPerpLiquidationStatus::ShortfallAssessed;
         self.version = version;
         Some(())
     }
 
-    /// 将当前强平会话升级到更高风险处置路径。
-    pub fn apply_escalated(&mut self, version: u64) -> Option<()> {
+    /// 将强平会话推进到保险基金覆盖阶段。
+    pub fn mark_fund_covering(&mut self, version: u64) -> Option<()> {
         if !matches!(
             self.status,
-            HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::OrderPlaced
+            HyperliquidPerpLiquidationStatus::ShortfallAssessed
+                | HyperliquidPerpLiquidationStatus::FundCovering
         ) {
             return None;
         }
 
-        self.status = HyperliquidPerpLiquidationStatus::Escalated;
+        self.status = HyperliquidPerpLiquidationStatus::FundCovering;
+        self.version = version;
+        Some(())
+    }
+
+    /// 将强平会话推进到 ADL 覆盖阶段。
+    pub fn mark_adl_covering(&mut self, version: u64) -> Option<()> {
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::ShortfallAssessed
+                | HyperliquidPerpLiquidationStatus::FundCovering
+                | HyperliquidPerpLiquidationStatus::AdlCovering
+        ) {
+            return None;
+        }
+
+        self.status = HyperliquidPerpLiquidationStatus::AdlCovering;
+        self.version = version;
+        Some(())
+    }
+
+    /// 在剩余待处置数量归零后，将强平会话推进为已关闭。
+    pub fn apply_closed(&mut self, version: u64) -> Option<()> {
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::Started
+                | HyperliquidPerpLiquidationStatus::Executing
+                | HyperliquidPerpLiquidationStatus::ShortfallAssessed
+                | HyperliquidPerpLiquidationStatus::FundCovering
+                | HyperliquidPerpLiquidationStatus::AdlCovering
+        ) || self.remaining_qty != 0
+        {
+            return None;
+        }
+
+        self.status = HyperliquidPerpLiquidationStatus::Closed;
+        self.version = version;
+        Some(())
+    }
+
+    /// 将当前强平会话推进到本组边界内的穷尽终态。
+    pub fn apply_exhausted(&mut self, version: u64) -> Option<()> {
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::Started
+                | HyperliquidPerpLiquidationStatus::Executing
+                | HyperliquidPerpLiquidationStatus::ShortfallAssessed
+                | HyperliquidPerpLiquidationStatus::FundCovering
+                | HyperliquidPerpLiquidationStatus::AdlCovering
+        ) {
+            return None;
+        }
+
+        self.status = HyperliquidPerpLiquidationStatus::Exhausted;
         self.version = version;
         Some(())
     }
@@ -397,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_order_placed_advances_session() {
+    fn mark_executing_advances_session() {
         let mut liquidation = HyperliquidPerpLiquidation::new(
             "liq-1-position-1".to_string(),
             "liq-1".to_string(),
@@ -415,9 +490,9 @@ mod tests {
             HyperliquidPerpLiquidationStatus::Started,
         );
 
-        liquidation.apply_order_placed("order-1".to_string(), 2, 2).unwrap();
+        liquidation.mark_executing("order-1".to_string(), 2, 2).unwrap();
 
-        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::OrderPlaced);
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Executing);
         assert_eq!(liquidation.placed_order_count, 1);
         assert_eq!(liquidation.placed_qty_total, 2);
         assert_eq!(liquidation.remaining_qty, 8);
@@ -426,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_resolved_succeeds_when_remaining_qty_is_zero() {
+    fn mark_shortfall_assessed_requires_zero_remaining_qty() {
         let mut liquidation = HyperliquidPerpLiquidation::new(
             "liq-1-position-1".to_string(),
             "liq-1".to_string(),
@@ -445,14 +520,17 @@ mod tests {
         );
         liquidation.remaining_qty = 0;
 
-        liquidation.apply_resolved(2).unwrap();
+        liquidation.mark_shortfall_assessed(2).unwrap();
 
-        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Resolved);
+        assert_eq!(
+            liquidation.status,
+            HyperliquidPerpLiquidationStatus::ShortfallAssessed
+        );
         assert_eq!(liquidation.version, 2);
     }
 
     #[test]
-    fn apply_resolved_rejects_when_remaining_qty_is_not_zero() {
+    fn mark_fund_covering_rejects_from_started() {
         let mut liquidation = HyperliquidPerpLiquidation::new(
             "liq-1-position-1".to_string(),
             "liq-1".to_string(),
@@ -470,13 +548,13 @@ mod tests {
             HyperliquidPerpLiquidationStatus::Started,
         );
 
-        assert_eq!(liquidation.apply_resolved(2), None);
+        assert_eq!(liquidation.mark_fund_covering(2), None);
         assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Started);
         assert_eq!(liquidation.version, 1);
     }
 
     #[test]
-    fn apply_escalated_succeeds_from_started() {
+    fn apply_closed_accepts_adl_covering_with_zero_remaining_qty() {
         let mut liquidation = HyperliquidPerpLiquidation::new(
             "liq-1-position-1".to_string(),
             "liq-1".to_string(),
@@ -491,17 +569,18 @@ mod tests {
             49_000,
             50_000,
             HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
-            HyperliquidPerpLiquidationStatus::Started,
+            HyperliquidPerpLiquidationStatus::AdlCovering,
         );
+        liquidation.remaining_qty = 0;
 
-        liquidation.apply_escalated(2).unwrap();
+        liquidation.apply_closed(2).unwrap();
 
-        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Escalated);
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Closed);
         assert_eq!(liquidation.version, 2);
     }
 
     #[test]
-    fn apply_escalated_rejects_terminal_status() {
+    fn apply_exhausted_accepts_fund_covering() {
         let mut liquidation = HyperliquidPerpLiquidation::new(
             "liq-1-position-1".to_string(),
             "liq-1".to_string(),
@@ -516,11 +595,12 @@ mod tests {
             49_000,
             50_000,
             HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
-            HyperliquidPerpLiquidationStatus::Escalated,
+            HyperliquidPerpLiquidationStatus::FundCovering,
         );
 
-        assert_eq!(liquidation.apply_escalated(2), None);
-        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Escalated);
-        assert_eq!(liquidation.version, 1);
+        liquidation.apply_exhausted(2).unwrap();
+
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Exhausted);
+        assert_eq!(liquidation.version, 2);
     }
 }

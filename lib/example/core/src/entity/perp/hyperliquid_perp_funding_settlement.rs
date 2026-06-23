@@ -22,6 +22,8 @@ pub struct HyperliquidPerpFundingSettlement {
     pub asset: u32,
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
+    /// 本次 funding 真相对应的时间锚点。
+    pub funding_time: u64,
     /// 被结算仓位方向。
     pub side: HyperliquidPerpPositionSide,
     /// 被结算仓位数量。
@@ -48,6 +50,7 @@ impl HyperliquidPerpFundingSettlement {
         position_id: String,
         asset: u32,
         symbol: String,
+        funding_time: u64,
         side: HyperliquidPerpPositionSide,
         qty: u64,
         oracle_price: u64,
@@ -63,6 +66,7 @@ impl HyperliquidPerpFundingSettlement {
             position_id,
             asset,
             symbol,
+            funding_time,
             side,
             qty,
             oracle_price,
@@ -97,6 +101,7 @@ impl Entity for HyperliquidPerpFundingSettlement {
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
+            EntityFieldChange::new("funding_time", "", self.funding_time.to_string()),
             EntityFieldChange::new("side", "", self.side.as_str()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
             EntityFieldChange::new("oracle_price", "", self.oracle_price.to_string()),
@@ -120,7 +125,8 @@ impl Entity for HyperliquidPerpFundingSettlement {
             | "symbol"
             | "side"
             | "is_payment" => 0,
-            "asset" | "qty" | "oracle_price" | "notional" | "funding_rate_e8" | "funding_fee" => 1,
+            "asset" | "funding_time" | "qty" | "oracle_price" | "notional" | "funding_rate_e8"
+            | "funding_fee" => 1,
             _ => 0,
         }
     }
@@ -153,6 +159,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
+            1_717_977_600_000,
             HyperliquidPerpPositionSide::Long,
             2,
             50_000,
@@ -176,6 +183,10 @@ mod tests {
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("oracle_price")
                 && change.new_value_bytes() == b"50000"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("funding_time")
+                && change.new_value_bytes() == b"1717977600000"
         }));
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("is_payment")
