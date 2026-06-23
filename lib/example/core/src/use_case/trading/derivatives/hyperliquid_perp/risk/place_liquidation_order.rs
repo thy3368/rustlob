@@ -1,4 +1,6 @@
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -77,20 +79,33 @@ pub enum PlaceHyperliquidPerpLiquidationOrderError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceHyperliquidPerpLiquidationOrderUseCase;
 
-/// 发出强平单后的业务产出。
+/// 发出强平单后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceHyperliquidPerpLiquidationOrderOutput {
-    /// 新创建的强平单快照。
-    pub order_after: HyperliquidPerpOrder,
-    /// 强平会话推进后的 after 快照。
-    pub liquidation_after: HyperliquidPerpLiquidation,
+pub struct PlaceHyperliquidPerpLiquidationOrderChanges {
+    /// 本次新创建的强平单。
+    pub created_order: HyperliquidPerpOrder,
+    /// 强平会话的 before/after 对。
+    pub changed_liquidation: UpdatedEntityPair<HyperliquidPerpLiquidation>,
 }
 
-impl CommandUseCase3 for PlaceHyperliquidPerpLiquidationOrderUseCase {
+impl ReplayableChanges for PlaceHyperliquidPerpLiquidationOrderChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        Ok(vec![
+            self.created_order.track_create_event()?,
+            self.changed_liquidation
+                .after
+                .track_update_event_from(&self.changed_liquidation.before)?,
+        ])
+    }
+}
+
+impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
     type Command = PlaceHyperliquidPerpLiquidationOrderCmd;
     type GivenState = PlaceHyperliquidPerpLiquidationOrderState;
     type Error = PlaceHyperliquidPerpLiquidationOrderError;
-    type Output = PlaceHyperliquidPerpLiquidationOrderOutput;
+    type Changes = PlaceHyperliquidPerpLiquidationOrderChanges;
 
     fn role(&self) -> &'static str {
         "RiskEngine"
@@ -117,13 +132,11 @@ impl CommandUseCase3 for PlaceHyperliquidPerpLiquidationOrderUseCase {
         validate_state(cmd, state)
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        validate_state(cmd, &state)?;
-
+    ) -> Result<Self::Changes, Self::Error> {
         let order_qty = state
             .liquidation
             .next_order_qty(state.position.qty)
@@ -131,7 +144,7 @@ impl CommandUseCase3 for PlaceHyperliquidPerpLiquidationOrderUseCase {
         let order_id =
             format!("{}-{}-{}", state.account_id, state.position.symbol, state.next_order_sequence);
         let side = liquidation_order_side(state.position.side)?;
-        let order_after = HyperliquidPerpOrder::new(
+        let created_order = HyperliquidPerpOrder::new(
             order_id.clone(),
             None,
             state.position.asset,
@@ -145,9 +158,6 @@ impl CommandUseCase3 for PlaceHyperliquidPerpLiquidationOrderUseCase {
             cmd.cloid.clone(),
         )
         .with_liquidation(cmd.liquidation_id.clone());
-        let order_event = order_after
-            .track_create_event()
-            .map_err(|_| PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
 
         let mut liquidation_after = state.liquidation.clone();
         let next_version = liquidation_after
@@ -157,13 +167,13 @@ impl CommandUseCase3 for PlaceHyperliquidPerpLiquidationOrderUseCase {
         liquidation_after
             .apply_order_placed(order_id, order_qty, next_version)
             .ok_or(PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
-        let liquidation_event = liquidation_after
-            .track_update_event_from(&state.liquidation)
-            .map_err(|_| PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
 
-        Ok(UseCaseOutput {
-            output: PlaceHyperliquidPerpLiquidationOrderOutput { order_after, liquidation_after },
-            events: vec![order_event, liquidation_event],
+        Ok(PlaceHyperliquidPerpLiquidationOrderChanges {
+            created_order,
+            changed_liquidation: UpdatedEntityPair {
+                before: state.liquidation,
+                after: liquidation_after,
+            },
         })
     }
 }
@@ -195,8 +205,10 @@ fn validate_state(
     if !matches!(
         state.liquidation.status,
         HyperliquidPerpLiquidationStatus::Started | HyperliquidPerpLiquidationStatus::OrderPlaced
-    ) || !state.liquidation.can_place_order()
-    {
+    ) {
+        return Err(PlaceHyperliquidPerpLiquidationOrderError::LiquidationNotPlaceable);
+    }
+    if !state.liquidation.can_place_order() {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::LiquidationNotPlaceable);
     }
     if state.liquidation.remaining_qty == 0 {
@@ -226,7 +238,7 @@ fn liquidation_order_side(
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
     use crate::entity::{HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode};
@@ -316,18 +328,52 @@ mod tests {
     }
 
     #[test]
-    fn compute_creates_sell_partial_liquidation_order_for_long() {
-        let result = PlaceHyperliquidPerpLiquidationOrderUseCase
-            .compute_output_and_events(&cmd(), state(HyperliquidPerpPositionSide::Long, 10))
-            .unwrap();
-        let events = result.events;
+    fn risk_engine_place_order_for_long_updates_session_pair_and_projects_two_events() {
+        // Rule:
+        // - 对 long 仓位发强平单时，风险引擎必须创建一张 sell liquidation order，
+        //   并把强平会话推进到 `OrderPlaced`。
+        //
+        // Given:
+        // - 一个 Started 状态、剩余数量为 10 的 long liquidation 会话。
+        //
+        // When:
+        // - 调用 `compute_changes()` 并再投影 `to_replayable_events()`。
+        //
+        // Then:
+        // - changes 先给出新订单和 liquidation before/after pair。
+        // - after 状态为 `OrderPlaced`，数量、最近订单和版本推进正确。
+        // - 最终按顺序投影出 order create event 和 liquidation update event。
 
-        assert_eq!(events.len(), 2);
-        assert_eq!(result.output.order_after.side, HyperliquidPerpOrderSide::Sell);
+        // arrange
+        let use_case = PlaceHyperliquidPerpLiquidationOrderUseCase;
+
+        // act
+        let changes =
+            use_case.compute_changes(&cmd(), state(HyperliquidPerpPositionSide::Long, 10)).unwrap();
+        let events = changes.to_replayable_events().unwrap();
+
+        // assert
+        assert_eq!(changes.created_order.side, HyperliquidPerpOrderSide::Sell);
+        assert_eq!(changes.created_order.liquidation_id.as_deref(), Some("liq-1"));
+        assert_eq!(changes.created_order.qty, 2);
         assert_eq!(
-            result.output.liquidation_after.status,
+            changes.changed_liquidation.before.status,
+            HyperliquidPerpLiquidationStatus::Started
+        );
+        assert_eq!(
+            changes.changed_liquidation.after.status,
             HyperliquidPerpLiquidationStatus::OrderPlaced
         );
+        assert_eq!(changes.changed_liquidation.after.placed_order_count, 1);
+        assert_eq!(changes.changed_liquidation.after.remaining_qty, 8);
+        assert_eq!(
+            changes.changed_liquidation.after.last_order_id.as_deref(),
+            Some("trader-1-BTC-PERP-11")
+        );
+        assert_eq!(changes.changed_liquidation.before.version, 1);
+        assert_eq!(changes.changed_liquidation.after.version, 2);
+
+        assert_eq!(events.len(), 2);
         assert!(events[0].is_created());
         assert!(events[0].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("side") && change.new_value_bytes() == b"sell"
@@ -335,30 +381,61 @@ mod tests {
         assert!(events[0].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("qty") && change.new_value_bytes() == b"2"
         }));
-        assert!(events[0].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("is_liquidation")
-                && change.new_value_bytes() == b"true"
-        }));
         assert!(events[1].is_updated());
         assert!(events[1].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("status")
                 && change.new_value_bytes() == b"order_placed"
         }));
+        assert!(events[1].field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("remaining_qty")
+                && change.new_value_bytes() == b"8"
+        }));
     }
 
     #[test]
-    fn compute_creates_buy_full_liquidation_order_for_small_short() {
-        let result = PlaceHyperliquidPerpLiquidationOrderUseCase
-            .compute_output_and_events(&cmd(), state(HyperliquidPerpPositionSide::Short, 3))
-            .unwrap();
-        let events = result.events;
+    fn risk_engine_place_order_for_small_short_creates_buy_order_and_consumes_remaining_qty() {
+        // Rule:
+        // - 对小数量 short 仓位发强平单时，本轮直接下满量 buy order。
+        //
+        // Given:
+        // - 一个 Started 状态、剩余数量为 3 的 short liquidation 会话。
+        //
+        // When:
+        // - 调用 `compute_changes()` 并再投影 `to_replayable_events()`。
+        //
+        // Then:
+        // - created order 为 buy，数量为 3。
+        // - liquidation after 进入 `OrderPlaced` 且 `remaining_qty == 0`。
 
-        assert_eq!(result.output.order_after.side, HyperliquidPerpOrderSide::Buy);
+        // arrange
+        let use_case = PlaceHyperliquidPerpLiquidationOrderUseCase;
+
+        // act
+        let changes =
+            use_case.compute_changes(&cmd(), state(HyperliquidPerpPositionSide::Short, 3)).unwrap();
+        let events = changes.to_replayable_events().unwrap();
+
+        // assert
+        assert_eq!(changes.created_order.side, HyperliquidPerpOrderSide::Buy);
+        assert_eq!(changes.created_order.qty, 3);
+        assert_eq!(
+            changes.changed_liquidation.before.status,
+            HyperliquidPerpLiquidationStatus::Started
+        );
+        assert_eq!(
+            changes.changed_liquidation.after.status,
+            HyperliquidPerpLiquidationStatus::OrderPlaced
+        );
+        assert_eq!(changes.changed_liquidation.after.remaining_qty, 0);
+        assert_eq!(changes.changed_liquidation.after.placed_qty_total, 3);
+
+        assert_eq!(events.len(), 2);
         assert!(events[0].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("side") && change.new_value_bytes() == b"buy"
         }));
-        assert!(events[0].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("qty") && change.new_value_bytes() == b"3"
+        assert!(events[1].field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("remaining_qty")
+                && change.new_value_bytes() == b"0"
         }));
     }
 }

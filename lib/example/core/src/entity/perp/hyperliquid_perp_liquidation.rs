@@ -181,6 +181,37 @@ impl HyperliquidPerpLiquidation {
         self.version = version;
         Some(())
     }
+
+    /// 在剩余待处置数量归零后，将强平会话推进为已解决。
+    pub fn apply_resolved(&mut self, version: u64) -> Option<()> {
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::Started
+                | HyperliquidPerpLiquidationStatus::OrderPlaced
+        ) || self.remaining_qty != 0
+        {
+            return None;
+        }
+
+        self.status = HyperliquidPerpLiquidationStatus::Resolved;
+        self.version = version;
+        Some(())
+    }
+
+    /// 将当前强平会话升级到更高风险处置路径。
+    pub fn apply_escalated(&mut self, version: u64) -> Option<()> {
+        if !matches!(
+            self.status,
+            HyperliquidPerpLiquidationStatus::Started
+                | HyperliquidPerpLiquidationStatus::OrderPlaced
+        ) {
+            return None;
+        }
+
+        self.status = HyperliquidPerpLiquidationStatus::Escalated;
+        self.version = version;
+        Some(())
+    }
 }
 
 impl Entity for HyperliquidPerpLiquidation {
@@ -392,5 +423,104 @@ mod tests {
         assert_eq!(liquidation.remaining_qty, 8);
         assert_eq!(liquidation.last_order_id.as_deref(), Some("order-1"));
         assert_eq!(liquidation.version, 2);
+    }
+
+    #[test]
+    fn apply_resolved_succeeds_when_remaining_qty_is_zero() {
+        let mut liquidation = HyperliquidPerpLiquidation::new(
+            "liq-1-position-1".to_string(),
+            "liq-1".to_string(),
+            "risk-engine".to_string(),
+            "trader-1".to_string(),
+            "position-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            HyperliquidPerpMarginMode::Cross,
+            49_000,
+            50_000,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
+            HyperliquidPerpLiquidationStatus::Started,
+        );
+        liquidation.remaining_qty = 0;
+
+        liquidation.apply_resolved(2).unwrap();
+
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Resolved);
+        assert_eq!(liquidation.version, 2);
+    }
+
+    #[test]
+    fn apply_resolved_rejects_when_remaining_qty_is_not_zero() {
+        let mut liquidation = HyperliquidPerpLiquidation::new(
+            "liq-1-position-1".to_string(),
+            "liq-1".to_string(),
+            "risk-engine".to_string(),
+            "trader-1".to_string(),
+            "position-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            HyperliquidPerpMarginMode::Cross,
+            49_000,
+            50_000,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
+            HyperliquidPerpLiquidationStatus::Started,
+        );
+
+        assert_eq!(liquidation.apply_resolved(2), None);
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Started);
+        assert_eq!(liquidation.version, 1);
+    }
+
+    #[test]
+    fn apply_escalated_succeeds_from_started() {
+        let mut liquidation = HyperliquidPerpLiquidation::new(
+            "liq-1-position-1".to_string(),
+            "liq-1".to_string(),
+            "risk-engine".to_string(),
+            "trader-1".to_string(),
+            "position-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            HyperliquidPerpMarginMode::Cross,
+            49_000,
+            50_000,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
+            HyperliquidPerpLiquidationStatus::Started,
+        );
+
+        liquidation.apply_escalated(2).unwrap();
+
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Escalated);
+        assert_eq!(liquidation.version, 2);
+    }
+
+    #[test]
+    fn apply_escalated_rejects_terminal_status() {
+        let mut liquidation = HyperliquidPerpLiquidation::new(
+            "liq-1-position-1".to_string(),
+            "liq-1".to_string(),
+            "risk-engine".to_string(),
+            "trader-1".to_string(),
+            "position-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            2,
+            HyperliquidPerpMarginMode::Cross,
+            49_000,
+            50_000,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
+            HyperliquidPerpLiquidationStatus::Escalated,
+        );
+
+        assert_eq!(liquidation.apply_escalated(2), None);
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Escalated);
+        assert_eq!(liquidation.version, 1);
     }
 }

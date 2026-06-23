@@ -1,4 +1,6 @@
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use cmd_handler::command_use_case_def2::{
+    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
+};
 use common_entity::Entity;
 use thiserror::Error;
 
@@ -72,8 +74,6 @@ pub enum StartHyperliquidPerpLiquidationError {
     PositionAlreadyInLiquidation,
     #[error("liquidation trigger condition is not met")]
     LiquidationConditionNotMet,
-    #[error("arithmetic overflow while deriving liquidation fact")]
-    ArithmeticOverflow,
 }
 
 /// 启动单个 Hyperliquid perp 强平流程。
@@ -82,18 +82,26 @@ pub enum StartHyperliquidPerpLiquidationError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StartHyperliquidPerpLiquidationUseCase;
 
-/// 启动强平后的业务产出。
+/// 启动强平后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StartHyperliquidPerpLiquidationOutput {
-    /// 新创建的强平事实。
-    pub liquidation: HyperliquidPerpLiquidation,
+pub struct StartHyperliquidPerpLiquidationChanges {
+    /// 本次新创建的强平会话。
+    pub created_liquidation: HyperliquidPerpLiquidation,
 }
 
-impl CommandUseCase3 for StartHyperliquidPerpLiquidationUseCase {
+impl ReplayableChanges for StartHyperliquidPerpLiquidationChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        Ok(vec![self.created_liquidation.track_create_event()?])
+    }
+}
+
+impl CommandUseCase4 for StartHyperliquidPerpLiquidationUseCase {
     type Command = StartHyperliquidPerpLiquidationCmd;
     type GivenState = StartHyperliquidPerpLiquidationState;
     type Error = StartHyperliquidPerpLiquidationError;
-    type Output = StartHyperliquidPerpLiquidationOutput;
+    type Changes = StartHyperliquidPerpLiquidationChanges;
 
     fn role(&self) -> &'static str {
         "RiskEngine"
@@ -126,37 +134,28 @@ impl CommandUseCase3 for StartHyperliquidPerpLiquidationUseCase {
         validate_state(cmd, state)
     }
 
-    fn compute_output_and_events(
+    fn compute_changes(
         &self,
         cmd: &Self::Command,
         state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        validate_state(cmd, &state)?;
-
-        let liquidation = HyperliquidPerpLiquidation::new(
-            liquidation_id(cmd.liquidation_batch_id.as_str(), cmd.position_id.as_str()),
-            cmd.liquidation_batch_id.clone(),
-            cmd.party_id.clone(),
-            state.position.account_id.clone(),
-            state.position.position_id.clone(),
-            state.position.asset,
-            state.position.symbol.clone(),
-            state.position.side,
-            state.position.qty,
-            cmd.margin_mode,
-            cmd.mark_price,
-            cmd.bankruptcy_price,
-            cmd.trigger_reason,
-            HyperliquidPerpLiquidationStatus::Started,
-        );
-
-        Ok(UseCaseOutput {
-            output: StartHyperliquidPerpLiquidationOutput { liquidation: liquidation.clone() },
-            events: vec![
-                liquidation
-                    .track_create_event()
-                    .map_err(|_| StartHyperliquidPerpLiquidationError::ArithmeticOverflow)?,
-            ],
+    ) -> Result<Self::Changes, Self::Error> {
+        Ok(StartHyperliquidPerpLiquidationChanges {
+            created_liquidation: HyperliquidPerpLiquidation::new(
+                liquidation_id(cmd.liquidation_batch_id.as_str(), cmd.position_id.as_str()),
+                cmd.liquidation_batch_id.clone(),
+                cmd.party_id.clone(),
+                state.position.account_id.clone(),
+                state.position.position_id.clone(),
+                state.position.asset,
+                state.position.symbol.clone(),
+                state.position.side,
+                state.position.qty,
+                cmd.margin_mode,
+                cmd.mark_price,
+                cmd.bankruptcy_price,
+                cmd.trigger_reason,
+                HyperliquidPerpLiquidationStatus::Started,
+            ),
         })
     }
 }
@@ -200,7 +199,7 @@ fn liquidation_id(batch_id: &str, position_id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::CommandUseCase3;
+    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
     use crate::entity::HyperliquidPerpPositionSide;
@@ -285,14 +284,35 @@ mod tests {
     }
 
     #[test]
-    fn compute_creates_single_liquidation_event() {
-        let result = StartHyperliquidPerpLiquidationUseCase
-            .compute_output_and_events(&cmd(), state())
-            .unwrap();
-        let events = result.events;
+    fn risk_engine_start_creates_started_liquidation_changes_and_single_create_event() {
+        // Rule:
+        // - 风险引擎确认仓位已满足强平触发条件后，必须创建一条 Started 强平会话事实。
+        //
+        // Given:
+        // - 一个可被强平且当前未进入其他强平流程的仓位。
+        //
+        // When:
+        // - 调用 `compute_changes()` 并再投影 `to_replayable_events()`。
+        //
+        // Then:
+        // - changes 先给出唯一真相 `created_liquidation`。
+        // - 该会话的初始状态是 `Started`，剩余数量等于仓位数量。
+        // - 最终只投影出 1 条 create event。
+
+        // arrange
+        let use_case = StartHyperliquidPerpLiquidationUseCase;
+
+        // act
+        let changes = use_case.compute_changes(&cmd(), state()).unwrap();
+        let events = changes.to_replayable_events().unwrap();
+
+        // assert
+        assert_eq!(changes.created_liquidation.liquidation_id, "liq-2026-06-10T00-position-1");
+        assert_eq!(changes.created_liquidation.status, HyperliquidPerpLiquidationStatus::Started);
+        assert_eq!(changes.created_liquidation.remaining_qty, 2);
+        assert_eq!(changes.created_liquidation.qty, 2);
 
         assert_eq!(events.len(), 1);
-        assert_eq!(result.output.liquidation.status, HyperliquidPerpLiquidationStatus::Started);
         assert!(events[0].is_created());
         assert!(events[0].field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("liquidation_id")

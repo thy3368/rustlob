@@ -506,6 +506,38 @@ mod tests {
     }
 
     #[test]
+    fn compute_changes_creates_funding_facts_then_applies_balance_side_effects() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let state = cross_state();
+        let cmd = cross_cmd();
+
+        let result = use_case.compute_changes(&cmd, state).unwrap();
+
+        assert_eq!(
+            result
+                .created_settlements
+                .iter()
+                .map(|settlement| settlement.funding_batch_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["funding-2026-06-10T08", "funding-2026-06-10T08",]
+        );
+        assert_eq!(
+            result
+                .created_settlements
+                .iter()
+                .map(|settlement| settlement.position_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["position-long", "position-short"]
+        );
+        assert!(result.changed_margin_balances.iter().all(|pair| {
+            result
+                .created_settlements
+                .iter()
+                .any(|settlement| settlement.account_id == pair.before.account_id)
+        }));
+    }
+
+    #[test]
     fn compute_changes_rejects_insufficient_balance() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
         let mut state = cross_state();
