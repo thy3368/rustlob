@@ -8,6 +8,7 @@ use crate::entity::{
     Balance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
 };
+use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
 
 /// 启动单个 Hyperliquid perp 仓位强平流程的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,14 +19,6 @@ pub struct StartHyperliquidPerpLiquidationCmd {
     pub liquidation_batch_id: String,
     /// 被强平仓位 ID。
     pub position_id: String,
-    /// 触发判定使用的标记价格。
-    pub mark_price: u64,
-    /// 当前仓位的破产价格。
-    pub bankruptcy_price: u64,
-    /// 触发原因。
-    pub trigger_reason: HyperliquidPerpLiquidationTriggerReason,
-    /// 当前仓位保证金模式。
-    pub margin_mode: HyperliquidPerpMarginMode,
 }
 
 impl IssuedByParty for StartHyperliquidPerpLiquidationCmd {
@@ -43,6 +36,14 @@ pub struct StartHyperliquidPerpLiquidationState {
     pub margin_balance: Balance,
     /// 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
+    /// 当前仓位保证金模式。
+    pub margin_mode: HyperliquidPerpMarginMode,
+    /// 触发判定使用的标记价格。
+    pub mark_price: u64,
+    /// 当前仓位的破产价格。
+    pub bankruptcy_price: u64,
+    /// 触发原因。
+    pub trigger_reason: HyperliquidPerpLiquidationTriggerReason,
     /// 当前已经进入强平流程的仓位 ID。
     pub existing_liquidation_position_ids: Vec<String>,
 }
@@ -70,6 +71,8 @@ pub enum StartHyperliquidPerpLiquidationError {
     MarginBalanceAccountMismatch,
     #[error("margin balance asset does not match state margin asset")]
     InvalidMarginBalance,
+    #[error("state trigger reason does not match risk facts")]
+    TriggerReasonMismatch,
     #[error("position is already in liquidation")]
     PositionAlreadyInLiquidation,
     #[error("liquidation trigger condition is not met")]
@@ -117,12 +120,6 @@ impl CommandUseCase4 for StartHyperliquidPerpLiquidationUseCase {
         if cmd.position_id.is_empty() {
             return Err(StartHyperliquidPerpLiquidationError::InvalidPositionId);
         }
-        if cmd.mark_price == 0 {
-            return Err(StartHyperliquidPerpLiquidationError::InvalidMarkPrice);
-        }
-        if cmd.bankruptcy_price == 0 {
-            return Err(StartHyperliquidPerpLiquidationError::InvalidBankruptcyPrice);
-        }
         Ok(())
     }
 
@@ -150,10 +147,10 @@ impl CommandUseCase4 for StartHyperliquidPerpLiquidationUseCase {
                 state.position.symbol.clone(),
                 state.position.side,
                 state.position.qty,
-                cmd.margin_mode,
-                cmd.mark_price,
-                cmd.bankruptcy_price,
-                cmd.trigger_reason,
+                state.margin_mode,
+                state.mark_price,
+                state.bankruptcy_price,
+                state.trigger_reason,
                 HyperliquidPerpLiquidationStatus::Started,
             ),
         })
@@ -179,6 +176,12 @@ fn validate_state(
     if !state.margin_balance.is_asset(state.margin_asset_id.as_str()) {
         return Err(StartHyperliquidPerpLiquidationError::InvalidMarginBalance);
     }
+    if state.mark_price == 0 {
+        return Err(StartHyperliquidPerpLiquidationError::InvalidMarkPrice);
+    }
+    if state.bankruptcy_price == 0 {
+        return Err(StartHyperliquidPerpLiquidationError::InvalidBankruptcyPrice);
+    }
     if state
         .existing_liquidation_position_ids
         .iter()
@@ -186,8 +189,16 @@ fn validate_state(
     {
         return Err(StartHyperliquidPerpLiquidationError::PositionAlreadyInLiquidation);
     }
-    if !state.position.liquidation_triggered_by_mark_price(cmd.mark_price, cmd.bankruptcy_price) {
+    let Some(trigger_reason) = derive_hyperliquid_perp_liquidation_trigger_reason(
+        &state.position,
+        state.margin_balance.available,
+        state.mark_price,
+        state.bankruptcy_price,
+    ) else {
         return Err(StartHyperliquidPerpLiquidationError::LiquidationConditionNotMet);
+    };
+    if trigger_reason != state.trigger_reason {
+        return Err(StartHyperliquidPerpLiquidationError::TriggerReasonMismatch);
     }
 
     Ok(())
@@ -229,6 +240,10 @@ mod tests {
             position: position(),
             margin_balance: balance(),
             margin_asset_id: "USDC".to_string(),
+            margin_mode: HyperliquidPerpMarginMode::Cross,
+            mark_price: 49_000,
+            bankruptcy_price: 50_000,
+            trigger_reason: HyperliquidPerpLiquidationTriggerReason::MaintenanceMarginBreach,
             existing_liquidation_position_ids: Vec::new(),
         }
     }
@@ -238,10 +253,6 @@ mod tests {
             party_id: "risk-engine".to_string(),
             liquidation_batch_id: "liq-2026-06-10T00".to_string(),
             position_id: "position-1".to_string(),
-            mark_price: 49_000,
-            bankruptcy_price: 50_000,
-            trigger_reason: HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk,
-            margin_mode: HyperliquidPerpMarginMode::Cross,
         }
     }
 
@@ -274,12 +285,45 @@ mod tests {
 
     #[test]
     fn validate_rejects_when_mark_does_not_trigger() {
-        let mut cmd = cmd();
-        cmd.mark_price = 50_001;
+        let mut state = state();
+        state.mark_price = 50_001;
 
         assert_eq!(
-            StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd, &state()),
+            StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state),
             Err(StartHyperliquidPerpLiquidationError::LiquidationConditionNotMet)
+        );
+    }
+
+    #[test]
+    fn validate_rejects_zero_mark_price_in_state() {
+        let mut state = state();
+        state.mark_price = 0;
+
+        assert_eq!(
+            StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state),
+            Err(StartHyperliquidPerpLiquidationError::InvalidMarkPrice)
+        );
+    }
+
+    #[test]
+    fn validate_rejects_zero_bankruptcy_price_in_state() {
+        let mut state = state();
+        state.bankruptcy_price = 0;
+
+        assert_eq!(
+            StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state),
+            Err(StartHyperliquidPerpLiquidationError::InvalidBankruptcyPrice)
+        );
+    }
+
+    #[test]
+    fn validate_rejects_inconsistent_trigger_reason() {
+        let mut state = state();
+        state.trigger_reason = HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk;
+
+        assert_eq!(
+            StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state),
+            Err(StartHyperliquidPerpLiquidationError::TriggerReasonMismatch)
         );
     }
 
@@ -311,6 +355,13 @@ mod tests {
         assert_eq!(changes.created_liquidation.status, HyperliquidPerpLiquidationStatus::Started);
         assert_eq!(changes.created_liquidation.remaining_qty, 2);
         assert_eq!(changes.created_liquidation.qty, 2);
+        assert_eq!(changes.created_liquidation.margin_mode, HyperliquidPerpMarginMode::Cross);
+        assert_eq!(changes.created_liquidation.mark_price, 49_000);
+        assert_eq!(changes.created_liquidation.bankruptcy_price, 50_000);
+        assert_eq!(
+            changes.created_liquidation.trigger_reason,
+            HyperliquidPerpLiquidationTriggerReason::MaintenanceMarginBreach
+        );
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_created());
@@ -322,5 +373,27 @@ mod tests {
             change.field_name_as_str().ok() == Some("status")
                 && change.new_value_bytes() == b"started"
         }));
+    }
+
+    #[test]
+    fn compute_uses_state_risk_facts_instead_of_command_fields() {
+        let mut state = state();
+        state.margin_mode = HyperliquidPerpMarginMode::Isolated;
+        state.mark_price = 48_500;
+        state.bankruptcy_price = 50_000;
+        state.trigger_reason = HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk;
+        state.margin_balance = Balance::new("trader-1".to_string(), "USDC".to_string(), 0, 0, 5);
+
+        StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state).unwrap();
+        let changes =
+            StartHyperliquidPerpLiquidationUseCase.compute_changes(&cmd(), state).unwrap();
+
+        assert_eq!(changes.created_liquidation.margin_mode, HyperliquidPerpMarginMode::Isolated);
+        assert_eq!(changes.created_liquidation.mark_price, 48_500);
+        assert_eq!(changes.created_liquidation.bankruptcy_price, 50_000);
+        assert_eq!(
+            changes.created_liquidation.trigger_reason,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk
+        );
     }
 }

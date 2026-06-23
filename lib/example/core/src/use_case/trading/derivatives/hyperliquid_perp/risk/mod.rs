@@ -41,7 +41,6 @@
 pub mod escalate_liquidation;
 pub mod place_liquidation_order;
 pub mod resolve_liquidation;
-pub mod scan_liquidation_candidates;
 pub mod start_liquidation;
 
 pub use escalate_liquidation::{
@@ -58,12 +57,6 @@ pub use resolve_liquidation::{
     ResolveHyperliquidPerpLiquidationChanges, ResolveHyperliquidPerpLiquidationCmd,
     ResolveHyperliquidPerpLiquidationError, ResolveHyperliquidPerpLiquidationState,
     ResolveHyperliquidPerpLiquidationUseCase,
-};
-pub use scan_liquidation_candidates::{
-    HyperliquidPerpLiquidationCandidate, HyperliquidPerpRiskSnapshot,
-    QueryHyperliquidPerpLiquidationCandidates, QueryHyperliquidPerpLiquidationCandidatesError,
-    QueryHyperliquidPerpLiquidationCandidatesReadModel,
-    QueryHyperliquidPerpLiquidationCandidatesUseCase,
 };
 pub use start_liquidation::{
     StartHyperliquidPerpLiquidationChanges, StartHyperliquidPerpLiquidationCmd,
