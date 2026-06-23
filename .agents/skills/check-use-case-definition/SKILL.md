@@ -16,7 +16,7 @@ Use this skill for RustLOB `CommandUseCase3` business-definition checks. Prefer 
 - The local script is a compatibility wrapper over the workflow/use-case review tool, so keep the CLI focused on review inputs and thresholds.
 
 2. Treat the script as the primary judge.
-- The rubric source is `.agents/skills/review-use-case/references/scorecard.md`.
+- The rubric source is `.agents/skills/shared/use_case_review_scorecard.md`.
 - Do not invent a second scoring rule in the response.
 
 3. When a use case fails:

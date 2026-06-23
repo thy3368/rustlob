@@ -16,12 +16,19 @@ Start from these source files:
 - Executor: `lib/common/cmd_handler/src/command_use_case_def2/executor.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
 - Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
+- Shared boundary reference: `.agents/skills/shared/use_case_entity_aggregate_boundary.md`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
+- Shared entity classification reference: `.agents/skills/shared/entity_four_color_classification.md`
 
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
 Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case.
+If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before writing or refactoring.
+If the task requires deciding how a `changes/entity` object should be classified, or whether it should be an `entity`, `value object`, `role object`, or `description/policy`, read `.agents/skills/shared/entity_four_color_classification.md` before writing or refactoring.
 Read `.agents/skills/shared/changes_pair_first_rule.md` before shaping `Changes`.
-If the task is to critique or score a use case, use the sibling skill `review-use-case` instead.
+If the task is to critique or score a use case:
+- use `.agents/skills/shared/use_case_review_scorecard.md` as the canonical scoring rubric
+- use `clean-architecture` for layer and boundary judgment
+- use the checker in `.agents/skills/check-use-case-definition/` or `scripts/check_use_case_business_definition.py` when the task needs a scripted score
 优先参考现有 V4 真实现例：
 - `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
 - `lib/example/core/src/use_case/trading/spot/cancel_order.rs`
@@ -86,6 +93,11 @@ If the task is to critique or score a use case, use the sibling skill `review-us
 - `trace_id` is only for tracing. Do not use it as the idempotency key.
 - Treat `entity` as a reusable core collaborator, not a private struct owned by one use case.
 - If business logic is likely reusable across use cases, prefer a domain-semantic entity method over duplicating the rule in the use case.
+- `use case` 负责业务边界与跨聚合协调，不只是串 `method call`。
+- 优先复用 `entity` / `aggregate` 的 `behavior method`。
+- 不要把 `helper/query method` 当成业务完成条件本身。
+- 聚合内协调可留在 `aggregate method`。
+- 跨聚合协调必须保留在 `use case`。
 
 ## Testing
 
@@ -117,4 +129,7 @@ Before finishing, verify:
 - Reply shaping happens through `UseCaseReplyMapper`.
 - The use case does not directly invoke outer technical workflow machinery.
 - Any reusable business rule that belongs on an entity is not duplicated inline in the use case.
+- The use case is not repeating an existing `entity` / `aggregate behavior method` without reason.
+- The use case has not wrongly pushed cross-aggregate coordination into one `aggregate method`.
+- Any method reused from an entity or aggregate is truly a business evolution method, not a helper disguised with an action name.
 - Tests cover both direct method behavior and executor orchestration.

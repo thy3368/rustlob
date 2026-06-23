@@ -14,7 +14,9 @@ domain queries/calculations, match semantics, Rustdoc, and focused unit tests.
 
 Before changing an entity, read the shared constraints file:
 
+- `.agents/skills/shared/entity_four_color_classification.md`
 - `.agents/skills/shared/use_case_entity_constraints.md`
+- If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, also read `.agents/skills/shared/use_case_entity_aggregate_boundary.md`
 
 For independent entity property tests, use `proptest-entity`. Keep this skill focused on
 entity modeling, Rustdoc, business methods, and small inline unit tests.
@@ -22,15 +24,16 @@ entity modeling, Rustdoc, business methods, and small inline unit tests.
 ## Workflow
 
 1. Read the entity, its neighboring entities, and the use cases/adapters that construct or inspect it.
-2. Identify business facts that belong on the entity, not in adapters.
-3. Add only reusable methods that at least two workflows may naturally need, or that make one workflow's business rule explicit.
-4. Keep validation ownership clear: use cases reject commands/state; entities expose facts and invariant checks.
-5. Add Rustdoc for the struct, fields, constructor, and business methods.
-6. Add focused inline `#[cfg(test)]` unit tests for the entity methods.
+2. Classify the target object with `.agents/skills/shared/entity_four_color_classification.md` before deciding whether it should be an `entity`, `aggregate root`, `value object`, or remain `description/policy`.
+3. Identify business facts that belong on the entity, not in adapters.
+4. Add only reusable methods that at least two workflows may naturally need, or that make one workflow's business rule explicit.
+5. Keep validation ownership clear: use cases reject commands/state; entities expose facts and invariant checks.
+6. Add Rustdoc for the struct, fields, constructor, and business methods.
+7. Add focused inline `#[cfg(test)]` unit tests for the entity methods.
    If the entity needs business-state enumeration with `proptest`, switch to
    `proptest-entity` and put those scenarios in a dedicated file.
-7. Replace duplicate manual construction or calculation in adapters/use cases with entity methods when it does not couple core to adapter details.
-8. Run targeted formatting and tests for the touched package.
+8. Replace duplicate manual construction or calculation in adapters/use cases with entity methods when it does not couple core to adapter details.
+9. Run targeted formatting and tests for the touched package.
 
 ## Entity Shape
 
@@ -63,12 +66,30 @@ Do not use `unwrap()` or `expect()` in production entity code.
 ## Business Method Rules
 
 - Every entity must contain domain-semantic methods that a use case can reuse; a plain field bag is not enough.
+- First decide the entity's `four_color_archetype`; do not assume every entity should have the same rich-behavior shape.
+- Split methods explicitly into three buckets:
+  - single-entity `behavior methods`
+  - aggregate-root `behavior methods`
+  - `helper/query methods`
+- Method bias should follow archetype:
+  - `Moment-Interval` usually favors `behavior methods`
+  - `Party/Place/Thing` often favors qualification, ownership, and derived `helper/query methods`
+  - promoted `Role` entities must justify their lifecycle and should not exist as label-only wrappers
+  - `Description` objects should usually stay out of behavior-heavy `entity` design
 - Put stable domain vocabulary on the entity: ownership, symbol/product matching, status checks, reserved/releasable amounts, notional calculations, version transitions.
+- `behavior methods` are strongly tied to the business `state machine`; they represent legal business evolution, not generic utilities.
+- Aggregate-root `behavior methods` may coordinate multiple objects inside the same aggregate.
+- `helper/query methods` may answer business questions or derived values, but they must not pretend to be independent business actions.
 - Keep persistence, event decoding, SQL, HTTP, CLI, and mapper details out of entities.
 - Constructors may be permissive when adapters need to rebuild historical state from events. Document that explicitly.
 - If a method enforces a command rejection rule, prefer returning a boolean or `Option`; map it to use-case errors in the use case.
 - Avoid generic utility methods that do not express business language.
 - Do not design the entity as a private helper for just one use case; preserve the many-`use_case` to one-`entity` reuse direction.
+- Do not put cross-aggregate coordination, authorization sequencing, or external dependency decisions into an entity.
+- Do not wrap a pure helper in a business-verb name.
+- Prefer names like `cancel`, `release`, `consume`, `apply_fill` for evolution methods.
+- Prefer names like `reserve_funds_for_order`, `release_hold` for aggregate-internal coordination.
+- Prefer names like `is_*`, `can_*`, `remaining_*`, `available_*` for query/helper methods.
 
 ## SpotOrder Pattern
 
@@ -98,6 +119,7 @@ duplicating crossing and finish-state rules in multiple places.
 Document:
 
 - What business snapshot the entity represents.
+- Its `four_color_archetype` and why it deserves to be an `entity`.
 - What each public field means in domain terms.
 - Whether `new` validates or only assembles already validated/replayed facts.
 - Overflow behavior for calculations.
@@ -109,6 +131,9 @@ Keep Rustdoc concise. Do not describe adapter implementation details.
 
 Add inline tests near the entity:
 
+- `behavior methods` test state transitions, failure semantics, and invariants.
+- Aggregate-root methods test consistency across the aggregate's internal objects.
+- `helper/query methods` test calculations and boolean judgments.
 - Constructor stores all fields.
 - Boolean business queries return true and false cases.
 - Calculations return expected values.

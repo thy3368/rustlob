@@ -1,7 +1,6 @@
 ---
 name: proptest-use-case
 description: Write property-based tests for RustLOB command-style use cases with `proptest`. Use when Codex needs to add or review `proptest!` tests for `CommandUseCase3`, design generators for commands or state snapshots, verify executor and pipeline invariants, or distinguish strong business properties from weak tautological tests.
-disabled: true
 ---
 
 # Proptest Use Case
@@ -23,6 +22,7 @@ Start from these source files:
   - `lib/common/cmd_handler/src/use_case_proptest_examples/bad.rs`
 
 Read the shared good and bad examples before writing new properties.
+If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before writing properties.
 
 ## Workflow
 
@@ -61,6 +61,8 @@ Read the shared good and bad examples before writing new properties.
 
 4. Test the right level.
 - Use direct method properties for pure logic in `pre_check_command`, `validate_against_state`, or `compute_output_and_events`.
+- Do not re-prove entity or aggregate internal evolution here when `behavior method` tests already own that proof.
+- Focus use-case properties on cross-aggregate coordination, combined constraints, side effects, and `actor / command / state` interaction.
 - Use `CommandUseCaseExecutor3` properties when orchestration matters:
   - load is or is not called
   - pipeline is or is not called
@@ -85,6 +87,7 @@ Read the shared good and bad examples before writing new properties.
   - use case actually computes business outcomes
 - Bad example characteristics:
   - property only reasserts precomputed state answers
+  - property only calls entity helper methods to restate obvious results, without proving use-case orchestration semantics
   - role is technical, not business-facing
   - command identity and trace identity are confused
   - the test is tautological and unlikely to catch regressions

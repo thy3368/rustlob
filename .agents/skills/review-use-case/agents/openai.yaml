@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review Use Case"
-  short_description: "Review and score RustLOB use cases"
-  default_prompt: "Review RustLOB CommandUseCase4 use cases with a changes-first lens, enforce pair-first changes for update scenarios, treat duplicate pair+after fields as a violation, map them to core, adapter, and infra, identify boundary or projection-design violations, and score them with a 100-point Clean Architecture and four-color rubric."

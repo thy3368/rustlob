@@ -298,7 +298,7 @@ def fallback_review(paths: list[str], *, scan_all: bool, min_score: int) -> dict
         "format": "json",
         "all": scan_all,
         "average_score": round(sum(result["score"] for result in results) / len(results), 2) if results else 0.0,
-        "scorecard_path": ".agents/skills/review-use-case/references/scorecard.md",
+        "scorecard_path": ".agents/skills/shared/use_case_review_scorecard.md",
     }
     return {"summary": summary, "results": results}
 

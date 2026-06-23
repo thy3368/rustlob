@@ -42,6 +42,7 @@ Load these files before doing any review or TDD work:
 - Main calibration example: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_happy_path.rs`
 - Existing happy-test calibration breakdown: `.agents/skills/write-use-case-happy-path-tests/references/example_breakdown.md`
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
+- Shared boundary reference: `.agents/skills/shared/use_case_entity_aggregate_boundary.md`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 
 Load these references from this skill:
@@ -50,6 +51,7 @@ Load these references from this skill:
 - `references/matrix-completion.md`
 
 Read the calibration example as style input. Apply the stricter TDD workflow from this skill on top of it.
+If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before review or repair.
 Read `.agents/skills/shared/changes_pair_first_rule.md` before reviewing happy-path semantics or repairing `Changes`.
 
 ## Required Workflow
@@ -121,8 +123,10 @@ Do not continue to add more happy-path cells by default after that point.
 ## Repair Boundary
 
 Apply this boundary strictly:
-- prefer repairing the use case first
-- allow entity repair only when rule reuse justifies it as domain logic
+- prefer repairing the use case first when the gap is cross-aggregate coordination or business-boundary semantics
+- allow single-entity repair when the missing semantics are a reusable entity `behavior method`
+- allow aggregate-root repair when the missing semantics are same-aggregate consistency behavior
+- if the missing gap is only a derived judgment or calculation, do not promote it into an independent `use case`
 - never move business repair into adapter or infra
 - prioritize repairing `Changes` into pair-first semantics over adding tests that normalize duplicate fields
 

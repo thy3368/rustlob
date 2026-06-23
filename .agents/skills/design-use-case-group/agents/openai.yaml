@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Use Case Group"
+  short_description: "Define use case groups with four-color modeling"
+  default_prompt: "Use $design-use-case-group to analyze the business text or candidate use case list, identify the business_truth_center, define one use case group boundary with four-color modeling, and output each use case as command / given_state / changes / entity."

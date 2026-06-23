@@ -16,6 +16,8 @@ Reference pattern:
 - Entity: `lib/example/core/src/entity/stored_order.rs`
 - Entity scenario file: `lib/example/core/src/entity/stored_order/stored_order_scenarios.rs`
 
+If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before writing properties.
+
 ## Workflow
 
 1. Read the entity and the use cases that inspect it.
@@ -25,7 +27,10 @@ Reference pattern:
    - mount it from the entity file with `#[cfg(test)] mod stored_order_scenarios;`
 4. Define one explicit scenario enum, such as `StoredOrderScenario`.
 5. Define one business-aware strategy, such as `stored_order_scenario_strategy()`.
-6. Write properties against entity methods, event fields, and state transitions.
+6. Write properties against the correct layer:
+   - single-entity `behavior methods`: state-machine transitions, invariants, boundary states
+   - aggregate-root `behavior methods`: internal coordination consistency
+   - `helper/query methods`: derived values, judgment consistency, overflow or `None` semantics
 7. Run targeted `rustfmt` and `cargo test -p <crate> <entity_or_scenario_filter>`.
 
 ## Scenario Enum Rules
@@ -77,6 +82,9 @@ Avoid tautologies:
 - Do not assert that a field equals itself after constructing the same fixture.
 - Do not compute expected values by calling the method under test.
 - Do not put use-case error mapping in entity proptests; use cases map entity facts to errors.
+- Do not test cross-aggregate coordination here.
+- Do not test use-case orchestration semantics here.
+- Do not test command-level error mapping here.
 
 ## Composition With Use Cases
 

@@ -1,6 +1,5 @@
 ---
 name: clean-architecture
-author: Tang Hong Yao
 description: >
   整洁架构实战指南。当用户询问架构设计、代码分层、重构、依赖管理、技术选型、过度设计时使用。
   回答优先使用 core / adapter / infra 三层表达，并保持与 Clean Architecture 的标准语义对齐。
@@ -17,6 +16,7 @@ description: >
 当用户想做这些事时使用：
 
 - 设计或评审代码分层
+- 轻量评审 `use case` 的层次归属、边界纯度、职责拆分
 - 判断某个模块应归属哪个层次
 - 分析依赖方向是否错误
 - 识别 `service` / `repository` / `controller` / `infrastructure` 这类命名背后的真实架构角色
@@ -26,6 +26,9 @@ description: >
 开始回答前，先读取共享约束文件：
 
 - `../shared/use_case_entity_constraints.md`
+- `../shared/entity_four_color_classification.md` when the task involves classifying a domain object/entity, deciding whether something should be an `entity`, `aggregate root`, `value object`, `role object`, or `policy/description`
+- `../shared/use_case_entity_aggregate_boundary.md` when the question involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action deserves an independent `use case`
+- `../shared/use_case_review_scorecard.md` when the task is to score or lightly review a `use case`
 
 ## Design Rules
 
@@ -33,6 +36,9 @@ description: >
     - `core`
         - `use_case` — business action, input as `command/query`
         - `entity` — core business rules, invariants, and domain-semantic methods reusable by multiple `use_case`
+          - classify the object first with its `four_color_archetype`
+          - `behavior method` — 单实体状态迁移或同一聚合内部协调
+          - `helper/query method` — 业务判断、业务查询、派生计算
     - `adapter`
         - `inbound` — HTTP/CLI/Event/GUI input to use case
         - `outbound` — use case port to DB/API/SDK/presenter
@@ -53,7 +59,7 @@ description: >
 4. `use case 组` 的定义：
     - `use case 组` 是 `core/use_case` 下的业务分组边界，用于组织同一业务线中的多个相关 `use_case`
     - `use case 组` 不是单个 `use_case`
-    - `use case 组` 也不是跨用例编排代码；跨用例协作属于更上层的 `process` / `composition root`
+    - `use case 组` 也不是跨用例编排代码；跨用例协作属于更上层的 `process` / 应用组装层
     - 一个 `use case 组` 下的多个 `use_case` 通常共享相近的领域语义、实体集合、状态装载方式，目录上体现为 `core/src/use_case/<use_case_group>/...`
     - 例如本仓库中的 `funding`、`trading`，以及更细一级的 `trading/spot`
 
@@ -80,6 +86,9 @@ description: >
     - `use_case -> entity`
     - `use_case` 之间不互相调用；一个业务动作必须收敛在单一 `use_case` 中，跨用例协作只能通过上层编排（如 composition root / process）完成，不能在一个 `use_case` 内直接调用另一个 `use_case`
     - `use_case` 与 `entity` 是多对一关系：多个 `use_case` 可以复用同一个 `entity`，但 `entity` 不反向绑定某个特定 `use_case`
+    - 单实体状态迁移属于 `core.entity`
+    - 同一聚合内部协调仍属于 `core.entity`
+    - 跨聚合业务动作协调属于 `core.use_case`
     - `entity` 必须包含有领域语义的方法，而不是只有字段和 getter/setter；这些方法承载可复用的业务规则，供多个 `use_case` 复用
     - `entity` 不依赖 `use_case`
     - `entity` 不知道 `command/query`
@@ -123,8 +132,6 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 - `lib/example/core/src/use_case/<use_case_group>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
 - `lib/example/inbound_adapter` 对应 `adapter.inbound`
 - `lib/example/outbound_adapter` 对应 `adapter.outbound`
-- `lib/example/app/composition_root` 负责组装 use case、adapter 和 infra
-
 ## Output Contract
 
 
@@ -137,55 +144,17 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
     - 如有违规，指出是 responsibility、dependency、还是 call flow 被混淆
 3. `Violations`: 指出是否把实现模式误当成架构层；检查 core 是否直接依赖 DB / HTTP / SDK / ORM / framework 等外部技术
     - 必查：是否存在 `use_case` 互调
+    - 必查：是否把跨聚合编排误塞进 `entity` / `aggregate`
     - 必查：是否把 `entity` 设计成只服务单一 `use_case` 的“私有流程对象”，从而破坏 `use_case` 与 `entity` 的多对一关系
     - 必查：`entity` 是否退化为贫血数据结构，只剩字段搬运，没有可被 `use_case` 复用的领域语义方法
+    - 必查：是否把 `entity method` 全做成贫血 `helper`，缺少真正业务演化方法
+    - 必查：是否把 `query/helper` 假装成 `use case` 或 `service`
+    - 必查：是否把 `Description` 错放进 `entity`
+    - 必查：是否把 `Role` 过度实体化
+    - 必查：是否把真正的 `Moment-Interval` 压成 DTO 或 `description`
 4. `Minimal restructuring advice`: 只给满足当前目标的最小调整建议
     - 如果问题涉及复杂度或技术选型，按 `Design Rules` 第 6 条先判断是否真的需要
-
-## Testing Guidelines
-
-当用户询问测试放在哪里时，使用以下 Clean Architecture 测试策略：
-
-### 测试放置规则
-
-- **Core / use_case**: 单元测试业务逻辑，mock 所有 outbound ports
-    - 位置: `core/use_case/tests/` 或 `#[cfg(test)]` 内联
-    - 依赖: 只依赖 entity，不依赖具体 infra
-
-- **Core / entity**: 单元测试业务规则、状态转换、不变式
-    - 位置: `core/entity/tests/` 或 `#[cfg(test)]` 内联
-    - 特点: 纯逻辑，无外部依赖，最容易测试
-
-- **Adapter / inbound**: 集成测试输入转换（HTTP/CLI → command）
-    - 位置: `adapter/inbound/tests/`
-    - 验证: 请求解析、参数校验、调用 use_case
-
-- **Adapter / outbound**: 集成测试 port 实现（repository → DB/API）
-    - 位置: `adapter/outbound/tests/`
-    - 使用: 内存数据库或 testcontainers 验证真实交互
-
-- **Infra**: 外部框架/SDK（Tokio、PostgreSQL、Redis、Kafka 等），不作为项目目录存在，也不写独立 infra 测试
-    - 外部工具由各自社区测试
-    - 通过 `adapter/outbound` 的集成测试间接验证
-    - 通过 `tests/e2e/` 的全流程测试验证
-
-
-### 测试目录结构示例
-
-以 `lib/example` 当前结构为准，按以下位置放测试：
-
-- `lib/example/core/tests/<use_case_group>_<use_case>_test.rs`: use_case 单元测试，mock outbound ports
-- `lib/example/core/tests/entity_<entity>_test.rs`: entity 纯业务规则测试
-- `lib/example/inbound_adapter/tests/<use_case_group>_<entrypoint>_to_command_test.rs`: inbound 输入转换测试
-- `lib/example/outbound_adapter/tests/<use_case_group>_<port_impl>_test.rs`: outbound port 实现测试
-- `lib/example/app/composition_root/tests/<use_case_group>_flow_test.rs`: E2E / composition test
-
-### 测试原则
-
-1. **单元测试**: 覆盖 core 层，无 I/O，快速执行 (< 10ms)
-2. **集成测试**: 覆盖 adapter + infra 层，验证真实交互
-3. **E2E 测试**: 覆盖完整流程，验证用户价值
-4. **测试金字塔**: 单元 (70%) > 集成 (20%) > E2E (10%)
+    - 如果问题涉及 `entity` 建模边界，先用 `four_color_archetype` 说明对象归类，再给最小调整建议
 
 ## Done When
 

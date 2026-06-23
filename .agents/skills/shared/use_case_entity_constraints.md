@@ -24,6 +24,11 @@
 - `use_case` 与 `entity` 是多对一关系：多个 `use_case` 可以复用同一个 `entity`。
 - `entity` 不能反向绑定某个特定 `use_case`，不能演化成某个单独流程的私有数据对象。
 - `entity` 必须包含有领域语义的方法，而不是只有字段和 getter/setter。
+- `entity methods` 要区分为 `behavior method` 与 `helper/query method`。
+- `behavior method` 与 `state machine` 强相关，负责本实体或本聚合内部的合法业务演化。
+- 聚合根可以用 `behavior method` 协调同一聚合内部多个对象的一致性。
+- `helper/query method` 负责业务判断、业务查询、派生计算，但不应伪装成独立 `use case`。
+- 跨聚合业务边界与协调必须保留在 `use_case`，不要下沉到 `entity` / `aggregate` method。
 - 这些方法应承载可复用的业务规则、业务查询、业务计算或不变式判断，供多个 `use_case` 复用。
 - 贫血 `entity` 是违规信号：如果一个类型只搬运字段、业务规则全堆在 `use_case` 或 adapter 中，应优先考虑把可复用规则下沉回 `entity`。
 
