@@ -3,6 +3,8 @@ pub mod funding;
 pub mod query;
 pub mod risk;
 
+mod liquidation_trigger_reason;
+
 pub use execution::{
     MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,
     MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase,
@@ -22,12 +24,16 @@ pub use funding::{
 };
 pub use query::{
     HyperliquidPerpLiquidatablePositionAtPriceSnapshot,
-    HyperliquidPerpLiquidatablePositionAtPriceView, HyperliquidPerpOpenOrderView,
-    HyperliquidPerpOrderDetailView, QueryHyperliquidPerpLiquidatablePositionsAtPrice,
+    HyperliquidPerpLiquidatablePositionAtPriceView, HyperliquidPerpLiquidationCandidate,
+    HyperliquidPerpOpenOrderView, HyperliquidPerpOrderDetailView, HyperliquidPerpRiskSnapshot,
+    QueryHyperliquidPerpLiquidatablePositionsAtPrice,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceError,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase,
-    QueryHyperliquidPerpLiquidatablePositionsAtPriceView, QueryHyperliquidPerpOpenOrders,
+    QueryHyperliquidPerpLiquidatablePositionsAtPriceView,
+    QueryHyperliquidPerpLiquidationCandidates, QueryHyperliquidPerpLiquidationCandidatesError,
+    QueryHyperliquidPerpLiquidationCandidatesReadModel,
+    QueryHyperliquidPerpLiquidationCandidatesUseCase, QueryHyperliquidPerpOpenOrders,
     QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
     QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
@@ -36,18 +42,14 @@ pub use query::{
 pub use risk::{
     EscalateHyperliquidPerpLiquidationChanges, EscalateHyperliquidPerpLiquidationCmd,
     EscalateHyperliquidPerpLiquidationError, EscalateHyperliquidPerpLiquidationState,
-    EscalateHyperliquidPerpLiquidationUseCase, HyperliquidPerpLiquidationCandidate,
-    HyperliquidPerpRiskSnapshot, PlaceHyperliquidPerpLiquidationOrderChanges,
+    EscalateHyperliquidPerpLiquidationUseCase, PlaceHyperliquidPerpLiquidationOrderChanges,
     PlaceHyperliquidPerpLiquidationOrderCmd, PlaceHyperliquidPerpLiquidationOrderError,
     PlaceHyperliquidPerpLiquidationOrderState, PlaceHyperliquidPerpLiquidationOrderUseCase,
-    QueryHyperliquidPerpLiquidationCandidates, QueryHyperliquidPerpLiquidationCandidatesError,
-    QueryHyperliquidPerpLiquidationCandidatesReadModel,
-    QueryHyperliquidPerpLiquidationCandidatesUseCase, ResolveHyperliquidPerpLiquidationChanges,
-    ResolveHyperliquidPerpLiquidationCmd, ResolveHyperliquidPerpLiquidationError,
-    ResolveHyperliquidPerpLiquidationState, ResolveHyperliquidPerpLiquidationUseCase,
-    StartHyperliquidPerpLiquidationChanges, StartHyperliquidPerpLiquidationCmd,
-    StartHyperliquidPerpLiquidationError, StartHyperliquidPerpLiquidationState,
-    StartHyperliquidPerpLiquidationUseCase,
+    ResolveHyperliquidPerpLiquidationChanges, ResolveHyperliquidPerpLiquidationCmd,
+    ResolveHyperliquidPerpLiquidationError, ResolveHyperliquidPerpLiquidationState,
+    ResolveHyperliquidPerpLiquidationUseCase, StartHyperliquidPerpLiquidationChanges,
+    StartHyperliquidPerpLiquidationCmd, StartHyperliquidPerpLiquidationError,
+    StartHyperliquidPerpLiquidationState, StartHyperliquidPerpLiquidationUseCase,
 };
 
 pub use crate::entity::HyperliquidPerpMarginMode;
