@@ -4,8 +4,8 @@
 //! - `business_truth_center`: `HyperliquidPerpLiquidation`
 //! - `four_color_archetype`: `Moment-Interval`
 //! - `meaning`: 某个 perp 仓位被系统正式认定进入强平流程，并在该流程中被推进直到结束或升级的业务事实
-//! - `lifecycle_or_state_machine`: `Started -> OrderPlaced -> Resolved | Escalated`
-//! - `group_boundary`: 只负责强平会话事实的创建与推进，不负责纯风险查询、成交清算、资金费、ADL 执行、逐仓保证金调整
+//! - `lifecycle_or_state_machine`: `Started -> OrderPlaced -> Closed | Exhausted`
+//! - `group_boundary`: 当前示例只负责强平会话事实的创建与推进，不负责纯风险查询、成交清算、穿仓缺口、保险基金覆盖、ADL 执行、逐仓保证金调整
 //!
 //! 这个分组最重要的主语不是订单，而是一次强平处置会话。
 //! 强平在触发方式上看起来像条件单，但业务主语并不是“某张订单被触发”，而是
@@ -21,11 +21,16 @@
 //!
 //! - `StartHyperliquidPerpLiquidation`：创建强平会话事实
 //! - `PlaceHyperliquidPerpLiquidationOrder`：为强平会话发出订单并推进会话
-//! - `ResolveHyperliquidPerpLiquidation`：正常关闭强平会话
-//! - `EscalateHyperliquidPerpLiquidation`：升级到更高风险处置路径
+//! - `CloseHyperliquidPerpLiquidation`：把强平会话显式推进到 `Closed | Exhausted`
 //!
 //! 当前这四个 mutation 已统一按 `CommandUseCase4` 建模：
 //! `Changes` 是业务第一真相，事件只从 `Changes` 投影。
+//!
+//! 按新的 MI 命名口径，`HyperliquidPerpLiquidation` 只回答“这是什么业务实体”，
+//! 终局通过 `status = Closed | Exhausted` 表达，不再使用 `Resolved`、`Escalated`
+//! 这类结果或流程导向词。更完整的
+//! `Liquidation -> Shortfall -> InsuranceFundAllocation -> AdlBatch -> AdlDeleveragingEntry`
+//! 链路设计见 `design/docs/hyperliquid_liquidation_mi_naming.md`。
 //!
 //! 与风险查询也要明确分组边界：爆仓候选扫描只返回 view，
 //! 不创建也不推进 `HyperliquidPerpLiquidation`，因此它本质上应归 `query`。
@@ -38,25 +43,19 @@
 //! - 是否把“条件触发”误建模成订单主语
 //! - 是否错误新增了“强平单专属 entity”
 //! - `HyperliquidPerpLiquidation` 的每个状态是否都有对应的 mutation use case
-pub mod escalate_liquidation;
+pub mod close_liquidation;
 pub mod place_liquidation_order;
-pub mod resolve_liquidation;
 pub mod start_liquidation;
 
-pub use escalate_liquidation::{
-    EscalateHyperliquidPerpLiquidationChanges, EscalateHyperliquidPerpLiquidationCmd,
-    EscalateHyperliquidPerpLiquidationError, EscalateHyperliquidPerpLiquidationState,
-    EscalateHyperliquidPerpLiquidationUseCase,
+pub use close_liquidation::{
+    CloseHyperliquidPerpLiquidationChanges, CloseHyperliquidPerpLiquidationCmd,
+    CloseHyperliquidPerpLiquidationError, CloseHyperliquidPerpLiquidationState,
+    CloseHyperliquidPerpLiquidationUseCase, HyperliquidPerpLiquidationCloseAs,
 };
 pub use place_liquidation_order::{
     PlaceHyperliquidPerpLiquidationOrderChanges, PlaceHyperliquidPerpLiquidationOrderCmd,
     PlaceHyperliquidPerpLiquidationOrderError, PlaceHyperliquidPerpLiquidationOrderState,
     PlaceHyperliquidPerpLiquidationOrderUseCase,
-};
-pub use resolve_liquidation::{
-    ResolveHyperliquidPerpLiquidationChanges, ResolveHyperliquidPerpLiquidationCmd,
-    ResolveHyperliquidPerpLiquidationError, ResolveHyperliquidPerpLiquidationState,
-    ResolveHyperliquidPerpLiquidationUseCase,
 };
 pub use start_liquidation::{
     StartHyperliquidPerpLiquidationChanges, StartHyperliquidPerpLiquidationCmd,
