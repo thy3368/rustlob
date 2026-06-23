@@ -72,7 +72,7 @@ Read the relationships as:
 
 ## Required Reference
 
-If the task asks about `时标对象`, `Moment-Interval`, or how to distinguish `business_truth_center` from commands, fields, balances, or technical steps, read [`references/moment_interval_definition.md`](references/moment_interval_definition.md) before answering.
+If the task asks about `时标对象`, `Moment-Interval`, or how to distinguish `business_truth_center` from commands, fields, balances, or technical steps, read [`../shared/moment_interval_definition.md`](../shared/moment_interval_definition.md) before answering.
 
 If the task asks about any of these topics, read [`../shared/mi.md`](../shared/mi.md) before answering:
 - `MI 识别`
@@ -144,7 +144,7 @@ Do not answer `Moment-Interval` boundary questions from memory or by extrapolati
 
 Routing order:
 1. If the task is about `MI 识别`、`主次 MI`、`审计链`、`settled fact`、`业务事实留痕`, read `../shared/mi.md` first.
-2. If the task is about `use case group` 划分、`business_truth_center`、`Moment-Interval` 定义, also read `references/moment_interval_definition.md`.
+2. If the task is about `use case group` 划分、`business_truth_center`、`Moment-Interval` 定义, also read `../shared/moment_interval_definition.md`.
 3. If the task extends to `entity / aggregate / state machine` 边界, continue to `../shared/use_case_entity_aggregate_boundary.md`.
 
 Do not rely on the examples in this file alone to judge whether something should become an independent `MI`, whether it is only a state/command/field, or where the final settled fact sits.
