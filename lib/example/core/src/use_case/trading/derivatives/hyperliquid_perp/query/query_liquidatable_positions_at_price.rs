@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::entity::{
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
 };
+use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
 
 /// 查询指定价格下哪些 Hyperliquid perp 仓位会触发爆仓。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +29,8 @@ pub struct HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
     pub position: HyperliquidPerpPosition,
     /// 当前仓位的保证金模式。
     pub margin_mode: HyperliquidPerpMarginMode,
+    /// 当前仓位可用于判定的保证金额度。
+    pub available_margin: u64,
     /// 当前仓位的破产价格。
     pub bankruptcy_price: u64,
     /// 当前仓位是否已经进入强平流程。
@@ -140,15 +143,18 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
         let mut total_liquidation_notional = 0_u64;
 
         for snapshot in read_model.snapshots {
-            if snapshot.has_active_liquidation || !snapshot.position.is_liquidatable() {
+            if snapshot.has_active_liquidation {
                 continue;
             }
-            if !snapshot
-                .position
-                .liquidation_triggered_by_mark_price(query.mark_price, snapshot.bankruptcy_price)
-            {
+
+            let Some(trigger_reason) = derive_hyperliquid_perp_liquidation_trigger_reason(
+                &snapshot.position,
+                snapshot.available_margin,
+                query.mark_price,
+                snapshot.bankruptcy_price,
+            ) else {
                 continue;
-            }
+            };
 
             let liquidation_notional =
                 snapshot.position.qty.checked_mul(query.mark_price).ok_or(
@@ -157,8 +163,6 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
             total_liquidation_notional = total_liquidation_notional
                 .checked_add(liquidation_notional)
                 .ok_or(QueryHyperliquidPerpLiquidatablePositionsAtPriceError::ArithmeticOverflow)?;
-
-            let trigger_reason = trigger_reason(&snapshot.position);
 
             positions.push(HyperliquidPerpLiquidatablePositionAtPriceView {
                 position_id: snapshot.position.position_id,
@@ -183,14 +187,6 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
             positions,
             total_liquidation_notional,
         })
-    }
-}
-
-fn trigger_reason(position: &HyperliquidPerpPosition) -> HyperliquidPerpLiquidationTriggerReason {
-    if position.margin == 0 {
-        HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk
-    } else {
-        HyperliquidPerpLiquidationTriggerReason::MaintenanceMarginBreach
     }
 }
 
@@ -277,6 +273,7 @@ mod tests {
                     3,
                 ),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
+                available_margin: 24_000,
                 bankruptcy_price: 50_000,
                 has_active_liquidation: false,
             }],
@@ -303,6 +300,7 @@ mod tests {
                     24_000,
                 ),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
+                available_margin: 24_000,
                 bankruptcy_price: 0,
                 has_active_liquidation: false,
             }],
@@ -330,6 +328,7 @@ mod tests {
                         24_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 24_000,
                     bankruptcy_price: 50_000,
                     has_active_liquidation: false,
                 },
@@ -342,6 +341,7 @@ mod tests {
                         36_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 36_000,
                     bankruptcy_price: 48_000,
                     has_active_liquidation: false,
                 },
@@ -354,6 +354,7 @@ mod tests {
                         0,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Isolated,
+                    available_margin: 0,
                     bankruptcy_price: 49_000,
                     has_active_liquidation: false,
                 },
@@ -390,6 +391,7 @@ mod tests {
                     24_000,
                 ),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
+                available_margin: 24_000,
                 bankruptcy_price: 50_000,
                 has_active_liquidation: true,
             }],
@@ -416,6 +418,7 @@ mod tests {
                         5,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 0,
                     bankruptcy_price: 50_000,
                     has_active_liquidation: false,
                 },
@@ -428,6 +431,7 @@ mod tests {
                         24_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 24_000,
                     bankruptcy_price: 48_000,
                     has_active_liquidation: false,
                 },
@@ -455,6 +459,7 @@ mod tests {
                         24_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 24_000,
                     bankruptcy_price: 50_000,
                     has_active_liquidation: false,
                 },
@@ -467,6 +472,7 @@ mod tests {
                         12_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Isolated,
+                    available_margin: 0,
                     bankruptcy_price: 49_000,
                     has_active_liquidation: false,
                 },
@@ -495,6 +501,7 @@ mod tests {
                     24_000,
                 ),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
+                available_margin: 0,
                 bankruptcy_price: u64::MAX,
                 has_active_liquidation: false,
             }],
@@ -522,6 +529,7 @@ mod tests {
                         24_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 0,
                     bankruptcy_price: u64::MAX,
                     has_active_liquidation: false,
                 },
@@ -534,6 +542,7 @@ mod tests {
                         24_000,
                     ),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
+                    available_margin: 0,
                     bankruptcy_price: 1,
                     has_active_liquidation: false,
                 },
@@ -546,6 +555,64 @@ mod tests {
         assert_eq!(
             result,
             Err(QueryHyperliquidPerpLiquidatablePositionsAtPriceError::ArithmeticOverflow)
+        );
+    }
+
+    #[test]
+    fn trigger_reason_matches_candidate_scan_for_same_position() {
+        use crate::use_case::trading::derivatives::hyperliquid_perp::query::{
+            HyperliquidPerpRiskSnapshot, QueryHyperliquidPerpLiquidationCandidates,
+            QueryHyperliquidPerpLiquidationCandidatesReadModel,
+            QueryHyperliquidPerpLiquidationCandidatesUseCase,
+        };
+
+        let position = position("position-1", "trader-1", HyperliquidPerpPositionSide::Short, 4, 0);
+        let available_margin = 0;
+        let bankruptcy_price = 49_000;
+        let mark_price = 49_000;
+
+        let liquidation_candidates = QueryHyperliquidPerpLiquidationCandidatesUseCase
+            .compute_view(
+                &QueryHyperliquidPerpLiquidationCandidates {
+                    party_id: "risk-engine".to_string(),
+                    scan_batch_id: "scan-1".to_string(),
+                },
+                QueryHyperliquidPerpLiquidationCandidatesReadModel {
+                    snapshots: vec![HyperliquidPerpRiskSnapshot {
+                        position: position.clone(),
+                        margin_mode: HyperliquidPerpMarginMode::Isolated,
+                        available_margin,
+                        bankruptcy_price,
+                        mark_price,
+                        has_active_liquidation: false,
+                    }],
+                },
+            )
+            .unwrap();
+        let at_price_view = QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase
+            .compute_view(
+                &query(mark_price),
+                QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
+                    snapshots: vec![HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
+                        position,
+                        margin_mode: HyperliquidPerpMarginMode::Isolated,
+                        available_margin,
+                        bankruptcy_price,
+                        has_active_liquidation: false,
+                    }],
+                },
+            )
+            .unwrap();
+
+        assert_eq!(liquidation_candidates.len(), 1);
+        assert_eq!(at_price_view.positions.len(), 1);
+        assert_eq!(
+            liquidation_candidates[0].trigger_reason,
+            at_price_view.positions[0].trigger_reason
+        );
+        assert_eq!(
+            at_price_view.positions[0].trigger_reason,
+            HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk
         );
     }
 }

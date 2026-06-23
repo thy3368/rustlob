@@ -1,6 +1,7 @@
 pub mod query_liquidatable_positions_at_price;
 pub mod query_open_orders;
 pub mod query_order_detail;
+pub mod scan_liquidation_candidates;
 
 pub use query_liquidatable_positions_at_price::{
     HyperliquidPerpLiquidatablePositionAtPriceSnapshot,
@@ -20,4 +21,10 @@ pub use query_order_detail::{
     HyperliquidPerpOrderDetailView, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
     QueryHyperliquidPerpOrderDetailUseCase,
+};
+pub use scan_liquidation_candidates::{
+    HyperliquidPerpLiquidationCandidate, HyperliquidPerpRiskSnapshot,
+    QueryHyperliquidPerpLiquidationCandidates, QueryHyperliquidPerpLiquidationCandidatesError,
+    QueryHyperliquidPerpLiquidationCandidatesReadModel,
+    QueryHyperliquidPerpLiquidationCandidatesUseCase,
 };

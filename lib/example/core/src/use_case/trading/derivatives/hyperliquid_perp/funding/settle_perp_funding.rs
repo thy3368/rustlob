@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, HyperliquidPerpFundingDirection, HyperliquidPerpFundingSettlement,
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingDirection,
+    HyperliquidPerpFundingSettlement, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
 };
 
 /// 批量结算 Hyperliquid perp 资金费的命令。
@@ -115,6 +115,8 @@ pub struct SettleHyperliquidPerpFundingChanges {
     pub created_settlements: Vec<HyperliquidPerpFundingSettlement>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
     pub changed_margin_balances: Vec<UpdatedEntityPair<Balance>>,
+    /// 本批次新创建的余额流水。
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntry>,
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
@@ -125,6 +127,9 @@ impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
         }
         for balance in &self.changed_margin_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
+        }
+        for entry in &self.created_balance_ledger_entries {
+            events.push(entry.track_create_event()?);
         }
         Ok(events)
     }
@@ -184,6 +189,11 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 return Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode);
             }
         };
+        let balance_ledger_reasons = settlement_balance_ledger_reasons(
+            &state.positions,
+            &outcome.settlements,
+            state.margin_asset_id.as_str(),
+        );
         let mut changed_margin_balances = Vec::new();
         for balance in &state.margin_balances {
             let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
@@ -205,10 +215,37 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             changed_margin_balances
                 .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
         }
+        let mut created_balance_ledger_entries = Vec::with_capacity(changed_margin_balances.len());
+        for updated_balance in &changed_margin_balances {
+            let balance_id = balance_key(
+                updated_balance.after.account_id.as_str(),
+                updated_balance.after.asset_id.as_str(),
+            );
+            let reason = balance_ledger_reasons
+                .get(&balance_id)
+                .cloned()
+                .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
+            created_balance_ledger_entries.push(BalanceLedgerEntry::new(
+                format!(
+                    "balance-ledger:funding:{}:{}",
+                    cmd.funding_batch_id,
+                    updated_balance.after.entity_id()
+                ),
+                updated_balance.after.account_id.clone(),
+                updated_balance.after.asset_id.clone(),
+                updated_balance.after.entity_id(),
+                updated_balance.before.available,
+                updated_balance.before.frozen,
+                updated_balance.after.available,
+                updated_balance.after.frozen,
+                reason,
+            ));
+        }
 
         Ok(SettleHyperliquidPerpFundingChanges {
             created_settlements: outcome.settlements,
             changed_margin_balances,
+            created_balance_ledger_entries,
         })
     }
 }
@@ -304,6 +341,7 @@ fn derive_cross_outcome(
             position.position_id.clone(),
             position.asset,
             position.symbol.clone(),
+            cmd.funding_time,
             position.side,
             position.qty,
             cmd.oracle_price,
@@ -346,6 +384,48 @@ fn balance_map<'a>(
         map.insert(balance_key(balance.account_id.as_str(), balance.asset_id.as_str()), balance);
     }
     Ok(map)
+}
+
+fn settlement_balance_ledger_reasons(
+    positions: &[HyperliquidPerpPosition],
+    settlements: &[HyperliquidPerpFundingSettlement],
+    margin_asset_id: &str,
+) -> BTreeMap<String, BalanceLedgerReason> {
+    #[derive(Debug, Clone, Default)]
+    struct FundingLedgerRefs {
+        settlement_ids: Vec<String>,
+        position_ids: Vec<String>,
+        funding_batch_id: String,
+    }
+
+    let positions_by_id: BTreeMap<&str, &HyperliquidPerpPosition> =
+        positions.iter().map(|position| (position.position_id.as_str(), position)).collect();
+
+    let mut refs_by_balance: BTreeMap<String, FundingLedgerRefs> = BTreeMap::new();
+    for settlement in settlements {
+        let Some(position) = positions_by_id.get(settlement.position_id.as_str()) else {
+            continue;
+        };
+        let balance_id = balance_key(position.account_id.as_str(), margin_asset_id);
+        let refs = refs_by_balance.entry(balance_id).or_default();
+        refs.funding_batch_id = settlement.funding_batch_id.clone();
+        refs.settlement_ids.push(settlement.funding_settlement_id.clone());
+        refs.position_ids.push(settlement.position_id.clone());
+    }
+
+    refs_by_balance
+        .into_iter()
+        .map(|(balance_id, refs)| {
+            (
+                balance_id,
+                BalanceLedgerReason::SettlePerpFunding {
+                    funding_batch_id: refs.funding_batch_id,
+                    settlement_ids: refs.settlement_ids,
+                    position_ids: refs.position_ids,
+                },
+            )
+        })
+        .collect()
 }
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
@@ -412,6 +492,49 @@ mod tests {
         }
     }
 
+    fn same_account_cross_state() -> SettleHyperliquidPerpFundingState {
+        SettleHyperliquidPerpFundingState {
+            positions: vec![
+                HyperliquidPerpPosition::new(
+                    "position-long-1".to_string(),
+                    "trader-1".to_string(),
+                    0,
+                    "BTC-PERP".to_string(),
+                    HyperliquidPerpPositionSide::Long,
+                    2,
+                    50_000,
+                    10,
+                    10_000,
+                    0,
+                    3,
+                ),
+                HyperliquidPerpPosition::new(
+                    "position-long-2".to_string(),
+                    "trader-1".to_string(),
+                    0,
+                    "BTC-PERP".to_string(),
+                    HyperliquidPerpPositionSide::Long,
+                    1,
+                    50_000,
+                    10,
+                    10_000,
+                    0,
+                    4,
+                ),
+            ],
+            margin_balances: vec![Balance::new(
+                "trader-1".to_string(),
+                "USDC".to_string(),
+                1_000,
+                0,
+                7,
+            )],
+            margin_asset_id: "USDC".to_string(),
+            settled_position_ids: Vec::new(),
+            margin_mode: HyperliquidPerpMarginMode::Cross,
+        }
+    }
+
     #[test]
     fn role_is_clearing_house() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
@@ -460,6 +583,7 @@ mod tests {
         let result = use_case.compute_changes(&cmd, state).unwrap();
         assert_eq!(result.created_settlements.len(), 2);
         assert_eq!(result.changed_margin_balances.len(), 2);
+        assert_eq!(result.created_balance_ledger_entries.len(), 2);
         assert!(result.changed_margin_balances.iter().any(|pair| {
             pair.before.account_id == "trader-1"
                 && pair.before.available == 1_000
@@ -474,10 +598,16 @@ mod tests {
                 && pair.before.frozen == 0
                 && pair.after.frozen == 0
         }));
+        assert!(result.created_balance_ledger_entries.iter().all(|entry| {
+            matches!(entry.reason, BalanceLedgerReason::SettlePerpFunding { .. })
+        }));
+        assert!(result.created_balance_ledger_entries.iter().all(|entry| {
+            result.changed_margin_balances.iter().any(|pair| entry.matches_balance_update(pair))
+        }));
 
         let events = result.to_replayable_events().unwrap();
-        assert_eq!(events.len(), 4);
-        assert_eq!(events.iter().filter(|event| event.is_created()).count(), 2);
+        assert_eq!(events.len(), 6);
+        assert_eq!(events.iter().filter(|event| event.is_created()).count(), 4);
         assert_eq!(events.iter().filter(|event| event.is_updated()).count(), 2);
         assert!(events.iter().filter(|event| event.is_updated()).any(|event| {
             event.field_changes.iter().any(|change| {
@@ -501,6 +631,12 @@ mod tests {
             event.field_changes.iter().any(|change| {
                 change.field_name_as_str().ok() == Some("oracle_price")
                     && change.new_value_bytes() == b"50000"
+            })
+        }));
+        assert!(events.iter().filter(|event| event.is_created()).any(|event| {
+            event.field_changes.iter().any(|change| {
+                change.field_name_as_str().ok() == Some("reason_funding_batch_id")
+                    && change.new_value_bytes() == b"funding-2026-06-10T08"
             })
         }));
     }
@@ -529,11 +665,23 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["position-long", "position-short"]
         );
+        assert!(
+            result
+                .created_settlements
+                .iter()
+                .all(|settlement| settlement.funding_time == cmd.funding_time)
+        );
         assert!(result.changed_margin_balances.iter().all(|pair| {
             result
                 .created_settlements
                 .iter()
                 .any(|settlement| settlement.account_id == pair.before.account_id)
+        }));
+        assert!(result.created_balance_ledger_entries.iter().all(|entry| {
+            result
+                .created_settlements
+                .iter()
+                .any(|settlement| settlement.account_id == entry.account_id)
         }));
     }
 
@@ -554,5 +702,72 @@ mod tests {
             use_case.validate_against_state(&cmd, &state),
             Err(SettleHyperliquidPerpFundingError::InsufficientAvailableMargin)
         );
+    }
+
+    #[test]
+    fn compute_changes_aggregates_same_account_positions_into_one_ledger_entry() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let state = same_account_cross_state();
+        let cmd = SettleHyperliquidPerpFundingCmd {
+            party_id: "trader-1".to_string(),
+            funding_batch_id: "funding-2026-06-10T08".to_string(),
+            funding_time: 1_717_977_600_000,
+            asset: 0,
+            symbol: "BTC-PERP".to_string(),
+            oracle_price: 50_000,
+            funding_rate_e8: 10_000,
+            position_ids: vec!["position-long-1".to_string(), "position-long-2".to_string()],
+        };
+
+        let result = use_case.compute_changes(&cmd, state).unwrap();
+
+        assert_eq!(result.created_settlements.len(), 2);
+        assert_eq!(result.changed_margin_balances.len(), 1);
+        assert_eq!(result.created_balance_ledger_entries.len(), 1);
+        let entry = &result.created_balance_ledger_entries[0];
+        assert_eq!(entry.entry_id, "balance-ledger:funding:funding-2026-06-10T08:trader-1:USDC");
+        assert_eq!(entry.before_available, 1_000);
+        assert_eq!(entry.after_available, 985);
+        assert!(entry.matches_balance_update(&result.changed_margin_balances[0]));
+        assert_eq!(
+            entry.reason,
+            BalanceLedgerReason::SettlePerpFunding {
+                funding_batch_id: "funding-2026-06-10T08".to_string(),
+                settlement_ids: vec![
+                    "funding-2026-06-10T08-position-long-1".to_string(),
+                    "funding-2026-06-10T08-position-long-2".to_string(),
+                ],
+                position_ids: vec!["position-long-1".to_string(), "position-long-2".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn compute_changes_keeps_different_accounts_in_separate_ledgers() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let result = use_case.compute_changes(&cross_cmd(), cross_state()).unwrap();
+
+        let mut accounts = result
+            .created_balance_ledger_entries
+            .iter()
+            .map(|entry| entry.account_id.as_str())
+            .collect::<Vec<_>>();
+        accounts.sort_unstable();
+
+        assert_eq!(accounts, vec!["trader-1", "trader-2"]);
+        assert!(result.created_balance_ledger_entries.iter().all(|entry| {
+            match &entry.reason {
+                BalanceLedgerReason::SettlePerpFunding {
+                    funding_batch_id,
+                    settlement_ids,
+                    position_ids,
+                } => {
+                    funding_batch_id == "funding-2026-06-10T08"
+                        && settlement_ids.len() == 1
+                        && position_ids.len() == 1
+                }
+                _ => false,
+            }
+        }));
     }
 }
