@@ -70,7 +70,8 @@ impl HyperliquidPerpAdlBatch {
         if covered_quote == 0
             || !matches!(
                 self.status,
-                HyperliquidPerpAdlBatchStatus::Open | HyperliquidPerpAdlBatchStatus::PartiallyCovered
+                HyperliquidPerpAdlBatchStatus::Open
+                    | HyperliquidPerpAdlBatchStatus::PartiallyCovered
             )
             || covered_quote > self.remaining_quote
         {
@@ -93,7 +94,8 @@ impl HyperliquidPerpAdlBatch {
         if self.remaining_quote == 0
             || !matches!(
                 self.status,
-                HyperliquidPerpAdlBatchStatus::Open | HyperliquidPerpAdlBatchStatus::PartiallyCovered
+                HyperliquidPerpAdlBatchStatus::Open
+                    | HyperliquidPerpAdlBatchStatus::PartiallyCovered
             )
         {
             return None;
@@ -147,7 +149,8 @@ impl Entity for HyperliquidPerpAdlBatch {
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "adl_batch_id" | "liquidation_id" | "shortfall_id" | "symbol" | "status" => 0,
-            "asset" | "target_cover_quote" | "covered_quote" | "remaining_quote" | "entry_count" => 1,
+            "asset" | "target_cover_quote" | "covered_quote" | "remaining_quote"
+            | "entry_count" => 1,
             _ => 0,
         }
     }
@@ -214,10 +217,10 @@ mod tests {
 
         let diff = before.diff(&after);
         assert_eq!(diff.len(), 4);
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("covered_quote")));
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("remaining_quote")));
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("entry_count")));
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("status")));
+        assert!(diff.iter().any(|change| change.field_name == "covered_quote"));
+        assert!(diff.iter().any(|change| change.field_name == "remaining_quote"));
+        assert!(diff.iter().any(|change| change.field_name == "entry_count"));
+        assert!(diff.iter().any(|change| change.field_name == "status"));
     }
 
     #[test]

@@ -83,7 +83,8 @@ impl HyperliquidPerpShortfall {
         if allocated_quote == 0
             || !matches!(
                 self.status,
-                HyperliquidPerpShortfallStatus::Open | HyperliquidPerpShortfallStatus::PartiallyCovered
+                HyperliquidPerpShortfallStatus::Open
+                    | HyperliquidPerpShortfallStatus::PartiallyCovered
             )
             || allocated_quote > self.remaining_quote
         {
@@ -106,7 +107,8 @@ impl HyperliquidPerpShortfall {
         if covered_quote == 0
             || !matches!(
                 self.status,
-                HyperliquidPerpShortfallStatus::Open | HyperliquidPerpShortfallStatus::PartiallyCovered
+                HyperliquidPerpShortfallStatus::Open
+                    | HyperliquidPerpShortfallStatus::PartiallyCovered
             )
             || covered_quote > self.remaining_quote
         {
@@ -128,7 +130,8 @@ impl HyperliquidPerpShortfall {
         if self.remaining_quote == 0
             || !matches!(
                 self.status,
-                HyperliquidPerpShortfallStatus::Open | HyperliquidPerpShortfallStatus::PartiallyCovered
+                HyperliquidPerpShortfallStatus::Open
+                    | HyperliquidPerpShortfallStatus::PartiallyCovered
             )
         {
             return None;
@@ -184,8 +187,18 @@ impl Entity for HyperliquidPerpShortfall {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::new();
-        push_change(&mut changes, "covered_by_insurance_quote", self.covered_by_insurance_quote, other.covered_by_insurance_quote);
-        push_change(&mut changes, "covered_by_adl_quote", self.covered_by_adl_quote, other.covered_by_adl_quote);
+        push_change(
+            &mut changes,
+            "covered_by_insurance_quote",
+            self.covered_by_insurance_quote,
+            other.covered_by_insurance_quote,
+        );
+        push_change(
+            &mut changes,
+            "covered_by_adl_quote",
+            self.covered_by_adl_quote,
+            other.covered_by_adl_quote,
+        );
         push_change(&mut changes, "remaining_quote", self.remaining_quote, other.remaining_quote);
         push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         changes
@@ -273,9 +286,9 @@ mod tests {
 
         let diff = before.diff(&after);
         assert_eq!(diff.len(), 3);
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("covered_by_insurance_quote")));
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("remaining_quote")));
-        assert!(diff.iter().any(|change| change.field_name_as_str().ok() == Some("status")));
+        assert!(diff.iter().any(|change| change.field_name == "covered_by_insurance_quote"));
+        assert!(diff.iter().any(|change| change.field_name == "remaining_quote"));
+        assert!(diff.iter().any(|change| change.field_name == "status"));
     }
 
     #[test]

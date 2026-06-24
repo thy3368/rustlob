@@ -1,4 +1,7 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{
+    Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
+    MiCausalRelation, MiCausalSourceMetadata, MiFactType,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{SpotOrderSide, SpotSettlement};
@@ -113,6 +116,45 @@ impl Entity for SpotTrade {
         SPOT_TRADE_ENTITY_TYPE
     }
 
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn mutation_model() -> EntityMutationModel
+    where
+        Self: Sized,
+    {
+        EntityMutationModel::AppendOnlyRecord
+    }
+
+    fn mi_fact_type() -> Option<MiFactType>
+    where
+        Self: Sized,
+    {
+        Some("spot_trade")
+    }
+
+    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
+    where
+        Self: Sized,
+    {
+        &[
+            MiCausalSourceMetadata {
+                source_fact_type: "spot_order",
+                relation: MiCausalRelation::CausedBy,
+                source_role: "taker_order",
+            },
+            MiCausalSourceMetadata {
+                source_fact_type: "spot_order",
+                relation: MiCausalRelation::DueTo,
+                source_role: "maker_order",
+            },
+        ]
+    }
+
     fn entity_version(&self) -> u64 {
         1
     }
@@ -191,6 +233,29 @@ mod tests {
         assert_eq!(trade.notional_quote(), Some(200));
         assert_eq!(trade.buyer_account_id(), "buyer");
         assert_eq!(trade.seller_account_id(), "seller");
+    }
+
+    #[test]
+    fn spot_trade_declares_mi_causal_source_metadata() {
+        assert_eq!(SpotTrade::four_color_archetype(), FourColorArchetype::MomentInterval);
+        assert_eq!(SpotTrade::mutation_model(), EntityMutationModel::AppendOnlyRecord);
+        assert_eq!(SpotTrade::mi_fact_type(), Some("spot_trade"));
+        assert!(!SpotTrade::is_mi_chain_root());
+        assert_eq!(
+            SpotTrade::mi_causal_sources(),
+            &[
+                MiCausalSourceMetadata {
+                    source_fact_type: "spot_order",
+                    relation: MiCausalRelation::CausedBy,
+                    source_role: "taker_order",
+                },
+                MiCausalSourceMetadata {
+                    source_fact_type: "spot_order",
+                    relation: MiCausalRelation::DueTo,
+                    source_role: "maker_order",
+                },
+            ]
+        );
     }
 
     #[test]

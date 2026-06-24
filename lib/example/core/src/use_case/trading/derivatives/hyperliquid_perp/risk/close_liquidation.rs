@@ -110,7 +110,10 @@ impl CommandUseCase4 for CloseHyperliquidPerpLiquidationUseCase {
         if !matches!(
             state.liquidation.status,
             HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::OrderPlaced
+                | HyperliquidPerpLiquidationStatus::Executing
+                | HyperliquidPerpLiquidationStatus::ShortfallAssessed
+                | HyperliquidPerpLiquidationStatus::FundCovering
+                | HyperliquidPerpLiquidationStatus::AdlCovering
         ) {
             return Err(CloseHyperliquidPerpLiquidationError::LiquidationNotClosable);
         }
@@ -207,7 +210,7 @@ mod tests {
     #[test]
     fn validate_rejects_close_as_closed_when_remaining_qty_is_not_zero() {
         let state = CloseHyperliquidPerpLiquidationState {
-            liquidation: liquidation(HyperliquidPerpLiquidationStatus::OrderPlaced, 3),
+            liquidation: liquidation(HyperliquidPerpLiquidationStatus::Executing, 3),
         };
 
         assert_eq!(
@@ -221,7 +224,7 @@ mod tests {
     fn risk_engine_close_moves_zero_remaining_session_to_closed_and_projects_single_update_event() {
         let use_case = CloseHyperliquidPerpLiquidationUseCase;
         let state = CloseHyperliquidPerpLiquidationState {
-            liquidation: liquidation(HyperliquidPerpLiquidationStatus::OrderPlaced, 0),
+            liquidation: liquidation(HyperliquidPerpLiquidationStatus::Executing, 0),
         };
 
         let changes = use_case
@@ -231,7 +234,7 @@ mod tests {
 
         assert_eq!(
             changes.changed_liquidation.before.status,
-            HyperliquidPerpLiquidationStatus::OrderPlaced
+            HyperliquidPerpLiquidationStatus::Executing
         );
         assert_eq!(
             changes.changed_liquidation.after.status,

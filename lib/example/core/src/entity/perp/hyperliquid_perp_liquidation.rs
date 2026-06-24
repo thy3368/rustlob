@@ -146,8 +146,7 @@ impl HyperliquidPerpLiquidation {
     pub fn can_place_order(&self) -> bool {
         matches!(
             self.status,
-            HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::Executing
+            HyperliquidPerpLiquidationStatus::Started | HyperliquidPerpLiquidationStatus::Executing
         ) && self.remaining_qty > 0
     }
 
@@ -180,8 +179,7 @@ impl HyperliquidPerpLiquidation {
     ) -> Option<()> {
         if !matches!(
             self.status,
-            HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::Executing
+            HyperliquidPerpLiquidationStatus::Started | HyperliquidPerpLiquidationStatus::Executing
         ) || fill_qty == 0
         {
             return None;
@@ -208,8 +206,7 @@ impl HyperliquidPerpLiquidation {
     pub fn mark_shortfall_assessed(&mut self, version: u64) -> Option<()> {
         if !matches!(
             self.status,
-            HyperliquidPerpLiquidationStatus::Started
-                | HyperliquidPerpLiquidationStatus::Executing
+            HyperliquidPerpLiquidationStatus::Started | HyperliquidPerpLiquidationStatus::Executing
         ) || self.remaining_qty != 0
         {
             return None;
@@ -522,10 +519,7 @@ mod tests {
 
         liquidation.mark_shortfall_assessed(2).unwrap();
 
-        assert_eq!(
-            liquidation.status,
-            HyperliquidPerpLiquidationStatus::ShortfallAssessed
-        );
+        assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::ShortfallAssessed);
         assert_eq!(liquidation.version, 2);
     }
 

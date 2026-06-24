@@ -15,7 +15,8 @@
 //! 同时要区分 `HyperliquidPerpLiquidation` 与链路中的次级事实：
 //! `HyperliquidPerpLiquidationFill`、`HyperliquidPerpShortfall`、
 //! `HyperliquidPerpInsuranceFundAllocation`、`HyperliquidPerpAdlBatch`、
-//! `HyperliquidPerpAdlDeleveragingEntry` 都是围绕主强平会话的独立审计事实，
+//! `HyperliquidPerpAdlExecution`、`HyperliquidPerpAdlDeleveragingRecord`
+//! 都是围绕主强平会话的独立审计事实，
 //! 但不会替代 `HyperliquidPerpLiquidation` 作为顶层生命周期主语。
 //!
 //! 从业务闭环看，这组 mutation use case 应收敛为：
@@ -25,28 +26,25 @@
 //! - `ConfirmHyperliquidPerpShortfall`：确认是否存在缺口
 //! - `AllocateHyperliquidPerpInsuranceFund`：记录保险基金覆盖
 //! - `StartHyperliquidPerpAdlBatch`：启动 ADL 覆盖批次
-//! - `ApplyHyperliquidPerpAdlDeleveraging`：记录 ADL 覆盖进展
+//! - `StartHyperliquidPerpAdlExecution`：启动一次 ADL 执行尝试
+//! - `CompleteHyperliquidPerpAdlExecution`：完成执行并落结果凭证，或把 ADL 路径推进到穷尽
 //! - `CloseHyperliquidPerpLiquidation`：把强平会话显式推进到 `Closed | Exhausted`
 //!
 //! 当前这组 mutation 已统一按 `CommandUseCase4` 建模：
 //! `Changes` 是业务第一真相，事件只从 `Changes` 投影。
 pub mod allocate_insurance_fund;
-pub mod apply_adl_deleveraging;
 pub mod apply_liquidation_fill;
 pub mod close_liquidation;
+pub mod complete_adl_execution;
 pub mod confirm_shortfall;
 pub mod start_adl_batch;
+pub mod start_adl_execution;
 pub mod start_liquidation;
 
 pub use allocate_insurance_fund::{
     AllocateHyperliquidPerpInsuranceFundChanges, AllocateHyperliquidPerpInsuranceFundCmd,
     AllocateHyperliquidPerpInsuranceFundError, AllocateHyperliquidPerpInsuranceFundState,
     AllocateHyperliquidPerpInsuranceFundUseCase,
-};
-pub use apply_adl_deleveraging::{
-    ApplyHyperliquidPerpAdlDeleveragingChanges, ApplyHyperliquidPerpAdlDeleveragingCmd,
-    ApplyHyperliquidPerpAdlDeleveragingError, ApplyHyperliquidPerpAdlDeleveragingState,
-    ApplyHyperliquidPerpAdlDeleveragingUseCase,
 };
 pub use apply_liquidation_fill::{
     ApplyHyperliquidPerpLiquidationFillChanges, ApplyHyperliquidPerpLiquidationFillCmd,
@@ -58,6 +56,11 @@ pub use close_liquidation::{
     CloseHyperliquidPerpLiquidationError, CloseHyperliquidPerpLiquidationState,
     CloseHyperliquidPerpLiquidationUseCase, HyperliquidPerpLiquidationCloseAs,
 };
+pub use complete_adl_execution::{
+    CompleteHyperliquidPerpAdlExecutionChanges, CompleteHyperliquidPerpAdlExecutionCmd,
+    CompleteHyperliquidPerpAdlExecutionError, CompleteHyperliquidPerpAdlExecutionState,
+    CompleteHyperliquidPerpAdlExecutionUseCase,
+};
 pub use confirm_shortfall::{
     ConfirmHyperliquidPerpShortfallChanges, ConfirmHyperliquidPerpShortfallCmd,
     ConfirmHyperliquidPerpShortfallError, ConfirmHyperliquidPerpShortfallState,
@@ -67,6 +70,11 @@ pub use start_adl_batch::{
     StartHyperliquidPerpAdlBatchChanges, StartHyperliquidPerpAdlBatchCmd,
     StartHyperliquidPerpAdlBatchError, StartHyperliquidPerpAdlBatchState,
     StartHyperliquidPerpAdlBatchUseCase,
+};
+pub use start_adl_execution::{
+    StartHyperliquidPerpAdlExecutionChanges, StartHyperliquidPerpAdlExecutionCmd,
+    StartHyperliquidPerpAdlExecutionError, StartHyperliquidPerpAdlExecutionState,
+    StartHyperliquidPerpAdlExecutionUseCase,
 };
 pub use start_liquidation::{
     StartHyperliquidPerpLiquidationChanges, StartHyperliquidPerpLiquidationCmd,

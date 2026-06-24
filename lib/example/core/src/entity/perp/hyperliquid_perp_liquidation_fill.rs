@@ -96,8 +96,14 @@ impl Entity for HyperliquidPerpLiquidationFill {
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "liquidation_fill_id" | "liquidation_id" | "order_id" | "trade_id" | "account_id"
-            | "position_id" | "symbol" | "side" => 0,
+            "liquidation_fill_id"
+            | "liquidation_id"
+            | "order_id"
+            | "trade_id"
+            | "account_id"
+            | "position_id"
+            | "symbol"
+            | "side" => 0,
             "asset" | "fill_qty" | "fill_price" | "bankruptcy_price" | "recovered_quote" => 1,
             _ => 0,
         }
