@@ -1,4 +1,5 @@
 mod executor;
+mod group_spec;
 mod outbound;
 pub(crate) mod trace;
 mod use_case;
@@ -6,6 +7,10 @@ mod use_case;
 pub use executor::{
     CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,
     CommandUseCaseExecutor4,
+};
+pub use group_spec::{
+    GroupBoundarySpec, MiCausalEdgeSpec, NonUseCaseItemSpec, TruthCenterSpec, UseCaseGroupSpec,
+    UseCaseInGroupSpec,
 };
 pub use outbound::{CommandUseCaseOutbound, CommandUseCaseOutboundPhase};
 pub use use_case::{
