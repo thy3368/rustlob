@@ -9,6 +9,7 @@ pub use funding::{
     DepositQuoteUseCase, WithdrawQuoteChanges, WithdrawQuoteCmd, WithdrawQuoteError,
     WithdrawQuoteState, WithdrawQuoteUseCase,
 };
+pub use settlement::SPOT_SETTLEMENT_GROUP_SPEC;
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
 pub use trading::{
     AllocateHyperliquidPerpInsuranceFundChanges, AllocateHyperliquidPerpInsuranceFundCmd,
@@ -54,7 +55,7 @@ pub use trading::{
     QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
     QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
-    QueryHyperliquidPerpOrderDetailUseCase, SPOT_SETTLEMENT_GROUP_SPEC, SPOT_TRADING_GROUP_SPEC,
+    QueryHyperliquidPerpOrderDetailUseCase, SPOT_TRADING_GROUP_SPEC,
     SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingCmd,
     SettleHyperliquidPerpFundingError, SettleHyperliquidPerpFundingState,
     SettleHyperliquidPerpFundingUseCase, SettleHyperliquidPerpTradeChanges,

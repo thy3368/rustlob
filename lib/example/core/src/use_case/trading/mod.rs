@@ -67,6 +67,6 @@ pub use spot::{
     ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
     ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase, MatchSpotOrderChanges,
     MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase,
-    SPOT_SETTLEMENT_GROUP_SPEC, SPOT_TRADING_GROUP_SPEC, SettleSpotTradeChanges,
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
+    SPOT_TRADING_GROUP_SPEC, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
+    SettleSpotTradeState, SettleSpotTradeUseCase,
 };

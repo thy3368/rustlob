@@ -19,7 +19,7 @@ pub use execute_matched_spot_trade::{
     ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
     ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase,
 };
-pub use group_spec::{SPOT_SETTLEMENT_GROUP_SPEC, SPOT_TRADING_GROUP_SPEC};
+pub use group_spec::SPOT_TRADING_GROUP_SPEC;
 pub use match_order::{
     MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
     MatchSpotOrderUseCase,
