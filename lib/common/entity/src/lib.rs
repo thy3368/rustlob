@@ -4,7 +4,10 @@ use std::sync::atomic::AtomicU64;
 mod entity;
 mod entity_field_change;
 
-pub use entity::{Entity, EntityMutationModel, FourColorArchetype};
+pub use entity::{
+    Entity, EntityMutationModel, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
+    MiFactType,
+};
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };

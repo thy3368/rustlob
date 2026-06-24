@@ -90,6 +90,37 @@ impl EntityMutationModel {
     }
 }
 
+/// MI 建模中的稳定业务事实类型名。
+///
+/// 它只表达业务语义，不参与 replay 事件编码或实体类型码分配。
+pub type MiFactType = &'static str;
+
+/// MI 因果链里当前事实与前驱事实之间的业务关系。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MiCausalRelation {
+    /// 当前事实由前驱事实直接触发或形成。
+    CausedBy,
+    /// 当前事实基于某个参与性前驱事实而成立。
+    DueTo,
+    /// 当前事实用于冲正或补偿前驱事实。
+    Compensates,
+    /// 当前事实用于结清前驱事实。
+    Settles,
+}
+
+/// 当前 MI 事实允许引用的前驱事实元数据。
+///
+/// 该结构描述类型级因果来源；具体实例仍由实体字段保存，例如订单 ID 或成交 ID。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MiCausalSourceMetadata {
+    /// 前驱事实的稳定业务类型名。
+    pub source_fact_type: MiFactType,
+    /// 当前事实与该前驱事实之间的因果关系。
+    pub relation: MiCausalRelation,
+    /// 同一前驱类型有多个参与角色时使用的业务角色名。
+    pub source_role: &'static str,
+}
+
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
@@ -128,6 +159,37 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         EntityMutationModel::VersionedMutable
+    }
+
+    /// 返回实体对应的稳定 MI 业务事实类型名。
+    ///
+    /// 该元数据只用于 MI 建模治理，不参与 replay 事件编码、实体类型码或持久化语义。
+    #[inline]
+    fn mi_fact_type() -> Option<MiFactType>
+    where
+        Self: Sized,
+    {
+        None
+    }
+
+    /// 返回该实体类型是否是一条 MI 因果链的根事实类型。
+    #[inline]
+    fn is_mi_chain_root() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
+    /// 返回当前 MI 事实允许由哪些前驱 MI 事实导致。
+    ///
+    /// 这里表达类型级规则；具体因果实例仍由业务字段表达。
+    #[inline]
+    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
+    where
+        Self: Sized,
+    {
+        &[]
     }
 
     fn entity_version(&self) -> u64;
@@ -424,6 +486,13 @@ mod tests {
     #[test]
     fn entity_defaults_to_versioned_mutable_mutation_model() {
         assert_eq!(TestEntity::mutation_model(), EntityMutationModel::VersionedMutable);
+    }
+
+    #[test]
+    fn entity_defaults_to_no_mi_metadata() {
+        assert_eq!(TestEntity::mi_fact_type(), None);
+        assert!(!TestEntity::is_mi_chain_root());
+        assert!(TestEntity::mi_causal_sources().is_empty());
     }
 
     #[test]
