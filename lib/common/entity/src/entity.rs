@@ -3,6 +3,93 @@ use std::fmt::Debug;
 use crate::entity_field_change::{current_timestamp, next_sequence};
 use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
+/// 四色建模中的实体原型分类。
+///
+/// 该分类只表达领域建模语义，用于标注实体在业务模型里的角色。
+/// 它不参与 replay 事件编码、实体类型码分配，也不承诺持久化格式语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FourColorArchetype {
+    /// Moment-Interval：记录一次业务活动、事件或时间区间。
+    MomentInterval,
+    /// Party-Place-Thing：业务中的人、地点、物或组织等核心对象。
+    PartyPlaceThing,
+    /// Role：某个 Party/Place/Thing 在特定上下文中的角色。
+    Role,
+    /// Description：用于描述、分类或定价等相对稳定的说明性信息。
+    Description,
+    /// 尚未分类，作为旧实体和未治理实体的默认值。
+    Unclassified,
+}
+
+impl FourColorArchetype {
+    /// 返回稳定的业务标签字符串。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MomentInterval => "moment_interval",
+            Self::PartyPlaceThing => "party_place_thing",
+            Self::Role => "role",
+            Self::Description => "description",
+            Self::Unclassified => "unclassified",
+        }
+    }
+}
+
+/// 实体的变更模型分类。
+///
+/// 该分类描述实体状态如何随业务事件演进，以及它是否作为业务事实来源。
+/// 它独立于四色建模分类，也不参与 replay 事件编码、实体类型码分配或持久化格式语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntityMutationModel {
+    /// 可版本化修改的当前状态实体。
+    ///
+    /// 这种实体有稳定 identity，同一个实体会随着业务命令从版本 `n` 演进到 `n + 1`。
+    /// 它通常是业务事实来源，系统关心的是“这个实体现在处于什么状态”，同时通过 replay
+    /// 事件保留状态变化过程。
+    ///
+    /// 典型例子：订单、余额、仓位、账户。
+    VersionedMutable,
+    /// 追加记录。
+    ///
+    /// 这种实体代表一条已经发生的业务事实，创建后通常不再修改。后续修正不应该原地改写
+    /// 旧记录，而应该追加新的冲正、补偿或关联记录。
+    ///
+    /// 典型例子：成交、资金流水、结算流水、审计记录。
+    AppendOnlyRecord,
+    /// 某个时点的状态截面。
+    ///
+    /// 这种实体通常不是业务事实本身，而是为了重建、查询、风控计算或读取加速而保存的
+    /// 一份状态截面。重点不是“同一个快照被持续修改”，而是“在某个序列号或时间点生成了
+    /// 一份新的状态截面”。
+    ///
+    /// 判断规则：如果同一个业务 ID 后续会被命令修改状态，通常应使用 [`VersionedMutable`]；
+    /// 如果每条记录都代表某个时点的一份状态截面，通常应使用 [`Snapshot`]。
+    ///
+    /// 典型例子：盘口快照、账户风险快照、组合资产快照。
+    ///
+    /// [`VersionedMutable`]: Self::VersionedMutable
+    /// [`Snapshot`]: Self::Snapshot
+    Snapshot,
+    /// 派生读模型。
+    ///
+    /// 这种实体由其他业务事实、事件或快照投影而来，服务查询、展示或下游消费。
+    /// 它不应该作为最终业务事实来源；如果和源事实冲突，应以源事实为准并重新投影。
+    ///
+    /// 典型例子：用户当前挂单视图、行情展示视图、PnL 报表视图。
+    DerivedReadModel,
+}
+
+impl EntityMutationModel {
+    /// 返回稳定的变更模型标签字符串。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::VersionedMutable => "versioned_mutable",
+            Self::AppendOnlyRecord => "append_only_record",
+            Self::Snapshot => "snapshot",
+            Self::DerivedReadModel => "derived_read_model",
+        }
+    }
+}
+
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
@@ -12,6 +99,36 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     fn entity_type() -> u8
     where
         Self: Sized;
+
+    /// 返回实体在四色建模中的业务原型分类。
+    ///
+    /// 该元数据只用于领域建模治理，不参与 replay 事件编码、实体类型码或持久化语义。
+    #[inline]
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::Unclassified
+    }
+
+    /// 返回实体状态随业务事件演进的变更模型。
+    ///
+    /// 默认值是 [`EntityMutationModel::VersionedMutable`]，因为当前 [`Entity`] trait
+    /// 内建了 `entity_version`、`diff`、`track_update_event` 和 `track_delete_event`，
+    /// 语义上更接近“同一个实体通过版本递增发生状态变化”。
+    ///
+    /// 该元数据只用于领域模型治理，不改变 `track_create_event`、`track_update_event`
+    /// 或 `track_delete_event` 的运行行为。若实体是成交、流水、审计记录等创建后不应原地修改的
+    /// 业务事实，应 override 为 [`EntityMutationModel::AppendOnlyRecord`]；若实体是一份时点截面，
+    /// 应 override 为 [`EntityMutationModel::Snapshot`]；若实体只是由其他事实投影出的查询模型，
+    /// 应 override 为 [`EntityMutationModel::DerivedReadModel`]。
+    #[inline]
+    fn mutation_model() -> EntityMutationModel
+    where
+        Self: Sized,
+    {
+        EntityMutationModel::VersionedMutable
+    }
 
     fn entity_version(&self) -> u64;
 
@@ -214,6 +331,112 @@ mod tests {
         fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
             Vec::new()
         }
+    }
+
+    #[derive(Debug, Clone)]
+    struct MomentIntervalEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for MomentIntervalEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            11
+        }
+
+        fn four_color_archetype() -> FourColorArchetype
+        where
+            Self: Sized,
+        {
+            FourColorArchetype::MomentInterval
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct AppendOnlyEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for AppendOnlyEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            12
+        }
+
+        fn mutation_model() -> EntityMutationModel
+        where
+            Self: Sized,
+        {
+            EntityMutationModel::AppendOnlyRecord
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn entity_defaults_to_unclassified_four_color_archetype() {
+        assert_eq!(TestEntity::four_color_archetype(), FourColorArchetype::Unclassified);
+    }
+
+    #[test]
+    fn entity_can_override_four_color_archetype() {
+        assert_eq!(
+            MomentIntervalEntity::four_color_archetype(),
+            FourColorArchetype::MomentInterval
+        );
+    }
+
+    #[test]
+    fn four_color_archetype_returns_stable_business_label() {
+        assert_eq!(FourColorArchetype::MomentInterval.as_str(), "moment_interval");
+        assert_eq!(FourColorArchetype::PartyPlaceThing.as_str(), "party_place_thing");
+        assert_eq!(FourColorArchetype::Role.as_str(), "role");
+        assert_eq!(FourColorArchetype::Description.as_str(), "description");
+        assert_eq!(FourColorArchetype::Unclassified.as_str(), "unclassified");
+    }
+
+    #[test]
+    fn entity_defaults_to_versioned_mutable_mutation_model() {
+        assert_eq!(TestEntity::mutation_model(), EntityMutationModel::VersionedMutable);
+    }
+
+    #[test]
+    fn entity_can_override_mutation_model() {
+        assert_eq!(AppendOnlyEntity::mutation_model(), EntityMutationModel::AppendOnlyRecord);
+    }
+
+    #[test]
+    fn entity_mutation_model_returns_stable_business_label() {
+        assert_eq!(EntityMutationModel::VersionedMutable.as_str(), "versioned_mutable");
+        assert_eq!(EntityMutationModel::AppendOnlyRecord.as_str(), "append_only_record");
+        assert_eq!(EntityMutationModel::Snapshot.as_str(), "snapshot");
+        assert_eq!(EntityMutationModel::DerivedReadModel.as_str(), "derived_read_model");
     }
 
     #[test]
