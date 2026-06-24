@@ -34,6 +34,36 @@ impl FourColorArchetype {
     }
 }
 
+/// 实体上方法的主倾向分类。
+///
+/// 该分类承载建模治理中的 `allowed_methods_bias` 语义，用于表达实体更适合承载哪一类方法。
+/// 它不是排他性 allowlist，不替代 [`FourColorArchetype`]，也不参与 replay 事件编码、
+/// 实体类型码分配或持久化格式语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntityMethodBias {
+    /// 尚未分类，作为旧实体和未治理实体的默认值。
+    Unclassified,
+    /// 主要适合承载业务行为、状态转换、约束校验方法。
+    ///
+    /// 这种实体仍然可以有 helper/query 方法。
+    Behavior,
+    /// 主要适合承载只读判断、派生计算、资格检查等 helper/query 方法。
+    ///
+    /// 这种实体可以有少量生命周期治理行为，但不应承载主流程状态迁移。
+    HelperQuery,
+}
+
+impl EntityMethodBias {
+    /// 返回稳定的方法倾向标签字符串。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unclassified => "unclassified",
+            Self::Behavior => "behavior",
+            Self::HelperQuery => "helper_query",
+        }
+    }
+}
+
 /// 实体的变更模型分类。
 ///
 /// 该分类描述实体状态如何随业务事件演进，以及它是否作为业务事实来源。
@@ -90,6 +120,41 @@ impl EntityMutationModel {
     }
 }
 
+/// 实体的业务生命周期模型分类。
+///
+/// 该分类只回答实体是否拥有自己的业务生命周期或状态机。
+/// 它独立于变更模型，不参与 replay 事件编码、实体类型码分配或持久化格式语义，
+/// 也不自动限制 `track_update_event` 或 `track_delete_event` 的运行行为。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntityLifecycleModel {
+    /// 尚未分类，作为旧实体和未治理实体的默认值。
+    Unclassified,
+    /// 创建即成立、没有业务状态迁移的事实记录。
+    ///
+    /// 典型例子：成交、资金流水、审计记录。
+    StatelessFact,
+    /// 有明确业务生命周期或状态机的实体。
+    ///
+    /// 典型例子：订单、仓位、账户状态。
+    StatefulLifecycle,
+    /// 没有独立生命周期，只随所属聚合或来源事实存在。
+    ///
+    /// 典型例子：owned object、派生读模型。
+    DependentLifecycle,
+}
+
+impl EntityLifecycleModel {
+    /// 返回稳定的生命周期模型标签字符串。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unclassified => "unclassified",
+            Self::StatelessFact => "stateless_fact",
+            Self::StatefulLifecycle => "stateful_lifecycle",
+            Self::DependentLifecycle => "dependent_lifecycle",
+        }
+    }
+}
+
 /// MI 建模中的稳定业务事实类型名。
 ///
 /// 它只表达业务语义，不参与 replay 事件编码或实体类型码分配。
@@ -142,6 +207,22 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         FourColorArchetype::Unclassified
     }
 
+    /// 返回实体上方法的主倾向。
+    ///
+    /// 默认值是 [`EntityMethodBias::Unclassified`]，用于兼容旧实体和未治理实体。
+    ///
+    /// 该元数据只用于领域模型治理、review 和 skill 输出，不改变 runtime、replay、
+    /// 实体类型码或持久化语义，也不自动限制实体上的方法定义。标注为
+    /// [`EntityMethodBias::Behavior`] 的实体仍然可以有 helper/query 方法；标注为
+    /// [`EntityMethodBias::HelperQuery`] 的实体也可以有少量生命周期治理行为。
+    #[inline]
+    fn allowed_methods_bias() -> EntityMethodBias
+    where
+        Self: Sized,
+    {
+        EntityMethodBias::Unclassified
+    }
+
     /// 返回实体状态随业务事件演进的变更模型。
     ///
     /// 默认值是 [`EntityMutationModel::VersionedMutable`]，因为当前 [`Entity`] trait
@@ -159,6 +240,23 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         EntityMutationModel::VersionedMutable
+    }
+
+    /// 返回实体是否拥有自己的业务生命周期或状态机。
+    ///
+    /// 默认值是 [`EntityLifecycleModel::Unclassified`]，用于兼容旧实体和未治理实体。
+    ///
+    /// 该元数据只用于领域模型治理，不改变 replay、实体类型码或持久化语义，也不自动限制
+    /// `track_update_event` 或 `track_delete_event`。若实体创建即代表一个已经成立的事实，
+    /// 应 override 为 [`EntityLifecycleModel::StatelessFact`]；若实体有明确状态机，
+    /// 应 override 为 [`EntityLifecycleModel::StatefulLifecycle`]；若实体只随所属聚合或来源事实存在，
+    /// 应 override 为 [`EntityLifecycleModel::DependentLifecycle`]。
+    #[inline]
+    fn lifecycle_model() -> EntityLifecycleModel
+    where
+        Self: Sized,
+    {
+        EntityLifecycleModel::Unclassified
     }
 
     /// 返回实体对应的稳定 MI 业务事实类型名。
@@ -461,6 +559,72 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Clone)]
+    struct StatefulLifecycleEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for StatefulLifecycleEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            13
+        }
+
+        fn lifecycle_model() -> EntityLifecycleModel
+        where
+            Self: Sized,
+        {
+            EntityLifecycleModel::StatefulLifecycle
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct BehaviorEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for BehaviorEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            14
+        }
+
+        fn allowed_methods_bias() -> EntityMethodBias
+        where
+            Self: Sized,
+        {
+            EntityMethodBias::Behavior
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
     #[test]
     fn entity_defaults_to_unclassified_four_color_archetype() {
         assert_eq!(TestEntity::four_color_archetype(), FourColorArchetype::Unclassified);
@@ -484,6 +648,23 @@ mod tests {
     }
 
     #[test]
+    fn entity_defaults_to_unclassified_allowed_methods_bias() {
+        assert_eq!(TestEntity::allowed_methods_bias(), EntityMethodBias::Unclassified);
+    }
+
+    #[test]
+    fn entity_can_override_allowed_methods_bias() {
+        assert_eq!(BehaviorEntity::allowed_methods_bias(), EntityMethodBias::Behavior);
+    }
+
+    #[test]
+    fn entity_method_bias_returns_stable_business_label() {
+        assert_eq!(EntityMethodBias::Unclassified.as_str(), "unclassified");
+        assert_eq!(EntityMethodBias::Behavior.as_str(), "behavior");
+        assert_eq!(EntityMethodBias::HelperQuery.as_str(), "helper_query");
+    }
+
+    #[test]
     fn entity_defaults_to_versioned_mutable_mutation_model() {
         assert_eq!(TestEntity::mutation_model(), EntityMutationModel::VersionedMutable);
     }
@@ -501,11 +682,32 @@ mod tests {
     }
 
     #[test]
+    fn entity_defaults_to_unclassified_lifecycle_model() {
+        assert_eq!(TestEntity::lifecycle_model(), EntityLifecycleModel::Unclassified);
+    }
+
+    #[test]
+    fn entity_can_override_lifecycle_model() {
+        assert_eq!(
+            StatefulLifecycleEntity::lifecycle_model(),
+            EntityLifecycleModel::StatefulLifecycle
+        );
+    }
+
+    #[test]
     fn entity_mutation_model_returns_stable_business_label() {
         assert_eq!(EntityMutationModel::VersionedMutable.as_str(), "versioned_mutable");
         assert_eq!(EntityMutationModel::AppendOnlyRecord.as_str(), "append_only_record");
         assert_eq!(EntityMutationModel::Snapshot.as_str(), "snapshot");
         assert_eq!(EntityMutationModel::DerivedReadModel.as_str(), "derived_read_model");
+    }
+
+    #[test]
+    fn entity_lifecycle_model_returns_stable_business_label() {
+        assert_eq!(EntityLifecycleModel::Unclassified.as_str(), "unclassified");
+        assert_eq!(EntityLifecycleModel::StatelessFact.as_str(), "stateless_fact");
+        assert_eq!(EntityLifecycleModel::StatefulLifecycle.as_str(), "stateful_lifecycle");
+        assert_eq!(EntityLifecycleModel::DependentLifecycle.as_str(), "dependent_lifecycle");
     }
 
     #[test]
