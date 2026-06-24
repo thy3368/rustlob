@@ -64,7 +64,7 @@ pub use use_case::{
     QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
     QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
-    QueryHyperliquidPerpOrderDetailUseCase, SPOT_TRADING_GROUP_SPEC,
+    QueryHyperliquidPerpOrderDetailUseCase, SPOT_SETTLEMENT_GROUP_SPEC, SPOT_TRADING_GROUP_SPEC,
     SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingCmd,
     SettleHyperliquidPerpFundingError, SettleHyperliquidPerpFundingState,
     SettleHyperliquidPerpFundingUseCase, SettleHyperliquidPerpTradeChanges,

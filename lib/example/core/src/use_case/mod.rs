@@ -1,5 +1,7 @@
 mod funding;
 mod support;
+
+mod settlement;
 mod trading;
 
 pub use funding::{
@@ -52,7 +54,7 @@ pub use trading::{
     QueryHyperliquidPerpOpenOrdersError, QueryHyperliquidPerpOpenOrdersReadModel,
     QueryHyperliquidPerpOpenOrdersUseCase, QueryHyperliquidPerpOrderDetail,
     QueryHyperliquidPerpOrderDetailError, QueryHyperliquidPerpOrderDetailReadModel,
-    QueryHyperliquidPerpOrderDetailUseCase, SPOT_TRADING_GROUP_SPEC,
+    QueryHyperliquidPerpOrderDetailUseCase, SPOT_SETTLEMENT_GROUP_SPEC, SPOT_TRADING_GROUP_SPEC,
     SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingCmd,
     SettleHyperliquidPerpFundingError, SettleHyperliquidPerpFundingState,
     SettleHyperliquidPerpFundingUseCase, SettleHyperliquidPerpTradeChanges,
