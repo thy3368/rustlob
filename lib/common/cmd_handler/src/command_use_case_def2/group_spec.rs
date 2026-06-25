@@ -34,15 +34,7 @@ pub struct MiCausalChainSpec {
     pub invariants: &'static [MiInvariantSpec],
 }
 
-/// 统一的 MI 规格，用于描述 root MI 和 produced MI。
-///
-/// Root MI (main_mi) 应填充：
-/// - name, identity, created_by, starts_when, payload, why_root, state_machine
-/// - kind, produced_by, causal_pointer 设为 None
-///
-/// Produced MI (secondary_mi) 应填充：
-/// - name, identity, kind, produced_by, causal_pointer
-/// - created_by, starts_when, payload, why_root, state_machine 设为 None
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiSpec {
     /// MI 的名称
