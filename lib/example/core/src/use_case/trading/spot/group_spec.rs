@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::{
-    GroupBoundarySpec, MiCausalChainRootSpec, MiCausalChainSpec, MiCausalPointerSpec,
-    MiInvariantSpec, MiPredicateSpec, MiProducedFactSpec, MiRootStateMachineSpec, MiRootStateSpec,
-    MiRootStateTransitionSpec, TruthCenterSpec, UseCaseGroupSpec, UseCaseInGroupSpec,
+    GroupBoundarySpec, MiCausalChainSpec, MiCausalPointerSpec, MiInvariantSpec, MiPredicateSpec,
+    MiSpec, MiStateMachineSpec, MiStateSpec, MiStateTransitionSpec, TruthCenterSpec,
+    UseCaseGroupSpec, UseCaseInGroupSpec,
 };
 
 pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
@@ -27,12 +27,14 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
         description: "一张现货订单在 group 边界内是否已经完成履约、撤销或仍处于可执行状态的业务真相",
     },
     mi_chain: MiCausalChainSpec {
-        root: MiCausalChainRootSpec {
-            mi: "SpotOrder",
+        root: MiSpec {
+            name: "SpotOrder",
             identity: "order_id",
-            created_by: "SpotOrderIntentSubmitted 通过受理校验后创建；未通过时以 SpotOrderRejected 收敛",
-            starts_when: "交易账户提交现货订单意图，系统受理后生成 order_id",
-            payload: &[
+            created_by: Some(
+                "SpotOrderIntentSubmitted 通过受理校验后创建；未通过时以 SpotOrderRejected 收敛",
+            ),
+            starts_when: Some("交易账户提交现货订单意图，系统受理后生成 order_id"),
+            payload: Some(&[
                 "order_id",
                 "account_id",
                 "asset",
@@ -44,51 +46,58 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                 "remaining_qty",
                 "status",
                 "time_in_force",
-            ],
-            why_root: "SpotOrder 是现货订单履约链的 main MI，承载 Open、PartiallyFilled、Filled、Canceled、Rejected 的合法演化",
-            state_machine: MiRootStateMachineSpec {
+            ]),
+            why_root: Some(
+                "SpotOrder 是现货订单履约链的 main MI，承载 Open、PartiallyFilled、Filled、Canceled、Rejected 的合法演化",
+            ),
+            state_machine: Some(MiStateMachineSpec {
                 state_field: "SpotOrder.status",
                 initial_state: "Open",
                 states: &[
-                    MiRootStateSpec {
+                    MiStateSpec {
                         name: "Open",
                         meaning: "订单已成立、仍有全部数量可撮合，或资金占用已证明其可履约",
                         terminal: false,
                     },
-                    MiRootStateSpec {
+                    MiStateSpec {
                         name: "PartiallyFilled",
                         meaning: "订单已经产生至少一笔成交，但仍有剩余数量可继续撮合或撤销",
                         terminal: false,
                     },
-                    MiRootStateSpec {
+                    MiStateSpec {
                         name: "Filled",
                         meaning: "订单累计成交数量等于原始数量，订单履约完成",
                         terminal: true,
                     },
-                    MiRootStateSpec {
+                    MiStateSpec {
                         name: "Canceled",
                         meaning: "订单剩余未成交数量被合法撤销，后续不再进入撮合",
                         terminal: true,
                     },
-                    MiRootStateSpec {
+                    MiStateSpec {
                         name: "Rejected",
                         meaning: "订单因参数、市场状态、资金能力或撮合限制被拒绝，未继续履约",
                         terminal: true,
                     },
                 ],
                 transitions: &[
-                    MiRootStateTransitionSpec {
+                    MiStateTransitionSpec {
                         from: &["Open"],
                         to: &["Rejected"],
-                        produced_fact: MiProducedFactSpec {
+                        produced_fact: MiSpec {
                             name: "SpotOrderRejected",
                             identity: "order_rejection_id",
-                            kind: "append_only_fact",
-                            produced_by: "PlaceOrderUseCase",
-                            causal_pointer: MiCausalPointerSpec {
+                            kind: Some("append_only_fact"),
+                            produced_by: Some("PlaceOrderUseCase"),
+                            causal_pointer: Some(MiCausalPointerSpec {
                                 caused_by: "order_intent_id 或 order_id",
                                 due_to: "订单意图或已创建订单未满足现货订单业务规则",
-                            },
+                            }),
+                            created_by: None,
+                            starts_when: None,
+                            payload: None,
+                            why_root: None,
+                            state_machine: None,
                         },
                         predicate: MiPredicateSpec {
                             reads: &[
@@ -106,18 +115,24 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         },
                         root_change: "status = Rejected, status_reason = reject_reason",
                     },
-                    MiRootStateTransitionSpec {
+                    MiStateTransitionSpec {
                         from: &["Open"],
                         to: &["Open"],
-                        produced_fact: MiProducedFactSpec {
+                        produced_fact: MiSpec {
                             name: "SpotFundHoldCreated",
                             identity: "fund_hold_id",
-                            kind: "fund_side_mi",
-                            produced_by: "PlaceOrderUseCase",
-                            causal_pointer: MiCausalPointerSpec {
+                            kind: Some("fund_side_mi"),
+                            produced_by: Some("PlaceOrderUseCase"),
+                            causal_pointer: Some(MiCausalPointerSpec {
                                 caused_by: "order_id",
                                 due_to: "现货订单成立后需要锁定买方报价资产或卖方基础资产",
-                            },
+                            }),
+                            // Root MI fields - None for produced MI
+                            created_by: None,
+                            starts_when: None,
+                            payload: None,
+                            why_root: None,
+                            state_machine: None,
                         },
                         predicate: MiPredicateSpec {
                             reads: &["fund_hold_id", "order_id", "asset", "held_qty"],
@@ -127,18 +142,24 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         },
                         root_change: "status 保持 Open，资金侧记录 fund_hold_id",
                     },
-                    MiRootStateTransitionSpec {
+                    MiStateTransitionSpec {
                         from: &["Open", "PartiallyFilled"],
                         to: &["PartiallyFilled", "Filled"],
-                        produced_fact: MiProducedFactSpec {
+                        produced_fact: MiSpec {
                             name: "SpotTradeExecuted",
                             identity: "trade_id",
-                            kind: "secondary_mi",
-                            produced_by: "MatchSpotOrderUseCase",
-                            causal_pointer: MiCausalPointerSpec {
+                            kind: Some("secondary_mi"),
+                            produced_by: Some("MatchSpotOrderUseCase"),
+                            causal_pointer: Some(MiCausalPointerSpec {
                                 caused_by: "trade_id",
                                 due_to: "该订单参与了一次价格交叉且数量可成交的现货成交",
-                            },
+                            }),
+                            // Root MI fields - None for produced MI
+                            created_by: None,
+                            starts_when: None,
+                            payload: None,
+                            why_root: None,
+                            state_machine: None,
                         },
                         predicate: MiPredicateSpec {
                             reads: &[
@@ -155,18 +176,24 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         },
                         root_change: "filled_qty += trade.qty, remaining_qty -= trade.qty, status = PartiallyFilled 或 Filled",
                     },
-                    MiRootStateTransitionSpec {
+                    MiStateTransitionSpec {
                         from: &["Open", "PartiallyFilled"],
                         to: &["Canceled"],
-                        produced_fact: MiProducedFactSpec {
+                        produced_fact: MiSpec {
                             name: "SpotOrderCanceled",
                             identity: "cancel_id",
-                            kind: "append_only_fact",
-                            produced_by: "CancelSpotOrderUseCase",
-                            causal_pointer: MiCausalPointerSpec {
+                            kind: Some("append_only_fact"),
+                            produced_by: Some("CancelSpotOrderUseCase"),
+                            causal_pointer: Some(MiCausalPointerSpec {
                                 caused_by: "cancel_id",
                                 due_to: "交易账户提交的合法撤单意图",
-                            },
+                            }),
+                            // Root MI fields - None for produced MI
+                            created_by: None,
+                            starts_when: None,
+                            payload: None,
+                            why_root: None,
+                            state_machine: None,
                         },
                         predicate: MiPredicateSpec {
                             reads: &["cancel_id", "order_id", "remaining_qty", "cancel_reason"],
@@ -177,7 +204,11 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         root_change: "status = Canceled, status_reason = cancel_reason",
                     },
                 ],
-            },
+            }),
+            // Produced MI fields - None for root MI
+            kind: None,
+            produced_by: None,
+            causal_pointer: None,
         },
         invariants: &[
             MiInvariantSpec {
@@ -232,13 +263,13 @@ mod tests {
         assert!(spec.boundary.excludes.contains(&"余额流水入账"));
         assert!(spec.boundary.excludes.contains(&"资金占用释放"));
 
-        assert_eq!(chain.root.mi, "SpotOrder");
+        assert_eq!(chain.root.name, "SpotOrder");
         assert_eq!(chain.root.identity, "order_id");
-        assert!(!chain.root.created_by.is_empty());
-        assert!(!chain.root.payload.is_empty());
-        assert!(!chain.root.why_root.is_empty());
+        assert!(!chain.root.created_by.unwrap().is_empty());
+        assert!(!chain.root.payload.unwrap().is_empty());
+        assert!(!chain.root.why_root.unwrap().is_empty());
 
-        let state_machine = chain.root.state_machine;
+        let state_machine = chain.root.state_machine.unwrap();
         assert_eq!(state_machine.state_field, "SpotOrder.status");
         assert_eq!(state_machine.initial_state, "Open");
 
@@ -268,20 +299,24 @@ mod tests {
             assert!(!transition.to.is_empty(), "{transition:?}");
             assert!(!transition.produced_fact.name.is_empty(), "{transition:?}");
             assert!(!transition.produced_fact.identity.is_empty(), "{transition:?}");
-            assert!(!transition.produced_fact.kind.is_empty(), "{transition:?}");
+            assert!(!transition.produced_fact.kind.unwrap().is_empty(), "{transition:?}");
             assert!(!transition.predicate.reads.is_empty(), "{transition:?}");
             assert!(!transition.predicate.rule.is_empty(), "{transition:?}");
             assert!(!transition.predicate.when_true.is_empty(), "{transition:?}");
             assert!(!transition.predicate.when_false.is_empty(), "{transition:?}");
             assert!(
-                use_case_names.contains(&transition.produced_fact.produced_by),
+                use_case_names.contains(&transition.produced_fact.produced_by.unwrap()),
                 "{transition:?}"
             );
             assert!(
-                !use_case_names.contains(&transition.produced_fact.causal_pointer.caused_by),
+                !use_case_names
+                    .contains(&transition.produced_fact.causal_pointer.unwrap().caused_by),
                 "{transition:?}"
             );
-            assert!(!transition.produced_fact.causal_pointer.due_to.is_empty(), "{transition:?}");
+            assert!(
+                !transition.produced_fact.causal_pointer.unwrap().due_to.is_empty(),
+                "{transition:?}"
+            );
             assert!(!transition.root_change.is_empty(), "{transition:?}");
             transition_drivers.push(transition.produced_fact.name);
         }
