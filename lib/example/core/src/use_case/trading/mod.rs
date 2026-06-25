@@ -61,12 +61,14 @@ pub use spot::place_order::{
 };
 pub use spot::{
     CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
-    CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
+    CancelSpotOrderMiChanges, CancelSpotOrderMiCmd, CancelSpotOrderMiState,
+    CancelSpotOrderMiUseCase, CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
     ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
     ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase, MatchSpotOrderChanges,
     MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase,
-    SPOT_TRADING_GROUP_SPEC, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
-    SettleSpotTradeState, SettleSpotTradeUseCase,
+    PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUseCase, SPOT_TRADING_GROUP_SPEC,
+    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
+    SettleSpotTradeUseCase,
 };

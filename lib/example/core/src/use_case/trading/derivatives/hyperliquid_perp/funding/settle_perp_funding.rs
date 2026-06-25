@@ -225,21 +225,24 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 .get(&balance_id)
                 .cloned()
                 .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
-            created_balance_ledger_entries.push(BalanceLedgerEntry::new(
-                format!(
-                    "balance-ledger:funding:{}:{}",
-                    cmd.funding_batch_id,
-                    updated_balance.after.entity_id()
-                ),
-                updated_balance.after.account_id.clone(),
-                updated_balance.after.asset_id.clone(),
-                updated_balance.after.entity_id(),
-                updated_balance.before.available,
-                updated_balance.before.frozen,
-                updated_balance.after.available,
-                updated_balance.after.frozen,
-                reason,
-            ));
+            created_balance_ledger_entries.push(
+                BalanceLedgerEntry::from_transition(
+                    format!(
+                        "balance-ledger:funding:{}:{}",
+                        cmd.funding_batch_id,
+                        updated_balance.after.entity_id()
+                    ),
+                    updated_balance.after.account_id.clone(),
+                    updated_balance.after.asset_id.clone(),
+                    updated_balance.after.entity_id(),
+                    updated_balance.before.available,
+                    updated_balance.before.frozen,
+                    updated_balance.after.available,
+                    updated_balance.after.frozen,
+                    reason,
+                )
+                .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?,
+            );
         }
 
         Ok(SettleHyperliquidPerpFundingChanges {

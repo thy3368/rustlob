@@ -226,7 +226,8 @@ impl PlaceImmediateOrderUseCase {
             ),
             &updated_balance,
             created_order.order_id.clone(),
-        );
+        )
+        .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
         Ok(PlaceImmediateOrderChanges {
             created_order,

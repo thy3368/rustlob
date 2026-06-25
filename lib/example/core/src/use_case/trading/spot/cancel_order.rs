@@ -197,7 +197,7 @@ fn derive_cancel_changes(
     } else {
         BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order_after.order_id.clone() }
     };
-    let balance_ledger_entry = BalanceLedgerEntry::new(
+    let balance_ledger_entry = BalanceLedgerEntry::from_transition(
         format!("balance-ledger:cancel:{}", released_balance.after.entity_id()),
         released_balance.after.account_id.clone(),
         released_balance.after.asset_id.clone(),
@@ -207,7 +207,8 @@ fn derive_cancel_changes(
         released_balance.after.available,
         released_balance.after.frozen,
         reason,
-    );
+    )
+    .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
     Ok(CancelSpotOrderChanges {
         canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
         released_balances: vec![released_balance],

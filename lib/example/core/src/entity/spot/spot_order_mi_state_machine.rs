@@ -27,6 +27,8 @@ pub struct PlaceSpotOrderChanges {
     pub updated_order: SpotOrderUpdated,
     /// 本次生成的成交事实。
     pub created_trades: Option<Vec<SpotTrade>>,
+
+    //todo
 }
 
 /// `Cancel` 命令不携带额外参数。

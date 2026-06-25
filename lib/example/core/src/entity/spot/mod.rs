@@ -6,5 +6,5 @@ pub mod spot_trade;
 
 pub use spot_order_mi_state_machine::{
     CancelSpotOrderCmd, PlaceSpotOrderCmd, SpotOrderMiChanges, SpotOrderMiCommand,
-    SpotOrderMiStateMachineError,
+    SpotOrderMiStateMachineError, SpotOrderUpdated,
 };
