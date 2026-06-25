@@ -30,34 +30,55 @@ pub struct TruthCenterSpec {
 /// 一个 use case group 内端到端 MI 因果链的源码规格。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiCausalChainSpec {
-    pub root: MiCausalChainRootSpec,
+    pub root: MiSpec,
     pub invariants: &'static [MiInvariantSpec],
 }
 
-/// MI 因果链的根 MI。
+/// 统一的 MI 规格，用于描述 root MI 和 produced MI。
+///
+/// Root MI (main_mi) 应填充：
+/// - name, identity, created_by, starts_when, payload, why_root, state_machine
+/// - kind, produced_by, causal_pointer 设为 None
+///
+/// Produced MI (secondary_mi) 应填充：
+/// - name, identity, kind, produced_by, causal_pointer
+/// - created_by, starts_when, payload, why_root, state_machine 设为 None
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MiCausalChainRootSpec {
-    pub mi: &'static str,
+pub struct MiSpec {
+    /// MI 的名称
+    pub name: &'static str,
+    /// MI 的身份字段
     pub identity: &'static str,
-    pub created_by: &'static str,
-    pub starts_when: &'static str,
-    pub payload: &'static [&'static str],
-    pub why_root: &'static str,
-    pub state_machine: MiRootStateMachineSpec,
+    ///  MI 如何被创建（
+    pub created_by: Option<&'static str>,
+    ///  MI 何时开始（
+    pub starts_when: Option<&'static str>,
+    ///  MI 的载荷字段列表（
+    pub payload: Option<&'static [&'static str]>,
+    ///  MI 为何作为根的说明（
+    pub why_root: Option<&'static str>,
+    ///  MI 的状态机
+    pub state_machine: Option<MiStateMachineSpec>,
+    ///  MI 的类型：append_only_fact, fund_side_mi 等
+    pub kind: Option<&'static str>,
+    ///  MI 由哪个 use case 产生
+    pub produced_by: Option<&'static str>,
+    ///  MI 的因果指针
+    pub causal_pointer: Option<MiCausalPointerSpec>,
 }
 
 /// 根 MI 的生命周期状态机。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MiRootStateMachineSpec {
+pub struct MiStateMachineSpec {
     pub state_field: &'static str,
     pub initial_state: &'static str,
-    pub states: &'static [MiRootStateSpec],
-    pub transitions: &'static [MiRootStateTransitionSpec],
+    pub states: &'static [MiStateSpec],
+    pub transitions: &'static [MiStateTransitionSpec],
 }
 
 /// 根 MI 的一个业务状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MiRootStateSpec {
+pub struct MiStateSpec {
     pub name: &'static str,
     pub meaning: &'static str,
     pub terminal: bool,
@@ -65,22 +86,12 @@ pub struct MiRootStateSpec {
 
 /// 子 MI 或 append-only 事实驱动根 MI 状态变化的规则。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MiRootStateTransitionSpec {
+pub struct MiStateTransitionSpec {
     pub from: &'static [&'static str],
     pub to: &'static [&'static str],
-    pub produced_fact: MiProducedFactSpec,
+    pub produced_fact: MiSpec,
     pub predicate: MiPredicateSpec,
     pub root_change: &'static str,
-}
-
-/// 驱动根 MI 状态变化时同步生成的子 MI 或 append-only 事实。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MiProducedFactSpec {
-    pub name: &'static str,
-    pub identity: &'static str,
-    pub kind: &'static str,
-    pub produced_by: &'static str,
-    pub causal_pointer: MiCausalPointerSpec,
 }
 
 /// 因果判断成立时读取的前驱载荷与判定规则。
