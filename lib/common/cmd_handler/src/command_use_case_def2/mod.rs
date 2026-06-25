@@ -9,8 +9,9 @@ pub use executor::{
     CommandUseCaseExecutor4,
 };
 pub use group_spec::{
-    GroupBoundarySpec, MiCausalEdgeSpec, NonUseCaseItemSpec, TruthCenterSpec, UseCaseGroupSpec,
-    UseCaseInGroupSpec,
+    GroupBoundarySpec, MiCausalChainRootSpec, MiCausalChainSpec, MiCausalPointerSpec,
+    MiInvariantSpec, MiPredicateSpec, MiProducedFactSpec, MiRootStateMachineSpec, MiRootStateSpec,
+    MiRootStateTransitionSpec, TruthCenterSpec, UseCaseGroupSpec, UseCaseInGroupSpec,
 };
 pub use outbound::{CommandUseCaseOutbound, CommandUseCaseOutboundPhase};
 pub use use_case::{
