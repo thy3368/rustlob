@@ -623,7 +623,7 @@ impl SpotOrder {
         self.reserved_quote
     }
 
-    fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
+    pub(crate) fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
         if self.limit_price().is_none() {
             SpotOrderStatusReason::MarketOrderNoLiquidityRejected
         } else {
@@ -755,6 +755,7 @@ impl Entity for SpotOrder {
             self.client_order_id.clone().unwrap_or_default(),
             other.client_order_id.clone().unwrap_or_default(),
         );
+        push_change(&mut changes, "version", self.version.to_string(), other.version.to_string());
 
         changes
     }
@@ -764,7 +765,7 @@ impl Entity for SpotOrder {
             "order_id" | "account_id" | "symbol" | "side" | "execution" | "time_in_force"
             | "status" | "status_reason" | "client_order_id" => 0,
             "asset" | "exchange_oid" | "qty" | "filled_qty" | "price" | "reserved_base"
-            | "reserved_quote" => 1,
+            | "reserved_quote" | "version" => 1,
             _ => 0,
         }
     }
