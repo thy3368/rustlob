@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, MiCreationStateMachine,
-    MiStateMachine, ReplayableChanges,
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, MiStateMachine,
+    ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,19 +25,6 @@ pub enum BalanceLedgerCommand {
     DebitAvailable { balance: Balance, amount: u64 },
     /// 扣减冻结余额，`available` 不变，`frozen` 减少。
     DebitFrozen { balance: Balance, amount: u64 },
-}
-
-/// 创建余额流水事实的命令。
-///
-/// `balance_command` 是纯余额变更值对象；流水 ID 与原因只用于创建审计事实本身。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BalanceLedgerEntryCreationCommand {
-    /// 流水记录 ID。
-    pub entry_id: String,
-    /// 余额侧变更动作。
-    pub balance_command: BalanceLedgerCommand,
-    /// 余额变更原因。
-    pub reason: BalanceLedgerReason,
 }
 
 fn balance_ledger_command_label(command: &BalanceLedgerCommand) -> &'static str {
@@ -263,9 +250,6 @@ pub enum BalanceLedgerEntryError {
     /// 传入命令与流水自身声明的命令不一致。
     #[error("balance ledger command does not match entry command")]
     CommandMismatch,
-    /// 创建态接口只允许从不存在的流水创建新事实。
-    #[error("balance ledger entry already exists")]
-    EntryAlreadyExists,
     /// 余额状态计算发生整数溢出。
     #[error("arithmetic overflow while deriving balance ledger transition")]
     ArithmeticOverflow,
@@ -686,62 +670,6 @@ impl BalanceLedgerEntry {
     }
 }
 
-impl MiCreationStateMachine for BalanceLedgerEntry {
-    type Command = BalanceLedgerEntryCreationCommand;
-    type State = Option<BalanceLedgerEntryStatus>;
-    type Error = BalanceLedgerEntryError;
-    type Changes = BalanceLedgerEntryMiChanges;
-
-    fn state(before: &Option<Self>) -> Self::State {
-        before.as_ref().map(|entry| entry.status)
-    }
-
-    fn pre_check_command(before: &Option<Self>, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if before.is_some() {
-            return Err(BalanceLedgerEntryError::EntryAlreadyExists);
-        }
-        if balance_ledger_command_amount(&cmd.balance_command) == 0 {
-            return Err(BalanceLedgerEntryError::InvalidAmount);
-        }
-        Ok(())
-    }
-
-    fn validate_state_transition(
-        before: &Option<Self>,
-        cmd: &Self::Command,
-    ) -> Result<(), Self::Error> {
-        <Self as MiCreationStateMachine>::pre_check_command(before, cmd)?;
-        let _ = apply_balance_ledger_command(&cmd.balance_command)?;
-        Ok(())
-    }
-
-    fn compute_changes(
-        before: &Option<Self>,
-        cmd: &Self::Command,
-    ) -> Result<Self::Changes, Self::Error> {
-        <Self as MiCreationStateMachine>::validate_state_transition(before, cmd)?;
-
-        let balance_before = balance_ledger_command_balance(&cmd.balance_command).clone();
-        let balance_after = apply_balance_ledger_command(&cmd.balance_command)?;
-        let entry_after = BalanceLedgerEntry::from_transition(
-            cmd.entry_id.clone(),
-            balance_before.account_id.clone(),
-            balance_before.asset_id.clone(),
-            balance_before.entity_id(),
-            balance_before.available,
-            balance_before.frozen,
-            balance_after.available,
-            balance_after.frozen,
-            cmd.reason.clone(),
-        )?;
-
-        Ok(BalanceLedgerEntryMiChanges {
-            updated_entry: UpdatedEntityPair { before: entry_after.clone(), after: entry_after },
-            updated_balance: UpdatedEntityPair { before: balance_before, after: balance_after },
-        })
-    }
-}
-
 impl MiStateMachine for BalanceLedgerEntry {
     type Command = BalanceLedgerCommand;
     type State = BalanceLedgerEntryStatus;
@@ -923,7 +851,7 @@ fn stable_balance_ledger_entry_id(value: &str) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{Entity, MiCreationStateMachine, MiStateMachine, ReplayableChanges};
+    use common_entity::{Entity, MiStateMachine};
 
     use super::*;
 
@@ -940,27 +868,6 @@ mod tests {
 
     fn debit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
         BalanceLedgerCommand::DebitAvailable { balance: balance.clone(), amount }
-    }
-
-    fn unfreeze_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
-        BalanceLedgerCommand::Unfreeze { balance: balance.clone(), amount }
-    }
-
-    fn credit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
-        BalanceLedgerCommand::CreditAvailable { balance: balance.clone(), amount }
-    }
-
-    fn creation_command(
-        entry_id: &str,
-        balance_command: BalanceLedgerCommand,
-    ) -> BalanceLedgerEntryCreationCommand {
-        BalanceLedgerEntryCreationCommand {
-            entry_id: entry_id.to_string(),
-            balance_command,
-            reason: BalanceLedgerReason::ReserveForImmediateOrder {
-                order_id: "order-1".to_string(),
-            },
-        }
     }
 
     #[test]
@@ -1027,90 +934,6 @@ mod tests {
             change.field_name_as_str().ok() == Some("reason")
                 && change.new_value_bytes() == b"reserve_for_immediate_order"
         }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_order_id")
-                && change.new_value_bytes() == b"trader-1-BTCUSDT-7"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_trade_ids")
-                && change.new_value_bytes().is_empty()
-        }));
-    }
-
-    #[test]
-    fn create_event_contains_settlement_reason_references() {
-        let entry = BalanceLedgerEntry::from_transition(
-            "ledger-settle-1-1-buyer-BTC".to_string(),
-            "buyer".to_string(),
-            "BTC".to_string(),
-            "buyer:BTC".to_string(),
-            0,
-            0,
-            3,
-            0,
-            BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
-                trade_ids: vec!["trade-1".to_string(), "trade-2".to_string()],
-                settlement_ids: vec!["settle-1-1".to_string(), "settle-1-2".to_string()],
-            },
-        )
-        .unwrap();
-
-        let event = entry.track_create_event().unwrap();
-
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason")
-                && change.new_value_bytes() == b"settle_spot_trade_buyer_receive_base"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_trade_ids")
-                && change.new_value_bytes() == b"trade-1,trade-2"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_settlement_ids")
-                && change.new_value_bytes() == b"settle-1-1,settle-1-2"
-        }));
-    }
-
-    #[test]
-    fn create_event_contains_funding_reason_references() {
-        let entry = BalanceLedgerEntry::from_transition(
-            "balance-ledger:funding:funding-1:trader-1:USDC".to_string(),
-            "trader-1".to_string(),
-            "USDC".to_string(),
-            "trader-1:USDC".to_string(),
-            1_000,
-            0,
-            990,
-            0,
-            BalanceLedgerReason::SettlePerpFunding {
-                funding_batch_id: "funding-1".to_string(),
-                settlement_ids: vec![
-                    "funding-1-position-1".to_string(),
-                    "funding-1-position-2".to_string(),
-                ],
-                position_ids: vec!["position-1".to_string(), "position-2".to_string()],
-            },
-        )
-        .unwrap();
-
-        let event = entry.track_create_event().unwrap();
-
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason")
-                && change.new_value_bytes() == b"settle_perp_funding"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_settlement_ids")
-                && change.new_value_bytes() == b"funding-1-position-1,funding-1-position-2"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_funding_batch_id")
-                && change.new_value_bytes() == b"funding-1"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("reason_position_ids")
-                && change.new_value_bytes() == b"position-1,position-2"
-        }));
     }
 
     #[test]
@@ -1132,21 +955,6 @@ mod tests {
         assert_eq!(changes.updated_balance.before, balance);
         assert_eq!(changes.updated_balance.after.available, 800);
         assert_eq!(changes.updated_balance.after.frozen, 200);
-        assert_eq!(changes.updated_entry.after.after_available, 800);
-        assert_eq!(changes.updated_entry.after.after_frozen, 200);
-
-        let events = changes.to_replayable_events().unwrap();
-        assert_eq!(events.len(), 2);
-        assert!(events[0].is_updated());
-        assert!(events[1].is_created());
-        assert!(events[0].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("available")
-                && change.new_value_bytes() == b"800"
-        }));
-        assert!(events[1].field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("command")
-                && change.new_value_bytes() == b"freeze"
-        }));
     }
 
     #[test]
@@ -1179,118 +987,5 @@ mod tests {
         let result = entry.compute_changes(&freeze_command(&updated_balance.before, 200));
 
         assert_eq!(result, Err(BalanceLedgerEntryError::AlreadyApplied));
-    }
-
-    #[test]
-    fn mi_state_machine_rejects_snapshot_mismatch_on_apply() {
-        let mut entry = BalanceLedgerEntry::draft_from_balance(
-            "ledger-draft-1".to_string(),
-            &Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3),
-            freeze_command(
-                &Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3),
-                200,
-            ),
-            BalanceLedgerReason::ReserveForImmediateOrder { order_id: "order-1".to_string() },
-        )
-        .unwrap();
-        entry.after_available = 700;
-
-        let result = entry.compute_changes(&freeze_command(
-            &Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3),
-            200,
-        ));
-
-        assert_eq!(result, Err(BalanceLedgerEntryError::SnapshotMismatch));
-    }
-
-    #[test]
-    fn creation_state_machine_creates_applied_freeze_entry_and_balance_change() {
-        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
-        let command = creation_command("ledger-freeze-1", freeze_command(&balance, 200));
-
-        let changes =
-            <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(&None, &command)
-                .unwrap();
-
-        assert_eq!(changes.updated_balance.before, balance);
-        assert_eq!(changes.updated_balance.after.available, 800);
-        assert_eq!(changes.updated_balance.after.frozen, 200);
-        assert_eq!(changes.updated_entry.after.entry_id, "ledger-freeze-1");
-        assert_eq!(changes.updated_entry.after.status, BalanceLedgerEntryStatus::Applied);
-        assert_eq!(changes.updated_entry.after.before_available, 1_000);
-        assert_eq!(changes.updated_entry.after.after_available, 800);
-
-        let events = changes.to_replayable_events().unwrap();
-        assert_eq!(events.len(), 2);
-        assert!(events[0].is_updated());
-        assert!(events[1].is_created());
-    }
-
-    #[test]
-    fn creation_state_machine_creates_unfreeze_credit_and_debit_entries() {
-        let frozen = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 3);
-        let credited = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 0, 3);
-        let debited = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 0, 3);
-
-        let unfreeze = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &None,
-            &creation_command("ledger-unfreeze-1", unfreeze_command(&frozen, 200)),
-        )
-        .unwrap();
-        let credit = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &None,
-            &creation_command("ledger-credit-1", credit_command(&credited, 50)),
-        )
-        .unwrap();
-        let debit = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &None,
-            &creation_command("ledger-debit-1", debit_command(&debited, 50)),
-        )
-        .unwrap();
-
-        assert_eq!(unfreeze.updated_balance.after.available, 1_000);
-        assert_eq!(unfreeze.updated_balance.after.frozen, 0);
-        assert_eq!(credit.updated_balance.after.available, 850);
-        assert_eq!(credit.updated_balance.after.frozen, 0);
-        assert_eq!(debit.updated_balance.after.available, 750);
-        assert_eq!(debit.updated_balance.after.frozen, 0);
-        assert!(unfreeze.updated_entry.after.is_applied());
-        assert!(credit.updated_entry.after.is_applied());
-        assert!(debit.updated_entry.after.is_applied());
-    }
-
-    #[test]
-    fn creation_state_machine_rejects_invalid_amount_and_insufficient_balance() {
-        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 0, 3);
-
-        let zero = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &None,
-            &creation_command("ledger-zero-1", freeze_command(&balance, 0)),
-        );
-        let insufficient = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &None,
-            &creation_command("ledger-insufficient-1", freeze_command(&balance, 200)),
-        );
-
-        assert_eq!(zero, Err(BalanceLedgerEntryError::InvalidAmount));
-        assert_eq!(insufficient, Err(BalanceLedgerEntryError::InsufficientAvailableBalance));
-    }
-
-    #[test]
-    fn creation_state_machine_rejects_existing_entry() {
-        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
-        let command = creation_command("ledger-freeze-1", freeze_command(&balance, 200));
-        let existing =
-            <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(&None, &command)
-                .unwrap()
-                .updated_entry
-                .after;
-
-        let result = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-            &Some(existing),
-            &command,
-        );
-
-        assert_eq!(result, Err(BalanceLedgerEntryError::EntryAlreadyExists));
     }
 }
