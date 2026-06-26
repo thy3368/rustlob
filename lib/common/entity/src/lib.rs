@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicU64;
 mod entity;
 mod entity_field_change;
 mod state_machine;
+mod state_machine_ref;
 
 pub use entity::{
     Entity, EntityLifecycleModel, EntityMutationModel, FourColorArchetype, MiCausalRelation,
@@ -12,9 +13,8 @@ pub use entity::{
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
-pub use state_machine::{
-    ChangedEntityRef, MiStateMachine, MiStateMachineRef, ReplayableChanges, UpdatedEntityRefPair,
-};
+pub use state_machine::{MiStateMachine, ReplayableChanges};
+pub use state_machine_ref::{ChangedEntityRef, MiStateMachineRef, UpdatedEntityRefPair};
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
 
