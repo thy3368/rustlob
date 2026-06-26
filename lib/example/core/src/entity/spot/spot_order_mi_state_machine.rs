@@ -7,9 +7,9 @@ use thiserror::Error;
 use super::spot_order::{SpotOrder, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
 use super::spot_trade::SpotTrade;
 use crate::entity::Balance;
-use crate::entity::account::balance_ledger_entry::{
-    BalanceLedgerCommand, BalanceLedgerEntry, BalanceLedgerEntryError, BalanceLedgerReason,
-    SpotSettlementLeg,
+use crate::entity::account::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
+use crate::entity::account::balance_ledger_entry_v2::{
+    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
 };
 
 /// `SpotOrder` 的显式状态机命令。
@@ -57,14 +57,14 @@ pub struct PlaceSpotOrderChanges {
     /// 本 case 涉及的余额起止状态；同一个 balance 实例最多出现一次。
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     /// 本次创建的余额流水；按业务发生顺序排列，表达 freeze / settlement 中间过程。
-    pub created_ledger_entries: Vec<BalanceLedgerEntry>,
+    pub created_ledger_entries: Vec<BalanceLedgerEntryV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PlaceSpotOrderMatchingEffects {
     created_trades: Vec<SpotTrade>,
     updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    created_ledger_entries: Vec<BalanceLedgerEntry>,
+    created_ledger_entries: Vec<BalanceLedgerEntryV2>,
 }
 
 /// `Cancel` 命令不携带额外参数。
@@ -113,7 +113,7 @@ impl ReplayableChanges for PlaceSpotOrderChanges {
 
 fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerEntry],
+    ledger_entries: &[BalanceLedgerEntryV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     let mut expected_after_balances =
@@ -463,7 +463,7 @@ impl SpotOrder {
 fn derive_place_freeze_changes(
     order: &SpotOrder,
     freeze_balance: &Balance,
-) -> Result<(UpdatedEntityPair<Balance>, BalanceLedgerEntry), SpotOrderMiStateMachineError> {
+) -> Result<(UpdatedEntityPair<Balance>, BalanceLedgerEntryV2), SpotOrderMiStateMachineError> {
     if !freeze_balance.belongs_to_account(&order.account_id) {
         return Err(SpotOrderMiStateMachineError::FreezeBalanceAccountMismatch);
     }
@@ -480,18 +480,18 @@ fn derive_place_freeze_changes(
         return Err(SpotOrderMiStateMachineError::InsufficientFreezeBalance);
     }
 
-    let entry_id = format!("balance-ledger:{}:{}", order.order_id, freeze_balance.entity_id());
-    let balance_command = BalanceLedgerCommand::Freeze { balance: freeze_balance.clone(), amount };
-    let draft_entry = BalanceLedgerEntry::draft_from_balance(
-        entry_id,
-        freeze_balance,
-        balance_command.clone(),
+    let mut after_balance = freeze_balance.clone();
+    let created_ledger_entry = BalanceLedgerEntryV2::freeze(
+        format!("balance-ledger:{}:{}", order.order_id, freeze_balance.entity_id()),
+        &mut after_balance,
+        amount,
         BalanceLedgerReason::FreezeForOrder { order_id: order.order_id.clone() },
     )
     .map_err(map_balance_ledger_error)?;
-    let changes =
-        draft_entry.compute_changes(&balance_command).map_err(map_balance_ledger_error)?;
-    Ok((changes.updated_balance, changes.updated_entry.after))
+    Ok((
+        UpdatedEntityPair { before: freeze_balance.clone(), after: after_balance },
+        created_ledger_entry,
+    ))
 }
 
 fn taker_freeze_balance<'a>(order: &SpotOrder, cmd: &'a PlaceSpotOrderCmd) -> &'a Balance {
@@ -540,76 +540,92 @@ fn derive_place_matching_changes(
                     placing_frozen_balance,
                 )
             };
-        let buyer_base_balance =
-            current_balance_snapshot(&mut current_balances, buyer_base_balance);
-        let buyer_quote_balance =
-            current_balance_snapshot(&mut current_balances, buyer_quote_balance);
-        let seller_quote_balance =
-            current_balance_snapshot(&mut current_balances, seller_quote_balance);
-        let seller_base_balance =
-            current_balance_snapshot(&mut current_balances, seller_base_balance);
-
-        let legs = [
-            (
-                SpotSettlementLeg::BuyerReceiveBase,
-                BalanceLedgerCommand::CreditAvailable {
-                    balance: buyer_base_balance,
-                    amount: trade.qty,
-                },
-            ),
-            (
-                SpotSettlementLeg::BuyerDebitFrozenQuote,
-                BalanceLedgerCommand::DebitFrozen {
-                    balance: buyer_quote_balance,
-                    amount: quote_qty,
-                },
-            ),
-            (
-                SpotSettlementLeg::SellerReceiveQuote,
-                BalanceLedgerCommand::CreditAvailable {
-                    balance: seller_quote_balance,
-                    amount: quote_qty,
-                },
-            ),
-            (
-                SpotSettlementLeg::SellerDebitFrozenBase,
-                BalanceLedgerCommand::DebitFrozen {
-                    balance: seller_base_balance,
-                    amount: trade.qty,
-                },
-            ),
-        ];
-
-        for (leg, balance_command) in legs {
-            let entry_id = format!(
+        let (buyer_base_updated_balance, buyer_base_ledger_entry) = apply_settlement_ledger_entry(
+            &mut current_balances,
+            buyer_base_balance,
+            format!(
                 "balance-ledger:{}:{}:{}",
                 input.settlement_batch_id,
                 trade.trade_id,
-                leg.as_str()
-            );
-            let reason = BalanceLedgerReason::SettleSpotTrade {
+                SpotSettlementLeg::BuyerReceiveBase.as_str()
+            ),
+            trade.qty,
+            BalanceLedgerReason::SettleSpotTrade {
                 trade_id: trade.trade_id.clone(),
                 match_id: trade.match_id.clone(),
                 settlement_batch_id: input.settlement_batch_id.clone(),
-                leg,
-            };
-            let draft_entry = BalanceLedgerEntry::draft_from_balance(
-                entry_id,
-                balance_ledger_command_balance_ref(&balance_command),
-                balance_command.clone(),
-                reason,
-            )
-            .map_err(map_settlement_balance_ledger_error)?;
-            let changes = draft_entry
-                .compute_changes(&balance_command)
-                .map_err(map_settlement_balance_ledger_error)?;
-            current_balances.insert(
-                changes.updated_balance.after.entity_id(),
-                changes.updated_balance.after.clone(),
-            );
-            updated_balances.push(changes.updated_balance);
-            created_ledger_entries.push(changes.updated_entry.after);
-        }
+                leg: SpotSettlementLeg::BuyerReceiveBase,
+            },
+            BalanceLedgerEntryV2::credit_available,
+        )?;
+        updated_balances.push(buyer_base_updated_balance);
+        created_ledger_entries.push(buyer_base_ledger_entry);
+
+        let (buyer_quote_updated_balance, buyer_quote_ledger_entry) =
+            apply_settlement_ledger_entry(
+                &mut current_balances,
+                buyer_quote_balance,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    input.settlement_batch_id,
+                    trade.trade_id,
+                    SpotSettlementLeg::BuyerDebitFrozenQuote.as_str()
+                ),
+                quote_qty,
+                BalanceLedgerReason::SettleSpotTrade {
+                    trade_id: trade.trade_id.clone(),
+                    match_id: trade.match_id.clone(),
+                    settlement_batch_id: input.settlement_batch_id.clone(),
+                    leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
+                },
+                BalanceLedgerEntryV2::debit_frozen,
+            )?;
+        updated_balances.push(buyer_quote_updated_balance);
+        created_ledger_entries.push(buyer_quote_ledger_entry);
+
+        let (seller_quote_updated_balance, seller_quote_ledger_entry) =
+            apply_settlement_ledger_entry(
+                &mut current_balances,
+                seller_quote_balance,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    input.settlement_batch_id,
+                    trade.trade_id,
+                    SpotSettlementLeg::SellerReceiveQuote.as_str()
+                ),
+                quote_qty,
+                BalanceLedgerReason::SettleSpotTrade {
+                    trade_id: trade.trade_id.clone(),
+                    match_id: trade.match_id.clone(),
+                    settlement_batch_id: input.settlement_batch_id.clone(),
+                    leg: SpotSettlementLeg::SellerReceiveQuote,
+                },
+                BalanceLedgerEntryV2::credit_available,
+            )?;
+        updated_balances.push(seller_quote_updated_balance);
+        created_ledger_entries.push(seller_quote_ledger_entry);
+
+        let (seller_base_updated_balance, seller_base_ledger_entry) =
+            apply_settlement_ledger_entry(
+                &mut current_balances,
+                seller_base_balance,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    input.settlement_batch_id,
+                    trade.trade_id,
+                    SpotSettlementLeg::SellerDebitFrozenBase.as_str()
+                ),
+                trade.qty,
+                BalanceLedgerReason::SettleSpotTrade {
+                    trade_id: trade.trade_id.clone(),
+                    match_id: trade.match_id.clone(),
+                    settlement_batch_id: input.settlement_batch_id.clone(),
+                    leg: SpotSettlementLeg::SellerDebitFrozenBase,
+                },
+                BalanceLedgerEntryV2::debit_frozen,
+            )?;
+        updated_balances.push(seller_base_updated_balance);
+        created_ledger_entries.push(seller_base_ledger_entry);
     }
 
     Ok(PlaceSpotOrderMatchingEffects { created_trades, updated_balances, created_ledger_entries })
@@ -657,14 +673,25 @@ fn current_balance_snapshot(
     current_balances.entry(initial.entity_id()).or_insert_with(|| initial.clone()).clone()
 }
 
-fn balance_ledger_command_balance_ref(command: &BalanceLedgerCommand) -> &Balance {
-    match command {
-        BalanceLedgerCommand::Freeze { balance, .. }
-        | BalanceLedgerCommand::Unfreeze { balance, .. }
-        | BalanceLedgerCommand::CreditAvailable { balance, .. }
-        | BalanceLedgerCommand::DebitAvailable { balance, .. }
-        | BalanceLedgerCommand::DebitFrozen { balance, .. } => balance,
-    }
+fn apply_settlement_ledger_entry(
+    current_balances: &mut HashMap<String, Balance>,
+    initial_balance: &Balance,
+    entry_id: String,
+    amount: u64,
+    reason: BalanceLedgerReason,
+    apply: fn(
+        String,
+        &mut Balance,
+        u64,
+        BalanceLedgerReason,
+    ) -> Result<BalanceLedgerEntryV2, BalanceLedgerEntryV2Error>,
+) -> Result<(UpdatedEntityPair<Balance>, BalanceLedgerEntryV2), SpotOrderMiStateMachineError> {
+    let mut after_balance = current_balance_snapshot(current_balances, initial_balance);
+    let before_balance = after_balance.clone();
+    let created_ledger_entry = apply(entry_id, &mut after_balance, amount, reason)
+        .map_err(map_settlement_balance_ledger_error)?;
+    current_balances.insert(after_balance.entity_id(), after_balance.clone());
+    Ok((UpdatedEntityPair { before: before_balance, after: after_balance }, created_ledger_entry))
 }
 
 fn validate_settlement_input_accounts(
@@ -684,42 +711,36 @@ fn validate_settlement_input_accounts(
     }
 }
 
-fn map_balance_ledger_error(error: BalanceLedgerEntryError) -> SpotOrderMiStateMachineError {
+fn map_balance_ledger_error(error: BalanceLedgerEntryV2Error) -> SpotOrderMiStateMachineError {
     match error {
-        BalanceLedgerEntryError::InvalidAmount => SpotOrderMiStateMachineError::MissingReservation,
-        BalanceLedgerEntryError::InsufficientAvailableBalance => {
+        BalanceLedgerEntryV2Error::InvalidAmount => {
+            SpotOrderMiStateMachineError::MissingReservation
+        }
+        BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
             SpotOrderMiStateMachineError::InsufficientFreezeBalance
         }
-        BalanceLedgerEntryError::ArithmeticOverflow => {
+        BalanceLedgerEntryV2Error::ArithmeticOverflow => {
             SpotOrderMiStateMachineError::VersionOverflow
         }
-        BalanceLedgerEntryError::SnapshotMismatch
-        | BalanceLedgerEntryError::InsufficientFrozenBalance
-        | BalanceLedgerEntryError::AlreadyApplied
-        | BalanceLedgerEntryError::InvalidStatusTransition
-        | BalanceLedgerEntryError::CommandMismatch => {
+        BalanceLedgerEntryV2Error::InsufficientFrozenBalance => {
             SpotOrderMiStateMachineError::BalanceLedgerCreationFailed
         }
     }
 }
 
 fn map_settlement_balance_ledger_error(
-    error: BalanceLedgerEntryError,
+    error: BalanceLedgerEntryV2Error,
 ) -> SpotOrderMiStateMachineError {
     match error {
-        BalanceLedgerEntryError::InvalidAmount => SpotOrderMiStateMachineError::MissingReservation,
-        BalanceLedgerEntryError::InsufficientAvailableBalance
-        | BalanceLedgerEntryError::InsufficientFrozenBalance => {
+        BalanceLedgerEntryV2Error::InvalidAmount => {
+            SpotOrderMiStateMachineError::MissingReservation
+        }
+        BalanceLedgerEntryV2Error::InsufficientAvailableBalance
+        | BalanceLedgerEntryV2Error::InsufficientFrozenBalance => {
             SpotOrderMiStateMachineError::InsufficientSettlementBalance
         }
-        BalanceLedgerEntryError::ArithmeticOverflow => {
+        BalanceLedgerEntryV2Error::ArithmeticOverflow => {
             SpotOrderMiStateMachineError::VersionOverflow
-        }
-        BalanceLedgerEntryError::SnapshotMismatch
-        | BalanceLedgerEntryError::AlreadyApplied
-        | BalanceLedgerEntryError::InvalidStatusTransition
-        | BalanceLedgerEntryError::CommandMismatch => {
-            SpotOrderMiStateMachineError::SettlementInputMismatch
         }
     }
 }
@@ -794,6 +815,17 @@ mod tests {
                 balance.before.account_id == account_id && balance.before.asset_id == asset_id
             })
             .expect("expected balance change")
+    }
+
+    fn assert_ledger_matches_balance_change(
+        entry: &BalanceLedgerEntryV2,
+        updated_balance: &UpdatedEntityPair<Balance>,
+    ) {
+        assert_eq!(entry.balance_entity_id, updated_balance.before.entity_id());
+        assert_eq!(entry.before_available, updated_balance.before.available);
+        assert_eq!(entry.before_frozen, updated_balance.before.frozen);
+        assert_eq!(entry.after_available, updated_balance.after.available);
+        assert_eq!(entry.after_frozen, updated_balance.after.frozen);
     }
 
     fn place(makers: Option<Vec<SpotOrder>>) -> SpotOrderMiCommand {
@@ -921,7 +953,7 @@ mod tests {
         assert_eq!(quote_change.before.available, 2_000);
         assert_eq!(quote_change.after.available, 1_000);
         assert_eq!(quote_change.after.frozen, 1_000);
-        assert!(changes.created_ledger_entries[0].matches_balance_update(quote_change));
+        assert_ledger_matches_balance_change(&changes.created_ledger_entries[0], quote_change);
         assert_eq!(
             changes.created_ledger_entries[0].entry_id,
             "balance-ledger:order-1:trader-1:USDT"
