@@ -205,26 +205,6 @@ pub trait ReplayableChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError>;
 }
 
-/// 实体内部业务方法的普通版契约。
-///
-/// 适合“实体有业务行为，但不强制显式状态机”的场景。`self` 本身就是当前状态，
-/// 因此这里不单独引入 `State` 关联类型。
-pub trait MiBusinessMethod: Clone + Debug + Send + Sync + 'static {
-    type Command;
-    type Error;
-    type Changes: ReplayableChanges;
-
-    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn validate_against_state(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn compute_changes(&self, _cmd: &Self::Command) -> Result<Self::Changes, Self::Error>;
-}
-
 /// 实体内部业务方法的显式状态机版契约。
 ///
 /// 适合“实体有明确状态流转”的场景。`state()` 用于显式暴露当前状态视图，便于把
