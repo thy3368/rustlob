@@ -4,8 +4,8 @@ mod execute_matched_spot_trade;
 mod group_spec;
 mod match_order;
 pub mod place_order;
-mod spot_order_mi;
 mod settle_trade;
+mod spot_order_mi;
 
 pub use cancel_order::{
     CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
@@ -25,11 +25,11 @@ pub use match_order::{
     MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
     MatchSpotOrderUseCase,
 };
-pub use spot_order_mi::{
-    CancelSpotOrderMiChanges, CancelSpotOrderMiCmd, CancelSpotOrderMiState,
-    CancelSpotOrderMiUseCase, PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUseCase,
-};
 pub use settle_trade::{
     SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
     SettleSpotTradeUseCase,
+};
+pub use spot_order_mi::{
+    CancelSpotOrderMiChanges, CancelSpotOrderMiCmd, CancelSpotOrderMiState,
+    CancelSpotOrderMiUseCase, PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUseCase,
 };

@@ -5,9 +5,10 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::Entity;
+use common_entity::{Entity, MiStateMachine};
 use thiserror::Error;
 
+use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
 use crate::entity::{Balance, SpotOrderSide, SpotSettlement, SpotTrade};
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
@@ -207,23 +208,33 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
                 .get(&balance_id)
                 .cloned()
                 .ok_or(SettleSpotTradeError::AccountNotFound)?;
+            let balance_command =
+                if updated_balance.after.available > updated_balance.before.available {
+                    BalanceLedgerCommand::CreditAvailable {
+                        balance: updated_balance.before.clone(),
+                        amount: updated_balance.after.available - updated_balance.before.available,
+                    }
+                } else {
+                    BalanceLedgerCommand::DebitFrozen {
+                        balance: updated_balance.before.clone(),
+                        amount: updated_balance.before.frozen - updated_balance.after.frozen,
+                    }
+                };
             created_balance_ledger_entries.push(
-                BalanceLedgerEntry::from_transition(
+                BalanceLedgerEntry::draft_from_balance(
                     format!(
                         "balance-ledger:{}:{}",
                         cmd.settlement_batch_id,
                         updated_balance.after.entity_id()
                     ),
-                    updated_balance.after.account_id.clone(),
-                    updated_balance.after.asset_id.clone(),
-                    updated_balance.after.entity_id(),
-                    updated_balance.before.available,
-                    updated_balance.before.frozen,
-                    updated_balance.after.available,
-                    updated_balance.after.frozen,
+                    &updated_balance.before,
+                    balance_command.clone(),
                     reason,
                 )
-                .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
+                .and_then(|draft| draft.compute_changes(&balance_command))
+                .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?
+                .updated_entry
+                .after,
             );
         }
 

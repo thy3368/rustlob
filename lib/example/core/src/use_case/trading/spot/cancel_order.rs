@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::Entity;
+use common_entity::{Entity, MiStateMachine};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -197,18 +197,29 @@ fn derive_cancel_changes(
     } else {
         BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order_after.order_id.clone() }
     };
-    let balance_ledger_entry = BalanceLedgerEntry::from_transition(
+    let balance_command = if release_quote > 0 {
+        crate::entity::account::balance_ledger_entry::BalanceLedgerCommand::Unfreeze {
+            balance: released_balance.before.clone(),
+            amount: release_quote,
+        }
+    } else {
+        crate::entity::account::balance_ledger_entry::BalanceLedgerCommand::Unfreeze {
+            balance: released_balance.before.clone(),
+            amount: release_base,
+        }
+    };
+    let draft_entry = BalanceLedgerEntry::draft_from_balance(
         format!("balance-ledger:cancel:{}", released_balance.after.entity_id()),
-        released_balance.after.account_id.clone(),
-        released_balance.after.asset_id.clone(),
-        released_balance.after.entity_id(),
-        released_balance.before.available,
-        released_balance.before.frozen,
-        released_balance.after.available,
-        released_balance.after.frozen,
+        &released_balance.before,
+        balance_command.clone(),
         reason,
     )
     .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+    let balance_ledger_entry = draft_entry
+        .compute_changes(&balance_command)
+        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
+        .updated_entry
+        .after;
     Ok(CancelSpotOrderChanges {
         canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
         released_balances: vec![released_balance],
