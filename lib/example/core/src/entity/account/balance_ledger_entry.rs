@@ -27,100 +27,70 @@ pub enum BalanceLedgerCommand {
     DebitFrozen { balance: Balance, amount: u64 },
 }
 
-fn balance_ledger_command_label(command: &BalanceLedgerCommand) -> &'static str {
-    match command {
-        BalanceLedgerCommand::Freeze { .. } => "freeze",
-        BalanceLedgerCommand::Unfreeze { .. } => "unfreeze",
-        BalanceLedgerCommand::CreditAvailable { .. } => "credit_available",
-        BalanceLedgerCommand::DebitAvailable { .. } => "debit_available",
-        BalanceLedgerCommand::DebitFrozen { .. } => "debit_frozen",
-    }
-}
-
-fn balance_ledger_command_amount(command: &BalanceLedgerCommand) -> u64 {
-    match command {
-        BalanceLedgerCommand::Freeze { amount, .. }
-        | BalanceLedgerCommand::Unfreeze { amount, .. }
-        | BalanceLedgerCommand::CreditAvailable { amount, .. }
-        | BalanceLedgerCommand::DebitAvailable { amount, .. }
-        | BalanceLedgerCommand::DebitFrozen { amount, .. } => *amount,
-    }
-}
-
-fn balance_ledger_command_balance(command: &BalanceLedgerCommand) -> &Balance {
-    match command {
-        BalanceLedgerCommand::Freeze { balance, .. }
-        | BalanceLedgerCommand::Unfreeze { balance, .. }
-        | BalanceLedgerCommand::CreditAvailable { balance, .. }
-        | BalanceLedgerCommand::DebitAvailable { balance, .. }
-        | BalanceLedgerCommand::DebitFrozen { balance, .. } => balance,
-    }
-}
-
-fn same_balance_business_snapshot(lhs: &Balance, rhs: &Balance) -> bool {
-    lhs.account_id == rhs.account_id
-        && lhs.asset_id == rhs.asset_id
-        && lhs.available == rhs.available
-        && lhs.frozen == rhs.frozen
-}
-
-fn apply_balance_ledger_command(
-    command: &BalanceLedgerCommand,
-) -> Result<Balance, BalanceLedgerEntryError> {
-    let balance = balance_ledger_command_balance(command);
-    let amount = balance_ledger_command_amount(command);
-    if amount == 0 {
-        return Err(BalanceLedgerEntryError::InvalidAmount);
+impl BalanceLedgerCommand {
+    fn parts(&self) -> (&'static str, &Balance, u64) {
+        match self {
+            Self::Freeze { balance, amount } => ("freeze", balance, *amount),
+            Self::Unfreeze { balance, amount } => ("unfreeze", balance, *amount),
+            Self::CreditAvailable { balance, amount } => ("credit_available", balance, *amount),
+            Self::DebitAvailable { balance, amount } => ("debit_available", balance, *amount),
+            Self::DebitFrozen { balance, amount } => ("debit_frozen", balance, *amount),
+        }
     }
 
-    let (next_available, next_frozen) = match command {
-        BalanceLedgerCommand::Freeze { .. } => {
-            let next_available = balance
-                .available
-                .checked_sub(amount)
-                .ok_or(BalanceLedgerEntryError::InsufficientAvailableBalance)?;
-            let next_frozen = balance
-                .frozen
-                .checked_add(amount)
-                .ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?;
-            (next_available, next_frozen)
-        }
-        BalanceLedgerCommand::Unfreeze { .. } => {
-            let next_available = balance
-                .available
-                .checked_add(amount)
-                .ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?;
-            let next_frozen = balance
-                .frozen
-                .checked_sub(amount)
-                .ok_or(BalanceLedgerEntryError::InsufficientFrozenBalance)?;
-            (next_available, next_frozen)
-        }
-        BalanceLedgerCommand::CreditAvailable { .. } => {
-            let next_available = balance
-                .credit_available_after(amount)
-                .ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?;
-            (next_available, balance.frozen)
-        }
-        BalanceLedgerCommand::DebitAvailable { .. } => {
-            let next_available = balance
-                .debit_available_after(amount)
-                .ok_or(BalanceLedgerEntryError::InsufficientAvailableBalance)?;
-            (next_available, balance.frozen)
-        }
-        BalanceLedgerCommand::DebitFrozen { .. } => {
-            let next_frozen = balance
-                .debit_frozen_after(amount)
-                .ok_or(BalanceLedgerEntryError::InsufficientFrozenBalance)?;
-            (balance.available, next_frozen)
-        }
-    };
+    pub(crate) fn label(&self) -> &'static str {
+        self.parts().0
+    }
 
-    let mut next_balance = balance.clone();
-    let next_version =
-        next_balance.version.checked_add(1).ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?;
-    next_balance.apply_after(next_available, next_frozen, next_version);
-    Ok(next_balance)
+    pub(crate) fn balance(&self) -> &Balance {
+        self.parts().1
+    }
+
+    pub(crate) fn amount(&self) -> u64 {
+        self.parts().2
+    }
+
+    pub(crate) fn apply_to_balance(&self) -> Result<Balance, BalanceLedgerEntryError> {
+        let (_, balance, amount) = self.parts();
+        if amount == 0 {
+            return Err(BalanceLedgerEntryError::InvalidAmount);
+        }
+
+        let (next_available, next_frozen) = match self {
+            Self::Freeze { .. } => balance
+                .reserve_after(amount)
+                .ok_or(BalanceLedgerEntryError::InsufficientAvailableBalance)?,
+            Self::Unfreeze { .. } => balance
+                .release_after(amount)
+                .ok_or(BalanceLedgerEntryError::InsufficientFrozenBalance)?,
+            Self::CreditAvailable { .. } => (
+                balance
+                    .credit_available_after(amount)
+                    .ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?,
+                balance.frozen,
+            ),
+            Self::DebitAvailable { .. } => (
+                balance
+                    .debit_available_after(amount)
+                    .ok_or(BalanceLedgerEntryError::InsufficientAvailableBalance)?,
+                balance.frozen,
+            ),
+            Self::DebitFrozen { .. } => (
+                balance.available,
+                balance
+                    .debit_frozen_after(amount)
+                    .ok_or(BalanceLedgerEntryError::InsufficientFrozenBalance)?,
+            ),
+        };
+
+        let mut next_balance = balance.clone();
+        let next_version = next_balance
+            .version
+            .checked_add(1)
+            .ok_or(BalanceLedgerEntryError::ArithmeticOverflow)?;
+        next_balance.apply_after(next_available, next_frozen, next_version);
+        Ok(next_balance)
+    }
 }
 
 fn infer_balance_ledger_command(
@@ -131,80 +101,53 @@ fn infer_balance_ledger_command(
         return Err(BalanceLedgerEntryError::SnapshotMismatch);
     }
 
-    if before.available == after.available && before.frozen == after.frozen {
+    let available_delta = i128::from(after.available) - i128::from(before.available);
+    let frozen_delta = i128::from(after.frozen) - i128::from(before.frozen);
+
+    if available_delta == 0 && frozen_delta == 0 {
         return Err(BalanceLedgerEntryError::InvalidAmount);
     }
 
-    if after.available < before.available && after.frozen > before.frozen {
-        let available_delta = before.available - after.available;
-        let frozen_delta = after.frozen - before.frozen;
-        if available_delta == frozen_delta {
-            return Ok(BalanceLedgerCommand::Freeze {
-                balance: before.clone(),
-                amount: available_delta,
-            });
+    let positive_abs =
+        |delta: i128| -> Option<u64> { if delta > 0 { u64::try_from(delta).ok() } else { None } };
+    let negative_abs = |delta: i128| -> Option<u64> {
+        if delta < 0 {
+            delta.checked_neg().and_then(|value| u64::try_from(value).ok())
+        } else {
+            None
         }
-    }
+    };
 
-    if after.available > before.available && after.frozen < before.frozen {
-        let available_delta = after.available - before.available;
-        let frozen_delta = before.frozen - after.frozen;
-        if available_delta == frozen_delta {
-            return Ok(BalanceLedgerCommand::Unfreeze {
-                balance: before.clone(),
-                amount: available_delta,
-            });
+    match (
+        negative_abs(available_delta),
+        positive_abs(available_delta),
+        negative_abs(frozen_delta),
+        positive_abs(frozen_delta),
+    ) {
+        (Some(amount), None, None, Some(frozen_amount)) if amount == frozen_amount => {
+            Ok(BalanceLedgerCommand::Freeze { balance: before.clone(), amount })
         }
+        (None, Some(amount), Some(frozen_amount), None) if amount == frozen_amount => {
+            Ok(BalanceLedgerCommand::Unfreeze { balance: before.clone(), amount })
+        }
+        (None, Some(amount), None, None) => {
+            Ok(BalanceLedgerCommand::CreditAvailable { balance: before.clone(), amount })
+        }
+        (Some(amount), None, None, None) => {
+            Ok(BalanceLedgerCommand::DebitAvailable { balance: before.clone(), amount })
+        }
+        (None, None, Some(amount), None) => {
+            Ok(BalanceLedgerCommand::DebitFrozen { balance: before.clone(), amount })
+        }
+        _ => Err(BalanceLedgerEntryError::SnapshotMismatch),
     }
-
-    if after.available > before.available && after.frozen == before.frozen {
-        return Ok(BalanceLedgerCommand::CreditAvailable {
-            balance: before.clone(),
-            amount: after.available - before.available,
-        });
-    }
-
-    if after.available < before.available && after.frozen == before.frozen {
-        return Ok(BalanceLedgerCommand::DebitAvailable {
-            balance: before.clone(),
-            amount: before.available - after.available,
-        });
-    }
-
-    if after.available == before.available && after.frozen < before.frozen {
-        return Ok(BalanceLedgerCommand::DebitFrozen {
-            balance: before.clone(),
-            amount: before.frozen - after.frozen,
-        });
-    }
-
-    Err(BalanceLedgerEntryError::SnapshotMismatch)
-}
-
-fn inferred_balance_ledger_command(entry: &BalanceLedgerEntry) -> Option<BalanceLedgerCommand> {
-    let before = Balance::new(
-        entry.account_id.clone(),
-        entry.asset_id.clone(),
-        entry.before_available,
-        entry.before_frozen,
-        0,
-    );
-    let after = Balance::new(
-        entry.account_id.clone(),
-        entry.asset_id.clone(),
-        entry.after_available,
-        entry.after_frozen,
-        0,
-    );
-    infer_balance_ledger_command(&before, &after).ok()
 }
 
 fn same_balance_ledger_command_kind_and_amount(
     lhs: &BalanceLedgerCommand,
     rhs: &BalanceLedgerCommand,
 ) -> bool {
-    balance_ledger_command_label(lhs) == balance_ledger_command_label(rhs)
-        && balance_ledger_command_amount(lhs) == balance_ledger_command_amount(rhs)
+    lhs.label() == rhs.label() && lhs.amount() == rhs.amount()
 }
 
 /// 余额流水状态。
@@ -530,6 +473,63 @@ pub struct BalanceLedgerEntry {
 }
 
 impl BalanceLedgerEntry {
+    fn before_balance(&self) -> Balance {
+        Balance::new(
+            self.account_id.clone(),
+            self.asset_id.clone(),
+            self.before_available,
+            self.before_frozen,
+            0,
+        )
+    }
+
+    fn after_balance(&self) -> Balance {
+        Balance::new(
+            self.account_id.clone(),
+            self.asset_id.clone(),
+            self.after_available,
+            self.after_frozen,
+            0,
+        )
+    }
+
+    fn inferred_command(&self) -> Result<BalanceLedgerCommand, BalanceLedgerEntryError> {
+        infer_balance_ledger_command(&self.before_balance(), &self.after_balance())
+    }
+
+    fn matches_command_snapshot(&self, command: &BalanceLedgerCommand) -> bool {
+        self.before_balance().matches_business_snapshot(command.balance())
+    }
+
+    fn validate_apply_command(
+        &self,
+        command: &BalanceLedgerCommand,
+    ) -> Result<Balance, BalanceLedgerEntryError> {
+        if self.is_applied() {
+            return Err(BalanceLedgerEntryError::AlreadyApplied);
+        }
+        if !self.is_draft() {
+            return Err(BalanceLedgerEntryError::InvalidStatusTransition);
+        }
+        if !self.matches_command_snapshot(command) {
+            return Err(BalanceLedgerEntryError::CommandMismatch);
+        }
+        if self
+            .inferred_command()
+            .as_ref()
+            .is_ok_and(|expected| !same_balance_ledger_command_kind_and_amount(expected, command))
+        {
+            return Err(BalanceLedgerEntryError::CommandMismatch);
+        }
+
+        let expected_after_balance = command.apply_to_balance()?;
+        if !self.after_balance().matches_business_snapshot(&expected_after_balance) {
+            return Err(BalanceLedgerEntryError::SnapshotMismatch);
+        }
+
+        Ok(expected_after_balance)
+    }
+
     /// 从已校验的余额前后快照、业务原因和命令推导流水记录。
     pub fn from_transition(
         entry_id: String,
@@ -569,10 +569,10 @@ impl BalanceLedgerEntry {
         command: BalanceLedgerCommand,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryError> {
-        if !same_balance_business_snapshot(balance, balance_ledger_command_balance(&command)) {
+        if !balance.matches_business_snapshot(command.balance()) {
             return Err(BalanceLedgerEntryError::SnapshotMismatch);
         }
-        let after_balance = apply_balance_ledger_command(&command)?;
+        let after_balance = command.apply_to_balance()?;
         Ok(Self {
             entry_id,
             account_id: balance.account_id.clone(),
@@ -618,36 +618,7 @@ impl BalanceLedgerEntry {
 
     /// 将 Draft 流水应用为 Applied。
     pub fn apply(&mut self, command: &BalanceLedgerCommand) -> Result<(), BalanceLedgerEntryError> {
-        if self.is_applied() {
-            return Err(BalanceLedgerEntryError::AlreadyApplied);
-        }
-        if !self.is_draft() {
-            return Err(BalanceLedgerEntryError::InvalidStatusTransition);
-        }
-
-        let before_balance = Balance::new(
-            self.account_id.clone(),
-            self.asset_id.clone(),
-            self.before_available,
-            self.before_frozen,
-            0,
-        );
-        if !same_balance_business_snapshot(balance_ledger_command_balance(command), &before_balance)
-        {
-            return Err(BalanceLedgerEntryError::CommandMismatch);
-        }
-        if inferred_balance_ledger_command(self)
-            .as_ref()
-            .is_some_and(|expected| !same_balance_ledger_command_kind_and_amount(expected, command))
-        {
-            return Err(BalanceLedgerEntryError::CommandMismatch);
-        }
-
-        let expected = apply_balance_ledger_command(command)?;
-        if expected.available != self.after_available || expected.frozen != self.after_frozen {
-            return Err(BalanceLedgerEntryError::SnapshotMismatch);
-        }
-
+        self.validate_apply_command(command)?;
         self.status = BalanceLedgerEntryStatus::Applied;
         Ok(())
     }
@@ -681,7 +652,7 @@ impl MiStateMachine for BalanceLedgerEntry {
     }
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if balance_ledger_command_amount(cmd) == 0 {
+        if cmd.amount() == 0 {
             return Err(BalanceLedgerEntryError::InvalidAmount);
         }
         Ok(())
@@ -689,47 +660,18 @@ impl MiStateMachine for BalanceLedgerEntry {
 
     fn validate_state_transition(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         self.pre_check_command(cmd)?;
-        if self.is_applied() {
-            Err(BalanceLedgerEntryError::AlreadyApplied)
-        } else if !self.is_draft() {
-            Err(BalanceLedgerEntryError::InvalidStatusTransition)
-        } else {
-            let before_balance = Balance::new(
-                self.account_id.clone(),
-                self.asset_id.clone(),
-                self.before_available,
-                self.before_frozen,
-                0,
-            );
-            if !same_balance_business_snapshot(balance_ledger_command_balance(cmd), &before_balance)
-            {
-                return Err(BalanceLedgerEntryError::CommandMismatch);
-            }
-            if inferred_balance_ledger_command(self)
-                .as_ref()
-                .is_some_and(|expected| !same_balance_ledger_command_kind_and_amount(expected, cmd))
-            {
-                return Err(BalanceLedgerEntryError::CommandMismatch);
-            }
-            let expected = apply_balance_ledger_command(cmd)?;
-            if expected.available == self.after_available && expected.frozen == self.after_frozen {
-                Ok(())
-            } else {
-                Err(BalanceLedgerEntryError::SnapshotMismatch)
-            }
-        }
+        self.validate_apply_command(cmd).map(|_| ())
     }
 
     fn compute_changes(&self, cmd: &Self::Command) -> Result<Self::Changes, Self::Error> {
-        self.validate_state_transition(cmd)?;
+        self.pre_check_command(cmd)?;
+        let expected_after_balance = self.validate_apply_command(cmd)?;
 
         let before = self.clone();
         let mut after = self.clone();
-        after.apply(cmd)?;
-        let updated_balance = UpdatedEntityPair {
-            before: balance_ledger_command_balance(cmd).clone(),
-            after: apply_balance_ledger_command(cmd)?,
-        };
+        after.status = BalanceLedgerEntryStatus::Applied;
+        let updated_balance =
+            UpdatedEntityPair { before: cmd.balance().clone(), after: expected_after_balance };
 
         Ok(BalanceLedgerEntryMiChanges {
             updated_entry: UpdatedEntityPair { before, after },
@@ -754,26 +696,19 @@ impl Entity for BalanceLedgerEntry {
     }
 
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        let inferred_command = inferred_balance_ledger_command(self);
+        let inferred_command = self.inferred_command().ok();
+        let command_label =
+            inferred_command.as_ref().map(BalanceLedgerCommand::label).unwrap_or_default();
+        let command_amount =
+            inferred_command.as_ref().map(BalanceLedgerCommand::amount).unwrap_or(0).to_string();
+
         vec![
             EntityFieldChange::new("entry_id", "", self.entry_id.clone()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
             EntityFieldChange::new("balance_entity_id", "", self.balance_entity_id.clone()),
-            EntityFieldChange::new(
-                "command",
-                "",
-                inferred_command.as_ref().map(balance_ledger_command_label).unwrap_or_default(),
-            ),
-            EntityFieldChange::new(
-                "command_amount",
-                "",
-                inferred_command
-                    .as_ref()
-                    .map(balance_ledger_command_amount)
-                    .unwrap_or(0)
-                    .to_string(),
-            ),
+            EntityFieldChange::new("command", "", command_label),
+            EntityFieldChange::new("command_amount", "", command_amount),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new("before_available", "", self.before_available.to_string()),
             EntityFieldChange::new("before_frozen", "", self.before_frozen.to_string()),
@@ -868,6 +803,18 @@ mod tests {
 
     fn debit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
         BalanceLedgerCommand::DebitAvailable { balance: balance.clone(), amount }
+    }
+
+    fn unfreeze_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
+        BalanceLedgerCommand::Unfreeze { balance: balance.clone(), amount }
+    }
+
+    fn credit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
+        BalanceLedgerCommand::CreditAvailable { balance: balance.clone(), amount }
+    }
+
+    fn debit_frozen_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
+        BalanceLedgerCommand::DebitFrozen { balance: balance.clone(), amount }
     }
 
     #[test]
@@ -987,5 +934,230 @@ mod tests {
         let result = entry.compute_changes(&freeze_command(&updated_balance.before, 200));
 
         assert_eq!(result, Err(BalanceLedgerEntryError::AlreadyApplied));
+    }
+
+    #[test]
+    fn command_apply_to_balance_covers_all_paths() {
+        let freeze_balance =
+            Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 200, 3);
+        let freeze_after = freeze_command(&freeze_balance, 150).apply_to_balance().unwrap();
+        assert_eq!(freeze_after.available, 850);
+        assert_eq!(freeze_after.frozen, 350);
+        assert_eq!(freeze_after.version, 4);
+
+        let unfreeze_after = unfreeze_command(&freeze_balance, 100).apply_to_balance().unwrap();
+        assert_eq!(unfreeze_after.available, 1_100);
+        assert_eq!(unfreeze_after.frozen, 100);
+
+        let credit_after = credit_command(&freeze_balance, 250).apply_to_balance().unwrap();
+        assert_eq!(credit_after.available, 1_250);
+        assert_eq!(credit_after.frozen, 200);
+
+        let debit_after = debit_command(&freeze_balance, 300).apply_to_balance().unwrap();
+        assert_eq!(debit_after.available, 700);
+        assert_eq!(debit_after.frozen, 200);
+
+        let debit_frozen_after =
+            debit_frozen_command(&freeze_balance, 80).apply_to_balance().unwrap();
+        assert_eq!(debit_frozen_after.available, 1_000);
+        assert_eq!(debit_frozen_after.frozen, 120);
+    }
+
+    #[test]
+    fn command_apply_to_balance_rejects_zero_amount() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 200, 3);
+
+        let result = freeze_command(&balance, 0).apply_to_balance();
+
+        assert_eq!(result, Err(BalanceLedgerEntryError::InvalidAmount));
+    }
+
+    #[test]
+    fn inferred_command_recognizes_all_supported_balance_patterns() {
+        let freeze_entry = BalanceLedgerEntry::from_transition(
+            "freeze-entry".to_string(),
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            "trader-1:USDT".to_string(),
+            1_000,
+            0,
+            800,
+            200,
+            BalanceLedgerReason::ReserveForImmediateOrder { order_id: "order-1".to_string() },
+        )
+        .unwrap();
+        assert_eq!(
+            freeze_entry.inferred_command().unwrap(),
+            BalanceLedgerCommand::Freeze {
+                balance: Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 0),
+                amount: 200,
+            }
+        );
+
+        let unfreeze_entry = BalanceLedgerEntry::from_transition(
+            "unfreeze-entry".to_string(),
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            "trader-1:USDT".to_string(),
+            800,
+            200,
+            950,
+            50,
+            BalanceLedgerReason::UnfreezeForCancel { order_id: "order-1".to_string() },
+        )
+        .unwrap();
+        assert_eq!(
+            unfreeze_entry.inferred_command().unwrap(),
+            BalanceLedgerCommand::Unfreeze {
+                balance: Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 0),
+                amount: 150,
+            }
+        );
+
+        let credit_entry = BalanceLedgerEntry::from_transition(
+            "credit-entry".to_string(),
+            "trader-1".to_string(),
+            "BTC".to_string(),
+            "trader-1:BTC".to_string(),
+            10,
+            2,
+            15,
+            2,
+            BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
+                trade_ids: vec!["trade-1".to_string()],
+                settlement_ids: vec!["settlement-1".to_string()],
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            credit_entry.inferred_command().unwrap(),
+            BalanceLedgerCommand::CreditAvailable {
+                balance: Balance::new("trader-1".to_string(), "BTC".to_string(), 10, 2, 0),
+                amount: 5,
+            }
+        );
+
+        let debit_entry = BalanceLedgerEntry::from_transition(
+            "debit-entry".to_string(),
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            "trader-1:USDT".to_string(),
+            1_000,
+            0,
+            700,
+            0,
+            BalanceLedgerReason::SettlePerpFunding {
+                funding_batch_id: "funding-1".to_string(),
+                settlement_ids: vec!["settlement-1".to_string()],
+                position_ids: vec!["position-1".to_string()],
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            debit_entry.inferred_command().unwrap(),
+            BalanceLedgerCommand::DebitAvailable {
+                balance: Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 0),
+                amount: 300,
+            }
+        );
+
+        let debit_frozen_entry = BalanceLedgerEntry::from_transition(
+            "debit-frozen-entry".to_string(),
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            "trader-1:USDT".to_string(),
+            1_000,
+            300,
+            1_000,
+            180,
+            BalanceLedgerReason::SettleSpotTrade {
+                trade_id: "trade-2".to_string(),
+                match_id: "match-1".to_string(),
+                settlement_batch_id: "batch-1".to_string(),
+                leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            debit_frozen_entry.inferred_command().unwrap(),
+            BalanceLedgerCommand::DebitFrozen {
+                balance: Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 300, 0),
+                amount: 120,
+            }
+        );
+    }
+
+    #[test]
+    fn validate_apply_command_rejects_command_snapshot_mismatch() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
+        let entry = BalanceLedgerEntry::draft_from_balance(
+            "ledger-draft-1".to_string(),
+            &balance,
+            freeze_command(&balance, 200),
+            BalanceLedgerReason::ReserveForImmediateOrder { order_id: "order-1".to_string() },
+        )
+        .unwrap();
+        let wrong_snapshot = Balance::new("trader-1".to_string(), "USDT".to_string(), 900, 0, 3);
+
+        let result = entry.validate_apply_command(&freeze_command(&wrong_snapshot, 200));
+
+        assert_eq!(result, Err(BalanceLedgerEntryError::CommandMismatch));
+    }
+
+    #[test]
+    fn compute_changes_reuses_single_balance_derivation_result() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
+        let command = freeze_command(&balance, 200);
+        let entry = BalanceLedgerEntry::draft_from_balance(
+            "ledger-draft-1".to_string(),
+            &balance,
+            command.clone(),
+            BalanceLedgerReason::ReserveForImmediateOrder { order_id: "order-1".to_string() },
+        )
+        .unwrap();
+
+        let expected_after = entry.validate_apply_command(&command).unwrap();
+        let changes = entry.compute_changes(&command).unwrap();
+
+        assert_eq!(changes.updated_balance.before, balance);
+        assert_eq!(changes.updated_balance.after, expected_after);
+        assert_eq!(changes.updated_entry.after.status, BalanceLedgerEntryStatus::Applied);
+    }
+
+    #[test]
+    fn created_field_changes_keep_command_and_reason_fields_stable() {
+        let entry = BalanceLedgerEntry::from_transition(
+            "settlement-ledger-1".to_string(),
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            "trader-1:USDT".to_string(),
+            1_000,
+            300,
+            1_000,
+            120,
+            BalanceLedgerReason::SettleSpotTrade {
+                trade_id: "trade-1".to_string(),
+                match_id: "match-1".to_string(),
+                settlement_batch_id: "batch-1".to_string(),
+                leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
+            },
+        )
+        .unwrap();
+
+        let field = |name: &str| {
+            entry
+                .created_field_changes()
+                .into_iter()
+                .find(|change| change.field_name.as_ref() == name)
+                .map(|change| change.new_value)
+                .unwrap()
+        };
+
+        assert_eq!(field("command"), "debit_frozen");
+        assert_eq!(field("command_amount"), "180");
+        assert_eq!(field("reason"), "settle_spot_trade");
+        assert_eq!(field("reason_trade_ids"), "trade-1");
+        assert_eq!(field("reason_settlement_batch_id"), "batch-1");
+        assert_eq!(field("reason_settlement_leg"), "buyer_debit_frozen_quote");
     }
 }

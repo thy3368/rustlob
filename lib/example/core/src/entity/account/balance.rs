@@ -45,6 +45,14 @@ impl Balance {
         self.asset_id == asset_id
     }
 
+    /// 返回两个余额是否表达同一条业务快照。
+    pub fn matches_business_snapshot(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && self.asset_id == other.asset_id
+            && self.available == other.available
+            && self.frozen == other.frozen
+    }
+
     /// 返回是否能冻结指定数量。
     pub fn can_reserve(&self, amount: u64) -> bool {
         self.available >= amount
