@@ -6,7 +6,8 @@ mod entity_field_change;
 
 pub use entity::{
     Entity, EntityLifecycleModel, EntityMethodBias, EntityMutationModel, FourColorArchetype,
-    MiCausalRelation, MiCausalSourceMetadata, MiFactType,
+    MiBusinessMethod, MiCausalRelation, MiCausalSourceMetadata, MiCreationStateMachine, MiFactType,
+    MiStateMachine, ReplayableChanges,
 };
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,

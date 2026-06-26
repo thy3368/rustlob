@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use crate::entity_field_change::{current_timestamp, next_sequence};
 use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
+/// todo 业务方法 跨因果链放在use case里；因果链内放在链根里 这规则要通过skill保障
+
 /// 四色建模中的实体原型分类。
 ///
 /// 该分类只表达领域建模语义，用于标注实体在业务模型里的角色。
@@ -186,6 +188,97 @@ pub struct MiCausalSourceMetadata {
     pub source_role: &'static str,
 }
 
+/// 实体业务变更的最小回放契约。
+///
+/// `Changes` 是一次业务 case 产生的业务变化的唯一真相。实现方必须把同一个实体实例在本次
+/// case 中的修改合并成至多一个 before/after pair；该 pair 表达“本业务 case 开始时的状态
+/// -> 本业务 case 结束时的状态”，不能拆成多个中间步骤。
+///
+/// 对同一个实体实例，不允许在同一个 `Changes` 中重复创建多段 `UpdatedEntityPair` 来表达
+/// 中间状态。中间步骤、资金腿、流水、审计过程、撮合明细等应建模为 append-only facts、
+/// ledger records 或 created records，并由这些事实记录承载顺序和因果信息。
+///
+/// `to_replayable_events()` 可以基于 append-only records 投影出多条单步 replay events；
+/// 但这种投影能力不能反向放宽 `Changes` 的约束，也不能让同一个实体实例在 `Changes`
+/// 中被重复表达为多个 before/after pair。
+pub trait ReplayableChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError>;
+}
+
+/// 实体内部业务方法的普通版契约。
+///
+/// 适合“实体有业务行为，但不强制显式状态机”的场景。`self` 本身就是当前状态，
+/// 因此这里不单独引入 `State` 关联类型。
+pub trait MiBusinessMethod: Clone + Debug + Send + Sync + 'static {
+    type Command;
+    type Error;
+    type Changes: ReplayableChanges;
+
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn validate_against_state(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn compute_changes(&self, _cmd: &Self::Command) -> Result<Self::Changes, Self::Error>;
+}
+
+/// 实体内部业务方法的显式状态机版契约。
+///
+/// 适合“实体有明确状态流转”的场景。`state()` 用于显式暴露当前状态视图，便于把
+/// 状态校验和变化计算写成清晰的状态机逻辑。
+pub trait MiStateMachine: Clone + Debug + Send + Sync + 'static {
+    type Command;
+    type State;
+    type Error;
+    type Changes: ReplayableChanges;
+
+    fn state(&self) -> &Self::State;
+
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn validate_state_transition(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn compute_changes(&self, _cmd: &Self::Command) -> Result<Self::Changes, Self::Error>;
+}
+
+/// 可创建 MI 事实的显式状态机契约。
+///
+/// `MiStateMachine` 只表达“已有对象”的合法状态迁移；本 trait 用 `Option<Self>`
+/// 显式表达创建前后的对象存在性，避免把 `None -> Some` 的创建语义硬塞进已有对象状态机。
+pub trait MiCreationStateMachine: Clone + Debug + Send + Sync + 'static {
+    type Command;
+    type State;
+    type Error;
+    type Changes: ReplayableChanges;
+
+    fn state(before: &Option<Self>) -> Self::State;
+
+    fn pre_check_command(before: &Option<Self>, _cmd: &Self::Command) -> Result<(), Self::Error> {
+        let _ = before;
+        Ok(())
+    }
+
+    fn validate_state_transition(
+        before: &Option<Self>,
+        _cmd: &Self::Command,
+    ) -> Result<(), Self::Error> {
+        let _ = before;
+        Ok(())
+    }
+
+    fn compute_changes(
+        before: &Option<Self>,
+        _cmd: &Self::Command,
+    ) -> Result<Self::Changes, Self::Error>;
+}
+
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
@@ -271,6 +364,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     }
 
     /// 返回该实体类型是否是一条 MI 因果链的根事实类型。
+    /// 必须：当root=true时，必须补充该因果链根的业务方法 驱动状态演进，链根是因，内链内mi是果。
     #[inline]
     fn is_mi_chain_root() -> bool
     where
@@ -346,6 +440,13 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     }
 
     #[inline]
+    /// 从旧状态和当前状态生成单步实体版本更新事件。
+    ///
+    /// 该方法只表达同一个实体实例的一次 `version n -> n + 1` 更新，调用方必须保证
+    /// `old_state` 和 `self` 是同一实体，且当前版本正好是旧版本的下一版本。
+    ///
+    /// 如果 case-level changes 中的 before/after pair 跨越多步版本，不能直接用该方法投影；
+    /// 应从 changes 内部的有序事实记录、流水或 created records 投影出逐步 replay events。
     fn track_update_event_from(
         &self,
         old_state: &Self,
