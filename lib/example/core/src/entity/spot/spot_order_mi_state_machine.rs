@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
-use common_entity::{
-    Entity, EntityReplayableEvent, MiCreationStateMachine, MiStateMachine, ReplayableChanges,
-};
+use common_entity::{Entity, EntityReplayableEvent, MiStateMachine, ReplayableChanges};
 use thiserror::Error;
 
 use super::spot_order::{SpotOrder, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
 use super::spot_trade::SpotTrade;
 use crate::entity::Balance;
 use crate::entity::account::balance_ledger_entry::{
-    BalanceLedgerCommand, BalanceLedgerEntry, BalanceLedgerEntryCreationCommand,
-    BalanceLedgerEntryError, BalanceLedgerReason, SpotSettlementLeg,
+    BalanceLedgerCommand, BalanceLedgerEntry, BalanceLedgerEntryError, BalanceLedgerReason,
+    SpotSettlementLeg,
 };
 
 /// `SpotOrder` 的显式状态机命令。
@@ -483,13 +481,16 @@ fn derive_place_freeze_changes(
     }
 
     let entry_id = format!("balance-ledger:{}:{}", order.order_id, freeze_balance.entity_id());
-    let command = BalanceLedgerEntryCreationCommand {
+    let balance_command = BalanceLedgerCommand::Freeze { balance: freeze_balance.clone(), amount };
+    let draft_entry = BalanceLedgerEntry::draft_from_balance(
         entry_id,
-        balance_command: BalanceLedgerCommand::Freeze { balance: freeze_balance.clone(), amount },
-        reason: BalanceLedgerReason::FreezeForOrder { order_id: order.order_id.clone() },
-    };
-    let changes = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(&None, &command)
-        .map_err(map_balance_ledger_error)?;
+        freeze_balance,
+        balance_command.clone(),
+        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id.clone() },
+    )
+    .map_err(map_balance_ledger_error)?;
+    let changes =
+        draft_entry.compute_changes(&balance_command).map_err(map_balance_ledger_error)?;
     Ok((changes.updated_balance, changes.updated_entry.after))
 }
 
@@ -592,11 +593,16 @@ fn derive_place_matching_changes(
                 settlement_batch_id: input.settlement_batch_id.clone(),
                 leg,
             };
-            let changes = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
-                &None,
-                &BalanceLedgerEntryCreationCommand { entry_id, balance_command, reason },
+            let draft_entry = BalanceLedgerEntry::draft_from_balance(
+                entry_id,
+                balance_ledger_command_balance_ref(&balance_command),
+                balance_command.clone(),
+                reason,
             )
             .map_err(map_settlement_balance_ledger_error)?;
+            let changes = draft_entry
+                .compute_changes(&balance_command)
+                .map_err(map_settlement_balance_ledger_error)?;
             current_balances.insert(
                 changes.updated_balance.after.entity_id(),
                 changes.updated_balance.after.clone(),
@@ -651,6 +657,16 @@ fn current_balance_snapshot(
     current_balances.entry(initial.entity_id()).or_insert_with(|| initial.clone()).clone()
 }
 
+fn balance_ledger_command_balance_ref(command: &BalanceLedgerCommand) -> &Balance {
+    match command {
+        BalanceLedgerCommand::Freeze { balance, .. }
+        | BalanceLedgerCommand::Unfreeze { balance, .. }
+        | BalanceLedgerCommand::CreditAvailable { balance, .. }
+        | BalanceLedgerCommand::DebitAvailable { balance, .. }
+        | BalanceLedgerCommand::DebitFrozen { balance, .. } => balance,
+    }
+}
+
 fn validate_settlement_input_accounts(
     trade: &SpotTrade,
     input: &PlaceSpotOrderSettlementInput,
@@ -681,8 +697,7 @@ fn map_balance_ledger_error(error: BalanceLedgerEntryError) -> SpotOrderMiStateM
         | BalanceLedgerEntryError::InsufficientFrozenBalance
         | BalanceLedgerEntryError::AlreadyApplied
         | BalanceLedgerEntryError::InvalidStatusTransition
-        | BalanceLedgerEntryError::CommandMismatch
-        | BalanceLedgerEntryError::EntryAlreadyExists => {
+        | BalanceLedgerEntryError::CommandMismatch => {
             SpotOrderMiStateMachineError::BalanceLedgerCreationFailed
         }
     }
@@ -703,8 +718,7 @@ fn map_settlement_balance_ledger_error(
         BalanceLedgerEntryError::SnapshotMismatch
         | BalanceLedgerEntryError::AlreadyApplied
         | BalanceLedgerEntryError::InvalidStatusTransition
-        | BalanceLedgerEntryError::CommandMismatch
-        | BalanceLedgerEntryError::EntryAlreadyExists => {
+        | BalanceLedgerEntryError::CommandMismatch => {
             SpotOrderMiStateMachineError::SettlementInputMismatch
         }
     }
