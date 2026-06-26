@@ -36,36 +36,6 @@ impl FourColorArchetype {
     }
 }
 
-/// 实体上方法的主倾向分类。
-///
-/// 该分类承载建模治理中的 `allowed_methods_bias` 语义，用于表达实体更适合承载哪一类方法。
-/// 它不是排他性 allowlist，不替代 [`FourColorArchetype`]，也不参与 replay 事件编码、
-/// 实体类型码分配或持久化格式语义。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EntityMethodBias {
-    /// 尚未分类，作为旧实体和未治理实体的默认值。
-    Unclassified,
-    /// 主要适合承载业务行为、状态转换、约束校验方法。
-    ///
-    /// 这种实体仍然可以有 helper/query 方法。
-    Behavior,
-    /// 主要适合承载只读判断、派生计算、资格检查等 helper/query 方法。
-    ///
-    /// 这种实体可以有少量生命周期治理行为，但不应承载主流程状态迁移。
-    HelperQuery,
-}
-
-impl EntityMethodBias {
-    /// 返回稳定的方法倾向标签字符串。
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Unclassified => "unclassified",
-            Self::Behavior => "behavior",
-            Self::HelperQuery => "helper_query",
-        }
-    }
-}
-
 /// 实体的变更模型分类。
 ///
 /// 该分类描述实体状态如何随业务事件演进，以及它是否作为业务事实来源。
@@ -188,77 +158,6 @@ pub struct MiCausalSourceMetadata {
     pub source_role: &'static str,
 }
 
-/// 实体业务变更的最小回放契约。
-///
-/// `Changes` 是一次业务 case 产生的业务变化的唯一真相。实现方必须把同一个实体实例在本次
-/// case 中的修改合并成至多一个 before/after pair；该 pair 表达“本业务 case 开始时的状态
-/// -> 本业务 case 结束时的状态”，不能拆成多个中间步骤。
-///
-/// 对同一个实体实例，不允许在同一个 `Changes` 中重复创建多段 `UpdatedEntityPair` 来表达
-/// 中间状态。中间步骤、资金腿、流水、审计过程、撮合明细等应建模为 append-only facts、
-/// ledger records 或 created records，并由这些事实记录承载顺序和因果信息。
-///
-/// `to_replayable_events()` 可以基于 append-only records 投影出多条单步 replay events；
-/// 但这种投影能力不能反向放宽 `Changes` 的约束，也不能让同一个实体实例在 `Changes`
-/// 中被重复表达为多个 before/after pair。
-pub trait ReplayableChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError>;
-}
-
-/// 实体内部业务方法的显式状态机版契约。
-///
-/// 适合“实体有明确状态流转”的场景。`state()` 用于显式暴露当前状态视图，便于把
-/// 状态校验和变化计算写成清晰的状态机逻辑。
-pub trait MiStateMachine: Clone + Debug + Send + Sync + 'static {
-    type Command;
-    type State;
-    type Error;
-    type Changes: ReplayableChanges;
-
-    fn state(&self) -> &Self::State;
-
-    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn validate_state_transition(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn compute_changes(&self, _cmd: &Self::Command) -> Result<Self::Changes, Self::Error>;
-}
-
-/// 可创建 MI 事实的显式状态机契约。
-///
-/// `MiStateMachine` 只表达“已有对象”的合法状态迁移；本 trait 用 `Option<Self>`
-/// 显式表达创建前后的对象存在性，避免把 `None -> Some` 的创建语义硬塞进已有对象状态机。
-pub trait MiCreationStateMachine: Clone + Debug + Send + Sync + 'static {
-    type Command;
-    type State;
-    type Error;
-    type Changes: ReplayableChanges;
-
-    fn state(before: &Option<Self>) -> Self::State;
-
-    fn pre_check_command(before: &Option<Self>, _cmd: &Self::Command) -> Result<(), Self::Error> {
-        let _ = before;
-        Ok(())
-    }
-
-    fn validate_state_transition(
-        before: &Option<Self>,
-        _cmd: &Self::Command,
-    ) -> Result<(), Self::Error> {
-        let _ = before;
-        Ok(())
-    }
-
-    fn compute_changes(
-        before: &Option<Self>,
-        _cmd: &Self::Command,
-    ) -> Result<Self::Changes, Self::Error>;
-}
-
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
@@ -278,22 +177,6 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         FourColorArchetype::Unclassified
-    }
-
-    /// 返回实体上方法的主倾向。
-    ///
-    /// 默认值是 [`EntityMethodBias::Unclassified`]，用于兼容旧实体和未治理实体。
-    ///
-    /// 该元数据只用于领域模型治理、review 和 skill 输出，不改变 runtime、replay、
-    /// 实体类型码或持久化语义，也不自动限制实体上的方法定义。标注为
-    /// [`EntityMethodBias::Behavior`] 的实体仍然可以有 helper/query 方法；标注为
-    /// [`EntityMethodBias::HelperQuery`] 的实体也可以有少量生命周期治理行为。
-    #[inline]
-    fn allowed_methods_bias() -> EntityMethodBias
-    where
-        Self: Sized,
-    {
-        EntityMethodBias::Unclassified
     }
 
     /// 返回实体状态随业务事件演进的变更模型。
@@ -673,39 +556,6 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone)]
-    struct BehaviorEntity {
-        id: i64,
-        version: u64,
-    }
-
-    impl Entity for BehaviorEntity {
-        type Id = i64;
-
-        fn entity_id(&self) -> Self::Id {
-            self.id
-        }
-
-        fn entity_type() -> u8 {
-            14
-        }
-
-        fn allowed_methods_bias() -> EntityMethodBias
-        where
-            Self: Sized,
-        {
-            EntityMethodBias::Behavior
-        }
-
-        fn entity_version(&self) -> u64 {
-            self.version
-        }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
-    }
-
     #[test]
     fn entity_defaults_to_unclassified_four_color_archetype() {
         assert_eq!(TestEntity::four_color_archetype(), FourColorArchetype::Unclassified);
@@ -726,23 +576,6 @@ mod tests {
         assert_eq!(FourColorArchetype::Role.as_str(), "role");
         assert_eq!(FourColorArchetype::Description.as_str(), "description");
         assert_eq!(FourColorArchetype::Unclassified.as_str(), "unclassified");
-    }
-
-    #[test]
-    fn entity_defaults_to_unclassified_allowed_methods_bias() {
-        assert_eq!(TestEntity::allowed_methods_bias(), EntityMethodBias::Unclassified);
-    }
-
-    #[test]
-    fn entity_can_override_allowed_methods_bias() {
-        assert_eq!(BehaviorEntity::allowed_methods_bias(), EntityMethodBias::Behavior);
-    }
-
-    #[test]
-    fn entity_method_bias_returns_stable_business_label() {
-        assert_eq!(EntityMethodBias::Unclassified.as_str(), "unclassified");
-        assert_eq!(EntityMethodBias::Behavior.as_str(), "behavior");
-        assert_eq!(EntityMethodBias::HelperQuery.as_str(), "helper_query");
     }
 
     #[test]
