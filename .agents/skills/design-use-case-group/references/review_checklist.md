@@ -12,12 +12,14 @@ Use this rule instead:
 ## Core Review Definition
 
 Unified definition:
-- `端到端 MI 链 = 从主 MI 成立开始，经过合法推进与派生，一直到该 group 业务边界内最终落定事实的业务真相链`
+- `端到端 MI 因果链 = 从主 MI 成立开始，经过合法推进与派生，一直到该 group 业务边界内最终落定事实的业务真相链`
+- `end_to_end_mi_chain` is the output field for that `MI causal chain`.
 
 Unified anti-example expression:
-- `只到中间事实而未到最终落定事实的链，不算完整端到端 MI 链`
+- `只到中间事实而未到最终落定事实的链，不算完整端到端 MI 因果链`
 
 `end-to-end` here refers only to business truth boundaries.
+It means causal evidence closure, not a process flow, state transition list, or ordered object list.
 
 It does not mean:
 - HTTP chain
@@ -27,16 +29,18 @@ It does not mean:
 
 ## Checklist
 
-1. Is the chosen `business_truth_center` truly the main `Moment-Interval` or equivalent business truth center, instead of a command, field, balance value, or technical step?
-2. Has the main `Moment-Interval` chain been traced from its creation through legal progression and derivation?
+1. Is the chosen `business_truth_center` truly the main `Moment-Interval` or an explicitly justified equivalent business truth center, instead of a command, field, balance value, or technical step?
+2. Has the main `MI causal chain` been traced from its creation through legal progression and derivation?
 3. Has that chain been traced all the way to the final settled fact inside the declared `group_boundary`?
-4. Are secondary `Moment-Interval` values modeled as legal progression or derivation from the main chain, instead of being mixed in without boundary logic?
+4. Are secondary `Moment-Interval` values modeled as legal progression or derivation from the main chain, with predecessor facts and `caused_by` / `due_to` reasons, instead of being mixed in without boundary logic?
 5. Do the proposed `use_case` boundaries correspond to independent business meaning, rather than validator, persistence, publish, or executor steps?
 6. Is the declared `group_boundary` consistent with where the modeled chain actually stops?
+7. Does the model avoid treating `业务真相` / `business truth` as a directly persisted object? A persistence candidate should usually first be judged as a concrete `业务事实` / `business fact` or `MI`.
+8. Does the model separate append-only facts, identity-bearing `MI` / business fact objects, and mutable current-state views instead of calling all of them the same kind of fact?
 
 ## High-Priority Failure Rule
 
-If a group claims to cover a complete business loop, but its `Moment-Interval` chain stops at an intermediate fact and never reaches the final settled fact inside that boundary, the group is incomplete.
+If a group claims to cover a complete business loop, but its `MI causal chain` stops at an intermediate fact and never reaches the final settled fact inside that boundary, the group is incomplete.
 
 In that case, do one of these:
 - narrow the `group_boundary` honestly
@@ -47,7 +51,7 @@ In that case, do one of these:
 ### `Order` Matching Group
 
 If the boundary is only the matching loop, then:
-- `Order -> Trade` may already be a complete end-to-end `Moment-Interval` chain
+- `Order --[matching predicate, caused_by/due_to]--> Trade` may already be a complete end-to-end `MI causal chain`
 
 ### `Order` Fulfillment Group
 

@@ -1,29 +1,32 @@
 # MI 扩展判定与校准
 
-本文件是 [`moment_interval_definition.md`](./moment_interval_definition.md) 的扩展参考，专门处理 `MI` 识别深化、主次 `MI`、资金侧 `MI`、审计链、`settled fact`、`append-only` 留痕，以及 `MI -> entity` 的命名校准。
+本文件是 [`moment_interval_definition.md`](./moment_interval_definition.md) 的扩展参考，只回答三类问题：
+
+- 一个候选对象是不是 `MI`
+- 它在业务事实层更接近哪类 `MI`
+- 哪些事实必须 append-only 留痕
 
 基础定义与最小判定标准以 [`moment_interval_definition.md`](./moment_interval_definition.md) 为准；本文件不重复改写基础定义，也不单独放宽或改写其门槛。
 
 当任务涉及以下主题时，应在读完基础定义后继续读本文件：
 
 - `MI 识别` 的深化判断
-- `主 MI / 次级 MI`
-- `资金侧 MI`
-- `审计凭证型 MI`
-- `端到端 MI 链`
-- `settled fact`
-- `业务事实留痕`
+- `main_mi` / `secondary_mis`
+- 资金侧 `MI`
+- 审计凭证型 `MI`
 - 哪些事实必须 append-only
-- `MI -> entity` 后推荐业务名该怎么收敛
+- `MI` 与 `command` / `state` / `entity` / `aggregate` / `description` 的边界
+
+当任务涉及 `group_boundary`、`business_truth_center`、`final_settled_fact`、端到端链路闭合或何时拆成独立 `use case group` 时，继续阅读 [`use_case_group_boundary.md`](./use_case_group_boundary.md)。这些问题不由本文件承载。
 
 ## 适用范围与非目标
 
-本文件用于 `design-use-case-group` 及相关 skill 的概念校准，帮助判断：
+本文件用于 `design-use-case-group`、`review-mi-causal-chain` 及相关 skill 的概念校准，帮助判断：
 
 - 某个对象是否应作为独立 `MI`
-- 某条链上哪些事实必须单独留痕
-- 某个 `MI` 落成 `entity` 后该如何命名
-- 某个 group 是否真正走到了边界内的最终落定事实
+- 某个 `MI` 是主事实、派生事实、资金事实还是审计凭证事实
+- 某条业务事实是否必须 append-only 留痕
+- 某个候选对象为什么不是 `MI`
 
 本文件不是：
 
@@ -31,6 +34,8 @@
 - 事件命名规范总册
 - 事件溯源框架说明
 - 所有领域对象的通用分类手册
+- `use case group` 边界判断手册
+- `MI -> entity` 命名校准手册
 
 不要把 `MI` 泛化成“一切需要留痕的对象”。
 
@@ -42,7 +47,7 @@
 
 ### 独立身份不是否定派生关系
 
-很多次级 `MI` 都是由主 `MI` 推进后派生出来的。
+很多 `secondary_mis` 都是由 `main_mi` 推进后派生出来的。
 
 这里说“有自己的业务身份”，不是否定派生关系，而是强调：
 
@@ -77,7 +82,7 @@
 
 1. 一个 `command` 创建一个新的 `MI`
 2. 一个 `command` 推进一个已有 `MI`
-3. 一个 `command` 推进主 `MI`，同时派生一个次级 `MI`
+3. 一个 `command` 推进 `main_mi`，同时派生一个 `secondary_mi`
 
 如果某个东西只在命令入口有意义，进入业务事实层后并不作为独立真相存在，它就不是 `MI`。
 
@@ -113,56 +118,7 @@
 
 先判断“它是不是值得独立记住的业务事实”，再决定它在代码里怎么落。
 
-## `MI` 落成 `entity` 后的命名规则
-
-`MI` 首先是业务事实判断，其次才常常落成 `entity`。
-
-一旦某个 `MI` 被确认要落成 `entity`、聚合内核心对象，或独立审计事实对象，命名必须优先表达“业务上到底是什么对象”，而不是“系统对它做了什么动作”。
-
-命名顺序必须是：
-
-1. 先判定它是否为 `MI`
-2. 再判定它是否落成 `entity` / aggregate root / 聚合内核心对象
-3. 最后再命名
-
-不要倒过来因为一个名字“看起来像 entity”就把它误判成 `MI`。
-
-### 命名原则
-
-1. 把 `MI` 当成“值得独立命名的业务事实对象候选”，不是 command、step、技术动作或状态字段的别名。
-2. 命名优先使用业务主语、事实对象名、稳定名词。
-3. 不要用命令名、实现动作名、流程步骤名、技术事件名给 `MI` 命名。
-4. 如果对象表达“持续生命周期中的事实对象”，优先使用裸业务名或稳定名词。
-5. 如果对象表达“必须独立留痕的凭证/事件事实”，允许使用 `Event` / `Record` / `Execution` / `Transfer` / `Adjustment` 等业务后缀。
-6. 这些后缀必须表达事实形态，不得只是技术事件包装。
-
-### 正反例
-
-- `FundHold` 优于 `Freeze`
-- `Order` 优于 `PersistOrder`
-- `BankruptcyShortfallEvent` 优于 `CalculateShortfall`
-- `ADLDeleveragingRecord` 优于 `AdlStepItem`
-- `SettlementTransfer` 优于 `SettleBalance`
-- `InsuranceFundTransfer` 或 `InsuranceFundAdjustment` 优于 `InsuranceFundTx(SURPLUS | REPLENISH)`
-- `LiquidationExecution` 可以成立；`RunLiquidationStep2` 不行
-- `AvailableBalanceChanged` 这类状态字段式名字通常不应作为推荐业务名
-
-如果需要表达资金向保险基金回充或从保险基金拨付，优先保留业务对象名，再把差异收在文内字段说明里，例如：
-
-- `InsuranceFundTransfer`
-- `reason = Surplus | Replenish`
-
-### 后缀使用约束
-
-以下后缀只有在确实表达业务事实形态时才成立：
-
-- `Event`: 某个必须留痕、可引用、可追责的已发生事实
-- `Record`: 某个必须保留的审计凭证或结果留痕
-- `Execution`: 某个已执行并可独立核对的业务执行事实
-- `Transfer`: 某个资金或资产划拨事实
-- `Adjustment`: 某个需要独立记账和归因的余额或基金调整事实
-
-如果只是为了让名字“像个 entity”，不要机械追加这些后缀。
+本文件不提供 `MI -> entity` 命名校准规则。
 
 ## 与 `aggregate` 的边界
 
@@ -195,34 +151,36 @@
 
 这些都可能非常重要，但通常是 `Description`，不是 `MI`。
 
-## 主 `MI`
+## `main_mi`
 
-`主 MI` 是某个 `use case group` 的 `business_truth_center`。
+`main_mi` 是一组业务事实判断中最主要、最能承载合法演化空间的 `MI`。
 
-它负责回答：
+它通常负责回答：
 
 - 这一组业务动作究竟围绕谁的合法演化展开
-- 谁是这条业务真相链的起点锚
-- 谁定义了这一组 use case 的主要生命周期
+- 谁是业务事实链的起点锚
+- 谁定义了主要生命周期
 
 例子：
 
-- 交易下单链中，`Order` 常是主 `MI`
-- 清算链中，`LiquidationEvent` 常是主 `MI`
-- 资金保留链中，`FundHold` 常是主 `MI`
+- 交易下单链中，`Order` 常是 `main_mi`
+- 清算链中，`LiquidationEvent` 常是 `main_mi`
+- 资金保留链中，`FundHold` 常是 `main_mi`
 
-## 次级 `MI`
+`main_mi` 是否成为某个 `use case group` 的 `business_truth_center`，由 [`use_case_group_boundary.md`](./use_case_group_boundary.md) 判断。
 
-`次级 MI` 是由主 `MI` 推进过程中派生出来、但自身也具备独立业务事实意义的对象。
+## `secondary_mis`
 
-次级 `MI` 可以由主 `MI` 推进派生，但派生后必须具备可单独引用、单独留痕、单独复原的业务身份。
+`secondary_mis` 是由 `main_mi` 推进过程中派生出来、但自身也具备独立业务事实意义的对象。
+
+`secondary_mis` 可以由 `main_mi` 推进派生，但派生后必须具备可单独引用、单独留痕、单独复原的业务身份。
 
 它通常：
 
-- 被主 `MI` 引发
+- 被 `main_mi` 引发
 - 有独立身份
 - 有独立审计价值
-- 不一定与主 `MI` 属于同一个 group
+- 不一定与 `main_mi` 属于同一个 `use case group`
 
 例子：
 
@@ -232,7 +190,7 @@
 
 ## 资金侧 `MI`
 
-`资金侧 MI` 是专门承载资金占用、释放、划拨、结算、扣减、回充等事实的 `MI`。
+资金侧 `MI` 是专门承载资金占用、释放、划拨、结算、扣减、回充等事实的 `MI`。
 
 判断重点不是“它是不是动了余额”，而是：
 
@@ -247,17 +205,14 @@
 - `InsuranceFundTransfer`
 - `SettlementTransfer`
 
-其中 `InsuranceFundTransfer` 或 `InsuranceFundAdjustment` 更适合作为业务对象名；若需表达差异，应用 `reason`、`variant` 等字段说明 `Surplus` 或 `Replenish`。
-
 `available_balance`、`frozen_amount` 这类数值本身不是资金侧 `MI`。
 
 ## 审计凭证型 `MI`
 
-`审计凭证型 MI` 指那些即使生命周期不长，也必须以“独立凭证”形式存在的事实对象。
+审计凭证型 `MI` 指那些即使生命周期不长，也必须以“独立凭证”形式存在的事实对象。
 
 它们往往用于：
 
-- 争议处理
 - 外部仲裁
 - 财务核对
 - 合规留痕
@@ -271,67 +226,6 @@
 - `BankruptcyShortfallEvent`
 - `InsuranceFundDrawdownEvent`
 - `ADLDeleveragingRecord`
-
-## 端到端 `MI` 链设计法
-
-设计一条业务链时，不要只看 API 顺序，也不要只看 handler 调用图。
-
-应该按以下顺序建模：
-
-1. 先声明 `group_boundary`
-2. 找到该边界内的 `main_mi`
-3. 写出它从成立到闭环的合法推进路径
-4. 标出推进过程中派生出的 `secondary_mis`
-5. 标出哪些事实必须 append-only 留痕
-6. 标出这条边界内的 `final_settled_fact`
-7. 反查哪些对象只是步骤、字段、检查、状态值，不应冒充 `MI`
-
-### 具体问题模板
-
-对任意候选对象，都用下面的问题逼近：
-
-1. 它是不是这一组业务动作真正围绕的主语？
-2. 如果不是主语，它是否仍然构成必须独立留痕的次级事实？
-3. 如果没有它，争议时是否无法复原完整因果链？
-4. 它是一次独立凭证，还是主 `MI` 内部的一步状态推进？
-5. 它是否触发了新的授权、失败语义、审计语义、资金语义？
-6. 它是否应该拆出独立 `use case group`，还是仍留在主链内部？
-
-### 何时拆成独立 `use case group`
-
-当一个次级对象同时满足以下大部分条件时，通常应考虑拆组：
-
-1. 它有独立身份
-2. 它有独立生命周期
-3. 它有独立授权或失败语义
-4. 它有独立审计意义
-5. 业务会围绕它定义多种合法动作
-
-如果它只是主 `MI` 内部推进的一步，或只是为了完成主链闭环而产生的一次性子事实，则通常不必单独升格为 group center。
-
-## 最终 `settled fact` 的判定法
-
-`final_settled_fact` 不是固定名词，也不等于“最后一次数据库更新”。
-
-它是：
-
-- 在声明的 `group_boundary` 内
-- 这条业务真相链真正完成闭环后
-- 对业务来说可被认定为“已经落定”的最终事实
-
-判断方法：
-
-1. 问“如果链条停在这里，业务会不会认为这件事已经真正办完？”
-2. 问“此后还有没有必须继续推进才能成立的核心事实？”
-3. 问“外部争议/对账时，是否可以把这里当作该边界内的最终结论？”
-
-例子：
-
-- 仅下单边界里，`Order accepted/rejected/cancelled/filled` 可能已是 settled fact
-- `Order -> Trade -> Settlement` 的完整交易履约边界里，`Trade` 不是最终 settled fact，`Settlement` 才更接近
-- 清算边界里，如果声明覆盖到“缺口被 IF 或 ADL 处理完成”，那么 `LiquidationExecution` 不是最终 settled fact，`shortfall closed / adl resolved` 才是
-
-不要把“技术流程暂时结束”误判成 settled fact。
 
 ## 哪些事实必须 append-only 留痕
 
@@ -358,41 +252,30 @@
 - `quantity`
 - `status enum value`
 
-## 交易例子：`Order / Trade / Settlement`
+## 交易例子：`Order / Trade / FundHold`
 
-- `Order` 常是主 `MI`
-- `Trade` 常是次级 `MI`
-- 如果边界只到撮合完成，`Trade` 可能已是该边界内 settled fact
-- 如果边界声明覆盖完整履约，`Settlement` 才更接近最终 settled fact
+- `Order` 常是 `main_mi`
+- `Trade` 常是 `secondary_mi`
+- `FundHold` 常是资金侧 `MI`
+- `Order.status`、`Order.remaining_qty`、`Account.available_balance` 通常只是状态表达或派生视图
 
-不要因为 `Trade` 重要，就自动让它与 `Order` 共用同一个 group center。
+不要因为 `Trade` 重要，就自动让它与 `Order` 共用同一个 group center；group 边界另见 [`use_case_group_boundary.md`](./use_case_group_boundary.md)。
 
 ## 清算例子：`Liquidation / Shortfall / IF / ADL`
 
-这是一条典型的端到端 `MI` 链：
+在清算链路中：
 
-1. `LiquidationEvent` 成立
-2. 派生 `LiquidationExecution / Fill`
-3. 若执行价劣于破产价，派生 `BankruptcyShortfallEvent`
-4. 若需基金兜底，产生 `InsuranceFundDrawdownEvent`
-5. 若基金不足，产生 `ADLRound`
-6. 批次内产生多个 `ADLDeleveragingRecord`
-7. 必要时以 `InsuranceFundTransfer` 或 `InsuranceFundAdjustment` 收尾，`reason` 可为 `Replenish`
+- `LiquidationEvent` 常是 `main_mi`
+- `LiquidationExecution / Fill` 常是审计凭证型 `MI`
+- `BankruptcyShortfallEvent` 常是必须独立留痕的 `secondary_mi`
+- `InsuranceFundDrawdownEvent` 常是资金侧或审计凭证型 `MI`
+- `ADLRound`、`ADLDeleveragingRecord` 常是必须独立留痕的 `secondary_mi`
 
-这里：
+以下通常不是 `MI`：
 
-- `LiquidationEvent` 常是主 `MI`
-- `BankruptcyShortfallEvent`、`ADLRound`、`ADLDeleveragingRecord` 常是必须独立留痕的次级或凭证型 `MI`
-- `available_balance` 不是 `MI`
-- `CheckRisk` 不是 `MI`
-- `run_adl_step_3` 不是 `MI`
-
-如果声明的 group boundary 覆盖“缺口被彻底处理完成”，则最终 settled fact 更接近：
-
-- `shortfall fully covered`
-- 或 `adl resolved / exhausted with explicit result`
-
-而不是“刚触发强平”。
+- `available_balance`
+- `CheckRisk`
+- `run_adl_step_3`
 
 ## 资金冻结例子：`Freeze / FundHold / Balance`
 
@@ -411,24 +294,13 @@
 
 `Balance` 或 `available_balance` 通常只是状态快照或派生值，不是 `MI`。
 
-## 审计留痕校验问句
-
-做完建模后，用这组问句自检：
-
-1. 任意争议发生时，能否从主 `MI` 一路追到最终 settled fact？
-2. 链上的关键因果事实，是否都以 append-only 凭证存在？
-3. 是否有哪个对象只是状态字段，却被错误包装成 `MI`？
-4. 是否有哪个必须独立留痕的资金事实，被偷懒折叠进余额快照？
-5. 是否有哪个次级事实其实已具备独立身份与审计意义，却还被埋在主对象内部？
-
-如果这些问题答不稳，说明 `MI` 边界大概率还没建对。
-
 ## 输出约束
 
-当回答 `MI` 建模问题，且建议某个对象应升格为独立 `MI`、`entity` 或审计事实对象时，结果里应显式给出：
+当回答 `MI` 建模问题，且建议某个对象应升格为独立 `MI` 或审计事实对象时，结果里应显式给出：
 
-- `推荐业务名`
 - 它为什么是 `MI`
 - 它为什么不是 `command / step / 状态字段 / 技术节点`
-- 它在链上的角色：`main_mi`、`secondary_mi`、资金侧 `MI` 或审计凭证型 `MI`
-- 若相关，再补充它与 `final_settled_fact` 的关系
+- 它在事实层的角色：`main_mi`、`secondary_mi`、资金侧 `MI` 或审计凭证型 `MI`
+- 若相关，哪些事实必须 append-only 留痕
+
+不要在本文件的职责内输出 `group_boundary`、`business_truth_center` 或 `final_settled_fact` 的完整判断；这些内容应转到 [`use_case_group_boundary.md`](./use_case_group_boundary.md)。
