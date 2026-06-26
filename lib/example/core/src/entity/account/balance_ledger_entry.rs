@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, MiStateMachine,
-    ReplayableChanges,
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, MiCreationStateMachine,
+    MiStateMachine, ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,6 +23,21 @@ pub enum BalanceLedgerCommand {
     CreditAvailable { balance: Balance, amount: u64 },
     /// 扣减可用余额。
     DebitAvailable { balance: Balance, amount: u64 },
+    /// 扣减冻结余额，`available` 不变，`frozen` 减少。
+    DebitFrozen { balance: Balance, amount: u64 },
+}
+
+/// 创建余额流水事实的命令。
+///
+/// `balance_command` 是纯余额变更值对象；流水 ID 与原因只用于创建审计事实本身。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceLedgerEntryCreationCommand {
+    /// 流水记录 ID。
+    pub entry_id: String,
+    /// 余额侧变更动作。
+    pub balance_command: BalanceLedgerCommand,
+    /// 余额变更原因。
+    pub reason: BalanceLedgerReason,
 }
 
 fn balance_ledger_command_label(command: &BalanceLedgerCommand) -> &'static str {
@@ -31,6 +46,7 @@ fn balance_ledger_command_label(command: &BalanceLedgerCommand) -> &'static str 
         BalanceLedgerCommand::Unfreeze { .. } => "unfreeze",
         BalanceLedgerCommand::CreditAvailable { .. } => "credit_available",
         BalanceLedgerCommand::DebitAvailable { .. } => "debit_available",
+        BalanceLedgerCommand::DebitFrozen { .. } => "debit_frozen",
     }
 }
 
@@ -39,7 +55,8 @@ fn balance_ledger_command_amount(command: &BalanceLedgerCommand) -> u64 {
         BalanceLedgerCommand::Freeze { amount, .. }
         | BalanceLedgerCommand::Unfreeze { amount, .. }
         | BalanceLedgerCommand::CreditAvailable { amount, .. }
-        | BalanceLedgerCommand::DebitAvailable { amount, .. } => *amount,
+        | BalanceLedgerCommand::DebitAvailable { amount, .. }
+        | BalanceLedgerCommand::DebitFrozen { amount, .. } => *amount,
     }
 }
 
@@ -48,7 +65,8 @@ fn balance_ledger_command_balance(command: &BalanceLedgerCommand) -> &Balance {
         BalanceLedgerCommand::Freeze { balance, .. }
         | BalanceLedgerCommand::Unfreeze { balance, .. }
         | BalanceLedgerCommand::CreditAvailable { balance, .. }
-        | BalanceLedgerCommand::DebitAvailable { balance, .. } => balance,
+        | BalanceLedgerCommand::DebitAvailable { balance, .. }
+        | BalanceLedgerCommand::DebitFrozen { balance, .. } => balance,
     }
 }
 
@@ -102,6 +120,12 @@ fn apply_balance_ledger_command(
                 .debit_available_after(amount)
                 .ok_or(BalanceLedgerEntryError::InsufficientAvailableBalance)?;
             (next_available, balance.frozen)
+        }
+        BalanceLedgerCommand::DebitFrozen { .. } => {
+            let next_frozen = balance
+                .debit_frozen_after(amount)
+                .ok_or(BalanceLedgerEntryError::InsufficientFrozenBalance)?;
+            (balance.available, next_frozen)
         }
     };
 
@@ -160,6 +184,13 @@ fn infer_balance_ledger_command(
         });
     }
 
+    if after.available == before.available && after.frozen < before.frozen {
+        return Ok(BalanceLedgerCommand::DebitFrozen {
+            balance: before.clone(),
+            amount: before.frozen - after.frozen,
+        });
+    }
+
     Err(BalanceLedgerEntryError::SnapshotMismatch)
 }
 
@@ -179,6 +210,14 @@ fn inferred_balance_ledger_command(entry: &BalanceLedgerEntry) -> Option<Balance
         0,
     );
     infer_balance_ledger_command(&before, &after).ok()
+}
+
+fn same_balance_ledger_command_kind_and_amount(
+    lhs: &BalanceLedgerCommand,
+    rhs: &BalanceLedgerCommand,
+) -> bool {
+    balance_ledger_command_label(lhs) == balance_ledger_command_label(rhs)
+        && balance_ledger_command_amount(lhs) == balance_ledger_command_amount(rhs)
 }
 
 /// 余额流水状态。
@@ -224,6 +263,9 @@ pub enum BalanceLedgerEntryError {
     /// 传入命令与流水自身声明的命令不一致。
     #[error("balance ledger command does not match entry command")]
     CommandMismatch,
+    /// 创建态接口只允许从不存在的流水创建新事实。
+    #[error("balance ledger entry already exists")]
+    EntryAlreadyExists,
     /// 余额状态计算发生整数溢出。
     #[error("arithmetic overflow while deriving balance ledger transition")]
     ArithmeticOverflow,
@@ -250,6 +292,16 @@ impl ReplayableChanges for BalanceLedgerEntryMiChanges {
 /// 余额变更原因。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BalanceLedgerReason {
+    /// 订单下单冻结余额。
+    FreezeForOrder {
+        /// 触发本次余额冻结的订单 ID。
+        order_id: String,
+    },
+    /// 撤单释放冻结余额。
+    UnfreezeForCancel {
+        /// 被撤销订单 ID。
+        order_id: String,
+    },
     /// 立即单冻结余额。
     ReserveForImmediateOrder {
         /// 触发本次余额冻结的订单 ID。
@@ -293,6 +345,17 @@ pub enum BalanceLedgerReason {
         /// 本次余额变化对应的 settlement id 列表。
         settlement_ids: Vec<String>,
     },
+    /// 现货成交同步清结算的单条资金腿流水。
+    SettleSpotTrade {
+        /// 本次流水对应的成交 ID。
+        trade_id: String,
+        /// 本次流水对应的撮合批次 ID。
+        match_id: String,
+        /// 本次流水所属清结算批次 ID。
+        settlement_batch_id: String,
+        /// 本次流水表达的清结算资金腿。
+        leg: SpotSettlementLeg,
+    },
     /// perp funding 结算按账户聚合后的保证金余额流水。
     SettlePerpFunding {
         /// 资金费批次 ID。
@@ -304,10 +367,37 @@ pub enum BalanceLedgerReason {
     },
 }
 
+/// 现货成交清结算的一条资金腿。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotSettlementLeg {
+    /// 买方收到 base。
+    BuyerReceiveBase,
+    /// 买方扣减已冻结 quote。
+    BuyerDebitFrozenQuote,
+    /// 卖方收到 quote。
+    SellerReceiveQuote,
+    /// 卖方扣减已冻结 base。
+    SellerDebitFrozenBase,
+}
+
+impl SpotSettlementLeg {
+    /// 返回稳定资金腿编码。
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::BuyerReceiveBase => "buyer_receive_base",
+            Self::BuyerDebitFrozenQuote => "buyer_debit_frozen_quote",
+            Self::SellerReceiveQuote => "seller_receive_quote",
+            Self::SellerDebitFrozenBase => "seller_debit_frozen_base",
+        }
+    }
+}
+
 impl BalanceLedgerReason {
     /// 返回稳定原因编码，供 replay event / 审计查询使用。
     pub const fn as_str(&self) -> &'static str {
         match self {
+            Self::FreezeForOrder { .. } => "freeze_for_order",
+            Self::UnfreezeForCancel { .. } => "unfreeze_for_cancel",
             Self::ReserveForImmediateOrder { .. } => "reserve_for_immediate_order",
             Self::CancelSpotOrderReleaseQuote { .. } => "cancel_spot_order_release_quote",
             Self::CancelSpotOrderReleaseBase { .. } => "cancel_spot_order_release_base",
@@ -321,6 +411,7 @@ impl BalanceLedgerReason {
             Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => {
                 "settle_spot_trade_seller_release_frozen_base"
             }
+            Self::SettleSpotTrade { .. } => "settle_spot_trade",
             Self::SettlePerpFunding { .. } => "settle_perp_funding",
         }
     }
@@ -328,13 +419,16 @@ impl BalanceLedgerReason {
     /// 返回关联订单 ID；非下单冻结场景返回 `None`。
     pub fn order_id(&self) -> Option<&str> {
         match self {
-            Self::ReserveForImmediateOrder { order_id }
+            Self::FreezeForOrder { order_id }
+            | Self::UnfreezeForCancel { order_id }
+            | Self::ReserveForImmediateOrder { order_id }
             | Self::CancelSpotOrderReleaseQuote { order_id }
             | Self::CancelSpotOrderReleaseBase { order_id } => Some(order_id.as_str()),
             Self::SettleSpotTradeBuyerReceiveBase { .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
             | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
+            | Self::SettleSpotTrade { .. }
             | Self::SettlePerpFunding { .. } => None,
         }
     }
@@ -342,10 +436,13 @@ impl BalanceLedgerReason {
     /// 返回关联 trade id 列表；非成交清结算场景返回空切片。
     pub fn trade_ids(&self) -> &[String] {
         match self {
-            Self::ReserveForImmediateOrder { .. }
+            Self::FreezeForOrder { .. }
+            | Self::UnfreezeForCancel { .. }
+            | Self::ReserveForImmediateOrder { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettlePerpFunding { .. } => &[],
+            Self::SettleSpotTrade { trade_id, .. } => std::slice::from_ref(trade_id),
             Self::SettleSpotTradeBuyerReceiveBase { trade_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { trade_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { trade_ids, .. }
@@ -356,9 +453,12 @@ impl BalanceLedgerReason {
     /// 返回关联 settlement id 列表；非成交清结算场景返回空切片。
     pub fn settlement_ids(&self) -> &[String] {
         match self {
-            Self::ReserveForImmediateOrder { .. }
+            Self::FreezeForOrder { .. }
+            | Self::UnfreezeForCancel { .. }
+            | Self::ReserveForImmediateOrder { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
-            | Self::CancelSpotOrderReleaseBase { .. } => &[],
+            | Self::CancelSpotOrderReleaseBase { .. }
+            | Self::SettleSpotTrade { .. } => &[],
             Self::SettleSpotTradeBuyerReceiveBase { settlement_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { settlement_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { settlement_ids, .. }
@@ -371,13 +471,32 @@ impl BalanceLedgerReason {
     pub fn funding_batch_id(&self) -> Option<&str> {
         match self {
             Self::SettlePerpFunding { funding_batch_id, .. } => Some(funding_batch_id.as_str()),
-            Self::ReserveForImmediateOrder { .. }
+            Self::FreezeForOrder { .. }
+            | Self::UnfreezeForCancel { .. }
+            | Self::ReserveForImmediateOrder { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTradeBuyerReceiveBase { .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
-            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => None,
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
+            | Self::SettleSpotTrade { .. } => None,
+        }
+    }
+
+    /// 返回 settlement batch id；非现货成交资金腿场景返回 `None`。
+    pub fn settlement_batch_id(&self) -> Option<&str> {
+        match self {
+            Self::SettleSpotTrade { settlement_batch_id, .. } => Some(settlement_batch_id.as_str()),
+            _ => None,
+        }
+    }
+
+    /// 返回结算资金腿；非现货成交资金腿场景返回 `None`。
+    pub fn settlement_leg(&self) -> Option<SpotSettlementLeg> {
+        match self {
+            Self::SettleSpotTrade { leg, .. } => Some(*leg),
+            _ => None,
         }
     }
 
@@ -385,13 +504,16 @@ impl BalanceLedgerReason {
     pub fn position_ids(&self) -> &[String] {
         match self {
             Self::SettlePerpFunding { position_ids, .. } => position_ids,
-            Self::ReserveForImmediateOrder { .. }
+            Self::FreezeForOrder { .. }
+            | Self::UnfreezeForCancel { .. }
+            | Self::ReserveForImmediateOrder { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTradeBuyerReceiveBase { .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
-            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. } => &[],
+            | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
+            | Self::SettleSpotTrade { .. } => &[],
         }
     }
 }
@@ -530,6 +652,12 @@ impl BalanceLedgerEntry {
         {
             return Err(BalanceLedgerEntryError::CommandMismatch);
         }
+        if inferred_balance_ledger_command(self)
+            .as_ref()
+            .is_some_and(|expected| !same_balance_ledger_command_kind_and_amount(expected, command))
+        {
+            return Err(BalanceLedgerEntryError::CommandMismatch);
+        }
 
         let expected = apply_balance_ledger_command(command)?;
         if expected.available != self.after_available || expected.frozen != self.after_frozen {
@@ -555,6 +683,62 @@ impl BalanceLedgerEntry {
             && self.after_available == updated_balance.after.available
             && self.after_frozen == updated_balance.after.frozen
             && self.is_applied()
+    }
+}
+
+impl MiCreationStateMachine for BalanceLedgerEntry {
+    type Command = BalanceLedgerEntryCreationCommand;
+    type State = Option<BalanceLedgerEntryStatus>;
+    type Error = BalanceLedgerEntryError;
+    type Changes = BalanceLedgerEntryMiChanges;
+
+    fn state(before: &Option<Self>) -> Self::State {
+        before.as_ref().map(|entry| entry.status)
+    }
+
+    fn pre_check_command(before: &Option<Self>, cmd: &Self::Command) -> Result<(), Self::Error> {
+        if before.is_some() {
+            return Err(BalanceLedgerEntryError::EntryAlreadyExists);
+        }
+        if balance_ledger_command_amount(&cmd.balance_command) == 0 {
+            return Err(BalanceLedgerEntryError::InvalidAmount);
+        }
+        Ok(())
+    }
+
+    fn validate_state_transition(
+        before: &Option<Self>,
+        cmd: &Self::Command,
+    ) -> Result<(), Self::Error> {
+        <Self as MiCreationStateMachine>::pre_check_command(before, cmd)?;
+        let _ = apply_balance_ledger_command(&cmd.balance_command)?;
+        Ok(())
+    }
+
+    fn compute_changes(
+        before: &Option<Self>,
+        cmd: &Self::Command,
+    ) -> Result<Self::Changes, Self::Error> {
+        <Self as MiCreationStateMachine>::validate_state_transition(before, cmd)?;
+
+        let balance_before = balance_ledger_command_balance(&cmd.balance_command).clone();
+        let balance_after = apply_balance_ledger_command(&cmd.balance_command)?;
+        let entry_after = BalanceLedgerEntry::from_transition(
+            cmd.entry_id.clone(),
+            balance_before.account_id.clone(),
+            balance_before.asset_id.clone(),
+            balance_before.entity_id(),
+            balance_before.available,
+            balance_before.frozen,
+            balance_after.available,
+            balance_after.frozen,
+            cmd.reason.clone(),
+        )?;
+
+        Ok(BalanceLedgerEntryMiChanges {
+            updated_entry: UpdatedEntityPair { before: entry_after.clone(), after: entry_after },
+            updated_balance: UpdatedEntityPair { before: balance_before, after: balance_after },
+        })
     }
 }
 
@@ -590,6 +774,12 @@ impl MiStateMachine for BalanceLedgerEntry {
                 0,
             );
             if !same_balance_business_snapshot(balance_ledger_command_balance(cmd), &before_balance)
+            {
+                return Err(BalanceLedgerEntryError::CommandMismatch);
+            }
+            if inferred_balance_ledger_command(self)
+                .as_ref()
+                .is_some_and(|expected| !same_balance_ledger_command_kind_and_amount(expected, cmd))
             {
                 return Err(BalanceLedgerEntryError::CommandMismatch);
             }
@@ -678,6 +868,16 @@ impl Entity for BalanceLedgerEntry {
                 "",
                 self.reason.funding_batch_id().unwrap_or_default(),
             ),
+            EntityFieldChange::new(
+                "reason_settlement_batch_id",
+                "",
+                self.reason.settlement_batch_id().unwrap_or_default(),
+            ),
+            EntityFieldChange::new(
+                "reason_settlement_leg",
+                "",
+                self.reason.settlement_leg().map(|leg| leg.as_str()).unwrap_or_default(),
+            ),
             EntityFieldChange::new("reason_position_ids", "", self.reason.position_ids().join(",")),
         ]
     }
@@ -700,6 +900,8 @@ impl Entity for BalanceLedgerEntry {
             | "reason_trade_ids"
             | "reason_settlement_ids"
             | "reason_funding_batch_id"
+            | "reason_settlement_batch_id"
+            | "reason_settlement_leg"
             | "reason_position_ids" => 0,
             "before_available" | "before_frozen" | "after_available" | "after_frozen" => 1,
             _ => 0,
@@ -721,7 +923,7 @@ fn stable_balance_ledger_entry_id(value: &str) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{Entity, MiStateMachine, ReplayableChanges};
+    use common_entity::{Entity, MiCreationStateMachine, MiStateMachine, ReplayableChanges};
 
     use super::*;
 
@@ -738,6 +940,27 @@ mod tests {
 
     fn debit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
         BalanceLedgerCommand::DebitAvailable { balance: balance.clone(), amount }
+    }
+
+    fn unfreeze_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
+        BalanceLedgerCommand::Unfreeze { balance: balance.clone(), amount }
+    }
+
+    fn credit_command(balance: &Balance, amount: u64) -> BalanceLedgerCommand {
+        BalanceLedgerCommand::CreditAvailable { balance: balance.clone(), amount }
+    }
+
+    fn creation_command(
+        entry_id: &str,
+        balance_command: BalanceLedgerCommand,
+    ) -> BalanceLedgerEntryCreationCommand {
+        BalanceLedgerEntryCreationCommand {
+            entry_id: entry_id.to_string(),
+            balance_command,
+            reason: BalanceLedgerReason::ReserveForImmediateOrder {
+                order_id: "order-1".to_string(),
+            },
+        }
     }
 
     #[test]
@@ -978,5 +1201,96 @@ mod tests {
         ));
 
         assert_eq!(result, Err(BalanceLedgerEntryError::SnapshotMismatch));
+    }
+
+    #[test]
+    fn creation_state_machine_creates_applied_freeze_entry_and_balance_change() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
+        let command = creation_command("ledger-freeze-1", freeze_command(&balance, 200));
+
+        let changes =
+            <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(&None, &command)
+                .unwrap();
+
+        assert_eq!(changes.updated_balance.before, balance);
+        assert_eq!(changes.updated_balance.after.available, 800);
+        assert_eq!(changes.updated_balance.after.frozen, 200);
+        assert_eq!(changes.updated_entry.after.entry_id, "ledger-freeze-1");
+        assert_eq!(changes.updated_entry.after.status, BalanceLedgerEntryStatus::Applied);
+        assert_eq!(changes.updated_entry.after.before_available, 1_000);
+        assert_eq!(changes.updated_entry.after.after_available, 800);
+
+        let events = changes.to_replayable_events().unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(events[0].is_updated());
+        assert!(events[1].is_created());
+    }
+
+    #[test]
+    fn creation_state_machine_creates_unfreeze_credit_and_debit_entries() {
+        let frozen = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 3);
+        let credited = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 0, 3);
+        let debited = Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 0, 3);
+
+        let unfreeze = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &None,
+            &creation_command("ledger-unfreeze-1", unfreeze_command(&frozen, 200)),
+        )
+        .unwrap();
+        let credit = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &None,
+            &creation_command("ledger-credit-1", credit_command(&credited, 50)),
+        )
+        .unwrap();
+        let debit = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &None,
+            &creation_command("ledger-debit-1", debit_command(&debited, 50)),
+        )
+        .unwrap();
+
+        assert_eq!(unfreeze.updated_balance.after.available, 1_000);
+        assert_eq!(unfreeze.updated_balance.after.frozen, 0);
+        assert_eq!(credit.updated_balance.after.available, 850);
+        assert_eq!(credit.updated_balance.after.frozen, 0);
+        assert_eq!(debit.updated_balance.after.available, 750);
+        assert_eq!(debit.updated_balance.after.frozen, 0);
+        assert!(unfreeze.updated_entry.after.is_applied());
+        assert!(credit.updated_entry.after.is_applied());
+        assert!(debit.updated_entry.after.is_applied());
+    }
+
+    #[test]
+    fn creation_state_machine_rejects_invalid_amount_and_insufficient_balance() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 0, 3);
+
+        let zero = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &None,
+            &creation_command("ledger-zero-1", freeze_command(&balance, 0)),
+        );
+        let insufficient = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &None,
+            &creation_command("ledger-insufficient-1", freeze_command(&balance, 200)),
+        );
+
+        assert_eq!(zero, Err(BalanceLedgerEntryError::InvalidAmount));
+        assert_eq!(insufficient, Err(BalanceLedgerEntryError::InsufficientAvailableBalance));
+    }
+
+    #[test]
+    fn creation_state_machine_rejects_existing_entry() {
+        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
+        let command = creation_command("ledger-freeze-1", freeze_command(&balance, 200));
+        let existing =
+            <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(&None, &command)
+                .unwrap()
+                .updated_entry
+                .after;
+
+        let result = <BalanceLedgerEntry as MiCreationStateMachine>::compute_changes(
+            &Some(existing),
+            &command,
+        );
+
+        assert_eq!(result, Err(BalanceLedgerEntryError::EntryAlreadyExists));
     }
 }
