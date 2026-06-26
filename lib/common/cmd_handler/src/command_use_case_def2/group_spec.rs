@@ -34,7 +34,6 @@ pub struct MiCausalChainSpec {
     pub invariants: &'static [MiInvariantSpec],
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiSpec {
     /// MI 的名称
