@@ -26,7 +26,7 @@ pub use use_case::{
     UseCaseOutput, UseCaseReplyMapper, UseCaseReplyMapper3,
 };
 pub use use_case5::{CommandUseCase5, MainMiAuthoritativeTruth, MainMiChanges};
-pub use use_case6::{CommandUseCase6, MainMiStatefulChanges};
+pub use use_case6::{CommandUseCase6, CommandWithGivenState, MainMiStatefulChanges};
 
 use crate::HandlerLatencyMetrics;
 

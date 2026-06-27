@@ -1,5 +1,10 @@
 use super::{IssuedByParty, MainMiChanges};
 
+/// 命令自己声明执行该命令所需的 GivenState 类型。
+pub trait CommandWithGivenState {
+    type GivenState;
+}
+
 /// V6 changes 在 V5 authoritative truth 之外，
 /// 还必须显式暴露主 MI 当前状态与稳定命令分支名。
 pub trait MainMiStatefulChanges: MainMiChanges {
@@ -20,8 +25,7 @@ pub trait MainMiStatefulChanges: MainMiChanges {
 /// 三者分支必须在 `compute_changes(cmd, state)` 内显式匹配，
 /// 分支错配时必须返回明确业务错误。
 pub trait CommandUseCase6: Send + Sync {
-    type Command: IssuedByParty;
-    type GivenState;
+    type Command: IssuedByParty + CommandWithGivenState;
     type Error: std::error::Error;
     type Changes: MainMiStatefulChanges;
 
@@ -43,7 +47,7 @@ pub trait CommandUseCase6: Send + Sync {
     fn validate_against_state(
         &self,
         _cmd: &Self::Command,
-        _state: &Self::GivenState,
+        _state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -52,6 +56,6 @@ pub trait CommandUseCase6: Send + Sync {
     fn compute_changes(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
+        state: <Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::Changes, Self::Error>;
 }

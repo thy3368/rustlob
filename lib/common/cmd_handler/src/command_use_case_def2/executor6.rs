@@ -5,8 +5,8 @@ use super::trace::{
 };
 use super::{
     CommandEnvelope, CommandMeta, CommandUseCase6, CommandUseCaseExecutionError,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, MainMiChanges,
-    MainMiStatefulChanges, ObserveHandlerLatency, ReplayableChanges, UseCaseChanges,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, CommandWithGivenState, EventProjectError,
+    MainMiChanges, MainMiStatefulChanges, ObserveHandlerLatency, ReplayableChanges, UseCaseChanges,
     UseCaseReplyMapper,
 };
 use crate::HandlerLatencyMetrics;
@@ -22,7 +22,10 @@ impl CommandUseCaseExecutor6 {
         O: ?Sized
             + Send
             + Sync
-            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+            + CommandUseCaseOutbound<
+                Command = U::Command,
+                State = <U::Command as CommandWithGivenState>::GivenState,
+            >,
         O::Error: 'static,
     {
         if !tracing::enabled!(tracing::Level::TRACE) {
@@ -130,7 +133,10 @@ impl CommandUseCaseExecutor6 {
         OB: ?Sized
             + Send
             + Sync
-            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+            + CommandUseCaseOutbound<
+                Command = U::Command,
+                State = <U::Command as CommandWithGivenState>::GivenState,
+            >,
         O: ?Sized + ObserveHandlerLatency,
         OB::Error: 'static,
     {
@@ -285,7 +291,10 @@ impl CommandUseCaseExecutor6 {
         OB: ?Sized
             + Send
             + Sync
-            + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
+            + CommandUseCaseOutbound<
+                Command = U::Command,
+                State = <U::Command as CommandWithGivenState>::GivenState,
+            >,
         O: ?Sized + ObserveHandlerLatency,
         M: UseCaseReplyMapper,
         OB::Error: 'static,

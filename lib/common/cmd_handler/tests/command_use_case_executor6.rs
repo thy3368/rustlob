@@ -5,8 +5,9 @@ use cmd_handler::HandlerLatencyMetrics;
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase6, CommandUseCaseExecutionError,
     CommandUseCaseExecutor6, CommandUseCaseOutbound, CommandUseCaseOutboundPhase,
-    EventProjectError, IssuedByParty, MainMiAuthoritativeTruth, MainMiChanges,
-    MainMiStatefulChanges, ObserveHandlerLatency, ReplayableChanges, UpdatedEntityPair,
+    CommandWithGivenState, EventProjectError, IssuedByParty, MainMiAuthoritativeTruth,
+    MainMiChanges, MainMiStatefulChanges, ObserveHandlerLatency, ReplayableChanges,
+    UpdatedEntityPair,
 };
 use common_entity::{Entity, EntityFieldChange, EntityReplayableEvent};
 
@@ -24,6 +25,10 @@ impl IssuedByParty for StubCommand {
             Self::Place { party_id, .. } | Self::Cancel { party_id, .. } => Some(party_id.as_str()),
         }
     }
+}
+
+impl CommandWithGivenState for StubCommand {
+    type GivenState = StubGivenState;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,7 +213,6 @@ impl Default for StubUseCase6 {
 
 impl CommandUseCase6 for StubUseCase6 {
     type Command = StubCommand;
-    type GivenState = StubGivenState;
     type Error = StubBusinessError;
     type Changes = StubChanges;
 
@@ -234,7 +238,7 @@ impl CommandUseCase6 for StubUseCase6 {
     fn validate_against_state(
         &self,
         _cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<(), Self::Error> {
         if matches!(state, StubGivenState::Existing { reject_in_validate: true, .. }) {
             return Err(StubBusinessError::RejectedInValidate);
@@ -245,7 +249,7 @@ impl CommandUseCase6 for StubUseCase6 {
     fn compute_changes(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
+        state: <Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         match (cmd, state) {
             (StubCommand::Place { order_id, .. }, StubGivenState::Missing) => {
