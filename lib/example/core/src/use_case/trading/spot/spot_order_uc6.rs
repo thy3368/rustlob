@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::{
     CommandUseCase6, CommandWithGivenState, Entity, EntityReplayableEvent, EventProjectError,
-    IssuedByParty, MainMiStatefulChanges, MainMiTruth, MiStateMachineOwned, ReplayableChanges,
-    UpdatedEntityPair,
+    IssuedByParty, MiStateMachineOwned, ReplayableChanges, UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -164,63 +163,6 @@ impl ReplayableChanges for SpotOrderUc6Changes {
         match self {
             Self::Place(changes) => changes.to_replayable_events(),
             Self::Cancel(changes) => changes.to_replayable_events(),
-        }
-    }
-}
-
-impl MainMiStatefulChanges for PlaceSpotOrderUc6Changes {
-    type MainMi = SpotOrder;
-
-    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
-        Some(MainMiTruth::Updated(&self.updated_taker_order))
-    }
-
-    fn command_kind(&self) -> &'static str {
-        "place"
-    }
-
-    fn main_mi_current_state(&self) -> Option<&str> {
-        Some(self.updated_taker_order.after.status.as_str())
-    }
-}
-
-impl MainMiStatefulChanges for CancelSpotOrderUc6Changes {
-    type MainMi = SpotOrder;
-
-    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
-        Some(MainMiTruth::Updated(&self.updated_order))
-    }
-
-    fn command_kind(&self) -> &'static str {
-        "cancel"
-    }
-
-    fn main_mi_current_state(&self) -> Option<&str> {
-        Some(self.updated_order.after.status.as_str())
-    }
-}
-
-impl MainMiStatefulChanges for SpotOrderUc6Changes {
-    type MainMi = SpotOrder;
-
-    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
-        match self {
-            Self::Place(changes) => changes.main_mi_truth(),
-            Self::Cancel(changes) => changes.main_mi_truth(),
-        }
-    }
-
-    fn command_kind(&self) -> &'static str {
-        match self {
-            Self::Place(changes) => changes.command_kind(),
-            Self::Cancel(changes) => changes.command_kind(),
-        }
-    }
-
-    fn main_mi_current_state(&self) -> Option<&str> {
-        match self {
-            Self::Place(changes) => changes.main_mi_current_state(),
-            Self::Cancel(changes) => changes.main_mi_current_state(),
         }
     }
 }
@@ -815,9 +757,8 @@ mod tests {
     use std::sync::Mutex;
 
     use common_entity::{
-        CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor6,
-        CommandUseCaseOutbound, CommandUseCaseOutboundPhase, HandlerLatencyMetrics,
-        ObserveHandlerLatency,
+        CommandEnvelope, CommandMeta, CommandUseCaseExecutor6, CommandUseCaseOutbound,
+        CommandUseCaseOutboundPhase, HandlerLatencyMetrics, ObserveHandlerLatency,
     };
 
     use super::*;
@@ -941,14 +882,6 @@ mod tests {
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.updated_balances.len(), 4);
         assert_eq!(changes.created_ledger_entries.len(), 6);
-        assert_eq!(changes.command_kind(), "place");
-        match changes.main_mi_truth() {
-            Some(MainMiTruth::Updated(pair)) => {
-                assert_eq!(pair.after.status, SpotOrderStatus::Filled)
-            }
-            other => panic!("unexpected main MI truth: {other:?}"),
-        }
-        assert_eq!(changes.main_mi_current_state(), Some("filled"));
         assert_eq!(events.len(), 15);
         assert_eq!(event_field(&events[0], "status"), Some("filled"));
         assert_eq!(event_field(&events[1], "trade_id"), Some("match-1-1"));
@@ -1060,14 +993,6 @@ mod tests {
                 order_id: changes.updated_order.after.order_id.clone(),
             }
         );
-        assert_eq!(changes.command_kind(), "cancel");
-        match changes.main_mi_truth() {
-            Some(MainMiTruth::Updated(pair)) => {
-                assert_eq!(pair.after.status, SpotOrderStatus::Canceled)
-            }
-            other => panic!("unexpected main MI truth: {other:?}"),
-        }
-        assert_eq!(changes.main_mi_current_state(), Some("canceled"));
         assert_eq!(events.len(), 3);
         assert_eq!(event_field(&events[0], "status"), Some("canceled"));
         assert_eq!(event_field(&events[2], "reason"), Some("unfreeze_for_cancel"));
@@ -1212,7 +1137,6 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(result.changes.command_kind(), "place");
         assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
         assert_eq!(observer.observed.lock().unwrap().len(), 1);
         assert!(!result.events.is_empty());
@@ -1236,7 +1160,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(result.changes.command_kind(), "cancel");
+        assert!(!result.events.is_empty());
         assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
     }
 
@@ -1246,22 +1170,6 @@ mod tests {
     impl ReplayableChanges for BrokenChanges {
         fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
             self.0.to_replayable_events()
-        }
-    }
-
-    impl MainMiStatefulChanges for BrokenChanges {
-        type MainMi = SpotOrder;
-
-        fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
-            self.0.main_mi_truth()
-        }
-
-        fn command_kind(&self) -> &'static str {
-            ""
-        }
-
-        fn main_mi_current_state(&self) -> Option<&str> {
-            self.0.main_mi_current_state()
         }
     }
 
@@ -1300,25 +1208,22 @@ mod tests {
     }
 
     #[test]
-    fn executor6_rejects_event_projection_contract_violation() {
+    fn executor6_accepts_replayable_changes_without_main_mi_metadata() {
         let executor = CommandUseCaseExecutor6;
         let outbound = StubOutbound::new(place_state_with_one_maker());
         let observer = StubObserver::default();
 
-        let result = executor.execute(
-            &BrokenUseCase,
-            CommandEnvelope { meta: CommandMeta::default(), command: place_cmd() },
-            &outbound,
-            &observer,
-        );
+        let result = executor
+            .execute(
+                &BrokenUseCase,
+                CommandEnvelope { meta: CommandMeta::default(), command: place_cmd() },
+                &outbound,
+                &observer,
+            )
+            .unwrap();
 
-        assert_eq!(
-            result,
-            Err(CommandUseCaseExecutionError::EventProject(EventProjectError::Custom(
-                "missing command_kind for main MI stateful changes".to_string()
-            )))
-        );
-        assert_eq!(outbound.calls(), vec!["load_state"]);
+        assert_eq!(result.events.len(), 15);
+        assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
     }
 
     #[test]
