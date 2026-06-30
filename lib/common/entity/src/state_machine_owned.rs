@@ -1,6 +1,27 @@
 use std::fmt::Debug;
 
-use crate::{Entity, EntityError, EntityReplayableEvent, ReplayableChanges};
+use crate::{Entity, EntityError, EntityReplayableEvent};
+
+/// 实体业务变更的最小回放契约。
+///
+/// `Changes` 是一次业务 case 产生的业务变化的唯一真相。实现方必须把同一个实体实例在本次
+/// case 中的修改合并成至多一个 before/after pair；该 pair 表达“本业务 case 开始时的状态
+/// -> 本业务 case 结束时的状态”，不能拆成多个中间步骤。
+///
+/// 对同一个实体实例，不允许在同一个 `Changes` 中重复创建多段 `UpdatedEntityPair` 来表达
+/// 中间状态。中间步骤、资金腿、流水、审计过程、撮合明细等应建模为 append-only facts、
+/// ledger records 或 created records，并由这些事实记录承载顺序和因果信息。
+///
+/// `to_replayable_events()` 可以基于 append-only records 投影出多条单步 replay events；
+/// 但这种投影能力不能反向放宽 `Changes` 的约束，也不能让同一个实体实例在 `Changes`
+/// 中被重复表达为多个 before/after pair。
+///
+/// 本 trait 只服务 owned changes：调用方拿到的是稳定快照，可继续做 replay、持久化、diff
+/// 或 outbound publish。借用型 changes 不应默认实现本 trait；如果某条链路之后确实要落库，
+/// 必须由上层显式 materialize 成 owned changes。
+pub trait ReplayableChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError>;
+}
 
 /// owned 实体变更：只暴露本次业务结果的 after 快照。
 ///
@@ -11,63 +32,84 @@ use crate::{Entity, EntityError, EntityReplayableEvent, ReplayableChanges};
 /// 表达 after 视图；before 真相由扩展 trait 的 `BeforeSnapshot` 单独捕获与合并。
 ///
 /// ```rust
-/// use entity::{ChangedEntity, CommandWithGivenState, MiStateMachineOwned};
+/// use entity::{
+///     ChangedEntity, CommandWithGivenState, MiStateMachineOwned, MiStateMachineOwnedUnchecked,
+/// };
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq)]
-/// enum BalanceStatus {
+/// enum WalletStatus {
 ///     Ready,
 /// }
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq)]
-/// struct BalanceAccount {
-///     available: u64,
+/// enum WalletCommand {
+///     Deposit { amount: u64 },
+///     Withdraw { amount: u64 },
 /// }
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq)]
-/// struct Deposit {
-///     amount: u64,
+/// struct WalletAccount {
+///     available: u64,
 /// }
 ///
-/// impl CommandWithGivenState for Deposit {
-///     type GivenState = BalanceAccount;
+/// impl CommandWithGivenState for WalletCommand {
+///     type GivenState = WalletAccount;
 /// }
 ///
 /// #[derive(Debug, Clone)]
-/// struct BalanceMachine {
-///     state: BalanceStatus,
+/// struct WalletMachine {
+///     state: WalletStatus,
 /// }
 ///
-/// impl MiStateMachineOwned for BalanceMachine {
-///     type Command = Deposit;
-///     type State = BalanceStatus;
+/// impl MiStateMachineOwnedUnchecked for WalletMachine {
+///     type Command = WalletCommand;
+///     type State = WalletStatus;
 ///     type Error = ();
-///     type AfterChanges = ChangedEntity<BalanceAccount>;
+///     type AfterChanges = ChangedEntity<WalletAccount>;
 ///
 ///     fn state(&self) -> &Self::State {
 ///         &self.state
 ///     }
 ///
-///     fn compute_after_changes(
+///     fn validate_state_transition(
 ///         &self,
 ///         cmd: &Self::Command,
-///         given_state: BalanceAccount,
+///         given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+///     ) -> Result<(), Self::Error> {
+///         if given_state.available == 0 {
+///             return Err(());
+///         }
+///         match cmd {
+///             WalletCommand::Deposit { .. } | WalletCommand::Withdraw { .. } => Ok(()),
+///         }
+///     }
+///
+///     fn compute_after_changes_unchecked(
+///         &self,
+///         cmd: &Self::Command,
+///         given_state: WalletAccount,
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
+///         let available = match cmd {
+///             WalletCommand::Deposit { amount } => given_state.available + amount,
+///             WalletCommand::Withdraw { amount } => given_state.available - amount,
+///         };
 ///         Ok(ChangedEntity {
-///             after: BalanceAccount {
-///                 available: given_state.available + cmd.amount,
-///             },
+///             after: WalletAccount { available },
 ///         })
 ///     }
 /// }
 ///
-/// let machine = BalanceMachine {
-///     state: BalanceStatus::Ready,
+/// let machine = WalletMachine {
+///     state: WalletStatus::Ready,
 /// };
 ///
 /// let changed = machine
-///     .compute_after_changes(&Deposit { amount: 10 }, BalanceAccount { available: 42 })
+///     .compute_after_changes(
+///         &WalletCommand::Deposit { amount: 10 },
+///         WalletAccount { available: 42 },
+///     )
 ///     .unwrap();
-/// assert_eq!(machine.state(), &BalanceStatus::Ready);
+/// assert_eq!(machine.state(), &WalletStatus::Ready);
 /// assert_eq!(changed.after.available, 52);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,13 +188,16 @@ where
 
 /// 命令自己声明执行该命令时，外部必须额外提供的输入类型。
 ///
-/// `GivenState` 不是状态机内部 `self.state()` 的别名。
-/// 它表示其它 entity、多个 entity 组合，或业务上下文输入。
+/// 这是 `Command -> GivenState` 的配对契约，尤其用于 enum / command family 场景。
+/// 它保留命令族需要的外部 authoritative state 绑定，避免把多个动作压成一个松散公共超集。
+/// `GivenState` 不是状态机内部 `self.state()` 的别名，它表示其它 entity、多个 entity 组合，
+/// 或业务上下文输入。
 pub trait CommandWithGivenState {
     type GivenState;
 }
 
-/// owned 状态机的最小契约：读取当前状态值，并结合外部 `GivenState` 推导 after-only owned changes。
+/// owned 状态机实现者的最小契约：读取当前状态值，并结合外部 `GivenState` 推导 after-only
+/// owned changes。
 ///
 /// 它只要求实现 after 结果计算，不默认要求 replay、持久化、diff 或审计语义。
 ///
@@ -166,8 +211,12 @@ pub trait CommandWithGivenState {
 ///
 /// 如果该状态机还实现 `MiStateMachineOwnedBeforeAfter`，这里也不要求 `AfterChanges`
 /// 自带 before 信息。默认 before/after 路径会先从 `GivenState` 捕获 `BeforeSnapshot`，
-/// 再复用 `compute_after_changes()` 计算 after，并在扩展 trait 中完成合并。
-pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
+/// 再复用 `MiStateMachineOwned::compute_after_changes()` 计算 after，并在扩展 trait 中完成合并。
+///
+/// 实现者只能提供 `compute_after_changes_unchecked()` 里的纯业务 after 计算。
+/// `pre_check_command()` 与 `validate_state_transition()` 的调用链由
+/// `MiStateMachineOwned` 的默认入口统一保证，避免实现者自行决定是否复用 hook。
+pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
     /// 业务命令类型。
     type Command: CommandWithGivenState;
     /// 状态机当前持有的状态值类型，例如 `OrderStatus`。
@@ -199,32 +248,62 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
         Ok(())
     }
 
-    /// 基于“当前状态值 + 外部 `GivenState`”计算 stable owned after changes。
+    /// 在已完成 command pre-check 与状态迁移校验后，计算 stable owned after changes。
     ///
-    /// 该方法是 after 结果计算的唯一入口。
-    /// 如果还需要 replayable before/after changes，应由
-    /// `MiStateMachineOwnedBeforeAfter::compute_before_after_changes()` 默认复用本方法。
-    fn compute_after_changes(
+    /// 该方法不是上层应直接依赖的业务入口。
+    /// 上层应始终通过 `MiStateMachineOwned::compute_after_changes()` 进入统一链路：
+    /// `pre_check_command() -> validate_state_transition() -> compute_after_changes_unchecked()`
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
         given_state: <Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error>;
 }
 
+/// owned 状态机的稳定对外入口：统一执行 hook 链路后，再进入纯业务 after 计算。
+///
+/// 该 trait 由 blanket impl 自动提供，外部实现者不需要也不能单独实现它。
+/// 这让 `compute_after_changes()` 的编排顺序固定下来，避免绕过 hook。
+/// 对外应只走 `compute_after_changes()` / `compute_before_after_changes()`，不要直接调用
+/// `compute_after_changes_unchecked()`。
+pub trait MiStateMachineOwned: MiStateMachineOwnedUnchecked {
+    /// 基于“当前状态值 + 外部 `GivenState`”计算 stable owned after changes。
+    ///
+    /// 这是 after 结果计算的唯一稳定入口。
+    /// 如果还需要 replayable before/after changes，应由
+    /// `MiStateMachineOwnedBeforeAfter::compute_before_after_changes()` 默认复用本方法。
+    fn compute_after_changes(
+        &self,
+        cmd: &Self::Command,
+        given_state: <Self::Command as CommandWithGivenState>::GivenState,
+    ) -> Result<Self::AfterChanges, Self::Error> {
+        self.pre_check_command(cmd)?;
+        self.validate_state_transition(cmd, &given_state)?;
+        self.compute_after_changes_unchecked(cmd, given_state)
+    }
+}
+
+impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
+
 /// owned 状态机的可选扩展契约：在 after-only 基础上，额外提供 replayable before/after changes。
 ///
 /// 只有需要 replay、持久化、diff、审计等稳定 before/after 事实的状态机，才需要实现这个 trait。
-/// 不需要这些能力的 owned 状态机，只实现 `MiStateMachineOwned` 即可。
+/// 不需要这些能力的 owned 状态机，只实现 `MiStateMachineOwnedUnchecked` 即可；
+/// `MiStateMachineOwned` 的稳定入口会自动可用。
+///
+/// `UpdatedEntityPair<E>` 与 `UpdatedEntities<E>` 是本 crate 内推荐的单实体 / 多实体
+/// before/after 默认结果形状，适合直接承载 case 级最终真相。
 ///
 /// `BeforeAfterChanges` 表示本次业务 case 内 1-n 个被更新 entity 的最终 before/after 真相。
 /// 同一个实体实例在一次 `BeforeAfterChanges` 里仍然只能表达为单个最终 before/after pair，
 /// 不允许拆分中间态。中间步骤应由 append-only facts、ledger records 或审计记录表达。
 ///
 /// 默认实现会先从借用的 `GivenState` 捕获 before 快照，再复用
-/// `compute_after_changes()` 计算 after，最后把两者合并成 `BeforeAfterChanges`。
+/// `MiStateMachineOwned::compute_after_changes()` 计算 after，最后把两者合并成
+/// `BeforeAfterChanges`。
 ///
 /// 因此实现者通常只需要：
-/// - 在 `compute_after_changes()` 里实现一次业务规则，产出 after 结果
+/// - 在 `compute_after_changes_unchecked()` 里实现一次业务规则，产出 after 结果
 /// - 用 `BeforeSnapshot` 表达 case 级 before 真相；它可以是 `GivenState` 的子集、重组结果、
 ///   或异构多实体快照，不要求与 `GivenState` 同型
 /// - 在 `merge_before_and_after()` 里把 before 快照与 after 结果稳定配对成最终 1-n pair 集合
@@ -232,7 +311,8 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 /// ```rust
 /// use entity::{
 ///     CommandWithGivenState, Entity, EntityError, EntityFieldChange, MiStateMachineOwned,
-///     MiStateMachineOwnedBeforeAfter, ReplayableChanges, UpdatedEntities, UpdatedEntityPair,
+///     MiStateMachineOwnedBeforeAfter, MiStateMachineOwnedUnchecked, ReplayableChanges,
+///     UpdatedEntities, UpdatedEntityPair,
 /// };
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq)]
@@ -370,7 +450,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///     state: OrderStatus,
 /// }
 ///
-/// impl MiStateMachineOwned for Machine {
+/// impl MiStateMachineOwnedUnchecked for Machine {
 ///     type Command = CancelOrder;
 ///     type State = OrderStatus;
 ///     type Error = EntityError;
@@ -380,7 +460,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///         &self.state
 ///     }
 ///
-///     fn compute_after_changes(
+///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         cmd: &Self::Command,
 ///         given_state: (Order, [Balance; 2], AccountContext),
@@ -490,8 +570,8 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///
 /// ```rust,compile_fail
 /// use entity::{
-///     CommandWithGivenState, EntityError, MiStateMachineOwned, MiStateMachineOwnedBeforeAfter,
-///     ReplayableChanges,
+///     CommandWithGivenState, EntityError, MiStateMachineOwnedBeforeAfter,
+///     MiStateMachineOwnedUnchecked, ReplayableChanges,
 /// };
 ///
 /// #[derive(Debug, Clone)]
@@ -507,7 +587,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 /// #[derive(Debug, Clone)]
 /// struct Machine;
 ///
-/// impl MiStateMachineOwned for Machine {
+/// impl MiStateMachineOwnedUnchecked for Machine {
 ///     type Command = CancelOrder;
 ///     type State = ();
 ///     type Error = EntityError;
@@ -517,7 +597,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///         &()
 ///     }
 ///
-///     fn compute_after_changes(
+///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         _cmd: &Self::Command,
 ///         _given_state: (),
@@ -533,7 +613,8 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///
 /// ```rust,compile_fail
 /// use entity::{
-///     CommandWithGivenState, EntityError, MiStateMachineOwned, MiStateMachineOwnedBeforeAfter,
+///     CommandWithGivenState, EntityError, MiStateMachineOwnedBeforeAfter,
+///     MiStateMachineOwnedUnchecked,
 /// };
 ///
 /// #[derive(Debug, Clone)]
@@ -552,7 +633,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 /// #[derive(Debug, Clone)]
 /// struct Machine;
 ///
-/// impl MiStateMachineOwned for Machine {
+/// impl MiStateMachineOwnedUnchecked for Machine {
 ///     type Command = CancelOrder;
 ///     type State = ();
 ///     type Error = EntityError;
@@ -562,7 +643,7 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///         &()
 ///     }
 ///
-///     fn compute_after_changes(
+///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         _cmd: &Self::Command,
 ///         _given_state: (),
@@ -587,6 +668,43 @@ pub trait MiStateMachineOwned: Clone + Debug + Send + Sync + 'static {
 ///     }
 /// }
 /// ```
+///
+/// ```rust,compile_fail
+/// use entity::{
+///     ChangedEntity, CommandWithGivenState, MiStateMachineOwned, MiStateMachineOwnedUnchecked,
+/// };
+///
+/// #[derive(Debug, Clone)]
+/// struct Deposit;
+///
+/// impl CommandWithGivenState for Deposit {
+///     type GivenState = ();
+/// }
+///
+/// #[derive(Debug, Clone)]
+/// struct Machine;
+///
+/// impl MiStateMachineOwnedUnchecked for Machine {
+///     type Command = Deposit;
+///     type State = ();
+///     type Error = ();
+///     type AfterChanges = ChangedEntity<()>;
+///
+///     fn state(&self) -> &Self::State {
+///         &()
+///     }
+///
+///     fn compute_after_changes_unchecked(
+///         &self,
+///         _cmd: &Self::Command,
+///         _given_state: (),
+///     ) -> Result<Self::AfterChanges, Self::Error> {
+///         Ok(ChangedEntity { after: () })
+///     }
+/// }
+///
+/// impl MiStateMachineOwned for Machine {}
+/// ```
 pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
     /// 最终可 replay 的 before/after changes。
     type BeforeAfterChanges: ReplayableChanges;
@@ -610,16 +728,16 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
 
     /// 基于“当前状态值 + 外部 `GivenState`”计算可 replay 的 before/after changes。
     ///
-    /// 默认实现会先捕获 before，再调用 `compute_after_changes()` 复用 after 计算，
-    /// 最后把两者合并成完整的 `BeforeAfterChanges`。这确保业务规则只实现一遍，
-    /// 避免两套 API 语义漂移。
+    /// 默认实现会先捕获 before，再调用 `MiStateMachineOwned::compute_after_changes()`
+    /// 复用 after 计算，最后把两者合并成完整的 `BeforeAfterChanges`。
+    /// 这确保 hook 只执行一条固定链路，业务规则也只实现一遍，避免两套 API 语义漂移。
     fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
         given_state: <Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
         let before = self.capture_before(&given_state);
-        let after = self.compute_after_changes(cmd, given_state)?;
+        let after = <Self as MiStateMachineOwned>::compute_after_changes(self, cmd, given_state)?;
         Self::merge_before_and_after(before, after)
     }
 }
@@ -628,8 +746,8 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
 mod tests {
     use crate::{
         CommandWithGivenState, Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
-        MiStateMachineOwned, MiStateMachineOwnedBeforeAfter, ReplayableChanges, UpdatedEntities,
-        UpdatedEntityPair,
+        MiStateMachineOwned, MiStateMachineOwnedBeforeAfter, MiStateMachineOwnedUnchecked,
+        ReplayableChanges, UpdatedEntities, UpdatedEntityPair,
     };
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -643,6 +761,7 @@ mod tests {
         id: i64,
         value: String,
         version: u64,
+        status: TestStatus,
     }
 
     impl Entity for TestOrder {
@@ -725,6 +844,121 @@ mod tests {
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
+    enum FamilyState {
+        Draft,
+        Live,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum FamilyCommand {
+        Open { opening_value: &'static str },
+        Close { closing_value: &'static str },
+        RejectInPreCheck,
+    }
+
+    impl CommandWithGivenState for FamilyCommand {
+        type GivenState = FamilyGivenState;
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct FamilyGivenState {
+        state: FamilyState,
+        value: &'static str,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct FamilyAfterChanges {
+        next_state: FamilyState,
+        next_value: String,
+    }
+
+    #[derive(Debug, Clone, Default)]
+    struct FamilyMachineLog(std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>);
+
+    impl FamilyMachineLog {
+        fn push(&self, marker: &'static str) {
+            self.0.lock().unwrap().push(marker);
+        }
+
+        fn snapshot(&self) -> Vec<&'static str> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct FamilyMachine {
+        state: FamilyState,
+        log: FamilyMachineLog,
+    }
+
+    impl FamilyMachine {
+        fn new(state: FamilyState) -> Self {
+            Self { state, log: FamilyMachineLog::default() }
+        }
+    }
+
+    impl MiStateMachineOwnedUnchecked for FamilyMachine {
+        type Command = FamilyCommand;
+        type State = FamilyState;
+        type Error = HookError;
+        type AfterChanges = FamilyAfterChanges;
+
+        fn state(&self) -> &Self::State {
+            &self.state
+        }
+
+        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+            self.log.push("pre_check");
+            match cmd {
+                FamilyCommand::RejectInPreCheck => Err(HookError::PreCheckRejected),
+                FamilyCommand::Open { opening_value } => {
+                    if opening_value.is_empty() {
+                        return Err(HookError::InvalidTransition);
+                    }
+                    Ok(())
+                }
+                FamilyCommand::Close { closing_value } => {
+                    if closing_value.is_empty() {
+                        return Err(HookError::InvalidTransition);
+                    }
+                    Ok(())
+                }
+            }
+        }
+
+        fn validate_state_transition(
+            &self,
+            cmd: &Self::Command,
+            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        ) -> Result<(), Self::Error> {
+            self.log.push("validate");
+            match (cmd, &given_state.state) {
+                (FamilyCommand::Open { .. }, FamilyState::Draft) => Ok(()),
+                (FamilyCommand::Close { .. }, FamilyState::Live) => Ok(()),
+                _ => Err(HookError::InvalidTransition),
+            }
+        }
+
+        fn compute_after_changes_unchecked(
+            &self,
+            cmd: &Self::Command,
+            given_state: <Self::Command as CommandWithGivenState>::GivenState,
+        ) -> Result<Self::AfterChanges, Self::Error> {
+            self.log.push("unchecked");
+            let (next_state, next_value) = match cmd {
+                FamilyCommand::Open { opening_value } => {
+                    (FamilyState::Live, format!("{}:{}", given_state.value, opening_value))
+                }
+                FamilyCommand::Close { closing_value } => {
+                    (FamilyState::Draft, format!("{}:{}", given_state.value, closing_value))
+                }
+                FamilyCommand::RejectInPreCheck => unreachable!("rejected by pre_check_command"),
+            };
+            Ok(FamilyAfterChanges { next_state, next_value })
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
     enum TestCommand {
         Apply { next_value: &'static str, trading_balance_delta: i64, fee_balance_delta: i64 },
         RejectInPreCheck,
@@ -773,31 +1007,20 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct OwnedMachine {
-        state: TestStatus,
-    }
-
-    impl OwnedMachine {
-        fn run_common_checks(
-            &self,
-            cmd: &TestCommand,
-            given_state: &TestGivenState,
-        ) -> Result<(), HookError> {
-            self.pre_check_command(cmd)?;
-            self.validate_state_transition(cmd, given_state)?;
-            Ok(())
+    impl TestOrder {
+        fn machine(status: TestStatus) -> Self {
+            Self { id: 0, value: "machine".to_string(), version: 0, status }
         }
     }
 
-    impl MiStateMachineOwned for OwnedMachine {
+    impl MiStateMachineOwnedUnchecked for TestOrder {
         type Command = TestCommand;
         type State = TestStatus;
         type Error = HookError;
         type AfterChanges = TestAfterChanges;
 
         fn state(&self) -> &Self::State {
-            &self.state
+            &self.status
         }
 
         fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
@@ -821,12 +1044,11 @@ mod tests {
             }
         }
 
-        fn compute_after_changes(
+        fn compute_after_changes_unchecked(
             &self,
             cmd: &Self::Command,
             given_state: <Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
-            self.run_common_checks(cmd, &given_state)?;
             let TestGivenState { order, balances: [trading_balance, fee_balance], account: _ } =
                 given_state;
             let (next_value, trading_balance_delta, fee_balance_delta) = match cmd {
@@ -840,6 +1062,7 @@ mod tests {
                 id: order.id,
                 value: next_value.to_string(),
                 version: order.version + 1,
+                status: order.status,
             };
             let next_trading_balance = TestBalance {
                 id: trading_balance.id,
@@ -859,7 +1082,7 @@ mod tests {
         }
     }
 
-    impl MiStateMachineOwnedBeforeAfter for OwnedMachine {
+    impl MiStateMachineOwnedBeforeAfter for TestOrder {
         type BeforeAfterChanges = TestBeforeAfterChanges;
         type BeforeSnapshot = TestBeforeSnapshot;
 
@@ -907,7 +1130,7 @@ mod tests {
         created_bonus_balance_after: TestBalance,
     }
 
-    impl MiStateMachineOwned for AfterOnlyMachine {
+    impl MiStateMachineOwnedUnchecked for AfterOnlyMachine {
         type Command = TestCommand;
         type State = TestStatus;
         type Error = HookError;
@@ -917,7 +1140,7 @@ mod tests {
             &self.state
         }
 
-        fn compute_after_changes(
+        fn compute_after_changes_unchecked(
             &self,
             cmd: &Self::Command,
             given_state: <Self::Command as CommandWithGivenState>::GivenState,
@@ -931,6 +1154,7 @@ mod tests {
                     id: given_state.order.id,
                     value: next_value.to_string(),
                     version: given_state.order.version + 1,
+                    status: given_state.order.status,
                 },
                 created_bonus_balance_after: TestBalance { id: 303, available: 1, version: 1 },
             })
@@ -939,7 +1163,12 @@ mod tests {
 
     fn sample_given_state() -> TestGivenState {
         TestGivenState {
-            order: TestOrder { id: 9, value: "before".to_string(), version: 3 },
+            order: TestOrder {
+                id: 9,
+                value: "before".to_string(),
+                version: 3,
+                status: TestStatus::Open,
+            },
             balances: [
                 TestBalance { id: 101, available: 100, version: 5 },
                 TestBalance { id: 202, available: 7, version: 8 },
@@ -996,7 +1225,7 @@ mod tests {
 
     #[test]
     fn default_before_after_changes_capture_before_then_merge_with_after() {
-        let machine = OwnedMachine { state: TestStatus::Applied };
+        let machine = TestOrder::machine(TestStatus::Applied);
         let cmd = TestCommand::Apply {
             next_value: "after",
             trading_balance_delta: 10,
@@ -1050,7 +1279,7 @@ mod tests {
         #[derive(Debug, Clone)]
         struct SequenceMachine;
 
-        impl MiStateMachineOwned for SequenceMachine {
+        impl MiStateMachineOwnedUnchecked for SequenceMachine {
             type Command = SequenceCommand;
             type State = ();
             type Error = EntityError;
@@ -1060,7 +1289,7 @@ mod tests {
                 &()
             }
 
-            fn compute_after_changes(
+            fn compute_after_changes_unchecked(
                 &self,
                 _cmd: &Self::Command,
                 given_state: <Self::Command as CommandWithGivenState>::GivenState,
@@ -1097,7 +1326,7 @@ mod tests {
 
     #[test]
     fn multi_entity_before_after_changes_project_replayable_update_events() {
-        let machine = OwnedMachine { state: TestStatus::Applied };
+        let machine = TestOrder::machine(TestStatus::Applied);
         let changes = machine
             .compute_before_after_changes(
                 &TestCommand::Apply {
@@ -1123,7 +1352,7 @@ mod tests {
 
     #[test]
     fn before_after_extension_reuses_same_pre_check_hook() {
-        let machine = OwnedMachine { state: TestStatus::Open };
+        let machine = TestOrder::machine(TestStatus::Open);
 
         assert_eq!(
             machine
@@ -1134,7 +1363,7 @@ mod tests {
 
     #[test]
     fn before_after_extension_reuses_same_transition_validation_hook() {
-        let machine = OwnedMachine { state: TestStatus::Open };
+        let machine = TestOrder::machine(TestStatus::Open);
         let mut given_state = sample_given_state();
         given_state.account.reject_in_transition = true;
 
@@ -1152,8 +1381,69 @@ mod tests {
     }
 
     #[test]
+    fn enum_command_family_reuses_same_shell_for_multiple_variants() {
+        let machine = FamilyMachine::new(FamilyState::Draft);
+
+        let opened = machine
+            .compute_after_changes(
+                &FamilyCommand::Open {
+                    opening_value: "opened",
+                },
+                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+            )
+            .unwrap();
+        assert_eq!(opened.next_state, FamilyState::Live);
+        assert_eq!(opened.next_value, "base:opened");
+
+        let closed = machine
+            .compute_after_changes(
+                &FamilyCommand::Close {
+                    closing_value: "closed",
+                },
+                FamilyGivenState { state: FamilyState::Live, value: "base" },
+            )
+            .unwrap();
+        assert_eq!(closed.next_state, FamilyState::Draft);
+        assert_eq!(closed.next_value, "base:closed");
+
+        assert_eq!(machine.log.snapshot(), vec!["pre_check", "validate", "unchecked", "pre_check", "validate", "unchecked"]);
+    }
+
+    #[test]
+    fn enum_command_family_rejects_illegal_state_pair_in_validate() {
+        let machine = FamilyMachine::new(FamilyState::Draft);
+
+        assert_eq!(
+            machine.compute_after_changes(
+                &FamilyCommand::Close {
+                    closing_value: "closed",
+                },
+                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+            ),
+            Err(HookError::InvalidTransition)
+        );
+
+        assert_eq!(machine.log.snapshot(), vec!["pre_check", "validate"]);
+    }
+
+    #[test]
+    fn enum_command_family_pre_check_stops_validate_and_unchecked() {
+        let machine = FamilyMachine::new(FamilyState::Draft);
+
+        assert_eq!(
+            machine.compute_after_changes(
+                &FamilyCommand::RejectInPreCheck,
+                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+            ),
+            Err(HookError::PreCheckRejected)
+        );
+
+        assert_eq!(machine.log.snapshot(), vec!["pre_check"]);
+    }
+
+    #[test]
     fn base_trait_reuses_hooks_for_after_truth_changes() {
-        let machine = OwnedMachine { state: TestStatus::Open };
+        let machine = TestOrder::machine(TestStatus::Open);
 
         assert_eq!(
             machine.compute_after_changes(&TestCommand::RejectInPreCheck, sample_given_state()),
