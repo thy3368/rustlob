@@ -1,6 +1,6 @@
 use crate::{
     CommandUseCase6, CommandWithGivenState, EntityError, EntityReplayableEvent, IssuedByParty,
-    MainMiStatefulChanges, MainMiTruth, ReplayableChanges,
+    ReplayableChanges,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -314,42 +314,6 @@ impl CommandUseCaseExecutor6 {
         )
     }
 
-    fn validate_main_mi_truth<U>(
-        _use_case: &U,
-        changes: &U::Changes,
-    ) -> Result<(), EventProjectError>
-    where
-        U: CommandUseCase6,
-    {
-        match changes.main_mi_truth() {
-            Some(MainMiTruth::Created(_)) | Some(MainMiTruth::Updated(_)) => Ok(()),
-            None => Err(EventProjectError::Custom(
-                "missing authoritative main MI truth".to_string(),
-            )),
-        }
-    }
-
-    fn validate_main_mi_state<U>(
-        _use_case: &U,
-        changes: &U::Changes,
-    ) -> Result<(), EventProjectError>
-    where
-        U: CommandUseCase6,
-    {
-        let command_kind = changes.command_kind();
-        if command_kind.is_empty() {
-            return Err(EventProjectError::Custom(
-                "missing command_kind for main MI stateful changes".to_string(),
-            ));
-        }
-
-        changes.main_mi_current_state().map(|_| ()).ok_or_else(|| {
-            EventProjectError::Custom(format!(
-                "missing main MI current state for command {command_kind}"
-            ))
-        })
-    }
-
     pub fn execute<U, OB, O>(
         &self,
         use_case: &U,
@@ -413,28 +377,13 @@ impl CommandUseCaseExecutor6 {
                 || use_case.compute_changes(&command, state),
             )
             .map_err(CommandUseCaseExecutionError::Business)?;
-            let ((), main_mi_truth_ns) = trace_phase(
-                "validate_main_mi_truth",
-                "changes.main_mi_truth()",
-                || Self::validate_main_mi_truth(use_case, &changes),
-            )
-            .map_err(CommandUseCaseExecutionError::event_project)?;
-            let ((), main_mi_state_ns) = trace_phase(
-                "validate_main_mi_state",
-                "changes.main_mi_current_state()",
-                || Self::validate_main_mi_state(use_case, &changes),
-            )
-            .map_err(CommandUseCaseExecutionError::event_project)?;
             let (events, event_project_ns) = trace_phase(
                 "project_replayable_events",
                 "changes.to_replayable_events()",
                 || changes.to_replayable_events(),
             )
             .map_err(CommandUseCaseExecutionError::event_project)?;
-            let apply_changes_ns = apply_changes_ns
-                .saturating_add(main_mi_truth_ns)
-                .saturating_add(main_mi_state_ns)
-                .saturating_add(event_project_ns);
+            let apply_changes_ns = apply_changes_ns.saturating_add(event_project_ns);
             let domain_event_count = events.len();
 
             let ((), persist_domain_events_ns) =
