@@ -302,6 +302,8 @@ fn compute_place_changes(
     cmd: &PlaceSpotOrderUc6Cmd,
     state: PlaceSpotOrderUc6State,
 ) -> Result<PlaceSpotOrderUc6Changes, SpotOrderUc6Error> {
+    // `Place` 先只推进 taker 自身状态机，完成下单时的首笔冻结，
+    // 拿到后续撮合流水要继续叠加的初始 changes。
     let place_changes = MiStateMachineOwned::compute_after_changes(
         &state.taker_order,
         &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
@@ -319,6 +321,8 @@ fn compute_place_changes(
     };
 
     let mut all_ledger_entries = place_changes.created_ledger_entries.clone();
+    // 余额上下文统一放进当前视图里维护：
+    // 一份保留原始快照用于最终 before/after 对比，一份持续吸收冻结、成交、释放后的最新余额。
     let mut current_balances = build_original_balance_map(
         &state.taker_base_balance,
         &state.taker_quote_balance,
@@ -332,6 +336,7 @@ fn compute_place_changes(
         .ok_or(SpotOrderUc6Error::ArithmeticOverflow)?
         .after
         .clone();
+    // 吸收 `Place` 阶段已经产生的首笔余额变化，后续所有结算都基于这个 authoritative 余额视图继续滚动。
     current_balances.insert(freeze_balance_after.entity_id(), freeze_balance_after.clone());
     let mut touched_balance_ids = vec![freeze_balance_after.entity_id()];
 
@@ -342,6 +347,8 @@ fn compute_place_changes(
     let mut updated_maker_orders = Vec::new();
     let mut created_trades = Vec::new();
 
+    // 只有订单在冻结后仍满足进入撮合条件时，才继续走 maker 撮合分支；
+    // 否则这里直接保留纯 place 结果，后续只考虑终态释放。
     if place_changes
         .updated_order
         .after
@@ -364,11 +371,14 @@ fn compute_place_changes(
             ));
         };
 
+        // 撮合状态机给出 taker/maker/trade 三类结果，这里把它们吸收到 place 主流水里，
+        // 后续统一按 trade 逐笔做资金结算。
         updated_taker_order.after = match_changes.updated_taker_order.after.clone();
         updated_maker_orders =
             match_changes.updated_maker_orders.into_iter().map(convert_pair).collect();
         created_trades = match_changes.created_trades.clone();
 
+        // 每笔成交都要拆成标准现货结算分录，分别更新买卖双方的 base/quote 余额。
         for trade in &created_trades {
             apply_settlement_trade(
                 cmd,
@@ -382,6 +392,8 @@ fn compute_place_changes(
         }
     }
 
+    // place 流水结束后，如果订单终态要求把剩余冻结释放回来
+    // （例如 IOC 未完全成交），就在这里补一笔统一的 reservation release。
     if updated_taker_order.after.should_release_reservation_after_place() {
         release_terminal_reservation(
             &updated_taker_order.after,
@@ -392,10 +404,14 @@ fn compute_place_changes(
         )?;
     }
 
+    // 无论中间经历了多少次冻结、撮合和释放，订单最终 authoritative after
+    // 都统一通过 place pipeline 投影一次，确保 case 级输出口径一致。
     updated_taker_order.after = updated_taker_order
         .after
         .project_authoritative_after_place_pipeline(&updated_taker_order.before)?;
 
+    // 最后只从被触达过的余额里提炼真正发生 before/after 差异的条目，
+    // 组合成 `Place` 分支的统一 changes 输出。
     let updated_balances =
         collect_updated_balances(&touched_balance_ids, &original_balances, &current_balances)?;
 
@@ -495,6 +511,9 @@ fn apply_settlement_trade(
     base_asset_id: &str,
     quote_asset_id: &str,
 ) -> Result<(), SpotOrderUc6Error> {
+    // 一笔现货成交在账本上固定拆成四条腿：
+    // 买方收 base、买方扣冻结 quote、卖方收 quote、卖方扣冻结 base。
+    // 这里集中展开，保证 place 主流程只关心“逐笔结算 trade”。
     let quote_qty = trade.notional_quote().ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
     apply_balance_entry(
         balances,
@@ -590,6 +609,8 @@ fn release_terminal_reservation(
     touched_balance_ids: &mut Vec<String>,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderUc6Error> {
+    // 这里处理的是 place 流水收尾时的“剩余冻结释放”，
+    // 它复用 unfreeze 账本动作，但业务上不是一条独立 cancel 命令。
     let release_balance_id = reservation_balance.entity_id();
     let current_balance = balances.get(&release_balance_id).ok_or_else(|| {
         SpotOrderUc6Error::SettlementBalanceNotFound {
@@ -633,6 +654,8 @@ fn apply_balance_entry(
     operation: BalanceOperation,
     entry_id: String,
 ) -> Result<(), SpotOrderUc6Error> {
+    // 余额账本分录统一从这里入账：
+    // 负责定位目标余额、执行借贷/解冻动作，并记录这次 place 流水真正触达过哪些余额。
     let balance_id = format!("{account_id}:{asset_id}");
     let balance = balances.get_mut(&balance_id).ok_or_else(|| {
         SpotOrderUc6Error::SettlementBalanceNotFound {
@@ -679,6 +702,8 @@ fn collect_updated_balances(
     original_balances: &HashMap<String, Balance>,
     current_balances: &HashMap<String, Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, SpotOrderUc6Error> {
+    // 账本滚动过程中只维护当前视图；直到收口时，
+    // 才从原始快照和当前视图里提炼真正变化过的余额 before/after 对。
     let mut updated_balances = Vec::new();
     for balance_id in touched_balance_ids {
         let before = original_balances
