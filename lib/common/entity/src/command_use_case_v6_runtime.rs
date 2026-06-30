@@ -282,7 +282,7 @@ macro_rules! trace_command_use_case_failed {
 pub struct CommandUseCaseExecutor6;
 
 impl CommandUseCaseExecutor6 {
-    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    fn trace_span<U, O>(_use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
     where
         U: CommandUseCase6,
         O: ?Sized
@@ -303,9 +303,6 @@ impl CommandUseCaseExecutor6 {
             "command_use_case_execute",
             use_case = std::any::type_name::<U>(),
             command_summary = ?use_case_command_summary::<U>(),
-            main_mi_name = use_case.main_mi_name(),
-            main_mi_identity_field = use_case.main_mi_identity_field(),
-            main_mi_state_field = use_case.main_mi_state_field(),
             command_type = std::any::type_name::<U::Command>(),
             business_error_type = std::any::type_name::<U::Error>(),
             changes_type = std::any::type_name::<U::Changes>(),
@@ -318,61 +315,37 @@ impl CommandUseCaseExecutor6 {
     }
 
     fn validate_main_mi_truth<U>(
-        use_case: &U,
+        _use_case: &U,
         changes: &U::Changes,
     ) -> Result<(), EventProjectError>
     where
         U: CommandUseCase6,
     {
-        if use_case.main_mi_name().is_empty() {
-            return Err(EventProjectError::Custom(
-                "CommandUseCase6 main_mi_name must not be empty".to_string(),
-            ));
-        }
-        if use_case.main_mi_identity_field().is_empty() {
-            return Err(EventProjectError::Custom(
-                "CommandUseCase6 main_mi_identity_field must not be empty".to_string(),
-            ));
-        }
-
         match changes.main_mi_truth() {
             Some(MainMiTruth::Created(_)) | Some(MainMiTruth::Updated(_)) => Ok(()),
-            None => Err(EventProjectError::Custom(format!(
-                "missing authoritative main MI truth for {} ({})",
-                use_case.main_mi_name(),
-                use_case.main_mi_identity_field()
-            ))),
+            None => Err(EventProjectError::Custom(
+                "missing authoritative main MI truth".to_string(),
+            )),
         }
     }
 
     fn validate_main_mi_state<U>(
-        use_case: &U,
+        _use_case: &U,
         changes: &U::Changes,
     ) -> Result<(), EventProjectError>
     where
         U: CommandUseCase6,
     {
-        if use_case.main_mi_state_field().is_empty() {
-            return Err(EventProjectError::Custom(
-                "CommandUseCase6 main_mi_state_field must not be empty".to_string(),
-            ));
-        }
-
         let command_kind = changes.command_kind();
         if command_kind.is_empty() {
-            return Err(EventProjectError::Custom(format!(
-                "missing command_kind for {} ({})",
-                use_case.main_mi_name(),
-                use_case.main_mi_state_field()
-            )));
+            return Err(EventProjectError::Custom(
+                "missing command_kind for main MI stateful changes".to_string(),
+            ));
         }
 
         changes.main_mi_current_state().map(|_| ()).ok_or_else(|| {
             EventProjectError::Custom(format!(
-                "missing main MI current state for {}.{} on command {}",
-                use_case.main_mi_name(),
-                use_case.main_mi_state_field(),
-                command_kind
+                "missing main MI current state for command {command_kind}"
             ))
         })
     }

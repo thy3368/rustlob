@@ -47,9 +47,6 @@ pub trait CommandUseCase6: Send + Sync {
     type Error: std::error::Error;
     type Changes: MainMiStatefulChanges;
 
-    /// 当前 use case 推进的主 MI 名称。
-    fn main_mi_name(&self) -> &'static str;
-
     /// 对 command 的快速检查。
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
