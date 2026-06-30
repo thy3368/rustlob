@@ -1,10 +1,20 @@
 use std::sync::LazyLock;
 use std::sync::atomic::AtomicU64;
 
+mod command_use_case_v6;
+mod command_use_case_v6_runtime;
 mod entity;
 mod entity_field_change;
 mod state_machine_owned;
 
+pub use command_use_case_v6::{
+    CommandUseCase6, IssuedByParty, MainMiStatefulChanges, MainMiTruth,
+};
+pub use command_use_case_v6_runtime::{
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor6,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, HandlerLatencyMetrics,
+    ObserveHandlerLatency, UseCaseChanges, UseCaseReplyMapper,
+};
 pub use entity::{
     Entity, EntityLifecycleModel, EntityMutationModel, FourColorArchetype, MiCausalRelation,
     MiCausalSourceMetadata, MiFactType,

@@ -1386,9 +1386,7 @@ mod tests {
 
         let opened = machine
             .compute_after_changes(
-                &FamilyCommand::Open {
-                    opening_value: "opened",
-                },
+                &FamilyCommand::Open { opening_value: "opened" },
                 FamilyGivenState { state: FamilyState::Draft, value: "base" },
             )
             .unwrap();
@@ -1397,16 +1395,17 @@ mod tests {
 
         let closed = machine
             .compute_after_changes(
-                &FamilyCommand::Close {
-                    closing_value: "closed",
-                },
+                &FamilyCommand::Close { closing_value: "closed" },
                 FamilyGivenState { state: FamilyState::Live, value: "base" },
             )
             .unwrap();
         assert_eq!(closed.next_state, FamilyState::Draft);
         assert_eq!(closed.next_value, "base:closed");
 
-        assert_eq!(machine.log.snapshot(), vec!["pre_check", "validate", "unchecked", "pre_check", "validate", "unchecked"]);
+        assert_eq!(
+            machine.log.snapshot(),
+            vec!["pre_check", "validate", "unchecked", "pre_check", "validate", "unchecked"]
+        );
     }
 
     #[test]
@@ -1415,9 +1414,7 @@ mod tests {
 
         assert_eq!(
             machine.compute_after_changes(
-                &FamilyCommand::Close {
-                    closing_value: "closed",
-                },
+                &FamilyCommand::Close { closing_value: "closed" },
                 FamilyGivenState { state: FamilyState::Draft, value: "base" },
             ),
             Err(HookError::InvalidTransition)
