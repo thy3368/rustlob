@@ -336,6 +336,46 @@ impl MiStateMachineOwnedUnchecked for SpotOrder {
 }
 
 impl SpotOrder {
+    fn checked_next_version(version: u64) -> Result<u64, SpotOrderMiStateMachineError> {
+        version.checked_add(1).ok_or(SpotOrderMiStateMachineError::VersionOverflow)
+    }
+
+    /// 推进一次 `place` 命令后的单订单生命周期。
+    ///
+    /// `place` 只表示订单被系统接受并进入后续业务流程，因此只推进版本；
+    /// 订单状态与拒绝原因仍保持订单自身当前语义。
+    pub(crate) fn evolve_after_place_acceptance(
+        &self,
+    ) -> Result<SpotOrder, SpotOrderMiStateMachineError> {
+        let mut after = self.clone();
+        after.version = Self::checked_next_version(after.version)?;
+        Ok(after)
+    }
+
+    /// 将 `place + match + release` 管线内的中间订单状态压缩成 case 级 authoritative after。
+    ///
+    /// UC6 对外只暴露一次主订单更新事件，因此版本必须相对 `place` 前快照只前进一步；
+    /// `filled_qty / status / status_reason` 保持订单状态机已经推导出的最终语义。
+    pub(crate) fn project_authoritative_after_place_pipeline(
+        &self,
+        before_place: &SpotOrder,
+    ) -> Result<SpotOrder, SpotOrderMiStateMachineError> {
+        let mut after = self.clone();
+        after.version = Self::checked_next_version(before_place.version)?;
+        Ok(after)
+    }
+
+    /// 推进一次用户撤单后的单订单生命周期。
+    pub(crate) fn evolve_after_user_cancel(
+        &self,
+    ) -> Result<SpotOrder, SpotOrderMiStateMachineError> {
+        let mut after = self.clone();
+        after.status = SpotOrderStatus::Canceled;
+        after.status_reason = Some(crate::entity::SpotOrderStatusReason::CanceledByUser);
+        after.version = Self::checked_next_version(after.version)?;
+        Ok(after)
+    }
+
     pub(crate) fn pre_check_place_command(
         &self,
         _cmd: &PlaceSpotOrderCmd,
@@ -365,9 +405,7 @@ impl SpotOrder {
         cmd: &PlaceSpotOrderCmd,
     ) -> Result<SpotOrderMiChanges, SpotOrderMiStateMachineError> {
         let before = self.clone();
-        let mut after = self.clone();
-        after.version =
-            after.version.checked_add(1).ok_or(SpotOrderMiStateMachineError::VersionOverflow)?;
+        let after = self.evolve_after_place_acceptance()?;
 
         let (frozen_balance, created_freeze_ledger_entry) =
             derive_place_freeze_changes(&after, taker_freeze_balance(&after, cmd))?;
@@ -470,11 +508,7 @@ impl SpotOrder {
         _cmd: &CancelSpotOrderCmd,
     ) -> Result<SpotOrderMiChanges, SpotOrderMiStateMachineError> {
         let before = self.clone();
-        let mut after = self.clone();
-        after.status = SpotOrderStatus::Canceled;
-        after.status_reason = Some(crate::entity::SpotOrderStatusReason::CanceledByUser);
-        after.version =
-            after.version.checked_add(1).ok_or(SpotOrderMiStateMachineError::VersionOverflow)?;
+        let after = self.evolve_after_user_cancel()?;
         Ok(SpotOrderMiChanges::Cancel(CancelSpotOrderChanges {
             updated_order: UpdatedEntityPair { before, after },
         }))
@@ -627,6 +661,20 @@ mod tests {
     }
 
     #[test]
+    fn authoritative_place_pipeline_projection_keeps_order_semantics_but_collapses_version_step() {
+        let before = sample_order(SpotOrderTimeInForce::Ioc);
+        let after_match =
+            before.clone().with_execution_state(SpotOrderStatus::Filled, 10).with_version(4);
+
+        let projected = after_match.project_authoritative_after_place_pipeline(&before).unwrap();
+
+        assert_eq!(projected.filled_qty, 10);
+        assert_eq!(projected.status, SpotOrderStatus::Filled);
+        assert_eq!(projected.status_reason, None);
+        assert_eq!(projected.version, 2);
+    }
+
+    #[test]
     fn match_happy_path_partially_fills_taker() {
         let order = sample_order(SpotOrderTimeInForce::Gtc);
         let cmd = SpotOrderMiCommand::Match(MatchSpotOrderCmd {
@@ -675,6 +723,23 @@ mod tests {
             panic!("expected cancel changes");
         };
         assert_eq!(cancel.updated_order.after.status, SpotOrderStatus::Canceled);
+    }
+
+    #[test]
+    fn evolve_after_user_cancel_advances_single_order_lifecycle() {
+        let order = sample_order(SpotOrderTimeInForce::Gtc)
+            .with_execution_state(SpotOrderStatus::PartiallyFilled, 4)
+            .with_version(7);
+
+        let canceled = order.evolve_after_user_cancel().unwrap();
+
+        assert_eq!(canceled.status, SpotOrderStatus::Canceled);
+        assert_eq!(
+            canceled.status_reason,
+            Some(crate::entity::SpotOrderStatusReason::CanceledByUser)
+        );
+        assert_eq!(canceled.filled_qty, 4);
+        assert_eq!(canceled.version, 8);
     }
 
     #[test]
