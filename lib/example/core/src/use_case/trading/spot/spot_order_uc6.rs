@@ -238,6 +238,14 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
         "SpotOrder"
     }
 
+    fn main_mi_identity_field(&self) -> &'static str {
+        "order_id"
+    }
+
+    fn main_mi_state_field(&self) -> &'static str {
+        "status"
+    }
+
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match cmd {
             SpotOrderUc6Cmd::Place(cmd) => {
@@ -454,13 +462,9 @@ fn compute_place_changes(
         )?;
     }
 
-    // V6 把内部 `place + match` 压缩成一个稳定业务命令分支，
-    // 主订单对外只投影一次 authoritative update event。
-    updated_taker_order.after.version = updated_taker_order
-        .before
-        .version
-        .checked_add(1)
-        .ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
+    updated_taker_order.after = updated_taker_order
+        .after
+        .project_authoritative_after_place_pipeline(&updated_taker_order.before)?;
 
     let updated_balances =
         collect_updated_balances(&touched_balance_ids, &original_balances, &current_balances)?;
@@ -944,6 +948,7 @@ mod tests {
         };
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Filled);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 2);
+        assert_eq!(changes.updated_taker_order.after.version, 2);
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.updated_balances.len(), 4);
@@ -989,6 +994,7 @@ mod tests {
             panic!("expected place changes");
         };
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Open);
+        assert_eq!(changes.updated_taker_order.after.version, 2);
         assert!(changes.created_trades.is_empty());
         assert_eq!(changes.updated_balances.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 1);
@@ -1098,6 +1104,7 @@ mod tests {
         };
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Canceled);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 1);
+        assert_eq!(changes.updated_taker_order.after.version, 2);
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 6);
         let taker_quote = changes
@@ -1127,6 +1134,7 @@ mod tests {
             panic!("expected place changes");
         };
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Rejected);
+        assert_eq!(changes.updated_taker_order.after.version, 2);
         assert!(changes.created_trades.is_empty());
         assert_eq!(changes.updated_balances.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 2);
@@ -1279,6 +1287,14 @@ mod tests {
 
         fn main_mi_name(&self) -> &'static str {
             "SpotOrder"
+        }
+
+        fn main_mi_identity_field(&self) -> &'static str {
+            "order_id"
+        }
+
+        fn main_mi_state_field(&self) -> &'static str {
+            "status"
         }
 
         fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
