@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::{
     CommandUseCase6, CommandWithGivenState, Entity, EntityReplayableEvent, EventProjectError,
-    IssuedByParty, MainMiChanges, MainMiStatefulChanges, MiStateMachineOwned, ReplayableChanges,
+    IssuedByParty, MainMiStatefulChanges, MainMiTruth, MiStateMachineOwned, ReplayableChanges,
     UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
@@ -173,15 +173,13 @@ impl ReplayableChanges for SpotOrderUc6Changes {
     }
 }
 
-impl MainMiChanges for PlaceSpotOrderUc6Changes {
+impl MainMiStatefulChanges for PlaceSpotOrderUc6Changes {
     type MainMi = SpotOrder;
 
-    fn main_mi_updated_pair(&self) -> Option<&UpdatedEntityPair<Self::MainMi>> {
-        Some(&self.updated_taker_order)
+    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
+        Some(MainMiTruth::Updated(&self.updated_taker_order))
     }
-}
 
-impl MainMiStatefulChanges for PlaceSpotOrderUc6Changes {
     fn command_kind(&self) -> &'static str {
         "place"
     }
@@ -191,15 +189,13 @@ impl MainMiStatefulChanges for PlaceSpotOrderUc6Changes {
     }
 }
 
-impl MainMiChanges for CancelSpotOrderUc6Changes {
+impl MainMiStatefulChanges for CancelSpotOrderUc6Changes {
     type MainMi = SpotOrder;
 
-    fn main_mi_updated_pair(&self) -> Option<&UpdatedEntityPair<Self::MainMi>> {
-        Some(&self.updated_order)
+    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
+        Some(MainMiTruth::Updated(&self.updated_order))
     }
-}
 
-impl MainMiStatefulChanges for CancelSpotOrderUc6Changes {
     fn command_kind(&self) -> &'static str {
         "cancel"
     }
@@ -209,25 +205,16 @@ impl MainMiStatefulChanges for CancelSpotOrderUc6Changes {
     }
 }
 
-impl MainMiChanges for SpotOrderUc6Changes {
+impl MainMiStatefulChanges for SpotOrderUc6Changes {
     type MainMi = SpotOrder;
 
-    fn main_mi_created(&self) -> Option<&Self::MainMi> {
+    fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
         match self {
-            Self::Place(changes) => changes.main_mi_created(),
-            Self::Cancel(changes) => changes.main_mi_created(),
+            Self::Place(changes) => changes.main_mi_truth(),
+            Self::Cancel(changes) => changes.main_mi_truth(),
         }
     }
 
-    fn main_mi_updated_pair(&self) -> Option<&UpdatedEntityPair<Self::MainMi>> {
-        match self {
-            Self::Place(changes) => changes.main_mi_updated_pair(),
-            Self::Cancel(changes) => changes.main_mi_updated_pair(),
-        }
-    }
-}
-
-impl MainMiStatefulChanges for SpotOrderUc6Changes {
     fn command_kind(&self) -> &'static str {
         match self {
             Self::Place(changes) => changes.command_kind(),
@@ -1043,11 +1030,12 @@ mod tests {
         assert_eq!(changes.updated_balances.len(), 4);
         assert_eq!(changes.created_ledger_entries.len(), 6);
         assert_eq!(changes.command_kind(), "place");
-        assert_eq!(changes.main_mi_created(), None);
-        assert_eq!(
-            changes.main_mi_updated_pair().map(|pair| pair.after.status),
-            Some(SpotOrderStatus::Filled)
-        );
+        match changes.main_mi_truth() {
+            Some(MainMiTruth::Updated(pair)) => {
+                assert_eq!(pair.after.status, SpotOrderStatus::Filled)
+            }
+            other => panic!("unexpected main MI truth: {other:?}"),
+        }
         assert_eq!(changes.main_mi_current_state(), Some("filled"));
         assert_eq!(events.len(), 16);
         assert_eq!(event_field(&events[0], "status"), Some("filled"));
@@ -1154,11 +1142,12 @@ mod tests {
             }
         );
         assert_eq!(changes.command_kind(), "cancel");
-        assert_eq!(changes.main_mi_created(), None);
-        assert_eq!(
-            changes.main_mi_updated_pair().map(|pair| pair.after.status),
-            Some(SpotOrderStatus::Canceled)
-        );
+        match changes.main_mi_truth() {
+            Some(MainMiTruth::Updated(pair)) => {
+                assert_eq!(pair.after.status, SpotOrderStatus::Canceled)
+            }
+            other => panic!("unexpected main MI truth: {other:?}"),
+        }
         assert_eq!(changes.main_mi_current_state(), Some("canceled"));
         assert_eq!(events.len(), 3);
         assert_eq!(event_field(&events[0], "status"), Some("canceled"));
@@ -1284,15 +1273,13 @@ mod tests {
         }
     }
 
-    impl MainMiChanges for BrokenChanges {
+    impl MainMiStatefulChanges for BrokenChanges {
         type MainMi = SpotOrder;
 
-        fn main_mi_updated_pair(&self) -> Option<&UpdatedEntityPair<Self::MainMi>> {
-            self.0.main_mi_updated_pair()
+        fn main_mi_truth<'a>(&'a self) -> Option<MainMiTruth<'a, Self::MainMi>> {
+            self.0.main_mi_truth()
         }
-    }
 
-    impl MainMiStatefulChanges for BrokenChanges {
         fn command_kind(&self) -> &'static str {
             ""
         }

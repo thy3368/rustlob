@@ -53,6 +53,13 @@ pub enum SpotOrderExecution {
     },
 }
 
+/// 订单冻结对应的 reservation 资产类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotReservationAssetKind {
+    Base,
+    Quote,
+}
+
 impl SpotOrderExecution {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -413,6 +420,58 @@ impl SpotOrder {
     /// 返回冻结 quote 所需使用的价格上限。
     pub fn reservation_quote(&self) -> Option<u64> {
         self.qty.checked_mul(self.order_price())
+    }
+
+    /// 返回该订单的 reservation 资产类型。
+    pub fn reservation_asset_kind(&self) -> SpotReservationAssetKind {
+        match self.side {
+            SpotOrderSide::Buy => SpotReservationAssetKind::Quote,
+            SpotOrderSide::Sell => SpotReservationAssetKind::Base,
+        }
+    }
+
+    /// 返回该订单应冻结的 reservation 数量。
+    pub fn reservation_amount(&self) -> u64 {
+        match self.reservation_asset_kind() {
+            SpotReservationAssetKind::Quote => self.reservation_quote().unwrap_or(0),
+            SpotReservationAssetKind::Base => self.qty,
+        }
+    }
+
+    /// 返回该订单是否应进入撮合。
+    pub fn should_enter_matching(
+        &self,
+        best_maker: Option<&SpotOrder>,
+    ) -> Result<bool, SpotOrderMatchError> {
+        if matches!(self.time_in_force, SpotOrderTimeInForce::Ioc) {
+            return Ok(true);
+        }
+
+        let Some(best_maker) = best_maker else {
+            return Ok(false);
+        };
+
+        match self.crosses_order(best_maker) {
+            Ok(crosses) => Ok(crosses),
+            Err(_) => Ok(true),
+        }
+    }
+
+    /// 返回该订单是否需要在 place 结束后释放剩余 reservation。
+    pub fn should_release_reservation_after_place(&self) -> bool {
+        matches!(
+            self.status,
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+        )
+    }
+
+    /// 返回 place 结束后应释放的 reservation 数量。
+    pub fn release_amount_after_place(&self) -> u64 {
+        match self.status {
+            SpotOrderStatus::Filled => 0,
+            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => 0,
+            SpotOrderStatus::Canceled | SpotOrderStatus::Rejected => self.reservation_amount(),
+        }
     }
 
     /// 返回该订单是否允许撤销。

@@ -2,8 +2,8 @@ pub mod entity;
 pub mod use_case;
 
 pub use entity::{
-    Account, Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpAdlBatch,
-    HyperliquidPerpAdlBatchStatus, HyperliquidPerpAdlDeleveragingRecord,
+    Account, Balance, BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerReason,
+    HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus, HyperliquidPerpAdlDeleveragingRecord,
     HyperliquidPerpAdlExecution, HyperliquidPerpAdlExecutionStatus, HyperliquidPerpBookLevel,
     HyperliquidPerpFundingDirection, HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
     HyperliquidPerpFundingSettlement, HyperliquidPerpInsuranceFundAllocation,
@@ -53,7 +53,8 @@ pub use use_case::{
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceImmediateOrderState,
     PlaceImmediateOrderUseCase, PlaceOrderCmd, PlaceOrderError, PlaceOrderExecution,
     PlaceOrderSide, PlaceOrderState, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
-    PlaceOrderUseCase, QueryHyperliquidPerpLiquidatablePositionsAtPrice,
+    PlaceOrderUseCase, PlaceSpotOrderUc6Changes, PlaceSpotOrderUc6Cmd, PlaceSpotOrderUc6State,
+    QueryHyperliquidPerpLiquidatablePositionsAtPrice,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceError,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase,
@@ -71,6 +72,7 @@ pub use use_case::{
     SettleHyperliquidPerpTradeCmd, SettleHyperliquidPerpTradeError,
     SettleHyperliquidPerpTradeState, SettleHyperliquidPerpTradeUseCase, SettleSpotTradeChanges,
     SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
+    SpotOrderUc6Changes, SpotOrderUc6Cmd, SpotOrderUc6Error, SpotOrderUc6State, SpotOrderUseCase6,
     StartHyperliquidPerpAdlBatchChanges, StartHyperliquidPerpAdlBatchCmd,
     StartHyperliquidPerpAdlBatchError, StartHyperliquidPerpAdlBatchState,
     StartHyperliquidPerpAdlBatchUseCase, StartHyperliquidPerpAdlExecutionChanges,
