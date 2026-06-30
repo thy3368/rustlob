@@ -468,9 +468,10 @@ impl SpotOrder {
     /// 返回 place 结束后应释放的 reservation 数量。
     pub fn release_amount_after_place(&self) -> u64 {
         match self.status {
-            SpotOrderStatus::Filled => 0,
             SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => 0,
-            SpotOrderStatus::Canceled | SpotOrderStatus::Rejected => self.reservation_amount(),
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected => {
+                self.reservation_amount()
+            }
         }
     }
 

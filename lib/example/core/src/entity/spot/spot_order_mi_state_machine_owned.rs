@@ -7,7 +7,7 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use super::spot_order::{SpotOrder, SpotOrderStatus};
+use super::spot_order::{SpotOrder, SpotOrderStatus, SpotReservationAssetKind};
 use super::spot_trade::SpotTrade;
 use crate::entity::Balance;
 use crate::entity::account::balance_ledger_entry::BalanceLedgerReason;
@@ -489,13 +489,10 @@ fn derive_place_freeze_changes(
         return Err(SpotOrderMiStateMachineError::FreezeBalanceAccountMismatch);
     }
 
-    let amount = if order.reserved_quote > 0 {
-        order.reserved_quote
-    } else if order.reserved_base > 0 {
-        order.reserved_base
-    } else {
+    let amount = order.reservation_amount();
+    if amount == 0 {
         return Err(SpotOrderMiStateMachineError::MissingReservation);
-    };
+    }
 
     if !freeze_balance.can_reserve(amount) {
         return Err(SpotOrderMiStateMachineError::InsufficientFreezeBalance);
@@ -517,7 +514,10 @@ fn derive_place_freeze_changes(
 }
 
 fn taker_freeze_balance<'a>(order: &SpotOrder, cmd: &'a PlaceSpotOrderCmd) -> &'a Balance {
-    if order.reserved_quote > 0 { &cmd.taker_quote_balance } else { &cmd.taker_base_balance }
+    match order.reservation_asset_kind() {
+        SpotReservationAssetKind::Quote => &cmd.taker_quote_balance,
+        SpotReservationAssetKind::Base => &cmd.taker_base_balance,
+    }
 }
 
 fn map_balance_ledger_error(error: BalanceLedgerEntryV2Error) -> SpotOrderMiStateMachineError {
