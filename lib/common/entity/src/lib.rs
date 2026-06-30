@@ -7,9 +7,7 @@ mod entity;
 mod entity_field_change;
 mod state_machine_owned;
 
-pub use command_use_case_v6::{
-    CommandUseCase6, IssuedByParty, MainMiStatefulChanges, MainMiTruth,
-};
+pub use command_use_case_v6::{CommandUseCase6, IssuedByParty, MainMiStatefulChanges, MainMiTruth};
 pub use command_use_case_v6_runtime::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor6,
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, HandlerLatencyMetrics,
