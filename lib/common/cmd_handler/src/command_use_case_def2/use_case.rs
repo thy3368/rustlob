@@ -1,4 +1,4 @@
-use common_entity::{EntityError, EntityReplayableEvent};
+use common_entity::{EntityError, EntityReplayableEvent, IssuedByParty};
 
 /// V3 use case 的标准业务产出：
 /// `output` 是当前用例内部可复用的强类型业务中间结果，
@@ -49,14 +49,6 @@ pub struct CommandMeta {
 pub struct CommandEnvelope<C> {
     pub meta: CommandMeta,
     pub command: C,
-}
-
-/// Business actor instance carried by the command.
-/// Semantically: `party_id` plays the `role()` of the use case and issues the command.
-pub trait IssuedByParty {
-    fn party_id(&self) -> Option<&str> {
-        None
-    }
 }
 
 /// 更贴近 Use Cases（用例）的命令型抽象：
