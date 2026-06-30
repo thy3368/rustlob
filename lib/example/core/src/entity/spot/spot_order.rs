@@ -439,7 +439,7 @@ impl SpotOrder {
     }
 
     /// 返回该订单是否应进入撮合。
-    pub fn should_enter_matching(
+    pub(crate) fn should_enter_matching(
         &self,
         best_maker: Option<&SpotOrder>,
     ) -> Result<bool, SpotOrderMatchError> {
@@ -868,6 +868,40 @@ pub(crate) fn option_status_reason_value(value: Option<SpotOrderStatusReason>) -
 mod tests {
     use super::*;
 
+    fn active_sell_order() -> SpotOrder {
+        SpotOrder::new(
+            "order-2".to_string(),
+            10_001,
+            None,
+            "trader-2".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Sell,
+            SpotOrderExecution::Limit { price: 100 },
+            SpotOrderTimeInForce::Gtc,
+            2,
+            2,
+            0,
+            Some("fedcba9876543210fedcba9876543210".to_string()),
+        )
+    }
+
+    fn maker_sell(price: u64) -> SpotOrder {
+        SpotOrder::new(
+            "maker-sell".to_string(),
+            10_001,
+            Some(9),
+            "maker".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Sell,
+            SpotOrderExecution::Limit { price },
+            SpotOrderTimeInForce::Gtc,
+            1,
+            1,
+            0,
+            None,
+        )
+    }
+
     fn active_buy_order() -> SpotOrder {
         SpotOrder::new(
             "order-1".to_string(),
@@ -910,9 +944,20 @@ mod tests {
 
         assert_eq!(order.notional_quote(), Some(200));
         assert_eq!(order.reservation_quote(), Some(200));
+        assert_eq!(order.reservation_asset_kind(), SpotReservationAssetKind::Quote);
+        assert_eq!(order.reservation_amount(), 200);
         assert!(order.has_consistent_reserved_quote());
         assert!(order.has_consistent_reserved_base());
         assert_eq!(order.quote_to_release_on_cancel(), 200);
+    }
+
+    #[test]
+    fn sell_order_uses_base_as_reservation() {
+        let order = active_sell_order();
+
+        assert_eq!(order.reservation_asset_kind(), SpotReservationAssetKind::Base);
+        assert_eq!(order.reservation_amount(), 2);
+        assert_eq!(order.base_to_release_on_cancel(), 2);
     }
 
     #[test]
@@ -927,6 +972,41 @@ mod tests {
         assert!(partial.has_consistent_execution_state());
         assert!(filled.has_consistent_execution_state());
         assert!(!inconsistent_filled.has_consistent_execution_state());
+    }
+
+    #[test]
+    fn should_enter_matching_follows_ioc_gtc_and_alo_semantics() {
+        let ioc = active_buy_order().with_execution_state(SpotOrderStatus::Open, 0);
+        let ioc = SpotOrder { time_in_force: SpotOrderTimeInForce::Ioc, ..ioc };
+        let gtc = active_buy_order();
+        let alo = SpotOrder { time_in_force: SpotOrderTimeInForce::Alo, ..active_buy_order() };
+
+        assert_eq!(ioc.should_enter_matching(None), Ok(true));
+        assert_eq!(gtc.should_enter_matching(None), Ok(false));
+        assert_eq!(gtc.should_enter_matching(Some(&maker_sell(90))), Ok(true));
+        assert_eq!(gtc.should_enter_matching(Some(&maker_sell(120))), Ok(false));
+        assert_eq!(alo.should_enter_matching(Some(&maker_sell(90))), Ok(true));
+    }
+
+    #[test]
+    fn release_semantics_after_place_follow_terminal_status() {
+        let open = active_buy_order();
+        let partial = active_buy_order().with_execution_state(SpotOrderStatus::PartiallyFilled, 1);
+        let filled = active_buy_order().with_execution_state(SpotOrderStatus::Filled, 2);
+        let canceled = active_buy_order().with_execution_state(SpotOrderStatus::Canceled, 1);
+        let rejected = active_buy_order().with_execution_state(SpotOrderStatus::Rejected, 0);
+
+        assert!(!open.should_release_reservation_after_place());
+        assert!(!partial.should_release_reservation_after_place());
+        assert!(filled.should_release_reservation_after_place());
+        assert!(canceled.should_release_reservation_after_place());
+        assert!(rejected.should_release_reservation_after_place());
+
+        assert_eq!(open.release_amount_after_place(), 0);
+        assert_eq!(partial.release_amount_after_place(), 0);
+        assert_eq!(filled.release_amount_after_place(), 200);
+        assert_eq!(canceled.release_amount_after_place(), 200);
+        assert_eq!(rejected.release_amount_after_place(), 200);
     }
 
     #[test]

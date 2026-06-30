@@ -16,8 +16,7 @@ use crate::entity::spot::{
     SpotOrderMiStateMachineError,
 };
 use crate::entity::{
-    Balance, BalanceLedgerEntryV2, SpotOrder, SpotOrderStatus, SpotOrderTimeInForce,
-    SpotSettlement, SpotTrade,
+    Balance, BalanceLedgerEntryV2, SpotOrder, SpotOrderStatus, SpotOrderTimeInForce, SpotTrade,
 };
 
 /// `SpotOrder` V6 总命令：只保留完整下单与撤单两个分支。
@@ -79,6 +78,7 @@ pub struct PlaceSpotOrderUc6State {
     pub taker_order: SpotOrder,
     pub taker_base_balance: Balance,
     pub taker_quote_balance: Balance,
+    pub taker_reservation_balance: Balance,
     pub maker_orders: Vec<SpotOrder>,
     pub settlement_balances: Vec<Balance>,
 }
@@ -99,7 +99,6 @@ pub struct PlaceSpotOrderUc6Changes {
     pub created_trades: Vec<SpotTrade>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub created_settlements: Vec<SpotSettlement>,
 }
 
 /// `Cancel` 分支的统一业务 changes。
@@ -122,8 +121,7 @@ impl ReplayableChanges for PlaceSpotOrderUc6Changes {
         let mut events = Vec::with_capacity(
             1 + self.created_trades.len()
                 + self.updated_maker_orders.len()
-                + self.created_ledger_entries.len() * 2
-                + self.created_settlements.len(),
+                + self.created_ledger_entries.len() * 2,
         );
         events.push(
             self.updated_taker_order
@@ -140,9 +138,6 @@ impl ReplayableChanges for PlaceSpotOrderUc6Changes {
         )?);
         for entry in &self.created_ledger_entries {
             events.push(entry.track_create_event()?);
-        }
-        for settlement in &self.created_settlements {
-            events.push(settlement.track_create_event()?);
         }
         Ok(events)
     }
@@ -243,14 +238,6 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
         "SpotOrder"
     }
 
-    fn main_mi_identity_field(&self) -> &'static str {
-        "order_id"
-    }
-
-    fn main_mi_state_field(&self) -> &'static str {
-        "status"
-    }
-
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match cmd {
             SpotOrderUc6Cmd::Place(cmd) => {
@@ -286,6 +273,7 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
                 }
                 if !state.taker_base_balance.belongs_to_account(&cmd.party_id)
                     || !state.taker_quote_balance.belongs_to_account(&cmd.party_id)
+                    || !state.taker_reservation_balance.belongs_to_account(&cmd.party_id)
                 {
                     return Err(SpotOrderUc6Error::BalanceOwnerMismatch);
                 }
@@ -396,6 +384,7 @@ fn compute_place_changes(
     let mut current_balances = build_original_balance_map(
         &state.taker_base_balance,
         &state.taker_quote_balance,
+        &state.taker_reservation_balance,
         &state.settlement_balances,
     )?;
     let original_balances = current_balances.clone();
@@ -414,9 +403,13 @@ fn compute_place_changes(
     };
     let mut updated_maker_orders = Vec::new();
     let mut created_trades = Vec::new();
-    let mut created_settlements = Vec::new();
 
-    if should_enter_matching(&place_changes.updated_order.after, &state.maker_orders)? {
+    if place_changes
+        .updated_order
+        .after
+        .should_enter_matching(state.maker_orders.first())
+        .map_err(SpotOrderMiStateMachineError::from)?
+    {
         let match_changes = MiStateMachineOwned::compute_after_changes(
             &place_changes.updated_order.after,
             &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
@@ -438,29 +431,23 @@ fn compute_place_changes(
             match_changes.updated_maker_orders.into_iter().map(convert_pair).collect();
         created_trades = match_changes.created_trades.clone();
 
-        for (index, trade) in created_trades.iter().enumerate() {
-            let settlement = trade
-                .to_settlement(format!("{}-{}", cmd.settlement_batch_id, index + 1))
-                .ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
+        for trade in &created_trades {
             apply_settlement_trade(
                 cmd,
                 trade,
-                &settlement,
                 &mut current_balances,
                 &mut touched_balance_ids,
                 &mut all_ledger_entries,
                 &state.taker_base_balance.asset_id,
                 &state.taker_quote_balance.asset_id,
             )?;
-            created_settlements.push(settlement);
         }
     }
 
-    if updated_taker_order.after.status != SpotOrderStatus::Open
-        && updated_taker_order.after.status != SpotOrderStatus::PartiallyFilled
-    {
+    if updated_taker_order.after.should_release_reservation_after_place() {
         release_terminal_reservation(
             &updated_taker_order.after,
+            &state.taker_reservation_balance,
             &mut current_balances,
             &mut touched_balance_ids,
             &mut all_ledger_entries,
@@ -484,7 +471,6 @@ fn compute_place_changes(
         created_trades,
         updated_balances,
         created_ledger_entries: all_ledger_entries,
-        created_settlements,
     })
 }
 
@@ -535,32 +521,16 @@ fn compute_cancel_changes(
     })
 }
 
-fn should_enter_matching(
-    taker_order: &SpotOrder,
-    maker_orders: &[SpotOrder],
-) -> Result<bool, SpotOrderUc6Error> {
-    if matches!(taker_order.time_in_force, SpotOrderTimeInForce::Ioc) {
-        return Ok(true);
-    }
-
-    let Some(best_maker) = maker_orders.first() else {
-        return Ok(false);
-    };
-
-    match taker_order.crosses_order(best_maker) {
-        Ok(crosses) => Ok(crosses),
-        Err(_) => Ok(true),
-    }
-}
-
 fn build_original_balance_map(
     taker_base_balance: &Balance,
     taker_quote_balance: &Balance,
+    taker_reservation_balance: &Balance,
     settlement_balances: &[Balance],
 ) -> Result<HashMap<String, Balance>, SpotOrderUc6Error> {
     let mut balances = HashMap::new();
     insert_balance_snapshot(&mut balances, taker_base_balance.clone())?;
     insert_balance_snapshot(&mut balances, taker_quote_balance.clone())?;
+    insert_balance_snapshot(&mut balances, taker_reservation_balance.clone())?;
     for balance in settlement_balances {
         insert_balance_snapshot(&mut balances, balance.clone())?;
     }
@@ -585,20 +555,20 @@ fn insert_balance_snapshot(
 fn apply_settlement_trade(
     cmd: &PlaceSpotOrderUc6Cmd,
     trade: &SpotTrade,
-    settlement: &SpotSettlement,
     balances: &mut HashMap<String, Balance>,
     touched_balance_ids: &mut Vec<String>,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
     base_asset_id: &str,
     quote_asset_id: &str,
 ) -> Result<(), SpotOrderUc6Error> {
+    let quote_qty = trade.notional_quote().ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
     apply_balance_entry(
         balances,
         touched_balance_ids,
         ledger_entries,
         trade.buyer_account_id(),
         base_asset_id,
-        settlement.base_qty,
+        trade.qty,
         BalanceLedgerReason::SettleSpotTrade {
             trade_id: trade.trade_id.clone(),
             match_id: trade.match_id.clone(),
@@ -619,7 +589,7 @@ fn apply_settlement_trade(
         ledger_entries,
         trade.buyer_account_id(),
         quote_asset_id,
-        settlement.quote_qty,
+        quote_qty,
         BalanceLedgerReason::SettleSpotTrade {
             trade_id: trade.trade_id.clone(),
             match_id: trade.match_id.clone(),
@@ -640,7 +610,7 @@ fn apply_settlement_trade(
         ledger_entries,
         trade.seller_account_id(),
         quote_asset_id,
-        settlement.quote_qty,
+        quote_qty,
         BalanceLedgerReason::SettleSpotTrade {
             trade_id: trade.trade_id.clone(),
             match_id: trade.match_id.clone(),
@@ -661,7 +631,7 @@ fn apply_settlement_trade(
         ledger_entries,
         trade.seller_account_id(),
         base_asset_id,
-        settlement.base_qty,
+        trade.qty,
         BalanceLedgerReason::SettleSpotTrade {
             trade_id: trade.trade_id.clone(),
             match_id: trade.match_id.clone(),
@@ -681,85 +651,34 @@ fn apply_settlement_trade(
 
 fn release_terminal_reservation(
     order: &SpotOrder,
+    reservation_balance: &Balance,
     balances: &mut HashMap<String, Balance>,
     touched_balance_ids: &mut Vec<String>,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderUc6Error> {
-    let release_balance_id = if order.reserved_quote > 0 {
-        format!("{}:{}", order.account_id, infer_quote_balance_asset_id(balances, order)?)
-    } else {
-        format!("{}:{}", order.account_id, infer_base_balance_asset_id(balances, order)?)
-    };
-
-    let current_frozen = balances
-        .get(&release_balance_id)
-        .ok_or_else(|| SpotOrderUc6Error::SettlementBalanceNotFound {
-            account_id: order.account_id.clone(),
-            asset_id: release_balance_id.clone(),
-        })?
-        .frozen;
-    if current_frozen == 0 {
+    let release_balance_id = reservation_balance.entity_id();
+    let current_balance = balances.get(&release_balance_id).ok_or_else(|| {
+        SpotOrderUc6Error::SettlementBalanceNotFound {
+            account_id: reservation_balance.account_id.clone(),
+            asset_id: reservation_balance.asset_id.clone(),
+        }
+    })?;
+    let release_amount = current_balance.frozen.min(order.release_amount_after_place());
+    if release_amount == 0 {
         return Ok(());
     }
 
-    let (account_id, asset_id) = split_balance_id(&release_balance_id)?;
     apply_balance_entry(
         balances,
         touched_balance_ids,
         ledger_entries,
-        &account_id,
-        &asset_id,
-        current_frozen,
+        &reservation_balance.account_id,
+        &reservation_balance.asset_id,
+        release_amount,
         BalanceLedgerReason::UnfreezeForCancel { order_id: order.order_id.clone() },
         BalanceOperation::Unfreeze,
         format!("balance-ledger:release:{}:{}", order.order_id, release_balance_id),
     )
-}
-
-fn infer_base_balance_asset_id(
-    balances: &HashMap<String, Balance>,
-    order: &SpotOrder,
-) -> Result<String, SpotOrderUc6Error> {
-    balances
-        .values()
-        .find(|balance| balance.account_id == order.account_id && balance.frozen == order.qty)
-        .map(|balance| balance.asset_id.clone())
-        .or_else(|| {
-            balances
-                .values()
-                .find(|balance| {
-                    balance.account_id == order.account_id && balance.asset_id != order.symbol
-                })
-                .map(|balance| balance.asset_id.clone())
-        })
-        .ok_or_else(|| SpotOrderUc6Error::SettlementBalanceNotFound {
-            account_id: order.account_id.clone(),
-            asset_id: "base".to_string(),
-        })
-}
-
-fn infer_quote_balance_asset_id(
-    balances: &HashMap<String, Balance>,
-    order: &SpotOrder,
-) -> Result<String, SpotOrderUc6Error> {
-    balances
-        .values()
-        .find(|balance| {
-            balance.account_id == order.account_id
-                && balance.available.saturating_add(balance.frozen) >= order.reserved_quote
-        })
-        .map(|balance| balance.asset_id.clone())
-        .ok_or_else(|| SpotOrderUc6Error::SettlementBalanceNotFound {
-            account_id: order.account_id.clone(),
-            asset_id: "quote".to_string(),
-        })
-}
-
-fn split_balance_id(balance_id: &str) -> Result<(String, String), SpotOrderUc6Error> {
-    let mut parts = balance_id.splitn(2, ':');
-    let account_id = parts.next().ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
-    let asset_id = parts.next().ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
-    Ok((account_id.to_string(), asset_id.to_string()))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -979,6 +898,7 @@ mod tests {
             taker_order: taker_buy_order(SpotOrderTimeInForce::Ioc),
             taker_base_balance: buyer_base_balance(),
             taker_quote_balance: buyer_quote_balance(),
+            taker_reservation_balance: buyer_quote_balance(),
             maker_orders: vec![maker_sell_order(2, 90)],
             settlement_balances: vec![seller_base_balance(2), seller_quote_balance()],
         })
@@ -1008,7 +928,7 @@ mod tests {
         //
         // Then:
         // - taker 最终进入 `Filled`。
-        // - 生成 trade、maker update、结算余额变化、余额流水和 settlement。
+        // - 生成 trade、maker update、结算余额变化和余额流水。
 
         // arrange
         let cmd = place_cmd();
@@ -1026,7 +946,6 @@ mod tests {
         assert_eq!(changes.updated_taker_order.after.filled_qty, 2);
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.created_settlements.len(), 1);
         assert_eq!(changes.updated_balances.len(), 4);
         assert_eq!(changes.created_ledger_entries.len(), 6);
         assert_eq!(changes.command_kind(), "place");
@@ -1037,7 +956,7 @@ mod tests {
             other => panic!("unexpected main MI truth: {other:?}"),
         }
         assert_eq!(changes.main_mi_current_state(), Some("filled"));
-        assert_eq!(events.len(), 16);
+        assert_eq!(events.len(), 15);
         assert_eq!(event_field(&events[0], "status"), Some("filled"));
         assert_eq!(event_field(&events[1], "trade_id"), Some("match-1-1"));
         assert_eq!(event_field(&events[2], "filled_qty"), Some("2"));
@@ -1045,7 +964,6 @@ mod tests {
         assert_eq!(event_field(&events[3], "asset_id"), Some("USDT"));
         assert_eq!(event_field(&events[9], "reason"), Some("freeze_for_order"));
         assert_eq!(event_field(&events[14], "reason"), Some("unfreeze_for_cancel"));
-        assert_eq!(event_field(&events[15], "settlement_id"), Some("settle-1-1"));
     }
 
     #[test]
@@ -1060,6 +978,7 @@ mod tests {
             taker_order: taker_buy_order(SpotOrderTimeInForce::Gtc),
             taker_base_balance: buyer_base_balance(),
             taker_quote_balance: buyer_quote_balance(),
+            taker_reservation_balance: buyer_quote_balance(),
             maker_orders: vec![maker_sell_order(2, 120)],
             settlement_balances: vec![seller_base_balance(2), seller_quote_balance()],
         });
@@ -1071,7 +990,6 @@ mod tests {
         };
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Open);
         assert!(changes.created_trades.is_empty());
-        assert!(changes.created_settlements.is_empty());
         assert_eq!(changes.updated_balances.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 1);
     }
@@ -1101,6 +1019,13 @@ mod tests {
             taker_order: taker_buy_order(SpotOrderTimeInForce::Ioc),
             taker_base_balance: buyer_base_balance(),
             taker_quote_balance: Balance::new("buyer".to_string(), "USDT".to_string(), 10, 0, 1),
+            taker_reservation_balance: Balance::new(
+                "buyer".to_string(),
+                "USDT".to_string(),
+                10,
+                0,
+                1,
+            ),
             maker_orders: vec![],
             settlement_balances: vec![],
         });
@@ -1152,6 +1077,61 @@ mod tests {
         assert_eq!(events.len(), 3);
         assert_eq!(event_field(&events[0], "status"), Some("canceled"));
         assert_eq!(event_field(&events[2], "reason"), Some("unfreeze_for_cancel"));
+    }
+
+    #[test]
+    fn place_ioc_partial_fill_releases_remaining_reservation() {
+        let use_case = SpotOrderUseCase6;
+        let state = SpotOrderUc6State::Place(PlaceSpotOrderUc6State {
+            taker_order: taker_buy_order(SpotOrderTimeInForce::Ioc),
+            taker_base_balance: buyer_base_balance(),
+            taker_quote_balance: buyer_quote_balance(),
+            taker_reservation_balance: buyer_quote_balance(),
+            maker_orders: vec![maker_sell_order(1, 90)],
+            settlement_balances: vec![seller_base_balance(1), seller_quote_balance()],
+        });
+
+        let changes = use_case.compute_changes(&place_cmd(), state).unwrap();
+
+        let SpotOrderUc6Changes::Place(changes) = changes else {
+            panic!("expected place changes");
+        };
+        assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Canceled);
+        assert_eq!(changes.updated_taker_order.after.filled_qty, 1);
+        assert_eq!(changes.created_trades.len(), 1);
+        assert_eq!(changes.created_ledger_entries.len(), 6);
+        let taker_quote = changes
+            .updated_balances
+            .iter()
+            .find(|pair| pair.after.account_id == "buyer" && pair.after.asset_id == "USDT")
+            .unwrap();
+        assert_eq!(taker_quote.after.available, 910);
+        assert_eq!(taker_quote.after.frozen, 0);
+    }
+
+    #[test]
+    fn place_ioc_without_match_releases_full_reservation() {
+        let use_case = SpotOrderUseCase6;
+        let state = SpotOrderUc6State::Place(PlaceSpotOrderUc6State {
+            taker_order: taker_buy_order(SpotOrderTimeInForce::Ioc),
+            taker_base_balance: buyer_base_balance(),
+            taker_quote_balance: buyer_quote_balance(),
+            taker_reservation_balance: buyer_quote_balance(),
+            maker_orders: vec![],
+            settlement_balances: vec![],
+        });
+
+        let changes = use_case.compute_changes(&place_cmd(), state).unwrap();
+
+        let SpotOrderUc6Changes::Place(changes) = changes else {
+            panic!("expected place changes");
+        };
+        assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Rejected);
+        assert!(changes.created_trades.is_empty());
+        assert_eq!(changes.updated_balances.len(), 1);
+        assert_eq!(changes.created_ledger_entries.len(), 2);
+        assert_eq!(changes.updated_balances[0].after.available, 1_000);
+        assert_eq!(changes.updated_balances[0].after.frozen, 0);
     }
 
     #[derive(Debug, Default)]
@@ -1299,14 +1279,6 @@ mod tests {
 
         fn main_mi_name(&self) -> &'static str {
             "SpotOrder"
-        }
-
-        fn main_mi_identity_field(&self) -> &'static str {
-            "order_id"
-        }
-
-        fn main_mi_state_field(&self) -> &'static str {
-            "status"
         }
 
         fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
