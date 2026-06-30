@@ -234,18 +234,6 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
     type Error = SpotOrderUc6Error;
     type Changes = SpotOrderUc6Changes;
 
-    fn main_mi_name(&self) -> &'static str {
-        "SpotOrder"
-    }
-
-    fn main_mi_identity_field(&self) -> &'static str {
-        "order_id"
-    }
-
-    fn main_mi_state_field(&self) -> &'static str {
-        "status"
-    }
-
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match cmd {
             SpotOrderUc6Cmd::Place(cmd) => {
@@ -1285,18 +1273,6 @@ mod tests {
         type Error = SpotOrderUc6Error;
         type Changes = BrokenChanges;
 
-        fn main_mi_name(&self) -> &'static str {
-            "SpotOrder"
-        }
-
-        fn main_mi_identity_field(&self) -> &'static str {
-            "order_id"
-        }
-
-        fn main_mi_state_field(&self) -> &'static str {
-            "status"
-        }
-
         fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
             SpotOrderUseCase6.pre_check_command(cmd)
         }
@@ -1339,7 +1315,7 @@ mod tests {
         assert_eq!(
             result,
             Err(CommandUseCaseExecutionError::EventProject(EventProjectError::Custom(
-                "missing command_kind for SpotOrder (status)".to_string()
+                "missing command_kind for main MI stateful changes".to_string()
             )))
         );
         assert_eq!(outbound.calls(), vec!["load_state"]);
