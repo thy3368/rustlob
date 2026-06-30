@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, MiStateMachine};
+use common_entity::{Entity, MiStateMachineOwned};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -215,11 +215,11 @@ fn derive_cancel_changes(
         reason,
     )
     .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
-    let balance_ledger_entry = draft_entry
-        .compute_changes(&balance_command)
-        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
-        .updated_entry
-        .after;
+    let balance_ledger_entry =
+        MiStateMachineOwned::compute_after_changes(&draft_entry, &balance_command, ())
+            .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
+            .updated_entry
+            .after;
     Ok(CancelSpotOrderChanges {
         canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
         released_balances: vec![released_balance],

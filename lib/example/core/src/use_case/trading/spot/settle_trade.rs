@@ -5,7 +5,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, MiStateMachine};
+use common_entity::{Entity, MiStateMachineOwned};
 use thiserror::Error;
 
 use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
@@ -231,7 +231,9 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
                     balance_command.clone(),
                     reason,
                 )
-                .and_then(|draft| draft.compute_changes(&balance_command))
+                .and_then(|draft| {
+                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, ())
+                })
                 .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?
                 .updated_entry
                 .after,

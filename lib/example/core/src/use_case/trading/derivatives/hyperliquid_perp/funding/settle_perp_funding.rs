@@ -4,9 +4,10 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::Entity;
+use common_entity::{Entity, MiStateMachineOwned};
 use thiserror::Error;
 
+use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
 use crate::entity::{
     Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingDirection,
     HyperliquidPerpFundingSettlement, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
@@ -225,23 +226,35 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 .get(&balance_id)
                 .cloned()
                 .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
+            let balance_command =
+                if updated_balance.after.available > updated_balance.before.available {
+                    BalanceLedgerCommand::CreditAvailable {
+                        balance: updated_balance.before.clone(),
+                        amount: updated_balance.after.available - updated_balance.before.available,
+                    }
+                } else {
+                    BalanceLedgerCommand::DebitAvailable {
+                        balance: updated_balance.before.clone(),
+                        amount: updated_balance.before.available - updated_balance.after.available,
+                    }
+                };
             created_balance_ledger_entries.push(
-                BalanceLedgerEntry::from_transition(
+                BalanceLedgerEntry::draft_from_balance(
                     format!(
                         "balance-ledger:funding:{}:{}",
                         cmd.funding_batch_id,
                         updated_balance.after.entity_id()
                     ),
-                    updated_balance.after.account_id.clone(),
-                    updated_balance.after.asset_id.clone(),
-                    updated_balance.after.entity_id(),
-                    updated_balance.before.available,
-                    updated_balance.before.frozen,
-                    updated_balance.after.available,
-                    updated_balance.after.frozen,
+                    &updated_balance.before,
+                    balance_command.clone(),
                     reason,
                 )
-                .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?,
+                .and_then(|draft| {
+                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, ())
+                })
+                .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?
+                .updated_entry
+                .after,
             );
         }
 

@@ -6,6 +6,7 @@ mod match_order;
 pub mod place_order;
 mod settle_trade;
 mod spot_order_mi;
+mod spot_order_uc6;
 
 pub use cancel_order::{
     CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
@@ -31,5 +32,11 @@ pub use settle_trade::{
 };
 pub use spot_order_mi::{
     CancelSpotOrderMiChanges, CancelSpotOrderMiCmd, CancelSpotOrderMiState,
-    CancelSpotOrderMiUseCase, PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUseCase,
+    CancelSpotOrderMiUseCase, MatchSpotOrderMiChanges, MatchSpotOrderMiCmd, MatchSpotOrderMiState,
+    MatchSpotOrderMiUseCase, PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUseCase,
+};
+pub use spot_order_uc6::{
+    CancelSpotOrderUc6Changes, CancelSpotOrderUc6Cmd, CancelSpotOrderUc6State,
+    PlaceSpotOrderUc6Changes, PlaceSpotOrderUc6Cmd, PlaceSpotOrderUc6State, SpotOrderUc6Changes,
+    SpotOrderUc6Cmd, SpotOrderUc6Error, SpotOrderUc6State, SpotOrderUseCase6,
 };

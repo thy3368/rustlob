@@ -1,39 +1,30 @@
 use cmd_handler::command_use_case_def2::{
     CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges,
 };
-use common_entity::MiStateMachine;
+use common_entity::MiStateMachineOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::entity::spot::spot_order_mi_state_machine::{
-    CancelSpotOrderChanges as EntityCancelSpotOrderChanges,
-    PlaceSpotOrderChanges as EntityPlaceSpotOrderChanges, PlaceSpotOrderSettlementInput,
-};
 use crate::entity::spot::{
-    CancelSpotOrderCmd as EntityCancelSpotOrderCmd, PlaceSpotOrderCmd as EntityPlaceSpotOrderCmd,
-    SpotOrderMiChanges, SpotOrderMiCommand, SpotOrderMiStateMachineError,
+    CancelSpotOrderChanges as EntityCancelSpotOrderChanges,
+    CancelSpotOrderCmd as EntityCancelSpotOrderCmd,
+    MatchSpotOrderChanges as EntityMatchSpotOrderChanges,
+    MatchSpotOrderCmd as EntityMatchSpotOrderCmd,
+    PlaceSpotOrderChanges as EntityPlaceSpotOrderChanges,
+    PlaceSpotOrderCmd as EntityPlaceSpotOrderCmd, SpotOrderMiChanges, SpotOrderMiCommand,
+    SpotOrderMiStateMachineError,
 };
 use crate::entity::{Balance, SpotOrder};
 
-/// 现货订单下单 MI 状态机所需的已加载状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderState {
-    /// 当前待推进的 taker 订单。
     pub order: SpotOrder,
 }
 
-/// 推进现货订单 Place 状态机的命令。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderCmd {
-    /// 发起下单的交易账户 ID。
     pub party_id: String,
-    /// 按撮合优先级排序的 maker 订单。
-    pub makers: Option<Vec<SpotOrder>>,
-    /// taker base 余额快照。
     pub taker_base_balance: Balance,
-    /// taker quote 余额快照。
     pub taker_quote_balance: Balance,
-    /// 同步成交清结算所需的 maker 余额快照；本次下单没有成交时不会使用。
-    pub settlement_inputs: Option<Vec<PlaceSpotOrderSettlementInput>>,
 }
 
 impl IssuedByParty for PlaceSpotOrderCmd {
@@ -42,10 +33,8 @@ impl IssuedByParty for PlaceSpotOrderCmd {
     }
 }
 
-/// 下单状态机变化。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderChanges {
-    /// 实体状态机产出的下单变化。
     pub inner: EntityPlaceSpotOrderChanges,
 }
 
@@ -57,7 +46,6 @@ impl ReplayableChanges for PlaceSpotOrderChanges {
     }
 }
 
-/// 推进现货订单 Place MI 状态机的 use case。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceSpotOrderUseCase;
 
@@ -90,18 +78,15 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
                 reason: "order does not belong to command party",
             });
         }
-        state.order.pre_check_command(&SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-            makers: cmd.makers.clone(),
-            taker_base_balance: cmd.taker_base_balance.clone(),
-            taker_quote_balance: cmd.taker_quote_balance.clone(),
-            settlement_inputs: cmd.settlement_inputs.clone(),
-        }))?;
-        state.order.validate_state_transition(&SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-            makers: cmd.makers.clone(),
-            taker_base_balance: cmd.taker_base_balance.clone(),
-            taker_quote_balance: cmd.taker_quote_balance.clone(),
-            settlement_inputs: cmd.settlement_inputs.clone(),
-        }))
+        MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
+                taker_base_balance: cmd.taker_base_balance.clone(),
+                taker_quote_balance: cmd.taker_quote_balance.clone(),
+            }),
+            (),
+        )
+        .map(|_| ())
     }
 
     fn compute_changes(
@@ -109,35 +94,130 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
-        let changes =
-            state.order.compute_changes(&SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-                makers: cmd.makers.clone(),
+        let changes = MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
                 taker_base_balance: cmd.taker_base_balance.clone(),
                 taker_quote_balance: cmd.taker_quote_balance.clone(),
-                settlement_inputs: cmd.settlement_inputs.clone(),
-            }))?;
+            }),
+            (),
+        )?;
         match changes {
             SpotOrderMiChanges::Place(inner) => Ok(PlaceSpotOrderChanges { inner }),
-            SpotOrderMiChanges::Cancel(_) => {
+            SpotOrderMiChanges::Match(_) | SpotOrderMiChanges::Cancel(_) => {
                 Err(SpotOrderMiStateMachineError::InvalidCommandFields {
-                    reason: "place use case received cancel changes",
+                    reason: "place use case received non-place changes",
                 })
             }
         }
     }
 }
 
-/// 现货订单撤单 MI 状态机所需的已加载状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderMiState {
-    /// 当前待撤销的订单。
+pub struct MatchSpotOrderMiState {
     pub order: SpotOrder,
 }
 
-/// 推进现货订单 Cancel 状态机的命令。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchSpotOrderMiCmd {
+    pub party_id: String,
+    pub match_id: String,
+    pub makers: Vec<SpotOrder>,
+}
+
+impl IssuedByParty for MatchSpotOrderMiCmd {
+    fn party_id(&self) -> Option<&str> {
+        Some(self.party_id.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchSpotOrderMiChanges {
+    pub inner: EntityMatchSpotOrderChanges,
+}
+
+impl ReplayableChanges for MatchSpotOrderMiChanges {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+        common_entity::ReplayableChanges::to_replayable_events(&self.inner)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MatchSpotOrderMiUseCase;
+
+impl CommandUseCase4 for MatchSpotOrderMiUseCase {
+    type Command = MatchSpotOrderMiCmd;
+    type GivenState = MatchSpotOrderMiState;
+    type Error = SpotOrderMiStateMachineError;
+    type Changes = MatchSpotOrderMiChanges;
+
+    fn role(&self) -> &'static str {
+        "MatchingEngine"
+    }
+
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        if cmd.party_id.is_empty() {
+            return Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                reason: "party_id must not be empty",
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_against_state(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::GivenState,
+    ) -> Result<(), Self::Error> {
+        if !state.order.belongs_to_account(&cmd.party_id) {
+            return Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                reason: "order does not belong to command party",
+            });
+        }
+        MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
+                match_id: cmd.match_id.clone(),
+                makers: cmd.makers.clone(),
+            }),
+            (),
+        )
+        .map(|_| ())
+    }
+
+    fn compute_changes(
+        &self,
+        cmd: &Self::Command,
+        state: Self::GivenState,
+    ) -> Result<Self::Changes, Self::Error> {
+        let changes = MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
+                match_id: cmd.match_id.clone(),
+                makers: cmd.makers.clone(),
+            }),
+            (),
+        )?;
+        match changes {
+            SpotOrderMiChanges::Match(inner) => Ok(MatchSpotOrderMiChanges { inner }),
+            SpotOrderMiChanges::Place(_) | SpotOrderMiChanges::Cancel(_) => {
+                Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                    reason: "match use case received non-match changes",
+                })
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderMiState {
+    pub order: SpotOrder,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderMiCmd {
-    /// 发起撤单的交易账户 ID。
     pub party_id: String,
 }
 
@@ -147,10 +227,8 @@ impl IssuedByParty for CancelSpotOrderMiCmd {
     }
 }
 
-/// 撤单状态机变化。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderMiChanges {
-    /// 实体状态机产出的撤单变化。
     pub inner: EntityCancelSpotOrderChanges,
 }
 
@@ -162,7 +240,6 @@ impl ReplayableChanges for CancelSpotOrderMiChanges {
     }
 }
 
-/// 推进现货订单 Cancel MI 状态机的 use case。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CancelSpotOrderMiUseCase;
 
@@ -195,7 +272,12 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
                 reason: "order does not belong to command party",
             });
         }
-        state.order.validate_state_transition(&SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd))
+        MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
+            (),
+        )
+        .map(|_| ())
     }
 
     fn compute_changes(
@@ -203,13 +285,16 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
         _cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
-        let changes =
-            state.order.compute_changes(&SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd))?;
+        let changes = MiStateMachineOwned::compute_after_changes(
+            &state.order,
+            &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
+            (),
+        )?;
         match changes {
             SpotOrderMiChanges::Cancel(inner) => Ok(CancelSpotOrderMiChanges { inner }),
-            SpotOrderMiChanges::Place(_) => {
+            SpotOrderMiChanges::Place(_) | SpotOrderMiChanges::Match(_) => {
                 Err(SpotOrderMiStateMachineError::InvalidCommandFields {
-                    reason: "cancel use case received place changes",
+                    reason: "cancel use case received non-cancel changes",
                 })
             }
         }
