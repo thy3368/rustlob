@@ -14,8 +14,8 @@ pub use command_use_case_v6_runtime::{
     ObserveHandlerLatency, UseCaseChanges, UseCaseReplyMapper,
 };
 pub use entity::{
-    AggregateRole, Entity, EntityMutationModel, FourColorArchetype, MiCausalRelation,
-    MiCausalSourceMetadata, MiFactType,
+    AggregateRole, Entity, EntityMutationModel, EntityUseCaseApiPolicy, EntityUseCaseApiSurface,
+    FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
