@@ -1,6 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityLifecycleModel, EntityMutationModel,
-    FourColorArchetype,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -51,6 +50,7 @@ pub enum BalanceLedgerEntryV2Error {
 /// 一条 create-only 的余额流水审计事实。
 ///
 /// 该实体记录某条 `Balance` 在单次业务动作前后的快照差异，不维护额外状态机。
+/// 在聚合边界上，它自身作为一条独立的审计事实聚合根存在。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceLedgerEntryV2 {
     /// 流水记录 ID。
@@ -244,8 +244,8 @@ impl Entity for BalanceLedgerEntryV2 {
         EntityMutationModel::AppendOnlyRecord
     }
 
-    fn lifecycle_model() -> EntityLifecycleModel {
-        EntityLifecycleModel::StatelessFact
+    fn aggregate_role() -> AggregateRole {
+        AggregateRole::AggregateRoot
     }
 
     fn entity_version(&self) -> u64 {
@@ -355,6 +355,7 @@ mod tests {
             BalanceLedgerEntryV2::freeze("ledger-1".to_string(), &mut balance, 200, order_reason())
                 .unwrap();
 
+        assert_eq!(BalanceLedgerEntryV2::aggregate_role(), AggregateRole::AggregateRoot);
         assert_eq!(balance.available, 800);
         assert_eq!(balance.frozen, 300);
         assert_eq!(balance.version, 4);
