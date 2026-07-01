@@ -245,7 +245,7 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
     fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
-        state: <Self::Command as CommandWithGivenState>::GivenState,
+        state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         match (cmd, state) {
             (SpotOrderUc6Cmd::Place(cmd), SpotOrderUc6State::Place(state)) => {
@@ -301,7 +301,7 @@ pub enum SpotOrderUc6Error {
 
 fn compute_place_changes(
     cmd: &PlaceSpotOrderUc6Cmd,
-    state: PlaceSpotOrderUc6State,
+    state: &PlaceSpotOrderUc6State,
 ) -> Result<PlaceSpotOrderUc6Changes, SpotOrderUc6Error> {
     // `Place` 先只推进 taker 自身状态机，完成下单时的首笔冻结，
     // 拿到后续撮合流水要继续叠加的初始 changes。
@@ -337,12 +337,13 @@ fn compute_place_changes(
         .ok_or(SpotOrderUc6Error::ArithmeticOverflow)?
         .after
         .clone();
+    let freeze_balance_id = freeze_balance_after.entity_id();
     // 吸收 `Place` 阶段已经产生的首笔余额变化，后续所有结算都基于这个 authoritative 余额视图继续滚动。
-    current_balances.insert(freeze_balance_after.entity_id(), freeze_balance_after.clone());
-    let mut touched_balance_ids = vec![freeze_balance_after.entity_id()];
+    current_balances.insert(freeze_balance_id.clone(), freeze_balance_after);
+    let mut touched_balance_ids = vec![freeze_balance_id];
 
     let mut updated_taker_order = UpdatedEntityPair {
-        before: state.taker_order,
+        before: state.taker_order.clone(),
         after: place_changes.updated_order.after.clone(),
     };
     let mut updated_maker_orders = Vec::new();
@@ -360,7 +361,7 @@ fn compute_place_changes(
             &place_changes.updated_order.after,
             &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
                 match_id: cmd.match_id.clone(),
-                makers: state.maker_orders,
+                makers: state.maker_orders.clone(),
             }),
             &(),
         )?;
@@ -374,10 +375,10 @@ fn compute_place_changes(
 
         // 撮合状态机给出 taker/maker/trade 三类结果，这里把它们吸收到 place 主流水里，
         // 后续统一按 trade 逐笔做资金结算。
-        updated_taker_order.after = match_changes.updated_taker_order.after.clone();
+        updated_taker_order.after = match_changes.updated_taker_order.after;
         updated_maker_orders =
             match_changes.updated_maker_orders.into_iter().map(convert_pair).collect();
-        created_trades = match_changes.created_trades.clone();
+        created_trades = match_changes.created_trades;
 
         // 每笔成交都要拆成标准现货结算分录，分别更新买卖双方的 base/quote 余额。
         for trade in &created_trades {
@@ -427,7 +428,7 @@ fn compute_place_changes(
 
 fn compute_cancel_changes(
     _cmd: &CancelSpotOrderUc6Cmd,
-    state: CancelSpotOrderUc6State,
+    state: &CancelSpotOrderUc6State,
 ) -> Result<CancelSpotOrderUc6Changes, SpotOrderUc6Error> {
     let cancel_changes = MiStateMachineOwned::compute_after_changes(
         &state.order,
@@ -465,7 +466,7 @@ fn compute_cancel_changes(
     Ok(CancelSpotOrderUc6Changes {
         updated_order: convert_pair(cancel_changes.updated_order),
         updated_balances: vec![UpdatedEntityPair {
-            before: state.release_balance,
+            before: state.release_balance.clone(),
             after: after_balance,
         }],
         created_ledger_entries: vec![entry],
@@ -894,7 +895,7 @@ mod tests {
         let state = place_state_with_one_maker();
 
         // act
-        let changes = use_case.compute_before_after_changes(&cmd, state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cmd, &state).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         // assert
@@ -935,7 +936,7 @@ mod tests {
             settlement_balances: vec![seller_base_balance(2), seller_quote_balance()],
         });
 
-        let changes = use_case.compute_before_after_changes(&cmd, state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cmd, &state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -951,13 +952,11 @@ mod tests {
     fn branch_mismatch_returns_business_error() {
         let use_case = SpotOrderUseCase6;
 
-        let result = use_case.compute_before_after_changes(
-            &place_cmd(),
-            SpotOrderUc6State::Cancel(CancelSpotOrderUc6State {
-                order: taker_buy_order(SpotOrderTimeInForce::Gtc),
-                release_balance: buyer_quote_balance(),
-            }),
-        );
+        let state = SpotOrderUc6State::Cancel(CancelSpotOrderUc6State {
+            order: taker_buy_order(SpotOrderTimeInForce::Gtc),
+            release_balance: buyer_quote_balance(),
+        });
+        let result = use_case.compute_before_after_changes(&place_cmd(), &state);
 
         assert_eq!(
             result,
@@ -983,7 +982,7 @@ mod tests {
             settlement_balances: vec![],
         });
 
-        let result = use_case.compute_before_after_changes(&place_cmd(), state);
+        let result = use_case.compute_before_after_changes(&place_cmd(), &state);
 
         assert_eq!(
             result,
@@ -1002,7 +1001,7 @@ mod tests {
             release_balance: Balance::new("buyer".to_string(), "USDT".to_string(), 800, 200, 1),
         });
 
-        let changes = use_case.compute_before_after_changes(&cancel_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cancel_cmd(), &state).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         let SpotOrderUc6Changes::Cancel(changes) = changes else {
@@ -1036,7 +1035,7 @@ mod tests {
             settlement_balances: vec![seller_base_balance(1), seller_quote_balance()],
         });
 
-        let changes = use_case.compute_before_after_changes(&place_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&place_cmd(), &state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -1067,7 +1066,7 @@ mod tests {
             settlement_balances: vec![],
         });
 
-        let changes = use_case.compute_before_after_changes(&place_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&place_cmd(), &state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -1222,7 +1221,7 @@ mod tests {
         fn compute_before_after_changes(
             &self,
             cmd: &Self::Command,
-            state: <Self::Command as CommandWithGivenState>::GivenState,
+            state: &<Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::Changes, Self::Error> {
             let SpotOrderUc6Changes::Place(changes) =
                 SpotOrderUseCase6.compute_before_after_changes(cmd, state)?
