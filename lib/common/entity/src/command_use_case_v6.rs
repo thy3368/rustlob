@@ -14,7 +14,7 @@ pub trait IssuedByParty {
 /// - `GivenState`
 /// - `Changes`
 ///
-/// 三者分支必须在 `compute_changes(cmd, state)` 内显式匹配，
+/// 三者分支必须在 `compute_changes(cmd, &state)` 内显式匹配，
 /// 分支错配时必须返回明确业务错误。
 pub trait CommandUseCase6: Send + Sync {
     type Command: IssuedByParty + CommandWithGivenState;
@@ -36,9 +36,13 @@ pub trait CommandUseCase6: Send + Sync {
     }
 
     /// 一次业务推导，只返回强类型领域 changes。
+    ///
+    /// `GivenState` 表示 outbound 已加载出的 authoritative context。
+    /// 默认只以只读借用形式传入 use case，不把它当作可直接消费的工作缓冲区。
+    /// 如果实现内部确实需要可变工作态，应显式 `clone` 到局部变量后再重组。
     fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
-        state: <Self::Command as CommandWithGivenState>::GivenState,
+        state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::Changes, Self::Error>;
 }

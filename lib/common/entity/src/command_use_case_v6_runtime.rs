@@ -373,8 +373,8 @@ impl CommandUseCaseExecutor6 {
             .map_err(CommandUseCaseExecutionError::Business)?;
             let (changes, apply_changes_ns) = trace_phase(
                 "compute_changes",
-                "workflow.compute_changes(&command, state)",
-                || use_case.compute_before_after_changes(&command, state),
+                "workflow.compute_changes(&command, &state)",
+                || use_case.compute_before_after_changes(&command, &state),
             )
             .map_err(CommandUseCaseExecutionError::Business)?;
             let (events, event_project_ns) = trace_phase(
