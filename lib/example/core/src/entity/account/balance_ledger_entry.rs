@@ -642,7 +642,7 @@ impl BalanceLedgerEntry {
 }
 
 impl MiStateMachineOwnedUnchecked for BalanceLedgerEntry {
-    type Command = BalanceLedgerCommand;
+    type Command<'a> = BalanceLedgerCommand;
     type State = BalanceLedgerEntryStatus;
     type Error = BalanceLedgerEntryError;
     type AfterChanges = BalanceLedgerEntryMiChanges;
@@ -651,25 +651,25 @@ impl MiStateMachineOwnedUnchecked for BalanceLedgerEntry {
         &self.status
     }
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
         if cmd.amount() == 0 {
             return Err(BalanceLedgerEntryError::InvalidAmount);
         }
         Ok(())
     }
 
-    fn validate_state_transition(
+    fn validate_state_transition<'a>(
         &self,
-        cmd: &Self::Command,
-        _given_state: &<Self::Command as common_entity::CommandWithGivenState>::GivenState,
+        cmd: &Self::Command<'a>,
+        _given_state: &<Self::Command<'a> as common_entity::CommandWithGivenState>::GivenState,
     ) -> Result<(), Self::Error> {
         self.validate_apply_command(cmd).map(|_| ())
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_changes_unchecked<'a>(
         &self,
-        cmd: &Self::Command,
-        _given_state: &<Self::Command as common_entity::CommandWithGivenState>::GivenState,
+        cmd: &Self::Command<'a>,
+        _given_state: &<Self::Command<'a> as common_entity::CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         let expected_after_balance = self.validate_apply_command(cmd)?;
 
