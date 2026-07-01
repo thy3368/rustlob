@@ -3,8 +3,6 @@ use std::fmt::Debug;
 use crate::entity_field_change::{current_timestamp, next_sequence};
 use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
-/// todo 业务方法 跨因果链放在use case里；因果链内放在链根里 这规则要通过skill保障
-
 /// 四色建模中的实体原型分类。
 ///
 /// 该分类只表达领域建模语义，用于标注实体在业务模型里的角色。
@@ -92,37 +90,31 @@ impl EntityMutationModel {
     }
 }
 
-/// 实体的业务生命周期模型分类。
+/// 实体在聚合边界中的业务角色分类。
 ///
-/// 该分类只回答实体是否拥有自己的业务生命周期或状态机。
-/// 它独立于变更模型，不参与 replay 事件编码、实体类型码分配或持久化格式语义，
-/// 也不自动限制 `track_update_event` 或 `track_delete_event` 的运行行为。
+/// 该分类只表达领域建模中的聚合语义，不参与 replay 事件编码、实体类型码分配
+/// 或持久化格式语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EntityLifecycleModel {
+pub enum AggregateRole {
     /// 尚未分类，作为旧实体和未治理实体的默认值。
     Unclassified,
-    /// 创建即成立、没有业务状态迁移的事实记录。
+    /// 聚合根。
     ///
-    /// 典型例子：成交、资金流水、审计记录。
-    StatelessFact,
-    /// 有明确业务生命周期或状态机的实体。
+    /// 典型例子：订单、账户、仓位。
+    AggregateRoot,
+    /// 聚合成员。
     ///
-    /// 典型例子：订单、仓位、账户状态。
-    StatefulLifecycle,
-    /// 没有独立生命周期，只随所属聚合或来源事实存在。
-    ///
-    /// 典型例子：owned object、派生读模型。
-    DependentLifecycle,
+    /// 典型例子：owned object、聚合内明细项。
+    AggregateMember,
 }
 
-impl EntityLifecycleModel {
-    /// 返回稳定的生命周期模型标签字符串。
+impl AggregateRole {
+    /// 返回稳定的聚合角色标签字符串。
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unclassified => "unclassified",
-            Self::StatelessFact => "stateless_fact",
-            Self::StatefulLifecycle => "stateful_lifecycle",
-            Self::DependentLifecycle => "dependent_lifecycle",
+            Self::AggregateRoot => "aggregate_root",
+            Self::AggregateMember => "aggregate_member",
         }
     }
 }
@@ -198,21 +190,19 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         EntityMutationModel::VersionedMutable
     }
 
-    /// 返回实体是否拥有自己的业务生命周期或状态机。
+    /// 返回实体在聚合边界中的业务角色。
     ///
-    /// 默认值是 [`EntityLifecycleModel::Unclassified`]，用于兼容旧实体和未治理实体。
+    /// 默认值是 [`AggregateRole::Unclassified`]，用于兼容旧实体和未治理实体。
     ///
-    /// 该元数据只用于领域模型治理，不改变 replay、实体类型码或持久化语义，也不自动限制
-    /// `track_update_event` 或 `track_delete_event`。若实体创建即代表一个已经成立的事实，
-    /// 应 override 为 [`EntityLifecycleModel::StatelessFact`]；若实体有明确状态机，
-    /// 应 override 为 [`EntityLifecycleModel::StatefulLifecycle`]；若实体只随所属聚合或来源事实存在，
-    /// 应 override 为 [`EntityLifecycleModel::DependentLifecycle`]。
+    /// 该元数据只用于领域模型治理，不改变 replay、实体类型码或持久化语义。
+    /// 若实体是聚合边界对外暴露的一致性根，应 override 为 [`AggregateRole::AggregateRoot`]；
+    /// 若实体只在某个聚合内部存在，应 override 为 [`AggregateRole::AggregateMember`]。
     #[inline]
-    fn lifecycle_model() -> EntityLifecycleModel
+    fn aggregate_role() -> AggregateRole
     where
         Self: Sized,
     {
-        EntityLifecycleModel::Unclassified
+        AggregateRole::Unclassified
     }
 
     /// 返回实体对应的稳定 MI 业务事实类型名。
@@ -524,12 +514,12 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    struct StatefulLifecycleEntity {
+    struct AggregateRootEntity {
         id: i64,
         version: u64,
     }
 
-    impl Entity for StatefulLifecycleEntity {
+    impl Entity for AggregateRootEntity {
         type Id = i64;
 
         fn entity_id(&self) -> Self::Id {
@@ -540,11 +530,44 @@ mod tests {
             13
         }
 
-        fn lifecycle_model() -> EntityLifecycleModel
+        fn aggregate_role() -> AggregateRole
         where
             Self: Sized,
         {
-            EntityLifecycleModel::StatefulLifecycle
+            AggregateRole::AggregateRoot
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct AggregateMemberEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for AggregateMemberEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            14
+        }
+
+        fn aggregate_role() -> AggregateRole
+        where
+            Self: Sized,
+        {
+            AggregateRole::AggregateMember
         }
 
         fn entity_version(&self) -> u64 {
@@ -596,16 +619,18 @@ mod tests {
     }
 
     #[test]
-    fn entity_defaults_to_unclassified_lifecycle_model() {
-        assert_eq!(TestEntity::lifecycle_model(), EntityLifecycleModel::Unclassified);
+    fn entity_defaults_to_unclassified_aggregate_role() {
+        assert_eq!(TestEntity::aggregate_role(), AggregateRole::Unclassified);
     }
 
     #[test]
-    fn entity_can_override_lifecycle_model() {
-        assert_eq!(
-            StatefulLifecycleEntity::lifecycle_model(),
-            EntityLifecycleModel::StatefulLifecycle
-        );
+    fn entity_can_override_aggregate_role_as_root() {
+        assert_eq!(AggregateRootEntity::aggregate_role(), AggregateRole::AggregateRoot);
+    }
+
+    #[test]
+    fn entity_can_override_aggregate_role_as_member() {
+        assert_eq!(AggregateMemberEntity::aggregate_role(), AggregateRole::AggregateMember);
     }
 
     #[test]
@@ -617,11 +642,10 @@ mod tests {
     }
 
     #[test]
-    fn entity_lifecycle_model_returns_stable_business_label() {
-        assert_eq!(EntityLifecycleModel::Unclassified.as_str(), "unclassified");
-        assert_eq!(EntityLifecycleModel::StatelessFact.as_str(), "stateless_fact");
-        assert_eq!(EntityLifecycleModel::StatefulLifecycle.as_str(), "stateful_lifecycle");
-        assert_eq!(EntityLifecycleModel::DependentLifecycle.as_str(), "dependent_lifecycle");
+    fn aggregate_role_returns_stable_business_label() {
+        assert_eq!(AggregateRole::Unclassified.as_str(), "unclassified");
+        assert_eq!(AggregateRole::AggregateRoot.as_str(), "aggregate_root");
+        assert_eq!(AggregateRole::AggregateMember.as_str(), "aggregate_member");
     }
 
     #[test]
