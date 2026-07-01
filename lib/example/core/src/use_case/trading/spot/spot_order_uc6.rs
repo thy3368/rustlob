@@ -840,24 +840,32 @@ mod tests {
         assert_eq!(changes.created_ledger_entries.len(), 2);
         assert_eq!(events.len(), 8);
         let voucher = &changes.created_settlement_vouchers[0];
-        let principal_legs = voucher.principal_legs();
+        let buyer_receive_base =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerReceiveBase);
+        let buyer_pay_quote =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerPayQuote);
+        let seller_receive_quote =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotSellerReceiveQuote);
+        let seller_deliver_base =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotSellerDeliverBase);
         assert_eq!(voucher.voucher_id(), "voucher:settle-1-1");
         assert_eq!(voucher.settlement_id(), "settle-1-1");
         assert_eq!(voucher.trade_id(), "match-1-1");
         assert_eq!(voucher.match_id(), Some("match-1"));
         assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
         assert_eq!(voucher.fee_account_id(), "");
-        assert_eq!(principal_legs.len(), 4);
-        assert_eq!(principal_legs[0].purpose(), SettlementTransferPurpose::SpotBuyerReceiveBase);
-        assert_eq!(principal_legs[0].asset_id(), "BTC");
-        assert_eq!(principal_legs[0].amount(), 2);
-        assert_eq!(principal_legs[1].purpose(), SettlementTransferPurpose::SpotBuyerPayQuote);
-        assert_eq!(principal_legs[1].asset_id(), "USDT");
-        assert_eq!(principal_legs[1].amount(), 180);
-        assert_eq!(principal_legs[2].purpose(), SettlementTransferPurpose::SpotSellerReceiveQuote);
-        assert_eq!(principal_legs[2].amount(), 180);
-        assert_eq!(principal_legs[3].purpose(), SettlementTransferPurpose::SpotSellerDeliverBase);
-        assert_eq!(principal_legs[3].amount(), 2);
+        assert_eq!(buyer_receive_base.len(), 1);
+        assert_eq!(buyer_receive_base[0].asset_id(), "BTC");
+        assert_eq!(buyer_receive_base[0].amount(), 2);
+        assert_eq!(buyer_pay_quote.len(), 1);
+        assert_eq!(buyer_pay_quote[0].asset_id(), "USDT");
+        assert_eq!(buyer_pay_quote[0].amount(), 180);
+        assert_eq!(seller_receive_quote.len(), 1);
+        assert_eq!(seller_receive_quote[0].asset_id(), "USDT");
+        assert_eq!(seller_receive_quote[0].amount(), 180);
+        assert_eq!(seller_deliver_base.len(), 1);
+        assert_eq!(seller_deliver_base[0].asset_id(), "BTC");
+        assert_eq!(seller_deliver_base[0].amount(), 2);
         let taker_quote = &changes.updated_balances[0].after;
         assert_eq!(taker_quote.available, 1_000);
         assert_eq!(taker_quote.frozen, 0);
