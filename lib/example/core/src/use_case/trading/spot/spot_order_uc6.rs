@@ -74,6 +74,7 @@ pub enum SpotOrderUc6State {
 /// `Place` 分支已加载状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderUc6State {
+    //todo 这个是创建出来的
     pub taker_order: SpotOrder,
     pub taker_base_balance: Balance,
     pub taker_quote_balance: Balance,
@@ -241,7 +242,7 @@ impl CommandUseCase6 for SpotOrderUseCase6 {
         }
     }
 
-    fn compute_changes(
+    fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
         state: <Self::Command as CommandWithGivenState>::GivenState,
@@ -310,7 +311,7 @@ fn compute_place_changes(
             taker_base_balance: state.taker_base_balance.clone(),
             taker_quote_balance: state.taker_quote_balance.clone(),
         }),
-        (),
+        &(),
     )?;
     let SpotOrderMiChanges::Place(place_changes) = place_changes else {
         return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -361,7 +362,7 @@ fn compute_place_changes(
                 match_id: cmd.match_id.clone(),
                 makers: state.maker_orders,
             }),
-            (),
+            &(),
         )?;
         let SpotOrderMiChanges::Match(match_changes) = match_changes else {
             return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -431,7 +432,7 @@ fn compute_cancel_changes(
     let cancel_changes = MiStateMachineOwned::compute_after_changes(
         &state.order,
         &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-        (),
+        &(),
     )?;
     let SpotOrderMiChanges::Cancel(cancel_changes) = cancel_changes else {
         return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -893,7 +894,7 @@ mod tests {
         let state = place_state_with_one_maker();
 
         // act
-        let changes = use_case.compute_changes(&cmd, state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cmd, state).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         // assert
@@ -934,7 +935,7 @@ mod tests {
             settlement_balances: vec![seller_base_balance(2), seller_quote_balance()],
         });
 
-        let changes = use_case.compute_changes(&cmd, state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cmd, state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -950,7 +951,7 @@ mod tests {
     fn branch_mismatch_returns_business_error() {
         let use_case = SpotOrderUseCase6;
 
-        let result = use_case.compute_changes(
+        let result = use_case.compute_before_after_changes(
             &place_cmd(),
             SpotOrderUc6State::Cancel(CancelSpotOrderUc6State {
                 order: taker_buy_order(SpotOrderTimeInForce::Gtc),
@@ -982,7 +983,7 @@ mod tests {
             settlement_balances: vec![],
         });
 
-        let result = use_case.compute_changes(&place_cmd(), state);
+        let result = use_case.compute_before_after_changes(&place_cmd(), state);
 
         assert_eq!(
             result,
@@ -1001,7 +1002,7 @@ mod tests {
             release_balance: Balance::new("buyer".to_string(), "USDT".to_string(), 800, 200, 1),
         });
 
-        let changes = use_case.compute_changes(&cancel_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&cancel_cmd(), state).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         let SpotOrderUc6Changes::Cancel(changes) = changes else {
@@ -1035,7 +1036,7 @@ mod tests {
             settlement_balances: vec![seller_base_balance(1), seller_quote_balance()],
         });
 
-        let changes = use_case.compute_changes(&place_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&place_cmd(), state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -1066,7 +1067,7 @@ mod tests {
             settlement_balances: vec![],
         });
 
-        let changes = use_case.compute_changes(&place_cmd(), state).unwrap();
+        let changes = use_case.compute_before_after_changes(&place_cmd(), state).unwrap();
 
         let SpotOrderUc6Changes::Place(changes) = changes else {
             panic!("expected place changes");
@@ -1218,13 +1219,13 @@ mod tests {
             SpotOrderUseCase6.validate_against_state(cmd, state)
         }
 
-        fn compute_changes(
+        fn compute_before_after_changes(
             &self,
             cmd: &Self::Command,
             state: <Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::Changes, Self::Error> {
             let SpotOrderUc6Changes::Place(changes) =
-                SpotOrderUseCase6.compute_changes(cmd, state)?
+                SpotOrderUseCase6.compute_before_after_changes(cmd, state)?
             else {
                 unreachable!("broken test only exercises place branch");
             };

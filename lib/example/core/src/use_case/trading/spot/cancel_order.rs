@@ -216,7 +216,7 @@ fn derive_cancel_changes(
     )
     .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
     let balance_ledger_entry =
-        MiStateMachineOwned::compute_after_changes(&draft_entry, &balance_command, ())
+        MiStateMachineOwned::compute_after_changes(&draft_entry, &balance_command, &())
             .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?
             .updated_entry
             .after;

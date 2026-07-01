@@ -325,7 +325,7 @@ impl MiStateMachineOwnedUnchecked for SpotOrder {
     fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        _given_state: <Self::Command as CommandWithGivenState>::GivenState,
+        _given_state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         match cmd {
             SpotOrderMiCommand::Place(place) => self.compute_place_changes(place),
@@ -645,7 +645,7 @@ mod tests {
             taker_quote_balance: quote_balance(2_000),
         });
 
-        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, ()).unwrap();
+        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, &()).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         let SpotOrderMiChanges::Place(place) = changes else {
@@ -682,7 +682,7 @@ mod tests {
             makers: vec![sell_maker("maker-1", 100, 4)],
         });
 
-        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, ()).unwrap();
+        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, &()).unwrap();
 
         let SpotOrderMiChanges::Match(matching) = changes else {
             panic!("expected match changes");
@@ -702,7 +702,7 @@ mod tests {
             makers: vec![sell_maker("maker-1", 100, 6)],
         });
 
-        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, ()).unwrap();
+        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, &()).unwrap();
 
         let SpotOrderMiChanges::Match(matching) = changes else {
             panic!("expected match changes");
@@ -717,7 +717,7 @@ mod tests {
         let order = sample_order(SpotOrderTimeInForce::Gtc);
         let cmd = SpotOrderMiCommand::Cancel(CancelSpotOrderCmd);
 
-        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, ()).unwrap();
+        let changes = MiStateMachineOwned::compute_after_changes(&order, &cmd, &()).unwrap();
 
         let SpotOrderMiChanges::Cancel(cancel) = changes else {
             panic!("expected cancel changes");
@@ -751,7 +751,7 @@ mod tests {
         });
 
         assert_eq!(
-            MiStateMachineOwned::compute_after_changes(&order, &cmd, ()),
+            MiStateMachineOwned::compute_after_changes(&order, &cmd, &()),
             Err(SpotOrderMiStateMachineError::InvalidMatchId)
         );
     }
@@ -783,7 +783,7 @@ mod tests {
         });
 
         assert_eq!(
-            MiStateMachineOwned::compute_after_changes(&order, &cmd, ()),
+            MiStateMachineOwned::compute_after_changes(&order, &cmd, &()),
             Err(SpotOrderMiStateMachineError::SameSideMaker)
         );
     }
@@ -797,7 +797,7 @@ mod tests {
         });
 
         let changes =
-            MiStateMachineOwnedUnchecked::compute_after_changes_unchecked(&order, &cmd, ())
+            MiStateMachineOwnedUnchecked::compute_after_changes_unchecked(&order, &cmd, &())
                 .unwrap();
 
         match changes {

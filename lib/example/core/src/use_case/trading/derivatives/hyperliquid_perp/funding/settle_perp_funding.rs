@@ -250,7 +250,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                     reason,
                 )
                 .and_then(|draft| {
-                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, ())
+                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, &())
                 })
                 .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?
                 .updated_entry

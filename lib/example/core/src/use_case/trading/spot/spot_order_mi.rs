@@ -84,7 +84,7 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
                 taker_base_balance: cmd.taker_base_balance.clone(),
                 taker_quote_balance: cmd.taker_quote_balance.clone(),
             }),
-            (),
+            &(),
         )
         .map(|_| ())
     }
@@ -100,7 +100,7 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
                 taker_base_balance: cmd.taker_base_balance.clone(),
                 taker_quote_balance: cmd.taker_quote_balance.clone(),
             }),
-            (),
+            &(),
         )?;
         match changes {
             SpotOrderMiChanges::Place(inner) => Ok(PlaceSpotOrderChanges { inner }),
@@ -182,7 +182,7 @@ impl CommandUseCase4 for MatchSpotOrderMiUseCase {
                 match_id: cmd.match_id.clone(),
                 makers: cmd.makers.clone(),
             }),
-            (),
+            &(),
         )
         .map(|_| ())
     }
@@ -198,7 +198,7 @@ impl CommandUseCase4 for MatchSpotOrderMiUseCase {
                 match_id: cmd.match_id.clone(),
                 makers: cmd.makers.clone(),
             }),
-            (),
+            &(),
         )?;
         match changes {
             SpotOrderMiChanges::Match(inner) => Ok(MatchSpotOrderMiChanges { inner }),
@@ -275,7 +275,7 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
         MiStateMachineOwned::compute_after_changes(
             &state.order,
             &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-            (),
+            &(),
         )
         .map(|_| ())
     }
@@ -288,7 +288,7 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
         let changes = MiStateMachineOwned::compute_after_changes(
             &state.order,
             &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-            (),
+            &(),
         )?;
         match changes {
             SpotOrderMiChanges::Cancel(inner) => Ok(CancelSpotOrderMiChanges { inner }),

@@ -232,7 +232,7 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
                     reason,
                 )
                 .and_then(|draft| {
-                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, ())
+                    MiStateMachineOwned::compute_after_changes(&draft, &balance_command, &())
                 })
                 .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?
                 .updated_entry
