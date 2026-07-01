@@ -36,7 +36,7 @@ pub trait CommandUseCase6: Send + Sync {
     }
 
     /// 一次业务推导，只返回强类型领域 changes。
-    fn compute_changes(
+    fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
         state: <Self::Command as CommandWithGivenState>::GivenState,

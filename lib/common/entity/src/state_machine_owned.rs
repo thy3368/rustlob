@@ -87,7 +87,7 @@ pub trait ReplayableChanges {
 ///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         cmd: &Self::Command,
-///         given_state: WalletAccount,
+///         given_state: &WalletAccount,
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         let available = match cmd {
 ///             WalletCommand::Deposit { amount } => given_state.available + amount,
@@ -103,10 +103,11 @@ pub trait ReplayableChanges {
 ///     state: WalletStatus::Ready,
 /// };
 ///
+/// let given_state = WalletAccount { available: 42 };
 /// let changed = machine
 ///     .compute_after_changes(
 ///         &WalletCommand::Deposit { amount: 10 },
-///         WalletAccount { available: 42 },
+///         &given_state,
 ///     )
 ///     .unwrap();
 /// assert_eq!(machine.state(), &WalletStatus::Ready);
@@ -191,7 +192,8 @@ where
 /// 这是 `Command -> GivenState` 的配对契约，尤其用于 enum / command family 场景。
 /// 它保留命令族需要的外部 authoritative state 绑定，避免把多个动作压成一个松散公共超集。
 /// `GivenState` 不是状态机内部 `self.state()` 的别名，它表示其它 entity、多个 entity 组合，
-/// 或业务上下文输入。
+/// 或业务上下文输入。默认入口只会只读借用它；真正需要可变工作态时，应由实现者在内部显式
+/// clone / move 到局部 working state。
 pub trait CommandWithGivenState {
     type GivenState;
 }
@@ -248,7 +250,8 @@ pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
         Ok(())
     }
 
-    /// 在已完成 command pre-check 与状态迁移校验后，计算 stable owned after changes。
+    /// 在已完成 command pre-check 与状态迁移校验后，基于借用的 `GivenState` 计算 stable
+    /// owned after changes。
     ///
     /// 该方法不是上层应直接依赖的业务入口。
     /// 上层应始终通过 `MiStateMachineOwned::compute_after_changes()` 进入统一链路：
@@ -256,7 +259,7 @@ pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
     fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        given_state: <Self::Command as CommandWithGivenState>::GivenState,
+        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error>;
 }
 
@@ -275,10 +278,10 @@ pub trait MiStateMachineOwned: MiStateMachineOwnedUnchecked {
     fn compute_after_changes(
         &self,
         cmd: &Self::Command,
-        given_state: <Self::Command as CommandWithGivenState>::GivenState,
+        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         self.pre_check_command(cmd)?;
-        self.validate_state_transition(cmd, &given_state)?;
+        self.validate_state_transition(cmd, given_state)?;
         self.compute_after_changes_unchecked(cmd, given_state)
     }
 }
@@ -463,7 +466,7 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         cmd: &Self::Command,
-///         given_state: (Order, [Balance; 2], AccountContext),
+///         given_state: &(Order, [Balance; 2], AccountContext),
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         let _ = cmd;
 ///         let (order_before, [cash_before, fee_before], account) = given_state;
@@ -536,29 +539,31 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///     state: OrderStatus::Open,
 /// };
 ///
+/// let given_state = (
+///     Order {
+///         id: 41,
+///         status: OrderStatus::Open,
+///         version: 7,
+///     },
+///     [
+///         Balance {
+///             id: 1001,
+///             available: 42,
+///             version: 9,
+///         },
+///         Balance {
+///             id: 1002,
+///             available: 5,
+///             version: 3,
+///         },
+///     ],
+///     AccountContext { can_cancel: true },
+/// );
+///
 /// let changes = machine
 ///     .compute_before_after_changes(
 ///         &CancelOrder,
-///         (
-///             Order {
-///                 id: 41,
-///                 status: OrderStatus::Open,
-///                 version: 7,
-///             },
-///             [
-///                 Balance {
-///                     id: 1001,
-///                     available: 42,
-///                     version: 9,
-///                 },
-///                 Balance {
-///                     id: 1002,
-///                     available: 5,
-///                     version: 3,
-///                 },
-///             ],
-///             AccountContext { can_cancel: true },
-///         ),
+///         &given_state,
 ///     )
 ///     .unwrap();
 ///
@@ -600,7 +605,7 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         _cmd: &Self::Command,
-///         _given_state: (),
+///         _given_state: &(),
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         Ok(AfterChanges)
 ///     }
@@ -646,7 +651,7 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         _cmd: &Self::Command,
-///         _given_state: (),
+///         _given_state: &(),
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         Ok(())
 ///     }
@@ -697,7 +702,7 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///     fn compute_after_changes_unchecked(
 ///         &self,
 ///         _cmd: &Self::Command,
-///         _given_state: (),
+///         _given_state: &(),
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         Ok(ChangedEntity { after: () })
 ///     }
@@ -714,7 +719,7 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
     /// 它不要求等于 `GivenState`，实现者可以按业务只保留必要子集，或重组为异构快照。
     type BeforeSnapshot;
 
-    /// 在 `compute_after_changes()` 消费 `GivenState` 之前，先捕获 before 快照。
+    /// 在 `compute_after_changes()` 借用 `GivenState` 期间，先捕获 before 快照。
     fn capture_before(
         &self,
         given_state: &<Self::Command as CommandWithGivenState>::GivenState,
@@ -734,9 +739,9 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
     fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
-        given_state: <Self::Command as CommandWithGivenState>::GivenState,
+        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
-        let before = self.capture_before(&given_state);
+        let before = self.capture_before(given_state);
         let after = <Self as MiStateMachineOwned>::compute_after_changes(self, cmd, given_state)?;
         Self::merge_before_and_after(before, after)
     }
@@ -942,7 +947,7 @@ mod tests {
         fn compute_after_changes_unchecked(
             &self,
             cmd: &Self::Command,
-            given_state: <Self::Command as CommandWithGivenState>::GivenState,
+            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             self.log.push("unchecked");
             let (next_state, next_value) = match cmd {
@@ -1047,7 +1052,7 @@ mod tests {
         fn compute_after_changes_unchecked(
             &self,
             cmd: &Self::Command,
-            given_state: <Self::Command as CommandWithGivenState>::GivenState,
+            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             let TestGivenState { order, balances: [trading_balance, fee_balance], account: _ } =
                 given_state;
@@ -1062,7 +1067,7 @@ mod tests {
                 id: order.id,
                 value: next_value.to_string(),
                 version: order.version + 1,
-                status: order.status,
+                status: order.status.clone(),
             };
             let next_trading_balance = TestBalance {
                 id: trading_balance.id,
@@ -1143,7 +1148,7 @@ mod tests {
         fn compute_after_changes_unchecked(
             &self,
             cmd: &Self::Command,
-            given_state: <Self::Command as CommandWithGivenState>::GivenState,
+            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             let next_value = match cmd {
                 TestCommand::Apply { next_value, .. } => *next_value,
@@ -1154,7 +1159,7 @@ mod tests {
                     id: given_state.order.id,
                     value: next_value.to_string(),
                     version: given_state.order.version + 1,
-                    status: given_state.order.status,
+                    status: given_state.order.status.clone(),
                 },
                 created_bonus_balance_after: TestBalance { id: 303, available: 1, version: 1 },
             })
@@ -1188,7 +1193,7 @@ mod tests {
                     trading_balance_delta: 10,
                     fee_balance_delta: -1,
                 },
-                sample_given_state(),
+                &sample_given_state(),
             )
             .unwrap();
 
@@ -1213,7 +1218,7 @@ mod tests {
                     trading_balance_delta: 10,
                     fee_balance_delta: -1,
                 },
-                sample_given_state(),
+                &sample_given_state(),
             )
             .unwrap();
 
@@ -1232,8 +1237,9 @@ mod tests {
             fee_balance_delta: -2,
         };
 
+        let given_state = sample_given_state();
         let before_after_changes =
-            machine.compute_before_after_changes(&cmd, sample_given_state()).unwrap();
+            machine.compute_before_after_changes(&cmd, &given_state).unwrap();
 
         assert_eq!(before_after_changes.updated_order.before.value, "before");
         assert_eq!(before_after_changes.updated_order.after.value, "after");
@@ -1292,7 +1298,7 @@ mod tests {
             fn compute_after_changes_unchecked(
                 &self,
                 _cmd: &Self::Command,
-                given_state: <Self::Command as CommandWithGivenState>::GivenState,
+                given_state: &<Self::Command as CommandWithGivenState>::GivenState,
             ) -> Result<Self::AfterChanges, Self::Error> {
                 given_state.lock().unwrap().push("after");
                 Ok(())
@@ -1319,7 +1325,7 @@ mod tests {
         }
 
         let log = Arc::new(Mutex::new(Vec::new()));
-        SequenceMachine.compute_before_after_changes(&SequenceCommand, log.clone()).unwrap();
+        SequenceMachine.compute_before_after_changes(&SequenceCommand, &log).unwrap();
 
         assert_eq!(*log.lock().unwrap(), vec!["before", "after"]);
     }
@@ -1327,6 +1333,7 @@ mod tests {
     #[test]
     fn multi_entity_before_after_changes_project_replayable_update_events() {
         let machine = TestOrder::machine(TestStatus::Applied);
+        let given_state = sample_given_state();
         let changes = machine
             .compute_before_after_changes(
                 &TestCommand::Apply {
@@ -1334,7 +1341,7 @@ mod tests {
                     trading_balance_delta: 10,
                     fee_balance_delta: -2,
                 },
-                sample_given_state(),
+                &given_state,
             )
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -1355,8 +1362,10 @@ mod tests {
         let machine = TestOrder::machine(TestStatus::Open);
 
         assert_eq!(
-            machine
-                .compute_before_after_changes(&TestCommand::RejectInPreCheck, sample_given_state()),
+            machine.compute_before_after_changes(
+                &TestCommand::RejectInPreCheck,
+                &sample_given_state(),
+            ),
             Err(HookError::PreCheckRejected)
         );
     }
@@ -1374,7 +1383,7 @@ mod tests {
                     trading_balance_delta: 10,
                     fee_balance_delta: -2,
                 },
-                given_state
+                &given_state
             ),
             Err(HookError::InvalidTransition)
         );
@@ -1387,7 +1396,7 @@ mod tests {
         let opened = machine
             .compute_after_changes(
                 &FamilyCommand::Open { opening_value: "opened" },
-                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+                &FamilyGivenState { state: FamilyState::Draft, value: "base" },
             )
             .unwrap();
         assert_eq!(opened.next_state, FamilyState::Live);
@@ -1396,7 +1405,7 @@ mod tests {
         let closed = machine
             .compute_after_changes(
                 &FamilyCommand::Close { closing_value: "closed" },
-                FamilyGivenState { state: FamilyState::Live, value: "base" },
+                &FamilyGivenState { state: FamilyState::Live, value: "base" },
             )
             .unwrap();
         assert_eq!(closed.next_state, FamilyState::Draft);
@@ -1415,7 +1424,7 @@ mod tests {
         assert_eq!(
             machine.compute_after_changes(
                 &FamilyCommand::Close { closing_value: "closed" },
-                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+                &FamilyGivenState { state: FamilyState::Draft, value: "base" },
             ),
             Err(HookError::InvalidTransition)
         );
@@ -1430,7 +1439,7 @@ mod tests {
         assert_eq!(
             machine.compute_after_changes(
                 &FamilyCommand::RejectInPreCheck,
-                FamilyGivenState { state: FamilyState::Draft, value: "base" },
+                &FamilyGivenState { state: FamilyState::Draft, value: "base" },
             ),
             Err(HookError::PreCheckRejected)
         );
@@ -1443,7 +1452,7 @@ mod tests {
         let machine = TestOrder::machine(TestStatus::Open);
 
         assert_eq!(
-            machine.compute_after_changes(&TestCommand::RejectInPreCheck, sample_given_state()),
+            machine.compute_after_changes(&TestCommand::RejectInPreCheck, &sample_given_state()),
             Err(HookError::PreCheckRejected)
         );
     }
