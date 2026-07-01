@@ -1,4 +1,6 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FourColorArchetype, MiFactType};
+use common_entity::{
+    AggregateRole, Entity, EntityError, EntityFieldChange, FourColorArchetype, MiFactType,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -710,6 +712,13 @@ impl Entity for SpotOrder {
         FourColorArchetype::MomentInterval
     }
 
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateRoot
+    }
+
     fn mi_fact_type() -> Option<MiFactType>
     where
         Self: Sized,
@@ -933,6 +942,7 @@ mod tests {
     #[test]
     fn spot_order_declares_mi_chain_root_metadata() {
         assert_eq!(SpotOrder::four_color_archetype(), FourColorArchetype::MomentInterval);
+        assert_eq!(SpotOrder::aggregate_role(), AggregateRole::AggregateRoot);
         assert_eq!(SpotOrder::mi_fact_type(), Some("spot_order"));
         assert!(SpotOrder::is_mi_chain_root());
         assert!(SpotOrder::mi_causal_sources().is_empty());

@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
     MiCausalRelation, MiCausalSourceMetadata, MiFactType,
 };
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 ///
 /// `SpotTrade` 只记录订单撮合结果，不表达账户清算、手续费或资产划转。
 /// 构造器假定输入已经由撮合 use case 校验。
+/// 在聚合边界上，它自身作为一条独立的成交事实聚合根存在。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotTrade {
     /// 本系统稳定成交 ID。
@@ -130,6 +131,13 @@ impl Entity for SpotTrade {
         EntityMutationModel::AppendOnlyRecord
     }
 
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateRoot
+    }
+
     fn mi_fact_type() -> Option<MiFactType>
     where
         Self: Sized,
@@ -239,6 +247,7 @@ mod tests {
     fn spot_trade_declares_mi_causal_source_metadata() {
         assert_eq!(SpotTrade::four_color_archetype(), FourColorArchetype::MomentInterval);
         assert_eq!(SpotTrade::mutation_model(), EntityMutationModel::AppendOnlyRecord);
+        assert_eq!(SpotTrade::aggregate_role(), AggregateRole::AggregateRoot);
         assert_eq!(SpotTrade::mi_fact_type(), Some("spot_trade"));
         assert!(!SpotTrade::is_mi_chain_root());
         assert_eq!(
