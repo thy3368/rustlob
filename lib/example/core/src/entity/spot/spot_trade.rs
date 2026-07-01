@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
-    MiCausalRelation, MiCausalSourceMetadata, MiFactType,
+    MiCausalRelation, MiCausalSourceMetadata,
 };
 use serde::{Deserialize, Serialize};
 
@@ -138,13 +138,6 @@ impl Entity for SpotTrade {
         AggregateRole::AggregateRoot
     }
 
-    fn mi_fact_type() -> Option<MiFactType>
-    where
-        Self: Sized,
-    {
-        Some("spot_trade")
-    }
-
     fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
     where
         Self: Sized,
@@ -248,7 +241,6 @@ mod tests {
         assert_eq!(SpotTrade::four_color_archetype(), FourColorArchetype::MomentInterval);
         assert_eq!(SpotTrade::mutation_model(), EntityMutationModel::AppendOnlyRecord);
         assert_eq!(SpotTrade::aggregate_role(), AggregateRole::AggregateRoot);
-        assert_eq!(SpotTrade::mi_fact_type(), Some("spot_trade"));
         assert!(!SpotTrade::is_mi_chain_root());
         assert_eq!(
             SpotTrade::mi_causal_sources(),
