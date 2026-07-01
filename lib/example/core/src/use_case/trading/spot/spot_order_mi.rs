@@ -11,7 +11,7 @@ use crate::entity::spot::{
     MatchSpotOrderCmd as EntityMatchSpotOrderCmd,
     PlaceSpotOrderChanges as EntityPlaceSpotOrderChanges,
     PlaceSpotOrderCmd as EntityPlaceSpotOrderCmd, SpotOrderMiChanges, SpotOrderMiCommand,
-    SpotOrderMiStateMachineError,
+    SpotOrderMiGivenState, SpotOrderMiStateMachineError,
 };
 use crate::entity::{Balance, SpotOrder};
 
@@ -80,11 +80,11 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
         }
         MiStateMachineOwned::compute_after_changes(
             &state.order,
-            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-                taker_base_balance: cmd.taker_base_balance.clone(),
-                taker_quote_balance: cmd.taker_quote_balance.clone(),
-            }),
-            &(),
+            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd::default()),
+            &SpotOrderMiGivenState::Place {
+                taker_base_balance: &cmd.taker_base_balance,
+                taker_quote_balance: &cmd.taker_quote_balance,
+            },
         )
         .map(|_| ())
     }
@@ -96,11 +96,11 @@ impl CommandUseCase4 for PlaceSpotOrderUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let changes = MiStateMachineOwned::compute_after_changes(
             &state.order,
-            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-                taker_base_balance: cmd.taker_base_balance.clone(),
-                taker_quote_balance: cmd.taker_quote_balance.clone(),
-            }),
-            &(),
+            &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd::default()),
+            &SpotOrderMiGivenState::Place {
+                taker_base_balance: &cmd.taker_base_balance,
+                taker_quote_balance: &cmd.taker_quote_balance,
+            },
         )?;
         match changes {
             SpotOrderMiChanges::Place(inner) => Ok(PlaceSpotOrderChanges { inner }),
@@ -178,11 +178,8 @@ impl CommandUseCase4 for MatchSpotOrderMiUseCase {
         }
         MiStateMachineOwned::compute_after_changes(
             &state.order,
-            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
-                match_id: cmd.match_id.clone(),
-                makers: cmd.makers.clone(),
-            }),
-            &(),
+            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd { match_id: cmd.match_id.clone() }),
+            &SpotOrderMiGivenState::Match { makers: &cmd.makers },
         )
         .map(|_| ())
     }
@@ -194,11 +191,8 @@ impl CommandUseCase4 for MatchSpotOrderMiUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let changes = MiStateMachineOwned::compute_after_changes(
             &state.order,
-            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
-                match_id: cmd.match_id.clone(),
-                makers: cmd.makers.clone(),
-            }),
-            &(),
+            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd { match_id: cmd.match_id.clone() }),
+            &SpotOrderMiGivenState::Match { makers: &cmd.makers },
         )?;
         match changes {
             SpotOrderMiChanges::Match(inner) => Ok(MatchSpotOrderMiChanges { inner }),
@@ -275,7 +269,7 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
         MiStateMachineOwned::compute_after_changes(
             &state.order,
             &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-            &(),
+            &SpotOrderMiGivenState::Cancel,
         )
         .map(|_| ())
     }
@@ -288,7 +282,7 @@ impl CommandUseCase4 for CancelSpotOrderMiUseCase {
         let changes = MiStateMachineOwned::compute_after_changes(
             &state.order,
             &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-            &(),
+            &SpotOrderMiGivenState::Cancel,
         )?;
         match changes {
             SpotOrderMiChanges::Cancel(inner) => Ok(CancelSpotOrderMiChanges { inner }),

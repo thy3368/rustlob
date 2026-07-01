@@ -7,15 +7,16 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
+use crate::entity::account::balance_ledger_entry::BalanceLedgerReason;
 use crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error;
 use crate::entity::spot::{
     CancelSpotOrderCmd as EntityCancelSpotOrderCmd, MatchSpotOrderCmd as EntityMatchSpotOrderCmd,
     PlaceSpotOrderCmd as EntityPlaceSpotOrderCmd, SpotOrderMiChanges, SpotOrderMiCommand,
-    SpotOrderMiStateMachineError,
+    SpotOrderMiGivenState, SpotOrderMiStateMachineError,
 };
 use crate::entity::{
-    Balance, BalanceLedgerEntryV2, SpotOrder, SpotOrderStatus, SpotOrderTimeInForce, SpotTrade,
+    Balance, BalanceLedgerEntryV2, SettlementTransferVoucher, SpotOrder, SpotOrderStatus,
+    SpotOrderTimeInForce, SpotTrade,
 };
 
 /// `SpotOrder` V6 总命令：只保留完整下单与撤单两个分支。
@@ -97,6 +98,7 @@ pub struct PlaceSpotOrderUc6Changes {
     pub updated_taker_order: UpdatedEntityPair<SpotOrder>,
     pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrder>>,
     pub created_trades: Vec<SpotTrade>,
+    pub created_settlement_vouchers: Vec<SettlementTransferVoucher>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_ledger_entries: Vec<BalanceLedgerEntryV2>,
 }
@@ -121,6 +123,7 @@ impl ReplayableChanges for PlaceSpotOrderUc6Changes {
         let mut events = Vec::with_capacity(
             1 + self.created_trades.len()
                 + self.updated_maker_orders.len()
+                + self.created_settlement_vouchers.len()
                 + self.created_ledger_entries.len() * 2,
         );
         events.push(
@@ -131,6 +134,9 @@ impl ReplayableChanges for PlaceSpotOrderUc6Changes {
         for (trade, maker) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
             events.push(maker.after.track_update_event_from(&maker.before)?);
+        }
+        for voucher in &self.created_settlement_vouchers {
+            events.push(voucher.track_create_event()?);
         }
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
@@ -307,11 +313,11 @@ fn compute_place_changes(
     // 拿到后续撮合流水要继续叠加的初始 changes。
     let place_changes = MiStateMachineOwned::compute_after_changes(
         &state.taker_order,
-        &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd {
-            taker_base_balance: state.taker_base_balance.clone(),
-            taker_quote_balance: state.taker_quote_balance.clone(),
-        }),
-        &(),
+        &SpotOrderMiCommand::Place(EntityPlaceSpotOrderCmd::default()),
+        &SpotOrderMiGivenState::Place {
+            taker_base_balance: &state.taker_base_balance,
+            taker_quote_balance: &state.taker_quote_balance,
+        },
     )?;
     let SpotOrderMiChanges::Place(place_changes) = place_changes else {
         return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -323,7 +329,7 @@ fn compute_place_changes(
 
     let mut all_ledger_entries = place_changes.created_ledger_entries.clone();
     // 余额上下文统一放进当前视图里维护：
-    // 一份保留原始快照用于最终 before/after 对比，一份持续吸收冻结、成交、释放后的最新余额。
+    // 一份保留原始快照用于最终 before/after 对比，一份持续吸收冻结、释放后的最新余额。
     let mut current_balances = build_original_balance_map(
         &state.taker_base_balance,
         &state.taker_quote_balance,
@@ -348,6 +354,7 @@ fn compute_place_changes(
     };
     let mut updated_maker_orders = Vec::new();
     let mut created_trades = Vec::new();
+    let mut created_settlement_vouchers = Vec::new();
 
     // 只有订单在冻结后仍满足进入撮合条件时，才继续走 maker 撮合分支；
     // 否则这里直接保留纯 place 结果，后续只考虑终态释放。
@@ -359,11 +366,8 @@ fn compute_place_changes(
     {
         let match_changes = MiStateMachineOwned::compute_after_changes(
             &place_changes.updated_order.after,
-            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd {
-                match_id: cmd.match_id.clone(),
-                makers: state.maker_orders.clone(),
-            }),
-            &(),
+            &SpotOrderMiCommand::Match(EntityMatchSpotOrderCmd { match_id: cmd.match_id.clone() }),
+            &SpotOrderMiGivenState::Match { makers: &state.maker_orders },
         )?;
         let SpotOrderMiChanges::Match(match_changes) = match_changes else {
             return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -374,23 +378,20 @@ fn compute_place_changes(
         };
 
         // 撮合状态机给出 taker/maker/trade 三类结果，这里把它们吸收到 place 主流水里，
-        // 后续统一按 trade 逐笔做资金结算。
+        // 后续统一按 trade 逐笔生成待记账 voucher。
         updated_taker_order.after = match_changes.updated_taker_order.after;
         updated_maker_orders =
             match_changes.updated_maker_orders.into_iter().map(convert_pair).collect();
         created_trades = match_changes.created_trades;
 
-        // 每笔成交都要拆成标准现货结算分录，分别更新买卖双方的 base/quote 余额。
-        for trade in &created_trades {
-            apply_settlement_trade(
-                cmd,
+        for (index, trade) in created_trades.iter().enumerate() {
+            created_settlement_vouchers.push(build_spot_settlement_voucher(
                 trade,
-                &mut current_balances,
-                &mut touched_balance_ids,
-                &mut all_ledger_entries,
+                &cmd.settlement_batch_id,
                 &state.taker_base_balance.asset_id,
                 &state.taker_quote_balance.asset_id,
-            )?;
+                index,
+            )?);
         }
     }
 
@@ -421,6 +422,7 @@ fn compute_place_changes(
         updated_taker_order,
         updated_maker_orders,
         created_trades,
+        created_settlement_vouchers,
         updated_balances,
         created_ledger_entries: all_ledger_entries,
     })
@@ -433,7 +435,7 @@ fn compute_cancel_changes(
     let cancel_changes = MiStateMachineOwned::compute_after_changes(
         &state.order,
         &SpotOrderMiCommand::Cancel(EntityCancelSpotOrderCmd),
-        &(),
+        &SpotOrderMiGivenState::Cancel,
     )?;
     let SpotOrderMiChanges::Cancel(cancel_changes) = cancel_changes else {
         return Err(SpotOrderUc6Error::SpotOrderStateMachine(
@@ -504,104 +506,24 @@ fn insert_balance_snapshot(
     Ok(())
 }
 
-fn apply_settlement_trade(
-    cmd: &PlaceSpotOrderUc6Cmd,
+fn build_spot_settlement_voucher(
     trade: &SpotTrade,
-    balances: &mut HashMap<String, Balance>,
-    touched_balance_ids: &mut Vec<String>,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    settlement_batch_id: &str,
     base_asset_id: &str,
     quote_asset_id: &str,
-) -> Result<(), SpotOrderUc6Error> {
-    // 一笔现货成交在账本上固定拆成四条腿：
-    // 买方收 base、买方扣冻结 quote、卖方收 quote、卖方扣冻结 base。
-    // 这里集中展开，保证 place 主流程只关心“逐笔结算 trade”。
-    let quote_qty = trade.notional_quote().ok_or(SpotOrderUc6Error::ArithmeticOverflow)?;
-    apply_balance_entry(
-        balances,
-        touched_balance_ids,
-        ledger_entries,
-        trade.buyer_account_id(),
+    index: usize,
+) -> Result<SettlementTransferVoucher, SpotOrderUc6Error> {
+    let settlement_id = format!("{settlement_batch_id}-{}", index + 1);
+    let voucher_id = format!("voucher:{settlement_id}");
+    SettlementTransferVoucher::build_spot_principal_voucher(
+        voucher_id,
+        settlement_id,
+        trade,
         base_asset_id,
-        trade.qty,
-        BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: cmd.settlement_batch_id.clone(),
-            leg: SpotSettlementLeg::BuyerReceiveBase,
-        },
-        BalanceOperation::CreditAvailable,
-        format!(
-            "balance-ledger:{}:{}:{}",
-            cmd.settlement_batch_id,
-            trade.trade_id,
-            SpotSettlementLeg::BuyerReceiveBase.as_str()
-        ),
-    )?;
-    apply_balance_entry(
-        balances,
-        touched_balance_ids,
-        ledger_entries,
-        trade.buyer_account_id(),
         quote_asset_id,
-        quote_qty,
-        BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: cmd.settlement_batch_id.clone(),
-            leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
-        },
-        BalanceOperation::DebitFrozen,
-        format!(
-            "balance-ledger:{}:{}:{}",
-            cmd.settlement_batch_id,
-            trade.trade_id,
-            SpotSettlementLeg::BuyerDebitFrozenQuote.as_str()
-        ),
-    )?;
-    apply_balance_entry(
-        balances,
-        touched_balance_ids,
-        ledger_entries,
-        trade.seller_account_id(),
-        quote_asset_id,
-        quote_qty,
-        BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: cmd.settlement_batch_id.clone(),
-            leg: SpotSettlementLeg::SellerReceiveQuote,
-        },
-        BalanceOperation::CreditAvailable,
-        format!(
-            "balance-ledger:{}:{}:{}",
-            cmd.settlement_batch_id,
-            trade.trade_id,
-            SpotSettlementLeg::SellerReceiveQuote.as_str()
-        ),
-    )?;
-    apply_balance_entry(
-        balances,
-        touched_balance_ids,
-        ledger_entries,
-        trade.seller_account_id(),
-        base_asset_id,
-        trade.qty,
-        BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: cmd.settlement_batch_id.clone(),
-            leg: SpotSettlementLeg::SellerDebitFrozenBase,
-        },
-        BalanceOperation::DebitFrozen,
-        format!(
-            "balance-ledger:{}:{}:{}",
-            cmd.settlement_batch_id,
-            trade.trade_id,
-            SpotSettlementLeg::SellerDebitFrozenBase.as_str()
-        ),
-    )?;
-    Ok(())
+        String::new(),
+    )
+    .ok_or(SpotOrderUc6Error::ArithmeticOverflow)
 }
 
 fn release_terminal_reservation(
@@ -789,7 +711,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::entity::{SpotOrderExecution, SpotOrderSide};
+    use crate::entity::{
+        SettlementKind, SettlementTransferPurpose, SpotOrderExecution, SpotOrderSide,
+    };
 
     fn taker_buy_order(tif: SpotOrderTimeInForce) -> SpotOrder {
         SpotOrder::new(
@@ -873,6 +797,10 @@ mod tests {
         })
     }
 
+    fn contains_reason(events: &[EntityReplayableEvent], reason: &str) -> bool {
+        events.iter().any(|event| event_field(event, "reason") == Some(reason))
+    }
+
     #[test]
     fn place_happy_path_freezes_matches_settles_and_advances_final_status() {
         let use_case = SpotOrderUseCase6;
@@ -888,7 +816,7 @@ mod tests {
         //
         // Then:
         // - taker 最终进入 `Filled`。
-        // - 生成 trade、maker update、结算余额变化和余额流水。
+        // - 生成 trade、maker update、settlement voucher，以及 freeze ledger replay。
 
         // arrange
         let cmd = place_cmd();
@@ -907,16 +835,44 @@ mod tests {
         assert_eq!(changes.updated_taker_order.after.version, 2);
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.updated_balances.len(), 4);
-        assert_eq!(changes.created_ledger_entries.len(), 6);
-        assert_eq!(events.len(), 15);
+        assert_eq!(changes.created_settlement_vouchers.len(), 1);
+        assert_eq!(changes.updated_balances.len(), 1);
+        assert_eq!(changes.created_ledger_entries.len(), 2);
+        assert_eq!(events.len(), 8);
+        let voucher = &changes.created_settlement_vouchers[0];
+        let principal_legs = voucher.principal_legs();
+        assert_eq!(voucher.voucher_id(), "voucher:settle-1-1");
+        assert_eq!(voucher.settlement_id(), "settle-1-1");
+        assert_eq!(voucher.trade_id(), "match-1-1");
+        assert_eq!(voucher.match_id(), Some("match-1"));
+        assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
+        assert_eq!(voucher.fee_account_id(), "");
+        assert_eq!(principal_legs.len(), 4);
+        assert_eq!(principal_legs[0].purpose(), SettlementTransferPurpose::SpotBuyerReceiveBase);
+        assert_eq!(principal_legs[0].asset_id(), "BTC");
+        assert_eq!(principal_legs[0].amount(), 2);
+        assert_eq!(principal_legs[1].purpose(), SettlementTransferPurpose::SpotBuyerPayQuote);
+        assert_eq!(principal_legs[1].asset_id(), "USDT");
+        assert_eq!(principal_legs[1].amount(), 180);
+        assert_eq!(principal_legs[2].purpose(), SettlementTransferPurpose::SpotSellerReceiveQuote);
+        assert_eq!(principal_legs[2].amount(), 180);
+        assert_eq!(principal_legs[3].purpose(), SettlementTransferPurpose::SpotSellerDeliverBase);
+        assert_eq!(principal_legs[3].amount(), 2);
+        let taker_quote = &changes.updated_balances[0].after;
+        assert_eq!(taker_quote.available, 1_000);
+        assert_eq!(taker_quote.frozen, 0);
         assert_eq!(event_field(&events[0], "status"), Some("filled"));
         assert_eq!(event_field(&events[1], "trade_id"), Some("match-1-1"));
         assert_eq!(event_field(&events[2], "filled_qty"), Some("2"));
         assert_eq!(event_field(&events[2], "status"), Some("filled"));
-        assert_eq!(event_field(&events[3], "asset_id"), Some("USDT"));
-        assert_eq!(event_field(&events[9], "reason"), Some("freeze_for_order"));
-        assert_eq!(event_field(&events[14], "reason"), Some("unfreeze_for_cancel"));
+        assert_eq!(event_field(&events[3], "settlement_id"), Some("settle-1-1"));
+        assert_eq!(event_field(&events[3], "settlement_kind"), Some("spot"));
+        assert_eq!(event_field(&events[3], "leg_1_amount"), Some("180"));
+        assert_eq!(event_field(&events[4], "asset_id"), Some("USDT"));
+        assert_eq!(event_field(&events[5], "asset_id"), Some("USDT"));
+        assert_eq!(event_field(&events[6], "reason"), Some("freeze_for_order"));
+        assert_eq!(event_field(&events[7], "reason"), Some("unfreeze_for_cancel"));
+        assert!(!contains_reason(&events, "settle_spot_trade"));
     }
 
     #[test]
@@ -944,6 +900,7 @@ mod tests {
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Open);
         assert_eq!(changes.updated_taker_order.after.version, 2);
         assert!(changes.created_trades.is_empty());
+        assert!(changes.created_settlement_vouchers.is_empty());
         assert_eq!(changes.updated_balances.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 1);
     }
@@ -1044,13 +1001,14 @@ mod tests {
         assert_eq!(changes.updated_taker_order.after.filled_qty, 1);
         assert_eq!(changes.updated_taker_order.after.version, 2);
         assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.created_ledger_entries.len(), 6);
+        assert_eq!(changes.created_settlement_vouchers.len(), 1);
+        assert_eq!(changes.created_ledger_entries.len(), 2);
         let taker_quote = changes
             .updated_balances
             .iter()
             .find(|pair| pair.after.account_id == "buyer" && pair.after.asset_id == "USDT")
             .unwrap();
-        assert_eq!(taker_quote.after.available, 910);
+        assert_eq!(taker_quote.after.available, 1_000);
         assert_eq!(taker_quote.after.frozen, 0);
     }
 
@@ -1074,6 +1032,7 @@ mod tests {
         assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Rejected);
         assert_eq!(changes.updated_taker_order.after.version, 2);
         assert!(changes.created_trades.is_empty());
+        assert!(changes.created_settlement_vouchers.is_empty());
         assert_eq!(changes.updated_balances.len(), 1);
         assert_eq!(changes.created_ledger_entries.len(), 2);
         assert_eq!(changes.updated_balances[0].after.available, 1_000);
@@ -1247,7 +1206,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(result.events.len(), 15);
+        assert_eq!(result.events.len(), 8);
         assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
     }
 
