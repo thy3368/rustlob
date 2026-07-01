@@ -1,5 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityUseCaseApiSurface, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -219,6 +220,49 @@ impl Entity for SettlementTransferLeg {
     }
 }
 
+/// 一条面向 use case 暴露的稳定转账结论。
+///
+/// 它只暴露稳定业务事实：谁向谁转了什么资产、多少数量；
+/// 不把底层 `SettlementTransferLeg` 的内部 ID 与落账材料暴露给 use case。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SettlementTransferSummary<'a> {
+    from_account_id: &'a str,
+    to_account_id: &'a str,
+    asset_id: &'a str,
+    amount: u64,
+}
+
+impl<'a> SettlementTransferSummary<'a> {
+    fn from_leg(leg: &'a SettlementTransferLeg) -> Self {
+        Self {
+            from_account_id: leg.from_account_id(),
+            to_account_id: leg.to_account_id(),
+            asset_id: leg.asset_id(),
+            amount: leg.amount(),
+        }
+    }
+
+    /// 返回付款账户 ID。
+    pub fn from_account_id(&self) -> &str {
+        self.from_account_id
+    }
+
+    /// 返回收款账户 ID。
+    pub fn to_account_id(&self) -> &str {
+        self.to_account_id
+    }
+
+    /// 返回该业务结论对应的资产 ID。
+    pub fn asset_id(&self) -> &str {
+        self.asset_id
+    }
+
+    /// 返回该业务结论对应的数量。
+    pub const fn amount(&self) -> u64 {
+        self.amount
+    }
+}
+
 /// 一张统一收拢多腿结算转账事实的审计凭证。
 ///
 /// `SettlementTransferVoucher` 是 `trade settlement` 上层的 Moment-Interval 审计事实，
@@ -404,19 +448,37 @@ impl SettlementTransferVoucher {
         self.legs.iter().any(|leg| leg.references_account(account_id))
     }
 
-    /// [General] 返回该凭证中与指定账户相关的所有资金腿。
-    pub fn account_legs(&self, account_id: &str) -> Vec<&SettlementTransferLeg> {
-        self.legs.iter().filter(|leg| leg.references_account(account_id)).collect()
+    /// [General] 返回指定业务用途下的稳定转账结论。
+    ///
+    /// 返回值只包含业务方通常稳定依赖的付款方、收款方、资产与数量，
+    /// 不返回底层 `leg_id`、`balance_ledger_entry_id` 等聚合内部材料。
+    pub fn transfers_for_purpose(
+        &self,
+        purpose: SettlementTransferPurpose,
+    ) -> Vec<SettlementTransferSummary<'_>> {
+        self.legs
+            .iter()
+            .filter(|leg| leg.purpose() == purpose)
+            .map(SettlementTransferSummary::from_leg)
+            .collect()
     }
 
-    /// [General] 返回 principal 资金腿。
-    pub fn principal_legs(&self) -> Vec<&SettlementTransferLeg> {
-        self.legs.iter().filter(|leg| !leg.is_fee_leg()).collect()
+    /// [General] 汇总指定账户在某一业务用途下支付的数量。
+    pub fn amount_sent_by_for_purpose(
+        &self,
+        account_id: &str,
+        purpose: SettlementTransferPurpose,
+    ) -> Option<u64> {
+        self.sum_amount_by(account_id, purpose, TransferDirection::Sent)
     }
 
-    /// [General] 返回手续费资金腿。
-    pub fn fee_legs(&self) -> Vec<&SettlementTransferLeg> {
-        self.legs.iter().filter(|leg| leg.is_fee_leg()).collect()
+    /// [General] 汇总指定账户在某一业务用途下收到的数量。
+    pub fn amount_received_by_for_purpose(
+        &self,
+        account_id: &str,
+        purpose: SettlementTransferPurpose,
+    ) -> Option<u64> {
+        self.sum_amount_by(account_id, purpose, TransferDirection::Received)
     }
 
     /// [General] 汇总指定账户支付的手续费数量。
@@ -424,11 +486,30 @@ impl SettlementTransferVoucher {
     /// 仅统计 `TradingFee` 且 `from_account_id` 命中该账户的腿。
     /// 若没有任何手续费腿则返回 `None`；若求和溢出也返回 `None`。
     pub fn fee_amount_paid_by(&self, account_id: &str) -> Option<u64> {
+        self.amount_sent_by_for_purpose(account_id, SettlementTransferPurpose::TradingFee)
+    }
+
+    /// [General] 返回该凭证是否引用指定底层余额流水。
+    pub fn references_ledger_entry(&self, entry_id: &str) -> bool {
+        self.legs.iter().any(|leg| leg.references_ledger_entry(entry_id))
+    }
+
+    fn sum_amount_by(
+        &self,
+        account_id: &str,
+        purpose: SettlementTransferPurpose,
+        direction: TransferDirection,
+    ) -> Option<u64> {
         let mut total = 0_u64;
         let mut matched = false;
 
-        for leg in self.fee_legs() {
-            if leg.from_account_id() == account_id {
+        for leg in self.legs.iter().filter(|leg| leg.purpose() == purpose) {
+            let account_matches = match direction {
+                TransferDirection::Sent => leg.from_account_id() == account_id,
+                TransferDirection::Received => leg.to_account_id() == account_id,
+            };
+
+            if account_matches {
                 matched = true;
                 total = total.checked_add(leg.amount())?;
             }
@@ -436,11 +517,12 @@ impl SettlementTransferVoucher {
 
         if matched { Some(total) } else { None }
     }
+}
 
-    /// [General] 返回该凭证是否引用指定底层余额流水。
-    pub fn references_ledger_entry(&self, entry_id: &str) -> bool {
-        self.legs.iter().any(|leg| leg.references_ledger_entry(entry_id))
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransferDirection {
+    Sent,
+    Received,
 }
 
 impl Entity for SettlementTransferVoucher {
@@ -464,6 +546,10 @@ impl Entity for SettlementTransferVoucher {
 
     fn aggregate_role() -> AggregateRole {
         AggregateRole::AggregateRoot
+    }
+
+    fn use_case_api_surface() -> EntityUseCaseApiSurface {
+        EntityUseCaseApiSurface::MinimalBusinessApi
     }
 
     fn entity_version(&self) -> u64 {
@@ -639,23 +725,31 @@ mod tests {
     #[test]
     fn constructor_stores_spot_voucher_facts() {
         let voucher = spot_voucher();
-        let buyer_receive_base = voucher.principal_legs()[0];
-        let buyer_fee_leg = voucher.fee_legs()[0];
+        let buyer_receive_base =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerReceiveBase);
 
         assert_eq!(SettlementTransferVoucher::aggregate_role(), AggregateRole::AggregateRoot);
+        assert_eq!(
+            SettlementTransferVoucher::use_case_api_surface(),
+            EntityUseCaseApiSurface::MinimalBusinessApi
+        );
         assert_eq!(SettlementTransferLeg::aggregate_role(), AggregateRole::AggregateMember);
         assert_eq!(voucher.voucher_id(), "voucher-spot-1");
         assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
         assert_eq!(voucher.trade_id(), "trade-spot-1");
         assert_eq!(voucher.match_id(), Some("match-spot-1"));
         assert_eq!(voucher.fee_account_id(), "fee-account");
-        assert_eq!(voucher.account_legs("buyer").len(), 3);
-        assert_eq!(buyer_receive_base.asset_id(), "BTC");
-        assert_eq!(buyer_fee_leg.purpose(), SettlementTransferPurpose::TradingFee);
+        assert!(voucher.references_account("buyer"));
+        assert_eq!(buyer_receive_base.len(), 1);
+        assert_eq!(buyer_receive_base[0].from_account_id(), "seller");
+        assert_eq!(buyer_receive_base[0].to_account_id(), "buyer");
+        assert_eq!(buyer_receive_base[0].asset_id(), "BTC");
+        assert_eq!(buyer_receive_base[0].amount(), 2);
+        assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(3));
     }
 
     #[test]
-    fn build_spot_principal_voucher_creates_four_principal_legs() {
+    fn build_spot_principal_voucher_creates_expected_spot_settlement_facts() {
         let trade = SpotTrade::new(
             "trade-1".to_string(),
             "match-1".to_string(),
@@ -680,24 +774,32 @@ mod tests {
         )
         .unwrap();
 
-        let principal_legs = voucher.principal_legs();
+        let buyer_receive_base =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerReceiveBase);
+        let buyer_pay_quote =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerPayQuote);
+        let seller_receive_quote =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotSellerReceiveQuote);
+        let seller_deliver_base =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::SpotSellerDeliverBase);
 
         assert_eq!(voucher.voucher_id(), "voucher-1");
         assert_eq!(voucher.settlement_id(), "settle-1-1");
         assert_eq!(voucher.trade_id(), "trade-1");
         assert_eq!(voucher.match_id(), Some("match-1"));
         assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
-        assert_eq!(principal_legs.len(), 4);
-        assert_eq!(principal_legs[0].purpose(), SettlementTransferPurpose::SpotBuyerReceiveBase);
-        assert_eq!(principal_legs[0].asset_id(), "BTC");
-        assert_eq!(principal_legs[0].amount(), 2);
-        assert_eq!(principal_legs[1].purpose(), SettlementTransferPurpose::SpotBuyerPayQuote);
-        assert_eq!(principal_legs[1].asset_id(), "USDT");
-        assert_eq!(principal_legs[1].amount(), 200);
-        assert_eq!(principal_legs[2].purpose(), SettlementTransferPurpose::SpotSellerReceiveQuote);
-        assert_eq!(principal_legs[2].amount(), 200);
-        assert_eq!(principal_legs[3].purpose(), SettlementTransferPurpose::SpotSellerDeliverBase);
-        assert_eq!(principal_legs[3].amount(), 2);
+        assert_eq!(buyer_receive_base.len(), 1);
+        assert_eq!(buyer_receive_base[0].asset_id(), "BTC");
+        assert_eq!(buyer_receive_base[0].amount(), 2);
+        assert_eq!(buyer_pay_quote.len(), 1);
+        assert_eq!(buyer_pay_quote[0].asset_id(), "USDT");
+        assert_eq!(buyer_pay_quote[0].amount(), 200);
+        assert_eq!(seller_receive_quote.len(), 1);
+        assert_eq!(seller_receive_quote[0].asset_id(), "USDT");
+        assert_eq!(seller_receive_quote[0].amount(), 200);
+        assert_eq!(seller_deliver_base.len(), 1);
+        assert_eq!(seller_deliver_base[0].asset_id(), "BTC");
+        assert_eq!(seller_deliver_base[0].amount(), 2);
     }
 
     #[test]
@@ -732,35 +834,73 @@ mod tests {
     #[test]
     fn constructor_stores_perp_voucher_facts() {
         let voucher = perp_voucher();
-        let principal_legs = voucher.principal_legs();
-        let fee_legs = voucher.fee_legs();
 
         assert_eq!(voucher.settlement_kind(), SettlementKind::Perp);
         assert_eq!(voucher.match_id(), None);
-        assert_eq!(principal_legs[0].purpose(), SettlementTransferPurpose::PerpRealizedPnlTransfer);
-        assert_eq!(fee_legs[0].purpose(), SettlementTransferPurpose::TradingFee);
+        assert!(voucher.references_account("winner"));
+        assert_eq!(voucher.fee_amount_paid_by("winner"), Some(1));
+        assert_eq!(
+            voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer).len(),
+            1
+        );
     }
 
     #[test]
-    fn business_queries_filter_accounts_fee_and_ledger_references() {
+    fn business_queries_return_semantic_results_without_exposing_raw_legs() {
         let voucher = spot_voucher();
+        let trade = SpotTrade::new(
+            "trade-semantic-1".to_string(),
+            "match-semantic-1".to_string(),
+            10_002,
+            "BTCUSDT".to_string(),
+            "taker-semantic-1".to_string(),
+            "maker-semantic-1".to_string(),
+            "buyer".to_string(),
+            "seller".to_string(),
+            crate::SpotOrderSide::Buy,
+            100,
+            2,
+        );
+        let principal_voucher = SettlementTransferVoucher::build_spot_principal_voucher(
+            "voucher-semantic-1".to_string(),
+            "settle-semantic-1".to_string(),
+            &trade,
+            "BTC",
+            "USDT",
+            "fee-account".to_string(),
+        )
+        .unwrap();
 
         assert!(voucher.references_account("buyer"));
         assert!(voucher.references_account("fee-account"));
         assert!(!voucher.references_account("outsider"));
 
-        let buyer_legs = voucher.account_legs("buyer");
-        assert_eq!(buyer_legs.len(), 3);
-        assert!(buyer_legs.iter().all(|leg| leg.references_account("buyer")));
-
-        let principal_legs = voucher.principal_legs();
-        assert_eq!(principal_legs.len(), 2);
-        assert!(principal_legs.iter().all(|leg| !leg.is_fee_leg()));
-
-        let fee_legs = voucher.fee_legs();
-        assert_eq!(fee_legs.len(), 2);
-        assert!(fee_legs.iter().all(|leg| leg.is_fee_leg()));
-
+        assert_eq!(
+            principal_voucher.amount_received_by_for_purpose(
+                "buyer",
+                SettlementTransferPurpose::SpotBuyerReceiveBase
+            ),
+            Some(2)
+        );
+        assert_eq!(
+            principal_voucher
+                .amount_sent_by_for_purpose("buyer", SettlementTransferPurpose::SpotBuyerPayQuote),
+            Some(200)
+        );
+        assert_eq!(
+            principal_voucher.amount_received_by_for_purpose(
+                "seller",
+                SettlementTransferPurpose::SpotSellerReceiveQuote
+            ),
+            Some(200)
+        );
+        assert_eq!(
+            principal_voucher.amount_sent_by_for_purpose(
+                "seller",
+                SettlementTransferPurpose::SpotSellerDeliverBase
+            ),
+            Some(2)
+        );
         assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(3));
         assert_eq!(voucher.fee_amount_paid_by("seller"), Some(2));
         assert_eq!(voucher.fee_amount_paid_by("outsider"), None);
