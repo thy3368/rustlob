@@ -10,6 +10,9 @@ pub use account::account::Account;
 pub use account::balance::Balance;
 pub use account::balance_ledger_entry::{BalanceLedgerEntry, BalanceLedgerReason};
 pub use account::balance_ledger_entry_v2::BalanceLedgerEntryV2;
+pub use account::settlement_transfer_voucher::{
+    SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
+};
 pub use market_rules::MarketRules;
 pub use perp::hyperliquid_perp_adl_batch::{
     HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,

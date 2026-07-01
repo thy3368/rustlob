@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
@@ -29,21 +30,20 @@ pub enum SpotOrderMiCommand<'a> {
 /// `SpotOrder` MI 各命令分支所需的外部已加载上下文。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpotOrderMiGivenState<'a> {
-    /// `Place` 不需要额外上下文，只要求显式选择对应分支。
-    Place,
+    /// `Place` 需要外部已加载的 taker base/quote 余额快照，用于冻结对应资产。
+    Place { taker_base_balance: &'a Balance, taker_quote_balance: &'a Balance },
     /// `Match` 需要外部已按撮合优先级加载好的 maker 订单切片。
     Match { makers: &'a [SpotOrder] },
     /// `Cancel` 不需要额外上下文，只要求显式选择对应分支。
     Cancel,
 }
 
-/// `Place` 命令只携带冻结余额所需的 taker 快照。
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// `Place` 命令只表达“接受下单”这一业务意图，不再携带余额快照。
+///
+/// 生命周期仅用于匹配状态机 `Command<'a>` 的 GAT 签名，本体不借用任何外部上下文字段。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PlaceSpotOrderCmd<'a> {
-    /// taker base 余额快照。
-    pub taker_base_balance: &'a Balance,
-    /// taker quote 余额快照。
-    pub taker_quote_balance: &'a Balance,
+    _marker: PhantomData<&'a ()>,
 }
 
 /// `Match` 命令携带撮合所需的全部上下文。
@@ -297,7 +297,10 @@ impl MiStateMachineOwnedUnchecked for SpotOrder {
         }
 
         match (cmd, given_state) {
-            (SpotOrderMiCommand::Place(_), SpotOrderMiGivenState::Place) => {
+            (
+                SpotOrderMiCommand::Place(_),
+                SpotOrderMiGivenState::Place { taker_base_balance: _, taker_quote_balance: _ },
+            ) => {
                 if matches!(self.state(), SpotOrderStatus::Open) {
                     Ok(())
                 } else {
@@ -359,9 +362,13 @@ impl MiStateMachineOwnedUnchecked for SpotOrder {
         given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         match (cmd, given_state) {
-            (SpotOrderMiCommand::Place(place), SpotOrderMiGivenState::Place) => {
-                self.compute_place_changes(place)
-            }
+            (
+                SpotOrderMiCommand::Place(place),
+                given_state @ SpotOrderMiGivenState::Place {
+                    taker_base_balance: _,
+                    taker_quote_balance: _,
+                },
+            ) => self.compute_place_changes(place, given_state),
             (SpotOrderMiCommand::Match(match_cmd), SpotOrderMiGivenState::Match { makers }) => {
                 self.compute_match_changes(match_cmd, makers)
             }
@@ -439,13 +446,14 @@ impl SpotOrder {
 
     pub(crate) fn compute_place_changes(
         &self,
-        cmd: &PlaceSpotOrderCmd<'_>,
+        _cmd: &PlaceSpotOrderCmd<'_>,
+        given_state: &SpotOrderMiGivenState<'_>,
     ) -> Result<SpotOrderMiChanges, SpotOrderMiStateMachineError> {
         let before = self.clone();
         let after = self.evolve_after_place_acceptance()?;
 
         let (frozen_balance, created_freeze_ledger_entry) =
-            derive_place_freeze_changes(&after, taker_freeze_balance(&after, cmd))?;
+            derive_place_freeze_changes(&after, taker_freeze_balance(&after, given_state)?)?;
 
         Ok(SpotOrderMiChanges::Place(PlaceSpotOrderChanges {
             updated_order: UpdatedEntityPair { before, after },
@@ -585,10 +593,22 @@ fn derive_place_freeze_changes(
     ))
 }
 
-fn taker_freeze_balance<'a>(order: &SpotOrder, cmd: &'a PlaceSpotOrderCmd<'a>) -> &'a Balance {
-    match order.reservation_asset_kind() {
-        SpotReservationAssetKind::Quote => &cmd.taker_quote_balance,
-        SpotReservationAssetKind::Base => &cmd.taker_base_balance,
+fn taker_freeze_balance<'a>(
+    order: &SpotOrder,
+    given_state: &SpotOrderMiGivenState<'a>,
+) -> Result<&'a Balance, SpotOrderMiStateMachineError> {
+    match *given_state {
+        SpotOrderMiGivenState::Place { taker_base_balance, taker_quote_balance } => {
+            Ok(match order.reservation_asset_kind() {
+                SpotReservationAssetKind::Quote => taker_quote_balance,
+                SpotReservationAssetKind::Base => taker_base_balance,
+            })
+        }
+        SpotOrderMiGivenState::Match { .. } | SpotOrderMiGivenState::Cancel => {
+            Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                reason: "place command requires place given state",
+            })
+        }
     }
 }
 
@@ -680,14 +700,17 @@ mod tests {
         let order = sample_order(SpotOrderTimeInForce::Gtc);
         let taker_base_balance = base_balance(0);
         let taker_quote_balance = quote_balance(2_000);
-        let cmd = SpotOrderMiCommand::Place(PlaceSpotOrderCmd {
-            taker_base_balance: &taker_base_balance,
-            taker_quote_balance: &taker_quote_balance,
-        });
+        let cmd = SpotOrderMiCommand::Place(PlaceSpotOrderCmd::default());
 
-        let changes =
-            MiStateMachineOwned::compute_after_changes(&order, &cmd, &SpotOrderMiGivenState::Place)
-                .unwrap();
+        let changes = MiStateMachineOwned::compute_after_changes(
+            &order,
+            &cmd,
+            &SpotOrderMiGivenState::Place {
+                taker_base_balance: &taker_base_balance,
+                taker_quote_balance: &taker_quote_balance,
+            },
+        )
+        .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         let SpotOrderMiChanges::Place(place) = changes else {
@@ -851,15 +874,56 @@ mod tests {
     fn validate_transition_rejects_match_when_given_state_branch_mismatches() {
         let order = sample_order(SpotOrderTimeInForce::Gtc);
         let cmd = SpotOrderMiCommand::Match(MatchSpotOrderCmd { match_id: "match-5".to_string() });
+        let taker_base_balance = base_balance(0);
+        let taker_quote_balance = quote_balance(2_000);
 
         assert_eq!(
             MiStateMachineOwnedUnchecked::validate_state_transition(
                 &order,
                 &cmd,
-                &SpotOrderMiGivenState::Place,
+                &SpotOrderMiGivenState::Place {
+                    taker_base_balance: &taker_base_balance,
+                    taker_quote_balance: &taker_quote_balance,
+                },
             ),
             Err(SpotOrderMiStateMachineError::InvalidCommandFields {
                 reason: "match command requires match given state",
+            })
+        );
+    }
+
+    #[test]
+    fn validate_transition_rejects_place_when_given_state_branch_mismatches() {
+        let order = sample_order(SpotOrderTimeInForce::Gtc);
+        let makers = vec![sell_maker("maker-1", 100, 4)];
+        let cmd = SpotOrderMiCommand::Place(PlaceSpotOrderCmd::default());
+
+        assert_eq!(
+            MiStateMachineOwnedUnchecked::validate_state_transition(
+                &order,
+                &cmd,
+                &SpotOrderMiGivenState::Match { makers: &makers },
+            ),
+            Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                reason: "place command requires place given state",
+            })
+        );
+    }
+
+    #[test]
+    fn validate_transition_rejects_cancel_when_given_state_branch_mismatches() {
+        let order = sample_order(SpotOrderTimeInForce::Gtc);
+        let makers = vec![sell_maker("maker-1", 100, 4)];
+        let cmd = SpotOrderMiCommand::Cancel(CancelSpotOrderCmd);
+
+        assert_eq!(
+            MiStateMachineOwnedUnchecked::validate_state_transition(
+                &order,
+                &cmd,
+                &SpotOrderMiGivenState::Match { makers: &makers },
+            ),
+            Err(SpotOrderMiStateMachineError::InvalidCommandFields {
+                reason: "cancel command requires cancel given state",
             })
         );
     }
