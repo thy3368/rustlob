@@ -62,7 +62,9 @@ pub trait ReplayableChanges {
 /// }
 ///
 /// impl MiStateMachineOwnedUnchecked for WalletMachine {
-///     type Command = WalletCommand;
+///     type Command<'a> = WalletCommand
+///     where
+///         Self: 'a;
 ///     type State = WalletStatus;
 ///     type Error = ();
 ///     type AfterChanges = ChangedEntity<WalletAccount>;
@@ -71,10 +73,10 @@ pub trait ReplayableChanges {
 ///         &self.state
 ///     }
 ///
-///     fn validate_state_transition(
+///     fn validate_state_transition<'a>(
 ///         &self,
-///         cmd: &Self::Command,
-///         given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+///         cmd: &Self::Command<'a>,
+///         given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
 ///     ) -> Result<(), Self::Error> {
 ///         if given_state.available == 0 {
 ///             return Err(());
@@ -84,9 +86,9 @@ pub trait ReplayableChanges {
 ///         }
 ///     }
 ///
-///     fn compute_after_changes_unchecked(
+///     fn compute_after_changes_unchecked<'a>(
 ///         &self,
-///         cmd: &Self::Command,
+///         cmd: &Self::Command<'a>,
 ///         given_state: &WalletAccount,
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         let available = match cmd {
@@ -218,9 +220,11 @@ pub trait CommandWithGivenState {
 /// 实现者只能提供 `compute_after_changes_unchecked()` 里的纯业务 after 计算。
 /// `pre_check_command()` 与 `validate_state_transition()` 的调用链由
 /// `MiStateMachineOwned` 的默认入口统一保证，避免实现者自行决定是否复用 hook。
-pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
+pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync {
     /// 业务命令类型。
-    type Command: CommandWithGivenState;
+    type Command<'a>: CommandWithGivenState
+    where
+        Self: 'a;
     /// 状态机当前持有的状态值类型，例如 `OrderStatus`。
     ///
     /// 它表示 `self.state()` 返回的内容，而不是外部输入 entity 本身。
@@ -237,15 +241,15 @@ pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
     /// 返回状态机当前持有的状态值。
     fn state(&self) -> &Self::State;
 
-    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn pre_check_command<'a>(&self, _cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// 基于外部 `GivenState` 校验本次状态迁移是否合法。
-    fn validate_state_transition(
+    fn validate_state_transition<'a>(
         &self,
-        _cmd: &Self::Command,
-        _given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        _cmd: &Self::Command<'a>,
+        _given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -256,10 +260,10 @@ pub trait MiStateMachineOwnedUnchecked: Clone + Debug + Send + Sync + 'static {
     /// 该方法不是上层应直接依赖的业务入口。
     /// 上层应始终通过 `MiStateMachineOwned::compute_after_changes()` 进入统一链路：
     /// `pre_check_command() -> validate_state_transition() -> compute_after_changes_unchecked()`
-    fn compute_after_changes_unchecked(
+    fn compute_after_changes_unchecked<'a>(
         &self,
-        cmd: &Self::Command,
-        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command<'a>,
+        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error>;
 }
 
@@ -275,10 +279,10 @@ pub trait MiStateMachineOwned: MiStateMachineOwnedUnchecked {
     /// 这是 after 结果计算的唯一稳定入口。
     /// 如果还需要 replayable before/after changes，应由
     /// `MiStateMachineOwnedBeforeAfter::compute_before_after_changes()` 默认复用本方法。
-    fn compute_after_changes(
+    fn compute_after_changes<'a>(
         &self,
-        cmd: &Self::Command,
-        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command<'a>,
+        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         self.pre_check_command(cmd)?;
         self.validate_state_transition(cmd, given_state)?;
@@ -454,7 +458,9 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 /// }
 ///
 /// impl MiStateMachineOwnedUnchecked for Machine {
-///     type Command = CancelOrder;
+///     type Command<'a> = CancelOrder
+///     where
+///         Self: 'a;
 ///     type State = OrderStatus;
 ///     type Error = EntityError;
 ///     type AfterChanges = AfterChanges;
@@ -463,9 +469,9 @@ impl<T> MiStateMachineOwned for T where T: MiStateMachineOwnedUnchecked {}
 ///         &self.state
 ///     }
 ///
-///     fn compute_after_changes_unchecked(
+///     fn compute_after_changes_unchecked<'a>(
 ///         &self,
-///         cmd: &Self::Command,
+///         cmd: &Self::Command<'a>,
 ///         given_state: &(Order, [Balance; 2], AccountContext),
 ///     ) -> Result<Self::AfterChanges, Self::Error> {
 ///         let _ = cmd;
@@ -722,7 +728,7 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
     /// 在 `compute_after_changes()` 借用 `GivenState` 期间，先捕获 before 快照。
     fn capture_before(
         &self,
-        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        given_state: &<Self::Command<'_> as CommandWithGivenState>::GivenState,
     ) -> Self::BeforeSnapshot;
 
     /// 把 case 级 before 快照与 after 结果合并成最终 replayable before/after changes。
@@ -736,10 +742,10 @@ pub trait MiStateMachineOwnedBeforeAfter: MiStateMachineOwned {
     /// 默认实现会先捕获 before，再调用 `MiStateMachineOwned::compute_after_changes()`
     /// 复用 after 计算，最后把两者合并成完整的 `BeforeAfterChanges`。
     /// 这确保 hook 只执行一条固定链路，业务规则也只实现一遍，避免两套 API 语义漂移。
-    fn compute_before_after_changes(
+    fn compute_before_after_changes<'a>(
         &self,
-        cmd: &Self::Command,
-        given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command<'a>,
+        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
         let before = self.capture_before(given_state);
         let after = <Self as MiStateMachineOwned>::compute_after_changes(self, cmd, given_state)?;
@@ -903,7 +909,10 @@ mod tests {
     }
 
     impl MiStateMachineOwnedUnchecked for FamilyMachine {
-        type Command = FamilyCommand;
+        type Command<'a>
+            = FamilyCommand
+        where
+            Self: 'a;
         type State = FamilyState;
         type Error = HookError;
         type AfterChanges = FamilyAfterChanges;
@@ -912,7 +921,7 @@ mod tests {
             &self.state
         }
 
-        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
             self.log.push("pre_check");
             match cmd {
                 FamilyCommand::RejectInPreCheck => Err(HookError::PreCheckRejected),
@@ -931,10 +940,10 @@ mod tests {
             }
         }
 
-        fn validate_state_transition(
+        fn validate_state_transition<'a>(
             &self,
-            cmd: &Self::Command,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            cmd: &Self::Command<'a>,
+            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
         ) -> Result<(), Self::Error> {
             self.log.push("validate");
             match (cmd, &given_state.state) {
@@ -944,10 +953,10 @@ mod tests {
             }
         }
 
-        fn compute_after_changes_unchecked(
+        fn compute_after_changes_unchecked<'a>(
             &self,
-            cmd: &Self::Command,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            cmd: &Self::Command<'a>,
+            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             self.log.push("unchecked");
             let (next_state, next_value) = match cmd {
@@ -1019,7 +1028,10 @@ mod tests {
     }
 
     impl MiStateMachineOwnedUnchecked for TestOrder {
-        type Command = TestCommand;
+        type Command<'a>
+            = TestCommand
+        where
+            Self: 'a;
         type State = TestStatus;
         type Error = HookError;
         type AfterChanges = TestAfterChanges;
@@ -1028,17 +1040,17 @@ mod tests {
             &self.status
         }
 
-        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
             match cmd {
                 TestCommand::RejectInPreCheck => Err(HookError::PreCheckRejected),
                 _ => Ok(()),
             }
         }
 
-        fn validate_state_transition(
+        fn validate_state_transition<'a>(
             &self,
-            _cmd: &Self::Command,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            _cmd: &Self::Command<'a>,
+            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
         ) -> Result<(), Self::Error> {
             if !given_state.account.can_apply {
                 return Err(HookError::InvalidTransition);
@@ -1049,10 +1061,10 @@ mod tests {
             }
         }
 
-        fn compute_after_changes_unchecked(
+        fn compute_after_changes_unchecked<'a>(
             &self,
-            cmd: &Self::Command,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            cmd: &Self::Command<'a>,
+            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             let TestGivenState { order, balances: [trading_balance, fee_balance], account: _ } =
                 given_state;
@@ -1093,7 +1105,7 @@ mod tests {
 
         fn capture_before(
             &self,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            given_state: &<Self::Command<'_> as CommandWithGivenState>::GivenState,
         ) -> Self::BeforeSnapshot {
             TestBeforeSnapshot {
                 order_before: given_state.order.clone(),
@@ -1136,7 +1148,10 @@ mod tests {
     }
 
     impl MiStateMachineOwnedUnchecked for AfterOnlyMachine {
-        type Command = TestCommand;
+        type Command<'a>
+            = TestCommand
+        where
+            Self: 'a;
         type State = TestStatus;
         type Error = HookError;
         type AfterChanges = TestAfterOnlyChanges;
@@ -1145,10 +1160,10 @@ mod tests {
             &self.state
         }
 
-        fn compute_after_changes_unchecked(
+        fn compute_after_changes_unchecked<'a>(
             &self,
-            cmd: &Self::Command,
-            given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+            cmd: &Self::Command<'a>,
+            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             let next_value = match cmd {
                 TestCommand::Apply { next_value, .. } => *next_value,
@@ -1286,7 +1301,10 @@ mod tests {
         struct SequenceMachine;
 
         impl MiStateMachineOwnedUnchecked for SequenceMachine {
-            type Command = SequenceCommand;
+            type Command<'a>
+                = SequenceCommand
+            where
+                Self: 'a;
             type State = ();
             type Error = EntityError;
             type AfterChanges = ();
@@ -1295,10 +1313,10 @@ mod tests {
                 &()
             }
 
-            fn compute_after_changes_unchecked(
+            fn compute_after_changes_unchecked<'a>(
                 &self,
-                _cmd: &Self::Command,
-                given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+                _cmd: &Self::Command<'a>,
+                given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
             ) -> Result<Self::AfterChanges, Self::Error> {
                 given_state.lock().unwrap().push("after");
                 Ok(())
@@ -1311,7 +1329,7 @@ mod tests {
 
             fn capture_before(
                 &self,
-                given_state: &<Self::Command as CommandWithGivenState>::GivenState,
+                given_state: &<Self::Command<'_> as CommandWithGivenState>::GivenState,
             ) -> Self::BeforeSnapshot {
                 given_state.lock().unwrap().push("before");
             }
