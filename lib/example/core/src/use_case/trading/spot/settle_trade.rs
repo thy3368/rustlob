@@ -9,7 +9,10 @@ use common_entity::{Entity, MiStateMachineOwned};
 use thiserror::Error;
 
 use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
-use crate::entity::{Balance, SpotOrderSide, SpotSettlement, SpotTrade};
+use crate::entity::{
+    AssetReservation, Balance, ReservationCloseReason, ReservationConsumed, SpotOrderSide,
+    SpotSettlement, SpotTrade,
+};
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
 /// 批量清结算现货成交的命令。
@@ -40,6 +43,8 @@ pub struct SettleSpotTradeState {
     pub quote_asset_id: String,
     /// 本批次涉及的资产余额快照。
     pub balances: Vec<Balance>,
+    /// 本批次涉及的 spot reservation 快照。
+    pub reservations: Vec<AssetReservation>,
     /// 已经存在清算记录的 trade id，用于 core 层幂等拒绝。///todo 有点问题
     pub settled_trade_ids: Vec<String>,
 }
@@ -71,6 +76,12 @@ pub enum SettleSpotTradeError {
     /// 卖方冻结 base 不足以完成清结算。
     #[error("seller frozen base is insufficient")]
     InsufficientSellerFrozenBase,
+    /// trade 对应 reservation 不存在。
+    #[error("spot reservation was not found for order={order_id}, account={account_id}, asset={asset_id}")]
+    ReservationNotFound { order_id: String, account_id: String, asset_id: String },
+    /// trade 对应 reservation 剩余量不足。
+    #[error("spot reservation remaining amount is insufficient for order={order_id}")]
+    InsufficientReservationRemaining { order_id: String },
     /// 生成清结算结果时发生整数溢出。
     #[error("arithmetic overflow while deriving settlement result")]
     ArithmeticOverflow,
@@ -81,6 +92,10 @@ pub enum SettleSpotTradeError {
 pub struct SettleSpotTradeChanges {
     /// 本批次创建出的 settlement 事实。
     pub settlements: Vec<SpotSettlement>,
+    /// 本批次被 trade 消耗的 reservation before/after。
+    pub updated_reservations: Vec<UpdatedEntityPair<AssetReservation>>,
+    /// 本批次生成的 reservation consumed append-only 事实。
+    pub created_reservation_consumed: Vec<ReservationConsumed>,
     /// 本批次实际受影响的余额 before/after。
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     /// 本批次对应的余额流水。
@@ -99,11 +114,19 @@ impl ReplayableChanges for SettleSpotTradeChanges {
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
             self.settlements.len()
+                + self.updated_reservations.len()
+                + self.created_reservation_consumed.len()
                 + self.updated_balances.len()
                 + self.created_balance_ledger_entries.len(),
         );
         for settlement in &self.settlements {
             events.push(settlement.track_create_event()?);
+        }
+        for reservation in &self.updated_reservations {
+            events.push(reservation.after.track_update_event_from(&reservation.before)?);
+        }
+        for consumed in &self.created_reservation_consumed {
+            events.push(consumed.track_create_event()?);
         }
         for balance in &self.updated_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
@@ -145,6 +168,7 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
     ) -> Result<(), Self::Error> {
         validate_trade_ids_match(cmd, state)?;
         ensure_not_settled(state)?;
+        validate_reservations_can_settle(state)?;
 
         let balances = balance_map(&state.balances);
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
@@ -162,6 +186,13 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
+        let (updated_reservations, created_reservation_consumed) =
+            consume_reservations_for_trades(
+                &state.trades,
+                &state.reservations,
+                &state.base_asset_id,
+                &state.quote_asset_id,
+            )?;
         let mut settlements = Vec::new();
         let mut updated_balances = Vec::new();
 
@@ -240,7 +271,13 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             );
         }
 
-        Ok(SettleSpotTradeChanges { settlements, updated_balances, created_balance_ledger_entries })
+        Ok(SettleSpotTradeChanges {
+            settlements,
+            updated_reservations,
+            created_reservation_consumed,
+            updated_balances,
+            created_balance_ledger_entries,
+        })
     }
 }
 
@@ -270,6 +307,160 @@ fn ensure_not_settled(state: &SettleSpotTradeState) -> Result<(), SettleSpotTrad
         return Err(SettleSpotTradeError::TradeAlreadySettled);
     }
     Ok(())
+}
+
+fn validate_reservations_can_settle(
+    state: &SettleSpotTradeState,
+) -> Result<(), SettleSpotTradeError> {
+    consume_reservations_for_trades(
+        &state.trades,
+        &state.reservations,
+        &state.base_asset_id,
+        &state.quote_asset_id,
+    )
+    .map(|_| ())
+}
+
+fn consume_reservations_for_trades(
+    trades: &[SpotTrade],
+    reservations: &[AssetReservation],
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Result<
+    (
+        Vec<UpdatedEntityPair<AssetReservation>>,
+        Vec<ReservationConsumed>,
+    ),
+    SettleSpotTradeError,
+> {
+    let mut original_by_id = HashMap::<String, AssetReservation>::new();
+    let mut current_by_id = HashMap::<String, AssetReservation>::new();
+    let mut lookup = HashMap::<String, String>::new();
+
+    for reservation in reservations {
+        let reservation_id = reservation.entity_id();
+        original_by_id.insert(reservation_id.clone(), reservation.clone());
+        current_by_id.insert(reservation_id.clone(), reservation.clone());
+        lookup.insert(
+            reservation_lookup_key(
+                reservation.caused_by_order_id.as_str(),
+                reservation.owner_account_id.as_str(),
+                reservation.asset_id.as_str(),
+            ),
+            reservation_id,
+        );
+    }
+
+    let mut touched_reservation_ids = Vec::<String>::new();
+    let mut created_consumed = Vec::<ReservationConsumed>::new();
+
+    for trade in trades {
+        let quote_amount = trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+        consume_one_reservation(
+            trade,
+            buyer_order_id(trade),
+            trade.buyer_account_id(),
+            quote_asset_id,
+            quote_amount,
+            &lookup,
+            &mut current_by_id,
+            &mut touched_reservation_ids,
+            &mut created_consumed,
+        )?;
+        consume_one_reservation(
+            trade,
+            seller_order_id(trade),
+            trade.seller_account_id(),
+            base_asset_id,
+            trade.qty,
+            &lookup,
+            &mut current_by_id,
+            &mut touched_reservation_ids,
+            &mut created_consumed,
+        )?;
+    }
+
+    let updated_reservations = touched_reservation_ids
+        .into_iter()
+        .map(|reservation_id| {
+            let before = original_by_id
+                .get(&reservation_id)
+                .cloned()
+                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+            let after = current_by_id
+                .get(&reservation_id)
+                .cloned()
+                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+            Ok(UpdatedEntityPair { before, after })
+        })
+        .collect::<Result<Vec<_>, SettleSpotTradeError>>()?;
+
+    Ok((updated_reservations, created_consumed))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn consume_one_reservation(
+    trade: &SpotTrade,
+    order_id: &str,
+    account_id: &str,
+    asset_id: &str,
+    amount: u64,
+    lookup: &HashMap<String, String>,
+    current_by_id: &mut HashMap<String, AssetReservation>,
+    touched_reservation_ids: &mut Vec<String>,
+    created_consumed: &mut Vec<ReservationConsumed>,
+) -> Result<(), SettleSpotTradeError> {
+    let reservation_id = lookup
+        .get(&reservation_lookup_key(order_id, account_id, asset_id))
+        .ok_or_else(|| SettleSpotTradeError::ReservationNotFound {
+            order_id: order_id.to_string(),
+            account_id: account_id.to_string(),
+            asset_id: asset_id.to_string(),
+        })?
+        .clone();
+    let reservation =
+        current_by_id.get(&reservation_id).cloned().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+    let close_reason =
+        if reservation.remaining_amount == amount { Some(ReservationCloseReason::Filled) } else { None };
+    let after = reservation
+        .consume(amount, close_reason)
+        .map_err(|_| SettleSpotTradeError::InsufficientReservationRemaining {
+            order_id: order_id.to_string(),
+        })?;
+    current_by_id.insert(reservation_id.clone(), after.clone());
+    if !touched_reservation_ids.iter().any(|existing| existing == &reservation_id) {
+        touched_reservation_ids.push(reservation_id.clone());
+    }
+    created_consumed.push(ReservationConsumed::new(
+        format!(
+            "reservation-consumed:{}:{}:{}",
+            trade.trade_id,
+            reservation_id,
+            created_consumed.len() + 1
+        ),
+        &after,
+        amount,
+        trade.trade_id.clone(),
+    ));
+    Ok(())
+}
+
+fn buyer_order_id(trade: &SpotTrade) -> &str {
+    match trade.taker_side {
+        SpotOrderSide::Buy => trade.taker_order_id.as_str(),
+        SpotOrderSide::Sell => trade.maker_order_id.as_str(),
+    }
+}
+
+fn seller_order_id(trade: &SpotTrade) -> &str {
+    match trade.taker_side {
+        SpotOrderSide::Buy => trade.maker_order_id.as_str(),
+        SpotOrderSide::Sell => trade.taker_order_id.as_str(),
+    }
+}
+
+fn reservation_lookup_key(order_id: &str, account_id: &str, asset_id: &str) -> String {
+    format!("{order_id}:{account_id}:{asset_id}")
 }
 
 fn balance_map(balances: &[Balance]) -> HashMap<String, &Balance> {
@@ -465,12 +656,59 @@ fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Bal
 }
 
 #[cfg(test)]
+fn reservations_from_trades(
+    trades: &[SpotTrade],
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Vec<AssetReservation> {
+    use crate::entity::{Reservation, ReservationKind, ReservationMarketKind};
+
+    let mut amounts = HashMap::<(String, String, String, ReservationKind), u64>::new();
+    for trade in trades {
+        let quote_amount = trade.notional_quote().unwrap_or(u64::MAX);
+        let buyer_key = (
+            buyer_order_id(trade).to_string(),
+            trade.buyer_account_id().to_string(),
+            quote_asset_id.to_string(),
+            ReservationKind::SpotBuyQuote,
+        );
+        *amounts.entry(buyer_key).or_default() += quote_amount;
+
+        let seller_key = (
+            seller_order_id(trade).to_string(),
+            trade.seller_account_id().to_string(),
+            base_asset_id.to_string(),
+            ReservationKind::SpotSellBase,
+        );
+        *amounts.entry(seller_key).or_default() += trade.qty;
+    }
+
+    amounts
+        .into_iter()
+        .map(|((order_id, account_id, asset_id, kind), amount)| {
+            Reservation::new(
+                format!("reservation:{order_id}"),
+                account_id,
+                order_id,
+                ReservationMarketKind::Spot,
+                kind,
+                asset_id,
+                amount,
+            )
+            .unwrap()
+        })
+        .collect()
+}
+
+#[cfg(test)]
 fn state(trades: Vec<SpotTrade>, balances: Vec<Balance>) -> SettleSpotTradeState {
+    let reservations = reservations_from_trades(&trades, "BTC", "USDT");
     SettleSpotTradeState {
         trades,
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),
         balances,
+        reservations,
         settled_trade_ids: Vec::new(),
     }
 }
