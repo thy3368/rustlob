@@ -1,10 +1,14 @@
-use common_entity::{AggregateRole, Entity, EntityError, EntityFieldChange, FourColorArchetype};
+use common_entity::{
+    AggregateRole, Entity, EntityError, EntityFieldChange, FinancialClassification,
+    FourColorArchetype,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use super::spot_conditional_order::{
     SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrderTriggerRole,
 };
+use crate::entity::{Reservation, ReservationError, ReservationKind, ReservationMarketKind};
 
 #[cfg(test)]
 mod spot_order_fixed_scenarios;
@@ -247,6 +251,8 @@ impl SpotOrderStatusReason {
 /// 立即单创建后直接成为 `SpotOrder`；条件单只有触发后才转换为 `SpotOrder`。
 /// `qty`、`filled_qty`、`price`、`reserved_base`、`reserved_quote` 都使用 core
 /// fixed-point 整数；adapter 负责和 Hyperliquid 字符串数字互转。
+/// 其中 `reserved_base` / `reserved_quote` 只保留初始冻结快照或兼容字段，
+/// authoritative 剩余冻结量应由独立 `Reservation` 表达。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrder {
     /// 本系统生成的稳定订单 ID。
@@ -436,6 +442,35 @@ impl SpotOrder {
             SpotReservationAssetKind::Quote => self.reservation_quote().unwrap_or(0),
             SpotReservationAssetKind::Base => self.qty,
         }
+    }
+
+    /// 返回该订单派生出的统一 reservation kind。
+    pub fn reservation_kind(&self) -> ReservationKind {
+        match self.side {
+            SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
+            SpotOrderSide::Sell => ReservationKind::SpotSellBase,
+        }
+    }
+
+    /// 为该订单构造初始 reservation 快照。
+    pub fn to_reservation(
+        &self,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+    ) -> Result<Reservation, ReservationError> {
+        let asset_id = match self.reservation_asset_kind() {
+            SpotReservationAssetKind::Base => base_asset_id.to_string(),
+            SpotReservationAssetKind::Quote => quote_asset_id.to_string(),
+        };
+        Reservation::new(
+            format!("reservation:{}", self.order_id),
+            self.account_id.clone(),
+            self.order_id.clone(),
+            ReservationMarketKind::Spot,
+            self.reservation_kind(),
+            asset_id,
+            self.reservation_amount(),
+        )
     }
 
     /// 返回该订单是否应进入撮合。
@@ -717,6 +752,13 @@ impl Entity for SpotOrder {
         AggregateRole::AggregateRoot
     }
 
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::BusinessVoucher
+    }
+
     fn is_mi_chain_root() -> bool
     where
         Self: Sized,
@@ -934,6 +976,7 @@ mod tests {
     fn spot_order_declares_mi_chain_root_metadata() {
         assert_eq!(SpotOrder::four_color_archetype(), FourColorArchetype::MomentInterval);
         assert_eq!(SpotOrder::aggregate_role(), AggregateRole::AggregateRoot);
+        assert_eq!(SpotOrder::financial_classification(), FinancialClassification::BusinessVoucher);
         assert!(SpotOrder::is_mi_chain_root());
         assert!(SpotOrder::mi_causal_sources().is_empty());
     }
