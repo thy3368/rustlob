@@ -90,6 +90,34 @@ impl EntityMutationModel {
     }
 }
 
+/// 实体在财务/账务链路中的语义分类。
+///
+/// 该分类独立于四色建模、变更模型与聚合角色，只表达实体在账务语义里的职责。
+/// 它不参与 replay 事件编码、实体类型码分配，也不承诺持久化格式语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FinancialClassification {
+    /// 尚未分类，作为旧实体和未治理实体的默认值。
+    Unclassified,
+    /// 业务凭证：描述业务事实本身，不直接等于入账结果。
+    BusinessVoucher,
+    /// 记账凭证：描述应如何入账，是账务编排依据。
+    AccountingVoucher,
+    /// 账本流水：描述已落账的余额或账本变化结果。
+    LedgerEntry,
+}
+
+impl FinancialClassification {
+    /// 返回稳定的财务分类标签字符串。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unclassified => "unclassified",
+            Self::BusinessVoucher => "business_voucher",
+            Self::AccountingVoucher => "accounting_voucher",
+            Self::LedgerEntry => "ledger_entry",
+        }
+    }
+}
+
 /// 实体在聚合边界中的业务角色分类。
 ///
 /// 该分类只表达领域建模中的聚合语义，不参与 replay 事件编码、实体类型码分配
@@ -238,6 +266,23 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         EntityMutationModel::VersionedMutable
+    }
+
+    /// 返回实体在财务/账务链路中的语义分类。
+    ///
+    /// 默认值是 [`FinancialClassification::Unclassified`]，用于兼容旧实体和未治理实体。
+    ///
+    /// [`FinancialClassification::BusinessVoucher`] 表示实体描述业务事实本身，不直接等于入账结果；
+    /// [`FinancialClassification::AccountingVoucher`] 表示实体描述应如何入账，是账务编排依据；
+    /// [`FinancialClassification::LedgerEntry`] 表示实体描述已落账的余额或账本变化结果。
+    ///
+    /// 该元数据只用于领域建模治理，不参与 replay 事件编码、实体类型码分配或持久化语义。
+    #[inline]
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::Unclassified
     }
 
     /// 返回实体在聚合边界中的业务角色。
@@ -682,6 +727,39 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Clone)]
+    struct AccountingVoucherEntity {
+        id: i64,
+        version: u64,
+    }
+
+    impl Entity for AccountingVoucherEntity {
+        type Id = i64;
+
+        fn entity_id(&self) -> Self::Id {
+            self.id
+        }
+
+        fn entity_type() -> u8 {
+            16
+        }
+
+        fn financial_classification() -> FinancialClassification
+        where
+            Self: Sized,
+        {
+            FinancialClassification::AccountingVoucher
+        }
+
+        fn entity_version(&self) -> u64 {
+            self.version
+        }
+
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
     #[test]
     fn entity_defaults_to_unclassified_four_color_archetype() {
         assert_eq!(TestEntity::four_color_archetype(), FourColorArchetype::Unclassified);
@@ -718,6 +796,27 @@ mod tests {
     #[test]
     fn entity_can_override_mutation_model() {
         assert_eq!(AppendOnlyEntity::mutation_model(), EntityMutationModel::AppendOnlyRecord);
+    }
+
+    #[test]
+    fn entity_defaults_to_unclassified_financial_classification() {
+        assert_eq!(TestEntity::financial_classification(), FinancialClassification::Unclassified);
+    }
+
+    #[test]
+    fn entity_can_override_financial_classification() {
+        assert_eq!(
+            AccountingVoucherEntity::financial_classification(),
+            FinancialClassification::AccountingVoucher
+        );
+    }
+
+    #[test]
+    fn financial_classification_returns_stable_business_label() {
+        assert_eq!(FinancialClassification::Unclassified.as_str(), "unclassified");
+        assert_eq!(FinancialClassification::BusinessVoucher.as_str(), "business_voucher");
+        assert_eq!(FinancialClassification::AccountingVoucher.as_str(), "accounting_voucher");
+        assert_eq!(FinancialClassification::LedgerEntry.as_str(), "ledger_entry");
     }
 
     #[test]
