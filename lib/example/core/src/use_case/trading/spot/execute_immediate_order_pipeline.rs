@@ -15,7 +15,7 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
     SettleSpotTradeUseCase,
 };
-use crate::entity::{Balance, SpotOrder, SpotOrderTimeInForce};
+use crate::entity::{AssetReservation, Balance, SpotOrder, SpotOrderTimeInForce};
 
 /// 串联立即下单、撮合、清结算三段现货执行流程的业务命令。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,6 +179,13 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
             settlement_batch_id: cmd.settlement_batch_id.clone(),
             trade_ids: trades.iter().map(|trade| trade.trade_id.clone()).collect(),
         };
+        let reservations = settlement_reservations_after_place(
+            &place_output.created_order,
+            &match_output,
+            state.base_asset_id.as_str(),
+            state.quote_asset_id.as_str(),
+        )
+        .map_err(ExecuteImmediateSpotOrderPipelineError::Settle)?;
         let settle_state = SettleSpotTradeState {
             trades,
             base_asset_id: state.base_asset_id,
@@ -187,6 +194,7 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
                 state.settlement_balances,
                 affected_balance_after,
             ),
+            reservations,
             settled_trade_ids: state.settled_trade_ids,
         };
 
@@ -247,6 +255,28 @@ fn upsert_balance(balances: &mut Vec<Balance>, next_balance: Balance) {
     }
 
     balances.push(next_balance);
+}
+
+fn settlement_reservations_after_place(
+    taker_order: &SpotOrder,
+    match_output: &MatchSpotOrderChanges,
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Result<Vec<AssetReservation>, SettleSpotTradeError> {
+    let mut reservations = vec![
+        taker_order
+            .to_reservation(base_asset_id, quote_asset_id)
+            .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
+    ];
+    for maker in &match_output.updated_maker_orders {
+        reservations.push(
+            maker
+                .before
+                .to_reservation(base_asset_id, quote_asset_id)
+                .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
+        );
+    }
+    Ok(reservations)
 }
 
 #[cfg(test)]
@@ -391,7 +421,7 @@ mod tests {
 
         let events = pipeline_events(&pipeline_cmd(), state)?;
 
-        assert_eq!(events.len(), 3);
+        assert_eq!(events.len(), 5);
         assert!(events.iter().all(|event| !has_field(event, "trade_id")));
         assert!(events.iter().any(|event| {
             event.is_created()
@@ -410,7 +440,7 @@ mod tests {
 
         let events = pipeline_events(&cmd, state)?;
 
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 6);
         let taker_update = events
             .iter()
             .find(|event| event.is_updated() && event_field(event, "status") == Some("rejected"))

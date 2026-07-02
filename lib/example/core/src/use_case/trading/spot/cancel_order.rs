@@ -5,7 +5,10 @@ use common_entity::{Entity, MiStateMachineOwned};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrder, SpotOrderStatus, SpotOrderStatusReason};
+use crate::entity::{
+    AssetReservation, Balance, ReservationCloseReason, ReservationReleased, SpotOrder,
+    SpotOrderStatus, SpotOrderStatusReason,
+};
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
 /// 撤销现货订单时需要的已加载业务状态。
@@ -13,6 +16,8 @@ use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 pub struct CancelSpotOrderState {
     /// 按 `asset + order_id` 查到的开放订单；不存在表示该订单不能撤销。
     pub open_order: Option<SpotOrder>,
+    /// 当前开放订单对应的资金 reservation。
+    pub reservation: Option<AssetReservation>,
     /// 订单所在账户 ID。
     pub account_id: String,
     /// base 资产余额快照。
@@ -66,6 +71,9 @@ pub enum CancelSpotOrderError {
     /// 账户冻结余额不足以释放该订单。
     #[error("frozen balance is lower than order reservation")]
     FrozenBalanceMismatch,
+    /// 订单对应的 reservation 不存在或与订单不一致。
+    #[error("spot order reservation was not found or does not match current order")]
+    ReservationMismatch,
     /// 生成账户释放事件时发生整数溢出。
     #[error("arithmetic overflow while deriving cancel result")]
     ArithmeticOverflow,
@@ -88,6 +96,10 @@ pub struct CancelSpotOrderUseCase;
 pub struct CancelSpotOrderChanges {
     /// 被撤销订单的 before/after 对。
     pub canceled_order: UpdatedEntityPair<SpotOrder>,
+    /// 被撤销 reservation 的 before/after 对。
+    pub released_reservation: UpdatedEntityPair<AssetReservation>,
+    /// 本次撤单对应的 reservation release append-only 事实。
+    pub created_reservation_released: ReservationReleased,
     /// 本次撤单释放的余额 before/after 对。
     pub released_balances: Vec<UpdatedEntityPair<Balance>>,
     /// 本次撤单生成的余额流水。
@@ -99,10 +111,16 @@ impl ReplayableChanges for CancelSpotOrderChanges {
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
-            1 + self.released_balances.len() + self.created_balance_ledger_entries.len(),
+            3 + self.released_balances.len() + self.created_balance_ledger_entries.len(),
         );
         events
             .push(self.canceled_order.after.track_update_event_from(&self.canceled_order.before)?);
+        events.push(
+            self.released_reservation
+                .after
+                .track_update_event_from(&self.released_reservation.before)?,
+        );
+        events.push(self.created_reservation_released.track_create_event()?);
         for balance in &self.released_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
         }
@@ -149,14 +167,27 @@ impl CommandUseCase4 for CancelSpotOrderUseCase {
         if state.account_id != cmd.party_id || !order.belongs_to_account(&cmd.party_id) {
             return Err(CancelSpotOrderError::OrderOwnerMismatch);
         }
+        let reservation =
+            state.reservation.as_ref().ok_or(CancelSpotOrderError::ReservationMismatch)?;
+        if !reservation.belongs_to_account(&cmd.party_id)
+            || !reservation.is_for_order(order.order_id.as_str())
+            || reservation.remaining_amount == 0
+        {
+            return Err(CancelSpotOrderError::ReservationMismatch);
+        }
 
         if !order.can_be_cancelled() {
             return Err(CancelSpotOrderError::OrderNotCancelable);
         }
 
-        if state.base_balance.frozen < order.base_to_release_on_cancel()
-            || state.quote_balance.frozen < order.quote_to_release_on_cancel()
-        {
+        let release_balance = if reservation.is_asset(state.quote_balance.asset_id.as_str()) {
+            &state.quote_balance
+        } else if reservation.is_asset(state.base_balance.asset_id.as_str()) {
+            &state.base_balance
+        } else {
+            return Err(CancelSpotOrderError::ReservationMismatch);
+        };
+        if release_balance.frozen < reservation.remaining_amount {
             return Err(CancelSpotOrderError::FrozenBalanceMismatch);
         }
 
@@ -176,9 +207,11 @@ fn derive_cancel_changes(
     state: CancelSpotOrderState,
 ) -> Result<CancelSpotOrderChanges, CancelSpotOrderError> {
     let mut order_after = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
+    let reservation_before =
+        state.reservation.ok_or(CancelSpotOrderError::ReservationMismatch)?;
     let order_before = order_after.clone();
-    let release_base = order_after.base_to_release_on_cancel();
-    let release_quote = order_after.quote_to_release_on_cancel();
+    let release_amount = reservation_before.remaining_amount;
+    let is_quote_reservation = reservation_before.is_asset(state.quote_balance.asset_id.as_str());
 
     let next_order_version =
         order_after.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
@@ -186,26 +219,37 @@ fn derive_cancel_changes(
     order_after.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
     order_after.version = next_order_version;
 
-    let (balance_before, balance_after) = if release_quote > 0 {
-        release_balance(state.quote_balance, release_quote)?
+    let reservation_after = reservation_before
+        .release(release_amount, Some(ReservationCloseReason::Canceled))
+        .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+    let created_reservation_released = ReservationReleased::new(
+        format!("reservation-released:cancel:{}", reservation_after.reservation_id),
+        &reservation_after,
+        release_amount,
+        order_after.order_id.clone(),
+        ReservationCloseReason::Canceled,
+    );
+
+    let (balance_before, balance_after) = if is_quote_reservation {
+        release_balance(state.quote_balance, release_amount)?
     } else {
-        release_balance(state.base_balance, release_base)?
+        release_balance(state.base_balance, release_amount)?
     };
     let released_balance = UpdatedEntityPair { before: balance_before, after: balance_after };
-    let reason = if release_quote > 0 {
+    let reason = if is_quote_reservation {
         BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order_after.order_id.clone() }
     } else {
         BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order_after.order_id.clone() }
     };
-    let balance_command = if release_quote > 0 {
+    let balance_command = if is_quote_reservation {
         crate::entity::account::balance_ledger_entry::BalanceLedgerCommand::Unfreeze {
             balance: released_balance.before.clone(),
-            amount: release_quote,
+            amount: release_amount,
         }
     } else {
         crate::entity::account::balance_ledger_entry::BalanceLedgerCommand::Unfreeze {
             balance: released_balance.before.clone(),
-            amount: release_base,
+            amount: release_amount,
         }
     };
     let draft_entry = BalanceLedgerEntry::draft_from_balance(
@@ -222,6 +266,11 @@ fn derive_cancel_changes(
             .after;
     Ok(CancelSpotOrderChanges {
         canceled_order: UpdatedEntityPair { before: order_before, after: order_after },
+        released_reservation: UpdatedEntityPair {
+            before: reservation_before,
+            after: reservation_after,
+        },
+        created_reservation_released,
         released_balances: vec![released_balance],
         created_balance_ledger_entries: vec![balance_ledger_entry],
     })
@@ -297,8 +346,11 @@ mod tests {
     }
 
     fn state(open_order: Option<SpotOrder>) -> CancelSpotOrderState {
+        let reservation =
+            open_order.as_ref().map(|order| order.to_reservation("BTC", "USDT").unwrap());
         CancelSpotOrderState {
             open_order,
+            reservation,
             account_id: "trader-1".to_string(),
             base_balance: base_balance(),
             quote_balance: quote_balance(),

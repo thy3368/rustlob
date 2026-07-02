@@ -10,7 +10,7 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };
-use crate::entity::{Balance, SpotOrder, SpotOrderExecution, SpotOrderSide};
+use crate::entity::{AssetReservation, Balance, SpotOrder, SpotOrderExecution, SpotOrderSide};
 
 /// 执行一次“撮合后立即清结算”的现货成交命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,11 +158,18 @@ impl CommandUseCase4 for ExecuteMatchedSpotTradeUseCase {
             settlement_batch_id: cmd.settlement_batch_id.clone(),
             trade_ids: trades.iter().map(|trade| trade.trade_id.clone()).collect(),
         };
+        let reservations = settlement_reservations_from_match(
+            &match_changes,
+            state.base_asset_id.as_str(),
+            state.quote_asset_id.as_str(),
+        )
+        .map_err(ExecuteMatchedSpotTradeError::Settle)?;
         let settle_state = SettleSpotTradeState {
             trades,
             base_asset_id: state.base_asset_id,
             quote_asset_id: state.quote_asset_id,
             balances: state.settlement_balances,
+            reservations,
             settled_trade_ids: state.settled_trade_ids,
         };
 
@@ -187,6 +194,29 @@ fn match_state_from_execute_state(state: &ExecuteMatchedSpotTradeState) -> Match
         taker_order: state.taker_order.clone(),
         maker_orders: state.maker_orders.clone(),
     }
+}
+
+fn settlement_reservations_from_match(
+    match_changes: &MatchSpotOrderChanges,
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Result<Vec<AssetReservation>, SettleSpotTradeError> {
+    let mut reservations = vec![
+        match_changes
+            .updated_taker_order
+            .before
+            .to_reservation(base_asset_id, quote_asset_id)
+            .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
+    ];
+    for maker in &match_changes.updated_maker_orders {
+        reservations.push(
+            maker
+                .before
+                .to_reservation(base_asset_id, quote_asset_id)
+                .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?,
+        );
+    }
+    Ok(reservations)
 }
 
 #[cfg(test)]
