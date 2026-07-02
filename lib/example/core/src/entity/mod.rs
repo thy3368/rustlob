@@ -1,4 +1,5 @@
 mod market_rules;
+mod reservation;
 
 pub mod perp;
 
@@ -15,6 +16,11 @@ pub use account::settlement_transfer_voucher::{
     SettlementTransferVoucher,
 };
 pub use market_rules::MarketRules;
+pub use reservation::{
+    AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationConsumed,
+    ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
+    ReservationReleased, ReservationStatus,
+};
 pub use perp::hyperliquid_perp_adl_batch::{
     HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,
 };
