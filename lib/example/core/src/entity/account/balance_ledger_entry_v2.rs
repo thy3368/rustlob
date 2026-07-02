@@ -1,5 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -248,6 +249,10 @@ impl Entity for BalanceLedgerEntryV2 {
         AggregateRole::AggregateRoot
     }
 
+    fn financial_classification() -> FinancialClassification {
+        FinancialClassification::LedgerEntry
+    }
+
     fn entity_version(&self) -> u64 {
         1
     }
@@ -356,6 +361,10 @@ mod tests {
                 .unwrap();
 
         assert_eq!(BalanceLedgerEntryV2::aggregate_role(), AggregateRole::AggregateRoot);
+        assert_eq!(
+            BalanceLedgerEntryV2::financial_classification(),
+            FinancialClassification::LedgerEntry
+        );
         assert_eq!(balance.available, 800);
         assert_eq!(balance.frozen, 300);
         assert_eq!(balance.version, 4);

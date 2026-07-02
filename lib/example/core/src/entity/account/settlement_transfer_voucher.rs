@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityUseCaseApiSurface, FourColorArchetype,
+    EntityUseCaseApiSurface, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -548,6 +548,10 @@ impl Entity for SettlementTransferVoucher {
         AggregateRole::AggregateRoot
     }
 
+    fn financial_classification() -> FinancialClassification {
+        FinancialClassification::AccountingVoucher
+    }
+
     fn use_case_api_surface() -> EntityUseCaseApiSurface {
         EntityUseCaseApiSurface::MinimalBusinessApi
     }
@@ -729,6 +733,10 @@ mod tests {
             voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerReceiveBase);
 
         assert_eq!(SettlementTransferVoucher::aggregate_role(), AggregateRole::AggregateRoot);
+        assert_eq!(
+            SettlementTransferVoucher::financial_classification(),
+            FinancialClassification::AccountingVoucher
+        );
         assert_eq!(
             SettlementTransferVoucher::use_case_api_surface(),
             EntityUseCaseApiSurface::MinimalBusinessApi
