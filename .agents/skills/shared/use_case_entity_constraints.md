@@ -33,6 +33,9 @@
 - `compute_before_after_changes(...)` 内应显式匹配 `Command / GivenState / Changes` 分支。
 - 分支错配时必须返回明确业务错误。
 - `use case` 应调用聚合根对外公开的业务方法，完成一次业务目标推导。
+- 若一次业务目标需要多个聚合协作，应由 `use case` 在 `Command + GivenState -> Changes` 编排层
+  分别驱动多个聚合根。
+- 聚合间协作不应下放到任一聚合根或聚合成员内部去直接访问、装载、调用或导航其它聚合。
 - `ReplayableChanges::to_replayable_events()` 从 `Changes` 投影后续可持久化、可回放、可发布的事实。
 
 `CommandUseCase6` 注释明确说它不负责：
@@ -88,15 +91,21 @@
 - 若实体是追加记录，应 override 为 `AppendOnlyRecord`。
 - 若实体是时点截面，应 override 为 `Snapshot`。
 - 若实体只是投影查询模型，应 override 为 `DerivedReadModel`。
-- 若实体是聚合边界对外暴露的一致性根，应 override 为 `AggregateRoot`。
+- 若实体是聚合边界对外暴露的一致性根，并统一承担本聚合对外业务入口，应 override 为
+  `AggregateRoot`。
 - 若实体只在某个聚合内部存在，应 override 为 `AggregateMember`。
+- `AggregateMember` 只表达聚合内部存在，不应被 `use case` 直接依赖为主业务入口。
+- 聚合成员不应直接访问、装载、调用或导航其它聚合，也不应承载跨聚合协作逻辑。
 - 当 `is_mi_chain_root() == true` 时，trait 注释要求该因果链根补充业务方法来驱动状态演进。
 
 ## Boundary Rules Directly Supported By Facts
 
 - `use case` 的编排形状是 `Command + GivenState -> Changes`。
 - `use case` 通过聚合根公开业务方法完成业务目标推导。
-- 聚合根角色只通过 `AggregateRole::{AggregateRoot, AggregateMember}` 这组元数据表达建模语义。
+- 若涉及多个聚合，协作层次仍留在 `use case` 的 `Command + GivenState -> Changes` 编排内。
+- `AggregateRoot` 表达该实体统一承担本聚合对外业务入口与一致性边界。
+- `AggregateMember` 表达该实体只在聚合内部存在，不是 `use case` 的主业务入口。
+- `AggregateMember` 不应直接承担跨聚合访问或协作。
 - `is_mi_chain_root = true` 的实体，需要承担链根业务方法来驱动链内状态演进。
 - replay helper 的默认运行语义天然更贴近 `VersionedMutable`。
 - `AppendOnlyRecord`、`Snapshot`、`DerivedReadModel` 若要表达不同业务语义，需要显式 override
@@ -111,7 +120,6 @@
 - 构造器必须优先 `pub(crate)`
 - 禁止公开内部集合
 - `helper/query method` 是否应成为主交互面
-- “跨聚合一定留在 use case” 这类超出 trait 直接表述的硬禁令
 - 任何超出 `Entity` / `CommandUseCase6` 注释与签名的风格化 OO 规则
 
 若后续仍需要这些规范，应放到独立 architecture policy 文档，而不是继续写进 shared
