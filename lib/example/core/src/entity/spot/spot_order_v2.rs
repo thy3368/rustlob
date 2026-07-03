@@ -344,10 +344,7 @@ impl SpotOrderV2 {
         SpotOrderHoldAsset::Quote
     }
 
-    fn max_fee_role_and_bps(
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
-    ) -> (SpotTradeFeeRole, u64) {
+    fn max_fee_role_and_bps(maker_fee_bps: u64, taker_fee_bps: u64) -> (SpotTradeFeeRole, u64) {
         if maker_fee_bps > taker_fee_bps {
             (SpotTradeFeeRole::Maker, maker_fee_bps)
         } else {
@@ -360,7 +357,7 @@ impl SpotOrderV2 {
             return Some(0);
         }
 
-        let notional = self.notional_quote()?;
+        let notional = self.initial_quote_hold_snapshot()?;
         let scaled = notional.checked_mul(fee_bps)?;
         let numerator = scaled.checked_add(FEE_BPS_DENOMINATOR.checked_sub(1)?)?;
         Some(numerator / FEE_BPS_DENOMINATOR)
@@ -496,23 +493,16 @@ impl SpotOrderV2 {
             SpotTradeFeeRole::Taker => taker_fee_bps,
         };
 
-        let trade_notional = trade_qty
-            .checked_mul(trade_price)
-            .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        let scaled = trade_notional
-            .checked_mul(fee_bps)
-            .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        let trade_notional =
+            trade_qty.checked_mul(trade_price).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        let scaled =
+            trade_notional.checked_mul(fee_bps).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
         let numerator = scaled
             .checked_add(FEE_BPS_DENOMINATOR - 1)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
         let amount = numerator / FEE_BPS_DENOMINATOR;
 
-        Ok(SpotOrderFeeConsumeRequirement {
-            asset: self.fee_hold_asset(),
-            amount,
-            role,
-            fee_bps,
-        })
+        Ok(SpotOrderFeeConsumeRequirement { asset: self.fee_hold_asset(), amount, role, fee_bps })
     }
 
     /// 返回订单在当前终态下是否存在订单侧释放需求。

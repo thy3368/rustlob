@@ -441,6 +441,76 @@ impl SettlementTransferVoucher {
         ))
     }
 
+    /// [UseCase-facing] 从一笔现货成交构造同时包含 principal 与 fee 的 settlement voucher。
+    ///
+    /// fee 统一以 quote 资产计价，且买卖双方各自向 `fee_account_id` 支付自己真实角色下的 fee。
+    /// 若 quote notional 溢出则返回 `None`。
+    pub fn build_spot_voucher_with_fees(
+        voucher_id: String,
+        settlement_id: String,
+        trade: &SpotTrade,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+        fee_account_id: String,
+        buyer_fee: u64,
+        seller_fee: u64,
+    ) -> Option<Self> {
+        let mut voucher = Self::build_spot_principal_voucher(
+            voucher_id,
+            settlement_id.clone(),
+            trade,
+            base_asset_id,
+            quote_asset_id,
+            fee_account_id.clone(),
+        )?;
+
+        if buyer_fee > 0 {
+            voucher.legs.push(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    trade.buyer_fee_role().as_str()
+                ),
+                trade.buyer_account_id().to_string(),
+                fee_account_id.clone(),
+                quote_asset_id.to_string(),
+                buyer_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    trade.buyer_fee_role().as_str()
+                ),
+            ));
+        }
+
+        if seller_fee > 0 {
+            voucher.legs.push(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    trade.seller_fee_role().as_str()
+                ),
+                trade.seller_account_id().to_string(),
+                fee_account_id.clone(),
+                quote_asset_id.to_string(),
+                seller_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    trade.seller_fee_role().as_str()
+                ),
+            ));
+        }
+
+        Some(voucher)
+    }
+
     // ===== 通用业务查询 / 不变量方法 =====
 
     /// [General] 返回该凭证是否引用指定账户。
@@ -837,6 +907,44 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn build_spot_voucher_with_fees_creates_principal_and_fee_legs() {
+        let trade = SpotTrade::new(
+            "trade-fee-1".to_string(),
+            "match-fee-1".to_string(),
+            10_001,
+            "BTCUSDT".to_string(),
+            "taker-fee-1".to_string(),
+            "maker-fee-1".to_string(),
+            "buyer".to_string(),
+            "seller".to_string(),
+            crate::SpotOrderSide::Buy,
+            100,
+            2,
+        );
+
+        let voucher = SettlementTransferVoucher::build_spot_voucher_with_fees(
+            "voucher-fee-1".to_string(),
+            "settle-fee-1".to_string(),
+            &trade,
+            "BTC",
+            "USDT",
+            "fee-account".to_string(),
+            1,
+            2,
+        )
+        .unwrap();
+
+        let fee_legs = voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee);
+        assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
+        assert_eq!(voucher.fee_account_id(), "fee-account");
+        assert_eq!(fee_legs.len(), 2);
+        assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(1));
+        assert_eq!(voucher.fee_amount_paid_by("seller"), Some(2));
+        assert_eq!(fee_legs[0].to_account_id(), "fee-account");
+        assert_eq!(fee_legs[0].asset_id(), "USDT");
     }
 
     #[test]

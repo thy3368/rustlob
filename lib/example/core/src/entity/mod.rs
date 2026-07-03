@@ -16,11 +16,6 @@ pub use account::settlement_transfer_voucher::{
     SettlementTransferVoucher,
 };
 pub use market_rules::MarketRules;
-pub use reservation::{
-    AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationConsumed,
-    ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
-    ReservationReleased, ReservationStatus,
-};
 pub use perp::hyperliquid_perp_adl_batch::{
     HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,
 };
@@ -53,6 +48,11 @@ pub use perp::hyperliquid_perp_shortfall::{
     HyperliquidPerpShortfall, HyperliquidPerpShortfallStatus,
 };
 pub use perp::hyperliquid_perp_trade::HyperliquidPerpTrade;
+pub use reservation::{
+    AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationConsumed,
+    ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
+    ReservationReleased, ReservationStatus,
+};
 pub(crate) use spot::spot_order::SpotOrderMatchError;
 #[cfg(test)]
 pub(crate) use spot::spot_order::spot_order_scenarios::{
@@ -66,6 +66,12 @@ pub use spot::spot_order_v2::{
     SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
     SpotOrderV2MatchError, SpotTradeFeeRole,
+};
+pub use spot::spot_order_v2_use_case_family::{
+    CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
+    PlaceSpotOrderV2AfterChanges, PlaceSpotOrderV2Changes, PlaceSpotOrderV2Cmd,
+    SpotOrderV2AfterChanges, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
+    SpotOrderV2UseCaseFamily, SpotOrderV2UseCaseFamilyError,
 };
 pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;

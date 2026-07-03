@@ -4,7 +4,7 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{SpotOrderSide, SpotSettlement};
+use crate::{SpotOrderSide, SpotSettlement, SpotTradeFeeRole};
 
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
@@ -103,6 +103,33 @@ impl SpotTrade {
             quote_qty,
             self.price,
         ))
+    }
+
+    /// 返回给定账户在该成交中的真实 fee 角色。
+    pub fn fee_role_for_account(&self, account_id: &str) -> Option<SpotTradeFeeRole> {
+        if self.taker_account_id == account_id {
+            Some(SpotTradeFeeRole::Taker)
+        } else if self.maker_account_id == account_id {
+            Some(SpotTradeFeeRole::Maker)
+        } else {
+            None
+        }
+    }
+
+    /// 返回买方在该成交中的真实 fee 角色。
+    pub fn buyer_fee_role(&self) -> SpotTradeFeeRole {
+        match self.taker_side {
+            SpotOrderSide::Buy => SpotTradeFeeRole::Taker,
+            SpotOrderSide::Sell => SpotTradeFeeRole::Maker,
+        }
+    }
+
+    /// 返回卖方在该成交中的真实 fee 角色。
+    pub fn seller_fee_role(&self) -> SpotTradeFeeRole {
+        match self.taker_side {
+            SpotOrderSide::Buy => SpotTradeFeeRole::Maker,
+            SpotOrderSide::Sell => SpotTradeFeeRole::Taker,
+        }
     }
 }
 
@@ -241,6 +268,11 @@ mod tests {
         assert_eq!(trade.notional_quote(), Some(200));
         assert_eq!(trade.buyer_account_id(), "buyer");
         assert_eq!(trade.seller_account_id(), "seller");
+        assert_eq!(trade.buyer_fee_role(), SpotTradeFeeRole::Taker);
+        assert_eq!(trade.seller_fee_role(), SpotTradeFeeRole::Maker);
+        assert_eq!(trade.fee_role_for_account("buyer"), Some(SpotTradeFeeRole::Taker));
+        assert_eq!(trade.fee_role_for_account("seller"), Some(SpotTradeFeeRole::Maker));
+        assert_eq!(trade.fee_role_for_account("outsider"), None);
     }
 
     #[test]
