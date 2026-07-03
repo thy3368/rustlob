@@ -128,10 +128,13 @@ pub enum AggregateRole {
     Unclassified,
     /// 聚合根。
     ///
+    /// 本聚合对外业务入口与一致性边界由根统一承担。
     /// 典型例子：订单、账户、仓位。
     AggregateRoot,
     /// 聚合成员。
     ///
+    /// 成员只供聚合根在聚合内部驱动、装配和维护不变量时使用，
+    /// 不作为对外业务入口，也不应被 use case 直接依赖为主业务入口。
     /// 典型例子：owned object、聚合内明细项。
     AggregateMember,
 }
@@ -290,8 +293,12 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// 默认值是 [`AggregateRole::Unclassified`]，用于兼容旧实体和未治理实体。
     ///
     /// 该元数据只用于领域模型治理，不改变 replay、实体类型码或持久化语义。
-    /// 若实体是聚合边界对外暴露的一致性根，应 override 为 [`AggregateRole::AggregateRoot`]；
+    /// 若实体是聚合边界对外暴露的一致性根，并统一承担本聚合的对外业务入口，
+    /// 应 override 为 [`AggregateRole::AggregateRoot`]；
     /// 若实体只在某个聚合内部存在，应 override 为 [`AggregateRole::AggregateMember`]。
+    /// `AggregateMember` 只表达聚合内部存在，不应被 use case 直接依赖为主业务入口，
+    /// 也不应直接访问、装载、调用或导航到其它聚合；
+    /// 聚合间协作逻辑不应下放到成员对象。
     #[inline]
     fn aggregate_role() -> AggregateRole
     where
@@ -305,6 +312,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// 默认值是 [`EntityUseCaseApiSurface::LegacyUnconstrained`]，用于兼容旧实体与未治理实体。
     /// 若实体希望对 use case 只暴露最小高语义业务 API，应 override 为
     /// [`EntityUseCaseApiSurface::MinimalBusinessApi`]，再由独立 checker 执行静态治理。
+    /// 其目标之一，是避免 use case 绕过聚合根，直接把聚合成员或原始成员材料当作主业务入口。
     #[inline]
     fn use_case_api_surface() -> EntityUseCaseApiSurface
     where
@@ -316,6 +324,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     /// 返回由 `use_case_api_surface()` 推导出的 use case API 治理政策。
     ///
     /// 该元数据只表达工程治理配置，不会自动阻止额外 `pub fn` 暴露。
+    /// 当 policy 收敛到最小业务 API 面时，目标之一同样是防止 use case 绕过聚合根直连成员材料。
     #[inline]
     fn use_case_api_policy() -> EntityUseCaseApiPolicy
     where
