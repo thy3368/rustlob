@@ -75,6 +75,8 @@ pub trait CommandUseCase6: Send + Sync {
     ///
     /// 这里是 use case 的业务核心：实现应显式匹配 `Command` 与 `GivenState` 分支，
     /// 调用聚合根公开业务方法，推导出本次业务目标对应的 before / after changes。
+    /// 若一次业务目标需要多个聚合协作，应由 use case 在这一编排层分别驱动多个聚合根；
+    /// 不要让任一聚合根或聚合成员直接访问、装载、调用或导航到其它聚合。
     /// 对同一组 `cmd + state`，结果应保持确定性。
     ///
     /// API 形状上，它表达的是：
