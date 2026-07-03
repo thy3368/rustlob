@@ -9,7 +9,10 @@ use super::{
     checked_qty, validate_market_state,
 };
 use crate::MarketRules;
-use crate::entity::{Balance, BalanceLedgerEntry, SpotOrder, SpotOrderExecution};
+use crate::entity::{
+    AssetReservation, Balance, BalanceLedgerEntry, ReservationCreated, SpotOrder,
+    SpotOrderExecution,
+};
 
 /// 立即执行单需要的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,6 +150,10 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 pub struct PlaceImmediateOrderChanges {
     /// 本次立即单创建出来的 taker 订单。
     pub created_order: SpotOrder,
+    /// 本次立即单创建出来的现货资金 reservation。
+    pub created_reservation: AssetReservation,
+    /// `OrderEstablished -> ReservationCreated` 的 append-only 事实。
+    pub created_reservation_fact: ReservationCreated,
     /// 本次下单影响到的那条余额 before/after。
     pub updated_balance: UpdatedEntityPair<Balance>,
     /// 本次余额冻结对应的余额流水。
@@ -187,6 +194,16 @@ impl PlaceImmediateOrderUseCase {
             reserved_base,
             reserved_quote,
             cmd.cloid.clone(),
+        );
+        let created_reservation = created_order
+            .to_reservation(
+                state.base_balance.asset_id.as_str(),
+                state.quote_balance.asset_id.as_str(),
+            )
+            .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
+        let created_reservation_fact = ReservationCreated::from_reservation(
+            format!("reservation-created:{}", created_reservation.reservation_id),
+            &created_reservation,
         );
 
         let updated_balance = match side {
@@ -231,6 +248,8 @@ impl PlaceImmediateOrderUseCase {
 
         Ok(PlaceImmediateOrderChanges {
             created_order,
+            created_reservation,
+            created_reservation_fact,
             updated_balance,
             created_balance_ledger_entry,
         })
@@ -243,6 +262,8 @@ impl ReplayableChanges for PlaceImmediateOrderChanges {
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         Ok(vec![
             self.created_order.track_create_event()?,
+            self.created_reservation.track_create_event()?,
+            self.created_reservation_fact.track_create_event()?,
             self.updated_balance.after.track_update_event_from(&self.updated_balance.before)?,
             self.created_balance_ledger_entry.track_create_event()?,
         ])

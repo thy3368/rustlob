@@ -207,8 +207,7 @@ fn derive_cancel_changes(
     state: CancelSpotOrderState,
 ) -> Result<CancelSpotOrderChanges, CancelSpotOrderError> {
     let mut order_after = state.open_order.ok_or(CancelSpotOrderError::OrderNotFound)?;
-    let reservation_before =
-        state.reservation.ok_or(CancelSpotOrderError::ReservationMismatch)?;
+    let reservation_before = state.reservation.ok_or(CancelSpotOrderError::ReservationMismatch)?;
     let order_before = order_after.clone();
     let release_amount = reservation_before.remaining_amount;
     let is_quote_reservation = reservation_before.is_asset(state.quote_balance.asset_id.as_str());

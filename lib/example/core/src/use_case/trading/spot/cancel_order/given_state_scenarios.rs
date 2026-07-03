@@ -28,6 +28,7 @@ impl CancelSpotOrderGivenStateScenario {
         match self {
             Self::MissingOpenOrder => CancelSpotOrderState {
                 open_order: None,
+                reservation: None,
                 account_id: "trader-1".to_string(),
                 base_balance: Balance {
                     account_id: "trader-1".to_string(),
@@ -107,10 +108,12 @@ proptest! {
             .to_replayable_events()
             .expect("cancelable stored order state should project events");
 
-        prop_assert_eq!(events.len(), 3);
+        prop_assert_eq!(events.len(), 5);
         prop_assert!(events[0].is_updated());
         prop_assert!(events[1].is_updated());
         prop_assert!(events[2].is_created());
+        prop_assert!(events[3].is_updated());
+        prop_assert!(events[4].is_created());
         prop_assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
         prop_assert_eq!(
             event_field(&events[0], "status_reason"),
@@ -130,10 +133,11 @@ proptest! {
         let next_available = expected_release.next_available.to_string();
 
         prop_assert_eq!(
-            event_field(&events[1], expected_release.available_field),
+            event_field(&events[3], expected_release.available_field),
             Some(next_available.as_str())
         );
-        prop_assert_eq!(event_field(&events[1], expected_release.frozen_field), Some("0"));
-        prop_assert!(event_field(&events[2], "reason_order_id").is_some());
+        prop_assert_eq!(event_field(&events[3], expected_release.frozen_field), Some("0"));
+        prop_assert!(event_field(&events[2], "close_reason").is_some());
+        prop_assert!(event_field(&events[4], "reason_order_id").is_some());
     }
 }

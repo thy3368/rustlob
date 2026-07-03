@@ -60,18 +60,13 @@ pub use spot::place_order::{
     PlaceOrderExecution, PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };
 pub use spot::{
-    CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderMiChanges,
-    CancelSpotOrderMiCmd, CancelSpotOrderMiState, CancelSpotOrderMiUseCase, CancelSpotOrderState,
-    CancelSpotOrderUc6Changes, CancelSpotOrderUc6Cmd, CancelSpotOrderUc6State,
+    CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
     CancelSpotOrderUseCase, ExecuteImmediateSpotOrderPipelineChanges,
     ExecuteImmediateSpotOrderPipelineCmd, ExecuteImmediateSpotOrderPipelineError,
     ExecuteImmediateSpotOrderPipelineState, ExecuteImmediateSpotOrderPipelineUseCase,
     ExecuteMatchedSpotTradeChanges, ExecuteMatchedSpotTradeCmd, ExecuteMatchedSpotTradeError,
     ExecuteMatchedSpotTradeState, ExecuteMatchedSpotTradeUseCase, MatchSpotOrderChanges,
-    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderMiChanges, MatchSpotOrderMiCmd,
-    MatchSpotOrderMiState, MatchSpotOrderMiUseCase, MatchSpotOrderState, MatchSpotOrderUseCase,
-    PlaceSpotOrderChanges, PlaceSpotOrderState, PlaceSpotOrderUc6Changes, PlaceSpotOrderUc6Cmd,
-    PlaceSpotOrderUc6State, PlaceSpotOrderUseCase, SPOT_TRADING_GROUP_SPEC, SettleSpotTradeChanges,
-    SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState, SettleSpotTradeUseCase,
-    SpotOrderUc6Changes, SpotOrderUc6Cmd, SpotOrderUc6Error, SpotOrderUc6State, SpotOrderUseCase6,
+    MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState, MatchSpotOrderUseCase,
+    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
+    SettleSpotTradeUseCase, SPOT_TRADING_GROUP_SPEC,
 };

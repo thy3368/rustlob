@@ -77,7 +77,9 @@ pub enum SettleSpotTradeError {
     #[error("seller frozen base is insufficient")]
     InsufficientSellerFrozenBase,
     /// trade 对应 reservation 不存在。
-    #[error("spot reservation was not found for order={order_id}, account={account_id}, asset={asset_id}")]
+    #[error(
+        "spot reservation was not found for order={order_id}, account={account_id}, asset={asset_id}"
+    )]
     ReservationNotFound { order_id: String, account_id: String, asset_id: String },
     /// trade 对应 reservation 剩余量不足。
     #[error("spot reservation remaining amount is insufficient for order={order_id}")]
@@ -186,13 +188,12 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
-        let (updated_reservations, created_reservation_consumed) =
-            consume_reservations_for_trades(
-                &state.trades,
-                &state.reservations,
-                &state.base_asset_id,
-                &state.quote_asset_id,
-            )?;
+        let (updated_reservations, created_reservation_consumed) = consume_reservations_for_trades(
+            &state.trades,
+            &state.reservations,
+            &state.base_asset_id,
+            &state.quote_asset_id,
+        )?;
         let mut settlements = Vec::new();
         let mut updated_balances = Vec::new();
 
@@ -327,10 +328,7 @@ fn consume_reservations_for_trades(
     base_asset_id: &str,
     quote_asset_id: &str,
 ) -> Result<
-    (
-        Vec<UpdatedEntityPair<AssetReservation>>,
-        Vec<ReservationConsumed>,
-    ),
+    (Vec<UpdatedEntityPair<AssetReservation>>, Vec<ReservationConsumed>),
     SettleSpotTradeError,
 > {
     let mut original_by_id = HashMap::<String, AssetReservation>::new();
@@ -355,7 +353,8 @@ fn consume_reservations_for_trades(
     let mut created_consumed = Vec::<ReservationConsumed>::new();
 
     for trade in trades {
-        let quote_amount = trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+        let quote_amount =
+            trade.notional_quote().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
         consume_one_reservation(
             trade,
             buyer_order_id(trade),
@@ -418,15 +417,18 @@ fn consume_one_reservation(
             asset_id: asset_id.to_string(),
         })?
         .clone();
-    let reservation =
-        current_by_id.get(&reservation_id).cloned().ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-    let close_reason =
-        if reservation.remaining_amount == amount { Some(ReservationCloseReason::Filled) } else { None };
-    let after = reservation
-        .consume(amount, close_reason)
-        .map_err(|_| SettleSpotTradeError::InsufficientReservationRemaining {
-            order_id: order_id.to_string(),
-        })?;
+    let reservation = current_by_id
+        .get(&reservation_id)
+        .cloned()
+        .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+    let close_reason = if reservation.remaining_amount == amount {
+        Some(ReservationCloseReason::Filled)
+    } else {
+        None
+    };
+    let after = reservation.consume(amount, close_reason).map_err(|_| {
+        SettleSpotTradeError::InsufficientReservationRemaining { order_id: order_id.to_string() }
+    })?;
     current_by_id.insert(reservation_id.clone(), after.clone());
     if !touched_reservation_ids.iter().any(|existing| existing == &reservation_id) {
         touched_reservation_ids.push(reservation_id.clone());

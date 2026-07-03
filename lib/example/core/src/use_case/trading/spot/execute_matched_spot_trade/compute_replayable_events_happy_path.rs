@@ -69,11 +69,11 @@ fn full_fill_matches_and_settles_in_single_business_result()
     assert_eq!(settle_changes.updated_balances.len(), 4);
     assert_eq!(settle_changes.created_balance_ledger_entries.len(), 4);
 
-    assert_eq!(events.len(), 12);
+    assert_eq!(events.len(), 16);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 2);
     assert_eq!(event_field(&events[3], "settlement_id"), Some("settle-1-1"));
-    assert_eq!(event_field(&events[4], "account_id"), Some("buyer"));
-    assert_eq!(event_field(&events[8], "reason"), Some("settle_spot_trade_buyer_receive_base"));
+    assert_eq!(event_field(&events[8], "account_id"), Some("buyer"));
+    assert_eq!(event_field(&events[12], "reason"), Some("settle_spot_trade_buyer_receive_base"));
 
     Ok(())
 }
@@ -123,7 +123,7 @@ fn partial_fill_settles_only_the_matched_quantity() -> Result<(), ExecuteMatched
     assert_eq!(settle_changes.settlements.len(), 1);
     assert_eq!(settle_changes.settlements[0].base_qty, 1);
     assert_eq!(settle_changes.settlements[0].quote_qty, 100);
-    assert_eq!(events.len(), 12);
+    assert_eq!(events.len(), 16);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 1);
     assert_eq!(event_field(&events[3], "settlement_id"), Some("settle-1-1"));
 

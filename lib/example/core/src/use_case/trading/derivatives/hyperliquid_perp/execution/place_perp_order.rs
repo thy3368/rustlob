@@ -9,6 +9,7 @@ use crate::MarketRules;
 use crate::entity::{
     Balance, HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
     HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+    MarginReservation, ReservationCreated, ReservationKind, ReservationMarketKind,
     required_position_margin,
 };
 
@@ -179,14 +180,27 @@ pub struct PlaceHyperliquidPerpOrderUseCase;
 pub struct PlaceHyperliquidPerpOrderChanges {
     /// 本次新创建的订单事实。
     pub created_order: HyperliquidPerpOrder,
+    /// 本次新创建的保证金 reservation；无需新增保证金时为空。
+    pub created_reservation: Option<MarginReservation>,
+    /// `OrderEstablished -> ReservationCreated` 的 append-only 事实。
+    pub created_reservation_fact: Option<ReservationCreated>,
     /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
     pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
 impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::with_capacity(1 + self.updated_margin_balances.len());
+        let mut events = Vec::with_capacity(
+            1 + self.updated_margin_balances.len()
+                + usize::from(self.created_reservation.is_some()) * 2,
+        );
         events.push(self.created_order.track_create_event()?);
+        if let Some(reservation) = &self.created_reservation {
+            events.push(reservation.track_create_event()?);
+        }
+        if let Some(created_fact) = &self.created_reservation_fact {
+            events.push(created_fact.track_create_event()?);
+        }
         for balance in &self.updated_margin_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
         }
@@ -296,6 +310,8 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         if cmd.reduce_only {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
+                created_reservation: None,
+                created_reservation_fact: None,
                 updated_margin_balances: Vec::new(),
             });
         }
@@ -304,9 +320,30 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         if margin == 0 {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
+                created_reservation: None,
+                created_reservation_fact: None,
                 updated_margin_balances: Vec::new(),
             });
         }
+        let reservation_kind = required_reservation_kind(cmd.side(), size, &state.position);
+        let created_reservation = Some(
+            MarginReservation::new(
+                format!("reservation:{}", created_order.order_id),
+                state.account_id.clone(),
+                created_order.order_id.clone(),
+                ReservationMarketKind::Perp,
+                reservation_kind,
+                state.margin_asset_id.clone(),
+                margin,
+            )
+            .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?,
+        );
+        let created_reservation_fact = created_reservation.as_ref().map(|reservation| {
+            ReservationCreated::from_reservation(
+                format!("reservation-created:{}", reservation.reservation_id),
+                reservation,
+            )
+        });
         let mut next_balance = state.margin_balance.clone();
         let previous_balance = next_balance.clone();
         let (next_available, next_frozen) = state
@@ -322,6 +359,8 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
 
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,
+            created_reservation,
+            created_reservation_fact,
             updated_margin_balances: vec![UpdatedEntityPair {
                 before: previous_balance,
                 after: next_balance,
@@ -350,6 +389,28 @@ fn required_new_order_margin(
     }
     required_position_margin(net_new_qty, price, position.leverage)
         .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)
+}
+
+fn required_reservation_kind(
+    order_side: HyperliquidPerpOrderSide,
+    size: u64,
+    position: &HyperliquidPerpPosition,
+) -> ReservationKind {
+    match (order_side, position.side) {
+        (_, HyperliquidPerpPositionSide::Flat)
+        | (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
+        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => {
+            ReservationKind::PerpOpenMargin
+        }
+        (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
+        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
+            if size > position.qty {
+                ReservationKind::PerpFlipNetNewMargin
+            } else {
+                ReservationKind::PerpOpenMargin
+            }
+        }
+    }
 }
 
 fn validate_reduce_only(
@@ -766,8 +827,8 @@ mod tests {
 
             let changes = use_case().compute_changes(&cmd, state).unwrap();
             let events = changes.to_replayable_events().unwrap();
-            let next_available = event_field_u64(&events[1], "available").unwrap();
-            let next_frozen = event_field_u64(&events[1], "frozen").unwrap();
+            let next_available = event_field_u64(&events[3], "available").unwrap();
+            let next_frozen = event_field_u64(&events[3], "frozen").unwrap();
 
             prop_assert_eq!(next_available, 0);
             prop_assert_eq!(next_frozen, existing_frozen + margin);

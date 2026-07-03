@@ -92,19 +92,23 @@ fn compute_output_and_events_produces_order_and_account_events() -> Result<(), P
     let result = use_case.compute_changes(&sample_cmd(), sample_state())?;
     let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(events.len(), 3);
+    assert_eq!(events.len(), 5);
     assert!(events[0].is_created());
-    assert!(events[1].is_updated());
+    assert!(events[1].is_created());
     assert!(events[2].is_created());
+    assert!(events[3].is_updated());
+    assert!(events[4].is_created());
     assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTCUSDT-7"));
     assert_eq!(field_as_u64(&events[0], "asset"), Some(10_001));
     assert_eq!(field_as_u64(&events[0], "reserved_quote"), Some(200));
-    assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
-    assert_eq!(field_as_u64(&events[1], "available"), Some(800));
-    assert_eq!(field_as_u64(&events[1], "frozen"), Some(200));
-    assert_eq!(event_field(&events[2], "reason"), Some("reserve_for_immediate_order"));
-    assert_eq!(event_field(&events[2], "reason_order_id"), Some("trader-1-BTCUSDT-7"));
-    assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:USDT"));
+    assert_eq!(event_field(&events[1], "reservation_id"), Some("reservation:trader-1-BTCUSDT-7"));
+    assert_eq!(event_field(&events[2], "reservation_id"), Some("reservation:trader-1-BTCUSDT-7"));
+    assert_eq!(event_field(&events[3], "asset_id"), Some("USDT"));
+    assert_eq!(field_as_u64(&events[3], "available"), Some(800));
+    assert_eq!(field_as_u64(&events[3], "frozen"), Some(200));
+    assert_eq!(event_field(&events[4], "reason"), Some("reserve_for_immediate_order"));
+    assert_eq!(event_field(&events[4], "reason_order_id"), Some("trader-1-BTCUSDT-7"));
+    assert_eq!(event_field(&events[4], "balance_entity_id"), Some("trader-1:USDT"));
 
     Ok(())
 }
@@ -132,13 +136,13 @@ fn buy_order_updates_quote_balance_and_creates_matching_ledger_entry() -> Result
     assert!(result.created_balance_ledger_entry.matches_balance_update(&result.updated_balance));
     assert_eq!(event_field(&events[0], "order_id"), Some(result.created_order.order_id.as_str()));
     assert_eq!(
-        event_field(&events[1], "asset_id"),
+        event_field(&events[3], "asset_id"),
         Some(result.updated_balance.after.asset_id.as_str())
     );
-    assert_eq!(field_as_u64(&events[1], "available"), Some(result.updated_balance.after.available));
-    assert_eq!(field_as_u64(&events[1], "frozen"), Some(result.updated_balance.after.frozen));
+    assert_eq!(field_as_u64(&events[3], "available"), Some(result.updated_balance.after.available));
+    assert_eq!(field_as_u64(&events[3], "frozen"), Some(result.updated_balance.after.frozen));
     assert_eq!(
-        event_field(&events[2], "reason_order_id"),
+        event_field(&events[4], "reason_order_id"),
         Some(result.created_order.order_id.as_str())
     );
 
@@ -176,14 +180,18 @@ fn replayable_events_follow_order_then_balance_then_ledger() -> Result<(), Place
     let changes = CommandUseCase4::compute_changes(&use_case, &sample_cmd(), sample_state())?;
     let events = changes.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-    assert_eq!(events.len(), 3);
+    assert_eq!(events.len(), 5);
     assert_eq!(event_field(&events[0], "order_id"), Some(changes.created_order.order_id.as_str()));
     assert_eq!(
-        event_field(&events[1], "asset_id"),
+        event_field(&events[1], "reservation_id"),
+        Some(changes.created_reservation.reservation_id.as_str())
+    );
+    assert_eq!(
+        event_field(&events[3], "asset_id"),
         Some(changes.updated_balance.after.asset_id.as_str())
     );
     assert_eq!(
-        event_field(&events[2], "entry_id"),
+        event_field(&events[4], "entry_id"),
         Some(changes.created_balance_ledger_entry.entry_id.as_str())
     );
 
@@ -217,6 +225,7 @@ proptest! {
                 cmd.symbol,
                 state.next_order_sequence
             );
+            let expected_reservation_id = format!("reservation:{expected_order_id}");
             let expected_price = match cmd.execution {
                 PlaceImmediateOrderExecution::Limit { price, .. } => price.to_string(),
                 PlaceImmediateOrderExecution::Market { aggressive_price } => {
@@ -240,10 +249,12 @@ proptest! {
             let result = use_case.compute_changes(&cmd, state.clone())?;
             let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-            prop_assert_eq!(events.len(), 3);
+            prop_assert_eq!(events.len(), 5);
             prop_assert!(events[0].is_created());
-            prop_assert!(events[1].is_updated());
+            prop_assert!(events[1].is_created());
             prop_assert!(events[2].is_created());
+            prop_assert!(events[3].is_updated());
+            prop_assert!(events[4].is_created());
             prop_assert_eq!(
                 event_field(&events[0], "order_id"),
                 Some(expected_order_id.as_str())
@@ -272,27 +283,31 @@ proptest! {
                 Some(expected_cloid.as_str())
             );
             prop_assert_eq!(
-                event_field(&events[2], "reason"),
-                Some("reserve_for_immediate_order")
+                event_field(&events[1], "reservation_id"),
+                Some(expected_reservation_id.as_str())
             );
             prop_assert_eq!(
-                event_field(&events[2], "reason_order_id"),
+                event_field(&events[2], "reservation_id"),
+                Some(expected_reservation_id.as_str())
+            );
+            prop_assert_eq!(
+                event_field(&events[2], "caused_by_order_id"),
                 Some(expected_order_id.as_str())
             );
             if case.scenario.expected_side() == PlaceOrderSide::Buy {
                 prop_assert_eq!(
-                    event_field(&events[1], "asset_id"),
+                    event_field(&events[3], "asset_id"),
                     Some("USDT")
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "available"),
+                    event_field(&events[3], "available"),
                     Some(expected_available_quote.as_str())
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "frozen"),
+                    event_field(&events[3], "frozen"),
                     Some(expected_frozen_quote.as_str())
                 );
-                prop_assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:USDT"));
+                prop_assert_eq!(event_field(&events[4], "balance_entity_id"), Some("trader-1:USDT"));
                 prop_assert_eq!(result.updated_balance.after.asset_id.as_str(), "USDT");
                 prop_assert_eq!(
                     result.updated_balance.after.available,
@@ -304,18 +319,18 @@ proptest! {
                 );
             } else {
                 prop_assert_eq!(
-                    event_field(&events[1], "asset_id"),
+                    event_field(&events[3], "asset_id"),
                     Some("BTC")
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "available"),
+                    event_field(&events[3], "available"),
                     Some(expected_available_base.as_str())
                 );
                 prop_assert_eq!(
-                    event_field(&events[1], "frozen"),
+                    event_field(&events[3], "frozen"),
                     Some(expected_frozen_base.as_str())
                 );
-                prop_assert_eq!(event_field(&events[2], "balance_entity_id"), Some("trader-1:BTC"));
+                prop_assert_eq!(event_field(&events[4], "balance_entity_id"), Some("trader-1:BTC"));
                 prop_assert_eq!(result.updated_balance.after.asset_id.as_str(), "BTC");
                 prop_assert_eq!(
                     result.updated_balance.after.available,

@@ -34,34 +34,39 @@ impl SpotOrderCancelScenario {
         match self {
             Self::EntityOrder { order_scenario, available_base, available_quote } => {
                 let order = order_scenario.order();
+                let reservation = order.to_reservation("BTC", "USDT").unwrap();
                 CancelSpotOrderState {
                     account_id: "trader-1".to_string(),
                     base_balance: balance(
                         "BTC",
                         *available_base,
-                        order.base_to_release_on_cancel(),
+                        reservation.remaining_amount.min(order.base_to_release_on_cancel()),
                     ),
                     quote_balance: balance(
                         "USDT",
                         *available_quote,
-                        order.quote_to_release_on_cancel(),
+                        reservation.remaining_amount.min(order.quote_to_release_on_cancel()),
                     ),
                     open_order: Some(order),
+                    reservation: Some(reservation),
                 }
             }
             Self::OwnerMismatch { order_scenario } => {
                 let mut order = order_scenario.order();
                 order.account_id = "trader-2".to_string();
+                let reservation = order.to_reservation("BTC", "USDT").unwrap();
 
                 CancelSpotOrderState {
                     account_id: "trader-1".to_string(),
                     base_balance: balance("BTC", 0, order.base_to_release_on_cancel()),
                     quote_balance: balance("USDT", 100, order.quote_to_release_on_cancel()),
                     open_order: Some(order),
+                    reservation: Some(reservation),
                 }
             }
             Self::FrozenBalanceMismatch { order_scenario } => {
                 let order = order_scenario.order();
+                let reservation = order.to_reservation("BTC", "USDT").unwrap();
                 let frozen_base = lower_than(order.base_to_release_on_cancel());
                 let frozen_quote = lower_than(order.quote_to_release_on_cancel());
 
@@ -70,6 +75,7 @@ impl SpotOrderCancelScenario {
                     base_balance: balance("BTC", 0, frozen_base),
                     quote_balance: balance("USDT", 100, frozen_quote),
                     open_order: Some(order),
+                    reservation: Some(reservation),
                 }
             }
         }
