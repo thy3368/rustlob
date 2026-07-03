@@ -62,5 +62,10 @@ pub use spot::spot_order::{
     SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole,
 };
+pub use spot::spot_order_v2::{
+    SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
+    SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
+    SpotOrderV2MatchError, SpotTradeFeeRole,
+};
 pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;

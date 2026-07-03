@@ -31,6 +31,8 @@ impl ReservationMarketKind {
 pub enum ReservationKind {
     SpotBuyQuote,
     SpotSellBase,
+    SpotBuyFeeQuote,
+    SpotSellFeeQuote,
     PerpOpenMargin,
     PerpFlipNetNewMargin,
 }
@@ -40,6 +42,8 @@ impl ReservationKind {
         match self {
             Self::SpotBuyQuote => "spot_buy_quote",
             Self::SpotSellBase => "spot_sell_base",
+            Self::SpotBuyFeeQuote => "spot_buy_fee_quote",
+            Self::SpotSellFeeQuote => "spot_sell_fee_quote",
             Self::PerpOpenMargin => "perp_open_margin",
             Self::PerpFlipNetNewMargin => "perp_flip_net_new_margin",
         }
@@ -794,6 +798,14 @@ mod tests {
             200,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn reservation_kind_labels_distinguish_spot_principal_and_fee() {
+        assert_eq!(ReservationKind::SpotBuyQuote.as_str(), "spot_buy_quote");
+        assert_eq!(ReservationKind::SpotSellBase.as_str(), "spot_sell_base");
+        assert_eq!(ReservationKind::SpotBuyFeeQuote.as_str(), "spot_buy_fee_quote");
+        assert_eq!(ReservationKind::SpotSellFeeQuote.as_str(), "spot_sell_fee_quote");
     }
 
     #[test]
