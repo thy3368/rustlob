@@ -25,6 +25,19 @@ pub use state_machine_owned::{
     ChangedEntity, CommandWithGivenState, MiStateMachineOwned, MiStateMachineOwnedBeforeAfter,
     MiStateMachineOwnedUnchecked, ReplayableChanges, UpdatedEntities, UpdatedEntityPair,
 };
+/// 文档首选称呼：围绕主业务对象组织多个相关 use case 的多聚合编排抽象。
+///
+/// 这是 [`MiStateMachineOwnedV2`] 的文档导向别名。原名保留用于兼容历史调用点，
+/// 但新的对外语义应优先理解为 `core.use_case` 层的 `MultiAggregateUseCase`。
+pub use state_machine_owned_v2::MiStateMachineOwnedV2 as MultiAggregateUseCase;
+/// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
+///
+/// 这是 [`MiStateMachineOwnedV2BeforeAfter`] 的文档导向别名。
+pub use state_machine_owned_v2::MiStateMachineOwnedV2BeforeAfter as MultiAggregateUseCaseBeforeAfter;
+/// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
+///
+/// 这是 [`MiStateMachineOwnedV2Unchecked`] 的文档导向别名。
+pub use state_machine_owned_v2::MiStateMachineOwnedV2Unchecked as MultiAggregateUseCaseUnchecked;
 pub use state_machine_owned_v2::{
     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineOwnedV2Unchecked,
 };
