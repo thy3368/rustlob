@@ -6,6 +6,7 @@ mod command_use_case_v6_runtime;
 mod entity;
 mod entity_field_change;
 mod state_machine_owned;
+mod state_machine_owned_v2;
 
 pub use command_use_case_v6::{CommandUseCase6, IssuedByParty};
 pub use command_use_case_v6_runtime::{
@@ -23,6 +24,9 @@ pub use entity_field_change::{
 pub use state_machine_owned::{
     ChangedEntity, CommandWithGivenState, MiStateMachineOwned, MiStateMachineOwnedBeforeAfter,
     MiStateMachineOwnedUnchecked, ReplayableChanges, UpdatedEntities, UpdatedEntityPair,
+};
+pub use state_machine_owned_v2::{
+    MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineOwnedV2Unchecked,
 };
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));

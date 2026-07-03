@@ -1,3 +1,10 @@
+//! 单聚合根 / 单状态机业务推导工具。
+//!
+//! 这一组 trait 更适合表达“某一个实体或某一个聚合根内部”的状态迁移与 before/after 推导。
+//! 如果一次业务目标需要在 `Command + GivenState -> Changes` 里分别驱动多个聚合根，
+//! 应优先使用 [`crate::MiStateMachineOwnedV2`] 及其扩展 trait，把多聚合编排职责明确放在
+//! `core.use_case` 语义层，而不是继续把它表述成单聚合状态机。
+
 use std::fmt::Debug;
 
 use crate::{Entity, EntityError, EntityReplayableEvent};
