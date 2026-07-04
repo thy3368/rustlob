@@ -7,10 +7,15 @@ use crate::entity::HyperliquidPerpPositionSide;
 
 const HYPERLIQUID_PERP_FUNDING_SETTLEMENT_ENTITY_TYPE: u8 = 13;
 
-/// 一次 Hyperliquid perp 资金费结算产生的账户级事实。
+/// 一次 Hyperliquid perp 仓位级资金费结算事实。
 ///
-/// 该实体只记录资金费事实本身；保证金余额变化由资金费结算 use case 另外发出
-/// `Balance` update event。
+/// 这是 funding use case 组内部的主业务真相，承接
+/// `position + oracle_price + funding_rate -> funding settlement` 的可回放、可审计结果。
+/// 它属于 `Moment-Interval + AppendOnlyRecord + AggregateRoot + BusinessVoucher`，但只表达
+/// “单仓位在本批次应收还是应付多少资金费”这一业务事实。
+///
+/// 该实体不表达 payer-to-receiver 对手方配对转账腿，也不直接持有账本流水引用。
+/// 保证金余额变化与 `BalanceLedgerEntry` 由资金费结算 use case 另外产出。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpFundingSettlement {
     /// 本系统稳定资金费结算记录 ID。
@@ -44,7 +49,10 @@ pub struct HyperliquidPerpFundingSettlement {
 }
 
 impl HyperliquidPerpFundingSettlement {
-    /// 从已经校验过的资金费结算事实构造记录。
+    /// 从已经推导完成或回放出的资金费结算事实组装记录。
+    ///
+    /// 该构造器不承担业务校验，也不推导资金费方向与金额；这些规则应由 use case
+    /// 或上游已校验的业务流程完成后再传入。
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         funding_settlement_id: String,
