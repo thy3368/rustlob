@@ -1,4 +1,7 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    FinancialClassification, FourColorArchetype,
+};
 
 use crate::entity::HyperliquidPerpPositionSide;
 
@@ -87,6 +90,34 @@ impl Entity for HyperliquidPerpFundingSettlement {
 
     fn entity_type() -> u8 {
         HYPERLIQUID_PERP_FUNDING_SETTLEMENT_ENTITY_TYPE
+    }
+
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn mutation_model() -> EntityMutationModel
+    where
+        Self: Sized,
+    {
+        EntityMutationModel::AppendOnlyRecord
+    }
+
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateRoot
+    }
+
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::BusinessVoucher
     }
 
     fn entity_version(&self) -> u64 {
@@ -192,5 +223,26 @@ mod tests {
             change.field_name_as_str().ok() == Some("is_payment")
                 && change.new_value_bytes() == b"true"
         }));
+    }
+
+    #[test]
+    fn funding_settlement_declares_business_voucher_metadata() {
+        assert_eq!(
+            HyperliquidPerpFundingSettlement::four_color_archetype(),
+            FourColorArchetype::MomentInterval
+        );
+        assert_eq!(
+            HyperliquidPerpFundingSettlement::mutation_model(),
+            EntityMutationModel::AppendOnlyRecord
+        );
+        assert_eq!(
+            HyperliquidPerpFundingSettlement::aggregate_role(),
+            AggregateRole::AggregateRoot
+        );
+        assert_eq!(
+            HyperliquidPerpFundingSettlement::financial_classification(),
+            FinancialClassification::BusinessVoucher
+        );
+        assert!(!HyperliquidPerpFundingSettlement::is_mi_chain_root());
     }
 }

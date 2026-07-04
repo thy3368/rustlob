@@ -2,10 +2,11 @@ pub mod hyperliquid_perp_adl_batch;
 pub mod hyperliquid_perp_adl_deleveraging_record;
 pub mod hyperliquid_perp_adl_execution;
 pub mod hyperliquid_perp_funding_rate;
-pub mod hyperliquid_perp_funding_settlement;
 pub mod hyperliquid_perp_insurance_fund_allocation;
 pub mod hyperliquid_perp_liquidation;
 pub mod hyperliquid_perp_liquidation_fill;
 pub mod hyperliquid_perp_shortfall;
 
 pub mod trade;
+
+pub mod fund;

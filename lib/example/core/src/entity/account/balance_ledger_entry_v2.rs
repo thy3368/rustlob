@@ -1,3 +1,4 @@
+use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
     FinancialClassification, FourColorArchetype,
@@ -6,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::balance::Balance;
-use super::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
+use super::balance_ledger_reason::BalanceLedgerReason;
+use super::settlement_transfer_voucher::SettlementTransferPurpose;
 
 const BALANCE_LEDGER_ENTRY_ENTITY_TYPE: u8 = 8;
 
@@ -221,8 +223,19 @@ impl BalanceLedgerEntryV2 {
         }
     }
 
-    fn reason_settlement_leg(&self) -> Option<SpotSettlementLeg> {
-        self.reason.settlement_leg()
+    /// 返回这条流水是否对应给定的余额 before/after 变化。
+    pub fn matches_balance_update(&self, updated_balance: &UpdatedEntityPair<Balance>) -> bool {
+        self.account_id == updated_balance.after.account_id
+            && self.asset_id == updated_balance.after.asset_id
+            && self.balance_entity_id == updated_balance.after.entity_id()
+            && self.before_available == updated_balance.before.available
+            && self.before_frozen == updated_balance.before.frozen
+            && self.after_available == updated_balance.after.available
+            && self.after_frozen == updated_balance.after.frozen
+    }
+
+    fn reason_settlement_purpose(&self) -> Option<SettlementTransferPurpose> {
+        self.reason.settlement_purpose()
     }
 }
 
@@ -298,7 +311,9 @@ impl Entity for BalanceLedgerEntryV2 {
             EntityFieldChange::new(
                 "reason_settlement_leg",
                 "",
-                self.reason_settlement_leg().map(|leg| leg.as_str()).unwrap_or_default(),
+                self.reason_settlement_purpose()
+                    .map(|purpose| purpose.as_str())
+                    .unwrap_or_default(),
             ),
             EntityFieldChange::new("reason_position_ids", "", self.reason.position_ids().join(",")),
         ]
@@ -448,7 +463,7 @@ mod tests {
                 trade_id: "trade-3".to_string(),
                 match_id: "match-3".to_string(),
                 settlement_batch_id: "batch-3".to_string(),
-                leg: SpotSettlementLeg::SellerDebitFrozenBase,
+                purpose: SettlementTransferPurpose::SpotSellerDeliverBase,
             },
         )
         .unwrap();
@@ -491,7 +506,7 @@ mod tests {
                 trade_id: "trade-8".to_string(),
                 match_id: "match-8".to_string(),
                 settlement_batch_id: "batch-8".to_string(),
-                leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
+                purpose: SettlementTransferPurpose::SpotBuyerPayQuote,
             },
         );
 
@@ -538,6 +553,30 @@ mod tests {
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("reason")
                 && change.new_value_bytes() == b"reserve_for_immediate_order"
+        }));
+    }
+
+    #[test]
+    fn create_event_projects_spot_settlement_purpose_from_reason() {
+        let mut balance = Balance::new("buyer".to_string(), "USDT".to_string(), 0, 200, 2);
+        let entry = BalanceLedgerEntryV2::debit_frozen(
+            "ledger-11".to_string(),
+            &mut balance,
+            200,
+            BalanceLedgerReason::SettleSpotTrade {
+                trade_id: "trade-11".to_string(),
+                match_id: "match-11".to_string(),
+                settlement_batch_id: "batch-11".to_string(),
+                purpose: SettlementTransferPurpose::SpotBuyerPayQuote,
+            },
+        )
+        .unwrap();
+
+        let event = entry.track_create_event().unwrap();
+
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("reason_settlement_leg")
+                && change.new_value_bytes() == b"spot_buyer_pay_quote"
         }));
     }
 }
