@@ -225,7 +225,9 @@ mod tests {
             2,
             60_000,
             5,
+            HyperliquidPerpMarginMode::Cross,
             24_000,
+            0,
             0,
             3,
         )

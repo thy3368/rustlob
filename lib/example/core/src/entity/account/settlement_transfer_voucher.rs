@@ -1,10 +1,12 @@
+use std::cmp::Ordering;
+
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
     EntityUseCaseApiSurface, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::SpotTrade;
+use crate::{HyperliquidPerpTrade, SpotTrade};
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
@@ -511,6 +513,138 @@ impl SettlementTransferVoucher {
         Some(voucher)
     }
 
+    /// [UseCase-facing] 从一笔永续成交构造清结算转账凭证。
+    ///
+    /// 该凭证只承接“账户间转账”语义：
+    /// - 一正一负对冲的 realized pnl，生成 1 条账户间 PnL transfer leg
+    /// - taker / maker fee 各自向 `fee_account_id` 支付手续费
+    /// - 同账户内 `available / frozen` 的保证金重分类，不在这里建模成 transfer leg
+    ///
+    /// 若 realized pnl 正负绝对值不一致，或 `i64` 绝对值转换失败，则返回 `None`。
+    pub fn build_perp_voucher(
+        voucher_id: String,
+        settlement_id: String,
+        trade: &HyperliquidPerpTrade,
+        margin_asset_id: &str,
+        fee_account_id: String,
+        taker_fee: u64,
+        maker_fee: u64,
+        taker_realized_pnl: i64,
+        maker_realized_pnl: i64,
+    ) -> Option<Self> {
+        let mut legs = Vec::new();
+
+        match (taker_realized_pnl.cmp(&0), maker_realized_pnl.cmp(&0)) {
+            (Ordering::Greater, Ordering::Less) => {
+                let profit = u64::try_from(taker_realized_pnl).ok()?;
+                let loss = abs_i64_to_u64(maker_realized_pnl)?;
+                if profit != loss {
+                    return None;
+                }
+                legs.push(SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
+                        trade.maker_account_id,
+                        trade.taker_account_id
+                    ),
+                    trade.maker_account_id.clone(),
+                    trade.taker_account_id.clone(),
+                    margin_asset_id.to_string(),
+                    profit,
+                    SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                    format!(
+                        "balance-ledger:{}:{}:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
+                        trade.maker_account_id,
+                        trade.taker_account_id
+                    ),
+                ));
+            }
+            (Ordering::Less, Ordering::Greater) => {
+                let profit = u64::try_from(maker_realized_pnl).ok()?;
+                let loss = abs_i64_to_u64(taker_realized_pnl)?;
+                if profit != loss {
+                    return None;
+                }
+                legs.push(SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
+                        trade.taker_account_id,
+                        trade.maker_account_id
+                    ),
+                    trade.taker_account_id.clone(),
+                    trade.maker_account_id.clone(),
+                    margin_asset_id.to_string(),
+                    profit,
+                    SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                    format!(
+                        "balance-ledger:{}:{}:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
+                        trade.taker_account_id,
+                        trade.maker_account_id
+                    ),
+                ));
+            }
+            _ => {}
+        }
+
+        if taker_fee > 0 {
+            legs.push(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:taker",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str()
+                ),
+                trade.taker_account_id.clone(),
+                fee_account_id.clone(),
+                margin_asset_id.to_string(),
+                taker_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:taker",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str()
+                ),
+            ));
+        }
+
+        if maker_fee > 0 {
+            legs.push(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:maker",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str()
+                ),
+                trade.maker_account_id.clone(),
+                fee_account_id.clone(),
+                margin_asset_id.to_string(),
+                maker_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:maker",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str()
+                ),
+            ));
+        }
+
+        Some(Self::new(
+            voucher_id,
+            SettlementKind::Perp,
+            settlement_id,
+            trade.trade_id.clone(),
+            Some(trade.match_id.clone()),
+            fee_account_id,
+            legs,
+        ))
+    }
+
     // ===== 通用业务查询 / 不变量方法 =====
 
     /// [General] 返回该凭证是否引用指定账户。
@@ -710,11 +844,32 @@ fn stable_entity_id(value: &str) -> i64 {
     (hasher.finish() & i64::MAX as u64) as i64
 }
 
+fn abs_i64_to_u64(value: i64) -> Option<u64> {
+    value.checked_abs().and_then(|abs| u64::try_from(abs).ok())
+}
+
 #[cfg(test)]
 mod tests {
     use common_entity::Entity;
 
     use super::*;
+
+    fn perp_trade() -> HyperliquidPerpTrade {
+        HyperliquidPerpTrade::new(
+            "trade-perp-1".to_string(),
+            "match-perp-1".to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            "taker-order-1".to_string(),
+            "maker-order-1".to_string(),
+            "winner".to_string(),
+            "loser".to_string(),
+            crate::HyperliquidPerpOrderSide::Buy,
+            100,
+            1,
+            1_717_171_717_000,
+        )
+    }
 
     fn spot_voucher() -> SettlementTransferVoucher {
         SettlementTransferVoucher::new(
@@ -766,34 +921,18 @@ mod tests {
     }
 
     fn perp_voucher() -> SettlementTransferVoucher {
-        SettlementTransferVoucher::new(
+        SettlementTransferVoucher::build_perp_voucher(
             "voucher-perp-1".to_string(),
-            SettlementKind::Perp,
             "settlement-perp-1".to_string(),
-            "trade-perp-1".to_string(),
-            None,
+            &perp_trade(),
+            "USDC",
             "fee-account".to_string(),
-            vec![
-                SettlementTransferLeg::new(
-                    "leg-perp-1".to_string(),
-                    "loser".to_string(),
-                    "winner".to_string(),
-                    "USDC".to_string(),
-                    25,
-                    SettlementTransferPurpose::PerpRealizedPnlTransfer,
-                    "ledger-perp-1".to_string(),
-                ),
-                SettlementTransferLeg::new(
-                    "leg-perp-2".to_string(),
-                    "winner".to_string(),
-                    "fee-account".to_string(),
-                    "USDC".to_string(),
-                    1,
-                    SettlementTransferPurpose::TradingFee,
-                    "ledger-perp-2".to_string(),
-                ),
-            ],
+            1,
+            0,
+            25,
+            -25,
         )
+        .unwrap()
     }
 
     #[test]
@@ -952,13 +1091,123 @@ mod tests {
         let voucher = perp_voucher();
 
         assert_eq!(voucher.settlement_kind(), SettlementKind::Perp);
-        assert_eq!(voucher.match_id(), None);
+        assert_eq!(voucher.match_id(), Some("match-perp-1"));
         assert!(voucher.references_account("winner"));
         assert_eq!(voucher.fee_amount_paid_by("winner"), Some(1));
         assert_eq!(
             voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer).len(),
             1
         );
+    }
+
+    #[test]
+    fn build_perp_voucher_with_only_fee_creates_only_fee_legs() {
+        let trade = perp_trade();
+        let voucher = SettlementTransferVoucher::build_perp_voucher(
+            "voucher-perp-fee".to_string(),
+            "settlement-perp-fee".to_string(),
+            &trade,
+            "USDC",
+            "fee-account".to_string(),
+            3,
+            2,
+            0,
+            0,
+        )
+        .unwrap();
+
+        let pnl_legs =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
+        let fee_legs = voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee);
+
+        assert_eq!(voucher.trade_id(), "trade-perp-1");
+        assert_eq!(voucher.match_id(), Some("match-perp-1"));
+        assert_eq!(voucher.settlement_kind(), SettlementKind::Perp);
+        assert_eq!(voucher.fee_account_id(), "fee-account");
+        assert!(pnl_legs.is_empty());
+        assert_eq!(fee_legs.len(), 2);
+        assert_eq!(voucher.fee_amount_paid_by("winner"), Some(3));
+        assert_eq!(voucher.fee_amount_paid_by("loser"), Some(2));
+    }
+
+    #[test]
+    fn build_perp_voucher_with_only_realized_pnl_creates_pnl_transfer_leg() {
+        let trade = perp_trade();
+        let voucher = SettlementTransferVoucher::build_perp_voucher(
+            "voucher-perp-pnl".to_string(),
+            "settlement-perp-pnl".to_string(),
+            &trade,
+            "USDC",
+            "fee-account".to_string(),
+            0,
+            0,
+            25,
+            -25,
+        )
+        .unwrap();
+
+        let pnl_legs =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
+        let fee_legs = voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee);
+
+        assert_eq!(pnl_legs.len(), 1);
+        assert_eq!(pnl_legs[0].from_account_id(), "loser");
+        assert_eq!(pnl_legs[0].to_account_id(), "winner");
+        assert_eq!(pnl_legs[0].asset_id(), "USDC");
+        assert_eq!(pnl_legs[0].amount(), 25);
+        assert!(fee_legs.is_empty());
+    }
+
+    #[test]
+    fn build_perp_voucher_with_fee_and_realized_pnl_keeps_all_legs() {
+        let trade = perp_trade();
+        let voucher = SettlementTransferVoucher::build_perp_voucher(
+            "voucher-perp-all".to_string(),
+            "settlement-perp-all".to_string(),
+            &trade,
+            "USDC",
+            "fee-account".to_string(),
+            4,
+            1,
+            25,
+            -25,
+        )
+        .unwrap();
+
+        let pnl_legs =
+            voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
+        let fee_legs = voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee);
+
+        assert_eq!(pnl_legs.len(), 1);
+        assert_eq!(fee_legs.len(), 2);
+        assert_eq!(voucher.fee_amount_paid_by("winner"), Some(4));
+        assert_eq!(voucher.fee_amount_paid_by("loser"), Some(1));
+    }
+
+    #[test]
+    fn build_perp_voucher_skips_zero_fee_and_zero_realized_pnl_legs() {
+        let trade = perp_trade();
+        let voucher = SettlementTransferVoucher::build_perp_voucher(
+            "voucher-perp-empty".to_string(),
+            "settlement-perp-empty".to_string(),
+            &trade,
+            "USDC",
+            "fee-account".to_string(),
+            0,
+            0,
+            0,
+            0,
+        )
+        .unwrap();
+
+        assert!(
+            voucher
+                .transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer)
+                .is_empty()
+        );
+        assert!(voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee).is_empty());
+        assert_eq!(voucher.fee_amount_paid_by("winner"), None);
+        assert_eq!(voucher.fee_amount_paid_by("loser"), None);
     }
 
     #[test]

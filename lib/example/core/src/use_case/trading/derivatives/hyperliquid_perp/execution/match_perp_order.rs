@@ -31,6 +31,8 @@ pub struct MatchHyperliquidPerpOrderCmd {
     pub taker_order_id: String,
     /// 一次撮合批次 ID，用于稳定生成多条 trade id。
     pub match_id: String,
+    /// 本次成交批次的稳定执行时间，单位毫秒。
+    pub executed_at_ms: u64,
 }
 
 impl IssuedByParty for MatchHyperliquidPerpOrderCmd {
@@ -220,6 +222,7 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
                 taker_order_after.side,
                 maker_price,
                 trade_qty,
+                cmd.executed_at_ms,
             );
             created_trades.push(trade);
 
@@ -336,6 +339,7 @@ mod tests {
             party_id: "buyer".to_string(),
             taker_order_id: "taker-1".to_string(),
             match_id: "match-1".to_string(),
+            executed_at_ms: 1_717_171_717_000,
         }
     }
 
@@ -395,6 +399,7 @@ mod tests {
         expected_taker_side: HyperliquidPerpOrderSide,
         expected_price: u64,
         expected_qty: u64,
+        expected_executed_at_ms: u64,
     ) {
         assert!(event.is_created());
         assert_eq!(event_field(event, "trade_id"), Some(expected_trade_id));
@@ -406,6 +411,7 @@ mod tests {
         assert_eq!(event_field(event, "taker_side"), Some(expected_taker_side.as_str()));
         assert_eq!(field_as_u64(event, "price"), Some(expected_price));
         assert_eq!(field_as_u64(event, "qty"), Some(expected_qty));
+        assert_eq!(field_as_u64(event, "executed_at_ms"), Some(expected_executed_at_ms));
     }
 
     fn assert_order_update_event(
@@ -586,6 +592,8 @@ mod tests {
         // assert
         assert_eq!(events.len(), 5);
         assert_eq!(changes.created_trades.len(), 2);
+        assert_eq!(changes.created_trades[0].executed_at_ms, 1_717_171_717_000);
+        assert_eq!(changes.created_trades[1].executed_at_ms, 1_717_171_717_000);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
         assert_trade_event(
             &events[0],
@@ -596,6 +604,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             99,
             1,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_trade_event(
@@ -607,6 +616,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             100,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
@@ -659,6 +669,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             99,
             1,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
@@ -709,6 +720,7 @@ mod tests {
             HyperliquidPerpOrderSide::Sell,
             101,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
@@ -759,6 +771,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             99,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
@@ -810,6 +823,7 @@ mod tests {
             HyperliquidPerpOrderSide::Sell,
             102,
             1,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_trade_event(
@@ -821,6 +835,7 @@ mod tests {
             HyperliquidPerpOrderSide::Sell,
             101,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
@@ -876,6 +891,7 @@ mod tests {
             HyperliquidPerpOrderSide::Sell,
             101,
             1,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
@@ -923,6 +939,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             99,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
         assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
@@ -972,6 +989,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             98,
             1,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
         assert_trade_event(
@@ -983,6 +1001,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             99,
             2,
+            1_717_171_717_000,
         );
         assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
         assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
@@ -1014,6 +1033,9 @@ mod tests {
         let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
 
         assert_eq!(changes.created_trades.len(), 2);
+        assert!(
+            changes.created_trades.iter().all(|trade| trade.executed_at_ms == 1_717_171_717_000)
+        );
         assert_eq!(changes.updated_taker_order.after.order_id, "taker-1");
         assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
         assert_eq!(
@@ -1074,6 +1096,7 @@ mod tests {
                 prop_assert_eq!(event_field(trade_event, "maker_account_id"), Some("seller"));
                 prop_assert_eq!(field_as_u64(trade_event, "asset"), Some(0));
                 prop_assert_eq!(field_as_u64(trade_event, "price"), Some(100));
+                prop_assert_eq!(field_as_u64(trade_event, "executed_at_ms"), Some(1_717_171_717_000));
             }
 
             for maker_index in 0..trade_events.len() {

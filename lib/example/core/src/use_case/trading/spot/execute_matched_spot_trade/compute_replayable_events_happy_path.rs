@@ -10,7 +10,7 @@ use crate::entity::SpotOrderStatus;
 // 规格矩阵:
 // - match outcome: full fill / partial fill / zero trade
 // - settlement outcome: settled / skipped
-// - event expectation: match events first / settlement events appended / no settlement events when no trade
+// - event expectation: match events first / clearing truth events appended / no clearing events when no trade
 //
 // current coverage:
 // - 单笔完全成交后立即清结算
@@ -39,8 +39,8 @@ fn full_fill_matches_and_settles_in_single_business_result()
     //
     // Then:
     // - `match_changes` 里有 1 笔 trade，taker 变成 `Filled`。
-    // - `settle_changes` 存在，且有 1 笔 settlement。
-    // - 投影事件顺序必须先 trade/match update，再 settlement/balance/ledger。
+    // - `settle_changes` 存在，且只暴露 reservation / balance / ledger 真相。
+    // - 投影事件顺序必须先 trade/match update，再 reservation/balance/ledger。
 
     // arrange
     let state = execute_state(
@@ -65,15 +65,17 @@ fn full_fill_matches_and_settles_in_single_business_result()
     assert_eq!(changes.match_changes.updated_maker_orders.len(), 1);
     assert_eq!(changes.match_changes.updated_taker_order.after.status, SpotOrderStatus::Filled);
     let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
-    assert_eq!(settle_changes.settlements.len(), 1);
+    assert_eq!(settle_changes.updated_reservations.len(), 2);
+    assert_eq!(settle_changes.created_reservation_consumed.len(), 2);
     assert_eq!(settle_changes.updated_balances.len(), 4);
     assert_eq!(settle_changes.created_balance_ledger_entries.len(), 4);
 
-    assert_eq!(events.len(), 16);
+    assert_eq!(events.len(), 15);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 2);
-    assert_eq!(event_field(&events[3], "settlement_id"), Some("settle-1-1"));
-    assert_eq!(event_field(&events[8], "account_id"), Some("buyer"));
-    assert_eq!(event_field(&events[12], "reason"), Some("settle_spot_trade_buyer_receive_base"));
+    assert_eq!(event_field(&events[3], "reservation_id"), Some("reservation:taker-1"));
+    assert_eq!(event_field(&events[7], "account_id"), Some("buyer"));
+    assert_eq!(event_field(&events[11], "reason"), Some("settle_spot_trade_buyer_receive_base"));
+    assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
 
     Ok(())
 }
@@ -93,7 +95,7 @@ fn partial_fill_settles_only_the_matched_quantity() -> Result<(), ExecuteMatched
     // Then:
     // - `match_changes` 里只有 1 笔部分成交 trade。
     // - taker 状态是 `PartiallyFilled`。
-    // - settlement 数量只对应已撮合的 1 手。
+    // - reservation consume / ledger 数量只对应已撮合的 1 手。
 
     // arrange
     let state = execute_state(
@@ -120,12 +122,13 @@ fn partial_fill_settles_only_the_matched_quantity() -> Result<(), ExecuteMatched
         SpotOrderStatus::PartiallyFilled
     );
     let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
-    assert_eq!(settle_changes.settlements.len(), 1);
-    assert_eq!(settle_changes.settlements[0].base_qty, 1);
-    assert_eq!(settle_changes.settlements[0].quote_qty, 100);
-    assert_eq!(events.len(), 16);
+    assert_eq!(settle_changes.updated_reservations.len(), 2);
+    assert_eq!(settle_changes.created_reservation_consumed.len(), 2);
+    assert_eq!(events.len(), 15);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 1);
-    assert_eq!(event_field(&events[3], "settlement_id"), Some("settle-1-1"));
+    assert_eq!(event_field(&events[3], "reservation_id"), Some("reservation:taker-1"));
+    assert_eq!(event_field(&events[11], "reason_settlement_ids"), Some("settle-1-1"));
+    assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
 
     Ok(())
 }

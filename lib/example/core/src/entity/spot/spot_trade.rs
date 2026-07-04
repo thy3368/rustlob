@@ -4,7 +4,7 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{SpotOrderSide, SpotSettlement, SpotTradeFeeRole};
+use crate::{SpotOrderSide, SpotTradeFeeRole};
 
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
@@ -88,21 +88,6 @@ impl SpotTrade {
             SpotOrderSide::Buy => self.maker_account_id.as_str(),
             SpotOrderSide::Sell => self.taker_account_id.as_str(),
         }
-    }
-
-    /// 将撮合事实转换为一条清结算事实；quote 名义价值溢出时返回 `None`。
-    pub fn to_settlement(&self, settlement_id: String) -> Option<SpotSettlement> {
-        let quote_qty = self.notional_quote()?;
-        Some(SpotSettlement::new(
-            settlement_id,
-            self.trade_id.clone(),
-            self.match_id.clone(),
-            self.buyer_account_id().to_string(),
-            self.seller_account_id().to_string(),
-            self.qty,
-            quote_qty,
-            self.price,
-        ))
     }
 
     /// 返回给定账户在该成交中的真实 fee 角色。
@@ -320,39 +305,6 @@ mod tests {
         );
         assert_eq!(sell_taker.buyer_account_id(), "buyer");
         assert_eq!(sell_taker.seller_account_id(), "seller");
-    }
-
-    #[test]
-    fn to_settlement_builds_settlement_fact() {
-        let settlement = trade().to_settlement("settle-1-1".to_string()).unwrap();
-
-        assert_eq!(settlement.settlement_id, "settle-1-1");
-        assert_eq!(settlement.trade_id, "match-1-1");
-        assert_eq!(settlement.match_id, "match-1");
-        assert_eq!(settlement.buyer_account_id, "buyer");
-        assert_eq!(settlement.seller_account_id, "seller");
-        assert_eq!(settlement.base_qty, 2);
-        assert_eq!(settlement.quote_qty, 200);
-        assert_eq!(settlement.price, 100);
-    }
-
-    #[test]
-    fn to_settlement_returns_none_when_notional_overflows() {
-        let trade = SpotTrade::new(
-            "match-overflow-1".to_string(),
-            "match-overflow".to_string(),
-            10_001,
-            "BTCUSDT".to_string(),
-            "taker-overflow".to_string(),
-            "maker-overflow".to_string(),
-            "buyer".to_string(),
-            "seller".to_string(),
-            SpotOrderSide::Buy,
-            u64::MAX,
-            2,
-        );
-
-        assert_eq!(trade.to_settlement("settle-overflow-1".to_string()), None);
     }
 
     #[test]

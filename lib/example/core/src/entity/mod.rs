@@ -29,25 +29,24 @@ pub use perp::hyperliquid_perp_funding_rate::{
 };
 pub use perp::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
 pub use perp::hyperliquid_perp_insurance_fund_allocation::HyperliquidPerpInsuranceFundAllocation;
-pub use perp::hyperliquid_perp_leverage_setting::HyperliquidPerpLeverageSetting;
 pub use perp::hyperliquid_perp_liquidation::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason,
 };
 pub use perp::hyperliquid_perp_liquidation_fill::HyperliquidPerpLiquidationFill;
-pub use perp::hyperliquid_perp_order::{
-    HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
-    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
-};
-pub use perp::hyperliquid_perp_position::{
-    HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, required_position_margin,
-};
-pub use perp::hyperliquid_perp_settlement::HyperliquidPerpSettlement;
 pub use perp::hyperliquid_perp_shortfall::{
     HyperliquidPerpShortfall, HyperliquidPerpShortfallStatus,
 };
-pub use perp::hyperliquid_perp_trade::HyperliquidPerpTrade;
+pub use perp::trade::hyperliquid_perp_leverage_setting::HyperliquidPerpLeverageSetting;
+pub use perp::trade::hyperliquid_perp_order::{
+    HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
+    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
+};
+pub use perp::trade::hyperliquid_perp_position::{
+    HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    HyperliquidPerpPositionSide, required_position_margin,
+};
+pub use perp::trade::hyperliquid_perp_trade::HyperliquidPerpTrade;
 pub use reservation::{
     AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationConsumed,
     ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
@@ -67,6 +66,4 @@ pub use spot::spot_order_v2::{
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
     SpotOrderV2MatchError, SpotTradeFeeRole,
 };
-
-pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;

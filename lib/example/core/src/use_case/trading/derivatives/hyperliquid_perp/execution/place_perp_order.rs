@@ -493,7 +493,9 @@ fn non_flat_position(side: HyperliquidPerpPositionSide, qty: u64) -> Hyperliquid
         qty,
         100,
         5,
+        crate::entity::HyperliquidPerpMarginMode::Cross,
         required_position_margin(qty, 100, 5).unwrap(),
+        0,
         0,
         2,
     )

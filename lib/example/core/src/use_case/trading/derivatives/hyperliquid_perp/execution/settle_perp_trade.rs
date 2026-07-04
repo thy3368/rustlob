@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionSide, HyperliquidPerpSettlement,
-    HyperliquidPerpTrade, required_position_margin,
+    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionSide, HyperliquidPerpTrade,
+    SettlementTransferVoucher, required_position_margin,
 };
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
@@ -89,11 +89,13 @@ pub struct SettleHyperliquidPerpTradeState {
     pub margin_balances: Vec<Balance>,
     /// Cross 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
+    /// 平台手续费账户 ID，用于 perp settlement voucher fee legs。
+    pub fee_account_id: String,
     /// taker 手续费 bps，分母为 10_000。
     pub taker_fee_bps: u64,
     /// maker 手续费 bps，分母为 10_000。
     pub maker_fee_bps: u64,
-    /// 已经存在清算记录的 trade id，用于 core 层幂等拒绝。
+    /// 已经完成清结算的 trade id，用于 core 层幂等拒绝。
     pub settled_trade_ids: Vec<String>,
 }
 
@@ -107,8 +109,8 @@ pub struct SettleHyperliquidPerpTradeUseCase;
 /// 批量清结算成交后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeChanges {
-    /// 本批次新创建的清结算事实。
-    pub created_settlements: Vec<HyperliquidPerpSettlement>,
+    /// 本批次新创建的 perp 清结算转账凭证。
+    pub created_vouchers: Vec<SettlementTransferVoucher>,
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
     pub changed_positions: Vec<UpdatedEntityPair<HyperliquidPerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
@@ -118,8 +120,8 @@ pub struct SettleHyperliquidPerpTradeChanges {
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::new();
-        for settlement in &self.created_settlements {
-            events.push(settlement.track_create_event()?);
+        for voucher in &self.created_vouchers {
+            events.push(voucher.track_create_event()?);
         }
         for position in &self.changed_positions {
             if position.before.version == 0 && !position.after.is_flat() {
@@ -209,17 +211,11 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
         }
 
         Ok(SettleHyperliquidPerpTradeChanges {
-            created_settlements: outcome.settlements,
+            created_vouchers: outcome.vouchers,
             changed_positions,
             changed_margin_balances,
         })
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct TradeParties<'a> {
-    long_account_id: &'a str,
-    short_account_id: &'a str,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -236,7 +232,7 @@ struct BalanceDelta {
 
 #[derive(Debug, Clone)]
 struct SettlementOutcome {
-    settlements: Vec<HyperliquidPerpSettlement>,
+    vouchers: Vec<SettlementTransferVoucher>,
     positions: BTreeMap<String, HyperliquidPerpPosition>,
     balance_deltas: BTreeMap<String, BalanceDelta>,
 }
@@ -280,10 +276,9 @@ fn derive_settlement_outcome(
 ) -> Result<SettlementOutcome, SettleHyperliquidPerpTradeError> {
     let mut positions = position_map(state.positions.clone().into_iter());
     let mut balance_deltas: BTreeMap<String, BalanceDelta> = BTreeMap::new();
-    let mut settlements = Vec::with_capacity(state.trades.len());
+    let mut vouchers = Vec::with_capacity(state.trades.len());
 
     for (index, trade) in state.trades.iter().enumerate() {
-        let parties = trade_parties(trade);
         let notional =
             trade.notional_quote().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         let taker_fee = fee_from_bps(notional, state.taker_fee_bps)?;
@@ -329,6 +324,7 @@ fn derive_settlement_outcome(
                 after.qty,
                 after.entry_price,
                 after.margin,
+                0,
                 next_realized_pnl,
                 next_version,
             );
@@ -357,25 +353,25 @@ fn derive_settlement_outcome(
             positions.insert(position_key, next_position);
         }
 
-        settlements.push(HyperliquidPerpSettlement::new(
-            format!("{}-{}", cmd.settlement_batch_id, index + 1),
-            trade.trade_id.clone(),
-            trade.match_id.clone(),
-            trade.asset,
-            trade.symbol.clone(),
-            parties.long_account_id.to_string(),
-            parties.short_account_id.to_string(),
-            trade.price,
-            trade.qty,
-            notional,
+        let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), index + 1);
+        let voucher_id =
+            format!("perp-voucher:{}:{}", cmd.settlement_batch_id, trade.trade_id.as_str());
+        let voucher = SettlementTransferVoucher::build_perp_voucher(
+            voucher_id,
+            settlement_id,
+            trade,
+            state.margin_asset_id.as_str(),
+            state.fee_account_id.clone(),
             taker_fee,
             maker_fee,
             taker_realized_pnl,
             maker_realized_pnl,
-        ));
+        )
+        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        vouchers.push(voucher);
     }
 
-    Ok(SettlementOutcome { settlements, positions, balance_deltas })
+    Ok(SettlementOutcome { vouchers, positions, balance_deltas })
 }
 
 fn validate_position_for_trade(
@@ -522,19 +518,6 @@ fn checked_i128_to_i64(value: i128) -> Result<i64, SettleHyperliquidPerpTradeErr
     i64::try_from(value).map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)
 }
 
-fn trade_parties(trade: &HyperliquidPerpTrade) -> TradeParties<'_> {
-    match trade.taker_side {
-        crate::entity::HyperliquidPerpOrderSide::Buy => TradeParties {
-            long_account_id: trade.taker_account_id.as_str(),
-            short_account_id: trade.maker_account_id.as_str(),
-        },
-        crate::entity::HyperliquidPerpOrderSide::Sell => TradeParties {
-            long_account_id: trade.maker_account_id.as_str(),
-            short_account_id: trade.taker_account_id.as_str(),
-        },
-    }
-}
-
 fn taker_position_side(trade: &HyperliquidPerpTrade) -> HyperliquidPerpPositionSide {
     match trade.taker_side {
         crate::entity::HyperliquidPerpOrderSide::Buy => HyperliquidPerpPositionSide::Long,
@@ -574,6 +557,10 @@ fn balance_key(account_id: &str, asset_id: &str) -> String {
     format!("{account_id}:{asset_id}")
 }
 
+fn settlement_id(settlement_batch_id: &str, index: usize) -> String {
+    format!("{settlement_batch_id}-{index}")
+}
+
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
@@ -611,6 +598,7 @@ mod tests {
             taker_side,
             price,
             qty,
+            1_717_171_717_000,
         )
     }
 
@@ -642,7 +630,9 @@ mod tests {
             qty,
             entry_price,
             leverage,
+            crate::entity::HyperliquidPerpMarginMode::Cross,
             margin,
+            0,
             realized_pnl,
             3,
         )
@@ -662,6 +652,7 @@ mod tests {
             positions,
             margin_balances: balances,
             margin_asset_id: "USDC".to_string(),
+            fee_account_id: "fee-account".to_string(),
             taker_fee_bps: 5,
             maker_fee_bps: 2,
             settled_trade_ids: Vec::new(),
@@ -698,6 +689,12 @@ mod tests {
         field_name: &str,
     ) -> Option<&'a EntityReplayableEvent> {
         events.iter().find(|event| event.is_updated() && event_field(event, field_name).is_some())
+    }
+
+    fn settlement_voucher(
+        changes: &SettleHyperliquidPerpTradeChanges,
+    ) -> &SettlementTransferVoucher {
+        &changes.created_vouchers[0]
     }
 
     #[test]
@@ -800,20 +797,43 @@ mod tests {
         let changes =
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
+        let voucher = settlement_voucher(&changes);
 
         assert_eq!(events.len(), 5);
-        assert_eq!(changes.created_settlements.len(), 1);
+        assert_eq!(changes.created_vouchers.len(), 1);
         assert_eq!(changes.changed_positions.len(), 2);
         assert_eq!(changes.changed_margin_balances.len(), 2);
         assert_eq!(changes.changed_positions[0].before.version, 0);
         assert_eq!(changes.changed_positions[0].after.margin, 20);
         assert_eq!(changes.changed_margin_balances[0].before.available, 1_000);
         assert_eq!(changes.changed_margin_balances[0].after.frozen, 20);
+        assert_eq!(voucher.voucher_id(), "perp-voucher:settle-1:trade-1");
+        assert_eq!(voucher.settlement_id(), "settle-1-1");
+        assert_eq!(voucher.trade_id(), "trade-1");
+        assert_eq!(voucher.match_id(), Some("match-1"));
+        assert_eq!(voucher.settlement_kind(), crate::entity::SettlementKind::Perp);
+        assert!(
+            voucher
+                .transfers_for_purpose(
+                    crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
+                )
+                .is_empty()
+        );
+        assert!(
+            voucher
+                .transfers_for_purpose(crate::entity::SettlementTransferPurpose::TradingFee)
+                .is_empty()
+        );
         assert!(events[0].is_created());
+        assert_eq!(event_field(&events[0], "voucher_id"), Some("perp-voucher:settle-1:trade-1"));
+        assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
         assert_eq!(event_field(&events[0], "settlement_id"), Some("settle-1-1"));
-        assert_eq!(field_as_u64(&events[0], "notional"), Some(200));
-        assert_eq!(field_as_u64(&events[0], "taker_fee"), Some(0));
-        assert_eq!(field_as_u64(&events[0], "maker_fee"), Some(0));
+        assert_eq!(event_field(&events[0], "trade_id"), Some("trade-1"));
+        assert_eq!(event_field(&events[0], "fee_account_id"), Some("fee-account"));
+        assert_eq!(field_as_u64(&events[0], "leg_count"), Some(0));
+        assert_eq!(field_as_u64(&events[0], "notional"), None);
+        assert_eq!(field_as_u64(&events[0], "taker_fee"), None);
+        assert_eq!(field_as_u64(&events[0], "maker_fee"), None);
 
         assert_eq!(event_field(&events[1], "account_id"), Some("buyer"));
         assert_eq!(event_field(&events[1], "side"), Some("long"));
@@ -850,9 +870,17 @@ mod tests {
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
         let buyer_position = updated_event_with_field(&events, "entry_price").unwrap();
+        let voucher = settlement_voucher(&changes);
 
         assert_eq!(changes.changed_positions[0].before.qty, 2);
         assert_eq!(changes.changed_positions[0].after.qty, 4);
+        assert!(
+            voucher
+                .transfers_for_purpose(
+                    crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
+                )
+                .is_empty()
+        );
         assert_eq!(event_field(buyer_position, "qty"), Some("4"));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("110"));
         assert_eq!(event_field(buyer_position, "margin"), Some("44"));
@@ -861,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_partially_closes_position_and_realizes_pnl()
+    fn compute_partial_close_without_counterparty_close_creates_no_realized_pnl_transfer()
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
@@ -876,10 +904,17 @@ mod tests {
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
         let buyer_position = updated_event_with_field(&events, "realized_pnl").unwrap();
+        let voucher = settlement_voucher(&changes);
 
         assert_eq!(changes.changed_positions[0].before.qty, 3);
         assert_eq!(changes.changed_positions[0].after.qty, 2);
-        assert_eq!(event_field(&events[0], "taker_realized_pnl"), Some("30"));
+        assert!(
+            voucher
+                .transfers_for_purpose(
+                    crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
+                )
+                .is_empty()
+        );
         assert_eq!(event_field(buyer_position, "qty"), Some("2"));
         assert_eq!(event_field(buyer_position, "margin"), Some("20"));
         assert_eq!(event_field_i64(buyer_position, "realized_pnl"), Some(30));
@@ -892,7 +927,81 @@ mod tests {
     }
 
     #[test]
-    fn compute_flattens_and_flips_position() -> Result<(), SettleHyperliquidPerpTradeError> {
+    fn compute_partial_close_with_counterparty_close_creates_realized_pnl_transfer_leg()
+    -> Result<(), SettleHyperliquidPerpTradeError> {
+        let state = state(
+            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
+            vec![
+                position("buyer", HyperliquidPerpPositionSide::Long, 3, 100, 10, 0),
+                position("seller", HyperliquidPerpPositionSide::Short, 2, 100, 10, 0),
+            ],
+            vec![balance("buyer", 1_000, 30), balance("seller", 1_000, 20)],
+        );
+
+        let changes =
+            SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
+        let events = changes.to_replayable_events().unwrap();
+        let voucher = settlement_voucher(&changes);
+        let pnl_legs = voucher.transfers_for_purpose(
+            crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer,
+        );
+
+        assert_eq!(pnl_legs.len(), 1);
+        assert_eq!(pnl_legs[0].from_account_id(), "seller");
+        assert_eq!(pnl_legs[0].to_account_id(), "buyer");
+        assert_eq!(pnl_legs[0].asset_id(), "USDC");
+        assert_eq!(pnl_legs[0].amount(), 30);
+        assert_eq!(field_as_u64(&events[0], "leg_count"), Some(1));
+        assert_eq!(event_field(&events[0], "leg_0_purpose"), Some("perp_realized_pnl_transfer"));
+        assert_eq!(event_field(&events[0], "leg_0_from_account_id"), Some("seller"));
+        assert_eq!(event_field(&events[0], "leg_0_to_account_id"), Some("buyer"));
+        assert_eq!(
+            event_field(updated_event(&events, "buyer", "available").unwrap(), "available"),
+            Some("1040")
+        );
+        assert_eq!(
+            event_field(updated_event(&events, "seller", "available").unwrap(), "available"),
+            Some("980")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_flattens_positions_to_flat() -> Result<(), SettleHyperliquidPerpTradeError> {
+        let state = state(
+            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 120, 1)],
+            vec![
+                position("buyer", HyperliquidPerpPositionSide::Long, 1, 100, 10, 0),
+                position("seller", HyperliquidPerpPositionSide::Short, 1, 100, 10, 0),
+            ],
+            vec![balance("buyer", 1_000, 10), balance("seller", 1_000, 10)],
+        );
+
+        let changes =
+            SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
+        let events = changes.to_replayable_events().unwrap();
+        let buyer_position = updated_event_with_field(&events, "realized_pnl").unwrap();
+        let voucher = settlement_voucher(&changes);
+
+        assert!(changes.changed_positions.iter().all(|pair| pair.after.is_flat()));
+        assert_eq!(changes.changed_positions[0].after.side, HyperliquidPerpPositionSide::Flat);
+        assert_eq!(changes.changed_positions[1].after.side, HyperliquidPerpPositionSide::Flat);
+        assert_eq!(event_field(buyer_position, "side"), Some("flat"));
+        assert_eq!(event_field(buyer_position, "qty"), Some("0"));
+        assert_eq!(
+            voucher.transfers_for_purpose(
+                crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
+            )[0]
+            .amount(),
+            20
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_flips_position_after_over_close() -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 90, 3)],
             vec![
@@ -906,10 +1015,17 @@ mod tests {
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
         let buyer_position = updated_event_with_field(&events, "side").unwrap();
+        let voucher = settlement_voucher(&changes);
 
         assert_eq!(changes.changed_positions[0].before.side, HyperliquidPerpPositionSide::Long);
         assert_eq!(changes.changed_positions[0].after.side, HyperliquidPerpPositionSide::Short);
-        assert_eq!(event_field(&events[0], "taker_realized_pnl"), Some("-20"));
+        assert!(
+            voucher
+                .transfers_for_purpose(
+                    crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
+                )
+                .is_empty()
+        );
         assert_eq!(event_field(buyer_position, "side"), Some("short"));
         assert_eq!(event_field(buyer_position, "qty"), Some("1"));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("90"));
@@ -932,9 +1048,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn compute_creates_taker_and_maker_fee_legs() -> Result<(), SettleHyperliquidPerpTradeError> {
+        let state = state(
+            vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 10_000, 10)],
+            vec![empty_position("buyer", 10), empty_position("seller", 10)],
+            vec![balance("buyer", 100_000, 0), balance("seller", 100_000, 0)],
+        );
+
+        let changes =
+            SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
+        let events = changes.to_replayable_events().unwrap();
+        let voucher = settlement_voucher(&changes);
+        let fee_legs =
+            voucher.transfers_for_purpose(crate::entity::SettlementTransferPurpose::TradingFee);
+
+        assert_eq!(fee_legs.len(), 2);
+        assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(50));
+        assert_eq!(voucher.fee_amount_paid_by("seller"), Some(20));
+        assert_eq!(field_as_u64(&events[0], "leg_count"), Some(2));
+        assert_eq!(event_field(&events[0], "leg_0_purpose"), Some("trading_fee"));
+        assert_eq!(event_field(&events[0], "leg_0_to_account_id"), Some("fee-account"));
+        assert_eq!(event_field(&events[0], "leg_1_purpose"), Some("trading_fee"));
+        assert_eq!(event_field(&events[0], "leg_1_to_account_id"), Some("fee-account"));
+
+        Ok(())
+    }
+
     proptest! {
         #[test]
-        fn opening_positions_keep_margin_and_settlement_fields_consistent(
+        fn opening_positions_keep_margin_and_voucher_first_event_consistent(
             price in 1_u64..10_000,
             qty in 1_u64..100,
             leverage in 1_u64..50,
@@ -950,9 +1093,12 @@ mod tests {
                 .expect("generated safe opening scenario settles");
             let events = changes.to_replayable_events().unwrap();
             let notional = price * qty;
+            let expected_leg_count = u64::from(notional * 5 / FEE_BPS_DENOMINATOR > 0)
+                + u64::from(notional * 2 / FEE_BPS_DENOMINATOR > 0);
             let margin = required_position_margin(qty, price, leverage).unwrap();
 
-            prop_assert_eq!(field_as_u64(&events[0], "notional"), Some(notional));
+            prop_assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
+            prop_assert_eq!(field_as_u64(&events[0], "leg_count"), Some(expected_leg_count));
             prop_assert_eq!(field_as_u64(&events[1], "margin"), Some(margin));
             prop_assert_eq!(field_as_u64(&events[2], "margin"), Some(margin));
             prop_assert_eq!(event_field(&events[1], "side"), Some("long"));

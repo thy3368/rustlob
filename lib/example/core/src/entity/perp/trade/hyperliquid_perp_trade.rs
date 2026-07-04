@@ -32,6 +32,8 @@ pub struct HyperliquidPerpTrade {
     pub price: u64,
     /// 成交数量。
     pub qty: u64,
+    /// 成交发生时间，单位毫秒。
+    pub executed_at_ms: u64,
 }
 
 impl HyperliquidPerpTrade {
@@ -49,6 +51,7 @@ impl HyperliquidPerpTrade {
         taker_side: HyperliquidPerpOrderSide,
         price: u64,
         qty: u64,
+        executed_at_ms: u64,
     ) -> Self {
         Self {
             trade_id,
@@ -62,6 +65,7 @@ impl HyperliquidPerpTrade {
             taker_side,
             price,
             qty,
+            executed_at_ms,
         }
     }
 
@@ -99,6 +103,7 @@ impl Entity for HyperliquidPerpTrade {
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("executed_at_ms", "", self.executed_at_ms.to_string()),
         ]
     }
 
@@ -110,7 +115,7 @@ impl Entity for HyperliquidPerpTrade {
         match field_name {
             "trade_id" | "match_id" | "symbol" | "taker_order_id" | "maker_order_id"
             | "taker_account_id" | "maker_account_id" | "taker_side" => 0,
-            "asset" | "price" | "qty" => 1,
+            "asset" | "price" | "qty" | "executed_at_ms" => 1,
             _ => 0,
         }
     }
@@ -148,6 +153,7 @@ mod tests {
             HyperliquidPerpOrderSide::Buy,
             100,
             2,
+            1_717_171_717_000,
         );
 
         let event = trade.track_create_event().unwrap();
@@ -157,6 +163,10 @@ mod tests {
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("trade_id")
                 && change.new_value_bytes() == b"match-1-1"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("executed_at_ms")
+                && change.new_value_bytes() == b"1717171717000"
         }));
     }
 }

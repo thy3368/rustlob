@@ -230,6 +230,7 @@ mod tests {
             HyperliquidPerpOrderSide::Sell,
             48_000,
             2,
+            1_717_171_717_000,
         )
     }
 
