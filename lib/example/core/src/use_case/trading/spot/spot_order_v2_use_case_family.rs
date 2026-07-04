@@ -8,11 +8,11 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use super::spot_order::{
+use crate::entity::spot::spot_order::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
-use super::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError, SpotTradeFeeRole};
-use super::spot_trade::SpotTrade;
+use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError, SpotTradeFeeRole};
+use crate::SpotTrade;
 use crate::entity::account::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
 use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,

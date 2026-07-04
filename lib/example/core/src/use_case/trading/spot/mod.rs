@@ -5,6 +5,7 @@ mod group_spec;
 mod match_order;
 pub mod place_order;
 mod settle_trade;
+pub mod spot_order_v2_use_case_family;
 
 pub use cancel_order::{
     CancelSpotOrderChanges, CancelSpotOrderCmd, CancelSpotOrderError, CancelSpotOrderState,
