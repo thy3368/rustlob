@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
 use crate::entity::{
     AssetReservation, Balance, ReservationCloseReason, ReservationConsumed, SpotOrderSide,
-    SpotSettlement, SpotTrade,
+    SpotTrade,
 };
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
@@ -20,7 +20,7 @@ use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 pub struct SettleSpotTradeCmd {
     /// 发起清结算的业务主体。
     pub party_id: String,
-    /// 清结算批次 ID，用于稳定生成 settlement id。
+    /// 清结算批次 ID，用于稳定生成账务关联标识。
     pub settlement_batch_id: String,
     /// 本批次要清结算的 trade id，顺序必须和已加载 trades 一致。
     pub trade_ids: Vec<String>,
@@ -45,7 +45,7 @@ pub struct SettleSpotTradeState {
     pub balances: Vec<Balance>,
     /// 本批次涉及的 spot reservation 快照。
     pub reservations: Vec<AssetReservation>,
-    /// 已经存在清算记录的 trade id，用于 core 层幂等拒绝。///todo 有点问题
+    /// 已经存在清结算真相的 trade id，用于 core 层幂等拒绝。
     pub settled_trade_ids: Vec<String>,
 }
 
@@ -92,8 +92,6 @@ pub enum SettleSpotTradeError {
 /// 本批次清结算的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleSpotTradeChanges {
-    /// 本批次创建出的 settlement 事实。
-    pub settlements: Vec<SpotSettlement>,
     /// 本批次被 trade 消耗的 reservation before/after。
     pub updated_reservations: Vec<UpdatedEntityPair<AssetReservation>>,
     /// 本批次生成的 reservation consumed append-only 事实。
@@ -106,7 +104,7 @@ pub struct SettleSpotTradeChanges {
 
 /// Use case that settles matched spot trades into account balance changes.
 ///
-/// 用例只处理 base/quote 资产交割和 settlement 事实记录；手续费由独立 use case 处理。
+/// 用例只处理 base/quote 资产交割对应的 reservation / balance / ledger 真相；手续费由独立 use case 处理。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleSpotTradeUseCase;
 
@@ -115,15 +113,11 @@ impl ReplayableChanges for SettleSpotTradeChanges {
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
-            self.settlements.len()
-                + self.updated_reservations.len()
+            self.updated_reservations.len()
                 + self.created_reservation_consumed.len()
                 + self.updated_balances.len()
                 + self.created_balance_ledger_entries.len(),
         );
-        for settlement in &self.settlements {
-            events.push(settlement.track_create_event()?);
-        }
         for reservation in &self.updated_reservations {
             events.push(reservation.after.track_update_event_from(&reservation.before)?);
         }
@@ -194,19 +188,10 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             &state.base_asset_id,
             &state.quote_asset_id,
         )?;
-        let mut settlements = Vec::new();
         let mut updated_balances = Vec::new();
-
-        for (index, trade) in state.trades.iter().enumerate() {
-            let settlement = trade
-                .to_settlement(format!("{}-{}", cmd.settlement_batch_id, index + 1))
-                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            settlements.push(settlement);
-        }
-
         let balance_ledger_reasons = settlement_balance_ledger_reasons(
+            &cmd.settlement_batch_id,
             &state.trades,
-            &settlements,
             &state.base_asset_id,
             &state.quote_asset_id,
         );
@@ -271,7 +256,6 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
         }
 
         Ok(SettleSpotTradeChanges {
-            settlements,
             updated_reservations,
             created_reservation_consumed,
             updated_balances,
@@ -511,8 +495,8 @@ fn settlement_deltas(
 }
 
 fn settlement_balance_ledger_reasons(
+    settlement_batch_id: &str,
     trades: &[SpotTrade],
-    settlements: &[SpotSettlement],
     base_asset_id: &str,
     quote_asset_id: &str,
 ) -> HashMap<String, BalanceLedgerReason> {
@@ -532,7 +516,8 @@ fn settlement_balance_ledger_reasons(
 
     let mut refs: HashMap<(String, BalanceLedgerKind), BalanceLedgerRefBatch> = HashMap::new();
 
-    for (trade, settlement) in trades.iter().zip(settlements) {
+    for (index, trade) in trades.iter().enumerate() {
+        let settlement_ref_id = settlement_ref_id(settlement_batch_id, index + 1);
         let keys = [
             (
                 balance_key(trade.buyer_account_id(), base_asset_id),
@@ -555,7 +540,7 @@ fn settlement_balance_ledger_reasons(
         for (balance_id, kind) in keys {
             let batch = refs.entry((balance_id, kind)).or_default();
             batch.trade_ids.push(trade.trade_id.clone());
-            batch.settlement_ids.push(settlement.settlement_id.clone());
+            batch.settlement_ids.push(settlement_ref_id.clone());
         }
     }
 
@@ -590,6 +575,10 @@ fn settlement_balance_ledger_reasons(
             (balance_id, reason)
         })
         .collect()
+}
+
+fn settlement_ref_id(settlement_batch_id: &str, ordinal: usize) -> String {
+    format!("{settlement_batch_id}-{ordinal}")
 }
 
 fn validate_balances_can_settle(
@@ -756,27 +745,6 @@ fn ledger_event<'a>(
 }
 
 #[cfg(test)]
-fn assert_settlement_event(
-    event: &EntityReplayableEvent,
-    expected_settlement_id: &str,
-    expected_trade_id: &str,
-    expected_buyer_account_id: &str,
-    expected_seller_account_id: &str,
-    expected_base_qty: u64,
-    expected_quote_qty: u64,
-    expected_price: u64,
-) {
-    assert!(event.is_created());
-    assert_eq!(event_field(event, "settlement_id"), Some(expected_settlement_id));
-    assert_eq!(event_field(event, "trade_id"), Some(expected_trade_id));
-    assert_eq!(event_field(event, "match_id"), Some("match-1"));
-    assert_eq!(event_field(event, "buyer_account_id"), Some(expected_buyer_account_id));
-    assert_eq!(event_field(event, "seller_account_id"), Some(expected_seller_account_id));
-    assert_eq!(event_field_u64(event, "base_qty"), Some(expected_base_qty));
-    assert_eq!(event_field_u64(event, "quote_qty"), Some(expected_quote_qty));
-    assert_eq!(event_field_u64(event, "price"), Some(expected_price));
-}
-
 #[cfg(test)]
 fn assert_balance_update_event(
     event: &EntityReplayableEvent,
@@ -934,8 +902,8 @@ mod tests {
         let events =
             result.to_replayable_events().map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?;
 
-        assert_eq!(result.settlements.len(), 1);
-        assert_eq!(result.settlements[0].settlement_id, "settle-1-1");
+        assert_eq!(result.updated_reservations.len(), 2);
+        assert_eq!(result.created_reservation_consumed.len(), 2);
         assert!(result.updated_balances.iter().any(|balance| {
             balance.after.account_id == "buyer"
                 && balance.after.asset_id == "BTC"
@@ -951,9 +919,7 @@ mod tests {
                         settlement_ids: vec!["settle-1-1".to_string()],
                     }
         }));
-        assert!(
-            events.iter().any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
-        );
+        assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
         assert!(events.iter().any(|event| {
             event_field(event, "reason") == Some("settle_spot_trade_buyer_receive_base")
         }));

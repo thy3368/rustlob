@@ -10,7 +10,9 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };
-use crate::entity::{AssetReservation, Balance, SpotOrder, SpotOrderExecution, SpotOrderSide};
+use crate::entity::{AssetReservation, Balance, SpotOrder};
+#[cfg(test)]
+use crate::entity::{SpotOrderExecution, SpotOrderSide};
 
 /// 执行一次“撮合后立即清结算”的现货成交命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +42,7 @@ pub struct ExecuteMatchedSpotTradeState {
     pub maker_orders: Vec<SpotOrder>,
     /// 本批次参与交割的余额快照。
     pub settlement_balances: Vec<Balance>,
-    /// 已经存在清算记录的 trade id，用于 core 层幂等拒绝。
+    /// 已经存在清结算真相的 trade id，用于 core 层幂等拒绝。
     pub settled_trade_ids: Vec<String>,
     /// base 资产 ID。
     pub base_asset_id: String,
@@ -496,12 +498,13 @@ mod tests {
         assert_eq!(changes.match_changes.trades[0].trade_id, "match-1-1");
         assert_eq!(changes.match_changes.updated_taker_order.after.status, SpotOrderStatus::Filled);
         let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
-        assert_eq!(settle_changes.settlements.len(), 1);
-        assert_eq!(settle_changes.settlements[0].settlement_id, "settle-1-1");
+        assert_eq!(settle_changes.updated_reservations.len(), 2);
+        assert_eq!(settle_changes.created_reservation_consumed.len(), 2);
         assert!(events.iter().any(|event| event_field(event, "trade_id") == Some("match-1-1")));
-        assert!(
-            events.iter().any(|event| event_field(event, "settlement_id") == Some("settle-1-1"))
-        );
+        assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
+        assert!(events.iter().any(|event| {
+            event_field(event, "reason") == Some("settle_spot_trade_buyer_receive_base")
+        }));
 
         Ok(())
     }

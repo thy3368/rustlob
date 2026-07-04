@@ -43,7 +43,7 @@ pub struct ExecuteImmediateSpotOrderPipelineState {
     pub maker_orders: Vec<SpotOrder>,
     /// 参与清结算的余额快照。
     pub settlement_balances: Vec<Balance>,
-    /// 本批次已清结算过的 trade id。
+    /// 本批次已形成清结算真相的 trade id。
     pub settled_trade_ids: Vec<String>,
     /// base 资产 ID。
     pub base_asset_id: String,
@@ -465,7 +465,11 @@ mod tests {
         let events = pipeline_events(&cmd, state)?;
 
         assert!(events.iter().any(|event| has_field(event, "trade_id")));
-        assert!(events.iter().any(|event| has_field(event, "settlement_id")));
+        assert!(events.iter().all(|event| !has_field(event, "settlement_id")));
+        assert!(events.iter().any(|event| {
+            event.is_created()
+                && event_field(event, "reason") == Some("settle_spot_trade_buyer_receive_base")
+        }));
 
         let buyer_base_balance = events
             .iter()
