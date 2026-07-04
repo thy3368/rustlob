@@ -1,7 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, MiStateMachineOwnedUnchecked,
-    ReplayableChanges,
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -623,6 +622,29 @@ impl BalanceLedgerEntry {
         Ok(())
     }
 
+    /// 计算 Draft 流水执行命令后的业务 changes。
+    pub fn compute_changes(
+        &self,
+        command: &BalanceLedgerCommand,
+    ) -> Result<BalanceLedgerEntryMiChanges, BalanceLedgerEntryError> {
+        if command.amount() == 0 {
+            return Err(BalanceLedgerEntryError::InvalidAmount);
+        }
+
+        let expected_after_balance = self.validate_apply_command(command)?;
+
+        let before = self.clone();
+        let mut after = self.clone();
+        after.status = BalanceLedgerEntryStatus::Applied;
+        let updated_balance =
+            UpdatedEntityPair { before: command.balance().clone(), after: expected_after_balance };
+
+        Ok(BalanceLedgerEntryMiChanges {
+            updated_entry: UpdatedEntityPair { before, after },
+            updated_balance,
+        })
+    }
+
     /// 返回这条流水是否对应指定余额实体。
     pub fn belongs_to_balance(&self, balance_entity_id: &str) -> bool {
         self.balance_entity_id == balance_entity_id
@@ -639,55 +661,6 @@ impl BalanceLedgerEntry {
             && self.after_frozen == updated_balance.after.frozen
             && self.is_applied()
     }
-}
-
-impl MiStateMachineOwnedUnchecked for BalanceLedgerEntry {
-    type Command<'a> = BalanceLedgerCommand;
-    type State = BalanceLedgerEntryStatus;
-    type Error = BalanceLedgerEntryError;
-    type AfterChanges = BalanceLedgerEntryMiChanges;
-
-    fn state(&self) -> &Self::State {
-        &self.status
-    }
-
-    fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
-        if cmd.amount() == 0 {
-            return Err(BalanceLedgerEntryError::InvalidAmount);
-        }
-        Ok(())
-    }
-
-    fn validate_state_transition<'a>(
-        &self,
-        cmd: &Self::Command<'a>,
-        _given_state: &<Self::Command<'a> as common_entity::CommandWithGivenState>::GivenState,
-    ) -> Result<(), Self::Error> {
-        self.validate_apply_command(cmd).map(|_| ())
-    }
-
-    fn compute_after_changes_unchecked<'a>(
-        &self,
-        cmd: &Self::Command<'a>,
-        _given_state: &<Self::Command<'a> as common_entity::CommandWithGivenState>::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
-        let expected_after_balance = self.validate_apply_command(cmd)?;
-
-        let before = self.clone();
-        let mut after = self.clone();
-        after.status = BalanceLedgerEntryStatus::Applied;
-        let updated_balance =
-            UpdatedEntityPair { before: cmd.balance().clone(), after: expected_after_balance };
-
-        Ok(BalanceLedgerEntryMiChanges {
-            updated_entry: UpdatedEntityPair { before, after },
-            updated_balance,
-        })
-    }
-}
-
-impl common_entity::CommandWithGivenState for BalanceLedgerCommand {
-    type GivenState = ();
 }
 
 impl Entity for BalanceLedgerEntry {
@@ -905,12 +878,7 @@ mod tests {
         )
         .unwrap();
 
-        let changes = common_entity::MiStateMachineOwned::compute_after_changes(
-            &entry,
-            &freeze_command(&balance, 200),
-            &(),
-        )
-        .unwrap();
+        let changes = entry.compute_changes(&freeze_command(&balance, 200)).unwrap();
 
         assert_eq!(changes.updated_entry.before.status, BalanceLedgerEntryStatus::Draft);
         assert_eq!(changes.updated_entry.after.status, BalanceLedgerEntryStatus::Applied);
@@ -931,11 +899,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = common_entity::MiStateMachineOwned::compute_after_changes(
-            &entry,
-            &debit_command(&balance, 200),
-            &(),
-        );
+        let result = entry.compute_changes(&debit_command(&balance, 200));
 
         assert_eq!(result, Err(BalanceLedgerEntryError::CommandMismatch));
     }
@@ -950,11 +914,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = common_entity::MiStateMachineOwned::compute_after_changes(
-            &entry,
-            &freeze_command(&updated_balance.before, 200),
-            &(),
-        );
+        let result = entry.compute_changes(&freeze_command(&updated_balance.before, 200));
 
         assert_eq!(result, Err(BalanceLedgerEntryError::AlreadyApplied));
     }
@@ -1140,9 +1100,7 @@ mod tests {
         .unwrap();
 
         let expected_after = entry.validate_apply_command(&command).unwrap();
-        let changes =
-            common_entity::MiStateMachineOwned::compute_after_changes(&entry, &command, &())
-                .unwrap();
+        let changes = entry.compute_changes(&command).unwrap();
 
         assert_eq!(changes.updated_balance.before, balance);
         assert_eq!(changes.updated_balance.after, expected_after);
