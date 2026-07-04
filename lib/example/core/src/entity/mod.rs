@@ -67,11 +67,6 @@ pub use spot::spot_order_v2::{
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
     SpotOrderV2MatchError, SpotTradeFeeRole,
 };
-pub use spot::spot_order_v2_use_case_family::{
-    CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
-    PlaceSpotOrderV2AfterChanges, PlaceSpotOrderV2Changes, PlaceSpotOrderV2Cmd,
-    SpotOrderV2AfterChanges, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
-    SpotOrderV2UseCaseFamily, SpotOrderV2UseCaseFamilyError,
-};
+
 pub use spot::spot_settlement::SpotSettlement;
 pub use spot::spot_trade::SpotTrade;
