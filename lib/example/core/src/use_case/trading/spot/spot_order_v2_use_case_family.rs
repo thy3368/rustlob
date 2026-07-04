@@ -4,19 +4,19 @@ use std::marker::PhantomData;
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
     CommandWithGivenState, Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter,
-    MiStateMachineOwnedV2Unchecked, ReplayableChanges,
+    MiStateMachineV2Unchecked, ReplayableChanges,
 };
 use thiserror::Error;
 
-use crate::entity::spot::spot_order::{
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
-};
-use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError, SpotTradeFeeRole};
 use crate::SpotTrade;
 use crate::entity::account::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
 use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
 };
+use crate::entity::spot::spot_order::{
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
+};
+use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError, SpotTradeFeeRole};
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationConsumed, ReservationKind,
     ReservationMarketKind, ReservationReleased, SettlementTransferVoucher,
@@ -248,7 +248,7 @@ impl ReplayableChanges for SpotOrderV2CaseChanges {
     }
 }
 
-impl MiStateMachineOwnedV2Unchecked for SpotOrderV2UseCaseFamily {
+impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
     type Command<'a>
         = SpotOrderV2Command<'a>
     where
