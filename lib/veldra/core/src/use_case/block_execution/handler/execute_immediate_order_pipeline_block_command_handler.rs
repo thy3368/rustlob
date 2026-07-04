@@ -1,9 +1,10 @@
 use cmd_handler::command_use_case_def2::CommandUseCase4;
+use example_core::entity::AssetReservation;
 use example_core::{
     Balance, ExecuteImmediateSpotOrderPipelineChanges, ExecuteImmediateSpotOrderPipelineCmd,
     MatchSpotOrderCmd, MatchSpotOrderState, MatchSpotOrderUseCase, PlaceImmediateOrderState,
-    PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState, SettleSpotTradeUseCase,
-    SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
+    PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState,
+    SettleSpotTradeUseCase, SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
 };
 
 use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
@@ -52,7 +53,7 @@ impl BlockCommandHandler for ExecuteImmediateOrderPipelineBlockCommandHandler {
     }
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution) {
-        let account_id = execution.changes.place_output.order.account_id.as_str();
+        let account_id = execution.changes.place_output.created_order.account_id.as_str();
         exchange_state
             .spot
             .next_order_sequence_by_account
@@ -67,6 +68,13 @@ impl BlockCommandHandler for ExecuteImmediateOrderPipelineBlockCommandHandler {
 
         for order in spot_orders_after(&execution.changes) {
             exchange_state.spot.orders.insert(order.order_id.clone(), order);
+        }
+
+        for reservation in spot_reservations_after(&execution.changes) {
+            exchange_state
+                .spot
+                .reservations
+                .insert(reservation.reservation_id.clone(), reservation);
         }
 
         for trade_id in &execution.apply_patch.settled_trade_ids_appended {
@@ -104,7 +112,7 @@ fn execute_immediate_spot_pipeline(
             BuildBlockError::SpotExecution("spot order sequence overflow".to_string())
         })?;
 
-    let taker_order = place_output.order.clone();
+    let taker_order = place_output.created_order.clone();
     let maker_orders = sorted_maker_orders(command, spot_state);
     if !should_enter_matching(&taker_order, &maker_orders) {
         return Ok(SpotPipelineExecutionBundle {
@@ -163,8 +171,17 @@ fn execute_immediate_spot_pipeline(
         quote_asset_id: asset_pair.quote_asset_id.clone(),
         balances: settlement_balances_after_place(
             spot_state.balances.values().cloned().collect(),
-            place_output.affected_balance.after.clone(),
+            place_output.updated_balance.after.clone(),
         ),
+        reservations: settlement_reservations_after_place(
+            &place_output.created_order,
+            &match_output,
+            asset_pair.base_asset_id.as_str(),
+            asset_pair.quote_asset_id.as_str(),
+        )
+        .map_err(|error: example_core::SettleSpotTradeError| {
+            BuildBlockError::SpotExecution(error.to_string())
+        })?,
         settled_trade_ids: spot_state.settled_trade_ids.iter().cloned().collect(),
     };
     CommandUseCase4::pre_check_command(&SettleSpotTradeUseCase, &settle_cmd)
@@ -297,7 +314,7 @@ fn settlement_balances_after_place(
 }
 
 fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<Balance> {
-    let mut balances = vec![changes.place_output.affected_balance.after.clone()];
+    let mut balances = vec![changes.place_output.updated_balance.after.clone()];
     if let Some(settle_changes) = &changes.settle_changes {
         balances
             .extend(settle_changes.updated_balances.iter().map(|balance| balance.after.clone()));
@@ -306,10 +323,47 @@ fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Ve
 }
 
 fn spot_orders_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<SpotOrder> {
-    let mut orders = vec![changes.place_output.order.clone()];
+    let mut orders = vec![changes.place_output.created_order.clone()];
     if let Some(match_output) = &changes.match_output {
         orders.extend(match_output.updated_maker_orders.iter().map(|order| order.after.clone()));
         orders.push(match_output.updated_taker_order.after.clone());
     }
     orders
+}
+
+fn spot_reservations_after(
+    changes: &ExecuteImmediateSpotOrderPipelineChanges,
+) -> Vec<AssetReservation> {
+    let mut reservations = vec![changes.place_output.created_reservation.clone()];
+    if let Some(settle_changes) = &changes.settle_changes {
+        reservations.extend(
+            settle_changes
+                .updated_reservations
+                .iter()
+                .map(|reservation| reservation.after.clone()),
+        );
+    }
+    reservations
+}
+
+fn settlement_reservations_after_place(
+    taker_order: &SpotOrder,
+    match_output: &example_core::MatchSpotOrderChanges,
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Result<Vec<AssetReservation>, example_core::SettleSpotTradeError> {
+    let mut reservations = vec![
+        taker_order
+            .to_reservation(base_asset_id, quote_asset_id)
+            .map_err(|_| example_core::SettleSpotTradeError::ArithmeticOverflow)?,
+    ];
+    for maker in &match_output.updated_maker_orders {
+        reservations.push(
+            maker
+                .before
+                .to_reservation(base_asset_id, quote_asset_id)
+                .map_err(|_| example_core::SettleSpotTradeError::ArithmeticOverflow)?,
+        );
+    }
+    Ok(reservations)
 }

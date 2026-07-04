@@ -49,6 +49,10 @@ impl BlockCommandHandler for CancelOrderBlockCommandHandler {
             execution.canceled_order.after.order_id.clone(),
             execution.canceled_order.after.clone(),
         );
+        exchange_state.spot.reservations.insert(
+            execution.released_reservation.after.reservation_id.clone(),
+            execution.released_reservation.after.clone(),
+        );
     }
 }
 
@@ -71,6 +75,15 @@ fn build_cancel_state(
         .asset_pairs_by_symbol
         .get(order.symbol.as_str())
         .ok_or_else(|| BuildBlockError::MissingSpotAssetPair { symbol: order.symbol.clone() })?;
+    let reservation = spot_state
+        .reservations
+        .values()
+        .find(|reservation| {
+            reservation.owner_account_id == order.account_id
+                && reservation.caused_by_order_id == order.order_id
+                && reservation.remaining_amount > 0
+        })
+        .cloned();
     let base_balance = spot_state
         .balances
         .get(&AccountAssetKey::new(order.account_id.as_str(), asset_pair.base_asset_id.as_str()))
@@ -91,6 +104,7 @@ fn build_cancel_state(
     Ok(CancelSpotOrderState {
         account_id: order.account_id.clone(),
         open_order: Some(order),
+        reservation,
         base_balance,
         quote_balance,
     })

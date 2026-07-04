@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use example_core::entity::AssetReservation;
 use example_core::{Balance, MarketRules, SpotOrder, SpotOrderTimeInForce};
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
@@ -11,6 +12,7 @@ pub struct SpotState {
     pub trading_enabled_by_symbol: BTreeMap<String, bool>,
     pub balances: BTreeMap<AccountAssetKey, Balance>,
     pub orders: BTreeMap<String, SpotOrder>,
+    pub reservations: BTreeMap<String, AssetReservation>,
     pub settled_trade_ids: BTreeSet<String>,
     pub next_order_sequence_by_account: BTreeMap<String, u64>,
 }
@@ -34,6 +36,8 @@ impl SpotState {
             .collect::<Vec<_>>();
         let balances = self.balances.values().map(balance_commitment).collect::<Vec<_>>();
         let orders = self.orders.values().map(spot_order_commitment).collect::<Vec<_>>();
+        let reservations =
+            self.reservations.values().map(spot_reservation_commitment).collect::<Vec<_>>();
         let settled = self.settled_trade_ids.iter().cloned().collect::<Vec<_>>();
         let sequences = self
             .next_order_sequence_by_account
@@ -47,6 +51,7 @@ impl SpotState {
             stable_hash_hex(&runtime).as_str(),
             stable_hash_hex(&balances).as_str(),
             stable_hash_hex(&orders).as_str(),
+            stable_hash_hex(&reservations).as_str(),
             stable_hash_hex(&settled).as_str(),
             stable_hash_hex(&sequences).as_str(),
         ])
@@ -117,4 +122,26 @@ fn spot_order_tif(value: SpotOrderTimeInForce) -> &'static str {
         SpotOrderTimeInForce::Ioc => "ioc",
         SpotOrderTimeInForce::Alo => "alo",
     }
+}
+
+fn spot_reservation_commitment(reservation: &AssetReservation) -> String {
+    let close_reason = match reservation.close_reason {
+        Some(value) => value.as_str(),
+        None => "",
+    };
+    stable_hash_hex(&[
+        reservation.reservation_id.as_str(),
+        reservation.owner_account_id.as_str(),
+        reservation.caused_by_order_id.as_str(),
+        reservation.market_kind.as_str(),
+        reservation.reservation_kind.as_str(),
+        reservation.asset_id.as_str(),
+        reservation.original_amount.to_string().as_str(),
+        reservation.consumed_amount.to_string().as_str(),
+        reservation.released_amount.to_string().as_str(),
+        reservation.remaining_amount.to_string().as_str(),
+        reservation.status.as_str(),
+        close_reason,
+        reservation.version.to_string().as_str(),
+    ])
 }

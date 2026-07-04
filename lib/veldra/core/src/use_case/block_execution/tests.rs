@@ -98,6 +98,7 @@ fn sample_state() -> BuildBlockFromCommandsState {
                 trading_enabled_by_symbol,
                 balances,
                 orders: BTreeMap::new(),
+                reservations: BTreeMap::new(),
                 settled_trade_ids: Default::default(),
                 next_order_sequence_by_account,
             },
@@ -202,22 +203,28 @@ fn open_sell_order() -> SpotOrder {
 
 fn state_with_open_buy_order() -> BuildBlockFromCommandsState {
     let mut state = sample_state();
+    let order = open_buy_order();
+    let reservation = order.to_reservation("BTC", "USDT").unwrap();
     state.exchange_state.spot.balances.insert(
         AccountAssetKey::new("trader-1", "USDT"),
         Balance::new("trader-1".to_string(), "USDT".to_string(), 9_800, 200, 3),
     );
-    state.exchange_state.spot.orders.insert("order-42".to_string(), open_buy_order());
+    state.exchange_state.spot.orders.insert("order-42".to_string(), order);
+    state.exchange_state.spot.reservations.insert(reservation.reservation_id.clone(), reservation);
     state.commands = vec![cancel_envelope()];
     state
 }
 
 fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
     let mut state = sample_state();
+    let order = open_sell_order();
+    let reservation = order.to_reservation("BTC", "USDT").unwrap();
     state.exchange_state.spot.balances.insert(
         AccountAssetKey::new("trader-1", "BTC"),
         Balance::new("trader-1".to_string(), "BTC".to_string(), 5, 2, 2),
     );
-    state.exchange_state.spot.orders.insert("order-42".to_string(), open_sell_order());
+    state.exchange_state.spot.orders.insert("order-42".to_string(), order);
+    state.exchange_state.spot.reservations.insert(reservation.reservation_id.clone(), reservation);
     state.commands = vec![cancel_envelope()];
     state
 }
@@ -523,7 +530,7 @@ fn execute_immediate_order_pipeline_handler_returns_changes_and_apply_patch()
     assert!(result.apply_patch.settled_trade_ids_appended.is_empty());
     assert!(result.changes.match_output.is_none());
     assert!(result.changes.settle_changes.is_none());
-    assert_eq!(result.changes.place_output.order.order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(result.changes.place_output.created_order.order_id, "trader-1-BTCUSDT-7");
 
     Ok(())
 }

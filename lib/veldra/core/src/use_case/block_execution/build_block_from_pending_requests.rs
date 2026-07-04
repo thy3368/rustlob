@@ -177,8 +177,8 @@ fn extract_spot_pipeline_changes(
 ) -> Vec<BlockEntityChange> {
     let mut ordered_changes = Vec::new();
     let place_output = &execution.place_output;
-    ordered_changes.push(BlockEntityChange::SpotOrderCreated(place_output.order.clone()));
-    ordered_changes.push(BlockEntityChange::BalanceUpdated(place_output.affected_balance.clone()));
+    ordered_changes.push(BlockEntityChange::SpotOrderCreated(place_output.created_order.clone()));
+    ordered_changes.push(BlockEntityChange::BalanceUpdated(place_output.updated_balance.clone()));
 
     if let Some(match_output) = &execution.match_output {
         for (trade, maker_update) in
