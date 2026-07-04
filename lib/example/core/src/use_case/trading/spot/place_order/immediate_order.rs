@@ -206,45 +206,44 @@ impl PlaceImmediateOrderUseCase {
             &created_reservation,
         );
 
-        let updated_balance = match side {
+        let (updated_balance, created_balance_ledger_entry) = match side {
             PlaceOrderSide::Buy => {
                 let mut next_balance = state.quote_balance;
                 let previous_balance = next_balance.clone();
-                let (next_available, next_frozen) = next_balance
-                    .reserve_after(reserved_quote)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                let next_version = next_balance
-                    .version
-                    .checked_add(1)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_balance.apply_after(next_available, next_frozen, next_version);
-                UpdatedEntityPair { before: previous_balance, after: next_balance }
+                let entry = BalanceLedgerEntry::freeze(
+                    format!(
+                        "balance-ledger:{}:{}",
+                        created_order.order_id,
+                        next_balance.entity_id()
+                    ),
+                    &mut next_balance,
+                    reserved_quote,
+                    crate::BalanceLedgerReason::ReserveForImmediateOrder {
+                        order_id: created_order.order_id.clone(),
+                    },
+                )
+                .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
+                (UpdatedEntityPair { before: previous_balance, after: next_balance }, entry)
             }
             PlaceOrderSide::Sell => {
                 let mut next_balance = state.base_balance;
                 let previous_balance = next_balance.clone();
-                let (next_available, next_frozen) = next_balance
-                    .reserve_after(reserved_base)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                let next_version = next_balance
-                    .version
-                    .checked_add(1)
-                    .ok_or(PlaceOrderError::ArithmeticOverflow)?;
-                next_balance.apply_after(next_available, next_frozen, next_version);
-                UpdatedEntityPair { before: previous_balance, after: next_balance }
+                let entry = BalanceLedgerEntry::freeze(
+                    format!(
+                        "balance-ledger:{}:{}",
+                        created_order.order_id,
+                        next_balance.entity_id()
+                    ),
+                    &mut next_balance,
+                    reserved_base,
+                    crate::BalanceLedgerReason::ReserveForImmediateOrder {
+                        order_id: created_order.order_id.clone(),
+                    },
+                )
+                .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
+                (UpdatedEntityPair { before: previous_balance, after: next_balance }, entry)
             }
         };
-
-        let created_balance_ledger_entry = BalanceLedgerEntry::reserve_for_immediate_order(
-            format!(
-                "balance-ledger:{}:{}",
-                created_order.order_id,
-                updated_balance.after.entity_id()
-            ),
-            &updated_balance,
-            created_order.order_id.clone(),
-        )
-        .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
         Ok(PlaceImmediateOrderChanges {
             created_order,
@@ -333,6 +332,25 @@ impl CommandUseCase4 for PlaceImmediateOrderUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         self.derive_output(cmd, state)
+    }
+}
+
+fn map_immediate_order_balance_ledger_error(
+    side: PlaceOrderSide,
+    error: crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error,
+) -> PlaceOrderError {
+    match error {
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+            match side {
+                PlaceOrderSide::Buy => PlaceOrderError::InsufficientQuoteBalance,
+                PlaceOrderSide::Sell => PlaceOrderError::InsufficientBaseBalance,
+            }
+        }
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+            PlaceOrderError::ArithmeticOverflow
+        }
     }
 }
 

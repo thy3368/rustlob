@@ -9,10 +9,11 @@ use common_entity::{
 use thiserror::Error;
 
 use crate::SpotTrade;
-use crate::entity::account::balance_ledger_entry::{BalanceLedgerReason, SpotSettlementLeg};
 use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
 };
+use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::spot::spot_order::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
@@ -1139,7 +1140,7 @@ fn apply_trade_balance_effects(
                 trade_id: trade.trade_id.clone(),
                 match_id: trade.match_id.clone(),
                 settlement_batch_id: settlement_id.to_string(),
-                leg: SpotSettlementLeg::BuyerDebitFrozenQuote,
+                purpose: SettlementTransferPurpose::TradingFee,
             },
         )?);
         let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
@@ -1151,7 +1152,7 @@ fn apply_trade_balance_effects(
                 trade_id: trade.trade_id.clone(),
                 match_id: trade.match_id.clone(),
                 settlement_batch_id: settlement_id.to_string(),
-                leg: SpotSettlementLeg::BuyerReceiveBase,
+                purpose: SettlementTransferPurpose::TradingFee,
             },
         )?);
     }
@@ -1167,7 +1168,7 @@ fn apply_trade_balance_effects(
                 trade_id: trade.trade_id.clone(),
                 match_id: trade.match_id.clone(),
                 settlement_batch_id: settlement_id.to_string(),
-                leg: SpotSettlementLeg::SellerReceiveQuote,
+                purpose: SettlementTransferPurpose::TradingFee,
             },
         )?);
         let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
@@ -1179,7 +1180,7 @@ fn apply_trade_balance_effects(
                 trade_id: trade.trade_id.clone(),
                 match_id: trade.match_id.clone(),
                 settlement_batch_id: settlement_id.to_string(),
-                leg: SpotSettlementLeg::SellerDebitFrozenBase,
+                purpose: SettlementTransferPurpose::TradingFee,
             },
         )?);
     }

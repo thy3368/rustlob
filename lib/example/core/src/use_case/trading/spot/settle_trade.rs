@@ -8,7 +8,6 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
 use crate::entity::{
     AssetReservation, Balance, ReservationCloseReason, ReservationConsumed, SpotOrderSide,
     SpotTrade,
@@ -188,71 +187,42 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             &state.base_asset_id,
             &state.quote_asset_id,
         )?;
-        let mut updated_balances = Vec::new();
         let balance_ledger_reasons = settlement_balance_ledger_reasons(
             &cmd.settlement_batch_id,
             &state.trades,
             &state.base_asset_id,
             &state.quote_asset_id,
         );
+        let mut updated_balances = Vec::new();
+        let mut created_balance_ledger_entries = Vec::new();
 
         for mut balance in state.balances {
             let Some(delta) = deltas.get(&balance_key(&balance.account_id, &balance.asset_id))
             else {
                 continue;
             };
-            let previous_balance = balance.clone();
-            let next_available = balance
-                .available
-                .checked_add(delta.available_add)
-                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            let next_frozen = balance
-                .frozen
-                .checked_sub(delta.frozen_sub)
-                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            let next_version =
-                balance.version.checked_add(1).ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-
-            balance.apply_after(next_available, next_frozen, next_version);
-            updated_balances.push(UpdatedEntityPair { before: previous_balance, after: balance });
-        }
-
-        let mut created_balance_ledger_entries = Vec::with_capacity(updated_balances.len());
-        for updated_balance in &updated_balances {
-            let balance_id =
-                balance_key(&updated_balance.after.account_id, &updated_balance.after.asset_id);
+            let balance_id = balance_key(&balance.account_id, &balance.asset_id);
             let reason = balance_ledger_reasons
                 .get(&balance_id)
                 .cloned()
                 .ok_or(SettleSpotTradeError::AccountNotFound)?;
-            let balance_command =
-                if updated_balance.after.available > updated_balance.before.available {
-                    BalanceLedgerCommand::CreditAvailable {
-                        balance: updated_balance.before.clone(),
-                        amount: updated_balance.after.available - updated_balance.before.available,
-                    }
-                } else {
-                    BalanceLedgerCommand::DebitFrozen {
-                        balance: updated_balance.before.clone(),
-                        amount: updated_balance.before.frozen - updated_balance.after.frozen,
-                    }
-                };
-            created_balance_ledger_entries.push(
-                BalanceLedgerEntry::draft_from_balance(
-                    format!(
-                        "balance-ledger:{}:{}",
-                        cmd.settlement_batch_id,
-                        updated_balance.after.entity_id()
-                    ),
-                    &updated_balance.before,
-                    balance_command.clone(),
+            let before = balance.clone();
+            let entry_id =
+                format!("balance-ledger:{}:{}", cmd.settlement_batch_id, balance.entity_id());
+            let entry = if delta.available_add > 0 {
+                BalanceLedgerEntry::credit_available(
+                    entry_id,
+                    &mut balance,
+                    delta.available_add,
                     reason,
                 )
-                .and_then(|draft| draft.compute_changes(&balance_command))
-                .map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?
-                .updated_entry
-                .after,
-            );
+            } else {
+                BalanceLedgerEntry::debit_frozen(entry_id, &mut balance, delta.frozen_sub, reason)
+            }
+            .map_err(map_spot_settlement_balance_ledger_error)?;
+
+            updated_balances.push(UpdatedEntityPair { before, after: balance });
+            created_balance_ledger_entries.push(entry);
         }
 
         Ok(SettleSpotTradeChanges {
@@ -604,6 +574,21 @@ fn validate_balances_can_settle(
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
     format!("{account_id}:{asset_id}")
+}
+
+fn map_spot_settlement_balance_ledger_error(
+    error: crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error,
+) -> SettleSpotTradeError {
+    match error {
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance => {
+            SettleSpotTradeError::InsufficientSellerFrozenBase
+        }
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+            SettleSpotTradeError::ArithmeticOverflow
+        }
+    }
 }
 
 #[cfg(test)]
