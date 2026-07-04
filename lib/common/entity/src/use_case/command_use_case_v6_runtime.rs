@@ -145,15 +145,15 @@ impl ObserveHandlerLatency for () {
     fn observe_latency(&self, _metrics: &HandlerLatencyMetrics) {}
 }
 
-pub(super) fn saturating_u64(value: u128) -> u64 {
+pub(crate) fn saturating_u64(value: u128) -> u64 {
     value.min(u64::MAX as u128) as u64
 }
 
-pub(super) fn trace_field_or_placeholder(value: Option<&str>) -> &str {
+pub(crate) fn trace_field_or_placeholder(value: Option<&str>) -> &str {
     value.unwrap_or("-")
 }
 
-pub(super) fn use_case_command_summary<U>() -> String {
+pub(crate) fn use_case_command_summary<U>() -> String {
     let type_name = std::any::type_name::<U>();
     let simple_name = type_name.rsplit("::").next().unwrap_or(type_name);
     let base_name = simple_name.strip_suffix("UseCase").unwrap_or(simple_name);
@@ -175,7 +175,7 @@ pub(super) fn use_case_command_summary<U>() -> String {
     summary
 }
 
-pub(super) fn trace_phase<T, E>(
+pub(crate) fn trace_phase<T, E>(
     phase: &'static str,
     operation: &'static str,
     f: impl FnOnce() -> Result<T, E>,
@@ -248,8 +248,8 @@ macro_rules! trace_command_use_case_completed {
             response_result = "ok",
             response_domain_event_count = $metrics.domain_event_count as u64,
             status = "ok",
-            latency_ns = $crate::command_use_case_v6_runtime::saturating_u64($metrics.total_ns),
-            total_ns = $crate::command_use_case_v6_runtime::saturating_u64($metrics.total_ns),
+            latency_ns = $crate::use_case::command_use_case_v6_runtime::saturating_u64($metrics.total_ns),
+            total_ns = $crate::use_case::command_use_case_v6_runtime::saturating_u64($metrics.total_ns),
             domain_event_count = $metrics.domain_event_count as u64,
             "command use case execution completed"
         );
@@ -270,8 +270,8 @@ macro_rules! trace_command_use_case_failed {
             request_outbound = %$outbound_type,
             response_result = "err",
             status = "err",
-            latency_ns = $crate::command_use_case_v6_runtime::saturating_u64($total_elapsed_ns),
-            total_ns = $crate::command_use_case_v6_runtime::saturating_u64($total_elapsed_ns),
+            latency_ns = $crate::use_case::command_use_case_v6_runtime::saturating_u64($total_elapsed_ns),
+            total_ns = $crate::use_case::command_use_case_v6_runtime::saturating_u64($total_elapsed_ns),
             error_message = %$error,
             "command use case execution failed"
         );
