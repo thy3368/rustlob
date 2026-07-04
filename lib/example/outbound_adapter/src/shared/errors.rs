@@ -62,6 +62,8 @@ pub enum SettleSpotTradeOutboundError {
     TradeNotFound,
     #[error("balance not found")]
     BalanceNotFound,
+    #[error("reservation not found")]
+    ReservationNotFound,
     #[error("failed to decode replayable event")]
     EventDecodeFailed,
     #[error(transparent)]

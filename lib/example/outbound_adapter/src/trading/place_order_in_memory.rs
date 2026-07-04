@@ -1,7 +1,8 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use example_core::{
-    Balance, MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderState, SpotOrder,
+    Balance, MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderState, Reservation,
+    ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrder,
     SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce,
 };
 
@@ -106,6 +107,15 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
         let mut state = self.store.lock_state()?;
 
         for event in events {
+            if event.is_created()
+                && event_string_field(event, "reservation_id").is_some()
+                && event_string_field(event, "status").is_some()
+            {
+                let reservation = decode_created_reservation(event)?;
+                state.reservations.insert(reservation.reservation_id.clone(), reservation);
+                continue;
+            }
+
             if event.is_created() && event_string_field(event, "order_id").is_some() {
                 let order = SpotOrder::new(
                     event_string_field(event, "order_id")
@@ -226,6 +236,92 @@ fn decode_time_in_force(
         Some("ioc") => Ok(SpotOrderTimeInForce::Ioc),
         Some("alo") => Ok(SpotOrderTimeInForce::Alo),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_created_reservation(
+    event: &EntityReplayableEvent,
+) -> Result<Reservation, PlaceOrderOutboundError> {
+    Ok(Reservation {
+        reservation_id: event_string_field(event, "reservation_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        owner_account_id: event_string_field(event, "owner_account_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        caused_by_order_id: event_string_field(event, "caused_by_order_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        market_kind: decode_market_kind(
+            event_string_field(event, "market_kind")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .as_str(),
+        )?,
+        reservation_kind: decode_reservation_kind(
+            event_string_field(event, "reservation_kind")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .as_str(),
+        )?,
+        asset_id: event_string_field(event, "asset_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        original_amount: event_u64_field(event, "original_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        consumed_amount: event_u64_field(event, "consumed_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        released_amount: event_u64_field(event, "released_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        remaining_amount: event_u64_field(event, "remaining_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        status: decode_reservation_status(
+            event_string_field(event, "status")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .as_str(),
+        )?,
+        close_reason: decode_optional_close_reason(
+            event_string_field(event, "close_reason").as_deref(),
+        )?,
+        version: event.new_version,
+    })
+}
+
+fn decode_market_kind(value: &str) -> Result<ReservationMarketKind, PlaceOrderOutboundError> {
+    match value {
+        "spot" => Ok(ReservationMarketKind::Spot),
+        "perp" => Ok(ReservationMarketKind::Perp),
+        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_reservation_kind(value: &str) -> Result<ReservationKind, PlaceOrderOutboundError> {
+    match value {
+        "spot_buy_quote" => Ok(ReservationKind::SpotBuyQuote),
+        "spot_sell_base" => Ok(ReservationKind::SpotSellBase),
+        "spot_buy_fee_quote" => Ok(ReservationKind::SpotBuyFeeQuote),
+        "spot_sell_fee_quote" => Ok(ReservationKind::SpotSellFeeQuote),
+        "perp_open_margin" => Ok(ReservationKind::PerpOpenMargin),
+        "perp_flip_net_new_margin" => Ok(ReservationKind::PerpFlipNetNewMargin),
+        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_reservation_status(value: &str) -> Result<ReservationStatus, PlaceOrderOutboundError> {
+    match value {
+        "active" => Ok(ReservationStatus::Active),
+        "exhausted_by_consume" => Ok(ReservationStatus::ExhaustedByConsume),
+        "closed_by_release" => Ok(ReservationStatus::ClosedByRelease),
+        "closed_mixed" => Ok(ReservationStatus::ClosedMixed),
+        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_optional_close_reason(
+    value: Option<&str>,
+) -> Result<Option<ReservationCloseReason>, PlaceOrderOutboundError> {
+    match value {
+        None | Some("") => Ok(None),
+        Some("filled") => Ok(Some(ReservationCloseReason::Filled)),
+        Some("canceled") => Ok(Some(ReservationCloseReason::Canceled)),
+        Some("rejected") => Ok(Some(ReservationCloseReason::Rejected)),
+        Some("ioc_remainder_canceled") => Ok(Some(ReservationCloseReason::IocRemainderCanceled)),
+        Some("expired") => Ok(Some(ReservationCloseReason::Expired)),
+        Some(_) => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
 
