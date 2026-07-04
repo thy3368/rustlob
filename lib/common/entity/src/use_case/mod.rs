@@ -1,4 +1,4 @@
 pub mod command_use_case_v6;
 pub mod command_use_case_v6_runtime;
-pub mod state_machine_owned_v2;
+pub mod state_machine_v2;
 pub mod use_case_support;

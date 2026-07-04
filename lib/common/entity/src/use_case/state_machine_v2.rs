@@ -41,7 +41,7 @@
 //! use entity::{
 //!     CommandWithGivenState, Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
 //!     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter,
-//!     MiStateMachineOwnedV2Unchecked, ReplayableChanges, UpdatedEntityPair,
+//!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
 //! };
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,7 +297,7 @@
 //! #[derive(Debug, Clone)]
 //! struct SpotTradingOrchestrator;
 //!
-//! impl MiStateMachineOwnedV2Unchecked for SpotTradingOrchestrator {
+//! impl MiStateMachineV2Unchecked for SpotTradingOrchestrator {
 //!     type Command<'a> = PlaceLimitOrder
 //!     where
 //!         Self: 'a;
@@ -444,7 +444,7 @@ use crate::{CommandWithGivenState, ReplayableChanges};
 /// `Command<'a>` 可以是单个业务命令，也可以是一组相关动作的命令族；
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
-pub trait MiStateMachineOwnedV2Unchecked: Clone + Debug + Send + Sync {
+pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type Command<'a>: CommandWithGivenState
     where
         Self: 'a;
@@ -493,7 +493,7 @@ pub trait MiStateMachineOwnedV2Unchecked: Clone + Debug + Send + Sync {
 /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
 ///
 /// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
-pub trait MiStateMachineOwnedV2: MiStateMachineOwnedV2Unchecked {
+pub trait MiStateMachineOwnedV2: MiStateMachineV2Unchecked {
     fn compute_after_changes<'a>(
         &self,
         cmd: &Self::Command<'a>,
@@ -505,7 +505,7 @@ pub trait MiStateMachineOwnedV2: MiStateMachineOwnedV2Unchecked {
     }
 }
 
-impl<T> MiStateMachineOwnedV2 for T where T: MiStateMachineOwnedV2Unchecked {}
+impl<T> MiStateMachineOwnedV2 for T where T: MiStateMachineV2Unchecked {}
 
 /// 在同一多聚合 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
 ///
@@ -542,7 +542,7 @@ mod tests {
 
     use crate::{
         CommandWithGivenState, EntityError, EntityReplayableEvent, MiStateMachineOwnedV2,
-        MiStateMachineOwnedV2BeforeAfter, MiStateMachineOwnedV2Unchecked,
+        MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
     };
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -562,7 +562,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct HookMachine;
 
-    impl MiStateMachineOwnedV2Unchecked for HookMachine {
+    impl MiStateMachineV2Unchecked for HookMachine {
         type Command<'a>
             = HookCommand
         where

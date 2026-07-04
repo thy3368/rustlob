@@ -5,12 +5,6 @@ mod entity;
 mod entity_field_change;
 
 mod use_case;
-pub use use_case::command_use_case_v6::{CommandUseCase6, IssuedByParty};
-pub use use_case::command_use_case_v6_runtime::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor6,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, HandlerLatencyMetrics,
-    ObserveHandlerLatency, UseCaseChanges, UseCaseReplyMapper,
-};
 pub use entity::{
     AggregateRole, Entity, EntityMutationModel, EntityUseCaseApiPolicy, EntityUseCaseApiSurface,
     FinancialClassification, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
@@ -18,20 +12,26 @@ pub use entity::{
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
+pub use use_case::command_use_case_v6::{CommandUseCase6, IssuedByParty};
+pub use use_case::command_use_case_v6_runtime::{
+    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseExecutor6,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, HandlerLatencyMetrics,
+    ObserveHandlerLatency, UseCaseChanges, UseCaseReplyMapper,
+};
 /// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
 ///
 /// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
-pub use use_case::state_machine_owned_v2::MiStateMachineOwnedV2 as MultiAggregateUseCase;
+pub use use_case::state_machine_v2::MiStateMachineOwnedV2 as MultiAggregateUseCase;
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
-pub use use_case::state_machine_owned_v2::MiStateMachineOwnedV2BeforeAfter as MultiAggregateUseCaseBeforeAfter;
+pub use use_case::state_machine_v2::MiStateMachineOwnedV2BeforeAfter as MultiAggregateUseCaseBeforeAfter;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
-pub use use_case::state_machine_owned_v2::MiStateMachineOwnedV2Unchecked as MultiAggregateUseCaseUnchecked;
-pub use use_case::state_machine_owned_v2::{
-    MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineOwnedV2Unchecked,
+pub use use_case::state_machine_v2::MiStateMachineV2Unchecked as MultiAggregateUseCaseUnchecked;
+pub use use_case::state_machine_v2::{
+    MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
 };
 pub use use_case::use_case_support::{CommandWithGivenState, ReplayableChanges, UpdatedEntityPair};
 
