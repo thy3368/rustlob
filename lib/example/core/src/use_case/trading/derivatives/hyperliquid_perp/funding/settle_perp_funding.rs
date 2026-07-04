@@ -7,7 +7,6 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry::BalanceLedgerCommand;
 use crate::entity::{
     Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingDirection,
     HyperliquidPerpFundingSettlement, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
@@ -196,7 +195,8 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             state.margin_asset_id.as_str(),
         );
         let mut changed_margin_balances = Vec::new();
-        for balance in &state.margin_balances {
+        let mut created_balance_ledger_entries = Vec::new();
+        for mut balance in state.margin_balances {
             let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
             let Some(delta) = outcome.balance_deltas.get(&key) else {
                 continue;
@@ -204,56 +204,28 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             if delta.available_delta == 0 {
                 continue;
             }
-            let next_available = balance
-                .available_after_signed_delta(delta.available_delta)
-                .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-            let next_version = balance
-                .version
-                .checked_add(1)
-                .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-            let mut next_balance = balance.clone();
-            next_balance.apply_after(next_available, balance.frozen, next_version);
-            changed_margin_balances
-                .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
-        }
-        let mut created_balance_ledger_entries = Vec::with_capacity(changed_margin_balances.len());
-        for updated_balance in &changed_margin_balances {
-            let balance_id = balance_key(
-                updated_balance.after.account_id.as_str(),
-                updated_balance.after.asset_id.as_str(),
-            );
+            let balance_id = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
             let reason = balance_ledger_reasons
                 .get(&balance_id)
                 .cloned()
                 .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
-            let balance_command =
-                if updated_balance.after.available > updated_balance.before.available {
-                    BalanceLedgerCommand::CreditAvailable {
-                        balance: updated_balance.before.clone(),
-                        amount: updated_balance.after.available - updated_balance.before.available,
-                    }
-                } else {
-                    BalanceLedgerCommand::DebitAvailable {
-                        balance: updated_balance.before.clone(),
-                        amount: updated_balance.before.available - updated_balance.after.available,
-                    }
-                };
-            created_balance_ledger_entries.push(
-                BalanceLedgerEntry::draft_from_balance(
-                    format!(
-                        "balance-ledger:funding:{}:{}",
-                        cmd.funding_batch_id,
-                        updated_balance.after.entity_id()
-                    ),
-                    &updated_balance.before,
-                    balance_command.clone(),
-                    reason,
-                )
-                .and_then(|draft| draft.compute_changes(&balance_command))
-                .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?
-                .updated_entry
-                .after,
-            );
+            let before = balance.clone();
+            let amount = delta
+                .available_delta
+                .unsigned_abs()
+                .try_into()
+                .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
+            let entry_id =
+                format!("balance-ledger:funding:{}:{}", cmd.funding_batch_id, balance.entity_id());
+            let entry = if delta.available_delta > 0 {
+                BalanceLedgerEntry::credit_available(entry_id, &mut balance, amount, reason)
+            } else {
+                BalanceLedgerEntry::debit_available(entry_id, &mut balance, amount, reason)
+            }
+            .map_err(map_funding_balance_ledger_error)?;
+
+            changed_margin_balances.push(UpdatedEntityPair { before, after: balance });
+            created_balance_ledger_entries.push(entry);
         }
 
         Ok(SettleHyperliquidPerpFundingChanges {
@@ -444,6 +416,21 @@ fn settlement_balance_ledger_reasons(
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
     format!("{account_id}:{asset_id}")
+}
+
+fn map_funding_balance_ledger_error(
+    error: crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error,
+) -> SettleHyperliquidPerpFundingError {
+    match error {
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+            SettleHyperliquidPerpFundingError::InsufficientAvailableMargin
+        }
+        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+            SettleHyperliquidPerpFundingError::ArithmeticOverflow
+        }
+    }
 }
 
 #[cfg(test)]
