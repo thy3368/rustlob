@@ -5,8 +5,8 @@ mod command_use_case_v6;
 mod command_use_case_v6_runtime;
 mod entity;
 mod entity_field_change;
-mod state_machine_owned;
 mod state_machine_owned_v2;
+mod use_case_support;
 
 pub use command_use_case_v6::{CommandUseCase6, IssuedByParty};
 pub use command_use_case_v6_runtime::{
@@ -21,26 +21,22 @@ pub use entity::{
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
-pub use state_machine_owned::{
-    ChangedEntity, CommandWithGivenState, MiStateMachineOwned, MiStateMachineOwnedBeforeAfter,
-    MiStateMachineOwnedUnchecked, ReplayableChanges, UpdatedEntities, UpdatedEntityPair,
-};
-/// 文档首选称呼：围绕主业务对象组织多个相关 use case 的多聚合编排抽象。
+/// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
 ///
-/// 这是 [`MiStateMachineOwnedV2`] 的文档导向别名。原名保留用于兼容历史调用点，
-/// 但新的对外语义应优先理解为 `core.use_case` 层的 `MultiAggregateUseCase`。
+/// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
 pub use state_machine_owned_v2::MiStateMachineOwnedV2 as MultiAggregateUseCase;
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
-/// 这是 [`MiStateMachineOwnedV2BeforeAfter`] 的文档导向别名。
+/// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
 pub use state_machine_owned_v2::MiStateMachineOwnedV2BeforeAfter as MultiAggregateUseCaseBeforeAfter;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
-/// 这是 [`MiStateMachineOwnedV2Unchecked`] 的文档导向别名。
+/// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use state_machine_owned_v2::MiStateMachineOwnedV2Unchecked as MultiAggregateUseCaseUnchecked;
 pub use state_machine_owned_v2::{
     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineOwnedV2Unchecked,
 };
+pub use use_case_support::{CommandWithGivenState, ReplayableChanges, UpdatedEntityPair};
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
 

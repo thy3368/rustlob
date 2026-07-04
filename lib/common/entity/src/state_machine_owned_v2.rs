@@ -1,12 +1,11 @@
-//! 多聚合 `use-case family` 编排骨架。
+//! 多聚合 `core.use_case` family 编排骨架。
 //!
-//! 虽然这组 trait 沿用了 `state_machine_owned_v2` 历史命名，但当前公开语义已经固定为
-//! `core.use_case` 层抽象，而不是 `core.entity` 的实体状态机。
-//! 它表达的是：围绕一个主业务对象组织一组相关业务动作，在
+//! 这组 trait 的公开语义只服务跨聚合或多业务对象协调的 `core.use_case` 编排。
+//! 它表达的是：围绕一个主业务主题组织一组相关业务动作，在
 //! `Command + GivenState -> Changes` 编排层分别驱动多个聚合，产出 case 级业务真相。
 //!
-//! 这里的“主业务对象”表示业务中心，而不是唯一参与对象。一个实现可以协调多个聚合，
-//! 但这些动作必须仍属于同一个业务主题，并共享：
+//! 这里的“主业务主题”表示业务中心，而不是唯一参与对象。一个实现必须协调多个聚合
+//! 或多个业务对象，但这些动作仍需共享：
 //! - 可匹配的 authoritative `GivenState` 语义
 //! - 一致的 `Changes` / case truth 模型
 //! - 同一组对外公开的业务编排边界
@@ -22,22 +21,19 @@
 //! - HTTP / WebSocket reply shaping
 //! - 权限、鉴权、审计等基础设施实现
 //!
-//! 实现禁忌：
+//! 明确禁用：
+//! - 不要把聚合内部业务演进建模到这里
+//! - 不要把单个聚合的内部推导建模到这里
 //! - 不要让任一聚合直接装载、导航、调用另一个聚合
 //! - 不要把 adapter / infra 逻辑下沉进该实现
-//! - 不要把它继续表述成“某个实体自己的状态机”
 //!
-//! 与 [`crate::CommandUseCase6`] 的关系是并列二选一，而不是上下位包装关系：
-//! - `MiStateMachineOwnedV2` 更适合围绕主业务对象、共享 `GivenState` 与 truth 模型的
-//!   `use-case family`
-//! - `CommandUseCase6` 更适合表达完整单 use case 契约
-//! - 新设计优先考虑本组 trait；`CommandUseCase6` 可继续作为并存旧路线或特定场景选择
-//!
-//! 单聚合根或单状态机推导，继续使用 [`crate::MiStateMachineOwned`]。
+//! 与 [`crate::CommandUseCase6`] 的关系是并列选择，而不是上下位包装关系：
+//! - `MiStateMachineOwnedV2` 适合共享 `GivenState` 与 truth 模型的多聚合 `use-case family`
+//! - `CommandUseCase6` 适合表达边界清晰的完整 use case 契约
 //!
 //! # Examples
 //!
-//! 下面的 `SpotTradingOrchestrator` 是一个 `use-case family` 的骨架示例。
+//! 下面的 `SpotTradingOrchestrator` 是一个多聚合 `use-case family` 的骨架示例。
 //! `PlaceLimitOrder` 只是该 family 的一个动作分支；同一 family 还可以继续承载其它共享同一
 //! 业务主题、`GivenState` 语义与 truth 模型的动作。
 //!
@@ -447,6 +443,7 @@ use crate::{CommandWithGivenState, ReplayableChanges};
 ///
 /// `Command<'a>` 可以是单个业务命令，也可以是一组相关动作的命令族；
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
+/// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
 pub trait MiStateMachineOwnedV2Unchecked: Clone + Debug + Send + Sync {
     type Command<'a>: CommandWithGivenState
     where
@@ -495,7 +492,7 @@ pub trait MiStateMachineOwnedV2Unchecked: Clone + Debug + Send + Sync {
 /// 它是该 family 的公共业务执行壳，固定执行：
 /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
 ///
-/// 这让编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
+/// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
 pub trait MiStateMachineOwnedV2: MiStateMachineOwnedV2Unchecked {
     fn compute_after_changes<'a>(
         &self,
@@ -510,7 +507,7 @@ pub trait MiStateMachineOwnedV2: MiStateMachineOwnedV2Unchecked {
 
 impl<T> MiStateMachineOwnedV2 for T where T: MiStateMachineOwnedV2Unchecked {}
 
-/// 在同一 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
+/// 在同一多聚合 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
 ///
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
