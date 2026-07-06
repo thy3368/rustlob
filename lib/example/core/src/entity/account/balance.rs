@@ -19,6 +19,12 @@ pub struct Balance {
     pub available: u64,
     /// 冻结或占用余额。
     pub frozen: u64,
+    /// 上游快照附带的入场名义值；并非所有余额都提供该事实。
+    #[serde(default)]
+    pub entry_notional: Option<u64>,
+    /// 上游快照附带的标识信息；并非所有余额都提供该事实。
+    #[serde(default)]
+    pub identifier: Option<String>,
     /// 当前余额实体版本。
     pub version: u64,
 }
@@ -32,7 +38,28 @@ impl Balance {
         frozen: u64,
         version: u64,
     ) -> Self {
-        Self { account_id, asset_id, available, frozen, version }
+        Self {
+            account_id,
+            asset_id,
+            available,
+            frozen,
+            entry_notional: None,
+            identifier: None,
+            version,
+        }
+    }
+
+    /// 从快照事实装配资产余额，并保留上游附带的补充信息。
+    pub fn new_with_snapshot_facts(
+        account_id: String,
+        asset_id: String,
+        available: u64,
+        frozen: u64,
+        entry_notional: Option<u64>,
+        identifier: Option<String>,
+        version: u64,
+    ) -> Self {
+        Self { account_id, asset_id, available, frozen, entry_notional, identifier, version }
     }
 
     /// 返回余额是否属于指定账户。
@@ -43,6 +70,21 @@ impl Balance {
     /// 返回余额是否对应指定资产。
     pub fn is_asset(&self, asset_id: &str) -> bool {
         self.asset_id == asset_id
+    }
+
+    /// 返回余额总额，即 `available + frozen`；若溢出则返回 `None`。
+    pub fn total(&self) -> Option<u64> {
+        self.available.checked_add(self.frozen)
+    }
+
+    /// 返回快照里的入场名义值。
+    pub fn entry_notional(&self) -> Option<u64> {
+        self.entry_notional
+    }
+
+    /// 返回快照里的附带标识。
+    pub fn identifier(&self) -> Option<&str> {
+        self.identifier.as_deref()
     }
 
     /// 返回两个余额是否表达同一条业务快照。
@@ -132,6 +174,8 @@ impl Entity for Balance {
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
+            EntityFieldChange::new("entry_notional", "", option_u64_value(self.entry_notional)),
+            EntityFieldChange::new("identifier", "", self.identifier.clone().unwrap_or_default()),
         ]
     }
 
@@ -154,13 +198,27 @@ impl Entity for Balance {
                 other.frozen.to_string(),
             ));
         }
+        if self.entry_notional != other.entry_notional {
+            changes.push(EntityFieldChange::new(
+                "entry_notional",
+                option_u64_value(self.entry_notional),
+                option_u64_value(other.entry_notional),
+            ));
+        }
+        if self.identifier != other.identifier {
+            changes.push(EntityFieldChange::new(
+                "identifier",
+                self.identifier.clone().unwrap_or_default(),
+                other.identifier.clone().unwrap_or_default(),
+            ));
+        }
         changes
     }
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "account_id" | "asset_id" => 0,
-            "available" | "frozen" => 1,
+            "account_id" | "asset_id" | "identifier" => 0,
+            "available" | "frozen" | "entry_notional" => 1,
             _ => 0,
         }
     }
@@ -178,8 +236,14 @@ fn stable_balance_entity_id(value: &str) -> i64 {
     (hasher.finish() & i64::MAX as u64) as i64
 }
 
+fn option_u64_value(value: Option<u64>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -206,5 +270,37 @@ mod tests {
         assert_eq!(balance.available_after_signed_delta(200), Some(1_200));
         assert_eq!(balance.available_after_signed_delta(-300), Some(700));
         assert_eq!(balance.available_after_signed_delta(-2_000), None);
+    }
+
+    #[test]
+    fn snapshot_constructor_preserves_optional_facts_and_total() {
+        let balance = Balance::new_with_snapshot_facts(
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            1_000,
+            200,
+            Some(12_345),
+            Some("spot-usdt".to_string()),
+            3,
+        );
+
+        assert_eq!(balance.total(), Some(1_200));
+        assert_eq!(balance.entry_notional(), Some(12_345));
+        assert_eq!(balance.identifier(), Some("spot-usdt"));
+    }
+
+    #[test]
+    fn serde_defaults_optional_snapshot_facts_when_absent() {
+        let balance: Balance = serde_json::from_value(json!({
+            "account_id": "trader-1",
+            "asset_id": "USDT",
+            "available": 1000,
+            "frozen": 50,
+            "version": 3
+        }))
+        .expect("legacy payload without snapshot facts should deserialize");
+
+        assert_eq!(balance.entry_notional(), None);
+        assert_eq!(balance.identifier(), None);
     }
 }
