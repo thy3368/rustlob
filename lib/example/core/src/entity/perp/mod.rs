@@ -10,3 +10,5 @@ pub mod hyperliquid_perp_shortfall;
 pub mod trade;
 
 pub mod fund;
+
+pub mod risk;

@@ -76,6 +76,10 @@ pub struct HyperliquidPerpPosition {
     pub margin_mode: HyperliquidPerpMarginMode,
     /// 当前仓位占用保证金。
     pub margin: u64,
+    /// 当前仓位强平价；未知或上游未提供时为 `None`。
+    ///
+    /// 这是上游或 adapter 提供的风险快照事实，不是主动平仓成交价。
+    pub liquidation_price: Option<u64>,
     /// 当前仓位未实现 PnL，允许为负。
     pub unrealized_pnl: i64,
     /// 累计已实现 PnL，允许为负。
@@ -86,6 +90,8 @@ pub struct HyperliquidPerpPosition {
 
 impl HyperliquidPerpPosition {
     /// 从已经校验过的业务事实或回放事件构造 Hyperliquid perp 仓位。
+    ///
+    /// 该构造器只装配已知事实，不在 entity 内推导强平价。
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         position_id: String,
@@ -98,6 +104,7 @@ impl HyperliquidPerpPosition {
         leverage: u64,
         margin_mode: HyperliquidPerpMarginMode,
         margin: u64,
+        liquidation_price: Option<u64>,
         unrealized_pnl: i64,
         realized_pnl: i64,
         version: u64,
@@ -113,6 +120,7 @@ impl HyperliquidPerpPosition {
             leverage,
             margin_mode,
             margin,
+            liquidation_price,
             unrealized_pnl,
             realized_pnl,
             version,
@@ -138,6 +146,7 @@ impl HyperliquidPerpPosition {
             leverage,
             HyperliquidPerpMarginMode::Cross,
             0,
+            None,
             0,
             0,
             0,
@@ -246,12 +255,21 @@ impl HyperliquidPerpPosition {
         !self.is_flat() && self.has_consistent_state()
     }
 
+    /// 返回当前仓位强平价事实；未知或上游未提供时返回 `None`。
+    ///
+    /// 该值来自上游风险快照或 adapter，不在 entity 内推导。
+    pub fn liquidation_price(&self) -> Option<u64> {
+        self.liquidation_price
+    }
+
     /// 返回 `ceil(qty * entry_price / leverage)`；空仓返回 0。
     pub fn required_margin(&self) -> Option<u64> {
         required_position_margin(self.qty, self.entry_price, self.leverage)
     }
 
     /// 应用已计算好的仓位字段和版本。
+    ///
+    /// 该方法只装配外部已得出的仓位事实，不在 entity 内推导强平价。
     #[allow(clippy::too_many_arguments)]
     pub fn apply_after(
         &mut self,
@@ -259,6 +277,7 @@ impl HyperliquidPerpPosition {
         qty: u64,
         entry_price: u64,
         margin: u64,
+        liquidation_price: Option<u64>,
         unrealized_pnl: i64,
         realized_pnl: i64,
         version: u64,
@@ -267,6 +286,7 @@ impl HyperliquidPerpPosition {
         self.qty = qty;
         self.entry_price = entry_price;
         self.margin = margin;
+        self.liquidation_price = liquidation_price;
         self.unrealized_pnl = unrealized_pnl;
         self.realized_pnl = realized_pnl;
         self.version = version;
@@ -300,6 +320,11 @@ impl Entity for HyperliquidPerpPosition {
             EntityFieldChange::new("leverage", "", self.leverage.to_string()),
             EntityFieldChange::new("margin_mode", "", self.margin_mode.as_str()),
             EntityFieldChange::new("margin", "", self.margin.to_string()),
+            EntityFieldChange::new(
+                "liquidation_price",
+                "",
+                option_u64_value(self.liquidation_price),
+            ),
             EntityFieldChange::new("unrealized_pnl", "", self.unrealized_pnl.to_string()),
             EntityFieldChange::new("realized_pnl", "", self.realized_pnl.to_string()),
         ]
@@ -334,6 +359,12 @@ impl Entity for HyperliquidPerpPosition {
         push_change(&mut changes, "margin", self.margin.to_string(), other.margin.to_string());
         push_change(
             &mut changes,
+            "liquidation_price",
+            option_u64_value(self.liquidation_price),
+            option_u64_value(other.liquidation_price),
+        );
+        push_change(
+            &mut changes,
             "unrealized_pnl",
             self.unrealized_pnl.to_string(),
             other.unrealized_pnl.to_string(),
@@ -351,8 +382,8 @@ impl Entity for HyperliquidPerpPosition {
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "position_id" | "account_id" | "symbol" | "side" | "margin_mode" => 0,
-            "asset" | "qty" | "entry_price" | "leverage" | "margin" | "unrealized_pnl"
-            | "realized_pnl" => 1,
+            "asset" | "qty" | "entry_price" | "leverage" | "margin" | "liquidation_price"
+            | "unrealized_pnl" | "realized_pnl" => 1,
             _ => 0,
         }
     }
@@ -397,6 +428,10 @@ fn push_change(
     }
 }
 
+fn option_u64_value(value: Option<u64>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +454,7 @@ mod tests {
         assert_eq!(position.required_margin(), Some(0));
         assert_eq!(position.margin_mode, HyperliquidPerpMarginMode::Cross);
         assert_eq!(position.margin, 0);
+        assert_eq!(position.liquidation_price(), None);
         assert_eq!(position.unrealized_pnl, 0);
         assert_eq!(position.realized_pnl, 0);
         assert_eq!(position.version, 0);
@@ -445,6 +481,7 @@ mod tests {
             10,
             HyperliquidPerpMarginMode::Cross,
             10_000,
+            Some(45_000),
             321,
             0,
             3,
@@ -460,6 +497,7 @@ mod tests {
             10,
             HyperliquidPerpMarginMode::Cross,
             10_000,
+            Some(55_000),
             -123,
             0,
             3,
@@ -472,6 +510,7 @@ mod tests {
         assert_eq!(long.funding_direction(-10_000), Some(HyperliquidPerpFundingDirection::Receive));
         assert_eq!(long.funding_fee(60_000, 10_000), Some(12));
         assert_eq!(long.funding_fee(60_000, 0), Some(0));
+        assert_eq!(long.liquidation_price(), Some(45_000));
         assert_eq!(long.margin_mode, HyperliquidPerpMarginMode::Cross);
         assert_eq!(long.unrealized_pnl, 321);
         assert!(short.has_consistent_state());
@@ -490,6 +529,7 @@ mod tests {
             5,
             HyperliquidPerpMarginMode::Cross,
             24_000,
+            None,
             0,
             0,
             1,
@@ -505,6 +545,7 @@ mod tests {
             5,
             HyperliquidPerpMarginMode::Isolated,
             24_000,
+            None,
             1_000,
             0,
             1,
@@ -518,7 +559,47 @@ mod tests {
     }
 
     #[test]
-    fn created_field_changes_include_margin_mode_and_unrealized_pnl() {
+    fn apply_after_updates_liquidation_price() {
+        let mut position = HyperliquidPerpPosition::new(
+            "position-1".to_string(),
+            "trader-1".to_string(),
+            7,
+            "BTC-PERP".to_string(),
+            HyperliquidPerpPositionSide::Long,
+            3,
+            55_000,
+            8,
+            HyperliquidPerpMarginMode::Isolated,
+            20_625,
+            Some(48_000),
+            -456,
+            123,
+            4,
+        );
+
+        position.apply_after(
+            HyperliquidPerpPositionSide::Short,
+            2,
+            54_000,
+            13_500,
+            Some(61_000),
+            789,
+            -12,
+            5,
+        );
+
+        assert_eq!(position.side, HyperliquidPerpPositionSide::Short);
+        assert_eq!(position.qty, 2);
+        assert_eq!(position.entry_price, 54_000);
+        assert_eq!(position.margin, 13_500);
+        assert_eq!(position.liquidation_price(), Some(61_000));
+        assert_eq!(position.unrealized_pnl, 789);
+        assert_eq!(position.realized_pnl, -12);
+        assert_eq!(position.version, 5);
+    }
+
+    #[test]
+    fn created_field_changes_and_diff_include_liquidation_price() {
         let position = HyperliquidPerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
@@ -530,6 +611,7 @@ mod tests {
             8,
             HyperliquidPerpMarginMode::Isolated,
             20_625,
+            Some(48_000),
             -456,
             123,
             4,
@@ -541,7 +623,20 @@ mod tests {
             change.field_name.as_ref() == "margin_mode" && change.new_value == "isolated"
         }));
         assert!(changes.iter().any(|change| {
+            change.field_name.as_ref() == "liquidation_price" && change.new_value == "48000"
+        }));
+        assert!(changes.iter().any(|change| {
             change.field_name.as_ref() == "unrealized_pnl" && change.new_value == "-456"
+        }));
+
+        let mut after = position.clone();
+        after.liquidation_price = None;
+
+        let diff = position.diff(&after);
+        assert!(diff.iter().any(|change| {
+            change.field_name.as_ref() == "liquidation_price"
+                && change.old_value == "48000"
+                && change.new_value.is_empty()
         }));
     }
 }
