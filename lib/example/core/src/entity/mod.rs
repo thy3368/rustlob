@@ -8,7 +8,7 @@ pub mod spot;
 
 pub mod account;
 
-pub use account::account::Account;
+pub use account::account::{Account, AccountStatus};
 pub use account::balance::Balance;
 pub use account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2,
@@ -20,7 +20,7 @@ pub use account::settlement_transfer_voucher::{
 };
 pub use hyperliquid_account::{
     AccountId, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpClearinghouseState,
-    RiskState, SpotBalance, SpotClearinghouseState, SubAccountProfile, SubAccountSnapshot,
+    RiskState, SpotClearinghouseState, SubAccountProfile, SubAccountSnapshot,
     SubAccountSnapshotError,
 };
 pub use market_rules::MarketRules;
