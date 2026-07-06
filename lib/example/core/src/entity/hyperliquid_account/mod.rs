@@ -7,4 +7,4 @@ pub use account::{
     SubAccountSnapshotError,
 };
 pub use perp::{MarginSummary, PerpClearinghouseState, RiskState};
-pub use spot::{SpotBalance, SpotClearinghouseState};
+pub use spot::SpotClearinghouseState;

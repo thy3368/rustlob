@@ -263,10 +263,10 @@ mod tests {
 
     use super::*;
     use crate::entity::hyperliquid_account::{
-        MarginSummary, PerpClearinghouseState, RiskState, SpotBalance, SpotClearinghouseState,
+        MarginSummary, PerpClearinghouseState, RiskState, SpotClearinghouseState,
     };
     use crate::entity::{
-        HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+        Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
     };
 
     fn dec(units: i64) -> Decimal {
@@ -276,12 +276,14 @@ mod tests {
     fn sample_spot(account_id: &str) -> SpotClearinghouseState {
         SpotClearinghouseState::new(
             AccountId::from(account_id),
-            vec![SpotBalance::new(
-                AssetId::from("USDC"),
-                dec(12),
-                dec(2),
-                Some(dec(12)),
+            vec![Balance::new_with_snapshot_facts(
+                account_id.to_string(),
+                "USDC".to_string(),
+                10,
+                2,
+                Some(12),
                 Some("usdc-spot".to_owned()),
+                1,
             )],
         )
     }
@@ -336,6 +338,7 @@ mod tests {
                 .expect("consistent account ids should assemble");
 
         assert_eq!(snapshot.account_id(), &AccountId::from("sub-1"));
+        assert_eq!(snapshot.spot().available_balance_of(&AssetId::from("USDC")), 10);
     }
 
     #[test]
