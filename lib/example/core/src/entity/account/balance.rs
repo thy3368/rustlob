@@ -93,6 +93,8 @@ impl Balance {
             && self.asset_id == other.asset_id
             && self.available == other.available
             && self.frozen == other.frozen
+            && self.entry_notional == other.entry_notional
+            && self.identifier == other.identifier
     }
 
     /// 返回是否能冻结指定数量。
@@ -302,5 +304,11 @@ mod tests {
 
         assert_eq!(balance.entry_notional(), None);
         assert_eq!(balance.identifier(), None);
+    }
+
+    #[test]
+    fn replay_field_type_covers_snapshot_fact_fields() {
+        assert_eq!(Balance::replay_field_type("identifier"), 0);
+        assert_eq!(Balance::replay_field_type("entry_notional"), 1);
     }
 }
