@@ -1,6 +1,7 @@
 mod market_rules;
 mod reservation;
 
+pub mod hyperliquid_account;
 pub mod perp;
 
 pub mod spot;
@@ -16,6 +17,11 @@ pub use account::balance_ledger_reason::BalanceLedgerReason;
 pub use account::settlement_transfer_voucher::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferSummary,
     SettlementTransferVoucher,
+};
+pub use hyperliquid_account::{
+    AccountId, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpClearinghouseState,
+    RiskState, SpotBalance, SpotClearinghouseState, SubAccountProfile, SubAccountSnapshot,
+    SubAccountSnapshotError,
 };
 pub use market_rules::MarketRules;
 pub use perp::fund::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
