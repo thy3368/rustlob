@@ -315,6 +315,8 @@ mod tests {
             asset_id: "BTC".to_string(),
             available: 5,
             frozen: 0,
+            entry_notional: None,
+            identifier: None,
             version: 3,
         }
     }
@@ -325,6 +327,8 @@ mod tests {
             asset_id: "USDT".to_string(),
             available: 80,
             frozen: 20,
+            entry_notional: None,
+            identifier: None,
             version: 3,
         }
     }
