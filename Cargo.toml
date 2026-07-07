@@ -37,6 +37,7 @@ members = [
     "lib/example/core",
     "lib/example/inbound_adapter",
     "lib/example/outbound_adapter",
+    "lib/example/veldra_inbound_adapter",
     # app
     "inbound_adapter/axum_server",
     "app/client",

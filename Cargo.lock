@@ -2222,17 +2222,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cqrs"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "crc"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2713,23 +2702,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dex"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "base_types",
- "cmd_handler",
- "db_repo",
- "l1_adapter",
- "l1_core",
- "md5",
- "mdbx",
- "rust_decimal",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "diff"
 version = "0.1.0"
 dependencies = [
@@ -2950,6 +2922,13 @@ dependencies = [
 [[package]]
 name = "entity"
 version = "0.1.0"
+dependencies = [
+ "minstant",
+ "serde",
+ "serde-big-array",
+ "thiserror 1.0.69",
+ "tracing",
+]
 
 [[package]]
 name = "entity_derive"
@@ -3063,8 +3042,11 @@ name = "example_core"
 version = "0.1.0"
 dependencies = [
  "cmd_handler",
+ "decimal",
  "entity",
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 
@@ -3091,6 +3073,21 @@ dependencies = [
  "example_core",
  "mysql 24.0.0",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "example_veldra_inbound_adapter"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "cmd_handler",
+ "example_core",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
 ]
 
 [[package]]
@@ -4109,6 +4106,8 @@ dependencies = [
  "clap 4.5.53",
  "colored",
  "reqwest 0.12.28",
+ "rust_decimal",
+ "rust_decimal_macros",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4351,6 +4350,15 @@ dependencies = [
 [[package]]
 name = "inbound_adapter"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
+]
 
 [[package]]
 name = "inbound_adapter_support"
@@ -4703,7 +4711,6 @@ dependencies = [
  "db_repo",
  "l1_core",
  "md5",
- "mdbx",
  "minstant",
  "revm 19.7.0",
  "sha3",
@@ -5602,17 +5609,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
 
 [[package]]
-name = "mdbx"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "db_repo",
- "libmdbx",
- "rkyv 0.8.15",
- "rocksdb",
-]
-
-[[package]]
 name = "mdbx-sys"
 version = "13.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6409,11 +6405,13 @@ checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 name = "outbound_adapter"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "cmd_handler",
  "core",
  "example_core",
+ "libmdbx",
  "serde",
- "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -8671,6 +8669,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9070,7 +9077,6 @@ dependencies = [
  "chrono",
  "cmd_handler",
  "core_affinity",
- "cqrs",
  "criterion",
  "crossbeam-channel",
  "crossbeam-utils",
@@ -9762,6 +9768,22 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tungstenite 0.24.0",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "tokio-tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
@@ -10107,6 +10129,26 @@ dependencies = [
  "sha1 0.10.6",
  "thiserror 1.0.69",
  "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.4.0",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "rustls",
+ "rustls-pki-types",
+ "sha1 0.10.6",
+ "thiserror 1.0.69",
  "utf-8",
 ]
 
