@@ -4,7 +4,10 @@ mod outbound;
 pub(crate) mod trace;
 mod use_case;
 
-pub use common_entity::IssuedByParty;
+pub use common_entity::{
+    IssuedByParty, MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec,
+    MiFamilyOutbound, MiStateMachineFamilyExecutor,
+};
 pub use executor::{
     CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,
     CommandUseCaseExecutor4,
