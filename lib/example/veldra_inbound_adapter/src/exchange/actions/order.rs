@@ -14,7 +14,7 @@ use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandle
 use crate::exchange::common::validate::{
     validate_cloid, validate_envelope_common, validate_hex_address,
 };
-use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
+use crate::exchange::common::wire::{ok_statuses_response, ExchangeRequestEnvelopeWire};
 use crate::exchange::error::ExchangeHttpError;
 
 /// `order` 动作的入站 contract 错误。
@@ -323,7 +323,7 @@ const STUB_OID_BASE: u64 = 77738308;
 
 #[allow(dead_code)]
 pub fn execute_place_spot_order_v2<OB>(
-    request: PlaceSpotOrderV2Request,
+    request: &PlaceSpotOrderV2Request,
     outbound: &OB,
 ) -> Result<
     MiFamilyExecutionResult<SpotOrderV2CaseChanges>,
@@ -335,7 +335,7 @@ where
     MiStateMachineFamilyExecutor
         .execute::<SpotOrderV2UseCaseFamily, SpotOrderV2PlaceExecutionSpec, OB>(
             &SpotOrderV2UseCaseFamily,
-            request,
+            &request,
             outbound,
         )
 }
@@ -873,7 +873,7 @@ mod tests {
         assert_eq!(request.size, "0.02");
         assert_eq!(request.tif, "Gtc");
 
-        let result = execute_place_spot_order_v2(request.clone(), &FakeSpotOrderV2Outbound)
+        let result = execute_place_spot_order_v2(&request, &FakeSpotOrderV2Outbound)
             .expect("spot order v2 family should execute");
         let status = order_status_from_spot_order_v2_changes(&request, &result.changes);
 
