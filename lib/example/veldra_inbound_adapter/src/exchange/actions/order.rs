@@ -10,11 +10,12 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
+use crate::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{
     validate_cloid, validate_envelope_common, validate_hex_address,
 };
-use crate::exchange::common::wire::{ok_statuses_response, ExchangeRequestEnvelopeWire};
+use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
 use crate::exchange::error::ExchangeHttpError;
 
 /// `order` 动作的入站 contract 错误。
@@ -220,14 +221,14 @@ impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2PlaceExecuti
     type Request = PlaceSpotOrderV2Request;
     type LoadedState = SpotOrderV2PlaceLoadedState;
 
-    fn command<'a>(_request: &'a Self::Request) -> SpotOrderV2Command<'a> {
+    fn command(_request: &Self::Request) -> SpotOrderV2Command {
         SpotOrderV2Command::Place(Default::default())
     }
 
-    fn given_state<'a>(
-        _request: &'a Self::Request,
-        loaded: &'a Self::LoadedState,
-    ) -> SpotOrderV2GivenState<'a> {
+    fn given_state<'loaded>(
+        _request: &Self::Request,
+        loaded: &'loaded Self::LoadedState,
+    ) -> SpotOrderV2GivenState<'loaded> {
         SpotOrderV2GivenState::Place {
             taker_order: &loaded.taker_order,
             maker_orders: &loaded.maker_orders,
@@ -316,10 +317,39 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-const STUB_FILLED_PREFIX: &str = "stub-filled";
-const STUB_ERROR_PREFIX: &str = "stub-error";
-const STUB_ERROR_MESSAGE: &str = "Order must have minimum value of $10.";
-const STUB_OID_BASE: u64 = 77738308;
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum DefaultSpotOrderV2PlaceOutboundError {
+    #[error("spot order v2 place state is not wired for default HTTP path")]
+    StateUnavailable,
+}
+
+#[derive(Debug, Default)]
+pub struct DefaultSpotOrderV2PlaceOutbound;
+
+impl MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>
+    for DefaultSpotOrderV2PlaceOutbound
+{
+    type Error = DefaultSpotOrderV2PlaceOutboundError;
+
+    fn load_state(
+        &self,
+        _request: &PlaceSpotOrderV2Request,
+    ) -> Result<SpotOrderV2PlaceLoadedState, Self::Error> {
+        Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
+    }
+
+    fn persist(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn replay(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn publish(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
 
 #[allow(dead_code)]
 pub fn execute_place_spot_order_v2<OB>(
@@ -374,36 +404,52 @@ fn order_status_from_spot_order_v2_changes(
 }
 
 async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
-    // 当前 inbound adapter 先返回稳定的 stub 形状，便于前后端与协议快照测试对齐。
-    // 后续接入真实下单 use case 时，应由 core/operating 层决定回执状态。
-    let statuses = request
+    let outbound = DefaultSpotOrderV2PlaceOutbound;
+    let statuses = execute_with_outbound(request, &outbound);
+    Ok(ok_statuses_response("order", statuses))
+}
+
+fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::OrderStatusWire>
+where
+    OB: MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>,
+    OB::Error: std::fmt::Display,
+{
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+
+    request
         .action
         .orders
         .iter()
-        .enumerate()
-        .map(|(index, order)| {
-            let oid = STUB_OID_BASE + index as u64;
-            match order.c.as_deref() {
-                Some(cloid) if cloid.starts_with(STUB_FILLED_PREFIX) => {
-                    reply::OrderStatusWire::Filled {
-                        filled: reply::FilledOrderStatusWire {
-                            total_sz: order.s.clone(),
-                            avg_px: order.p.clone(),
-                            oid,
-                        },
-                    }
+        .map(|order| match PlaceSpotOrderV2Request::from_wire_order(party_id.clone(), order) {
+            Ok(place_request) => match execute_place_spot_order_v2(&place_request, outbound) {
+                Ok(result) => {
+                    order_status_from_spot_order_v2_changes(&place_request, &result.changes)
                 }
-                Some(cloid) if cloid.starts_with(STUB_ERROR_PREFIX) => {
-                    reply::OrderStatusWire::Error { error: STUB_ERROR_MESSAGE.to_string() }
+                Err(error) => {
+                    reply::OrderStatusWire::Error { error: order_execution_error_message(error) }
                 }
-                _ => reply::OrderStatusWire::Resting {
-                    resting: reply::RestingOrderStatusWire { oid },
-                },
-            }
+            },
+            Err(error) => reply::OrderStatusWire::Error { error: error.to_string() },
         })
-        .collect();
+        .collect()
+}
 
-    Ok(ok_statuses_response("order", statuses))
+fn order_execution_error_message<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> String
+where
+    BE: std::fmt::Display,
+    OE: std::fmt::Display,
+{
+    match error {
+        MiFamilyExecutionError::Business(error) => error.to_string(),
+        MiFamilyExecutionError::ProjectEvents(error) => {
+            format!("project replayable events failed: {error}")
+        }
+        MiFamilyExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
+        MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
+        MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+    }
 }
 
 #[cfg(test)]
@@ -593,7 +639,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn success_json_snapshot_is_stable() {
+    async fn default_path_returns_item_error_when_state_is_unavailable() {
         let request =
             parse_json_request::<RequestWire, ExchangeHttpError>(valid_order_request_json())
                 .expect("request parses");
@@ -607,9 +653,7 @@ mod tests {
     "data": {
       "statuses": [
         {
-          "resting": {
-            "oid": 77738308
-          }
+          "error": "load_state failed: spot order v2 place state is not wired for default HTTP path"
         }
       ]
     }
@@ -637,7 +681,9 @@ mod tests {
                                 oid: 2,
                             },
                         },
-                        reply::OrderStatusWire::Error { error: STUB_ERROR_MESSAGE.to_string() },
+                        reply::OrderStatusWire::Error {
+                            error: "Order must have minimum value of $10.".to_string(),
+                        },
                     ],
                 },
             },

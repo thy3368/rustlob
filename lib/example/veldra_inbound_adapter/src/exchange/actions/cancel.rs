@@ -64,7 +64,7 @@ struct CancelItemWire {
     o: u64,
 }
 
-const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
+pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -109,14 +109,14 @@ impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2CancelExecut
     type Request = CancelSpotOrderV2Request;
     type LoadedState = SpotOrderV2CancelLoadedState;
 
-    fn command<'a>(_request: &'a Self::Request) -> SpotOrderV2Command<'a> {
+    fn command(_request: &Self::Request) -> SpotOrderV2Command {
         SpotOrderV2Command::Cancel(Default::default())
     }
 
-    fn given_state<'a>(
-        _request: &'a Self::Request,
-        loaded: &'a Self::LoadedState,
-    ) -> SpotOrderV2GivenState<'a> {
+    fn given_state<'loaded>(
+        _request: &Self::Request,
+        loaded: &'loaded Self::LoadedState,
+    ) -> SpotOrderV2GivenState<'loaded> {
         SpotOrderV2GivenState::Cancel {
             order: &loaded.order,
             principal_reservation: &loaded.principal_reservation,
@@ -247,7 +247,9 @@ where
         .collect()
 }
 
-fn cancel_execution_error_message<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> String
+pub(crate) fn cancel_execution_error_message<BE, OE>(
+    error: MiFamilyExecutionError<BE, OE>,
+) -> String
 where
     BE: std::fmt::Display,
     OE: std::fmt::Display,

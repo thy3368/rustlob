@@ -1,7 +1,12 @@
+use cmd_handler::command_use_case_def2::MiFamilyOutbound;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
+use crate::exchange::actions::cancel::{
+    CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, DefaultSpotOrderV2CancelOutbound,
+    SpotOrderV2CancelLoadedState, cancel_execution_error_message, execute_cancel_spot_order_v2,
+};
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
@@ -84,14 +89,8 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
-    // 官方 exchange 文档没有给出 cancelByCloid 的成功响应示例。
-    // 当前采用与 cancel 一致的最小成功形状，后续若拿到官方响应样例再收敛。
-    let statuses = request
-        .action
-        .cancels
-        .iter()
-        .map(|_| reply::CancelByCloidStatusWire::Success("success"))
-        .collect();
+    let outbound = DefaultSpotOrderV2CancelOutbound;
+    let statuses = execute_with_outbound(request, &outbound);
     Ok(reply::CancelByCloidResponseWire {
         status: "ok",
         response: reply::CancelByCloidResponseEnvelopeWire {
@@ -101,8 +100,43 @@ async fn execute(
     })
 }
 
+fn execute_with_outbound<OB>(
+    request: RequestWire,
+    outbound: &OB,
+) -> Vec<reply::CancelByCloidStatusWire>
+where
+    OB: MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>,
+    OB::Error: std::fmt::Display,
+{
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+
+    request
+        .action
+        .cancels
+        .iter()
+        .map(|cancel| {
+            let cancel_request = CancelSpotOrderV2Request::from_cloid(
+                party_id.clone(),
+                cancel.asset,
+                cancel.cloid.clone(),
+            );
+            match execute_cancel_spot_order_v2(&cancel_request, outbound) {
+                Ok(_) => reply::CancelByCloidStatusWire::Success("success"),
+                Err(error) => reply::CancelByCloidStatusWire::Error {
+                    error: cancel_execution_error_message(error),
+                },
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+
     use super::*;
     use crate::exchange::actions::cancel::{CancelSpotOrderV2Lookup, CancelSpotOrderV2Request};
 
@@ -155,7 +189,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn reply_snapshot_is_stable() {
+    async fn default_path_returns_item_error_when_state_is_unavailable() {
         let response = execute(
             parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
                 .expect("request parses"),
@@ -165,7 +199,72 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"cancel\",\n    \"data\": {\n      \"statuses\": [\n        \"success\"\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"cancel\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 cancel state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
+        );
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+    #[error("fake outbound error")]
+    struct FakeOutboundError;
+
+    #[derive(Debug, Default)]
+    struct ObservingCancelOutbound {
+        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
+    }
+
+    impl MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>
+        for ObservingCancelOutbound
+    {
+        type Error = FakeOutboundError;
+
+        fn load_state(
+            &self,
+            request: &CancelSpotOrderV2Request,
+        ) -> Result<SpotOrderV2CancelLoadedState, Self::Error> {
+            *self.observed_lookup.lock().expect("lookup observation lock should be available") =
+                Some(request.lookup.clone());
+            Err(FakeOutboundError)
+        }
+
+        fn persist(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn replay(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn publish(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn execute_uses_cloid_lookup_for_shared_cancel_executor() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request parses");
+        let outbound = ObservingCancelOutbound::default();
+
+        let statuses = execute_with_outbound(request, &outbound);
+
+        assert_eq!(
+            *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
+            Some(CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string()))
+        );
+        assert_eq!(
+            statuses,
+            vec![reply::CancelByCloidStatusWire::Error {
+                error: "load_state failed: fake outbound error".to_string()
+            }]
         );
     }
 
