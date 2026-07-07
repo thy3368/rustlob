@@ -80,6 +80,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                 trading_enabled_by_symbol,
                 balances: spot_balances,
                 orders: BTreeMap::new(),
+                reservations: BTreeMap::new(),
                 settled_trade_ids: Default::default(),
                 next_order_sequence_by_account,
             },
