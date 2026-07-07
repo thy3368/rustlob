@@ -34,10 +34,7 @@ where
 
     fn command(request: &Self::Request) -> F::Command;
 
-    fn given_state<'a>(
-        request: &'a Self::Request,
-        loaded: &'a Self::LoadedState,
-    ) -> F::GivenState<'a>;
+    fn given_state(loaded: &Self::LoadedState) -> F::GivenState<'_>;
 }
 
 /// MI family runtime 所需的 outbound port。
@@ -89,7 +86,7 @@ impl MiStateMachineFamilyExecutor {
         let loaded = outbound.load_state(request).map_err(MiFamilyExecutionError::LoadState)?;
 
         let cmd = S::command(request);
-        let given_state = S::given_state(request, &loaded);
+        let given_state = S::given_state(&loaded);
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
@@ -225,10 +222,9 @@ mod tests {
             StubCommand { log: Arc::clone(&request.log) }
         }
 
-        fn given_state<'a>(
-            _request: &'a Self::Request,
-            loaded: &'a Self::LoadedState,
-        ) -> <StubFamily as MiStateMachineV2Unchecked>::GivenState<'a> {
+        fn given_state(
+            loaded: &Self::LoadedState,
+        ) -> <StubFamily as MiStateMachineV2Unchecked>::GivenState<'_> {
             Arc::clone(&loaded.log)
         }
     }
