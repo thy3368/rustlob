@@ -104,6 +104,7 @@ async fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::exchange::actions::cancel::{CancelSpotOrderV2Lookup, CancelSpotOrderV2Request};
 
     #[test]
     fn parses_request() {
@@ -132,6 +133,25 @@ mod tests {
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
         assert_eq!(error.to_string(), "Invalid `action.f`. `f` must be omitted when false.");
+    }
+
+    #[test]
+    fn maps_cancel_by_cloid_wire_to_cancel_lookup() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request parses");
+        let cancel = &request.action.cancels[0];
+
+        let mapped = CancelSpotOrderV2Request::from_cloid(
+            "buyer".to_string(),
+            cancel.asset,
+            cancel.cloid.clone(),
+        );
+
+        assert_eq!(mapped.asset, 10000);
+        assert_eq!(
+            mapped.lookup,
+            CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
+        );
     }
 
     #[actix_web::test]
