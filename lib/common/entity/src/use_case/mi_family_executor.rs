@@ -120,7 +120,6 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    #[derive(Debug, Clone)]
     struct StubCommand {
         log: Arc<Mutex<Vec<&'static str>>>,
     }
@@ -195,7 +194,7 @@ mod tests {
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
             given_state.lock().unwrap().push("merge");
-            Ok(StubChanges { log: Arc::clone(given_state) })
+            Ok(StubChanges { log: Arc::clone(&given_state) })
         }
     }
 

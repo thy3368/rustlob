@@ -27,9 +27,8 @@
 //! - 不要让任一聚合直接装载、导航、调用另一个聚合
 //! - 不要把 adapter / infra 逻辑下沉进该实现
 //!
-//! 与 [`crate::CommandUseCase6`] 的关系是并列选择，而不是上下位包装关系：
-//! - `MiStateMachineOwnedV2` 适合共享 `GivenState` 与 truth 模型的多聚合 `use-case family`
-//! - `CommandUseCase6` 适合表达边界清晰的完整 use case 契约
+//! `MiStateMachineOwnedV2` 适合共享 `GivenState` 与 truth 模型的多聚合
+//! `use-case family`，并为同一业务主题下的多个动作分支提供统一编排骨架。
 //!
 //! # Examples
 //!
@@ -293,9 +292,7 @@
 //!
 //! impl MiStateMachineV2Unchecked for SpotTradingOrchestrator {
 //!     type Command = PlaceLimitOrder;
-//!     type GivenState<'a> = SpotTradingGivenState
-//!     where
-//!         Self: 'a;
+//!     type GivenState = SpotTradingGivenState;
 //!     type Error = TradingError;
 //!     type AfterChanges = SpotTradingAfterChanges;
 //!
@@ -306,7 +303,7 @@
 //!         Ok(())
 //!     }
 //!
-//!     fn validate_against_given_state<'a>(
+//!     fn validate_against_given_state(
 //!         &self,
 //!         _cmd: &Self::Command,
 //!         given_state: &SpotTradingGivenState,
@@ -320,7 +317,7 @@
 //!         }
 //!     }
 //!
-//!     fn compute_after_changes_unchecked<'a>(
+//!     fn compute_after_changes_unchecked(
 //!         &self,
 //!         cmd: &Self::Command,
 //!         given_state: &SpotTradingGivenState,
@@ -345,7 +342,7 @@
 //!     type BeforeAfterChanges = SpotTradingChanges;
 //!
 //!     fn merge_before_and_after(
-//!         given_state: &SpotTradingGivenState,
+//!         given_state: SpotTradingGivenState,
 //!         after: Self::AfterChanges,
 //!     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
 //!         let SpotTradingGivenState::Placeable { order, cash, hold, .. } = given_state else {
@@ -353,9 +350,9 @@
 //!         };
 //!
 //!         Ok(SpotTradingChanges {
-//!             updated_order: UpdatedEntityPair::new(order.clone(), after.order_after),
-//!             updated_cash: UpdatedEntityPair::new(cash.clone(), after.cash_after),
-//!             updated_hold: UpdatedEntityPair::new(hold.clone(), after.hold_after),
+//!             updated_order: UpdatedEntityPair::new(order, after.order_after),
+//!             updated_cash: UpdatedEntityPair::new(cash, after.cash_after),
+//!             updated_hold: UpdatedEntityPair::new(hold, after.hold_after),
 //!         })
 //!     }
 //! }
@@ -391,7 +388,7 @@
 //! assert_eq!(after.hold_after.reserved, 30);
 //!
 //! let replayable = orchestrator
-//!     .compute_before_after_changes(&command, &placeable_state)
+//!     .compute_before_after_changes(&command, placeable_state.clone())
 //!     .unwrap();
 //! let events = replayable.to_replayable_events().unwrap();
 //! assert_eq!(events.len(), 3);
@@ -442,9 +439,7 @@ use crate::ReplayableChanges;
 pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type Command;
 
-    type GivenState<'a>
-    where
-        Self: 'a;
+    type GivenState;
 
     /// 当前 family 的业务错误类型。
     type Error;
@@ -464,10 +459,10 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     ///
     /// `GivenState` 可以由多个聚合和上下文字段组成。实现者应在这里显式拒绝
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
-    fn validate_against_given_state<'a>(
+    fn validate_against_given_state(
         &self,
         _cmd: &Self::Command,
-        _given_state: &Self::GivenState<'a>,
+        _given_state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -477,10 +472,10 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// 该方法不是对外稳定入口。外部应始终走
     /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
     /// 的统一链路。
-    fn compute_after_changes_unchecked<'a>(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        given_state: &Self::GivenState<'a>,
+        given_state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error>;
 }
 
@@ -491,10 +486,10 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 ///
 /// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
 pub trait MiStateMachineOwnedV2: MiStateMachineV2Unchecked {
-    fn compute_after_changes<'a>(
+    fn compute_after_changes(
         &self,
         cmd: &Self::Command,
-        given_state: &Self::GivenState<'a>,
+        given_state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         self.pre_check_command(cmd)?;
         self.validate_against_given_state(cmd, given_state)?;
@@ -518,17 +513,18 @@ pub trait MiStateMachineOwnedV2BeforeAfter: MiStateMachineOwnedV2 {
     /// 这里的 `GivenState` 仍然只是运输形状；实现者可以直接使用其全部内容，也可以只提取
     /// 必要子集，或重组为异构 before truth 后再与 after 稳定配对。
     fn merge_before_and_after(
-        given_state: &Self::GivenState<'_>,
+        given_state: Self::GivenState,
         after: Self::AfterChanges,
     ) -> Result<Self::BeforeAfterChanges, Self::Error>;
 
     /// 基于 `Command + GivenState` 计算稳定的 replayable before/after changes。
-    fn compute_before_after_changes<'a>(
+    fn compute_before_after_changes(
         &self,
         cmd: &Self::Command,
-        given_state: &Self::GivenState<'a>,
+        given_state: Self::GivenState,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
-        let after = <Self as MiStateMachineOwnedV2>::compute_after_changes(self, cmd, given_state)?;
+        let after =
+            <Self as MiStateMachineOwnedV2>::compute_after_changes(self, cmd, &given_state)?;
         Self::merge_before_and_after(given_state, after)
     }
 }
@@ -557,10 +553,7 @@ mod tests {
 
     impl MiStateMachineV2Unchecked for HookMachine {
         type Command = HookCommand;
-        type GivenState<'a>
-            = Arc<Mutex<Vec<&'static str>>>
-        where
-            Self: 'a;
+        type GivenState = Arc<Mutex<Vec<&'static str>>>;
         type Error = HookError;
         type AfterChanges = ();
 
@@ -571,7 +564,7 @@ mod tests {
             Ok(())
         }
 
-        fn validate_against_given_state<'a>(
+        fn validate_against_given_state(
             &self,
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
@@ -580,7 +573,7 @@ mod tests {
             Ok(())
         }
 
-        fn compute_after_changes_unchecked<'a>(
+        fn compute_after_changes_unchecked(
             &self,
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
@@ -603,7 +596,7 @@ mod tests {
         type BeforeAfterChanges = ReplayableLog;
 
         fn merge_before_and_after(
-            given_state: &Arc<Mutex<Vec<&'static str>>>,
+            given_state: Arc<Mutex<Vec<&'static str>>>,
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
             given_state.lock().unwrap().push("merge");
@@ -627,7 +620,10 @@ mod tests {
         let machine = HookMachine;
 
         machine
-            .compute_before_after_changes(&HookCommand { reject_in_pre_check: false }, &log)
+            .compute_before_after_changes(
+                &HookCommand { reject_in_pre_check: false },
+                Arc::clone(&log),
+            )
             .unwrap();
 
         assert_eq!(*log.lock().unwrap(), vec!["validate", "unchecked", "merge"]);
