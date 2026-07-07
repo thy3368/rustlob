@@ -1,3 +1,11 @@
+use cmd_handler::command_use_case_def2::{
+    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
+    MiStateMachineFamilyExecutor,
+};
+use example_core::{
+    Balance, Reservation, SpotOrderV2, SpotOrderV2CaseChanges, SpotOrderV2Command,
+    SpotOrderV2GivenState, SpotOrderV2UseCaseFamily,
+};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -155,6 +163,88 @@ struct BuilderWire {
     f: u64,
 }
 
+/// adapter-side 下单请求，只保留 wire 已校验字段，不装配业务 state。
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceSpotOrderV2Request {
+    pub party_id: String,
+    pub asset: u32,
+    pub is_buy: bool,
+    pub price: String,
+    pub size: String,
+    pub tif: String,
+    pub cloid: Option<String>,
+}
+
+impl PlaceSpotOrderV2Request {
+    #[allow(dead_code)]
+    fn from_wire_order(party_id: String, order: &OrderWire) -> Result<Self, OrderContractError> {
+        let Some(limit) = &order.t.limit else {
+            return Err(OrderContractError::InvalidOrderType);
+        };
+
+        Ok(Self {
+            party_id,
+            asset: order.a,
+            is_buy: order.b,
+            price: order.p.clone(),
+            size: order.s.clone(),
+            tif: limit.tif.clone(),
+            cloid: order.c.clone(),
+        })
+    }
+}
+
+/// outbound.load_state 返回的 authoritative owned state。
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpotOrderV2PlaceLoadedState {
+    pub taker_order: SpotOrderV2,
+    pub maker_orders: Vec<SpotOrderV2>,
+    pub taker_principal_reservation: Reservation,
+    pub taker_fee_reservation: Reservation,
+    pub maker_principal_reservations: Vec<Reservation>,
+    pub maker_fee_reservations: Vec<Reservation>,
+    pub settlement_balances: Vec<Balance>,
+    pub base_asset_id: String,
+    pub quote_asset_id: String,
+    pub fee_account_id: String,
+    pub maker_fee_bps: u64,
+    pub taker_fee_bps: u64,
+}
+
+#[allow(dead_code)]
+pub struct SpotOrderV2PlaceExecutionSpec;
+
+impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2PlaceExecutionSpec {
+    type Request = PlaceSpotOrderV2Request;
+    type LoadedState = SpotOrderV2PlaceLoadedState;
+
+    fn command<'a>(_request: &'a Self::Request) -> SpotOrderV2Command<'a> {
+        SpotOrderV2Command::Place(Default::default())
+    }
+
+    fn given_state<'a>(
+        _request: &'a Self::Request,
+        loaded: &'a Self::LoadedState,
+    ) -> SpotOrderV2GivenState<'a> {
+        SpotOrderV2GivenState::Place {
+            taker_order: &loaded.taker_order,
+            maker_orders: &loaded.maker_orders,
+            taker_principal_reservation: &loaded.taker_principal_reservation,
+            taker_fee_reservation: &loaded.taker_fee_reservation,
+            maker_principal_reservations: &loaded.maker_principal_reservations,
+            maker_fee_reservations: &loaded.maker_fee_reservations,
+            settlement_balances: &loaded.settlement_balances,
+            base_asset_id: &loaded.base_asset_id,
+            quote_asset_id: &loaded.quote_asset_id,
+            fee_account_id: &loaded.fee_account_id,
+            maker_fee_bps: loaded.maker_fee_bps,
+            taker_fee_bps: loaded.taker_fee_bps,
+        }
+    }
+}
+
 pub(crate) struct OrderAction;
 
 impl ExchangeActionHandler for OrderAction {
@@ -231,6 +321,58 @@ const STUB_ERROR_PREFIX: &str = "stub-error";
 const STUB_ERROR_MESSAGE: &str = "Order must have minimum value of $10.";
 const STUB_OID_BASE: u64 = 77738308;
 
+#[allow(dead_code)]
+pub fn execute_place_spot_order_v2<OB>(
+    request: PlaceSpotOrderV2Request,
+    outbound: &OB,
+) -> Result<
+    MiFamilyExecutionResult<SpotOrderV2CaseChanges>,
+    MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyError, OB::Error>,
+>
+where
+    OB: MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>,
+{
+    MiStateMachineFamilyExecutor
+        .execute::<SpotOrderV2UseCaseFamily, SpotOrderV2PlaceExecutionSpec, OB>(
+            &SpotOrderV2UseCaseFamily,
+            request,
+            outbound,
+        )
+}
+
+#[allow(dead_code)]
+fn order_status_from_spot_order_v2_changes(
+    request: &PlaceSpotOrderV2Request,
+    changes: &SpotOrderV2CaseChanges,
+) -> reply::OrderStatusWire {
+    let SpotOrderV2CaseChanges::Place(place) = changes else {
+        return reply::OrderStatusWire::Error { error: "unexpected spot order branch".to_string() };
+    };
+
+    let filled_qty: u64 = place
+        .created_trades
+        .iter()
+        .filter(|trade| trade.taker_order_id == place.updated_taker_order.after.order_id)
+        .map(|trade| trade.qty)
+        .sum();
+
+    if filled_qty > 0 {
+        return reply::OrderStatusWire::Filled {
+            filled: reply::FilledOrderStatusWire {
+                total_sz: filled_qty.to_string(),
+                avg_px: request.price.clone(),
+                oid: place.updated_taker_order.after.exchange_oid.unwrap_or(0),
+            },
+        };
+    }
+
+    reply::OrderStatusWire::Resting {
+        resting: reply::RestingOrderStatusWire {
+            oid: place.updated_taker_order.after.exchange_oid.unwrap_or(0),
+        },
+    }
+}
+
 async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
     // 当前 inbound adapter 先返回稳定的 stub 形状，便于前后端与协议快照测试对齐。
     // 后续接入真实下单 use case 时，应由 core/operating 层决定回执状态。
@@ -266,6 +408,14 @@ async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, Excha
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
+
+    use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+    use example_core::{
+        Balance, Reservation, ReservationKind, ReservationMarketKind, SpotOrderExecution,
+        SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,
+    };
+
     use super::*;
     use crate::exchange::test_support::{
         valid_order_request_json, valid_request_with_grouping_json,
@@ -560,5 +710,182 @@ mod tests {
 }"#;
 
         assert_eq!(actual, expected);
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct FakeOutboundError;
+
+    impl fmt::Display for FakeOutboundError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("fake outbound error")
+        }
+    }
+
+    impl std::error::Error for FakeOutboundError {}
+
+    #[derive(Debug, Default)]
+    struct FakeSpotOrderV2Outbound;
+
+    impl MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>
+        for FakeSpotOrderV2Outbound
+    {
+        type Error = FakeOutboundError;
+
+        fn load_state(
+            &self,
+            request: &PlaceSpotOrderV2Request,
+        ) -> Result<SpotOrderV2PlaceLoadedState, Self::Error> {
+            let taker_order = SpotOrderV2::new(
+                "taker-buy".to_string(),
+                request.asset,
+                Some(1),
+                request.party_id.clone(),
+                "BTCUSDT".to_string(),
+                SpotOrderSide::Buy,
+                SpotOrderExecution::Limit { price: 100 },
+                SpotOrderTimeInForce::Gtc,
+                2,
+                0,
+                SpotOrderStatus::Open,
+                None,
+                0,
+                200,
+                request.cloid.clone(),
+                1,
+            );
+            let maker_orders = vec![SpotOrderV2::new(
+                "maker-1".to_string(),
+                request.asset,
+                Some(100),
+                "seller".to_string(),
+                "BTCUSDT".to_string(),
+                SpotOrderSide::Sell,
+                SpotOrderExecution::Limit { price: 100 },
+                SpotOrderTimeInForce::Gtc,
+                1,
+                0,
+                SpotOrderStatus::Open,
+                None,
+                1,
+                0,
+                None,
+                1,
+            )];
+
+            Ok(SpotOrderV2PlaceLoadedState {
+                taker_principal_reservation: reservation(
+                    &taker_order.order_id,
+                    &taker_order.account_id,
+                    ReservationKind::SpotBuyQuote,
+                    "USDT",
+                    200,
+                ),
+                taker_fee_reservation: reservation(
+                    &taker_order.order_id,
+                    &taker_order.account_id,
+                    ReservationKind::SpotBuyFeeQuote,
+                    "USDT",
+                    1,
+                ),
+                maker_principal_reservations: vec![reservation(
+                    "maker-1",
+                    "seller",
+                    ReservationKind::SpotSellBase,
+                    "BTC",
+                    1,
+                )],
+                maker_fee_reservations: vec![reservation(
+                    "maker-1",
+                    "seller",
+                    ReservationKind::SpotSellFeeQuote,
+                    "USDT",
+                    1,
+                )],
+                settlement_balances: vec![
+                    Balance::new(request.party_id.clone(), "USDT".to_string(), 1000, 201, 1),
+                    Balance::new(request.party_id.clone(), "BTC".to_string(), 0, 0, 1),
+                    Balance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
+                    Balance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
+                    Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                ],
+                taker_order,
+                maker_orders,
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                fee_account_id: "fee".to_string(),
+                maker_fee_bps: 10,
+                taker_fee_bps: 20,
+            })
+        }
+
+        fn persist(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn replay(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn publish(
+            &self,
+            _events: &[cmd_handler::EntityReplayableEvent],
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    fn reservation(
+        order_id: &str,
+        account_id: &str,
+        kind: ReservationKind,
+        asset_id: &str,
+        amount: u64,
+    ) -> Reservation {
+        Reservation::new(
+            format!("reservation:{order_id}:{asset_id}:{kind:?}"),
+            account_id.to_string(),
+            order_id.to_string(),
+            ReservationMarketKind::Spot,
+            kind,
+            asset_id.to_string(),
+            amount,
+        )
+        .expect("test reservation should be valid")
+    }
+
+    #[test]
+    fn spot_order_v2_place_request_maps_wire_and_executes_with_fake_outbound() {
+        let wire = parse_json_request::<RequestWire, ExchangeHttpError>(valid_order_request_json())
+            .expect("request parses");
+        let request =
+            PlaceSpotOrderV2Request::from_wire_order("buyer".to_string(), &wire.action.orders[0])
+                .expect("wire order maps");
+
+        assert_eq!(request.asset, 10000);
+        assert!(request.is_buy);
+        assert_eq!(request.price, "1891.4");
+        assert_eq!(request.size, "0.02");
+        assert_eq!(request.tif, "Gtc");
+
+        let result = execute_place_spot_order_v2(request.clone(), &FakeSpotOrderV2Outbound)
+            .expect("spot order v2 family should execute");
+        let status = order_status_from_spot_order_v2_changes(&request, &result.changes);
+
+        assert_eq!(
+            status,
+            reply::OrderStatusWire::Filled {
+                filled: reply::FilledOrderStatusWire {
+                    total_sz: "1".to_string(),
+                    avg_px: "1891.4".to_string(),
+                    oid: 1
+                }
+            }
+        );
     }
 }
