@@ -18,6 +18,10 @@ pub use use_case::command_use_case_v6_runtime::{
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, HandlerLatencyMetrics,
     ObserveHandlerLatency, UseCaseChanges, UseCaseReplyMapper,
 };
+pub use use_case::mi_family_executor::{
+    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
+    MiStateMachineFamilyExecutor,
+};
 /// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
 ///
 /// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
