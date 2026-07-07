@@ -113,10 +113,7 @@ impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2CancelExecut
         SpotOrderV2Command::Cancel(Default::default())
     }
 
-    fn given_state<'loaded>(
-        _request: &Self::Request,
-        loaded: &'loaded Self::LoadedState,
-    ) -> SpotOrderV2GivenState<'loaded> {
+    fn given_state(loaded: &Self::LoadedState) -> SpotOrderV2GivenState<'_> {
         SpotOrderV2GivenState::Cancel {
             order: &loaded.order,
             principal_reservation: &loaded.principal_reservation,

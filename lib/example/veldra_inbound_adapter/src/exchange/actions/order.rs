@@ -225,10 +225,7 @@ impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2PlaceExecuti
         SpotOrderV2Command::Place(Default::default())
     }
 
-    fn given_state<'loaded>(
-        _request: &Self::Request,
-        loaded: &'loaded Self::LoadedState,
-    ) -> SpotOrderV2GivenState<'loaded> {
+    fn given_state(loaded: &Self::LoadedState) -> SpotOrderV2GivenState<'_> {
         SpotOrderV2GivenState::Place {
             taker_order: &loaded.taker_order,
             maker_orders: &loaded.maker_orders,
