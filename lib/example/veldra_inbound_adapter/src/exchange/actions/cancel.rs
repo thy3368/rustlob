@@ -2,9 +2,12 @@ use cmd_handler::command_use_case_def2::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
 };
+pub use example_core::CancelSpotOrderV2Lookup;
+#[cfg(test)]
+use example_core::{Balance, Reservation, SpotOrderV2};
 use example_core::{
-    Balance, Reservation, SpotOrderV2, SpotOrderV2CaseChanges, SpotOrderV2Command,
-    SpotOrderV2GivenState, SpotOrderV2UseCaseFamily,
+    CancelSpotOrderV2Cmd, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
+    SpotOrderV2UseCaseFamily,
 };
 use serde::{Deserialize, Serialize};
 
@@ -67,13 +70,6 @@ struct CancelItemWire {
 pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum CancelSpotOrderV2Lookup {
-    Oid(u64),
-    Cloid(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2Request {
     pub party_id: String,
     pub asset: u32,
@@ -91,39 +87,17 @@ impl CancelSpotOrderV2Request {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotOrderV2CancelLoadedState {
-    pub order: SpotOrderV2,
-    pub principal_reservation: Reservation,
-    pub fee_reservation: Reservation,
-    pub balances: Vec<Balance>,
-    pub base_asset_id: String,
-    pub quote_asset_id: String,
-    pub maker_fee_bps: u64,
-    pub taker_fee_bps: u64,
-}
-
 pub struct SpotOrderV2CancelExecutionSpec;
 
 impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
-    type LoadedState = SpotOrderV2CancelLoadedState;
 
-    fn command(_request: &Self::Request) -> SpotOrderV2Command {
-        SpotOrderV2Command::Cancel(Default::default())
-    }
-
-    fn given_state(loaded: &Self::LoadedState) -> SpotOrderV2GivenState<'_> {
-        SpotOrderV2GivenState::Cancel {
-            order: &loaded.order,
-            principal_reservation: &loaded.principal_reservation,
-            fee_reservation: &loaded.fee_reservation,
-            balances: &loaded.balances,
-            base_asset_id: &loaded.base_asset_id,
-            quote_asset_id: &loaded.quote_asset_id,
-            maker_fee_bps: loaded.maker_fee_bps,
-            taker_fee_bps: loaded.taker_fee_bps,
-        }
+    fn command(request: &Self::Request) -> SpotOrderV2Command {
+        SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd {
+            party_id: request.party_id.clone(),
+            asset: request.asset,
+            lookup: request.lookup.clone(),
+        })
     }
 }
 
@@ -136,15 +110,13 @@ pub enum DefaultSpotOrderV2CancelOutboundError {
 #[derive(Debug, Default)]
 pub struct DefaultSpotOrderV2CancelOutbound;
 
-impl MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>
-    for DefaultSpotOrderV2CancelOutbound
-{
+impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for DefaultSpotOrderV2CancelOutbound {
     type Error = DefaultSpotOrderV2CancelOutboundError;
 
-    fn load_state(
+    fn load_given_state(
         &self,
-        _request: &CancelSpotOrderV2Request,
-    ) -> Result<SpotOrderV2CancelLoadedState, Self::Error> {
+        _cmd: &SpotOrderV2Command,
+    ) -> Result<SpotOrderV2GivenState, Self::Error> {
         Err(DefaultSpotOrderV2CancelOutboundError::StateUnavailable)
     }
 
@@ -209,7 +181,7 @@ pub fn execute_cancel_spot_order_v2<OB>(
     MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyError, OB::Error>,
 >
 where
-    OB: MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
 {
     MiStateMachineFamilyExecutor
         .execute::<SpotOrderV2UseCaseFamily, SpotOrderV2CancelExecutionSpec, OB>(
@@ -221,7 +193,7 @@ where
 
 fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::CancelStatusWire>
 where
-    OB: MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
     OB::Error: std::fmt::Display,
 {
     let party_id =
@@ -346,15 +318,16 @@ mod tests {
         observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
     }
 
-    impl MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>
-        for FakeSpotOrderV2CancelOutbound
-    {
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for FakeSpotOrderV2CancelOutbound {
         type Error = FakeOutboundError;
 
-        fn load_state(
+        fn load_given_state(
             &self,
-            request: &CancelSpotOrderV2Request,
-        ) -> Result<SpotOrderV2CancelLoadedState, Self::Error> {
+            cmd: &SpotOrderV2Command,
+        ) -> Result<SpotOrderV2GivenState, Self::Error> {
+            let SpotOrderV2Command::Cancel(request) = cmd else {
+                panic!("expected cancel command");
+            };
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
 
@@ -377,7 +350,7 @@ mod tests {
                 1,
             );
 
-            Ok(SpotOrderV2CancelLoadedState {
+            Ok(SpotOrderV2GivenState::Cancel {
                 principal_reservation: reservation(
                     &order.order_id,
                     &order.account_id,

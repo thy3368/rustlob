@@ -1,11 +1,12 @@
 use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+use example_core::SpotOrderV2UseCaseFamily;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
 use crate::exchange::actions::cancel::{
     CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, DefaultSpotOrderV2CancelOutbound,
-    SpotOrderV2CancelLoadedState, cancel_execution_error_message, execute_cancel_spot_order_v2,
+    cancel_execution_error_message, execute_cancel_spot_order_v2,
 };
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
@@ -105,7 +106,7 @@ fn execute_with_outbound<OB>(
     outbound: &OB,
 ) -> Vec<reply::CancelByCloidStatusWire>
 where
-    OB: MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
     OB::Error: std::fmt::Display,
 {
     let party_id =
@@ -136,6 +137,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+    use example_core::{SpotOrderV2Command, SpotOrderV2GivenState};
 
     use super::*;
     use crate::exchange::actions::cancel::{CancelSpotOrderV2Lookup, CancelSpotOrderV2Request};
@@ -212,15 +214,16 @@ mod tests {
         observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
     }
 
-    impl MiFamilyOutbound<CancelSpotOrderV2Request, SpotOrderV2CancelLoadedState>
-        for ObservingCancelOutbound
-    {
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
-        fn load_state(
+        fn load_given_state(
             &self,
-            request: &CancelSpotOrderV2Request,
-        ) -> Result<SpotOrderV2CancelLoadedState, Self::Error> {
+            cmd: &SpotOrderV2Command,
+        ) -> Result<SpotOrderV2GivenState, Self::Error> {
+            let SpotOrderV2Command::Cancel(request) = cmd else {
+                panic!("expected cancel command");
+            };
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
             Err(FakeOutboundError)
