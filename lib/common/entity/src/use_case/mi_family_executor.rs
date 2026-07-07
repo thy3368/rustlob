@@ -55,7 +55,7 @@ impl MiStateMachineFamilyExecutor {
     pub fn execute<F, S, OB>(
         &self,
         family: &F,
-        request: S::Request,
+        request: &S::Request,
         outbound: &OB,
     ) -> Result<
         MiFamilyExecutionResult<F::BeforeAfterChanges>,
@@ -67,14 +67,14 @@ impl MiStateMachineFamilyExecutor {
         OB: MiFamilyOutbound<S::Request, S::LoadedState>,
     {
         {
-            let cmd = S::command(&request);
+            let cmd = S::command(request);
             family.pre_check_command(&cmd).map_err(MiFamilyExecutionError::Business)?;
         }
 
-        let loaded = outbound.load_state(&request).map_err(MiFamilyExecutionError::LoadState)?;
+        let loaded = outbound.load_state(request).map_err(MiFamilyExecutionError::LoadState)?;
 
-        let cmd = S::command(&request);
-        let given_state = S::given_state(&request, &loaded);
+        let cmd = S::command(request);
+        let given_state = S::given_state(request, &loaded);
 
         family
             .validate_against_given_state(&cmd, &given_state)
@@ -259,7 +259,7 @@ mod tests {
         let executor = MiStateMachineFamilyExecutor;
         let outbound = StubOutbound { log: Arc::clone(&log) };
 
-        executor.execute::<StubFamily, StubSpec, _>(&StubFamily, request, &outbound).unwrap();
+        executor.execute::<StubFamily, StubSpec, _>(&StubFamily, &request, &outbound).unwrap();
 
         assert_eq!(
             *log.lock().unwrap(),
