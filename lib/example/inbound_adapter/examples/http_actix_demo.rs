@@ -203,14 +203,6 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
                 "price": trade.price
             })
         )).collect::<serde_json::Map<String, serde_json::Value>>(),
-        "settlements": snapshot.settlements.into_iter().map(|(settlement_id, settlement)| (
-            settlement_id,
-            serde_json::json!({
-                "trade_id": settlement.trade_id,
-                "buyer_account_id": settlement.buyer_account_id,
-                "seller_account_id": settlement.seller_account_id
-            })
-        )).collect::<serde_json::Map<String, serde_json::Value>>(),
         "persisted_event_count": snapshot.persisted_event_count,
         "published_event_count": snapshot.published_event_count,
         "broker_message_count": snapshot.broker_message_count,

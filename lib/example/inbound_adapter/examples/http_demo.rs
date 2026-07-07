@@ -263,26 +263,10 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
         })
         .collect::<serde_json::Map<String, Value>>();
 
-    let settlements = snapshot
-        .settlements
-        .into_iter()
-        .map(|(settlement_id, settlement)| {
-            (
-                settlement_id,
-                json!({
-                    "trade_id": settlement.trade_id,
-                    "buyer_account_id": settlement.buyer_account_id,
-                    "seller_account_id": settlement.seller_account_id
-                }),
-            )
-        })
-        .collect::<serde_json::Map<String, Value>>();
-
     json!({
         "balances": balances,
         "orders": orders,
         "trades": trades,
-        "settlements": settlements,
         "persisted_event_count": snapshot.persisted_event_count,
         "published_event_count": snapshot.published_event_count,
         "broker_message_count": snapshot.broker_message_count,

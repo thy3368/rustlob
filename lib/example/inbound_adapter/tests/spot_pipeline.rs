@@ -16,7 +16,7 @@ fn seeded_store() -> Result<InMemoryStore, Box<dyn std::error::Error>> {
     )?;
     store.seed_balance(Balance::new("maker-1".to_string(), "BTC".to_string(), 0, 1, 1))?;
     store.seed_balance(Balance::new("maker-1".to_string(), "USDT".to_string(), 0, 0, 1))?;
-    store.seed_order(SpotOrder::new(
+    let maker_order = SpotOrder::new(
         "maker-order-1".to_string(),
         10_001,
         None,
@@ -29,7 +29,9 @@ fn seeded_store() -> Result<InMemoryStore, Box<dyn std::error::Error>> {
         1,
         0,
         None,
-    ))?;
+    );
+    store.seed_order(maker_order.clone())?;
+    store.seed_reservation(maker_order.to_reservation("BTC", "USDT")?)?;
     Ok(store)
 }
 
@@ -82,11 +84,11 @@ fn event_pipeline_matches_and_settles_after_http_place() -> Result<(), Box<dyn s
         },
         &settle_outbound,
     )?;
-    assert_eq!(settle_result.changes.settlements.len(), 1);
+    assert_eq!(settle_result.changes.updated_reservations.len(), 2);
+    assert_eq!(settle_result.changes.created_reservation_consumed.len(), 2);
 
     let snapshot = store.snapshot_with_broker_depth(broker.len()?)?;
     assert_eq!(snapshot.trades.len(), 1);
-    assert_eq!(snapshot.settlements.len(), 1);
     assert_eq!(snapshot.balances.get("trader-1:BTC").map(|balance| balance.available), Some(1));
 
     Ok(())

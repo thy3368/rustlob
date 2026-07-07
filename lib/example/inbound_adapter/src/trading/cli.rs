@@ -227,7 +227,7 @@ mod tests {
             response.summary,
             "accepted order_id=trader-1-BTCUSDT-11 reserved_quote=200 remaining_quote=800"
         );
-        assert_eq!(counts, (2, 2));
+        assert_eq!(counts, (5, 5));
 
         Ok(())
     }
