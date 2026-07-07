@@ -47,6 +47,8 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
                 asset_id: "USDT".to_string(),
                 available: available_quote,
                 frozen: 0,
+                entry_notional: None,
+                identifier: None,
                 version,
             },
         })

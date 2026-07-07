@@ -257,7 +257,6 @@ impl MySqlStore {
             orders,
             trades: HashMap::new(),
             reservations: HashMap::new(),
-            settlements: HashMap::new(),
             persisted_event_count,
             published_event_count,
             broker_message_count: 0,

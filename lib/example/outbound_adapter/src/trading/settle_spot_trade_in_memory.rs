@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use example_core::{
     Balance, Reservation, ReservationCloseReason, ReservationStatus, SettleSpotTradeCmd,
-    SettleSpotTradeState, SpotOrderSide, SpotSettlement,
+    SettleSpotTradeState, SpotOrderSide,
 };
 
 use crate::shared::{
@@ -71,16 +73,8 @@ impl CommandUseCaseOutbound for InMemorySettleSpotTradeOutbound {
             }
 
             for (order_id, account_id, asset_id) in [
-                (
-                    buyer_order_id(trade),
-                    buyer_account_id,
-                    "USDT",
-                ),
-                (
-                    seller_order_id(trade),
-                    seller_account_id,
-                    "BTC",
-                ),
+                (buyer_order_id(trade), buyer_account_id, "USDT"),
+                (seller_order_id(trade), seller_account_id, "BTC"),
             ] {
                 let reservation = state
                     .reservations
@@ -100,13 +94,16 @@ impl CommandUseCaseOutbound for InMemorySettleSpotTradeOutbound {
             }
         }
 
+        let settled_trade_ids =
+            settled_trade_ids_from_events(&state.persisted_events, &cmd.trade_ids);
+
         Ok(SettleSpotTradeState {
             trades,
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
             balances,
             reservations,
-            settled_trade_ids: state.settlements.values().map(|it| it.trade_id.clone()).collect(),
+            settled_trade_ids,
         })
     }
 
@@ -120,12 +117,6 @@ impl CommandUseCaseOutbound for InMemorySettleSpotTradeOutbound {
         let mut state = self.store.lock_state()?;
 
         for event in events {
-            if event.is_created() && event_string_field(event, "settlement_id").is_some() {
-                let settlement = decode_settlement(event)?;
-                state.settlements.insert(settlement.settlement_id.clone(), settlement);
-                continue;
-            }
-
             if event.is_updated() && event_string_field(event, "reservation_id").is_some() {
                 let reservation_id = event_string_field(event, "reservation_id")
                     .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?;
@@ -146,7 +137,8 @@ impl CommandUseCaseOutbound for InMemorySettleSpotTradeOutbound {
                     reservation.status = decode_reservation_status(status.as_str())?;
                 }
                 if let Some(close_reason) = event_string_field(event, "close_reason") {
-                    reservation.close_reason = decode_optional_close_reason(Some(close_reason.as_str()))?;
+                    reservation.close_reason =
+                        decode_optional_close_reason(Some(close_reason.as_str()))?;
                 }
                 reservation.version = event.new_version;
                 continue;
@@ -180,28 +172,6 @@ impl CommandUseCaseOutbound for InMemorySettleSpotTradeOutbound {
         state.published_events.extend(events.iter().cloned());
         Ok(())
     }
-}
-
-fn decode_settlement(
-    event: &EntityReplayableEvent,
-) -> Result<SpotSettlement, SettleSpotTradeOutboundError> {
-    Ok(SpotSettlement::new(
-        event_string_field(event, "settlement_id")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "trade_id")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "match_id")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "buyer_account_id")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "seller_account_id")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_u64_field(event, "base_qty")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_u64_field(event, "quote_qty")
-            .ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-        event_u64_field(event, "price").ok_or(SettleSpotTradeOutboundError::EventDecodeFailed)?,
-    ))
 }
 
 fn buyer_order_id(trade: &example_core::SpotTrade) -> &str {
@@ -242,4 +212,31 @@ fn decode_optional_close_reason(
         Some("expired") => Ok(Some(ReservationCloseReason::Expired)),
         Some(_) => Err(SettleSpotTradeOutboundError::EventDecodeFailed),
     }
+}
+
+fn settled_trade_ids_from_events(
+    events: &[EntityReplayableEvent],
+    requested_trade_ids: &[String],
+) -> Vec<String> {
+    let requested_trade_ids =
+        requested_trade_ids.iter().map(String::as_str).collect::<HashSet<_>>();
+    let mut settled_trade_ids: Vec<String> = Vec::new();
+
+    for event in events {
+        let Some(caused_by_ref_id) = event_string_field(event, "caused_by_ref_id") else {
+            continue;
+        };
+        if !event.is_created()
+            || !requested_trade_ids.contains(caused_by_ref_id.as_str())
+            || event_string_field(event, "reservation_id").is_none()
+            || event_u64_field(event, "remaining_amount_after").is_none()
+        {
+            continue;
+        }
+        if !settled_trade_ids.iter().any(|existing| existing == caused_by_ref_id.as_str()) {
+            settled_trade_ids.push(caused_by_ref_id.to_string());
+        }
+    }
+
+    settled_trade_ids
 }

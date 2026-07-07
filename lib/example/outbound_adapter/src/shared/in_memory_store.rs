@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
-use example_core::{Balance, MarketRules, Reservation, SpotOrder, SpotSettlement, SpotTrade};
+use example_core::{Balance, MarketRules, Reservation, SpotOrder, SpotTrade};
 
 use super::StoreSnapshot;
 use crate::shared::StoreError;
@@ -14,7 +14,6 @@ pub(crate) struct StoreState {
     pub(crate) orders: HashMap<String, SpotOrder>,
     pub(crate) trades: HashMap<String, SpotTrade>,
     pub(crate) reservations: HashMap<String, Reservation>,
-    pub(crate) settlements: HashMap<String, SpotSettlement>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
@@ -28,7 +27,6 @@ impl Default for StoreState {
             orders: HashMap::new(),
             trades: HashMap::new(),
             reservations: HashMap::new(),
-            settlements: HashMap::new(),
             persisted_events: Vec::new(),
             published_events: Vec::new(),
             next_order_sequence: 1,
@@ -92,7 +90,6 @@ impl InMemoryStore {
             orders: state.orders.clone(),
             trades: state.trades.clone(),
             reservations: state.reservations.clone(),
-            settlements: state.settlements.clone(),
             persisted_event_count: state.persisted_events.len(),
             published_event_count: state.published_events.len(),
             broker_message_count,
