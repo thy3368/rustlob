@@ -31,7 +31,9 @@ pub use use_case::state_machine_v2::MiStateMachineV2Unchecked as MultiAggregateU
 pub use use_case::state_machine_v2::{
     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
 };
-pub use use_case::use_case_support::{CommandWithGivenState, ReplayableChanges, UpdatedEntityPair};
+pub use use_case::use_case_support::{
+    CommandWithGivenState, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+};
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
 

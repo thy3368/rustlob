@@ -9,6 +9,15 @@ pub trait CommandWithGivenState {
     type GivenState;
 }
 
+/// 命令主体识别契约。
+///
+/// 默认没有可识别主体；需要审计、鉴权或链路追踪的命令可覆盖 `party_id`。
+pub trait IssuedByParty {
+    fn party_id(&self) -> Option<&str> {
+        None
+    }
+}
+
 /// 实体业务变更的最小回放契约。
 ///
 /// `Changes` 是一次业务 case 产生的唯一业务真相；后续 replay / persist / publish
