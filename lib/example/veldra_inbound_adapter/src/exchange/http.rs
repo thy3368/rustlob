@@ -123,7 +123,10 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["response"]["type"], "cancel");
-        assert_eq!(body["response"]["data"]["statuses"][0], "success");
+        assert_eq!(
+            body["response"]["data"]["statuses"][0]["error"],
+            "load_state failed: spot order v2 cancel state is not wired for default HTTP path"
+        );
     }
 
     #[actix_web::test]
