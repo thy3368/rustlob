@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::marker::PhantomData;
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    CommandWithGivenState, Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter,
-    MiStateMachineV2Unchecked, ReplayableChanges,
+    Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+    ReplayableChanges,
 };
 use thiserror::Error;
 
@@ -24,16 +23,14 @@ use crate::entity::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct PlaceSpotOrderV2Cmd<'a> {
-    _marker: PhantomData<&'a ()>,
-}
+pub struct PlaceSpotOrderV2Cmd;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CancelSpotOrderV2Cmd;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotOrderV2Command<'a> {
-    Place(PlaceSpotOrderV2Cmd<'a>),
+pub enum SpotOrderV2Command {
+    Place(PlaceSpotOrderV2Cmd),
     Cancel(CancelSpotOrderV2Cmd),
 }
 
@@ -63,10 +60,6 @@ pub enum SpotOrderV2GivenState<'a> {
         maker_fee_bps: u64,
         taker_fee_bps: u64,
     },
-}
-
-impl<'a> CommandWithGivenState for SpotOrderV2Command<'a> {
-    type GivenState = SpotOrderV2GivenState<'a>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,14 +243,15 @@ impl ReplayableChanges for SpotOrderV2CaseChanges {
 }
 
 impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
-    type Command<'a>
-        = SpotOrderV2Command<'a>
+    type Command = SpotOrderV2Command;
+    type GivenState<'a>
+        = SpotOrderV2GivenState<'a>
     where
         Self: 'a;
     type Error = SpotOrderV2UseCaseFamilyError;
     type AfterChanges = SpotOrderV2AfterChanges;
 
-    fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
+    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match cmd {
             SpotOrderV2Command::Place(_) | SpotOrderV2Command::Cancel(_) => Ok(()),
         }
@@ -265,7 +259,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
 
     fn validate_against_given_state<'a>(
         &self,
-        cmd: &Self::Command<'a>,
+        cmd: &Self::Command,
         given_state: &SpotOrderV2GivenState<'a>,
     ) -> Result<(), Self::Error> {
         match (cmd, given_state) {
@@ -366,7 +360,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
 
     fn compute_after_changes_unchecked<'a>(
         &self,
-        cmd: &Self::Command<'a>,
+        cmd: &Self::Command,
         given_state: &SpotOrderV2GivenState<'a>,
     ) -> Result<Self::AfterChanges, Self::Error> {
         match (cmd, given_state) {
