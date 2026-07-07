@@ -39,7 +39,7 @@
 //!
 //! ```rust
 //! use entity::{
-//!     CommandWithGivenState, Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
+//!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
 //!     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter,
 //!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
 //! };
@@ -251,12 +251,6 @@
 //!     quote_amount: i64,
 //! }
 //!
-//! // 在生产实现中，同一 family 也可以改成 `enum SpotTradingCommand`，
-//! // 把多个相关动作分支收敛进同一个编排入口。
-//! impl CommandWithGivenState for PlaceLimitOrder {
-//!     type GivenState = SpotTradingGivenState;
-//! }
-//!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
 //! enum SpotTradingGivenState {
 //!     Placeable {
@@ -298,13 +292,14 @@
 //! struct SpotTradingOrchestrator;
 //!
 //! impl MiStateMachineV2Unchecked for SpotTradingOrchestrator {
-//!     type Command<'a> = PlaceLimitOrder
+//!     type Command = PlaceLimitOrder;
+//!     type GivenState<'a> = SpotTradingGivenState
 //!     where
 //!         Self: 'a;
 //!     type Error = TradingError;
 //!     type AfterChanges = SpotTradingAfterChanges;
 //!
-//!     fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
+//!     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
 //!         if cmd.quote_amount <= 0 {
 //!             return Err(TradingError::InvalidQuoteAmount);
 //!         }
@@ -313,7 +308,7 @@
 //!
 //!     fn validate_against_given_state<'a>(
 //!         &self,
-//!         _cmd: &Self::Command<'a>,
+//!         _cmd: &Self::Command,
 //!         given_state: &SpotTradingGivenState,
 //!     ) -> Result<(), Self::Error> {
 //!         match given_state {
@@ -327,7 +322,7 @@
 //!
 //!     fn compute_after_changes_unchecked<'a>(
 //!         &self,
-//!         cmd: &Self::Command<'a>,
+//!         cmd: &Self::Command,
 //!         given_state: &SpotTradingGivenState,
 //!     ) -> Result<Self::AfterChanges, Self::Error> {
 //!         let SpotTradingGivenState::Placeable { order, cash, hold, .. } = given_state else {
@@ -437,15 +432,17 @@
 
 use std::fmt::Debug;
 
-use crate::{CommandWithGivenState, ReplayableChanges};
+use crate::ReplayableChanges;
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
-/// `Command<'a>` 可以是单个业务命令，也可以是一组相关动作的命令族；
+/// `Command` 可以是单个业务命令，也可以是一组相关动作的命令族；
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
 pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
-    type Command<'a>: CommandWithGivenState
+    type Command;
+
+    type GivenState<'a>
     where
         Self: 'a;
 
@@ -459,7 +456,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type AfterChanges;
 
     /// 对命令本身做不依赖 `GivenState` 的快速校验。
-    fn pre_check_command<'a>(&self, _cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -469,8 +466,8 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
     fn validate_against_given_state<'a>(
         &self,
-        _cmd: &Self::Command<'a>,
-        _given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+        _cmd: &Self::Command,
+        _given_state: &Self::GivenState<'a>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -482,8 +479,8 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// 的统一链路。
     fn compute_after_changes_unchecked<'a>(
         &self,
-        cmd: &Self::Command<'a>,
-        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command,
+        given_state: &Self::GivenState<'a>,
     ) -> Result<Self::AfterChanges, Self::Error>;
 }
 
@@ -496,8 +493,8 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 pub trait MiStateMachineOwnedV2: MiStateMachineV2Unchecked {
     fn compute_after_changes<'a>(
         &self,
-        cmd: &Self::Command<'a>,
-        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command,
+        given_state: &Self::GivenState<'a>,
     ) -> Result<Self::AfterChanges, Self::Error> {
         self.pre_check_command(cmd)?;
         self.validate_against_given_state(cmd, given_state)?;
@@ -521,15 +518,15 @@ pub trait MiStateMachineOwnedV2BeforeAfter: MiStateMachineOwnedV2 {
     /// 这里的 `GivenState` 仍然只是运输形状；实现者可以直接使用其全部内容，也可以只提取
     /// 必要子集，或重组为异构 before truth 后再与 after 稳定配对。
     fn merge_before_and_after(
-        given_state: &<Self::Command<'_> as CommandWithGivenState>::GivenState,
+        given_state: &Self::GivenState<'_>,
         after: Self::AfterChanges,
     ) -> Result<Self::BeforeAfterChanges, Self::Error>;
 
     /// 基于 `Command + GivenState` 计算稳定的 replayable before/after changes。
     fn compute_before_after_changes<'a>(
         &self,
-        cmd: &Self::Command<'a>,
-        given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+        cmd: &Self::Command,
+        given_state: &Self::GivenState<'a>,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
         let after = <Self as MiStateMachineOwnedV2>::compute_after_changes(self, cmd, given_state)?;
         Self::merge_before_and_after(given_state, after)
@@ -541,7 +538,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        CommandWithGivenState, EntityError, EntityReplayableEvent, MiStateMachineOwnedV2,
+        EntityError, EntityReplayableEvent, MiStateMachineOwnedV2,
         MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
     };
 
@@ -555,22 +552,19 @@ mod tests {
         reject_in_pre_check: bool,
     }
 
-    impl CommandWithGivenState for HookCommand {
-        type GivenState = Arc<Mutex<Vec<&'static str>>>;
-    }
-
     #[derive(Debug, Clone)]
     struct HookMachine;
 
     impl MiStateMachineV2Unchecked for HookMachine {
-        type Command<'a>
-            = HookCommand
+        type Command = HookCommand;
+        type GivenState<'a>
+            = Arc<Mutex<Vec<&'static str>>>
         where
             Self: 'a;
         type Error = HookError;
         type AfterChanges = ();
 
-        fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
+        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
             if cmd.reject_in_pre_check {
                 return Err(HookError::PreCheckRejected);
             }
@@ -579,7 +573,7 @@ mod tests {
 
         fn validate_against_given_state<'a>(
             &self,
-            _cmd: &Self::Command<'a>,
+            _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
         ) -> Result<(), Self::Error> {
             given_state.lock().unwrap().push("validate");
@@ -588,7 +582,7 @@ mod tests {
 
         fn compute_after_changes_unchecked<'a>(
             &self,
-            _cmd: &Self::Command<'a>,
+            _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
         ) -> Result<Self::AfterChanges, Self::Error> {
             given_state.lock().unwrap().push("unchecked");

@@ -1,6 +1,5 @@
 use crate::{
-    CommandWithGivenState, EntityError, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter,
-    ReplayableChanges,
+    EntityError, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, ReplayableChanges,
 };
 
 /// 多聚合 MI state-machine family 的运行时编排器。
@@ -33,12 +32,12 @@ where
     type Request;
     type LoadedState;
 
-    fn command<'a>(request: &'a Self::Request) -> F::Command<'a>;
+    fn command(request: &Self::Request) -> F::Command;
 
     fn given_state<'a>(
         request: &'a Self::Request,
         loaded: &'a Self::LoadedState,
-    ) -> <F::Command<'a> as CommandWithGivenState>::GivenState;
+    ) -> F::GivenState<'a>;
 }
 
 /// MI family runtime 所需的 outbound port。
@@ -122,7 +121,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
-    use crate::{CommandWithGivenState, EntityError, MiStateMachineV2Unchecked};
+    use crate::{EntityError, MiStateMachineV2Unchecked};
 
     #[derive(Debug, Clone)]
     struct StubRequest {
@@ -137,10 +136,6 @@ mod tests {
     #[derive(Debug, Clone)]
     struct StubCommand {
         log: Arc<Mutex<Vec<&'static str>>>,
-    }
-
-    impl CommandWithGivenState for StubCommand {
-        type GivenState = Arc<Mutex<Vec<&'static str>>>;
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,22 +171,23 @@ mod tests {
     struct StubFamily;
 
     impl MiStateMachineV2Unchecked for StubFamily {
-        type Command<'a>
-            = StubCommand
+        type Command = StubCommand;
+        type GivenState<'a>
+            = Arc<Mutex<Vec<&'static str>>>
         where
             Self: 'a;
         type Error = StubBusinessError;
         type AfterChanges = StubAfter;
 
-        fn pre_check_command<'a>(&self, cmd: &Self::Command<'a>) -> Result<(), Self::Error> {
+        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
             cmd.log.lock().unwrap().push("pre_check");
             Ok(())
         }
 
         fn validate_against_given_state<'a>(
             &self,
-            _cmd: &Self::Command<'a>,
-            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+            _cmd: &Self::Command,
+            given_state: &Self::GivenState<'a>,
         ) -> Result<(), Self::Error> {
             given_state.lock().unwrap().push("validate");
             Ok(())
@@ -199,8 +195,8 @@ mod tests {
 
         fn compute_after_changes_unchecked<'a>(
             &self,
-            _cmd: &Self::Command<'a>,
-            given_state: &<Self::Command<'a> as CommandWithGivenState>::GivenState,
+            _cmd: &Self::Command,
+            given_state: &Self::GivenState<'a>,
         ) -> Result<Self::AfterChanges, Self::Error> {
             given_state.lock().unwrap().push("compute");
             Ok(StubAfter)
@@ -211,7 +207,7 @@ mod tests {
         type BeforeAfterChanges = StubChanges;
 
         fn merge_before_and_after(
-            given_state: &<Self::Command<'_> as CommandWithGivenState>::GivenState,
+            given_state: &Self::GivenState<'_>,
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
             given_state.lock().unwrap().push("merge");
@@ -225,15 +221,14 @@ mod tests {
         type Request = StubRequest;
         type LoadedState = StubLoadedState;
 
-        fn command<'a>(request: &'a Self::Request) -> StubCommand {
+        fn command(request: &Self::Request) -> StubCommand {
             StubCommand { log: Arc::clone(&request.log) }
         }
 
         fn given_state<'a>(
             _request: &'a Self::Request,
             loaded: &'a Self::LoadedState,
-        ) -> <<StubFamily as MiStateMachineV2Unchecked>::Command<'a> as CommandWithGivenState>::GivenState
-        {
+        ) -> <StubFamily as MiStateMachineV2Unchecked>::GivenState<'a> {
             Arc::clone(&loaded.log)
         }
     }
