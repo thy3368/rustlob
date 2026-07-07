@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{
     MiStateMachineFamilyExecutor,
 };
 use example_core::{
-    Balance, Reservation, SpotOrderV2, SpotOrderV2CaseChanges, SpotOrderV2Command,
-    SpotOrderV2GivenState, SpotOrderV2UseCaseFamily,
+    PlaceSpotOrderV2Cmd, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
+    SpotOrderV2UseCaseFamily,
 };
 use serde::{Deserialize, Serialize};
 
@@ -196,50 +196,22 @@ impl PlaceSpotOrderV2Request {
     }
 }
 
-/// outbound.load_state 返回的 authoritative owned state。
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotOrderV2PlaceLoadedState {
-    pub taker_order: SpotOrderV2,
-    pub maker_orders: Vec<SpotOrderV2>,
-    pub taker_principal_reservation: Reservation,
-    pub taker_fee_reservation: Reservation,
-    pub maker_principal_reservations: Vec<Reservation>,
-    pub maker_fee_reservations: Vec<Reservation>,
-    pub settlement_balances: Vec<Balance>,
-    pub base_asset_id: String,
-    pub quote_asset_id: String,
-    pub fee_account_id: String,
-    pub maker_fee_bps: u64,
-    pub taker_fee_bps: u64,
-}
-
 #[allow(dead_code)]
 pub struct SpotOrderV2PlaceExecutionSpec;
 
 impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2PlaceExecutionSpec {
     type Request = PlaceSpotOrderV2Request;
-    type LoadedState = SpotOrderV2PlaceLoadedState;
 
-    fn command(_request: &Self::Request) -> SpotOrderV2Command {
-        SpotOrderV2Command::Place(Default::default())
-    }
-
-    fn given_state(loaded: &Self::LoadedState) -> SpotOrderV2GivenState<'_> {
-        SpotOrderV2GivenState::Place {
-            taker_order: &loaded.taker_order,
-            maker_orders: &loaded.maker_orders,
-            taker_principal_reservation: &loaded.taker_principal_reservation,
-            taker_fee_reservation: &loaded.taker_fee_reservation,
-            maker_principal_reservations: &loaded.maker_principal_reservations,
-            maker_fee_reservations: &loaded.maker_fee_reservations,
-            settlement_balances: &loaded.settlement_balances,
-            base_asset_id: &loaded.base_asset_id,
-            quote_asset_id: &loaded.quote_asset_id,
-            fee_account_id: &loaded.fee_account_id,
-            maker_fee_bps: loaded.maker_fee_bps,
-            taker_fee_bps: loaded.taker_fee_bps,
-        }
+    fn command(request: &Self::Request) -> SpotOrderV2Command {
+        SpotOrderV2Command::Place(PlaceSpotOrderV2Cmd {
+            party_id: request.party_id.clone(),
+            asset: request.asset,
+            is_buy: request.is_buy,
+            price: request.price.clone(),
+            size: request.size.clone(),
+            tif: request.tif.clone(),
+            cloid: request.cloid.clone(),
+        })
     }
 }
 
@@ -323,15 +295,13 @@ pub enum DefaultSpotOrderV2PlaceOutboundError {
 #[derive(Debug, Default)]
 pub struct DefaultSpotOrderV2PlaceOutbound;
 
-impl MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>
-    for DefaultSpotOrderV2PlaceOutbound
-{
+impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for DefaultSpotOrderV2PlaceOutbound {
     type Error = DefaultSpotOrderV2PlaceOutboundError;
 
-    fn load_state(
+    fn load_given_state(
         &self,
-        _request: &PlaceSpotOrderV2Request,
-    ) -> Result<SpotOrderV2PlaceLoadedState, Self::Error> {
+        _cmd: &SpotOrderV2Command,
+    ) -> Result<SpotOrderV2GivenState, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }
 
@@ -357,12 +327,12 @@ pub fn execute_place_spot_order_v2<OB>(
     MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyError, OB::Error>,
 >
 where
-    OB: MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
 {
     MiStateMachineFamilyExecutor
         .execute::<SpotOrderV2UseCaseFamily, SpotOrderV2PlaceExecutionSpec, OB>(
             &SpotOrderV2UseCaseFamily,
-            &request,
+            request,
             outbound,
         )
 }
@@ -408,7 +378,7 @@ async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, Excha
 
 fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::OrderStatusWire>
 where
-    OB: MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
     OB::Error: std::fmt::Display,
 {
     let party_id =
@@ -769,15 +739,16 @@ mod tests {
     #[derive(Debug, Default)]
     struct FakeSpotOrderV2Outbound;
 
-    impl MiFamilyOutbound<PlaceSpotOrderV2Request, SpotOrderV2PlaceLoadedState>
-        for FakeSpotOrderV2Outbound
-    {
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for FakeSpotOrderV2Outbound {
         type Error = FakeOutboundError;
 
-        fn load_state(
+        fn load_given_state(
             &self,
-            request: &PlaceSpotOrderV2Request,
-        ) -> Result<SpotOrderV2PlaceLoadedState, Self::Error> {
+            cmd: &SpotOrderV2Command,
+        ) -> Result<SpotOrderV2GivenState, Self::Error> {
+            let SpotOrderV2Command::Place(request) = cmd else {
+                panic!("expected place command");
+            };
             let taker_order = SpotOrderV2::new(
                 "taker-buy".to_string(),
                 request.asset,
@@ -815,7 +786,7 @@ mod tests {
                 1,
             )];
 
-            Ok(SpotOrderV2PlaceLoadedState {
+            Ok(SpotOrderV2GivenState::Place {
                 taker_principal_reservation: reservation(
                     &taker_order.order_id,
                     &taker_order.account_id,

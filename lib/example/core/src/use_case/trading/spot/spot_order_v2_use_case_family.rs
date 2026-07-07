@@ -471,9 +471,7 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                     after.principal_reservations_after,
                 )?,
                 updated_fee_reservations: zip_pairs(
-                    std::iter::once(taker_fee_reservation)
-                        .chain(maker_fee_reservations)
-                        .collect(),
+                    std::iter::once(taker_fee_reservation).chain(maker_fee_reservations).collect(),
                     after.fee_reservations_after,
                 )?,
                 updated_balances: merge_balance_pairs(settlement_balances, after.balances_after)?,
@@ -493,10 +491,7 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                 },
                 SpotOrderV2AfterChanges::Cancel(after),
             ) => Ok(SpotOrderV2CaseChanges::Cancel(CancelSpotOrderV2Changes {
-                updated_order: UpdatedEntityPair {
-                    before: order,
-                    after: after.order_after,
-                },
+                updated_order: UpdatedEntityPair { before: order, after: after.order_after },
                 updated_principal_reservation: UpdatedEntityPair {
                     before: principal_reservation,
                     after: after.principal_reservation_after,
@@ -1768,7 +1763,10 @@ mod tests {
         };
 
         let SpotOrderV2CaseChanges::Cancel(changes) = family
-            .compute_before_after_changes(&SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd::default()), state)
+            .compute_before_after_changes(
+                &SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd::default()),
+                state,
+            )
             .unwrap()
         else {
             panic!("expected cancel changes");
