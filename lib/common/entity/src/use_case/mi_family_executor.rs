@@ -30,18 +30,18 @@ where
     F: MiStateMachineOwnedV2BeforeAfter,
 {
     type Request;
-    type LoadedState;
 
     fn command(request: &Self::Request) -> F::Command;
-
-    fn given_state(loaded: &Self::LoadedState) -> F::GivenState<'_>;
 }
 
 /// MI family runtime 所需的 outbound port。
-pub trait MiFamilyOutbound<Request, LoadedState>: Send + Sync {
+pub trait MiFamilyOutbound<F>: Send + Sync
+where
+    F: MiStateMachineOwnedV2BeforeAfter,
+{
     type Error: std::error::Error;
 
-    fn load_state(&self, request: &Request) -> Result<LoadedState, Self::Error>;
+    fn load_given_state(&self, cmd: &F::Command) -> Result<F::GivenState, Self::Error>;
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
     fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
@@ -50,9 +50,8 @@ pub trait MiFamilyOutbound<Request, LoadedState>: Send + Sync {
 impl MiStateMachineFamilyExecutor {
     /// 执行一个 MI family use case 的运行时编排。
     ///
-    /// `request` 在整个执行过程中只被借用：它先用于派生 command 做
-    /// pre-check，再用于通过 outbound 加载 authoritative given state，并
-    /// 与已加载状态一起组装 family command 所需的 given state。
+    /// `request` 只用于派生 command。outbound 基于 command 加载 authoritative given state，
+    /// 后续业务校验与计算都只读取 command 和 owned given state。
     ///
     /// 固定执行顺序为：pre-check -> load state -> validate -> compute ->
     /// merge -> project events -> persist -> replay -> publish。该函数只负
@@ -74,19 +73,14 @@ impl MiStateMachineFamilyExecutor {
     where
         F: MiStateMachineOwnedV2BeforeAfter,
         S: MiFamilyExecutionSpec<F>,
-        OB: MiFamilyOutbound<S::Request, S::LoadedState>,
+        OB: MiFamilyOutbound<F>,
     {
-        // command pre-check 只依赖 request 派生出的 command，不取得 request 所有权。
-        {
-            let cmd = S::command(request);
-            family.pre_check_command(&cmd).map_err(MiFamilyExecutionError::Business)?;
-        }
+        let cmd = S::command(request);
+        family.pre_check_command(&cmd).map_err(MiFamilyExecutionError::Business)?;
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
-        let loaded = outbound.load_state(request).map_err(MiFamilyExecutionError::LoadState)?;
-
-        let cmd = S::command(request);
-        let given_state = S::given_state(&loaded);
+        let given_state =
+            outbound.load_given_state(&cmd).map_err(MiFamilyExecutionError::LoadState)?;
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
@@ -97,7 +91,7 @@ impl MiStateMachineFamilyExecutor {
             .compute_after_changes_unchecked(&cmd, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
-        let changes = F::merge_before_and_after(&given_state, after)
+        let changes = F::merge_before_and_after(given_state, after)
             .map_err(MiFamilyExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
@@ -126,10 +120,6 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    struct StubLoadedState {
-        log: Arc<Mutex<Vec<&'static str>>>,
-    }
-
     #[derive(Debug, Clone)]
     struct StubCommand {
         log: Arc<Mutex<Vec<&'static str>>>,
@@ -169,10 +159,7 @@ mod tests {
 
     impl MiStateMachineV2Unchecked for StubFamily {
         type Command = StubCommand;
-        type GivenState<'a>
-            = Arc<Mutex<Vec<&'static str>>>
-        where
-            Self: 'a;
+        type GivenState = Arc<Mutex<Vec<&'static str>>>;
         type Error = StubBusinessError;
         type AfterChanges = StubAfter;
 
@@ -181,19 +168,19 @@ mod tests {
             Ok(())
         }
 
-        fn validate_against_given_state<'a>(
+        fn validate_against_given_state(
             &self,
             _cmd: &Self::Command,
-            given_state: &Self::GivenState<'a>,
+            given_state: &Self::GivenState,
         ) -> Result<(), Self::Error> {
             given_state.lock().unwrap().push("validate");
             Ok(())
         }
 
-        fn compute_after_changes_unchecked<'a>(
+        fn compute_after_changes_unchecked(
             &self,
             _cmd: &Self::Command,
-            given_state: &Self::GivenState<'a>,
+            given_state: &Self::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
             given_state.lock().unwrap().push("compute");
             Ok(StubAfter)
@@ -204,7 +191,7 @@ mod tests {
         type BeforeAfterChanges = StubChanges;
 
         fn merge_before_and_after(
-            given_state: &Self::GivenState<'_>,
+            given_state: Self::GivenState,
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
             given_state.lock().unwrap().push("merge");
@@ -216,16 +203,9 @@ mod tests {
 
     impl MiFamilyExecutionSpec<StubFamily> for StubSpec {
         type Request = StubRequest;
-        type LoadedState = StubLoadedState;
 
         fn command(request: &Self::Request) -> StubCommand {
             StubCommand { log: Arc::clone(&request.log) }
-        }
-
-        fn given_state(
-            loaded: &Self::LoadedState,
-        ) -> <StubFamily as MiStateMachineV2Unchecked>::GivenState<'_> {
-            Arc::clone(&loaded.log)
         }
     }
 
@@ -234,12 +214,15 @@ mod tests {
         log: Arc<Mutex<Vec<&'static str>>>,
     }
 
-    impl MiFamilyOutbound<StubRequest, StubLoadedState> for StubOutbound {
+    impl MiFamilyOutbound<StubFamily> for StubOutbound {
         type Error = StubOutboundError;
 
-        fn load_state(&self, request: &StubRequest) -> Result<StubLoadedState, Self::Error> {
-            request.log.lock().unwrap().push("load_state");
-            Ok(StubLoadedState { log: Arc::clone(&request.log) })
+        fn load_given_state(
+            &self,
+            cmd: &<StubFamily as MiStateMachineV2Unchecked>::Command,
+        ) -> Result<<StubFamily as MiStateMachineV2Unchecked>::GivenState, Self::Error> {
+            cmd.log.lock().unwrap().push("load_state");
+            Ok(Arc::clone(&cmd.log))
         }
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

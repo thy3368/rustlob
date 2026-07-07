@@ -12,6 +12,8 @@ pub(crate) fn sample_state() -> PlaceImmediateOrderState {
             asset_id: "BTC".to_string(),
             available: 1_000,
             frozen: 0,
+            entry_notional: None,
+            identifier: None,
             version: 3,
         },
         quote_balance: Balance {
@@ -19,6 +21,8 @@ pub(crate) fn sample_state() -> PlaceImmediateOrderState {
             asset_id: "USDT".to_string(),
             available: 1_000,
             frozen: 0,
+            entry_notional: None,
+            identifier: None,
             version: 3,
         },
         market_rules: MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },

@@ -435,6 +435,8 @@ fn map_funding_balance_ledger_error(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
@@ -454,6 +456,7 @@ mod tests {
                     10,
                     HyperliquidPerpMarginMode::Cross,
                     10_000,
+                    None,
                     0,
                     0,
                     3,
@@ -469,6 +472,7 @@ mod tests {
                     10,
                     HyperliquidPerpMarginMode::Cross,
                     10_000,
+                    None,
                     0,
                     0,
                     5,
@@ -497,6 +501,10 @@ mod tests {
         }
     }
 
+    fn cross_cmd_with_rate(funding_rate_e8: i64) -> SettleHyperliquidPerpFundingCmd {
+        SettleHyperliquidPerpFundingCmd { funding_rate_e8, ..cross_cmd() }
+    }
+
     fn same_account_cross_state() -> SettleHyperliquidPerpFundingState {
         SettleHyperliquidPerpFundingState {
             positions: vec![
@@ -511,6 +519,7 @@ mod tests {
                     10,
                     HyperliquidPerpMarginMode::Cross,
                     10_000,
+                    None,
                     0,
                     0,
                     3,
@@ -526,6 +535,7 @@ mod tests {
                     10,
                     HyperliquidPerpMarginMode::Cross,
                     10_000,
+                    None,
                     0,
                     0,
                     4,
@@ -692,6 +702,101 @@ mod tests {
                 .iter()
                 .any(|settlement| settlement.account_id == entry.account_id)
         }));
+    }
+
+    #[test]
+    fn positive_funding_makes_long_pay_and_short_receive_with_absolute_fee() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let result = use_case.compute_changes(&cross_cmd(), cross_state()).unwrap();
+
+        assert!(result.created_settlements.iter().any(|settlement| {
+            settlement.position_id == "position-long"
+                && settlement.side == HyperliquidPerpPositionSide::Long
+                && settlement.is_payment
+                && settlement.funding_fee == 10
+                && settlement.funding_rate_e8 == 10_000
+        }));
+        assert!(result.created_settlements.iter().any(|settlement| {
+            settlement.position_id == "position-short"
+                && settlement.side == HyperliquidPerpPositionSide::Short
+                && !settlement.is_payment
+                && settlement.funding_fee == 10
+                && settlement.funding_rate_e8 == 10_000
+        }));
+    }
+
+    #[test]
+    fn negative_funding_reverses_direction_but_keeps_absolute_fee() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let cmd = cross_cmd_with_rate(-10_000);
+        let result = use_case.compute_changes(&cmd, cross_state()).unwrap();
+
+        assert!(result.created_settlements.iter().any(|settlement| {
+            settlement.position_id == "position-long"
+                && settlement.side == HyperliquidPerpPositionSide::Long
+                && !settlement.is_payment
+                && settlement.funding_fee == 10
+                && settlement.funding_rate_e8 == -10_000
+        }));
+        assert!(result.created_settlements.iter().any(|settlement| {
+            settlement.position_id == "position-short"
+                && settlement.side == HyperliquidPerpPositionSide::Short
+                && settlement.is_payment
+                && settlement.funding_fee == 10
+                && settlement.funding_rate_e8 == -10_000
+        }));
+        assert!(result.changed_margin_balances.iter().any(|pair| {
+            pair.before.account_id == "trader-1"
+                && pair.before.available == 1_000
+                && pair.after.available == 1_010
+        }));
+        assert!(result.changed_margin_balances.iter().any(|pair| {
+            pair.before.account_id == "trader-2"
+                && pair.before.available == 1_000
+                && pair.after.available == 990
+        }));
+    }
+
+    #[test]
+    fn funding_balance_ledger_reasons_align_with_created_settlements() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let cmd = cross_cmd();
+        let result = use_case.compute_changes(&cmd, cross_state()).unwrap();
+
+        let settlements_by_account: BTreeMap<&str, Vec<&HyperliquidPerpFundingSettlement>> =
+            result.created_settlements.iter().fold(BTreeMap::new(), |mut acc, settlement| {
+                acc.entry(settlement.account_id.as_str()).or_default().push(settlement);
+                acc
+            });
+
+        for entry in &result.created_balance_ledger_entries {
+            let expected_settlements =
+                settlements_by_account.get(entry.account_id.as_str()).unwrap();
+            match &entry.reason {
+                BalanceLedgerReason::SettlePerpFunding {
+                    funding_batch_id,
+                    settlement_ids,
+                    position_ids,
+                } => {
+                    assert_eq!(funding_batch_id, &cmd.funding_batch_id);
+                    assert_eq!(
+                        settlement_ids,
+                        &expected_settlements
+                            .iter()
+                            .map(|settlement| settlement.funding_settlement_id.clone())
+                            .collect::<Vec<_>>()
+                    );
+                    assert_eq!(
+                        position_ids,
+                        &expected_settlements
+                            .iter()
+                            .map(|settlement| settlement.position_id.clone())
+                            .collect::<Vec<_>>()
+                    );
+                }
+                _ => panic!("unexpected non-funding balance ledger reason"),
+            }
+        }
     }
 
     #[test]

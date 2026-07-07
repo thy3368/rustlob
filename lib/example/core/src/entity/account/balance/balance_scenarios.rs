@@ -193,6 +193,8 @@ proptest! {
         prop_assert_eq!(created_value(&old, "asset_id"), Some("USDT".to_string()));
         prop_assert_eq!(created_value(&old, "available"), Some(available.to_string()));
         prop_assert_eq!(created_value(&old, "frozen"), Some(frozen.to_string()));
+        prop_assert_eq!(created_value(&old, "entry_notional"), Some(String::new()));
+        prop_assert_eq!(created_value(&old, "identifier"), Some(String::new()));
 
         prop_assert_eq!(diff_value(&old, &new, "account_id"), Some("trader-1".to_string()));
         prop_assert_eq!(diff_value(&old, &new, "asset_id"), Some("USDT".to_string()));
@@ -203,6 +205,56 @@ proptest! {
         prop_assert_eq!(
             diff_value(&old, &new, "frozen"),
             (frozen != next_frozen).then(|| next_frozen.to_string())
+        );
+        prop_assert_eq!(diff_value(&old, &new, "entry_notional"), None);
+        prop_assert_eq!(diff_value(&old, &new, "identifier"), None);
+    }
+
+    #[test]
+    fn snapshot_facts_enter_create_and_diff_only_when_changed(
+        available in 0_u64..=1_000_000,
+        frozen in 0_u64..=1_000_000,
+        entry_notional in proptest::option::of(0_u64..=1_000_000),
+        next_entry_notional in proptest::option::of(0_u64..=1_000_000),
+        identifier in proptest::option::of("[a-z0-9-]{1,16}"),
+        next_identifier in proptest::option::of("[a-z0-9-]{1,16}"),
+        version in 0_u64..=1_000_000,
+    ) {
+        let old = Balance::new_with_snapshot_facts(
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            available,
+            frozen,
+            entry_notional,
+            identifier.clone(),
+            version,
+        );
+        let new = Balance::new_with_snapshot_facts(
+            "trader-1".to_string(),
+            "USDT".to_string(),
+            available,
+            frozen,
+            next_entry_notional,
+            next_identifier.clone(),
+            version + 1,
+        );
+
+        prop_assert_eq!(
+            created_value(&old, "entry_notional"),
+            Some(entry_notional.map(|value| value.to_string()).unwrap_or_default())
+        );
+        prop_assert_eq!(
+            created_value(&old, "identifier"),
+            Some(identifier.clone().unwrap_or_default())
+        );
+        prop_assert_eq!(
+            diff_value(&old, &new, "entry_notional"),
+            (entry_notional != next_entry_notional)
+                .then(|| next_entry_notional.map(|value| value.to_string()).unwrap_or_default())
+        );
+        prop_assert_eq!(
+            diff_value(&old, &new, "identifier"),
+            (identifier != next_identifier).then(|| next_identifier.unwrap_or_default())
         );
     }
 }

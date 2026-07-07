@@ -30,6 +30,7 @@ pub use settle_trade::{
     SettleSpotTradeUseCase,
 };
 pub use spot_order_v2_use_case_family::{
-    SpotOrderV2AfterChanges, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
-    SpotOrderV2UseCaseFamily, SpotOrderV2UseCaseFamilyError,
+    CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, PlaceSpotOrderV2Cmd, SpotOrderV2AfterChanges,
+    SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState, SpotOrderV2UseCaseFamily,
+    SpotOrderV2UseCaseFamilyError,
 };

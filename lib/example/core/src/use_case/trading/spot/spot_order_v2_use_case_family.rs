@@ -22,11 +22,31 @@ use crate::entity::{
     ReservationMarketKind, ReservationReleased, SettlementTransferVoucher,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct PlaceSpotOrderV2Cmd;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PlaceSpotOrderV2Cmd {
+    pub party_id: String,
+    pub asset: u32,
+    pub is_buy: bool,
+    pub price: String,
+    pub size: String,
+    pub tif: String,
+    pub cloid: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CancelSpotOrderV2Cmd;
+pub struct CancelSpotOrderV2Cmd {
+    pub party_id: String,
+    pub asset: u32,
+    pub lookup: CancelSpotOrderV2Lookup,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum CancelSpotOrderV2Lookup {
+    #[default]
+    Missing,
+    Oid(u64),
+    Cloid(String),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2Command {
@@ -34,29 +54,29 @@ pub enum SpotOrderV2Command {
     Cancel(CancelSpotOrderV2Cmd),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpotOrderV2GivenState<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotOrderV2GivenState {
     Place {
-        taker_order: &'a SpotOrderV2,
-        maker_orders: &'a [SpotOrderV2],
-        taker_principal_reservation: &'a Reservation,
-        taker_fee_reservation: &'a Reservation,
-        maker_principal_reservations: &'a [Reservation],
-        maker_fee_reservations: &'a [Reservation],
-        settlement_balances: &'a [Balance],
-        base_asset_id: &'a str,
-        quote_asset_id: &'a str,
-        fee_account_id: &'a str,
+        taker_order: SpotOrderV2,
+        maker_orders: Vec<SpotOrderV2>,
+        taker_principal_reservation: Reservation,
+        taker_fee_reservation: Reservation,
+        maker_principal_reservations: Vec<Reservation>,
+        maker_fee_reservations: Vec<Reservation>,
+        settlement_balances: Vec<Balance>,
+        base_asset_id: String,
+        quote_asset_id: String,
+        fee_account_id: String,
         maker_fee_bps: u64,
         taker_fee_bps: u64,
     },
     Cancel {
-        order: &'a SpotOrderV2,
-        principal_reservation: &'a Reservation,
-        fee_reservation: &'a Reservation,
-        balances: &'a [Balance],
-        base_asset_id: &'a str,
-        quote_asset_id: &'a str,
+        order: SpotOrderV2,
+        principal_reservation: Reservation,
+        fee_reservation: Reservation,
+        balances: Vec<Balance>,
+        base_asset_id: String,
+        quote_asset_id: String,
         maker_fee_bps: u64,
         taker_fee_bps: u64,
     },
@@ -244,10 +264,7 @@ impl ReplayableChanges for SpotOrderV2CaseChanges {
 
 impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
     type Command = SpotOrderV2Command;
-    type GivenState<'a>
-        = SpotOrderV2GivenState<'a>
-    where
-        Self: 'a;
+    type GivenState = SpotOrderV2GivenState;
     type Error = SpotOrderV2UseCaseFamilyError;
     type AfterChanges = SpotOrderV2AfterChanges;
 
@@ -257,10 +274,10 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
         }
     }
 
-    fn validate_against_given_state<'a>(
+    fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
-        given_state: &SpotOrderV2GivenState<'a>,
+        given_state: &SpotOrderV2GivenState,
     ) -> Result<(), Self::Error> {
         match (cmd, given_state) {
             (
@@ -358,10 +375,10 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
         }
     }
 
-    fn compute_after_changes_unchecked<'a>(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        given_state: &SpotOrderV2GivenState<'a>,
+        given_state: &SpotOrderV2GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         match (cmd, given_state) {
             (
@@ -425,7 +442,7 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
     type BeforeAfterChanges = SpotOrderV2CaseChanges;
 
     fn merge_before_and_after(
-        given_state: &SpotOrderV2GivenState<'_>,
+        given_state: SpotOrderV2GivenState,
         after: Self::AfterChanges,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
         match (given_state, after) {
@@ -443,26 +460,23 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                 SpotOrderV2AfterChanges::Place(after),
             ) => Ok(SpotOrderV2CaseChanges::Place(PlaceSpotOrderV2Changes {
                 updated_taker_order: UpdatedEntityPair {
-                    before: (*taker_order).clone(),
+                    before: taker_order,
                     after: after.taker_order_after,
                 },
-                updated_maker_orders: zip_pairs(maker_orders.to_vec(), after.maker_orders_after)?,
+                updated_maker_orders: zip_pairs(maker_orders, after.maker_orders_after)?,
                 updated_principal_reservations: zip_pairs(
-                    std::iter::once((*taker_principal_reservation).clone())
-                        .chain(maker_principal_reservations.iter().cloned())
+                    std::iter::once(taker_principal_reservation)
+                        .chain(maker_principal_reservations)
                         .collect(),
                     after.principal_reservations_after,
                 )?,
                 updated_fee_reservations: zip_pairs(
-                    std::iter::once((*taker_fee_reservation).clone())
-                        .chain(maker_fee_reservations.iter().cloned())
+                    std::iter::once(taker_fee_reservation)
+                        .chain(maker_fee_reservations)
                         .collect(),
                     after.fee_reservations_after,
                 )?,
-                updated_balances: merge_balance_pairs(
-                    settlement_balances.to_vec(),
-                    after.balances_after,
-                )?,
+                updated_balances: merge_balance_pairs(settlement_balances, after.balances_after)?,
                 created_trades: after.created_trades,
                 created_vouchers: after.created_vouchers,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
@@ -480,18 +494,18 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                 SpotOrderV2AfterChanges::Cancel(after),
             ) => Ok(SpotOrderV2CaseChanges::Cancel(CancelSpotOrderV2Changes {
                 updated_order: UpdatedEntityPair {
-                    before: (*order).clone(),
+                    before: order,
                     after: after.order_after,
                 },
                 updated_principal_reservation: UpdatedEntityPair {
-                    before: (*principal_reservation).clone(),
+                    before: principal_reservation,
                     after: after.principal_reservation_after,
                 },
                 updated_fee_reservation: UpdatedEntityPair {
-                    before: (*fee_reservation).clone(),
+                    before: fee_reservation,
                     after: after.fee_reservation_after,
                 },
-                updated_balances: merge_balance_pairs(balances.to_vec(), after.balances_after)?,
+                updated_balances: merge_balance_pairs(balances, after.balances_after)?,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
                 created_reservation_released: after.created_reservation_released,
             })),
@@ -1498,16 +1512,16 @@ mod tests {
             balance("fee", "USDT", 0, 0),
         ];
         let state = SpotOrderV2GivenState::Place {
-            taker_order: &taker,
-            maker_orders: &makers,
-            taker_principal_reservation: &principal,
-            taker_fee_reservation: &fee,
-            maker_principal_reservations: &maker_principal,
-            maker_fee_reservations: &maker_fee,
-            settlement_balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
-            fee_account_id: "fee",
+            taker_order: taker.clone(),
+            maker_orders: makers.clone(),
+            taker_principal_reservation: principal.clone(),
+            taker_fee_reservation: fee.clone(),
+            maker_principal_reservations: maker_principal.clone(),
+            maker_fee_reservations: maker_fee.clone(),
+            settlement_balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            fee_account_id: "fee".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };
@@ -1559,22 +1573,22 @@ mod tests {
             balance("fee", "USDT", 0, 0),
         ];
         let state = SpotOrderV2GivenState::Place {
-            taker_order: &taker,
-            maker_orders: &makers,
-            taker_principal_reservation: &principal,
-            taker_fee_reservation: &fee,
-            maker_principal_reservations: &maker_principal,
-            maker_fee_reservations: &maker_fee,
-            settlement_balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
-            fee_account_id: "fee",
+            taker_order: taker.clone(),
+            maker_orders: makers.clone(),
+            taker_principal_reservation: principal.clone(),
+            taker_fee_reservation: fee.clone(),
+            maker_principal_reservations: maker_principal.clone(),
+            maker_fee_reservations: maker_fee.clone(),
+            settlement_balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            fee_account_id: "fee".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };
 
         let SpotOrderV2CaseChanges::Place(changes) = family
-            .compute_before_after_changes(&SpotOrderV2Command::Place(Default::default()), &state)
+            .compute_before_after_changes(&SpotOrderV2Command::Place(Default::default()), state)
             .unwrap()
         else {
             panic!("expected place case changes");
@@ -1622,16 +1636,16 @@ mod tests {
             balance("fee", "USDT", 0, 0),
         ];
         let state = SpotOrderV2GivenState::Place {
-            taker_order: &taker,
-            maker_orders: &makers,
-            taker_principal_reservation: &principal,
-            taker_fee_reservation: &fee,
-            maker_principal_reservations: &maker_principal,
-            maker_fee_reservations: &maker_fee,
-            settlement_balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
-            fee_account_id: "fee",
+            taker_order: taker.clone(),
+            maker_orders: makers.clone(),
+            taker_principal_reservation: principal.clone(),
+            taker_fee_reservation: fee.clone(),
+            maker_principal_reservations: maker_principal.clone(),
+            maker_fee_reservations: maker_fee.clone(),
+            settlement_balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            fee_account_id: "fee".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };
@@ -1641,7 +1655,7 @@ mod tests {
             .unwrap();
 
         let SpotOrderV2CaseChanges::Place(changes) =
-            SpotOrderV2UseCaseFamily::merge_before_and_after(&state, after).unwrap()
+            SpotOrderV2UseCaseFamily::merge_before_and_after(state, after).unwrap()
         else {
             panic!("expected place case changes");
         };
@@ -1692,16 +1706,16 @@ mod tests {
             balance("fee", "USDT", 0, 0),
         ];
         let state = SpotOrderV2GivenState::Place {
-            taker_order: &taker,
-            maker_orders: &makers,
-            taker_principal_reservation: &principal,
-            taker_fee_reservation: &fee,
-            maker_principal_reservations: &maker_principal,
-            maker_fee_reservations: &maker_fee,
-            settlement_balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
-            fee_account_id: "fee",
+            taker_order: taker.clone(),
+            maker_orders: makers.clone(),
+            taker_principal_reservation: principal.clone(),
+            taker_fee_reservation: fee.clone(),
+            maker_principal_reservations: maker_principal.clone(),
+            maker_fee_reservations: maker_fee.clone(),
+            settlement_balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            fee_account_id: "fee".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };
@@ -1743,18 +1757,18 @@ mod tests {
         );
         let balances = vec![balance("buyer", "USDT", 1000, 201)];
         let state = SpotOrderV2GivenState::Cancel {
-            order: &order,
-            principal_reservation: &principal,
-            fee_reservation: &fee,
-            balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
+            order: order.clone(),
+            principal_reservation: principal.clone(),
+            fee_reservation: fee.clone(),
+            balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };
 
         let SpotOrderV2CaseChanges::Cancel(changes) = family
-            .compute_before_after_changes(&SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd), &state)
+            .compute_before_after_changes(&SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd::default()), state)
             .unwrap()
         else {
             panic!("expected cancel changes");
@@ -1790,12 +1804,12 @@ mod tests {
         );
         let balances = vec![balance("buyer", "USDT", 1000, 201)];
         let state = SpotOrderV2GivenState::Cancel {
-            order: &order,
-            principal_reservation: &principal,
-            fee_reservation: &fee,
-            balances: &balances,
-            base_asset_id: "BTC",
-            quote_asset_id: "USDT",
+            order: order.clone(),
+            principal_reservation: principal.clone(),
+            fee_reservation: fee.clone(),
+            balances: balances.clone(),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         };

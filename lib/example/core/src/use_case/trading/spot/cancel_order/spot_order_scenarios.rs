@@ -168,6 +168,8 @@ fn balance(asset_id: &str, available: u64, frozen: u64) -> Balance {
         asset_id: asset_id.to_string(),
         available,
         frozen,
+        entry_notional: None,
+        identifier: None,
         version: 3,
     }
 }

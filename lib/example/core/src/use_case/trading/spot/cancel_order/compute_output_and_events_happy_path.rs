@@ -51,6 +51,8 @@ fn base_balance(available: u64, frozen: u64) -> Balance {
         asset_id: "BTC".to_string(),
         available,
         frozen,
+        entry_notional: None,
+        identifier: None,
         version: 3,
     }
 }
@@ -61,6 +63,8 @@ fn quote_balance(available: u64, frozen: u64) -> Balance {
         asset_id: "USDT".to_string(),
         available,
         frozen,
+        entry_notional: None,
+        identifier: None,
         version: 3,
     }
 }

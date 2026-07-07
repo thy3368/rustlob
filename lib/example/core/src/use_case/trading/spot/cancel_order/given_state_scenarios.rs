@@ -35,6 +35,8 @@ impl CancelSpotOrderGivenStateScenario {
                     asset_id: "BTC".to_string(),
                     available: 0,
                     frozen: 0,
+                    entry_notional: None,
+                    identifier: None,
                     version: 3,
                 },
                 quote_balance: Balance {
@@ -42,6 +44,8 @@ impl CancelSpotOrderGivenStateScenario {
                     asset_id: "USDT".to_string(),
                     available: 0,
                     frozen: 0,
+                    entry_notional: None,
+                    identifier: None,
                     version: 3,
                 },
             },

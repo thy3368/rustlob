@@ -134,6 +134,8 @@ mod tests {
                 asset_id: "USDT".to_string(),
                 available: 1_000,
                 frozen: 50,
+                entry_notional: None,
+                identifier: None,
                 version: 3,
             },
         }
