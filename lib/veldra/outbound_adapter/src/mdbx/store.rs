@@ -183,8 +183,7 @@ impl VeldraMdbxBlockStore {
                     )
                     .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
                 }
-                BlockEntityChange::SpotTradeCreated(_)
-                | BlockEntityChange::SpotSettlementCreated(_) => {}
+                BlockEntityChange::SpotTradeCreated(_) => {}
             }
         }
 
