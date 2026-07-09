@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 bincode = "1.3"
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 example_core = { path = "../../example/core" }
 libmdbx = "0.6"
 serde = { version = "1", features = ["derive"] }

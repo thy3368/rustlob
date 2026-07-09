@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use cmd_handler::command_use_case_def2::CommandUseCase4;
+use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
     Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
@@ -134,7 +134,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
 
 pub fn built_block() -> BuildBlockFromCommandsChanges {
     BuildBlockFromCommandsUseCase
-        .compute_changes(&sample_command(), sample_state())
+        .compute_after_changes_unchecked(&sample_command(), &sample_state())
         .expect("block should build")
 }
 
