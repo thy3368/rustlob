@@ -3,8 +3,8 @@ use example_core::entity::AssetReservation;
 use example_core::{
     Balance, ExecuteImmediateSpotOrderPipelineChanges, ExecuteImmediateSpotOrderPipelineCmd,
     MatchSpotOrderCmd, MatchSpotOrderState, MatchSpotOrderUseCase, PlaceImmediateOrderState,
-    PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState,
-    SettleSpotTradeUseCase, SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
+    PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState, SettleSpotTradeUseCase,
+    SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
 };
 
 use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
@@ -193,7 +193,7 @@ fn execute_immediate_spot_pipeline(
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
     let settled_trade_ids_appended =
-        settle_changes.settlements.iter().map(|settlement| settlement.trade_id.clone()).collect();
+        match_output.trades.iter().map(|trade| trade.trade_id.clone()).collect();
 
     Ok(SpotPipelineExecutionBundle {
         changes: ExecuteImmediateSpotOrderPipelineChanges {
@@ -337,10 +337,7 @@ fn spot_reservations_after(
     let mut reservations = vec![changes.place_output.created_reservation.clone()];
     if let Some(settle_changes) = &changes.settle_changes {
         reservations.extend(
-            settle_changes
-                .updated_reservations
-                .iter()
-                .map(|reservation| reservation.after.clone()),
+            settle_changes.updated_reservations.iter().map(|reservation| reservation.after.clone()),
         );
     }
     reservations

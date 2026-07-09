@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
-use example_core::{Balance, SpotOrder, SpotSettlement, SpotTrade};
+use example_core::{Balance, SpotOrder, SpotTrade};
 use thiserror::Error;
 
 use crate::entity::{BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
@@ -29,7 +29,6 @@ pub enum BlockEntityChange {
     SpotOrderUpdated(UpdatedEntityPair<SpotOrder>),
     BalanceUpdated(UpdatedEntityPair<Balance>),
     SpotTradeCreated(SpotTrade),
-    SpotSettlementCreated(SpotSettlement),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -56,9 +55,6 @@ impl ReplayableChanges for BuildBlockFromCommandsChanges {
                 }
                 BlockEntityChange::SpotTradeCreated(trade) => {
                     events.push(trade.track_create_event()?);
-                }
-                BlockEntityChange::SpotSettlementCreated(settlement) => {
-                    events.push(settlement.track_create_event()?);
                 }
             }
         }

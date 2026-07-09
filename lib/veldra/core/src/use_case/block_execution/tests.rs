@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
+use cmd_handler::command_use_case_def2::ReplayableChanges;
+use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
     Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
@@ -276,14 +277,9 @@ fn spot_order_after<'a>(
 }
 
 #[test]
-fn role_is_block_builder() {
-    assert_eq!(CommandUseCase4::role(&BuildBlockFromCommandsUseCase), "BlockBuilder");
-}
-
-#[test]
 fn pre_check_rejects_zero_block_height() {
     let cmd = BuildBlockFromCommandsCommand { block_height: 0 };
-    let result = CommandUseCase4::pre_check_command(&BuildBlockFromCommandsUseCase, &cmd);
+    let result = MiStateMachineV2Unchecked::pre_check_command(&BuildBlockFromCommandsUseCase, &cmd);
     assert_eq!(result, Err(BuildBlockError::BlockHeightMustBePositive));
 }
 
@@ -291,7 +287,7 @@ fn pre_check_rejects_zero_block_height() {
 fn validate_rejects_empty_batch() {
     let mut state = sample_state();
     state.commands.clear();
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -301,10 +297,10 @@ fn validate_rejects_empty_batch() {
 
 #[test]
 fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
-    let changes = CommandUseCase4::compute_changes(
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        sample_state(),
+        &sample_state(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
     let new_block = block(&changes);
@@ -332,15 +328,15 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
 
 #[test]
 fn same_input_produces_same_block_commitment() -> Result<(), BuildBlockError> {
-    let first = CommandUseCase4::compute_changes(
+    let first = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        sample_state(),
+        &sample_state(),
     )?;
-    let second = CommandUseCase4::compute_changes(
+    let second = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        sample_state(),
+        &sample_state(),
     )?;
 
     assert_eq!(block(&first), block(&second));
@@ -358,8 +354,11 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![treasury_envelope()];
 
-    let changes =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     assert_eq!(changes.ordered_changes.len(), 1);
@@ -373,10 +372,10 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
 
 #[test]
 fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
-    let changes = CommandUseCase4::compute_changes(
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        state_with_open_buy_order(),
+        &state_with_open_buy_order(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
@@ -398,10 +397,10 @@ fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
 
 #[test]
 fn spot_cancel_sell_order_releases_base_balance() -> Result<(), BuildBlockError> {
-    let changes = CommandUseCase4::compute_changes(
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        state_with_open_sell_order(),
+        &state_with_open_sell_order(),
     )?;
 
     let next_order = spot_order_after(&changes, "order-42");
@@ -419,8 +418,11 @@ fn spot_cancel_missing_order_returns_spot_execution_error() {
     let mut state = sample_state();
     state.commands = vec![cancel_envelope()];
 
-    let result =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state);
+    let result = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
 
     assert_eq!(result, Err(BuildBlockError::SpotExecution("open order was not found".to_string())));
 }
@@ -434,8 +436,11 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let changes =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     assert_eq!(changes.ordered_changes.len(), 3);
@@ -476,8 +481,11 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let changes =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
@@ -605,7 +613,7 @@ fn validate_rejects_duplicate_command_id_in_batch() {
         treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
     ];
 
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -629,7 +637,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
         treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
     ];
 
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -650,7 +658,7 @@ fn validate_rejects_zero_timestamp_command() {
     state.commands =
         vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, PlaceOrderTimeInForce::Gtc)];
 
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -669,7 +677,7 @@ fn validate_rejects_envelope_account_mismatch() {
     mismatched.account_id = "operator-1".to_string();
     state.commands = vec![mismatched];
 
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -694,7 +702,7 @@ fn validate_rejects_non_canonical_command_order() {
         sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = CommandUseCase4::validate_against_state(
+    let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -726,8 +734,11 @@ fn compute_changes_rejects_non_canonical_batch() {
         sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state);
+    let result = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    );
 
     assert_eq!(result, Err(BuildBlockError::NonCanonicalCommandOrder));
 }
@@ -747,8 +758,11 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
     let expected_root =
         stable_hash_hex(&canonical.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>());
 
-    let changes =
-        CommandUseCase4::compute_changes(&BuildBlockFromCommandsUseCase, &sample_command(), state)?;
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
+        &BuildBlockFromCommandsUseCase,
+        &sample_command(),
+        &state,
+    )?;
 
     assert_eq!(block(&changes).commands_root, expected_root);
 
@@ -758,10 +772,10 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
 #[test]
 fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
 -> Result<(), BuildBlockError> {
-    let changes = CommandUseCase4::compute_changes(
+    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
-        sample_state(),
+        &sample_state(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 

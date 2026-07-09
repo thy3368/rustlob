@@ -1,5 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
+use cmd_handler::command_use_case_def2::ReplayableChanges;
+use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
     CancelSpotOrderChanges, DepositQuoteChanges, ExecuteImmediateSpotOrderPipelineChanges,
     WithdrawQuoteChanges,
@@ -23,15 +24,11 @@ use crate::use_case::block_execution::handler::perp_unsupported_block_command_ha
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BuildBlockFromCommandsUseCase;
 
-impl CommandUseCase4 for BuildBlockFromCommandsUseCase {
+impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
     type Command = BuildBlockFromCommandsCommand;
     type GivenState = BuildBlockFromCommandsState;
     type Error = BuildBlockError;
-    type Changes = BuildBlockFromCommandsChanges;
-
-    fn role(&self) -> &'static str {
-        "BlockBuilder"
-    }
+    type AfterChanges = BuildBlockFromCommandsChanges;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.block_height == 0 {
@@ -40,7 +37,7 @@ impl CommandUseCase4 for BuildBlockFromCommandsUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -60,14 +57,14 @@ impl CommandUseCase4 for BuildBlockFromCommandsUseCase {
         validate_batch_commands(&commands, &state.exchange_state)
     }
 
-    fn compute_changes(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
-        let BuildBlockFromCommandsState { parent_block_hash, mut exchange_state, commands, .. } =
-            state;
-        let commands = validate_and_clone_canonical_commands(&commands)?;
+        state: &Self::GivenState,
+    ) -> Result<Self::AfterChanges, Self::Error> {
+        let parent_block_hash = state.parent_block_hash.clone();
+        let mut exchange_state = state.exchange_state.clone();
+        let commands = validate_and_clone_canonical_commands(&state.commands)?;
         let ordered_changes = execute_batch_commands(&commands, &mut exchange_state)?;
         let events = BuildBlockFromCommandsChanges {
             new_block: None,
@@ -192,9 +189,6 @@ fn extract_spot_pipeline_changes(
     }
 
     if let Some(settle_changes) = &execution.settle_changes {
-        for settlement in &settle_changes.settlements {
-            ordered_changes.push(BlockEntityChange::SpotSettlementCreated(settlement.clone()));
-        }
         for balance in &settle_changes.updated_balances {
             ordered_changes.push(BlockEntityChange::BalanceUpdated(balance.clone()));
         }
