@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
     Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
     PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
@@ -13,7 +12,7 @@ use veldra_core::entity::{
 };
 use veldra_core::use_case::{
     BlockEntityChange, BuildBlockFromCommandsChanges, BuildBlockFromCommandsCommand,
-    BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase,
+    BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase, MiStateMachineV2Unchecked,
 };
 
 pub struct TestDir {
