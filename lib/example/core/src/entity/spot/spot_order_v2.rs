@@ -95,6 +95,17 @@ pub struct SpotOrderFeeConsumeRequirement {
     pub fee_bps: u64,
 }
 
+/// 订单侧 principal / fee 释放需求组合。
+///
+/// use case 只读取该组合语义，再映射到 authoritative reservation / balance 变化。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotOrderReleaseRequirements {
+    /// 订单 principal 冻结释放需求。
+    pub principal: Option<SpotOrderReleaseRequirement>,
+    /// 订单 fee 冻结释放需求。
+    pub fee: Option<SpotOrderReleaseRequirement>,
+}
+
 /// 订单终态允许释放冻结的业务原因。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderReleaseReason {
@@ -142,6 +153,9 @@ pub enum SpotOrderV2MatchError {
     /// 订单当前生命周期状态不允许继续撮合。
     #[error("order is not matchable")]
     OrderNotMatchable,
+    /// 订单当前生命周期状态不允许用户撤单。
+    #[error("order is not cancelable")]
+    OrderNotCancelable,
     /// maker 和 taker 不能是同一张订单。
     #[error("maker order must not be the taker order")]
     MakerIsTaker,
@@ -170,13 +184,6 @@ pub enum SpotOrderV2MatchError {
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SpotOrderV2Finalization {
-    pub(crate) next_filled_qty: u64,
-    pub(crate) status: SpotOrderStatus,
-    pub(crate) status_reason: Option<SpotOrderStatusReason>,
-}
-
 /// `SpotOrder v2` 的目标态订单聚合。
 ///
 /// 这是一个 `MomentInterval + AggregateRoot`，只表达订单自身的业务真相：
@@ -192,43 +199,43 @@ pub(crate) struct SpotOrderV2Finalization {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderV2 {
     /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
+    order_id: String,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
-    pub asset: u32,
+    asset: u32,
     /// Hyperliquid 返回的 numeric `oid`；订单尚未被交易所确认时可以为空。
-    pub exchange_oid: Option<u64>,
+    exchange_oid: Option<u64>,
     /// 拥有该订单的交易账户 ID。
-    pub account_id: String,
+    account_id: String,
     /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
-    pub symbol: String,
+    symbol: String,
     /// 买卖方向。
-    pub side: SpotOrderSide,
+    side: SpotOrderSide,
     /// 进入执行流程后的执行意图。
-    pub execution: SpotOrderExecution,
+    execution: SpotOrderExecution,
     /// Hyperliquid `t.limit.tif`。市价意图通常映射为 `Ioc`。
-    pub time_in_force: SpotOrderTimeInForce,
+    time_in_force: SpotOrderTimeInForce,
     /// 以 base asset 计价的下单数量。
-    pub qty: u64,
+    qty: u64,
     /// 已成交数量。
-    pub filled_qty: u64,
+    filled_qty: u64,
     /// 本地生命周期状态。
-    pub status: SpotOrderStatus,
+    status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
-    pub status_reason: Option<SpotOrderStatusReason>,
+    status_reason: Option<SpotOrderStatusReason>,
     /// 订单建立时记录的 base 冻结快照，主要用于卖单。
     ///
     /// 该字段只保留订单内初始冻结事实或回放兼容语义，不代表余额侧 authoritative
     /// remaining hold。
-    pub reserved_base: u64,
+    reserved_base: u64,
     /// 订单建立时记录的 quote 冻结快照，主要用于买单。
     ///
     /// 该字段只保留订单内初始冻结事实或回放兼容语义，不代表余额侧 authoritative
     /// remaining hold。
-    pub reserved_quote: u64,
+    reserved_quote: u64,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
-    pub client_order_id: Option<String>,
+    client_order_id: Option<String>,
     /// 当前订单实体版本，用于生成可重放更新事件。
-    pub version: u64,
+    version: u64,
 }
 
 impl SpotOrderV2 {
@@ -275,6 +282,46 @@ impl SpotOrderV2 {
         }
     }
 
+    /// 返回本系统生成的稳定订单 ID。
+    pub fn order_id(&self) -> &str {
+        &self.order_id
+    }
+
+    /// 返回拥有该订单的交易账户 ID。
+    pub fn account_id(&self) -> &str {
+        &self.account_id
+    }
+
+    /// 返回 Hyperliquid 现货资产编号。
+    pub fn asset(&self) -> u32 {
+        self.asset
+    }
+
+    /// 返回交易对展示名。
+    pub fn symbol(&self) -> &str {
+        &self.symbol
+    }
+
+    /// 返回买卖方向。
+    pub fn side(&self) -> SpotOrderSide {
+        self.side
+    }
+
+    /// 返回本地生命周期状态。
+    pub fn status(&self) -> SpotOrderStatus {
+        self.status
+    }
+
+    /// 返回 Hyperliquid 细分状态原因。
+    pub fn status_reason(&self) -> Option<SpotOrderStatusReason> {
+        self.status_reason
+    }
+
+    /// 返回交易所确认后的 numeric `oid`。
+    pub fn exchange_oid(&self) -> Option<u64> {
+        self.exchange_oid
+    }
+
     /// 返回订单是否属于指定账户。
     pub fn belongs_to_account(&self, account_id: &str) -> bool {
         self.account_id == account_id
@@ -291,7 +338,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单限价价格。
-    pub fn limit_price(&self) -> Option<u64> {
+    fn limit_price(&self) -> Option<u64> {
         self.execution.limit_price()
     }
 
@@ -308,7 +355,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单当前剩余可成交数量。
-    pub fn remaining_qty(&self) -> Option<u64> {
+    fn remaining_qty(&self) -> Option<u64> {
         self.qty.checked_sub(self.filled_qty)
     }
 
@@ -378,7 +425,7 @@ impl SpotOrderV2 {
     ///
     /// 只有当前仍可撤单的订单会返回释放需求；数量是订单侧允许释放的上界，
     /// 外部用例仍需对照 authoritative hold 状态决定实际释放量。
-    pub fn cancel_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
+    fn cancel_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
         if !self.can_be_cancelled() {
             return None;
         }
@@ -393,7 +440,7 @@ impl SpotOrderV2 {
     /// 返回订单在终态下允许释放的冻结需求。
     ///
     /// 该方法只表达订单侧语义，不直接读取 reservation / balance 当前 remaining hold。
-    pub fn terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
+    fn terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
         let reason = match self.status {
             SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => return None,
             SpotOrderStatus::Filled => SpotOrderReleaseReason::FilledCleanup,
@@ -436,7 +483,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回撤单语义下允许释放 fee reservation remainder 的订单侧 requirement。
-    pub fn fee_cancel_release_requirement(
+    fn fee_cancel_release_requirement(
         &self,
         maker_fee_bps: u64,
         taker_fee_bps: u64,
@@ -458,7 +505,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单终态下允许释放 fee reservation remainder 的订单侧 requirement。
-    pub fn fee_terminal_release_requirement(
+    fn fee_terminal_release_requirement(
         &self,
         maker_fee_bps: u64,
         taker_fee_bps: u64,
@@ -506,12 +553,36 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单在当前终态下是否存在订单侧释放需求。
-    pub fn has_terminal_release(&self) -> bool {
+    fn has_terminal_release(&self) -> bool {
         self.terminal_release_requirement().is_some()
     }
 
+    /// 返回用户撤单时订单侧允许释放的 principal / fee requirement。
+    pub fn cancel_release_requirements(
+        &self,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+    ) -> SpotOrderReleaseRequirements {
+        SpotOrderReleaseRequirements {
+            principal: self.cancel_release_requirement(),
+            fee: self.fee_cancel_release_requirement(maker_fee_bps, taker_fee_bps),
+        }
+    }
+
+    /// 返回订单终态下允许释放的 principal / fee requirement。
+    pub fn terminal_release_requirements(
+        &self,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+    ) -> SpotOrderReleaseRequirements {
+        SpotOrderReleaseRequirements {
+            principal: self.terminal_release_requirement(),
+            fee: self.fee_terminal_release_requirement(maker_fee_bps, taker_fee_bps),
+        }
+    }
+
     /// 返回该订单是否允许撤销。
-    pub fn can_be_cancelled(&self) -> bool {
+    fn can_be_cancelled(&self) -> bool {
         self.status.is_cancelable()
     }
 
@@ -543,7 +614,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否应进入撮合。
-    pub(crate) fn should_enter_matching(
+    fn should_enter_matching(
         &self,
         best_maker: Option<&SpotOrderV2>,
     ) -> Result<bool, SpotOrderV2MatchError> {
@@ -562,7 +633,7 @@ impl SpotOrderV2 {
     }
 
     /// 校验订单当前是否仍然允许进入撮合。
-    pub(crate) fn ensure_matchable(&self) -> Result<(), SpotOrderV2MatchError> {
+    fn ensure_matchable(&self) -> Result<(), SpotOrderV2MatchError> {
         if !self.has_consistent_execution_state() {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
@@ -576,7 +647,7 @@ impl SpotOrderV2 {
     }
 
     /// 校验该 maker 是否可以作为给定 taker 的撮合对手方。
-    pub(crate) fn ensure_compatible_maker_for(
+    fn ensure_compatible_maker_for(
         &self,
         taker: &SpotOrderV2,
     ) -> Result<(), SpotOrderV2MatchError> {
@@ -599,7 +670,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会以当前价格和 maker 价格交叉成交。
-    pub(crate) fn crosses_maker_price(&self, maker_price: u64) -> bool {
+    fn crosses_maker_price(&self, maker_price: u64) -> bool {
         match self.side {
             SpotOrderSide::Buy => self.order_price() >= maker_price,
             SpotOrderSide::Sell => self.order_price() <= maker_price,
@@ -607,7 +678,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会和给定 maker 订单成交。
-    pub(crate) fn crosses_order(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
+    fn crosses_order(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
         if self.side == maker.side {
             return Err(SpotOrderV2MatchError::SameSideMaker);
         }
@@ -617,7 +688,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会因 ALO 语义在进入撮合前被拒绝。
-    pub(crate) fn would_be_rejected_as_alo(
+    fn would_be_rejected_as_alo(
         &self,
         best_maker: Option<&SpotOrderV2>,
     ) -> Result<bool, SpotOrderV2MatchError> {
@@ -629,7 +700,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回给定成交后数量对应的撮合状态。
-    pub(crate) fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus {
+    fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus {
         if next_filled_qty == self.qty {
             SpotOrderStatus::Filled
         } else {
@@ -637,97 +708,164 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 应用一次 maker 成交推进。
-    pub(crate) fn apply_fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+    fn transition_to(
+        &mut self,
+        status: SpotOrderStatus,
+        status_reason: Option<SpotOrderStatusReason>,
+    ) -> Result<(), SpotOrderV2MatchError> {
+        self.version =
+            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        self.status = status;
+        self.status_reason = status_reason;
+        Ok(())
+    }
+
+    /// 按成交事实推进订单生命周期。
+    pub(crate) fn fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
         let next_filled_qty = self
             .filled_qty
             .checked_add(added_fill_qty)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        let next_version =
-            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        if next_filled_qty > self.qty {
+            return Err(SpotOrderV2MatchError::InconsistentExecutionState);
+        }
+        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
         self.filled_qty = next_filled_qty;
-        self.status = self.matched_status_for(next_filled_qty);
-        self.version = next_version;
+        self.transition_to(self.matched_status_for(next_filled_qty), None)?;
         Ok(())
     }
 
-    /// 返回本轮撮合结束后 taker 订单应进入的生命周期状态。
-    pub(crate) fn finalize_after_match(
-        &self,
+    /// 按用户主动撤单语义关闭订单。
+    pub(crate) fn cancel_by_user(&mut self) -> Result<(), SpotOrderV2MatchError> {
+        if !self.can_be_cancelled() {
+            return Err(SpotOrderV2MatchError::OrderNotCancelable);
+        }
+        self.transition_to(SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::CanceledByUser))
+    }
+
+    /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
+    fn cancel_ioc_unfilled(&mut self, next_filled_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        self.filled_qty = next_filled_qty;
+        self.transition_to(
+            SpotOrderStatus::Canceled,
+            Some(SpotOrderStatusReason::IocCancelRejected),
+        )
+    }
+
+    /// 按 IOC / 市价订单无流动性语义拒绝订单。
+    pub(crate) fn reject_as_no_liquidity(&mut self) -> Result<(), SpotOrderV2MatchError> {
+        self.transition_to(SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()))
+    }
+
+    /// 应用 taker 本轮撮合结束后的业务结果。
+    pub(crate) fn finish_after_match(
+        &mut self,
         added_fill_qty: u64,
-    ) -> Result<SpotOrderV2Finalization, SpotOrderV2MatchError> {
+    ) -> Result<(), SpotOrderV2MatchError> {
         let next_filled_qty = self
             .filled_qty
             .checked_add(added_fill_qty)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
 
         match self.time_in_force {
-            SpotOrderTimeInForce::Gtc => {
+            SpotOrderTimeInForce::Gtc | SpotOrderTimeInForce::Alo => {
                 if added_fill_qty == 0 {
                     return Err(SpotOrderV2MatchError::NoTradesMatched);
                 }
-
-                Ok(SpotOrderV2Finalization {
-                    next_filled_qty,
-                    status: self.matched_status_for(next_filled_qty),
-                    status_reason: None,
-                })
+                self.fill(added_fill_qty)
             }
             SpotOrderTimeInForce::Ioc => {
-                let (status, status_reason) = if added_fill_qty == 0 {
-                    (SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()))
-                } else if next_filled_qty == self.qty {
-                    (SpotOrderStatus::Filled, None)
-                } else {
-                    (SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::IocCancelRejected))
-                };
-
-                Ok(SpotOrderV2Finalization { next_filled_qty, status, status_reason })
-            }
-            SpotOrderTimeInForce::Alo => {
                 if added_fill_qty == 0 {
-                    return Err(SpotOrderV2MatchError::NoTradesMatched);
+                    self.reject_as_no_liquidity()
+                } else if next_filled_qty == self.qty {
+                    self.fill(added_fill_qty)
+                } else {
+                    self.cancel_ioc_unfilled(next_filled_qty)
                 }
-
-                Ok(SpotOrderV2Finalization {
-                    next_filled_qty,
-                    status: self.matched_status_for(next_filled_qty),
-                    status_reason: None,
-                })
             }
         }
     }
 
-    /// 应用 taker 撮合结束后的目标状态。
-    pub(crate) fn apply_finalization(
-        &mut self,
-        finalization: SpotOrderV2Finalization,
-    ) -> Result<(), SpotOrderV2MatchError> {
-        let next_version =
-            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        self.filled_qty = finalization.next_filled_qty;
-        self.status = finalization.status;
-        self.status_reason = finalization.status_reason;
-        self.version = next_version;
-        Ok(())
-    }
-
     /// 将 ALO 订单按“会立即吃单”语义拒绝。
     pub(crate) fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderV2MatchError> {
-        let next_version =
-            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        self.status = SpotOrderStatus::Rejected;
-        self.status_reason = Some(SpotOrderStatusReason::BadAloPxRejected);
-        self.version = next_version;
-        Ok(())
+        self.transition_to(SpotOrderStatus::Rejected, Some(SpotOrderStatusReason::BadAloPxRejected))
     }
 
-    pub(crate) fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
+    fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
         if self.limit_price().is_none() {
             SpotOrderStatusReason::MarketOrderNoLiquidityRejected
         } else {
             SpotOrderStatusReason::IocCancelRejected
         }
+    }
+}
+
+/// 下单后面对最优 maker 时的订单侧撮合结论。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpotOrderV2MatchingDecision {
+    /// 非 IOC 且当前没有可成交 maker，订单保持挂单。
+    Rest,
+    /// ALO 订单会立即吃单，应按 bad ALO 拒绝。
+    RejectAlo,
+    /// 应进入逐笔撮合。
+    Match,
+}
+
+/// 单笔 taker/maker 撮合条款。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SpotOrderV2TradeTerms {
+    /// 成交价格，取 maker 限价。
+    pub maker_price: u64,
+    /// 本笔成交数量。
+    pub trade_qty: u64,
+}
+
+/// 推导订单面对当前最优 maker 时是否应挂单、拒绝或进入撮合。
+pub(crate) fn spot_order_v2_matching_decision(
+    taker: &SpotOrderV2,
+    best_maker: Option<&SpotOrderV2>,
+) -> Result<SpotOrderV2MatchingDecision, SpotOrderV2MatchError> {
+    if taker.would_be_rejected_as_alo(best_maker)? {
+        return Ok(SpotOrderV2MatchingDecision::RejectAlo);
+    }
+    if taker.should_enter_matching(best_maker)? {
+        Ok(SpotOrderV2MatchingDecision::Match)
+    } else {
+        Ok(SpotOrderV2MatchingDecision::Rest)
+    }
+}
+
+/// 校验订单当前生命周期可作为 taker 进入撮合流程。
+pub(crate) fn spot_order_v2_ensure_matchable(
+    order: &SpotOrderV2,
+) -> Result<(), SpotOrderV2MatchError> {
+    order.ensure_matchable()
+}
+
+/// 推导 taker 与 maker 的下一笔成交条款。
+///
+/// 返回 `Ok(None)` 表示当前 maker 价格已经不再与 taker crossing。
+pub(crate) fn spot_order_v2_next_trade_terms(
+    taker: &SpotOrderV2,
+    maker: &SpotOrderV2,
+) -> Result<Option<SpotOrderV2TradeTerms>, SpotOrderV2MatchError> {
+    maker.ensure_matchable()?;
+    maker.ensure_compatible_maker_for(taker)?;
+    if !taker.crosses_order(maker)? {
+        return Ok(None);
+    }
+
+    let maker_price = maker.limit_price().ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
+    let taker_remaining =
+        taker.remaining_qty().ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
+    let maker_remaining =
+        maker.remaining_qty().ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
+    let trade_qty = taker_remaining.min(maker_remaining);
+    if trade_qty == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(SpotOrderV2TradeTerms { maker_price, trade_qty }))
     }
 }
 
@@ -1080,7 +1218,7 @@ mod tests {
     }
 
     #[test]
-    fn cancel_release_requirement_only_exists_for_cancelable_orders() {
+    fn cancel_release_requirements_include_principal_and_fee_for_cancelable_orders() {
         let open = buy_order();
         let partial =
             SpotOrderV2 { filled_qty: 1, status: SpotOrderStatus::PartiallyFilled, ..buy_order() };
@@ -1101,49 +1239,57 @@ mod tests {
             ..buy_order()
         };
 
+        let expected_principal = Some(SpotOrderReleaseRequirement {
+            asset: SpotOrderHoldAsset::Quote,
+            amount: 200,
+            reason: SpotOrderReleaseReason::Canceled,
+        });
+        let expected_fee = Some(SpotOrderReleaseRequirement {
+            asset: SpotOrderHoldAsset::Quote,
+            amount: 1,
+            reason: SpotOrderReleaseReason::Canceled,
+        });
         assert_eq!(
-            open.cancel_release_requirement(),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 200,
-                reason: SpotOrderReleaseReason::Canceled,
-            })
+            open.cancel_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: expected_principal, fee: expected_fee }
         );
         assert_eq!(
-            partial.cancel_release_requirement(),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 200,
-                reason: SpotOrderReleaseReason::Canceled,
-            })
+            partial.cancel_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: expected_principal, fee: expected_fee }
         );
-        assert_eq!(canceled.cancel_release_requirement(), None);
-        assert_eq!(filled.cancel_release_requirement(), None);
-        assert_eq!(rejected.cancel_release_requirement(), None);
+        assert_eq!(
+            canceled.cancel_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: None, fee: None }
+        );
+        assert_eq!(
+            filled.cancel_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: None, fee: None }
+        );
+        assert_eq!(
+            rejected.cancel_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: None, fee: None }
+        );
     }
 
     #[test]
-    fn fee_cancel_release_requirement_only_exists_for_cancelable_orders() {
+    fn cancel_release_requirements_skip_zero_fee() {
         let open = buy_order();
-        let canceled = SpotOrderV2 {
-            status: SpotOrderStatus::Canceled,
-            status_reason: Some(SpotOrderStatusReason::CanceledByUser),
-            ..buy_order()
-        };
 
         assert_eq!(
-            open.fee_cancel_release_requirement(5, 10),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 1,
-                reason: SpotOrderReleaseReason::Canceled,
-            })
+            open.cancel_release_requirements(0, 0),
+            SpotOrderReleaseRequirements {
+                principal: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 200,
+                    reason: SpotOrderReleaseReason::Canceled,
+                }),
+                fee: None,
+            }
         );
-        assert_eq!(canceled.fee_cancel_release_requirement(5, 10), None);
     }
 
     #[test]
-    fn terminal_release_requirement_follows_terminal_status_semantics() {
+    fn terminal_release_requirements_follow_terminal_status_semantics() {
         let open = buy_order();
         let partial =
             SpotOrderV2 { filled_qty: 1, status: SpotOrderStatus::PartiallyFilled, ..buy_order() };
@@ -1166,80 +1312,60 @@ mod tests {
             ..market_buy_order()
         };
 
-        assert_eq!(open.terminal_release_requirement(), None);
-        assert_eq!(partial.terminal_release_requirement(), None);
         assert_eq!(
-            filled.terminal_release_requirement(),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 200,
-                reason: SpotOrderReleaseReason::FilledCleanup,
-            })
+            open.terminal_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: None, fee: None }
         );
         assert_eq!(
-            rejected.terminal_release_requirement(),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 200,
-                reason: SpotOrderReleaseReason::Rejected,
-            })
+            partial.terminal_release_requirements(5, 10),
+            SpotOrderReleaseRequirements { principal: None, fee: None }
         );
         assert_eq!(
-            ioc_canceled.terminal_release_requirement(),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 240,
-                reason: SpotOrderReleaseReason::IocUnfilled,
-            })
+            filled.terminal_release_requirements(5, 10),
+            SpotOrderReleaseRequirements {
+                principal: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 200,
+                    reason: SpotOrderReleaseReason::FilledCleanup,
+                }),
+                fee: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 1,
+                    reason: SpotOrderReleaseReason::FilledCleanup,
+                }),
+            }
+        );
+        assert_eq!(
+            rejected.terminal_release_requirements(5, 10),
+            SpotOrderReleaseRequirements {
+                principal: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 200,
+                    reason: SpotOrderReleaseReason::Rejected,
+                }),
+                fee: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 1,
+                    reason: SpotOrderReleaseReason::Rejected,
+                }),
+            }
+        );
+        assert_eq!(
+            ioc_canceled.terminal_release_requirements(5, 10),
+            SpotOrderReleaseRequirements {
+                principal: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 240,
+                    reason: SpotOrderReleaseReason::IocUnfilled,
+                }),
+                fee: Some(SpotOrderReleaseRequirement {
+                    asset: SpotOrderHoldAsset::Quote,
+                    amount: 1,
+                    reason: SpotOrderReleaseReason::IocUnfilled,
+                }),
+            }
         );
         assert!(ioc_canceled.has_terminal_release());
-    }
-
-    #[test]
-    fn fee_terminal_release_requirement_follows_terminal_status_semantics() {
-        let filled = SpotOrderV2 {
-            filled_qty: 2,
-            status: SpotOrderStatus::Filled,
-            status_reason: Some(SpotOrderStatusReason::Filled),
-            ..buy_order()
-        };
-        let rejected = SpotOrderV2 {
-            status: SpotOrderStatus::Rejected,
-            status_reason: Some(SpotOrderStatusReason::RejectedAtPlacement),
-            ..buy_order()
-        };
-        let ioc_canceled = SpotOrderV2 {
-            time_in_force: SpotOrderTimeInForce::Ioc,
-            filled_qty: 1,
-            status: SpotOrderStatus::Canceled,
-            status_reason: Some(SpotOrderStatusReason::IocCancelRejected),
-            ..market_buy_order()
-        };
-
-        assert_eq!(
-            filled.fee_terminal_release_requirement(5, 10),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 1,
-                reason: SpotOrderReleaseReason::FilledCleanup,
-            })
-        );
-        assert_eq!(
-            rejected.fee_terminal_release_requirement(5, 10),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 1,
-                reason: SpotOrderReleaseReason::Rejected,
-            })
-        );
-        assert_eq!(
-            ioc_canceled.fee_terminal_release_requirement(5, 10),
-            Some(SpotOrderReleaseRequirement {
-                asset: SpotOrderHoldAsset::Quote,
-                amount: 1,
-                reason: SpotOrderReleaseReason::IocUnfilled,
-            })
-        );
     }
 
     #[test]
@@ -1273,26 +1399,151 @@ mod tests {
     }
 
     #[test]
-    fn should_enter_matching_and_crossing_semantics_still_live_on_order() {
+    fn matching_decision_and_trade_terms_hide_crossing_details() -> Result<(), SpotOrderV2MatchError>
+    {
         let buy = buy_order();
 
-        assert_eq!(buy.should_enter_matching(None), Ok(false));
-        assert_eq!(buy.should_enter_matching(Some(&maker_sell(90))), Ok(true));
-        assert_eq!(buy.should_enter_matching(Some(&maker_sell(120))), Ok(false));
-        assert_eq!(buy.crosses_order(&maker_sell(90)), Ok(true));
-        assert_eq!(buy.crosses_order(&maker_sell(120)), Ok(false));
+        assert_eq!(spot_order_v2_matching_decision(&buy, None)?, SpotOrderV2MatchingDecision::Rest);
+        assert_eq!(
+            spot_order_v2_matching_decision(&buy, Some(&maker_sell(90)))?,
+            SpotOrderV2MatchingDecision::Match
+        );
+        assert_eq!(
+            spot_order_v2_matching_decision(&buy, Some(&maker_sell(120)))?,
+            SpotOrderV2MatchingDecision::Rest
+        );
+        assert_eq!(
+            spot_order_v2_next_trade_terms(&buy, &maker_sell(90))?,
+            Some(SpotOrderV2TradeTerms { maker_price: 90, trade_qty: 1 })
+        );
+        assert_eq!(spot_order_v2_next_trade_terms(&buy, &maker_sell(120))?, None);
+        Ok(())
     }
 
     #[test]
-    fn finalize_after_match_keeps_ioc_terminal_behavior_on_order() {
-        let order = market_buy_order();
+    fn new_assembles_entrusted_open_order_fact() {
+        let order = buy_order();
 
-        let partial = order.finalize_after_match(1).unwrap();
-        assert_eq!(partial.next_filled_qty, 1);
-        assert_eq!(partial.status, SpotOrderStatus::Canceled);
-        assert_eq!(partial.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
+        assert_eq!(order.status, SpotOrderStatus::Open);
+        assert_eq!(order.status_reason, None);
+        assert_eq!(order.filled_qty, 0);
+        assert_eq!(order.version, 1);
+    }
 
-        let none = order.finalize_after_match(0).unwrap();
-        assert_eq!(none.status, SpotOrderStatus::Rejected);
+    #[test]
+    fn fill_moves_order_to_partially_filled_and_filled() -> Result<(), SpotOrderV2MatchError> {
+        let mut order = buy_order();
+
+        order.fill(1)?;
+        assert_eq!(order.filled_qty, 1);
+        assert_eq!(order.status, SpotOrderStatus::PartiallyFilled);
+        assert_eq!(order.status_reason, None);
+        assert_eq!(order.version, 2);
+
+        order.fill(1)?;
+        assert_eq!(order.filled_qty, 2);
+        assert_eq!(order.status, SpotOrderStatus::Filled);
+        assert_eq!(order.status_reason, None);
+        assert_eq!(order.version, 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancel_by_user_marks_order_canceled() -> Result<(), SpotOrderV2MatchError> {
+        let mut order = buy_order();
+
+        order.cancel_by_user()?;
+
+        assert_eq!(order.status, SpotOrderStatus::Canceled);
+        assert_eq!(order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
+        assert_eq!(order.version, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn cancel_by_user_rejects_non_cancelable_order() {
+        let mut filled = SpotOrderV2 {
+            filled_qty: 2,
+            status: SpotOrderStatus::Filled,
+            status_reason: Some(SpotOrderStatusReason::Filled),
+            ..buy_order()
+        };
+
+        assert_eq!(filled.cancel_by_user(), Err(SpotOrderV2MatchError::OrderNotCancelable));
+        assert_eq!(filled.status, SpotOrderStatus::Filled);
+        assert_eq!(filled.version, 1);
+    }
+
+    #[test]
+    fn reject_as_bad_alo_marks_order_rejected() -> Result<(), SpotOrderV2MatchError> {
+        let mut order = buy_order();
+
+        order.reject_as_bad_alo()?;
+
+        assert_eq!(order.status, SpotOrderStatus::Rejected);
+        assert_eq!(order.status_reason, Some(SpotOrderStatusReason::BadAloPxRejected));
+        assert_eq!(order.version, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn reject_as_no_liquidity_uses_market_or_ioc_reason() -> Result<(), SpotOrderV2MatchError> {
+        let mut market = market_buy_order();
+        let mut limit_ioc = SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Ioc, ..buy_order() };
+
+        market.reject_as_no_liquidity()?;
+        limit_ioc.reject_as_no_liquidity()?;
+
+        assert_eq!(
+            market.status_reason,
+            Some(SpotOrderStatusReason::MarketOrderNoLiquidityRejected)
+        );
+        assert_eq!(limit_ioc.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
+        assert_eq!(market.status, SpotOrderStatus::Rejected);
+        assert_eq!(limit_ioc.status, SpotOrderStatus::Rejected);
+        Ok(())
+    }
+
+    #[test]
+    fn finish_after_match_covers_gtc_alo_ioc_and_full_fill() -> Result<(), SpotOrderV2MatchError> {
+        let mut gtc_no_fill = buy_order();
+        assert_eq!(gtc_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
+
+        let mut alo_no_fill =
+            SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Alo, ..buy_order() };
+        assert_eq!(alo_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
+
+        let mut ioc_partial = market_buy_order();
+        ioc_partial.finish_after_match(1)?;
+        assert_eq!(ioc_partial.filled_qty, 1);
+        assert_eq!(ioc_partial.status, SpotOrderStatus::Canceled);
+        assert_eq!(ioc_partial.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
+
+        let mut ioc_none = market_buy_order();
+        ioc_none.finish_after_match(0)?;
+        assert_eq!(ioc_none.filled_qty, 0);
+        assert_eq!(ioc_none.status, SpotOrderStatus::Rejected);
+        assert_eq!(
+            ioc_none.status_reason,
+            Some(SpotOrderStatusReason::MarketOrderNoLiquidityRejected)
+        );
+
+        let mut full = buy_order();
+        full.finish_after_match(2)?;
+        assert_eq!(full.filled_qty, 2);
+        assert_eq!(full.status, SpotOrderStatus::Filled);
+        assert_eq!(full.status_reason, None);
+        Ok(())
+    }
+
+    #[test]
+    fn lifecycle_transition_rejects_version_overflow_without_partial_mutation() {
+        let mut order = SpotOrderV2 { version: u64::MAX, ..buy_order() };
+
+        assert_eq!(order.fill(1), Err(SpotOrderV2MatchError::ArithmeticOverflow));
+        assert_eq!(order.filled_qty, 0);
+        assert_eq!(order.status, SpotOrderStatus::Open);
+        assert_eq!(order.version, u64::MAX);
     }
 }
