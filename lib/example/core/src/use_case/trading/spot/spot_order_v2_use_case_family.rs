@@ -13,10 +13,12 @@ use crate::entity::account::balance_ledger_entry_v2::{
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
-use crate::entity::spot::spot_order::{
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
+use crate::entity::spot::spot_order::SpotOrderSide;
+use crate::entity::spot::spot_order_v2::{
+    SpotOrderV2, SpotOrderV2MatchError, SpotOrderV2MatchingDecision, SpotTradeFeeRole,
+    spot_order_v2_ensure_matchable, spot_order_v2_matching_decision,
+    spot_order_v2_next_trade_terms,
 };
-use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError, SpotTradeFeeRole};
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationConsumed, ReservationKind,
     ReservationMarketKind, ReservationReleased, SettlementTransferVoucher,
@@ -301,14 +303,14 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
                 validate_reservation_for_order(
                     taker_order,
                     taker_principal_reservation,
-                    expected_principal_kind_for(taker_order.side),
+                    expected_principal_kind_for(taker_order.side()),
                     base_asset_id,
                     quote_asset_id,
                 )?;
                 validate_reservation_for_order(
                     taker_order,
                     taker_fee_reservation,
-                    expected_fee_kind_for(taker_order.side),
+                    expected_fee_kind_for(taker_order.side()),
                     quote_asset_id,
                     quote_asset_id,
                 )?;
@@ -323,7 +325,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
                     validate_reservation_for_order(
                         maker,
                         reservation,
-                        expected_principal_kind_for(maker.side),
+                        expected_principal_kind_for(maker.side()),
                         base_asset_id,
                         quote_asset_id,
                     )?;
@@ -332,12 +334,12 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
                     validate_reservation_for_order(
                         maker,
                         reservation,
-                        expected_fee_kind_for(maker.side),
+                        expected_fee_kind_for(maker.side()),
                         quote_asset_id,
                         quote_asset_id,
                     )?;
                 }
-                taker_order.ensure_matchable()?;
+                spot_order_v2_ensure_matchable(taker_order)?;
                 Ok(())
             }
             (
@@ -351,21 +353,19 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamily {
                     ..
                 },
             ) => {
-                if !matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-                {
-                    return Err(SpotOrderV2UseCaseFamilyError::BranchMismatch);
-                }
+                let mut order_after = order.clone();
+                order_after.cancel_by_user()?;
                 validate_reservation_for_order(
                     order,
                     principal_reservation,
-                    expected_principal_kind_for(order.side),
+                    expected_principal_kind_for(order.side()),
                     base_asset_id,
                     quote_asset_id,
                 )?;
                 validate_reservation_for_order(
                     order,
                     fee_reservation,
-                    expected_fee_kind_for(order.side),
+                    expected_fee_kind_for(order.side()),
                     quote_asset_id,
                     quote_asset_id,
                 )?;
@@ -541,112 +541,110 @@ impl SpotOrderV2UseCaseFamily {
         let mut created_reservation_consumed = Vec::new();
         let mut created_reservation_released = Vec::new();
 
-        let best_maker = maker_orders.first();
-        let should_match = taker_order.should_enter_matching(best_maker)?;
-        if !should_match {
-            return Ok(SpotOrderV2AfterChanges::Place(PlaceSpotOrderV2AfterChanges {
-                taker_order_after: taker_after,
-                maker_orders_after,
-                principal_reservations_after,
-                fee_reservations_after,
-                balances_after: balance_book.into_balances(),
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-                created_reservation_consumed,
-                created_reservation_released,
-            }));
-        }
-
-        if taker_order.would_be_rejected_as_alo(best_maker)? {
-            taker_after.reject_as_bad_alo()?;
-            release_remaining_for_terminal(
-                &taker_after,
-                &mut principal_reservations_after[0],
-                &mut fee_reservations_after[0],
-                &mut balance_book,
-                &mut created_balance_ledger_entries,
-                &mut created_reservation_released,
-                maker_fee_bps,
-                taker_fee_bps,
-            )?;
-            return Ok(SpotOrderV2AfterChanges::Place(PlaceSpotOrderV2AfterChanges {
-                taker_order_after: taker_after,
-                maker_orders_after,
-                principal_reservations_after,
-                fee_reservations_after,
-                balances_after: balance_book.into_balances(),
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-                created_reservation_consumed,
-                created_reservation_released,
-            }));
+        match spot_order_v2_matching_decision(taker_order, maker_orders.first())? {
+            SpotOrderV2MatchingDecision::Rest => {
+                return Ok(SpotOrderV2AfterChanges::Place(PlaceSpotOrderV2AfterChanges {
+                    taker_order_after: taker_after,
+                    maker_orders_after,
+                    principal_reservations_after,
+                    fee_reservations_after,
+                    balances_after: balance_book.into_balances(),
+                    created_trades,
+                    created_vouchers,
+                    created_balance_ledger_entries,
+                    created_reservation_consumed,
+                    created_reservation_released,
+                }));
+            }
+            SpotOrderV2MatchingDecision::RejectAlo => {
+                taker_after.reject_as_bad_alo()?;
+                release_remaining_for_terminal(
+                    &taker_after,
+                    &mut principal_reservations_after[0],
+                    &mut fee_reservations_after[0],
+                    &mut balance_book,
+                    &mut created_balance_ledger_entries,
+                    &mut created_reservation_released,
+                    maker_fee_bps,
+                    taker_fee_bps,
+                )?;
+                return Ok(SpotOrderV2AfterChanges::Place(PlaceSpotOrderV2AfterChanges {
+                    taker_order_after: taker_after,
+                    maker_orders_after,
+                    principal_reservations_after,
+                    fee_reservations_after,
+                    balances_after: balance_book.into_balances(),
+                    created_trades,
+                    created_vouchers,
+                    created_balance_ledger_entries,
+                    created_reservation_consumed,
+                    created_reservation_released,
+                }));
+            }
+            SpotOrderV2MatchingDecision::Match => {}
         }
 
         let mut total_taker_fill = 0_u64;
         for (index, maker_after) in maker_orders_after.iter_mut().enumerate() {
-            maker_after.ensure_matchable()?;
-            maker_after.ensure_compatible_maker_for(&taker_after)?;
-            if !taker_after.crosses_order(maker_after)? {
+            let Some(trade_terms) = spot_order_v2_next_trade_terms(&taker_after, maker_after)?
+            else {
                 break;
-            }
-            let maker_price =
-                maker_after.limit_price().ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
-            let trade_qty = taker_after
-                .remaining_qty()
-                .and_then(|qty| maker_after.remaining_qty().map(|maker_qty| qty.min(maker_qty)))
-                .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
-            if trade_qty == 0 {
-                break;
-            }
+            };
 
             let trade = SpotTrade::new(
-                format!("spot-trade:{}:{}", taker_after.order_id, created_trades.len() + 1),
-                taker_after.order_id.clone(),
-                taker_after.asset,
-                taker_after.symbol.clone(),
-                taker_after.order_id.clone(),
-                maker_after.order_id.clone(),
-                taker_after.account_id.clone(),
-                maker_after.account_id.clone(),
-                taker_after.side,
-                maker_price,
-                trade_qty,
+                format!("spot-trade:{}:{}", taker_after.order_id(), created_trades.len() + 1),
+                taker_after.order_id().to_string(),
+                taker_after.asset(),
+                taker_after.symbol().to_string(),
+                taker_after.order_id().to_string(),
+                maker_after.order_id().to_string(),
+                taker_after.account_id().to_string(),
+                maker_after.account_id().to_string(),
+                taker_after.side(),
+                trade_terms.maker_price,
+                trade_terms.trade_qty,
             );
             let trade_notional =
                 trade.notional_quote().ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
 
-            maker_after.apply_fill(trade_qty)?;
+            maker_after.fill(trade_terms.trade_qty)?;
             total_taker_fill = total_taker_fill
-                .checked_add(trade_qty)
+                .checked_add(trade_terms.trade_qty)
                 .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
 
             consume_reservation(
                 &mut principal_reservations_after[0],
-                principal_consume_amount_for_taker(&taker_after, trade_qty, trade_notional),
+                principal_consume_amount_for_taker(
+                    &taker_after,
+                    trade_terms.trade_qty,
+                    trade_notional,
+                ),
                 ReservationCloseReason::Filled,
                 trade.trade_id.clone(),
                 &mut created_reservation_consumed,
             )?;
             consume_reservation(
                 &mut principal_reservations_after[index + 1],
-                principal_consume_amount_for_maker(maker_after, trade_qty, trade_notional),
+                principal_consume_amount_for_maker(
+                    maker_after,
+                    trade_terms.trade_qty,
+                    trade_notional,
+                ),
                 ReservationCloseReason::Filled,
                 trade.trade_id.clone(),
                 &mut created_reservation_consumed,
             )?;
 
             let taker_fee = taker_after.fee_consume_requirement_for_trade(
-                trade_qty,
-                maker_price,
+                trade_terms.trade_qty,
+                trade_terms.maker_price,
                 SpotTradeFeeRole::Taker,
                 maker_fee_bps,
                 taker_fee_bps,
             )?;
             let maker_fee = maker_after.fee_consume_requirement_for_trade(
-                trade_qty,
-                maker_price,
+                trade_terms.trade_qty,
+                trade_terms.maker_price,
                 SpotTradeFeeRole::Maker,
                 maker_fee_bps,
                 taker_fee_bps,
@@ -695,22 +693,17 @@ impl SpotOrderV2UseCaseFamily {
             created_vouchers.push(voucher);
         }
 
-        let finalization = taker_after.finalize_after_match(total_taker_fill)?;
-        taker_after.apply_finalization(finalization)?;
-        if taker_after.time_in_force == SpotOrderTimeInForce::Ioc
-            && taker_after.remaining_qty() != Some(0)
-        {
-            release_remaining_for_terminal(
-                &taker_after,
-                &mut principal_reservations_after[0],
-                &mut fee_reservations_after[0],
-                &mut balance_book,
-                &mut created_balance_ledger_entries,
-                &mut created_reservation_released,
-                maker_fee_bps,
-                taker_fee_bps,
-            )?;
-        }
+        taker_after.finish_after_match(total_taker_fill)?;
+        release_remaining_for_terminal(
+            &taker_after,
+            &mut principal_reservations_after[0],
+            &mut fee_reservations_after[0],
+            &mut balance_book,
+            &mut created_balance_ledger_entries,
+            &mut created_reservation_released,
+            maker_fee_bps,
+            taker_fee_bps,
+        )?;
 
         Ok(SpotOrderV2AfterChanges::Place(PlaceSpotOrderV2AfterChanges {
             taker_order_after: taker_after,
@@ -739,12 +732,7 @@ impl SpotOrderV2UseCaseFamily {
         taker_fee_bps: u64,
     ) -> Result<SpotOrderV2AfterChanges, SpotOrderV2UseCaseFamilyError> {
         let mut order_after = order.clone();
-        order_after.status = SpotOrderStatus::Canceled;
-        order_after.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-        order_after.version = order_after
-            .version
-            .checked_add(1)
-            .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
+        order_after.cancel_by_user()?;
 
         let mut principal_reservation_after = principal_reservation.clone();
         let mut fee_reservation_after = fee_reservation.clone();
@@ -798,7 +786,7 @@ fn validate_reservation_for_order(
     if reservation.market_kind != ReservationMarketKind::Spot {
         return Err(SpotOrderV2UseCaseFamilyError::ReservationKindMismatch);
     }
-    if reservation.caused_by_order_id != order.order_id {
+    if reservation.caused_by_order_id != order.order_id() {
         return Err(SpotOrderV2UseCaseFamilyError::ReservationOrderMismatch);
     }
     if reservation.reservation_kind != expected_kind {
@@ -822,7 +810,7 @@ fn principal_consume_amount_for_taker(
     trade_qty: u64,
     trade_notional: u64,
 ) -> u64 {
-    match order.side {
+    match order.side() {
         SpotOrderSide::Buy => trade_notional,
         SpotOrderSide::Sell => trade_qty,
     }
@@ -833,7 +821,7 @@ fn principal_consume_amount_for_maker(
     trade_qty: u64,
     trade_notional: u64,
 ) -> u64 {
-    match order.side {
+    match order.side() {
         SpotOrderSide::Buy => trade_notional,
         SpotOrderSide::Sell => trade_qty,
     }
@@ -888,7 +876,9 @@ fn release_remaining_for_terminal(
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
-    if let Some(requirement) = order_after.terminal_release_requirement() {
+    let requirements = order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
+
+    if let Some(requirement) = requirements.principal {
         let release_amount = principal_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let close_reason = match requirement.reason {
@@ -918,15 +908,13 @@ fn release_remaining_for_terminal(
                 ),
                 &after,
                 release_amount,
-                order_after.order_id.clone(),
+                order_after.order_id().to_string(),
                 close_reason,
             ));
         }
     }
 
-    if let Some(requirement) =
-        order_after.fee_terminal_release_requirement(maker_fee_bps, taker_fee_bps)
-    {
+    if let Some(requirement) = requirements.fee {
         let release_amount = fee_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let close_reason = match requirement.reason {
@@ -956,7 +944,7 @@ fn release_remaining_for_terminal(
                 ),
                 &after,
                 release_amount,
-                order_after.order_id.clone(),
+                order_after.order_id().to_string(),
                 close_reason,
             ));
         }
@@ -975,7 +963,9 @@ fn release_remaining_for_cancel(
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
-    if let Some(requirement) = order.cancel_release_requirement() {
+    let requirements = order.cancel_release_requirements(maker_fee_bps, taker_fee_bps);
+
+    if let Some(requirement) = requirements.principal {
         let release_amount = principal_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let after = principal_reservation
@@ -997,12 +987,12 @@ fn release_remaining_for_cancel(
                 ),
                 &after,
                 release_amount,
-                order.order_id.clone(),
+                order.order_id().to_string(),
                 ReservationCloseReason::Canceled,
             ));
         }
     }
-    if let Some(requirement) = order.fee_cancel_release_requirement(maker_fee_bps, taker_fee_bps) {
+    if let Some(requirement) = requirements.fee {
         let release_amount = fee_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let after = fee_reservation
@@ -1024,7 +1014,7 @@ fn release_remaining_for_cancel(
                 ),
                 &after,
                 release_amount,
-                order.order_id.clone(),
+                order.order_id().to_string(),
                 ReservationCloseReason::Canceled,
             ));
         }
@@ -1039,17 +1029,17 @@ fn release_to_balance(
     balance_book: &mut BalanceBook,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
-    let reason = match order.side {
-        SpotOrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id.clone() }
-        }
-        SpotOrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id.clone() }
-        }
+    let reason = match order.side() {
+        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+            order_id: order.order_id().to_string(),
+        },
+        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+            order_id: order.order_id().to_string(),
+        },
     };
-    let balance = balance_book.get_mut(&order.account_id, asset_id)?;
+    let balance = balance_book.get_mut(&order.account_id(), asset_id)?;
     let entry = BalanceLedgerEntryV2::unfreeze(
-        format!("balance-ledger:{}:release:{}", order.order_id, ledger_entries.len() + 1),
+        format!("balance-ledger:{}:release:{}", order.order_id(), ledger_entries.len() + 1),
         balance,
         amount,
         reason,
@@ -1409,7 +1399,7 @@ mod tests {
     use common_entity::{MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter};
 
     use super::*;
-    use crate::{SpotOrderExecution, SpotOrderTimeInForce};
+    use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
 
     fn buy_order(tif: SpotOrderTimeInForce) -> SpotOrderV2 {
         SpotOrderV2::new(
@@ -1482,15 +1472,15 @@ mod tests {
         let taker = buy_order(SpotOrderTimeInForce::Gtc);
         let makers = vec![sell_order("maker-1", "seller", 110, 1)];
         let principal = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
@@ -1543,15 +1533,15 @@ mod tests {
         let taker = buy_order(SpotOrderTimeInForce::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let principal = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
@@ -1590,9 +1580,9 @@ mod tests {
         };
 
         assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.updated_taker_order.after.status, SpotOrderStatus::Canceled);
+        assert_eq!(changes.updated_taker_order.after.status(), SpotOrderStatus::Canceled);
         assert_eq!(
-            changes.updated_taker_order.after.status_reason,
+            changes.updated_taker_order.after.status_reason(),
             Some(SpotOrderStatusReason::IocCancelRejected)
         );
         assert!(!changes.created_reservation_released.is_empty());
@@ -1606,15 +1596,15 @@ mod tests {
         let taker = buy_order(SpotOrderTimeInForce::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let principal = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
@@ -1676,15 +1666,15 @@ mod tests {
         let taker = buy_order(SpotOrderTimeInForce::Alo);
         let makers = vec![sell_order("maker-1", "seller", 99, 1)];
         let principal = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &taker.order_id,
-            &taker.account_id,
+            &taker.order_id(),
+            &taker.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
@@ -1722,9 +1712,9 @@ mod tests {
             panic!("expected place after");
         };
 
-        assert_eq!(after.taker_order_after.status, SpotOrderStatus::Rejected);
+        assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);
         assert_eq!(
-            after.taker_order_after.status_reason,
+            after.taker_order_after.status_reason(),
             Some(SpotOrderStatusReason::BadAloPxRejected)
         );
         assert!(after.created_trades.is_empty());
@@ -1737,15 +1727,15 @@ mod tests {
         let family = SpotOrderV2UseCaseFamily;
         let order = buy_order(SpotOrderTimeInForce::Gtc);
         let principal = reservation(
-            &order.order_id,
-            &order.account_id,
+            &order.order_id(),
+            &order.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &order.order_id,
-            &order.account_id,
+            &order.order_id(),
+            &order.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
@@ -1772,9 +1762,9 @@ mod tests {
             panic!("expected cancel changes");
         };
 
-        assert_eq!(changes.updated_order.after.status, SpotOrderStatus::Canceled);
+        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
         assert_eq!(
-            changes.updated_order.after.status_reason,
+            changes.updated_order.after.status_reason(),
             Some(SpotOrderStatusReason::CanceledByUser)
         );
         assert_eq!(changes.created_reservation_released.len(), 2);
@@ -1787,15 +1777,15 @@ mod tests {
         let family = SpotOrderV2UseCaseFamily;
         let order = buy_order(SpotOrderTimeInForce::Gtc);
         let principal = reservation(
-            &order.order_id,
-            &order.account_id,
+            &order.order_id(),
+            &order.account_id(),
             ReservationKind::SpotBuyQuote,
             "USDT",
             200,
         );
         let fee = reservation(
-            &order.order_id,
-            &order.account_id,
+            &order.order_id(),
+            &order.account_id(),
             ReservationKind::SpotBuyFeeQuote,
             "USDT",
             1,
