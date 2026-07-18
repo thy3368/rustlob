@@ -1,12 +1,11 @@
-use std::cmp::Ordering;
-
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
     EntityUseCaseApiSurface, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{HyperliquidPerpTrade, SpotTrade};
+use super::balance_ledger_entry_v2::{BalanceLedgerEntryV2, BalanceLedgerEntryV2Error};
+use super::balance_ledger_reason::BalanceLedgerReason;
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
@@ -345,304 +344,62 @@ impl SettlementTransferVoucher {
         self.fee_account_id.as_str()
     }
 
-    // ===== 面向 spot settlement use case 的业务方法 =====
-
-    /// [UseCase-facing] 从一笔现货成交构造 principal-only settlement voucher。
-    ///
-    /// 当前只生成 4 条 principal legs，不包含任何手续费腿。
-    /// 若 `price * qty` 溢出，则返回 `None`。
-    pub fn build_spot_principal_voucher(
-        voucher_id: String,
-        settlement_id: String,
-        trade: &SpotTrade,
-        base_asset_id: &str,
-        quote_asset_id: &str,
-        fee_account_id: String,
-    ) -> Option<Self> {
-        let quote_amount = trade.notional_quote()?;
-        let buyer_account_id = trade.buyer_account_id();
-        let seller_account_id = trade.seller_account_id();
-
-        Some(Self::new(
-            voucher_id,
-            SettlementKind::Spot,
-            settlement_id.clone(),
-            trade.trade_id.clone(),
-            Some(trade.match_id.clone()),
-            fee_account_id,
-            vec![
-                SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
-                    ),
-                    seller_account_id.to_string(),
-                    buyer_account_id.to_string(),
-                    base_asset_id.to_string(),
-                    trade.qty,
-                    SettlementTransferPurpose::SpotBuyerReceiveBase,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
-                    ),
-                ),
-                SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
-                    ),
-                    buyer_account_id.to_string(),
-                    seller_account_id.to_string(),
-                    quote_asset_id.to_string(),
-                    quote_amount,
-                    SettlementTransferPurpose::SpotBuyerPayQuote,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
-                    ),
-                ),
-                SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
-                    ),
-                    buyer_account_id.to_string(),
-                    seller_account_id.to_string(),
-                    quote_asset_id.to_string(),
-                    quote_amount,
-                    SettlementTransferPurpose::SpotSellerReceiveQuote,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
-                    ),
-                ),
-                SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
-                    ),
-                    seller_account_id.to_string(),
-                    buyer_account_id.to_string(),
-                    base_asset_id.to_string(),
-                    trade.qty,
-                    SettlementTransferPurpose::SpotSellerDeliverBase,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
-                    ),
-                ),
-            ],
-        ))
+    /// [Internal] 向已构造凭证追加一条已校验资金腿。
+    pub(crate) fn push_leg(&mut self, leg: SettlementTransferLeg) {
+        self.legs.push(leg);
     }
 
-    /// [UseCase-facing] 从一笔现货成交构造同时包含 principal 与 fee 的 settlement voucher。
+    /// 从结算转账凭证纯派生下游余额流水单据。
     ///
-    /// fee 统一以 quote 资产计价，且买卖双方各自向 `fee_account_id` 支付自己真实角色下的 fee。
-    /// 若 quote notional 溢出则返回 `None`。
-    pub fn build_spot_voucher_with_fees(
-        voucher_id: String,
-        settlement_id: String,
-        trade: &SpotTrade,
-        base_asset_id: &str,
-        quote_asset_id: &str,
-        fee_account_id: String,
-        buyer_fee: u64,
-        seller_fee: u64,
-    ) -> Option<Self> {
-        let mut voucher = Self::build_spot_principal_voucher(
-            voucher_id,
-            settlement_id.clone(),
-            trade,
-            base_asset_id,
-            quote_asset_id,
-            fee_account_id.clone(),
-        )?;
+    /// 每条转账腿派生两条流水：付款方 debit，收款方 credit。
+    /// 该方法只生成流水事实，不应用余额、不持久化、不发布事件。
+    pub fn derive_balance_ledger_entries(
+        &self,
+        balance_entity_id_for: impl Fn(&str, &str) -> String,
+    ) -> Result<Vec<BalanceLedgerEntryV2>, BalanceLedgerEntryV2Error> {
+        let mut entries = Vec::with_capacity(self.legs.len() * 2);
 
-        if buyer_fee > 0 {
-            voucher.legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    trade.buyer_fee_role().as_str()
+        for leg in &self.legs {
+            let reason = self.balance_ledger_reason_for(leg);
+            let debit_entry_id = format!("{}:debit", leg.balance_ledger_entry_id());
+            let credit_entry_id = format!("{}:credit", leg.balance_ledger_entry_id());
+            let debit_balance_entity_id =
+                balance_entity_id_for(leg.from_account_id(), leg.asset_id());
+            let credit_balance_entity_id =
+                balance_entity_id_for(leg.to_account_id(), leg.asset_id());
+
+            let debit = match self.debit_operation_for(leg.purpose()) {
+                SettlementDebitOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
+                    debit_entry_id,
+                    leg.from_account_id().to_string(),
+                    leg.asset_id().to_string(),
+                    debit_balance_entity_id,
+                    leg.amount(),
+                    reason.clone(),
                 ),
-                trade.buyer_account_id().to_string(),
-                fee_account_id.clone(),
-                quote_asset_id.to_string(),
-                buyer_fee,
-                SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    trade.buyer_fee_role().as_str()
+                SettlementDebitOperation::DebitAvailable => BalanceLedgerEntryV2::debit_available(
+                    debit_entry_id,
+                    leg.from_account_id().to_string(),
+                    leg.asset_id().to_string(),
+                    debit_balance_entity_id,
+                    leg.amount(),
+                    reason.clone(),
                 ),
-            ));
+            }?;
+            let credit = BalanceLedgerEntryV2::credit_available(
+                credit_entry_id,
+                leg.to_account_id().to_string(),
+                leg.asset_id().to_string(),
+                credit_balance_entity_id,
+                leg.amount(),
+                reason,
+            )?;
+
+            entries.push(debit);
+            entries.push(credit);
         }
 
-        if seller_fee > 0 {
-            voucher.legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    trade.seller_fee_role().as_str()
-                ),
-                trade.seller_account_id().to_string(),
-                fee_account_id.clone(),
-                quote_asset_id.to_string(),
-                seller_fee,
-                SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    trade.seller_fee_role().as_str()
-                ),
-            ));
-        }
-
-        Some(voucher)
-    }
-
-    /// [UseCase-facing] 从一笔永续成交构造清结算转账凭证。
-    ///
-    /// 该凭证只承接“账户间转账”语义：
-    /// - 一正一负对冲的 realized pnl，生成 1 条账户间 PnL transfer leg
-    /// - taker / maker fee 各自向 `fee_account_id` 支付手续费
-    /// - 同账户内 `available / frozen` 的保证金重分类，不在这里建模成 transfer leg
-    ///
-    /// 若 realized pnl 正负绝对值不一致，或 `i64` 绝对值转换失败，则返回 `None`。
-    pub fn build_perp_voucher(
-        voucher_id: String,
-        settlement_id: String,
-        trade: &HyperliquidPerpTrade,
-        margin_asset_id: &str,
-        fee_account_id: String,
-        taker_fee: u64,
-        maker_fee: u64,
-        taker_realized_pnl: i64,
-        maker_realized_pnl: i64,
-    ) -> Option<Self> {
-        let mut legs = Vec::new();
-
-        match (taker_realized_pnl.cmp(&0), maker_realized_pnl.cmp(&0)) {
-            (Ordering::Greater, Ordering::Less) => {
-                let profit = u64::try_from(taker_realized_pnl).ok()?;
-                let loss = abs_i64_to_u64(maker_realized_pnl)?;
-                if profit != loss {
-                    return None;
-                }
-                legs.push(SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        trade.maker_account_id,
-                        trade.taker_account_id
-                    ),
-                    trade.maker_account_id.clone(),
-                    trade.taker_account_id.clone(),
-                    margin_asset_id.to_string(),
-                    profit,
-                    SettlementTransferPurpose::PerpRealizedPnlTransfer,
-                    format!(
-                        "balance-ledger:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        trade.maker_account_id,
-                        trade.taker_account_id
-                    ),
-                ));
-            }
-            (Ordering::Less, Ordering::Greater) => {
-                let profit = u64::try_from(maker_realized_pnl).ok()?;
-                let loss = abs_i64_to_u64(taker_realized_pnl)?;
-                if profit != loss {
-                    return None;
-                }
-                legs.push(SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        trade.taker_account_id,
-                        trade.maker_account_id
-                    ),
-                    trade.taker_account_id.clone(),
-                    trade.maker_account_id.clone(),
-                    margin_asset_id.to_string(),
-                    profit,
-                    SettlementTransferPurpose::PerpRealizedPnlTransfer,
-                    format!(
-                        "balance-ledger:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        trade.taker_account_id,
-                        trade.maker_account_id
-                    ),
-                ));
-            }
-            _ => {}
-        }
-
-        if taker_fee > 0 {
-            legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:taker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
-                ),
-                trade.taker_account_id.clone(),
-                fee_account_id.clone(),
-                margin_asset_id.to_string(),
-                taker_fee,
-                SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:taker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
-                ),
-            ));
-        }
-
-        if maker_fee > 0 {
-            legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:maker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
-                ),
-                trade.maker_account_id.clone(),
-                fee_account_id.clone(),
-                margin_asset_id.to_string(),
-                maker_fee,
-                SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:maker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
-                ),
-            ));
-        }
-
-        Some(Self::new(
-            voucher_id,
-            SettlementKind::Perp,
-            settlement_id,
-            trade.trade_id.clone(),
-            Some(trade.match_id.clone()),
-            fee_account_id,
-            legs,
-        ))
+        Ok(entries)
     }
 
     // ===== 通用业务查询 / 不变量方法 =====
@@ -698,6 +455,42 @@ impl SettlementTransferVoucher {
         self.legs.iter().any(|leg| leg.references_ledger_entry(entry_id))
     }
 
+    fn balance_ledger_reason_for(&self, leg: &SettlementTransferLeg) -> BalanceLedgerReason {
+        match self.settlement_kind {
+            SettlementKind::Spot => BalanceLedgerReason::SettleSpotTrade {
+                trade_id: self.trade_id.clone(),
+                match_id: self.match_id.clone().unwrap_or_default(),
+                settlement_batch_id: self.settlement_id.clone(),
+                purpose: leg.purpose(),
+            },
+            SettlementKind::Perp => BalanceLedgerReason::SettlePerpTrade {
+                trade_id: self.trade_id.clone(),
+                match_id: self.match_id.clone().unwrap_or_default(),
+                settlement_id: self.settlement_id.clone(),
+                purpose: leg.purpose(),
+            },
+        }
+    }
+
+    fn debit_operation_for(&self, purpose: SettlementTransferPurpose) -> SettlementDebitOperation {
+        match self.settlement_kind {
+            SettlementKind::Spot => match purpose {
+                SettlementTransferPurpose::SpotBuyerPayQuote
+                | SettlementTransferPurpose::SpotBuyerReceiveBase
+                | SettlementTransferPurpose::SpotSellerReceiveQuote
+                | SettlementTransferPurpose::SpotSellerDeliverBase => {
+                    SettlementDebitOperation::DebitFrozen
+                }
+                SettlementTransferPurpose::TradingFee
+                | SettlementTransferPurpose::PerpMarginTransfer
+                | SettlementTransferPurpose::PerpRealizedPnlTransfer => {
+                    SettlementDebitOperation::DebitAvailable
+                }
+            },
+            SettlementKind::Perp => SettlementDebitOperation::DebitAvailable,
+        }
+    }
+
     fn sum_amount_by(
         &self,
         account_id: &str,
@@ -721,6 +514,12 @@ impl SettlementTransferVoucher {
 
         if matched { Some(total) } else { None }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettlementDebitOperation {
+    DebitAvailable,
+    DebitFrozen,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -844,15 +643,12 @@ fn stable_entity_id(value: &str) -> i64 {
     (hasher.finish() & i64::MAX as u64) as i64
 }
 
-fn abs_i64_to_u64(value: i64) -> Option<u64> {
-    value.checked_abs().and_then(|abs| u64::try_from(abs).ok())
-}
-
 #[cfg(test)]
 mod tests {
     use common_entity::Entity;
 
     use super::*;
+    use crate::{HyperliquidPerpTrade, SpotTrade};
 
     fn perp_trade() -> HyperliquidPerpTrade {
         HyperliquidPerpTrade::new(
@@ -921,18 +717,18 @@ mod tests {
     }
 
     fn perp_voucher() -> SettlementTransferVoucher {
-        SettlementTransferVoucher::build_perp_voucher(
-            "voucher-perp-1".to_string(),
-            "settlement-perp-1".to_string(),
-            &perp_trade(),
-            "USDC",
-            "fee-account".to_string(),
-            1,
-            0,
-            25,
-            -25,
-        )
-        .unwrap()
+        perp_trade()
+            .derive_perp_settlement_transfer_voucher(
+                "voucher-perp-1".to_string(),
+                "settlement-perp-1".to_string(),
+                "USDC",
+                "fee-account".to_string(),
+                1,
+                0,
+                25,
+                -25,
+            )
+            .unwrap()
     }
 
     #[test]
@@ -983,15 +779,15 @@ mod tests {
             1,
         );
 
-        let voucher = SettlementTransferVoucher::build_spot_principal_voucher(
-            "voucher-1".to_string(),
-            "settle-1-1".to_string(),
-            &trade,
-            "BTC",
-            "USDT",
-            String::new(),
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_spot_principal_settlement_transfer_voucher(
+                "voucher-1".to_string(),
+                "settle-1-1".to_string(),
+                "BTC",
+                "USDT",
+                String::new(),
+            )
+            .unwrap();
 
         let buyer_receive_base =
             voucher.transfers_for_purpose(SettlementTransferPurpose::SpotBuyerReceiveBase);
@@ -1040,10 +836,9 @@ mod tests {
         );
 
         assert_eq!(
-            SettlementTransferVoucher::build_spot_principal_voucher(
+            trade.derive_spot_principal_settlement_transfer_voucher(
                 "voucher-overflow".to_string(),
                 "settle-overflow-1".to_string(),
-                &trade,
                 "BTC",
                 "USDT",
                 String::new(),
@@ -1070,17 +865,15 @@ mod tests {
             2,
         );
 
-        let voucher = SettlementTransferVoucher::build_spot_voucher_with_fees(
-            "voucher-fee-1".to_string(),
-            "settle-fee-1".to_string(),
-            &trade,
-            "BTC",
-            "USDT",
-            "fee-account".to_string(),
-            1,
-            2,
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_spot_settlement_transfer_voucher_with_fees(
+                "voucher-fee-1".to_string(),
+                "settle-fee-1".to_string(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            )
+            .unwrap();
 
         let fee_legs = voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee);
         assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
@@ -1109,18 +902,18 @@ mod tests {
     #[test]
     fn build_perp_voucher_with_only_fee_creates_only_fee_legs() {
         let trade = perp_trade();
-        let voucher = SettlementTransferVoucher::build_perp_voucher(
-            "voucher-perp-fee".to_string(),
-            "settlement-perp-fee".to_string(),
-            &trade,
-            "USDC",
-            "fee-account".to_string(),
-            3,
-            2,
-            0,
-            0,
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_perp_settlement_transfer_voucher(
+                "voucher-perp-fee".to_string(),
+                "settlement-perp-fee".to_string(),
+                "USDC",
+                "fee-account".to_string(),
+                3,
+                2,
+                0,
+                0,
+            )
+            .unwrap();
 
         let pnl_legs =
             voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
@@ -1139,18 +932,18 @@ mod tests {
     #[test]
     fn build_perp_voucher_with_only_realized_pnl_creates_pnl_transfer_leg() {
         let trade = perp_trade();
-        let voucher = SettlementTransferVoucher::build_perp_voucher(
-            "voucher-perp-pnl".to_string(),
-            "settlement-perp-pnl".to_string(),
-            &trade,
-            "USDC",
-            "fee-account".to_string(),
-            0,
-            0,
-            25,
-            -25,
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_perp_settlement_transfer_voucher(
+                "voucher-perp-pnl".to_string(),
+                "settlement-perp-pnl".to_string(),
+                "USDC",
+                "fee-account".to_string(),
+                0,
+                0,
+                25,
+                -25,
+            )
+            .unwrap();
 
         let pnl_legs =
             voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
@@ -1167,18 +960,18 @@ mod tests {
     #[test]
     fn build_perp_voucher_with_fee_and_realized_pnl_keeps_all_legs() {
         let trade = perp_trade();
-        let voucher = SettlementTransferVoucher::build_perp_voucher(
-            "voucher-perp-all".to_string(),
-            "settlement-perp-all".to_string(),
-            &trade,
-            "USDC",
-            "fee-account".to_string(),
-            4,
-            1,
-            25,
-            -25,
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_perp_settlement_transfer_voucher(
+                "voucher-perp-all".to_string(),
+                "settlement-perp-all".to_string(),
+                "USDC",
+                "fee-account".to_string(),
+                4,
+                1,
+                25,
+                -25,
+            )
+            .unwrap();
 
         let pnl_legs =
             voucher.transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer);
@@ -1193,18 +986,18 @@ mod tests {
     #[test]
     fn build_perp_voucher_skips_zero_fee_and_zero_realized_pnl_legs() {
         let trade = perp_trade();
-        let voucher = SettlementTransferVoucher::build_perp_voucher(
-            "voucher-perp-empty".to_string(),
-            "settlement-perp-empty".to_string(),
-            &trade,
-            "USDC",
-            "fee-account".to_string(),
-            0,
-            0,
-            0,
-            0,
-        )
-        .unwrap();
+        let voucher = trade
+            .derive_perp_settlement_transfer_voucher(
+                "voucher-perp-empty".to_string(),
+                "settlement-perp-empty".to_string(),
+                "USDC",
+                "fee-account".to_string(),
+                0,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
 
         assert!(
             voucher
@@ -1234,15 +1027,15 @@ mod tests {
             2,
             1,
         );
-        let principal_voucher = SettlementTransferVoucher::build_spot_principal_voucher(
-            "voucher-semantic-1".to_string(),
-            "settle-semantic-1".to_string(),
-            &trade,
-            "BTC",
-            "USDT",
-            "fee-account".to_string(),
-        )
-        .unwrap();
+        let principal_voucher = trade
+            .derive_spot_principal_settlement_transfer_voucher(
+                "voucher-semantic-1".to_string(),
+                "settle-semantic-1".to_string(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            )
+            .unwrap();
 
         assert!(voucher.references_account("buyer"));
         assert!(voucher.references_account("fee-account"));

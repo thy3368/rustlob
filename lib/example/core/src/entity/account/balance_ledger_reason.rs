@@ -69,6 +69,17 @@ pub enum BalanceLedgerReason {
         /// 本次流水表达的清结算资金腿用途。
         purpose: SettlementTransferPurpose,
     },
+    /// 永续成交同步清结算的单条资金腿流水。
+    SettlePerpTrade {
+        /// 本次流水对应的成交 ID。
+        trade_id: String,
+        /// 本次流水对应的撮合批次 ID。
+        match_id: String,
+        /// 本次流水所属清结算 ID。
+        settlement_id: String,
+        /// 本次流水表达的清结算资金腿用途。
+        purpose: SettlementTransferPurpose,
+    },
     /// perp funding 结算按账户聚合后的保证金余额流水。
     SettlePerpFunding {
         /// 资金费批次 ID。
@@ -100,6 +111,7 @@ impl BalanceLedgerReason {
                 "settle_spot_trade_seller_release_frozen_base"
             }
             Self::SettleSpotTrade { .. } => "settle_spot_trade",
+            Self::SettlePerpTrade { .. } => "settle_perp_trade",
             Self::SettlePerpFunding { .. } => "settle_perp_funding",
         }
     }
@@ -117,6 +129,7 @@ impl BalanceLedgerReason {
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
             | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
             | Self::SettleSpotTrade { .. }
+            | Self::SettlePerpTrade { .. }
             | Self::SettlePerpFunding { .. } => None,
         }
     }
@@ -130,7 +143,9 @@ impl BalanceLedgerReason {
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettlePerpFunding { .. } => &[],
-            Self::SettleSpotTrade { trade_id, .. } => std::slice::from_ref(trade_id),
+            Self::SettleSpotTrade { trade_id, .. } | Self::SettlePerpTrade { trade_id, .. } => {
+                std::slice::from_ref(trade_id)
+            }
             Self::SettleSpotTradeBuyerReceiveBase { trade_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { trade_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { trade_ids, .. }
@@ -147,6 +162,7 @@ impl BalanceLedgerReason {
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTrade { .. } => &[],
+            Self::SettlePerpTrade { settlement_id, .. } => std::slice::from_ref(settlement_id),
             Self::SettleSpotTradeBuyerReceiveBase { settlement_ids, .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { settlement_ids, .. }
             | Self::SettleSpotTradeSellerReceiveQuote { settlement_ids, .. }
@@ -168,7 +184,8 @@ impl BalanceLedgerReason {
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
             | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
-            | Self::SettleSpotTrade { .. } => None,
+            | Self::SettleSpotTrade { .. }
+            | Self::SettlePerpTrade { .. } => None,
         }
     }
 
@@ -180,10 +197,12 @@ impl BalanceLedgerReason {
         }
     }
 
-    /// 返回结算资金腿用途；非现货成交资金腿场景返回 `None`。
+    /// 返回结算资金腿用途；非成交资金腿场景返回 `None`。
     pub const fn settlement_purpose(&self) -> Option<SettlementTransferPurpose> {
         match self {
-            Self::SettleSpotTrade { purpose, .. } => Some(*purpose),
+            Self::SettleSpotTrade { purpose, .. } | Self::SettlePerpTrade { purpose, .. } => {
+                Some(*purpose)
+            }
             _ => None,
         }
     }
@@ -201,7 +220,8 @@ impl BalanceLedgerReason {
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
             | Self::SettleSpotTradeSellerReleaseFrozenBase { .. }
-            | Self::SettleSpotTrade { .. } => &[],
+            | Self::SettleSpotTrade { .. }
+            | Self::SettlePerpTrade { .. } => &[],
         }
     }
 }

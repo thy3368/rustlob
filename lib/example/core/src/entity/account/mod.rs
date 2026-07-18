@@ -10,6 +10,8 @@ mod balance_bdd_tests;
 mod balance_ledger_entry_v2_bdd_tests;
 #[cfg(test)]
 mod balance_tests;
+#[cfg(test)]
+mod settlement_transfer_voucher_bdd_tests;
 
 pub use balance::BalanceError;
 pub use balance_ledger_entry_v2::{
