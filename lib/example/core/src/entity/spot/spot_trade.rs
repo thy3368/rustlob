@@ -6,11 +6,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{SpotOrderSide, SpotTradeFeeRole};
 
+#[cfg(test)]
+mod spot_trade_bdd_notional_quote;
+#[cfg(test)]
+mod spot_trade_bdd_settlement_balance_chain;
+
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
 /// 已完成撮合的一笔现货成交事实。
 ///
-/// `SpotTrade` 只记录订单撮合结果，不表达账户清算、手续费或资产划转。
+/// `SpotTrade` 只记录订单撮合结果和已确定的撮合角色手续费金额，不表达账户清算或资产划转。
 /// 构造器假定输入已经由撮合 use case 校验。
 /// 在聚合边界上，它自身作为一条独立的成交事实聚合根存在。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +42,10 @@ pub struct SpotTrade {
     pub price: u64,
     /// 成交数量，以 base asset 计价。
     pub qty: u64,
+    /// taker 为本笔成交支付的 quote 手续费金额。
+    pub taker_fee: u64,
+    /// maker 为本笔成交支付的 quote 手续费金额。
+    pub maker_fee: u64,
 }
 
 impl SpotTrade {
@@ -53,6 +62,8 @@ impl SpotTrade {
         taker_side: SpotOrderSide,
         price: u64,
         qty: u64,
+        taker_fee: u64,
+        maker_fee: u64,
     ) -> Self {
         Self {
             trade_id,
@@ -66,6 +77,8 @@ impl SpotTrade {
             taker_side,
             price,
             qty,
+            taker_fee,
+            maker_fee,
         }
     }
 
@@ -114,6 +127,22 @@ impl SpotTrade {
         match self.taker_side {
             SpotOrderSide::Buy => SpotTradeFeeRole::Maker,
             SpotOrderSide::Sell => SpotTradeFeeRole::Taker,
+        }
+    }
+
+    /// 返回买方在本笔成交中支付的 quote 手续费金额。
+    pub fn buyer_fee(&self) -> u64 {
+        match self.taker_side {
+            SpotOrderSide::Buy => self.taker_fee,
+            SpotOrderSide::Sell => self.maker_fee,
+        }
+    }
+
+    /// 返回卖方在本笔成交中支付的 quote 手续费金额。
+    pub fn seller_fee(&self) -> u64 {
+        match self.taker_side {
+            SpotOrderSide::Buy => self.maker_fee,
+            SpotOrderSide::Sell => self.taker_fee,
         }
     }
 }
@@ -192,6 +221,8 @@ impl Entity for SpotTrade {
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
+            EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
         ]
     }
 
@@ -203,7 +234,7 @@ impl Entity for SpotTrade {
         match field_name {
             "trade_id" | "match_id" | "symbol" | "taker_order_id" | "maker_order_id"
             | "taker_account_id" | "maker_account_id" | "taker_side" => 0,
-            "asset" | "price" | "qty" => 1,
+            "asset" | "price" | "qty" | "taker_fee" | "maker_fee" => 1,
             _ => 0,
         }
     }
@@ -240,6 +271,8 @@ mod tests {
             SpotOrderSide::Buy,
             100,
             2,
+            2,
+            1,
         )
     }
 
@@ -255,6 +288,10 @@ mod tests {
         assert_eq!(trade.seller_account_id(), "seller");
         assert_eq!(trade.buyer_fee_role(), SpotTradeFeeRole::Taker);
         assert_eq!(trade.seller_fee_role(), SpotTradeFeeRole::Maker);
+        assert_eq!(trade.taker_fee, 2);
+        assert_eq!(trade.maker_fee, 1);
+        assert_eq!(trade.buyer_fee(), 2);
+        assert_eq!(trade.seller_fee(), 1);
         assert_eq!(trade.fee_role_for_account("buyer"), Some(SpotTradeFeeRole::Taker));
         assert_eq!(trade.fee_role_for_account("seller"), Some(SpotTradeFeeRole::Maker));
         assert_eq!(trade.fee_role_for_account("outsider"), None);
@@ -302,9 +339,13 @@ mod tests {
             SpotOrderSide::Sell,
             100,
             2,
+            2,
+            1,
         );
         assert_eq!(sell_taker.buyer_account_id(), "buyer");
         assert_eq!(sell_taker.seller_account_id(), "seller");
+        assert_eq!(sell_taker.buyer_fee(), 1);
+        assert_eq!(sell_taker.seller_fee(), 2);
     }
 
     #[test]
@@ -318,6 +359,12 @@ mod tests {
         }));
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("price") && change.new_value_bytes() == b"100"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("taker_fee") && change.new_value_bytes() == b"2"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("maker_fee") && change.new_value_bytes() == b"1"
         }));
     }
 }

@@ -979,6 +979,8 @@ mod tests {
             crate::SpotOrderSide::Buy,
             100,
             2,
+            2,
+            1,
         );
 
         let voucher = SettlementTransferVoucher::build_spot_principal_voucher(
@@ -1033,6 +1035,8 @@ mod tests {
             crate::SpotOrderSide::Buy,
             u64::MAX,
             2,
+            2,
+            1,
         );
 
         assert_eq!(
@@ -1061,6 +1065,8 @@ mod tests {
             "seller".to_string(),
             crate::SpotOrderSide::Buy,
             100,
+            2,
+            1,
             2,
         );
 
@@ -1225,6 +1231,8 @@ mod tests {
             crate::SpotOrderSide::Buy,
             100,
             2,
+            2,
+            1,
         );
         let principal_voucher = SettlementTransferVoucher::build_spot_principal_voucher(
             "voucher-semantic-1".to_string(),

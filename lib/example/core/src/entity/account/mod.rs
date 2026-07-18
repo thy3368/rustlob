@@ -4,6 +4,7 @@ pub mod balance_ledger_entry_v2;
 pub mod balance_ledger_reason;
 pub mod settlement_transfer_voucher;
 
+pub use balance::BalanceError;
 pub use balance_ledger_entry_v2::{
     BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2,
 };

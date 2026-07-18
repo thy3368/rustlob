@@ -9,7 +9,7 @@ pub mod spot;
 pub mod account;
 
 pub use account::account::{Account, AccountStatus};
-pub use account::balance::Balance;
+pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2,
 };

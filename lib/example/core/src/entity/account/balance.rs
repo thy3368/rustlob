@@ -1,10 +1,28 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[cfg(test)]
-mod balance_scenarios;
+mod balance_bdd;
 
 const BALANCE_ENTITY_TYPE: u8 = 7;
+
+/// 余额实体行为错误。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum BalanceError {
+    /// 金额必须大于零。
+    #[error("balance amount must be greater than zero")]
+    InvalidAmount,
+    /// 可用余额不足。
+    #[error("available balance is insufficient")]
+    InsufficientAvailableBalance,
+    /// 冻结余额不足。
+    #[error("frozen balance is insufficient")]
+    InsufficientFrozenBalance,
+    /// 余额状态计算发生整数溢出。
+    #[error("arithmetic overflow while deriving balance transition")]
+    ArithmeticOverflow,
+}
 
 /// 某个账户在单一资产上的余额快照。
 ///
@@ -102,23 +120,40 @@ impl Balance {
         self.available >= amount
     }
 
-    /// 返回冻结后的 `(available, frozen)`。
-    pub fn reserve_after(&self, amount: u64) -> Option<(u64, u64)> {
-        let next_available = self.available.checked_sub(amount)?;
-        let next_frozen = self.frozen.checked_add(amount)?;
-        Some((next_available, next_frozen))
+    /// 可 BDD 规格化的聚合根行为：冻结可用余额。
+    pub fn reserve(&self, amount: u64) -> Result<Self, BalanceError> {
+        if amount == 0 {
+            return Err(BalanceError::InvalidAmount);
+        }
+
+        let available =
+            self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
+        let frozen = self.frozen.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
+        self.after_amounts(available, frozen)
     }
 
-    /// 返回释放冻结后的 `(available, frozen)`。
-    pub fn release_after(&self, amount: u64) -> Option<(u64, u64)> {
-        let next_available = self.available.checked_add(amount)?;
-        let next_frozen = self.frozen.checked_sub(amount)?;
-        Some((next_available, next_frozen))
+    /// 可 BDD 规格化的聚合根行为：释放冻结余额。
+    pub fn release(&self, amount: u64) -> Result<Self, BalanceError> {
+        if amount == 0 {
+            return Err(BalanceError::InvalidAmount);
+        }
+
+        let frozen =
+            self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
+        let available =
+            self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
+        self.after_amounts(available, frozen)
     }
 
-    /// 返回交割收入后的可用余额。
-    pub fn credit_available_after(&self, amount: u64) -> Option<u64> {
-        self.available.checked_add(amount)
+    /// 可 BDD 规格化的聚合根行为：入账可用余额。
+    pub fn credit_available(&self, amount: u64) -> Result<Self, BalanceError> {
+        if amount == 0 {
+            return Err(BalanceError::InvalidAmount);
+        }
+
+        let available =
+            self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
+        self.after_amounts(available, self.frozen)
     }
 
     /// 返回当前可用余额是否足以直接支付指定金额。
@@ -126,32 +161,38 @@ impl Balance {
         self.available >= amount
     }
 
-    /// 返回直接扣减可用余额后的新可用余额。
-    pub fn debit_available_after(&self, amount: u64) -> Option<u64> {
-        self.available.checked_sub(amount)
-    }
-
-    /// 返回应用 signed 可用余额增量后的新可用余额。
-    pub fn available_after_signed_delta(&self, delta: i128) -> Option<u64> {
-        if delta >= 0 {
-            let amount = u64::try_from(delta).ok()?;
-            self.credit_available_after(amount)
-        } else {
-            let amount = delta.checked_neg().and_then(|value| u64::try_from(value).ok())?;
-            self.debit_available_after(amount)
+    /// 可 BDD 规格化的聚合根行为：扣减可用余额。
+    pub fn debit_available(&self, amount: u64) -> Result<Self, BalanceError> {
+        if amount == 0 {
+            return Err(BalanceError::InvalidAmount);
         }
+
+        let available =
+            self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
+        self.after_amounts(available, self.frozen)
     }
 
-    /// 返回扣减冻结后的冻结余额。
-    pub fn debit_frozen_after(&self, amount: u64) -> Option<u64> {
-        self.frozen.checked_sub(amount)
+    /// 可 BDD 规格化的聚合根行为：成交消耗冻结余额。
+    pub fn debit_frozen(&self, amount: u64) -> Result<Self, BalanceError> {
+        if amount == 0 {
+            return Err(BalanceError::InvalidAmount);
+        }
+
+        let frozen =
+            self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
+        self.after_amounts(self.available, frozen)
     }
 
-    /// 应用已计算好的余额字段和版本。
-    pub fn apply_after(&mut self, available: u64, frozen: u64, version: u64) {
-        self.available = available;
-        self.frozen = frozen;
-        self.version = version;
+    fn after_amounts(&self, available: u64, frozen: u64) -> Result<Self, BalanceError> {
+        Ok(Self {
+            account_id: self.account_id.clone(),
+            asset_id: self.asset_id.clone(),
+            available,
+            frozen,
+            entry_notional: self.entry_notional,
+            identifier: self.identifier.clone(),
+            version: self.version.checked_add(1).ok_or(BalanceError::ArithmeticOverflow)?,
+        })
     }
 }
 
@@ -256,22 +297,18 @@ mod tests {
         assert!(balance.is_asset("USDT"));
         assert!(balance.can_debit_available(200));
         assert!(!balance.can_debit_available(2_000));
-        assert_eq!(balance.debit_available_after(300), Some(700));
-        assert_eq!(balance.debit_available_after(2_000), None);
-        assert_eq!(balance.reserve_after(200), Some((800, 200)));
+        assert_eq!(balance.debit_available(300).map(|after| after.available), Ok(700));
+        assert_eq!(balance.debit_available(2_000), Err(BalanceError::InsufficientAvailableBalance));
         assert_eq!(
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 4).release_after(50),
-            Some((850, 150))
+            balance.reserve(200).map(|after| (after.available, after.frozen)),
+            Ok((800, 200))
         );
-    }
-
-    #[test]
-    fn available_after_signed_delta_handles_credit_and_debit() {
-        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
-
-        assert_eq!(balance.available_after_signed_delta(200), Some(1_200));
-        assert_eq!(balance.available_after_signed_delta(-300), Some(700));
-        assert_eq!(balance.available_after_signed_delta(-2_000), None);
+        assert_eq!(
+            Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 4)
+                .release(50)
+                .map(|after| (after.available, after.frozen)),
+            Ok((850, 150))
+        );
     }
 
     #[test]

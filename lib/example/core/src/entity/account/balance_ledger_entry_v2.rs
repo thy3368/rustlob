@@ -6,7 +6,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::balance::Balance;
+use super::balance::{Balance, BalanceError};
 use super::balance_ledger_reason::BalanceLedgerReason;
 use super::settlement_transfer_voucher::SettlementTransferPurpose;
 
@@ -48,6 +48,17 @@ pub enum BalanceLedgerEntryV2Error {
     /// 余额状态计算发生整数溢出。
     #[error("arithmetic overflow while deriving balance ledger transition")]
     ArithmeticOverflow,
+}
+
+impl From<BalanceError> for BalanceLedgerEntryV2Error {
+    fn from(error: BalanceError) -> Self {
+        match error {
+            BalanceError::InvalidAmount => Self::InvalidAmount,
+            BalanceError::InsufficientAvailableBalance => Self::InsufficientAvailableBalance,
+            BalanceError::InsufficientFrozenBalance => Self::InsufficientFrozenBalance,
+            BalanceError::ArithmeticOverflow => Self::ArithmeticOverflow,
+        }
+    }
 }
 
 /// 一条 create-only 的余额流水审计事实。
@@ -134,43 +145,19 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
         operation: BalanceLedgerOperation,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
-        if amount == 0 {
-            return Err(BalanceLedgerEntryV2Error::InvalidAmount);
-        }
-
         let before_available = balance.available;
         let before_frozen = balance.frozen;
-        let next_version =
-            balance.version.checked_add(1).ok_or(BalanceLedgerEntryV2Error::ArithmeticOverflow)?;
 
-        let (after_available, after_frozen) = match operation {
-            BalanceLedgerOperation::Freeze => balance
-                .reserve_after(amount)
-                .ok_or(BalanceLedgerEntryV2Error::InsufficientAvailableBalance)?,
-            BalanceLedgerOperation::Unfreeze => balance
-                .release_after(amount)
-                .ok_or(BalanceLedgerEntryV2Error::InsufficientFrozenBalance)?,
-            BalanceLedgerOperation::CreditAvailable => (
-                balance
-                    .credit_available_after(amount)
-                    .ok_or(BalanceLedgerEntryV2Error::ArithmeticOverflow)?,
-                balance.frozen,
-            ),
-            BalanceLedgerOperation::DebitAvailable => (
-                balance
-                    .debit_available_after(amount)
-                    .ok_or(BalanceLedgerEntryV2Error::InsufficientAvailableBalance)?,
-                balance.frozen,
-            ),
-            BalanceLedgerOperation::DebitFrozen => (
-                balance.available,
-                balance
-                    .debit_frozen_after(amount)
-                    .ok_or(BalanceLedgerEntryV2Error::InsufficientFrozenBalance)?,
-            ),
+        let after_balance = match operation {
+            BalanceLedgerOperation::Freeze => balance.reserve(amount),
+            BalanceLedgerOperation::Unfreeze => balance.release(amount),
+            BalanceLedgerOperation::CreditAvailable => balance.credit_available(amount),
+            BalanceLedgerOperation::DebitAvailable => balance.debit_available(amount),
+            BalanceLedgerOperation::DebitFrozen => balance.debit_frozen(amount),
         };
+        let after_balance = after_balance.map_err(BalanceLedgerEntryV2Error::from)?;
 
-        balance.apply_after(after_available, after_frozen, next_version);
+        *balance = after_balance;
 
         Ok(Self {
             entry_id,
@@ -179,8 +166,8 @@ impl BalanceLedgerEntryV2 {
             balance_entity_id: balance.entity_id(),
             before_available,
             before_frozen,
-            after_available,
-            after_frozen,
+            after_available: balance.available,
+            after_frozen: balance.frozen,
             reason,
         })
     }
