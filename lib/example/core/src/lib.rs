@@ -17,7 +17,7 @@ pub use entity::{
     PerpClearinghouseState, Reservation, ReservationCloseReason, ReservationConsumed,
     ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationReleased, ReservationStatus, RiskState, SpotClearinghouseState,
-    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution,
+    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrderExecution,
     SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole,
