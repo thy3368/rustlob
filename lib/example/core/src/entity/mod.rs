@@ -60,18 +60,16 @@ pub use reservation::{
     ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationReleased, ReservationStatus,
 };
-pub(crate) use spot::spot_order::SpotOrderMatchError;
-#[cfg(test)]
-pub(crate) use spot::spot_order::spot_order_scenarios::{
-    ActiveSpotOrderScenario, active_spot_order_scenario_strategy,
+use spot as spot_entity;
+pub use spot::spot_trade::SpotTrade;
+pub use spot_entity::spot_conditional_order::{
+    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrderTriggerRole,
 };
-pub use spot::spot_order::{
-    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrder, SpotOrderExecution, SpotOrderSide,
-    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce, SpotOrderTriggerRole,
+pub use spot_entity::spot_order_primitives::{
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
-pub use spot::spot_order_v2::{
+pub use spot_entity::spot_order_v2::{
     SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
     SpotOrderV2MatchError, SpotTradeFeeRole,
 };
-pub use spot::spot_trade::SpotTrade;

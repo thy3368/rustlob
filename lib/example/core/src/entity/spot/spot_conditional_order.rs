@@ -1,9 +1,11 @@
 use common_entity::{Entity, EntityError, EntityFieldChange};
 
-use super::spot_order::{
-    SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatusReason, SpotOrderTimeInForce,
-    option_status_reason_value, option_u64_value, push_change, stable_order_entity_id,
+use super::spot_order_primitives::{
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce, option_status_reason_value, option_u64_value, push_change,
+    stable_order_entity_id,
 };
+use super::spot_order_v2::SpotOrderV2;
 
 const SPOT_CONDITIONAL_ORDER_ENTITY_TYPE: u8 = 4;
 
@@ -30,7 +32,7 @@ impl SpotOrderTriggerRole {
 pub enum SpotConditionalOrderStatus {
     /// 条件单已接受，等待触发。
     Open,
-    /// 条件单已触发，并转换为 active `SpotOrder`。
+    /// 条件单已触发，并转换为 active `SpotOrderV2`。
     Triggered,
     /// 条件单触发前被取消。
     Canceled,
@@ -59,7 +61,7 @@ impl SpotConditionalOrderStatus {
 /// 未触发的 Hyperliquid 条件现货订单。
 ///
 /// 条件单只保存触发规则和触发后的执行意图；它不表示已进入订单簿的订单，也不冻结余额。
-/// 条件满足后，用 `triggered_order` 转换成 active `SpotOrder`。
+/// 条件满足后，用 `triggered_order` 转换成 active `SpotOrderV2`。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotConditionalOrder {
     /// 本系统生成的稳定条件单 ID。
@@ -165,8 +167,8 @@ impl SpotConditionalOrder {
         order_id: String,
         reserved_base: u64,
         reserved_quote: u64,
-    ) -> SpotOrder {
-        SpotOrder::new(
+    ) -> SpotOrderV2 {
+        SpotOrderV2::new(
             order_id,
             self.asset,
             self.exchange_oid,
@@ -176,9 +178,13 @@ impl SpotConditionalOrder {
             self.execution,
             self.time_in_force,
             self.qty,
+            0,
+            SpotOrderStatus::Open,
+            None,
             reserved_base,
             reserved_quote,
             self.client_order_id.clone(),
+            1,
         )
     }
 }

@@ -4,6 +4,9 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::entity::{
+    SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
+};
 use crate::{SpotOrderSide, SpotTradeFeeRole};
 
 #[cfg(test)]
@@ -144,6 +147,172 @@ impl SpotTrade {
             SpotOrderSide::Buy => self.maker_fee,
             SpotOrderSide::Sell => self.taker_fee,
         }
+    }
+
+    /// 从现货成交事实派生 principal-only settlement transfer voucher。
+    ///
+    /// 当前只生成 4 条 principal legs，不包含任何手续费腿。
+    /// 若 `price * qty` 溢出，则返回 `None`。
+    pub fn derive_spot_principal_settlement_transfer_voucher(
+        &self,
+        voucher_id: String,
+        settlement_id: String,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+        fee_account_id: String,
+    ) -> Option<SettlementTransferVoucher> {
+        let quote_amount = self.notional_quote()?;
+        let buyer_account_id = self.buyer_account_id();
+        let seller_account_id = self.seller_account_id();
+
+        Some(SettlementTransferVoucher::new(
+            voucher_id,
+            SettlementKind::Spot,
+            settlement_id.clone(),
+            self.trade_id.clone(),
+            Some(self.match_id.clone()),
+            fee_account_id,
+            vec![
+                SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
+                    ),
+                    seller_account_id.to_string(),
+                    buyer_account_id.to_string(),
+                    base_asset_id.to_string(),
+                    self.qty,
+                    SettlementTransferPurpose::SpotBuyerReceiveBase,
+                    format!(
+                        "balance-ledger:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
+                    ),
+                ),
+                SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
+                    ),
+                    buyer_account_id.to_string(),
+                    seller_account_id.to_string(),
+                    quote_asset_id.to_string(),
+                    quote_amount,
+                    SettlementTransferPurpose::SpotBuyerPayQuote,
+                    format!(
+                        "balance-ledger:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
+                    ),
+                ),
+                SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
+                    ),
+                    buyer_account_id.to_string(),
+                    seller_account_id.to_string(),
+                    quote_asset_id.to_string(),
+                    quote_amount,
+                    SettlementTransferPurpose::SpotSellerReceiveQuote,
+                    format!(
+                        "balance-ledger:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
+                    ),
+                ),
+                SettlementTransferLeg::new(
+                    format!(
+                        "settlement-leg:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
+                    ),
+                    seller_account_id.to_string(),
+                    buyer_account_id.to_string(),
+                    base_asset_id.to_string(),
+                    self.qty,
+                    SettlementTransferPurpose::SpotSellerDeliverBase,
+                    format!(
+                        "balance-ledger:{}:{}",
+                        settlement_id,
+                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
+                    ),
+                ),
+            ],
+        ))
+    }
+
+    /// 从现货成交事实派生包含 principal 与 fee 的 settlement transfer voucher。
+    ///
+    /// fee 统一以 quote 资产计价，且买卖双方各自向 `fee_account_id` 支付自己真实角色下的 fee。
+    /// fee 金额来自本成交事实的 `buyer_fee()` / `seller_fee()`。
+    /// 若 quote notional 溢出则返回 `None`。
+    pub fn derive_spot_settlement_transfer_voucher_with_fees(
+        &self,
+        voucher_id: String,
+        settlement_id: String,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+        fee_account_id: String,
+    ) -> Option<SettlementTransferVoucher> {
+        let mut voucher = self.derive_spot_principal_settlement_transfer_voucher(
+            voucher_id,
+            settlement_id.clone(),
+            base_asset_id,
+            quote_asset_id,
+            fee_account_id.clone(),
+        )?;
+
+        let buyer_fee = self.buyer_fee();
+        if buyer_fee > 0 {
+            voucher.push_leg(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    self.buyer_fee_role().as_str()
+                ),
+                self.buyer_account_id().to_string(),
+                fee_account_id.clone(),
+                quote_asset_id.to_string(),
+                buyer_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    self.buyer_fee_role().as_str()
+                ),
+            ));
+        }
+
+        let seller_fee = self.seller_fee();
+        if seller_fee > 0 {
+            voucher.push_leg(SettlementTransferLeg::new(
+                format!(
+                    "settlement-leg:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    self.seller_fee_role().as_str()
+                ),
+                self.seller_account_id().to_string(),
+                fee_account_id,
+                quote_asset_id.to_string(),
+                seller_fee,
+                SettlementTransferPurpose::TradingFee,
+                format!(
+                    "balance-ledger:{}:{}:{}",
+                    settlement_id,
+                    SettlementTransferPurpose::TradingFee.as_str(),
+                    self.seller_fee_role().as_str()
+                ),
+            ));
+        }
+
+        Some(voucher)
     }
 }
 
@@ -346,6 +515,81 @@ mod tests {
         assert_eq!(sell_taker.seller_account_id(), "seller");
         assert_eq!(sell_taker.buyer_fee(), 1);
         assert_eq!(sell_taker.seller_fee(), 2);
+    }
+
+    #[test]
+    fn derive_spot_principal_settlement_transfer_voucher_creates_expected_legs() {
+        let voucher = trade()
+            .derive_spot_principal_settlement_transfer_voucher(
+                "voucher-1".to_string(),
+                "settle-1".to_string(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(voucher.settlement_kind(), SettlementKind::Spot);
+        assert_eq!(voucher.trade_id(), "match-1-1");
+        assert_eq!(
+            voucher.amount_received_by_for_purpose(
+                "buyer",
+                SettlementTransferPurpose::SpotBuyerReceiveBase
+            ),
+            Some(2)
+        );
+        assert_eq!(
+            voucher
+                .amount_sent_by_for_purpose("buyer", SettlementTransferPurpose::SpotBuyerPayQuote),
+            Some(200)
+        );
+        assert_eq!(
+            voucher.amount_received_by_for_purpose(
+                "seller",
+                SettlementTransferPurpose::SpotSellerReceiveQuote
+            ),
+            Some(200)
+        );
+        assert_eq!(
+            voucher.amount_sent_by_for_purpose(
+                "seller",
+                SettlementTransferPurpose::SpotSellerDeliverBase
+            ),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn derive_spot_settlement_transfer_voucher_with_fees_uses_trade_fee_facts() {
+        let voucher = trade()
+            .derive_spot_settlement_transfer_voucher_with_fees(
+                "voucher-1".to_string(),
+                "settle-1".to_string(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(2));
+        assert_eq!(voucher.fee_amount_paid_by("seller"), Some(1));
+        assert_eq!(voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee).len(), 2);
+    }
+
+    #[test]
+    fn derive_spot_settlement_transfer_voucher_returns_none_when_notional_overflows() {
+        let overflow_trade = SpotTrade { price: u64::MAX, qty: 2, ..trade() };
+
+        assert_eq!(
+            overflow_trade.derive_spot_principal_settlement_transfer_voucher(
+                "voucher-overflow".to_string(),
+                "settle-overflow".to_string(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            ),
+            None
+        );
     }
 
     #[test]

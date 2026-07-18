@@ -287,15 +287,15 @@ fn settle_principal_chain(
             &mut consumed_reservation_updates,
         )?;
 
-        let voucher = SettlementTransferVoucher::build_spot_principal_voucher(
-            format!("voucher:{settlement_id}"),
-            settlement_id.clone(),
-            trade,
-            "BTC",
-            "USDT",
-            "fee-account".to_string(),
-        )
-        .ok_or_else(|| "failed to build spot principal voucher".to_string())?;
+        let voucher = trade
+            .derive_spot_principal_settlement_transfer_voucher(
+                format!("voucher:{settlement_id}"),
+                settlement_id.clone(),
+                "BTC",
+                "USDT",
+                "fee-account".to_string(),
+            )
+            .ok_or_else(|| "failed to build spot principal voucher".to_string())?;
 
         apply_ledger(
             &mut balances,
