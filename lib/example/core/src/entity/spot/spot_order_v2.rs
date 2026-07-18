@@ -11,6 +11,9 @@ use super::spot_order::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
 
+#[cfg(test)]
+mod spot_order_v2_bdd_happy_path;
+
 const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
 
 /// `SpotOrderV2` 的冻结资产角色。
@@ -720,7 +723,14 @@ impl SpotOrderV2 {
         Ok(())
     }
 
-    /// 按成交事实推进订单生命周期。
+    // 领域方法：订单生命周期推进
+    //
+    // use case 应通过这些聚合根方法推进订单生命周期，不得绕过它们直接修改
+    // status、filled_qty、status_reason、version。
+
+    /// 领域方法：按成交事实推进订单生命周期。
+    ///
+    /// 可 BDD 规格化的聚合根行为：成交后推进 filled quantity 与生命周期状态。
     pub(crate) fn fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
         let next_filled_qty = self
             .filled_qty
@@ -735,7 +745,9 @@ impl SpotOrderV2 {
         Ok(())
     }
 
-    /// 按用户主动撤单语义关闭订单。
+    /// 领域方法：按用户主动撤单语义关闭订单。
+    ///
+    /// 可 BDD 规格化的聚合根行为：可撤订单被用户主动撤销。
     pub(crate) fn cancel_by_user(&mut self) -> Result<(), SpotOrderV2MatchError> {
         if !self.can_be_cancelled() {
             return Err(SpotOrderV2MatchError::OrderNotCancelable);
@@ -753,12 +765,16 @@ impl SpotOrderV2 {
         )
     }
 
-    /// 按 IOC / 市价订单无流动性语义拒绝订单。
+    /// 领域方法：按 IOC / 市价订单无流动性语义拒绝订单。
+    ///
+    /// 可 BDD 规格化的聚合根行为：IOC 或市价订单因无流动性被拒绝。
     pub(crate) fn reject_as_no_liquidity(&mut self) -> Result<(), SpotOrderV2MatchError> {
         self.transition_to(SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()))
     }
 
-    /// 应用 taker 本轮撮合结束后的业务结果。
+    /// 领域方法：应用 taker 本轮撮合结束后的业务结果。
+    ///
+    /// 可 BDD 规格化的聚合根行为：taker 本轮撮合结束后进入终态或成交态。
     pub(crate) fn finish_after_match(
         &mut self,
         added_fill_qty: u64,
@@ -787,7 +803,9 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 将 ALO 订单按“会立即吃单”语义拒绝。
+    /// 领域方法：将 ALO 订单按“会立即吃单”语义拒绝。
+    ///
+    /// 可 BDD 规格化的聚合根行为：ALO 会立即吃单时被拒绝。
     pub(crate) fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderV2MatchError> {
         self.transition_to(SpotOrderStatus::Rejected, Some(SpotOrderStatusReason::BadAloPxRejected))
     }
@@ -1431,37 +1449,6 @@ mod tests {
     }
 
     #[test]
-    fn fill_moves_order_to_partially_filled_and_filled() -> Result<(), SpotOrderV2MatchError> {
-        let mut order = buy_order();
-
-        order.fill(1)?;
-        assert_eq!(order.filled_qty, 1);
-        assert_eq!(order.status, SpotOrderStatus::PartiallyFilled);
-        assert_eq!(order.status_reason, None);
-        assert_eq!(order.version, 2);
-
-        order.fill(1)?;
-        assert_eq!(order.filled_qty, 2);
-        assert_eq!(order.status, SpotOrderStatus::Filled);
-        assert_eq!(order.status_reason, None);
-        assert_eq!(order.version, 3);
-
-        Ok(())
-    }
-
-    #[test]
-    fn cancel_by_user_marks_order_canceled() -> Result<(), SpotOrderV2MatchError> {
-        let mut order = buy_order();
-
-        order.cancel_by_user()?;
-
-        assert_eq!(order.status, SpotOrderStatus::Canceled);
-        assert_eq!(order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-        assert_eq!(order.version, 2);
-        Ok(())
-    }
-
-    #[test]
     fn cancel_by_user_rejects_non_cancelable_order() {
         let mut filled = SpotOrderV2 {
             filled_qty: 2,
@@ -1473,68 +1460,6 @@ mod tests {
         assert_eq!(filled.cancel_by_user(), Err(SpotOrderV2MatchError::OrderNotCancelable));
         assert_eq!(filled.status, SpotOrderStatus::Filled);
         assert_eq!(filled.version, 1);
-    }
-
-    #[test]
-    fn reject_as_bad_alo_marks_order_rejected() -> Result<(), SpotOrderV2MatchError> {
-        let mut order = buy_order();
-
-        order.reject_as_bad_alo()?;
-
-        assert_eq!(order.status, SpotOrderStatus::Rejected);
-        assert_eq!(order.status_reason, Some(SpotOrderStatusReason::BadAloPxRejected));
-        assert_eq!(order.version, 2);
-        Ok(())
-    }
-
-    #[test]
-    fn reject_as_no_liquidity_uses_market_or_ioc_reason() -> Result<(), SpotOrderV2MatchError> {
-        let mut market = market_buy_order();
-        let mut limit_ioc = SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Ioc, ..buy_order() };
-
-        market.reject_as_no_liquidity()?;
-        limit_ioc.reject_as_no_liquidity()?;
-
-        assert_eq!(
-            market.status_reason,
-            Some(SpotOrderStatusReason::MarketOrderNoLiquidityRejected)
-        );
-        assert_eq!(limit_ioc.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
-        assert_eq!(market.status, SpotOrderStatus::Rejected);
-        assert_eq!(limit_ioc.status, SpotOrderStatus::Rejected);
-        Ok(())
-    }
-
-    #[test]
-    fn finish_after_match_covers_gtc_alo_ioc_and_full_fill() -> Result<(), SpotOrderV2MatchError> {
-        let mut gtc_no_fill = buy_order();
-        assert_eq!(gtc_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
-
-        let mut alo_no_fill =
-            SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Alo, ..buy_order() };
-        assert_eq!(alo_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
-
-        let mut ioc_partial = market_buy_order();
-        ioc_partial.finish_after_match(1)?;
-        assert_eq!(ioc_partial.filled_qty, 1);
-        assert_eq!(ioc_partial.status, SpotOrderStatus::Canceled);
-        assert_eq!(ioc_partial.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
-
-        let mut ioc_none = market_buy_order();
-        ioc_none.finish_after_match(0)?;
-        assert_eq!(ioc_none.filled_qty, 0);
-        assert_eq!(ioc_none.status, SpotOrderStatus::Rejected);
-        assert_eq!(
-            ioc_none.status_reason,
-            Some(SpotOrderStatusReason::MarketOrderNoLiquidityRejected)
-        );
-
-        let mut full = buy_order();
-        full.finish_after_match(2)?;
-        assert_eq!(full.filled_qty, 2);
-        assert_eq!(full.status, SpotOrderStatus::Filled);
-        assert_eq!(full.status_reason, None);
-        Ok(())
     }
 
     #[test]
