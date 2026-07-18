@@ -36,18 +36,21 @@ modeling, Rustdoc, entity methods, and small inline unit tests.
    before deciding whether it should be an `entity`, `aggregate root`, `value object`, or remain
    `description/policy`.
 3. Identify business facts that belong on the entity, not in adapters.
-4. Check each candidate method against `.agents/skills/shared/entity_method_constraints.md` before
+4. If the entity participates in a document flow / 单据链, identify stable upstream-document to
+   downstream-document factory methods first, such as
+   `SettlementTransferVoucher -> BalanceLedgerEntryV2`.
+5. Check each candidate method against `.agents/skills/shared/entity_method_constraints.md` before
    exposing it to use cases.
-5. Add only reusable methods that at least two workflows may naturally need, or that make one
+6. Add only reusable methods that at least two workflows may naturally need, or that make one
    workflow's business rule explicit.
-6. Keep validation ownership clear: use cases reject commands/state; entities expose facts,
+7. Keep validation ownership clear: use cases reject commands/state; entities expose facts,
    invariant checks, and legal lifecycle progression.
-7. Add Rustdoc for the struct, fields or exposed facts, constructor, and entity methods.
-8. Add focused inline `#[cfg(test)]` unit tests for the entity methods. If the entity needs
+8. Add Rustdoc for the struct, fields or exposed facts, constructor, and entity methods.
+9. Add focused inline `#[cfg(test)]` unit tests for the entity methods. If the entity needs
    business-state enumeration with `proptest`, switch to `proptest-entity`.
-9. Replace duplicate manual construction or calculation in adapters/use cases with entity methods
+10. Replace duplicate manual construction or calculation in adapters/use cases with entity methods
    when it does not couple core to adapter details.
-10. Run targeted formatting and tests for the touched package.
+11. Run targeted formatting and tests for the touched package.
 
 ## Entity Shape
 
@@ -87,6 +90,23 @@ impl EntityName {
 
 Use `Option` for arithmetic that can overflow, e.g. `checked_mul`, `checked_add`, `checked_sub`.
 Do not use `unwrap()` or `expect()` in production entity code.
+
+## Document Chain Factories
+
+For document-flow entities, model the upstream document as the factory source for downstream
+documents when the derivation is a stable business fact. Examples:
+
+- `SpotTrade -> SettlementTransferVoucher`
+- `HyperliquidPerpTrade -> SettlementTransferVoucher`
+- `SettlementTransferVoucher -> BalanceLedgerEntryV2`
+
+Name these methods with `from_*` / `derive_*` wording that exposes the document derivation, rather
+than generic `build_*` construction. The factory should only derive and return the downstream
+document. It must not apply balances, mutate other aggregates, persist events, publish messages, or
+run downstream document behavior such as `apply_to(balance)`.
+
+Downstream document invariants and behavior remain owned by the downstream entity. Cross-aggregate
+state changes and persistence/publication sequencing remain use case orchestration.
 
 ## SpotOrderV2 Pattern
 
