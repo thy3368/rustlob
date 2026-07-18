@@ -210,19 +210,31 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 .cloned()
                 .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
             let before = balance.clone();
-            let amount = delta
-                .available_delta
-                .unsigned_abs()
-                .try_into()
+            let amount = u64::try_from(delta.available_delta.unsigned_abs())
                 .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
             let entry_id =
                 format!("balance-ledger:funding:{}:{}", cmd.funding_batch_id, balance.entity_id());
-            let entry = if delta.available_delta > 0 {
-                BalanceLedgerEntry::credit_available(entry_id, &mut balance, amount, reason)
+            let mut entry = if delta.available_delta > 0 {
+                BalanceLedgerEntry::credit_available(
+                    entry_id,
+                    balance.account_id.clone(),
+                    balance.asset_id.clone(),
+                    balance.entity_id(),
+                    amount,
+                    reason,
+                )
             } else {
-                BalanceLedgerEntry::debit_available(entry_id, &mut balance, amount, reason)
+                BalanceLedgerEntry::debit_available(
+                    entry_id,
+                    balance.account_id.clone(),
+                    balance.asset_id.clone(),
+                    balance.entity_id(),
+                    amount,
+                    reason,
+                )
             }
             .map_err(map_funding_balance_ledger_error)?;
+            entry.apply_to(&mut balance).map_err(map_funding_balance_ledger_error)?;
 
             changed_margin_balances.push(UpdatedEntityPair { before, after: balance });
             created_balance_ledger_entries.push(entry);
@@ -427,7 +439,9 @@ fn map_funding_balance_ledger_error(
         }
         crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             SettleHyperliquidPerpFundingError::ArithmeticOverflow
         }
     }
@@ -840,8 +854,8 @@ mod tests {
         assert_eq!(result.created_balance_ledger_entries.len(), 1);
         let entry = &result.created_balance_ledger_entries[0];
         assert_eq!(entry.entry_id, "balance-ledger:funding:funding-2026-06-10T08:trader-1:USDC");
-        assert_eq!(entry.before_available, 1_000);
-        assert_eq!(entry.after_available, 985);
+        assert_eq!(entry.before_available, Some(1_000));
+        assert_eq!(entry.after_available, Some(985));
         assert!(entry.matches_balance_update(&result.changed_margin_balances[0]));
         assert_eq!(
             entry.reason,

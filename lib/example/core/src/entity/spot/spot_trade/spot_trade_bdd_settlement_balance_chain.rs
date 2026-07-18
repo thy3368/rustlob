@@ -1,4 +1,5 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+use common_entity::Entity;
 
 use super::*;
 use crate::entity::{
@@ -443,15 +444,29 @@ fn apply_ledger(
         .find(|balance| balance.belongs_to_account(account_id) && balance.is_asset(asset_id))
         .ok_or_else(|| format!("missing balance for {account_id}:{asset_id}"))?;
     let before = balance.clone();
-    let entry = match delta {
-        BalanceDelta::CreditAvailable(amount) => {
-            BalanceLedgerEntryV2::credit_available(entry_id, balance, amount, reason)
-        }
-        BalanceDelta::DebitFrozen(amount) => {
-            BalanceLedgerEntryV2::debit_frozen(entry_id, balance, amount, reason)
-        }
+    let account_id = balance.account_id.clone();
+    let asset_id = balance.asset_id.clone();
+    let balance_entity_id = balance.entity_id();
+    let mut entry = match delta {
+        BalanceDelta::CreditAvailable(amount) => BalanceLedgerEntryV2::credit_available(
+            entry_id,
+            account_id,
+            asset_id,
+            balance_entity_id,
+            amount,
+            reason,
+        ),
+        BalanceDelta::DebitFrozen(amount) => BalanceLedgerEntryV2::debit_frozen(
+            entry_id,
+            account_id,
+            asset_id,
+            balance_entity_id,
+            amount,
+            reason,
+        ),
     }
     .map_err(|err| err.to_string())?;
+    entry.apply_to(balance).map_err(|err| err.to_string())?;
     balance_updates.push(UpdatedEntityPair { before, after: balance.clone() });
     ledger_entries.push(entry);
     Ok(())
@@ -624,8 +639,8 @@ fn assert_ledger_matches_update(
     balance_update: &UpdatedEntityPair<Balance>,
 ) {
     assert!(ledger_entry.matches_balance_update(balance_update));
-    assert_eq!(ledger_entry.after_available, balance_update.after.available);
-    assert_eq!(ledger_entry.after_frozen, balance_update.after.frozen);
+    assert_eq!(ledger_entry.after_available, Some(balance_update.after.available));
+    assert_eq!(ledger_entry.after_frozen, Some(balance_update.after.frozen));
 }
 
 fn assert_ledger_reason_refs(

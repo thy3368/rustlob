@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
 use crate::entity::{
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatusReason, SpotOrderTimeInForce,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
 
 // 目的:
@@ -53,6 +53,8 @@ fn sample_cmd() -> MatchSpotOrderCmd {
         party_id: "buyer".to_string(),
         taker_order_id: "taker-1".to_string(),
         match_id: "match-1".to_string(),
+        maker_fee_bps: 5,
+        taker_fee_bps: 10,
     }
 }
 
@@ -170,6 +172,15 @@ fn assert_trade_event_for_accounts(
     assert_eq!(event_field(event, "taker_side"), Some(expected_taker_side.as_str()));
     assert_eq!(event_field_u64(event, "price"), Some(expected_price));
     assert_eq!(event_field_u64(event, "qty"), Some(expected_qty));
+    let expected_taker_fee = expected_fee_amount(expected_price, expected_qty, 10);
+    let expected_maker_fee = expected_fee_amount(expected_price, expected_qty, 5);
+    assert_eq!(event_field_u64(event, "taker_fee"), Some(expected_taker_fee));
+    assert_eq!(event_field_u64(event, "maker_fee"), Some(expected_maker_fee));
+}
+
+fn expected_fee_amount(price: u64, qty: u64, fee_bps: u64) -> u64 {
+    let scaled = price * qty * fee_bps;
+    scaled / 10_000 + u64::from(scaled % 10_000 > 0)
 }
 
 // 订单更新事件采用 diff 语义：
@@ -958,4 +969,29 @@ fn first_non_crossing_maker_stops_scan_even_if_later_maker_would_cross()
     assert_eq!(result, Err(MatchSpotOrderError::NoTradesMatched));
 
     Ok(())
+}
+
+#[test]
+fn fee_calculation_overflow_returns_arithmetic_overflow() {
+    // Rule:
+    // - 成交事实中的 fee 金额必须由撮合命令费率计算；乘法溢出不能被截断。
+    //
+    // Given:
+    // - 成交 notional 可以表示，但 notional * fee_bps 会溢出。
+    //
+    // When:
+    // - 执行撮合。
+    //
+    // Then:
+    // - 返回既有 `ArithmeticOverflow` 业务错误。
+
+    let cmd = MatchSpotOrderCmd { taker_fee_bps: 2, maker_fee_bps: 1, ..sample_cmd() };
+    let state = MatchSpotOrderState {
+        taker_order: taker_buy_limit(1, u64::MAX, SpotOrderTimeInForce::Gtc),
+        maker_orders: vec![maker_sell("maker-1", 1, u64::MAX, SpotOrderTimeInForce::Gtc)],
+    };
+
+    let result = compute_events(&cmd, state);
+
+    assert_eq!(result, Err(MatchSpotOrderError::ArithmeticOverflow));
 }

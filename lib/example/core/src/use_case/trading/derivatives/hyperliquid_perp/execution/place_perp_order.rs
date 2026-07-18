@@ -7,10 +7,10 @@ use thiserror::Error;
 
 use crate::MarketRules;
 use crate::entity::{
-    Balance, HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
-    HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
-    MarginReservation, ReservationCreated, ReservationKind, ReservationMarketKind,
-    required_position_margin,
+    Balance, BalanceError, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
+    HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
+    HyperliquidPerpPositionSide, MarginReservation, ReservationCreated, ReservationKind,
+    ReservationMarketKind, required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -344,18 +344,9 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
                 reservation,
             )
         });
-        let mut next_balance = state.margin_balance.clone();
-        let previous_balance = next_balance.clone();
-        let (next_available, next_frozen) = state
-            .margin_balance
-            .reserve_after(margin)
-            .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        let next_version = state
-            .margin_balance
-            .version
-            .checked_add(1)
-            .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        next_balance.apply_after(next_available, next_frozen, next_version);
+        let previous_balance = state.margin_balance.clone();
+        let mut next_balance = previous_balance.clone();
+        next_balance.reserve(margin).map_err(map_margin_reserve_balance_error)?;
 
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,
@@ -366,6 +357,17 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
                 after: next_balance,
             }],
         })
+    }
+}
+
+fn map_margin_reserve_balance_error(error: BalanceError) -> PlaceHyperliquidPerpOrderError {
+    match error {
+        BalanceError::InsufficientAvailableBalance => {
+            PlaceHyperliquidPerpOrderError::InsufficientMarginBalance
+        }
+        BalanceError::InvalidAmount
+        | BalanceError::InsufficientFrozenBalance
+        | BalanceError::ArithmeticOverflow => PlaceHyperliquidPerpOrderError::ArithmeticOverflow,
     }
 }
 

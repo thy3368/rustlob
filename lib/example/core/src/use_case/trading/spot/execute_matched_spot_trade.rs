@@ -23,6 +23,10 @@ pub struct ExecuteMatchedSpotTradeCmd {
     pub taker_order_id: String,
     /// 本次撮合批次 ID。
     pub match_id: String,
+    /// maker 角色手续费 bps。
+    pub maker_fee_bps: u64,
+    /// taker 角色手续费 bps。
+    pub taker_fee_bps: u64,
     /// 本次清结算批次 ID。
     pub settlement_batch_id: String,
 }
@@ -188,6 +192,8 @@ fn match_cmd_from_execute_cmd(cmd: &ExecuteMatchedSpotTradeCmd) -> MatchSpotOrde
         party_id: cmd.party_id.clone(),
         taker_order_id: cmd.taker_order_id.clone(),
         match_id: cmd.match_id.clone(),
+        maker_fee_bps: cmd.maker_fee_bps,
+        taker_fee_bps: cmd.taker_fee_bps,
     }
 }
 
@@ -227,6 +233,8 @@ fn execute_cmd() -> ExecuteMatchedSpotTradeCmd {
         party_id: "buyer".to_string(),
         taker_order_id: "taker-1".to_string(),
         match_id: "match-1".to_string(),
+        maker_fee_bps: 5,
+        taker_fee_bps: 10,
         settlement_batch_id: "settle-1".to_string(),
     }
 }

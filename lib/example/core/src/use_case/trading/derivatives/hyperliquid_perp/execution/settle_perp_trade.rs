@@ -204,8 +204,15 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                 .version
                 .checked_add(1)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let mut next_balance = balance.clone();
-            next_balance.apply_after(next_available, next_frozen, next_version);
+            let next_balance = Balance::new_with_snapshot_facts(
+                balance.account_id.clone(),
+                balance.asset_id.clone(),
+                next_available,
+                next_frozen,
+                balance.entry_notional(),
+                balance.identifier().map(str::to_string),
+                next_version,
+            );
             changed_margin_balances
                 .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
         }

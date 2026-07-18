@@ -209,17 +209,27 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
             let before = balance.clone();
             let entry_id =
                 format!("balance-ledger:{}:{}", cmd.settlement_batch_id, balance.entity_id());
-            let entry = if delta.available_add > 0 {
+            let mut entry = if delta.available_add > 0 {
                 BalanceLedgerEntry::credit_available(
                     entry_id,
-                    &mut balance,
+                    balance.account_id.clone(),
+                    balance.asset_id.clone(),
+                    balance.entity_id(),
                     delta.available_add,
                     reason,
                 )
             } else {
-                BalanceLedgerEntry::debit_frozen(entry_id, &mut balance, delta.frozen_sub, reason)
+                BalanceLedgerEntry::debit_frozen(
+                    entry_id,
+                    balance.account_id.clone(),
+                    balance.asset_id.clone(),
+                    balance.entity_id(),
+                    delta.frozen_sub,
+                    reason,
+                )
             }
             .map_err(map_spot_settlement_balance_ledger_error)?;
+            entry.apply_to(&mut balance).map_err(map_spot_settlement_balance_ledger_error)?;
 
             updated_balances.push(UpdatedEntityPair { before, after: balance });
             created_balance_ledger_entries.push(entry);
@@ -585,7 +595,9 @@ fn map_spot_settlement_balance_ledger_error(
         }
         crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             SettleSpotTradeError::ArithmeticOverflow
         }
     }
@@ -621,6 +633,8 @@ fn trade(
         taker_side,
         price,
         qty,
+        2,
+        1,
     )
 }
 

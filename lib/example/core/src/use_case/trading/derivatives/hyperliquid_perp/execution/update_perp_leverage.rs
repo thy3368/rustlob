@@ -1,8 +1,8 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::Entity;
+use common_entity::{Entity, MiStateMachineV2Unchecked};
 use thiserror::Error;
 
 use crate::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
@@ -86,15 +86,11 @@ impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
     }
 }
 
-impl CommandUseCase4 for UpdateHyperliquidPerpLeverageUseCase {
+impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
     type Command = UpdateHyperliquidPerpLeverageCmd;
     type GivenState = UpdateHyperliquidPerpLeverageState;
     type Error = UpdateHyperliquidPerpLeverageError;
-    type Changes = UpdateHyperliquidPerpLeverageChanges;
-
-    fn role(&self) -> &'static str {
-        "Trader"
-    }
+    type AfterChanges = UpdateHyperliquidPerpLeverageChanges;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
@@ -106,7 +102,7 @@ impl CommandUseCase4 for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -128,14 +124,14 @@ impl CommandUseCase4 for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn compute_changes(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
+        state: &Self::GivenState,
+    ) -> Result<Self::AfterChanges, Self::Error> {
         match margin_mode_from_is_cross(cmd.is_cross) {
             HyperliquidPerpMarginMode::Cross => {
-                let before = state.leverage_setting;
+                let before = state.leverage_setting.clone();
                 let next_version = before
                     .version
                     .checked_add(1)
@@ -188,11 +184,6 @@ mod tests {
     }
 
     #[test]
-    fn role_is_trader() {
-        assert_eq!(UpdateHyperliquidPerpLeverageUseCase.role(), "Trader");
-    }
-
-    #[test]
     fn pre_check_rejects_empty_party_id() {
         let cmd = UpdateHyperliquidPerpLeverageCmd { party_id: String::new(), ..cross_cmd() };
 
@@ -218,7 +209,7 @@ mod tests {
         };
 
         let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_state(&cmd, &cross_state());
+            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
 
         assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::AccountMismatch));
     }
@@ -228,7 +219,7 @@ mod tests {
         let cmd = UpdateHyperliquidPerpLeverageCmd { asset: 9, ..cross_cmd() };
 
         let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_state(&cmd, &cross_state());
+            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
 
         assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::LeverageSettingMismatch));
     }
@@ -238,7 +229,7 @@ mod tests {
         let cmd = UpdateHyperliquidPerpLeverageCmd { is_cross: false, ..cross_cmd() };
 
         let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_state(&cmd, &cross_state());
+            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
 
         assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch));
     }
@@ -246,7 +237,7 @@ mod tests {
     #[test]
     fn compute_changes_updates_cross_leverage_setting() {
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_changes(&cross_cmd(), cross_state())
+            .compute_after_changes_unchecked(&cross_cmd(), &cross_state())
             .unwrap();
 
         assert_eq!(changes.changed_leverage_setting.before.leverage, 5);
@@ -269,7 +260,8 @@ mod tests {
             ),
         };
 
-        let result = UpdateHyperliquidPerpLeverageUseCase.compute_changes(&cmd, state);
+        let result =
+            UpdateHyperliquidPerpLeverageUseCase.compute_after_changes_unchecked(&cmd, &state);
 
         assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::UnsupportedMarginMode));
     }
@@ -277,7 +269,7 @@ mod tests {
     #[test]
     fn replayable_events_project_updated_leverage_field() {
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_changes(&cross_cmd(), cross_state())
+            .compute_after_changes_unchecked(&cross_cmd(), &cross_state())
             .unwrap();
 
         let events = changes.to_replayable_events().unwrap();

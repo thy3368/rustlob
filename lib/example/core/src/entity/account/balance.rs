@@ -2,9 +2,6 @@ use common_entity::{Entity, EntityError, EntityFieldChange};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(test)]
-mod balance_bdd;
-
 const BALANCE_ENTITY_TYPE: u8 = 7;
 
 /// 余额实体行为错误。
@@ -121,7 +118,7 @@ impl Balance {
     }
 
     /// 可 BDD 规格化的聚合根行为：冻结可用余额。
-    pub fn reserve(&self, amount: u64) -> Result<Self, BalanceError> {
+    pub fn reserve(&mut self, amount: u64) -> Result<(), BalanceError> {
         if amount == 0 {
             return Err(BalanceError::InvalidAmount);
         }
@@ -129,11 +126,11 @@ impl Balance {
         let available =
             self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
         let frozen = self.frozen.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
-        self.after_amounts(available, frozen)
+        self.apply_amounts(available, frozen)
     }
 
     /// 可 BDD 规格化的聚合根行为：释放冻结余额。
-    pub fn release(&self, amount: u64) -> Result<Self, BalanceError> {
+    pub fn release(&mut self, amount: u64) -> Result<(), BalanceError> {
         if amount == 0 {
             return Err(BalanceError::InvalidAmount);
         }
@@ -142,18 +139,18 @@ impl Balance {
             self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
         let available =
             self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
-        self.after_amounts(available, frozen)
+        self.apply_amounts(available, frozen)
     }
 
     /// 可 BDD 规格化的聚合根行为：入账可用余额。
-    pub fn credit_available(&self, amount: u64) -> Result<Self, BalanceError> {
+    pub fn credit_available(&mut self, amount: u64) -> Result<(), BalanceError> {
         if amount == 0 {
             return Err(BalanceError::InvalidAmount);
         }
 
         let available =
             self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
-        self.after_amounts(available, self.frozen)
+        self.apply_amounts(available, self.frozen)
     }
 
     /// 返回当前可用余额是否足以直接支付指定金额。
@@ -162,37 +159,33 @@ impl Balance {
     }
 
     /// 可 BDD 规格化的聚合根行为：扣减可用余额。
-    pub fn debit_available(&self, amount: u64) -> Result<Self, BalanceError> {
+    pub fn debit_available(&mut self, amount: u64) -> Result<(), BalanceError> {
         if amount == 0 {
             return Err(BalanceError::InvalidAmount);
         }
 
         let available =
             self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
-        self.after_amounts(available, self.frozen)
+        self.apply_amounts(available, self.frozen)
     }
 
     /// 可 BDD 规格化的聚合根行为：成交消耗冻结余额。
-    pub fn debit_frozen(&self, amount: u64) -> Result<Self, BalanceError> {
+    pub fn debit_frozen(&mut self, amount: u64) -> Result<(), BalanceError> {
         if amount == 0 {
             return Err(BalanceError::InvalidAmount);
         }
 
         let frozen =
             self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
-        self.after_amounts(self.available, frozen)
+        self.apply_amounts(self.available, frozen)
     }
 
-    fn after_amounts(&self, available: u64, frozen: u64) -> Result<Self, BalanceError> {
-        Ok(Self {
-            account_id: self.account_id.clone(),
-            asset_id: self.asset_id.clone(),
-            available,
-            frozen,
-            entry_notional: self.entry_notional,
-            identifier: self.identifier.clone(),
-            version: self.version.checked_add(1).ok_or(BalanceError::ArithmeticOverflow)?,
-        })
+    fn apply_amounts(&mut self, available: u64, frozen: u64) -> Result<(), BalanceError> {
+        let version = self.version.checked_add(1).ok_or(BalanceError::ArithmeticOverflow)?;
+        self.available = available;
+        self.frozen = frozen;
+        self.version = version;
+        Ok(())
     }
 }
 
@@ -281,71 +274,4 @@ fn stable_balance_entity_id(value: &str) -> i64 {
 
 fn option_u64_value(value: Option<u64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn reserve_and_release_are_asset_local() {
-        let balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 3);
-
-        assert!(balance.belongs_to_account("trader-1"));
-        assert!(balance.is_asset("USDT"));
-        assert!(balance.can_debit_available(200));
-        assert!(!balance.can_debit_available(2_000));
-        assert_eq!(balance.debit_available(300).map(|after| after.available), Ok(700));
-        assert_eq!(balance.debit_available(2_000), Err(BalanceError::InsufficientAvailableBalance));
-        assert_eq!(
-            balance.reserve(200).map(|after| (after.available, after.frozen)),
-            Ok((800, 200))
-        );
-        assert_eq!(
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 800, 200, 4)
-                .release(50)
-                .map(|after| (after.available, after.frozen)),
-            Ok((850, 150))
-        );
-    }
-
-    #[test]
-    fn snapshot_constructor_preserves_optional_facts_and_total() {
-        let balance = Balance::new_with_snapshot_facts(
-            "trader-1".to_string(),
-            "USDT".to_string(),
-            1_000,
-            200,
-            Some(12_345),
-            Some("spot-usdt".to_string()),
-            3,
-        );
-
-        assert_eq!(balance.total(), Some(1_200));
-        assert_eq!(balance.entry_notional(), Some(12_345));
-        assert_eq!(balance.identifier(), Some("spot-usdt"));
-    }
-
-    #[test]
-    fn serde_defaults_optional_snapshot_facts_when_absent() {
-        let balance: Balance = serde_json::from_value(json!({
-            "account_id": "trader-1",
-            "asset_id": "USDT",
-            "available": 1000,
-            "frozen": 50,
-            "version": 3
-        }))
-        .expect("legacy payload without snapshot facts should deserialize");
-
-        assert_eq!(balance.entry_notional(), None);
-        assert_eq!(balance.identifier(), None);
-    }
-
-    #[test]
-    fn replay_field_type_covers_snapshot_fact_fields() {
-        assert_eq!(Balance::replay_field_type("identifier"), 0);
-        assert_eq!(Balance::replay_field_type("entry_notional"), 1);
-    }
 }

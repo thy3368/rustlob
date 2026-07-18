@@ -11,7 +11,7 @@ pub mod account;
 pub use account::account::{Account, AccountStatus};
 pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2,
+    BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerOperation,
 };
 pub use account::balance_ledger_reason::BalanceLedgerReason;
 pub use account::settlement_transfer_voucher::{

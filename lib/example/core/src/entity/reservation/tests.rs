@@ -33,6 +33,63 @@ fn created_field_value(entity: &impl Entity, field_name: &str) -> Option<String>
         .map(|change| change.new_value)
 }
 
+fn applied_freeze_ledger(
+    entry_id: String,
+    balance: &mut Balance,
+    amount: u64,
+    reason: BalanceLedgerReason,
+) -> BalanceLedgerEntryV2 {
+    let mut entry = BalanceLedgerEntryV2::freeze(
+        entry_id,
+        balance.account_id.clone(),
+        balance.asset_id.clone(),
+        balance.entity_id(),
+        amount,
+        reason,
+    )
+    .unwrap();
+    entry.apply_to(balance).unwrap();
+    entry
+}
+
+fn applied_unfreeze_ledger(
+    entry_id: String,
+    balance: &mut Balance,
+    amount: u64,
+    reason: BalanceLedgerReason,
+) -> BalanceLedgerEntryV2 {
+    let mut entry = BalanceLedgerEntryV2::unfreeze(
+        entry_id,
+        balance.account_id.clone(),
+        balance.asset_id.clone(),
+        balance.entity_id(),
+        amount,
+        reason,
+    )
+    .unwrap();
+    entry.apply_to(balance).unwrap();
+    entry
+}
+
+fn applied_debit_frozen_ledger(
+    entry_id: String,
+    balance: &mut Balance,
+    amount: u64,
+    reason: BalanceLedgerReason,
+) -> BalanceLedgerEntryV2 {
+    let mut entry = BalanceLedgerEntryV2::debit_frozen(
+        entry_id,
+        balance.account_id.clone(),
+        balance.asset_id.clone(),
+        balance.entity_id(),
+        amount,
+        reason,
+    )
+    .unwrap();
+    entry.apply_to(balance).unwrap();
+    entry
+}
+
 #[test]
 fn reservation_kind_labels_distinguish_spot_principal_and_fee() {
     assert_eq!(ReservationKind::SpotBuyQuote.as_str(), "spot_buy_quote");
@@ -115,13 +172,12 @@ fn reservation_to_balance_ledger_happy_path_is_auditable() -> Result<(), Reserva
 
     // When: ReservationCreated 触发余额冻结。
     let before_freeze = balance.clone();
-    let freeze_ledger = BalanceLedgerEntryV2::freeze(
+    let freeze_ledger = applied_freeze_ledger(
         "ledger:freeze:order-1".to_string(),
         &mut balance,
         created.original_amount,
         BalanceLedgerReason::FreezeForOrder { order_id: created.caused_by_order_id.clone() },
-    )
-    .unwrap();
+    );
 
     // Then: 冻结凭证和余额流水指向同一订单，余额 before/after 可审计。
     assert_eq!(reservation.status, ReservationStatus::Active);
@@ -145,7 +201,7 @@ fn reservation_to_balance_ledger_happy_path_is_auditable() -> Result<(), Reserva
         trade_ids[0].clone(),
     );
     let before_debit = balance.clone();
-    let debit_ledger = BalanceLedgerEntryV2::debit_frozen(
+    let debit_ledger = applied_debit_frozen_ledger(
         "ledger:debit-frozen:trade-1".to_string(),
         &mut balance,
         consumed.amount,
@@ -153,8 +209,7 @@ fn reservation_to_balance_ledger_happy_path_is_auditable() -> Result<(), Reserva
             trade_ids: trade_ids.clone(),
             settlement_ids: settlement_ids.clone(),
         },
-    )
-    .unwrap();
+    );
 
     // Then: ReservationConsumed 和余额流水共同证明冻结余额被成交消耗。
     assert_eq!(after_consume.status, ReservationStatus::Active);
@@ -185,15 +240,14 @@ fn reservation_to_balance_ledger_happy_path_is_auditable() -> Result<(), Reserva
         ReservationCloseReason::IocRemainderCanceled,
     );
     let before_unfreeze = balance.clone();
-    let unfreeze_ledger = BalanceLedgerEntryV2::unfreeze(
+    let unfreeze_ledger = applied_unfreeze_ledger(
         "ledger:unfreeze:cancel-1".to_string(),
         &mut balance,
         released.amount,
         BalanceLedgerReason::CancelSpotOrderReleaseQuote {
             order_id: after_release.caused_by_order_id.clone(),
         },
-    )
-    .unwrap();
+    );
 
     // Then: close_reason、剩余冻结释放和余额最终状态一致。
     assert_eq!(after_release.status, ReservationStatus::ClosedMixed);
@@ -231,7 +285,7 @@ fn partial_reservation_consume_debits_frozen_balance_without_closing()
         "trade-2".to_string(),
     );
     let before_debit = balance.clone();
-    let ledger = BalanceLedgerEntryV2::debit_frozen(
+    let ledger = applied_debit_frozen_ledger(
         "ledger:debit-frozen:trade-2".to_string(),
         &mut balance,
         consumed.amount,
@@ -239,8 +293,7 @@ fn partial_reservation_consume_debits_frozen_balance_without_closing()
             trade_ids: vec![consumed.caused_by_ref_id.clone()],
             settlement_ids: vec!["settlement-2".to_string()],
         },
-    )
-    .unwrap();
+    );
 
     // Then: Reservation 保持 active，冻结余额只减少成交消耗部分。
     assert_eq!(after_consume.status, ReservationStatus::Active);
@@ -279,15 +332,14 @@ fn reservation_release_tail_unfreezes_balance_and_records_close_reason()
         ReservationCloseReason::IocRemainderCanceled,
     );
     let before_unfreeze = balance.clone();
-    let ledger = BalanceLedgerEntryV2::unfreeze(
+    let ledger = applied_unfreeze_ledger(
         "ledger:unfreeze:cancel-2".to_string(),
         &mut balance,
         released.amount,
         BalanceLedgerReason::CancelSpotOrderReleaseQuote {
             order_id: after_release.caused_by_order_id.clone(),
         },
-    )
-    .unwrap();
+    );
 
     // Then: Reservation 以混合关闭收尾，余额解冻回可用。
     assert_eq!(after_release.status, ReservationStatus::ClosedMixed);

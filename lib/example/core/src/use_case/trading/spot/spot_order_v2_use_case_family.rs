@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::SpotTrade;
 use crate::entity::account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
+    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
@@ -591,6 +591,20 @@ impl SpotOrderV2UseCaseFamily {
                 break;
             };
 
+            let taker_fee = taker_after.fee_consume_requirement_for_trade(
+                trade_terms.trade_qty,
+                trade_terms.maker_price,
+                SpotTradeFeeRole::Taker,
+                maker_fee_bps,
+                taker_fee_bps,
+            )?;
+            let maker_fee = maker_after.fee_consume_requirement_for_trade(
+                trade_terms.trade_qty,
+                trade_terms.maker_price,
+                SpotTradeFeeRole::Maker,
+                maker_fee_bps,
+                taker_fee_bps,
+            )?;
             let trade = SpotTrade::new(
                 format!("spot-trade:{}:{}", taker_after.order_id(), created_trades.len() + 1),
                 taker_after.order_id().to_string(),
@@ -603,6 +617,8 @@ impl SpotOrderV2UseCaseFamily {
                 taker_after.side(),
                 trade_terms.maker_price,
                 trade_terms.trade_qty,
+                taker_fee.amount,
+                maker_fee.amount,
             );
             let trade_notional =
                 trade.notional_quote().ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
@@ -635,30 +651,16 @@ impl SpotOrderV2UseCaseFamily {
                 &mut created_reservation_consumed,
             )?;
 
-            let taker_fee = taker_after.fee_consume_requirement_for_trade(
-                trade_terms.trade_qty,
-                trade_terms.maker_price,
-                SpotTradeFeeRole::Taker,
-                maker_fee_bps,
-                taker_fee_bps,
-            )?;
-            let maker_fee = maker_after.fee_consume_requirement_for_trade(
-                trade_terms.trade_qty,
-                trade_terms.maker_price,
-                SpotTradeFeeRole::Maker,
-                maker_fee_bps,
-                taker_fee_bps,
-            )?;
             consume_reservation(
                 &mut fee_reservations_after[0],
-                taker_fee.amount,
+                trade.taker_fee,
                 ReservationCloseReason::Filled,
                 trade.trade_id.clone(),
                 &mut created_reservation_consumed,
             )?;
             consume_reservation(
                 &mut fee_reservations_after[index + 1],
-                maker_fee.amount,
+                trade.maker_fee,
                 ReservationCloseReason::Filled,
                 trade.trade_id.clone(),
                 &mut created_reservation_consumed,
@@ -672,8 +674,8 @@ impl SpotOrderV2UseCaseFamily {
                 base_asset_id,
                 quote_asset_id,
                 fee_account_id.to_string(),
-                buyer_fee_for_trade(&trade, taker_fee.amount, maker_fee.amount),
-                seller_fee_for_trade(&trade, taker_fee.amount, maker_fee.amount),
+                trade.buyer_fee(),
+                trade.seller_fee(),
             )
             .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
 
@@ -683,8 +685,6 @@ impl SpotOrderV2UseCaseFamily {
                 base_asset_id,
                 quote_asset_id,
                 fee_account_id,
-                taker_fee.amount,
-                maker_fee.amount,
                 &mut balance_book,
                 &mut created_balance_ledger_entries,
             )?;
@@ -824,20 +824,6 @@ fn principal_consume_amount_for_maker(
     match order.side() {
         SpotOrderSide::Buy => trade_notional,
         SpotOrderSide::Sell => trade_qty,
-    }
-}
-
-fn buyer_fee_for_trade(trade: &SpotTrade, taker_fee: u64, maker_fee: u64) -> u64 {
-    match trade.taker_side {
-        SpotOrderSide::Buy => taker_fee,
-        SpotOrderSide::Sell => maker_fee,
-    }
-}
-
-fn seller_fee_for_trade(trade: &SpotTrade, taker_fee: u64, maker_fee: u64) -> u64 {
-    match trade.taker_side {
-        SpotOrderSide::Buy => maker_fee,
-        SpotOrderSide::Sell => taker_fee,
     }
 }
 
@@ -1038,7 +1024,8 @@ fn release_to_balance(
         },
     };
     let balance = balance_book.get_mut(&order.account_id(), asset_id)?;
-    let entry = BalanceLedgerEntryV2::unfreeze(
+    let entry = apply_balance_ledger_entry(
+        BalanceLedgerOperation::Unfreeze,
         format!("balance-ledger:{}:release:{}", order.order_id(), ledger_entries.len() + 1),
         balance,
         amount,
@@ -1048,6 +1035,49 @@ fn release_to_balance(
     Ok(())
 }
 
+fn apply_balance_ledger_entry(
+    operation: BalanceLedgerOperation,
+    entry_id: String,
+    balance: &mut Balance,
+    amount: u64,
+    reason: BalanceLedgerReason,
+) -> Result<BalanceLedgerEntryV2, BalanceLedgerEntryV2Error> {
+    let account_id = balance.account_id.clone();
+    let asset_id = balance.asset_id.clone();
+    let balance_entity_id = balance.entity_id();
+    let mut entry = match operation {
+        BalanceLedgerOperation::Unfreeze => BalanceLedgerEntryV2::unfreeze(
+            entry_id,
+            account_id,
+            asset_id,
+            balance_entity_id,
+            amount,
+            reason,
+        ),
+        BalanceLedgerOperation::CreditAvailable => BalanceLedgerEntryV2::credit_available(
+            entry_id,
+            account_id,
+            asset_id,
+            balance_entity_id,
+            amount,
+            reason,
+        ),
+        BalanceLedgerOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
+            entry_id,
+            account_id,
+            asset_id,
+            balance_entity_id,
+            amount,
+            reason,
+        ),
+        BalanceLedgerOperation::Freeze | BalanceLedgerOperation::DebitAvailable => {
+            unreachable!()
+        }
+    }?;
+    entry.apply_to(balance)?;
+    Ok(entry)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_trade_balance_effects(
     trade: &SpotTrade,
@@ -1055,8 +1085,6 @@ fn apply_trade_balance_effects(
     base_asset_id: &str,
     quote_asset_id: &str,
     fee_account_id: &str,
-    taker_fee: u64,
-    maker_fee: u64,
     balance_book: &mut BalanceBook,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
@@ -1087,7 +1115,8 @@ fn apply_trade_balance_effects(
 
     {
         let balance = balance_book.get_mut(&buyer_account_id, base_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::credit_available(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::CreditAvailable,
             format!("balance-ledger:{}:buyer-base", settlement_id),
             balance,
             trade.qty,
@@ -1096,7 +1125,8 @@ fn apply_trade_balance_effects(
     }
     {
         let balance = balance_book.get_mut(&buyer_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::debit_frozen(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::DebitFrozen,
             format!("balance-ledger:{}:buyer-quote", settlement_id),
             balance,
             quote_notional,
@@ -1105,7 +1135,8 @@ fn apply_trade_balance_effects(
     }
     {
         let balance = balance_book.get_mut(&seller_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::credit_available(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::CreditAvailable,
             format!("balance-ledger:{}:seller-quote", settlement_id),
             balance,
             quote_notional,
@@ -1114,18 +1145,18 @@ fn apply_trade_balance_effects(
     }
     {
         let balance = balance_book.get_mut(&seller_account_id, base_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::debit_frozen(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::DebitFrozen,
             format!("balance-ledger:{}:seller-base", settlement_id),
             balance,
             trade.qty,
             seller_release_base_reason,
         )?);
     }
-    if let Some((buyer_fee_account_id, buyer_fee_amount)) =
-        fee_payer_for_buyer(trade, taker_fee, maker_fee)
-    {
+    if let Some((buyer_fee_account_id, buyer_fee_amount)) = fee_payer_for_buyer(trade) {
         let balance = balance_book.get_mut(&buyer_fee_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::debit_frozen(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::DebitFrozen,
             format!("balance-ledger:{}:buyer-fee", settlement_id),
             balance,
             buyer_fee_amount,
@@ -1137,7 +1168,8 @@ fn apply_trade_balance_effects(
             },
         )?);
         let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::credit_available(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::CreditAvailable,
             format!("balance-ledger:{}:buyer-fee-recv", settlement_id),
             fee_balance,
             buyer_fee_amount,
@@ -1149,11 +1181,10 @@ fn apply_trade_balance_effects(
             },
         )?);
     }
-    if let Some((seller_fee_account_id, seller_fee_amount)) =
-        fee_payer_for_seller(trade, taker_fee, maker_fee)
-    {
+    if let Some((seller_fee_account_id, seller_fee_amount)) = fee_payer_for_seller(trade) {
         let balance = balance_book.get_mut(&seller_fee_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::debit_frozen(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::DebitFrozen,
             format!("balance-ledger:{}:seller-fee", settlement_id),
             balance,
             seller_fee_amount,
@@ -1165,7 +1196,8 @@ fn apply_trade_balance_effects(
             },
         )?);
         let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
-        ledger_entries.push(BalanceLedgerEntryV2::credit_available(
+        ledger_entries.push(apply_balance_ledger_entry(
+            BalanceLedgerOperation::CreditAvailable,
             format!("balance-ledger:{}:seller-fee-recv", settlement_id),
             fee_balance,
             seller_fee_amount,
@@ -1180,17 +1212,13 @@ fn apply_trade_balance_effects(
     Ok(())
 }
 
-fn fee_payer_for_buyer(trade: &SpotTrade, taker_fee: u64, maker_fee: u64) -> Option<(String, u64)> {
-    let amount = buyer_fee_for_trade(trade, taker_fee, maker_fee);
+fn fee_payer_for_buyer(trade: &SpotTrade) -> Option<(String, u64)> {
+    let amount = trade.buyer_fee();
     if amount == 0 { None } else { Some((trade.buyer_account_id().to_string(), amount)) }
 }
 
-fn fee_payer_for_seller(
-    trade: &SpotTrade,
-    taker_fee: u64,
-    maker_fee: u64,
-) -> Option<(String, u64)> {
-    let amount = seller_fee_for_trade(trade, taker_fee, maker_fee);
+fn fee_payer_for_seller(trade: &SpotTrade) -> Option<(String, u64)> {
+    let amount = trade.seller_fee();
     if amount == 0 { None } else { Some((trade.seller_account_id().to_string(), amount)) }
 }
 
@@ -1269,7 +1297,23 @@ fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry does not belong to updated balances".to_string(),
             ));
         };
-        if before.available != entry.before_available || before.frozen != entry.before_frozen {
+        let (
+            Some(entry_before_available),
+            Some(entry_before_frozen),
+            Some(entry_after_available),
+            Some(entry_after_frozen),
+        ) = (
+            entry.before_available,
+            entry.before_frozen,
+            entry.after_available,
+            entry.after_frozen,
+        )
+        else {
+            return Err(common_entity::EntityError::Custom(
+                "balance ledger entry has not been applied".to_string(),
+            ));
+        };
+        if before.available != entry_before_available || before.frozen != entry_before_frozen {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
@@ -1281,8 +1325,8 @@ fn balance_replay_events_from_ledger_entries(
         let after = Balance::new(
             before.account_id.clone(),
             before.asset_id.clone(),
-            entry.after_available,
-            entry.after_frozen,
+            entry_after_available,
+            entry_after_frozen,
             next_version,
         );
         events.push(after.track_update_event_from(&before)?);
@@ -1580,6 +1624,8 @@ mod tests {
         };
 
         assert_eq!(changes.created_trades.len(), 1);
+        assert_eq!(changes.created_trades[0].taker_fee, 1);
+        assert_eq!(changes.created_trades[0].maker_fee, 1);
         assert_eq!(changes.updated_taker_order.after.status(), SpotOrderStatus::Canceled);
         assert_eq!(
             changes.updated_taker_order.after.status_reason(),

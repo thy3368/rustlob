@@ -24,6 +24,10 @@ pub struct ExecuteImmediateSpotOrderPipelineCmd {
     pub place: PlaceImmediateOrderCmd,
     /// 第 2 段撮合批次 ID。
     pub match_id: String,
+    /// maker 角色手续费 bps。
+    pub maker_fee_bps: u64,
+    /// taker 角色手续费 bps。
+    pub taker_fee_bps: u64,
     /// 第 3 段清结算批次 ID。
     pub settlement_batch_id: String,
 }
@@ -157,6 +161,8 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
             party_id: cmd.place.party_id.clone(),
             taker_order_id: taker_order.order_id.clone(),
             match_id: cmd.match_id.clone(),
+            maker_fee_bps: cmd.maker_fee_bps,
+            taker_fee_bps: cmd.taker_fee_bps,
         };
         let match_state = MatchSpotOrderState { taker_order, maker_orders: state.maker_orders };
 
@@ -303,6 +309,8 @@ mod tests {
                 cloid: Some("cloid-1".to_string()),
             },
             match_id: "match-1".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
             settlement_batch_id: "settle-1".to_string(),
         }
     }

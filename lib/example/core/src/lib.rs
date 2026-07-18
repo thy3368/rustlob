@@ -2,11 +2,11 @@ pub mod entity;
 pub mod use_case;
 
 pub use entity::{
-    Account, AccountId, AccountStatus, AssetId, Balance, BalanceLedgerEntry, BalanceLedgerEntryV2,
-    BalanceLedgerReason, HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,
-    HyperliquidPerpAdlDeleveragingRecord, HyperliquidPerpAdlExecution,
-    HyperliquidPerpAdlExecutionStatus, HyperliquidPerpBookLevel, HyperliquidPerpFundingDirection,
-    HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
+    Account, AccountId, AccountStatus, AssetId, Balance, BalanceError, BalanceLedgerEntry,
+    BalanceLedgerEntryV2, BalanceLedgerOperation, BalanceLedgerReason, HyperliquidPerpAdlBatch,
+    HyperliquidPerpAdlBatchStatus, HyperliquidPerpAdlDeleveragingRecord,
+    HyperliquidPerpAdlExecution, HyperliquidPerpAdlExecutionStatus, HyperliquidPerpBookLevel,
+    HyperliquidPerpFundingDirection, HyperliquidPerpFundingRateError, HyperliquidPerpFundingSample,
     HyperliquidPerpFundingSettlement, HyperliquidPerpInsuranceFundAllocation,
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationFill, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpOrder,

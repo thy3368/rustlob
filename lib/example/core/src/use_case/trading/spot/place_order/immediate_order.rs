@@ -210,37 +210,47 @@ impl PlaceImmediateOrderUseCase {
             PlaceOrderSide::Buy => {
                 let mut next_balance = state.quote_balance;
                 let previous_balance = next_balance.clone();
-                let entry = BalanceLedgerEntry::freeze(
+                let mut entry = BalanceLedgerEntry::freeze(
                     format!(
                         "balance-ledger:{}:{}",
                         created_order.order_id,
                         next_balance.entity_id()
                     ),
-                    &mut next_balance,
+                    next_balance.account_id.clone(),
+                    next_balance.asset_id.clone(),
+                    next_balance.entity_id(),
                     reserved_quote,
                     crate::BalanceLedgerReason::ReserveForImmediateOrder {
                         order_id: created_order.order_id.clone(),
                     },
                 )
                 .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
+                entry
+                    .apply_to(&mut next_balance)
+                    .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
                 (UpdatedEntityPair { before: previous_balance, after: next_balance }, entry)
             }
             PlaceOrderSide::Sell => {
                 let mut next_balance = state.base_balance;
                 let previous_balance = next_balance.clone();
-                let entry = BalanceLedgerEntry::freeze(
+                let mut entry = BalanceLedgerEntry::freeze(
                     format!(
                         "balance-ledger:{}:{}",
                         created_order.order_id,
                         next_balance.entity_id()
                     ),
-                    &mut next_balance,
+                    next_balance.account_id.clone(),
+                    next_balance.asset_id.clone(),
+                    next_balance.entity_id(),
                     reserved_base,
                     crate::BalanceLedgerReason::ReserveForImmediateOrder {
                         order_id: created_order.order_id.clone(),
                     },
                 )
                 .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
+                entry
+                    .apply_to(&mut next_balance)
+                    .map_err(|error| map_immediate_order_balance_ledger_error(side, error))?;
                 (UpdatedEntityPair { before: previous_balance, after: next_balance }, entry)
             }
         };
@@ -348,7 +358,9 @@ fn map_immediate_order_balance_ledger_error(
         }
         crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             PlaceOrderError::ArithmeticOverflow
         }
     }

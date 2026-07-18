@@ -237,13 +237,18 @@ fn derive_cancel_changes(
     let mut released_balance_after =
         if is_quote_reservation { state.quote_balance } else { state.base_balance };
     let released_balance_before = released_balance_after.clone();
-    let balance_ledger_entry = BalanceLedgerEntry::unfreeze(
+    let mut balance_ledger_entry = BalanceLedgerEntry::unfreeze(
         format!("balance-ledger:cancel:{}", released_balance_before.entity_id()),
-        &mut released_balance_after,
+        released_balance_after.account_id.clone(),
+        released_balance_after.asset_id.clone(),
+        released_balance_after.entity_id(),
         release_amount,
         reason,
     )
     .map_err(map_cancel_balance_ledger_error)?;
+    balance_ledger_entry
+        .apply_to(&mut released_balance_after)
+        .map_err(map_cancel_balance_ledger_error)?;
     let released_balance =
         UpdatedEntityPair { before: released_balance_before, after: released_balance_after };
     Ok(CancelSpotOrderChanges {
@@ -267,7 +272,9 @@ fn map_cancel_balance_ledger_error(
         }
         crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow => {
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             CancelSpotOrderError::ArithmeticOverflow
         }
     }

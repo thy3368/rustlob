@@ -4,7 +4,7 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{SpotOrder, SpotOrderMatchError, SpotOrderStatus, SpotTrade};
+use crate::entity::{SpotOrder, SpotOrderMatchError, SpotTrade};
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
 ///
@@ -27,6 +27,10 @@ pub struct MatchSpotOrderCmd {
     pub taker_order_id: String,
     /// 一次撮合批次 ID，用于稳定生成多条 trade id。
     pub match_id: String,
+    /// maker 角色手续费 bps，用于计算成交事实中的 maker fee 金额。
+    pub maker_fee_bps: u64,
+    /// taker 角色手续费 bps，用于计算成交事实中的 taker fee 金额。
+    pub taker_fee_bps: u64,
 }
 
 impl IssuedByParty for MatchSpotOrderCmd {
@@ -220,6 +224,8 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
             if trade_qty == 0 {
                 continue;
             }
+            let taker_fee = fee_amount_from_bps(maker_price, trade_qty, cmd.taker_fee_bps)?;
+            let maker_fee = fee_amount_from_bps(maker_price, trade_qty, cmd.maker_fee_bps)?;
 
             let trade = SpotTrade::new(
                 format!("{}-{}", cmd.match_id, trade_index + 1),
@@ -233,6 +239,8 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
                 taker_order.side,
                 maker_price,
                 trade_qty,
+                taker_fee,
+                maker_fee,
             );
             trades.push(trade);
 
@@ -262,6 +270,17 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
             },
         })
     }
+}
+
+fn fee_amount_from_bps(price: u64, qty: u64, fee_bps: u64) -> Result<u64, MatchSpotOrderError> {
+    if fee_bps == 0 {
+        return Ok(0);
+    }
+    let notional = price.checked_mul(qty).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
+    let scaled = notional.checked_mul(fee_bps).ok_or(MatchSpotOrderError::ArithmeticOverflow)?;
+    let quotient = scaled / 10_000;
+    let remainder = scaled % 10_000;
+    quotient.checked_add(u64::from(remainder > 0)).ok_or(MatchSpotOrderError::ArithmeticOverflow)
 }
 
 #[cfg(test)]

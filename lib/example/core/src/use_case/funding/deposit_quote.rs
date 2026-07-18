@@ -5,7 +5,7 @@ use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::Balance;
+use crate::entity::{Balance, BalanceError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositQuoteCmd {
@@ -83,24 +83,25 @@ impl CommandUseCase4 for DepositQuoteUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
-        let mut balance = state.quote_balance;
-        let quote_balance_before = balance.clone();
-        let next_available = balance
-            .available
-            .checked_add(cmd.amount)
-            .ok_or(DepositQuoteError::ArithmeticOverflow)?;
-        let next_version =
-            balance.version.checked_add(1).ok_or(DepositQuoteError::ArithmeticOverflow)?;
-        let next_frozen = balance.frozen;
-
-        balance.apply_after(next_available, next_frozen, next_version);
+        let quote_balance_before = state.quote_balance;
+        let mut quote_balance_after = quote_balance_before.clone();
+        quote_balance_after.credit_available(cmd.amount).map_err(map_balance_error)?;
 
         Ok(DepositQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {
                 before: quote_balance_before,
-                after: balance,
+                after: quote_balance_after,
             },
         })
+    }
+}
+
+fn map_balance_error(error: BalanceError) -> DepositQuoteError {
+    match error {
+        BalanceError::InvalidAmount => DepositQuoteError::InvalidAmount,
+        BalanceError::ArithmeticOverflow
+        | BalanceError::InsufficientAvailableBalance
+        | BalanceError::InsufficientFrozenBalance => DepositQuoteError::ArithmeticOverflow,
     }
 }
 
