@@ -8,6 +8,7 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
+use crate::entity::spot::spot_trade::SpotTradeReservationConsumedDerivationError;
 use crate::entity::{
     AssetReservation, Balance, ReservationCloseReason, ReservationConsumed, SpotOrderSide,
     SpotTrade,
@@ -395,17 +396,30 @@ fn consume_one_reservation(
     if !touched_reservation_ids.iter().any(|existing| existing == &reservation_id) {
         touched_reservation_ids.push(reservation_id.clone());
     }
-    created_consumed.push(ReservationConsumed::new(
-        format!(
-            "reservation-consumed:{}:{}:{}",
-            trade.trade_id,
-            reservation_id,
-            created_consumed.len() + 1
-        ),
-        &after,
-        amount,
-        trade.trade_id.clone(),
-    ));
+    let event_id = format!(
+        "reservation-consumed:{}:{}:{}",
+        trade.trade_id,
+        reservation_id,
+        created_consumed.len() + 1
+    );
+    let consumed =
+        if account_id == trade.buyer_account_id() && order_id == trade.buyer_order_id() {
+            trade.derive_buyer_quote_reservation_consumed(event_id, &after, asset_id)
+        } else if account_id == trade.seller_account_id() && order_id == trade.seller_order_id() {
+            trade.derive_seller_base_reservation_consumed(event_id, &after, asset_id)
+        } else {
+            return Err(SettleSpotTradeError::ReservationNotFound {
+                order_id: order_id.to_string(),
+                account_id: account_id.to_string(),
+                asset_id: asset_id.to_string(),
+            });
+        }
+        .map_err(|error| {
+            map_spot_trade_reservation_consumed_derivation_error(
+                error, order_id, account_id, asset_id,
+            )
+        })?;
+    created_consumed.push(consumed);
     Ok(())
 }
 
@@ -599,6 +613,30 @@ fn map_spot_settlement_balance_ledger_error(
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             SettleSpotTradeError::ArithmeticOverflow
+        }
+    }
+}
+
+fn map_spot_trade_reservation_consumed_derivation_error(
+    error: SpotTradeReservationConsumedDerivationError,
+    order_id: &str,
+    account_id: &str,
+    asset_id: &str,
+) -> SettleSpotTradeError {
+    match error {
+        SpotTradeReservationConsumedDerivationError::ArithmeticOverflow => {
+            SettleSpotTradeError::ArithmeticOverflow
+        }
+        SpotTradeReservationConsumedDerivationError::ReservationOwnerMismatch
+        | SpotTradeReservationConsumedDerivationError::ReservationOrderMismatch
+        | SpotTradeReservationConsumedDerivationError::ReservationAssetMismatch
+        | SpotTradeReservationConsumedDerivationError::ReservationKindMismatch
+        | SpotTradeReservationConsumedDerivationError::ReservationMarketMismatch => {
+            SettleSpotTradeError::ReservationNotFound {
+                order_id: order_id.to_string(),
+                account_id: account_id.to_string(),
+                asset_id: asset_id.to_string(),
+            }
         }
     }
 }
