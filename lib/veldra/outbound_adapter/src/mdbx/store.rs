@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use cmd_handler::EntityReplayableEvent;
-use example_core::{Balance, SpotOrder};
+use example_core::{Balance, SpotOrderV2};
 use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags, WriteFlags};
 use veldra_core::entity::{BlockExecutionBody, CommandEnvelope, NewBlock, ProductCommand};
 use veldra_core::use_case::BlockEntityChange;
@@ -302,7 +302,7 @@ impl VeldraMdbxBlockStore {
     pub fn load_current_spot_order(
         &self,
         order_id: &str,
-    ) -> Result<Option<SpotOrder>, VeldraMdbxStorageError> {
+    ) -> Result<Option<SpotOrderV2>, VeldraMdbxStorageError> {
         let txn = self
             .db
             .begin_ro_txn()

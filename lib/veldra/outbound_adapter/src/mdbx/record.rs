@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use example_core::{Balance, SpotOrder};
+use example_core::{Balance, SpotOrderV2};
 use veldra_core::entity::{CommandEnvelope, NewBlock, ProductCommand};
 
 use super::codec::{SCHEMA_VERSION_V1, decode_record, encode_record};
@@ -136,7 +136,7 @@ impl StoredReplayableEvent {
 impl StoredSpotOrderSnapshot {
     pub fn from_order(
         block_height: u64,
-        order: &SpotOrder,
+        order: &SpotOrderV2,
     ) -> Result<Self, VeldraMdbxStorageError> {
         Ok(Self {
             schema_version: SCHEMA_VERSION_V1,
@@ -148,7 +148,7 @@ impl StoredSpotOrderSnapshot {
         })
     }
 
-    pub fn decode_order(&self) -> Result<SpotOrder, VeldraMdbxStorageError> {
+    pub fn decode_order(&self) -> Result<SpotOrderV2, VeldraMdbxStorageError> {
         decode_record(&self.encoded_payload)
     }
 }

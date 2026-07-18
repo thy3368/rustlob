@@ -113,6 +113,8 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                             cloid: Some("cl-1".to_string()),
                         },
                         match_id: "match-1".to_string(),
+                        maker_fee_bps: 5,
+                        taker_fee_bps: 10,
                         settlement_batch_id: "settle-1".to_string(),
                     },
                 )),
