@@ -4,7 +4,7 @@ use example_core::{
     Balance, ExecuteImmediateSpotOrderPipelineChanges, ExecuteImmediateSpotOrderPipelineCmd,
     MatchSpotOrderCmd, MatchSpotOrderState, MatchSpotOrderUseCase, PlaceImmediateOrderState,
     PlaceImmediateOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeState, SettleSpotTradeUseCase,
-    SpotOrder, SpotOrderSide, SpotOrderTimeInForce,
+    SpotOrderSide, SpotOrderTimeInForce, SpotOrderV2,
 };
 
 use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
@@ -132,6 +132,8 @@ fn execute_immediate_spot_pipeline(
         party_id: command.place.party_id.clone(),
         taker_order_id: taker_order.order_id.clone(),
         match_id: command.match_id.clone(),
+        maker_fee_bps: command.maker_fee_bps,
+        taker_fee_bps: command.taker_fee_bps,
     };
     let match_state = MatchSpotOrderState { taker_order, maker_orders };
     CommandUseCase4::pre_check_command(&MatchSpotOrderUseCase, &match_cmd)
@@ -257,7 +259,7 @@ fn build_place_state(
 fn sorted_maker_orders(
     command: &ExecuteImmediateSpotOrderPipelineCmd,
     spot_state: &SpotState,
-) -> Vec<SpotOrder> {
+) -> Vec<SpotOrderV2> {
     let mut maker_orders = spot_state
         .orders
         .values()
@@ -271,8 +273,8 @@ fn sorted_maker_orders(
 }
 
 fn compare_maker_orders(
-    left: &SpotOrder,
-    right: &SpotOrder,
+    left: &SpotOrderV2,
+    right: &SpotOrderV2,
     taker_is_buy: bool,
 ) -> std::cmp::Ordering {
     let left_price = left.limit_price().unwrap_or(if taker_is_buy { u64::MAX } else { 0 });
@@ -282,7 +284,7 @@ fn compare_maker_orders(
     price_order.then_with(|| left.order_id.cmp(&right.order_id))
 }
 
-fn should_enter_matching(taker_order: &SpotOrder, maker_orders: &[SpotOrder]) -> bool {
+fn should_enter_matching(taker_order: &SpotOrderV2, maker_orders: &[SpotOrderV2]) -> bool {
     if matches!(taker_order.time_in_force, SpotOrderTimeInForce::Ioc) {
         return true;
     }
@@ -322,7 +324,7 @@ fn spot_balances_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Ve
     balances
 }
 
-fn spot_orders_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<SpotOrder> {
+fn spot_orders_after(changes: &ExecuteImmediateSpotOrderPipelineChanges) -> Vec<SpotOrderV2> {
     let mut orders = vec![changes.place_output.created_order.clone()];
     if let Some(match_output) = &changes.match_output {
         orders.extend(match_output.updated_maker_orders.iter().map(|order| order.after.clone()));
@@ -344,7 +346,7 @@ fn spot_reservations_after(
 }
 
 fn settlement_reservations_after_place(
-    taker_order: &SpotOrder,
+    taker_order: &SpotOrderV2,
     match_output: &example_core::MatchSpotOrderChanges,
     base_asset_id: &str,
     quote_asset_id: &str,

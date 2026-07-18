@@ -5,8 +5,8 @@ use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
     Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
     MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
-    SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce, WithdrawQuoteCmd,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce, SpotOrderV2, WithdrawQuoteCmd,
 };
 
 use crate::entity::stable_hash_hex;
@@ -59,6 +59,8 @@ fn sample_spot_envelope_with(
                     cloid: Some("cl-1".to_string()),
                 },
                 match_id: "match-1".to_string(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
                 settlement_batch_id: "settle-1".to_string(),
             },
         )),
@@ -168,8 +170,8 @@ fn withdraw_envelope() -> CommandEnvelope<ProductCommand> {
     }
 }
 
-fn open_buy_order() -> SpotOrder {
-    SpotOrder::new(
+fn open_buy_order() -> SpotOrderV2 {
+    SpotOrderV2::new(
         "order-42".to_string(),
         10_001,
         Some(42),
@@ -180,13 +182,17 @@ fn open_buy_order() -> SpotOrder {
         SpotOrderTimeInForce::Gtc,
         2,
         0,
+        SpotOrderStatus::Open,
+        None,
+        0,
         200,
         None,
+        0,
     )
 }
 
-fn open_sell_order() -> SpotOrder {
-    SpotOrder::new(
+fn open_sell_order() -> SpotOrderV2 {
+    SpotOrderV2::new(
         "order-42".to_string(),
         10_001,
         Some(42),
@@ -197,8 +203,12 @@ fn open_sell_order() -> SpotOrder {
         SpotOrderTimeInForce::Gtc,
         2,
         2,
+        SpotOrderStatus::Open,
+        None,
+        2,
         0,
         None,
+        0,
     )
 }
 
@@ -261,7 +271,7 @@ fn spot_balance_after<'a>(
 fn spot_order_after<'a>(
     changes: &'a BuildBlockFromCommandsChanges,
     order_id: &str,
-) -> &'a SpotOrder {
+) -> &'a SpotOrderV2 {
     changes
         .ordered_changes
         .iter()
@@ -387,7 +397,7 @@ fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
     let next_order = spot_order_after(&changes, "order-42");
     assert_eq!(next_order.status, SpotOrderStatus::Canceled);
     assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-    assert_eq!(next_order.version, 2);
+    assert_eq!(next_order.version, 1);
 
     let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (10_000, 0, 4));

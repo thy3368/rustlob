@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use example_core::entity::AssetReservation;
-use example_core::{Balance, MarketRules, SpotOrder, SpotOrderTimeInForce};
+use example_core::{Balance, MarketRules, SpotOrderTimeInForce, SpotOrderV2};
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
 
@@ -11,7 +11,7 @@ pub struct SpotState {
     pub asset_pairs_by_symbol: BTreeMap<String, SpotAssetPair>,
     pub trading_enabled_by_symbol: BTreeMap<String, bool>,
     pub balances: BTreeMap<AccountAssetKey, Balance>,
-    pub orders: BTreeMap<String, SpotOrder>,
+    pub orders: BTreeMap<String, SpotOrderV2>,
     pub reservations: BTreeMap<String, AssetReservation>,
     pub settled_trade_ids: BTreeSet<String>,
     pub next_order_sequence_by_account: BTreeMap<String, u64>,
@@ -88,7 +88,7 @@ fn balance_commitment(balance: &Balance) -> String {
     ])
 }
 
-fn spot_order_commitment(order: &SpotOrder) -> String {
+fn spot_order_commitment(order: &SpotOrderV2) -> String {
     let execution = match order.execution {
         example_core::SpotOrderExecution::Market { aggressive_price } => {
             format!("market:{aggressive_price}")
