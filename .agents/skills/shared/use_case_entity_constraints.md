@@ -111,6 +111,21 @@
 - `AppendOnlyRecord`、`Snapshot`、`DerivedReadModel` 若要表达不同业务语义，需要显式 override
   `mutation_model()`。
 
+## Boundary Policy References
+
+以下规则是 use case / entity 边界上的 architecture policy，不是 `Entity` 或
+`CommandUseCase6` trait 本身的代码事实。方法分类和 admission 细则见
+`.agents/skills/shared/entity_method_constraints.md`。
+
+- `use case` 可编排单据流/单据链，例如
+  `Trade -> SettlementTransferVoucher -> BalanceLedgerEntryV2`。
+- 单据之间稳定、纯粹的业务事实派生规则可以下沉到上游单据 entity，作为上游单据到下游单据的
+  工厂方法。
+- 上游单据工厂方法只负责生成下游单据，不负责执行下游单据的状态应用行为。
+- 下游单据自身的不变量、构造校验、业务行为仍由下游单据负责。
+- 跨聚合状态修改、余额应用、持久化、发布仍由 `use case` 编排。
+- 上游单据 entity 不应直接加载、修改、调用、导航其它聚合，也不应承担 adapter / infra 逻辑。
+
 ## What Is No Longer Claimed
 
 以下内容不再以 shared hard rule 形式保留，因为它们不能由上述事实源直接推出：

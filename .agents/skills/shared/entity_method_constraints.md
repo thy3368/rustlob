@@ -88,6 +88,19 @@ Do not expose these as use-case-visible entity methods:
 - 构造器只有在表达业务创建入口时才可标为 BDD behavior；如果只是装配已校验事实或回放历史状态，
   不标，并说明“仅装配事实”。
 
+## Document Chain / 单据链
+
+- 上游单据是下游单据的工厂来源：稳定的业务事实派生可以放在上游单据 entity 上。
+- 单据链表达业务事实派生链，例如：
+  - `SpotTrade -> SettlementTransferVoucher`
+  - `HyperliquidPerpTrade -> SettlementTransferVoucher`
+  - `SettlementTransferVoucher -> BalanceLedgerEntryV2`
+- 这类方法属于有业务语义的单据派生方法，不是普通 getter，也不是 adapter glue。
+- 上游单据工厂方法只生成下游单据，不执行下游单据自身的状态应用行为。
+- 下游单据自身的不变量、构造校验、状态应用行为仍由下游单据负责。
+- 需要跨聚合状态修改、余额应用、持久化、发布时，由 `use case` 编排。
+- 不要把 `apply_to(balance)`、账户余额变更、仓位变更、外部发布等动作归入上游单据工厂方法。
+
 ## Rustdoc Tags
 
 - 只有 public 的真实 `Behavior Method` 可添加：
