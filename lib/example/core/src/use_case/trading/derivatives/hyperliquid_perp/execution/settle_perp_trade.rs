@@ -364,18 +364,18 @@ fn derive_settlement_outcome(
         let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), index + 1);
         let voucher_id =
             format!("perp-voucher:{}:{}", cmd.settlement_batch_id, trade.trade_id.as_str());
-        let voucher = SettlementTransferVoucher::build_perp_voucher(
-            voucher_id,
-            settlement_id,
-            trade,
-            state.margin_asset_id.as_str(),
-            state.fee_account_id.clone(),
-            taker_fee,
-            maker_fee,
-            taker_realized_pnl,
-            maker_realized_pnl,
-        )
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        let voucher = trade
+            .derive_perp_settlement_transfer_voucher(
+                voucher_id,
+                settlement_id,
+                state.margin_asset_id.as_str(),
+                state.fee_account_id.clone(),
+                taker_fee,
+                maker_fee,
+                taker_realized_pnl,
+                maker_realized_pnl,
+            )
+            .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         vouchers.push(voucher);
     }
 

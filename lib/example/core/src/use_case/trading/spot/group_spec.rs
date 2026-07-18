@@ -23,12 +23,12 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
     },
     truth_center: TruthCenterSpec {
         name: "SpotOrderFulfillment",
-        main_mi: "SpotOrder",
+        main_mi: "SpotOrderV2",
         description: "一张现货订单在 group 边界内是否已经完成履约、撤销或仍处于可执行状态的业务真相",
     },
     mi_chain: MiCausalChainSpec {
         root: MiSpec {
-            name: "SpotOrder",
+            name: "SpotOrderV2",
             identity: "order_id",
             created_by: Some(
                 "SpotOrderIntentSubmitted 通过受理校验后创建；未通过时以 SpotOrderRejected 收敛",
@@ -48,10 +48,10 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                 "time_in_force",
             ]),
             why_root: Some(
-                "SpotOrder 是现货订单履约链的 main MI，承载 Open、PartiallyFilled、Filled、Canceled、Rejected 的合法演化",
+                "SpotOrderV2 是现货订单履约链的 main MI，承载 Open、PartiallyFilled、Filled、Canceled、Rejected 的合法演化",
             ),
             state_machine: Some(MiStateMachineSpec {
-                state_field: "SpotOrder.status",
+                state_field: "SpotOrderV2.status",
                 initial_state: "Open",
                 states: &[
                     MiStateSpec {
@@ -110,7 +110,7 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                                 "reject_reason",
                             ],
                             rule: "订单参数、交易对状态、账户状态、余额能力或撮合限制任一拒绝规则成立",
-                            when_true: "SpotOrder.status 进入 Rejected，并保留拒绝原因",
+                            when_true: "SpotOrderV2.status 进入 Rejected，并保留拒绝原因",
                             when_false: "订单继续处于可受理或可撮合路径",
                         },
                         root_change: "status = Rejected, status_reason = reject_reason",
@@ -137,7 +137,7 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         predicate: MiPredicateSpec {
                             reads: &["fund_hold_id", "order_id", "asset", "held_qty"],
                             rule: "资金占用事实存在且覆盖订单剩余最大履约需求",
-                            when_true: "SpotOrder 保持 Open，并具备进入撮合队列的履约担保",
+                            when_true: "SpotOrderV2 保持 Open，并具备进入撮合队列的履约担保",
                             when_false: "订单不得进入可撮合状态，等待拒绝或补偿事实",
                         },
                         root_change: "status 保持 Open，资金侧记录 fund_hold_id",
@@ -171,7 +171,7 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                                 "order_qty",
                             ],
                             rule: "成交数量应用到订单后，0 < filled_qty < order_qty 则部分成交，filled_qty == order_qty 则完全成交",
-                            when_true: "更新 SpotOrder.filled_qty，并进入 PartiallyFilled 或 Filled",
+                            when_true: "更新 SpotOrderV2.filled_qty，并进入 PartiallyFilled 或 Filled",
                             when_false: "成交事实不应用到该订单，订单状态不变化",
                         },
                         root_change: "filled_qty += trade.qty, remaining_qty -= trade.qty, status = PartiallyFilled 或 Filled",
@@ -198,7 +198,7 @@ pub const SPOT_TRADING_GROUP_SPEC: UseCaseGroupSpec = UseCaseGroupSpec {
                         predicate: MiPredicateSpec {
                             reads: &["cancel_id", "order_id", "remaining_qty", "cancel_reason"],
                             rule: "订单仍有未成交数量、状态允许撤销，且撤单意图来自有权交易账户",
-                            when_true: "SpotOrder.status 进入 Canceled，剩余数量停止后续撮合",
+                            when_true: "SpotOrderV2.status 进入 Canceled，剩余数量停止后续撮合",
                             when_false: "拒绝撤单意图或等待订单进入可撤状态",
                         },
                         root_change: "status = Canceled, status_reason = cancel_reason",
@@ -263,14 +263,14 @@ mod tests {
         assert!(spec.boundary.excludes.contains(&"余额流水入账"));
         assert!(spec.boundary.excludes.contains(&"资金占用释放"));
 
-        assert_eq!(chain.root.name, "SpotOrder");
+        assert_eq!(chain.root.name, "SpotOrderV2");
         assert_eq!(chain.root.identity, "order_id");
         assert!(!chain.root.created_by.unwrap().is_empty());
         assert!(!chain.root.payload.unwrap().is_empty());
         assert!(!chain.root.why_root.unwrap().is_empty());
 
         let state_machine = chain.root.state_machine.unwrap();
-        assert_eq!(state_machine.state_field, "SpotOrder.status");
+        assert_eq!(state_machine.state_field, "SpotOrderV2.status");
         assert_eq!(state_machine.initial_state, "Open");
 
         let state_names: Vec<&str> = state_machine.states.iter().map(|state| state.name).collect();

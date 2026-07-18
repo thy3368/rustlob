@@ -65,12 +65,12 @@ fn build_limit_order(
     price: u64,
     time_in_force: SpotOrderTimeInForce,
     qty: u64,
-) -> SpotOrder {
+) -> SpotOrderV2 {
     let (reserved_base, reserved_quote) = match side {
         SpotOrderSide::Buy => (0, qty * price),
         SpotOrderSide::Sell => (qty, 0),
     };
-    SpotOrder::new(
+    SpotOrderV2::new(
         order_id.to_string(),
         10_001,
         Some(42),
@@ -80,9 +80,13 @@ fn build_limit_order(
         SpotOrderExecution::Limit { price },
         time_in_force,
         qty,
+        0,
+        SpotOrderStatus::Open,
+        None,
         reserved_base,
         reserved_quote,
         None,
+        1,
     )
 }
 
@@ -92,12 +96,12 @@ fn build_market_order(
     side: SpotOrderSide,
     aggressive_price: u64,
     qty: u64,
-) -> SpotOrder {
+) -> SpotOrderV2 {
     let (reserved_base, reserved_quote) = match side {
         SpotOrderSide::Buy => (0, qty * aggressive_price),
         SpotOrderSide::Sell => (qty, 0),
     };
-    SpotOrder::new(
+    SpotOrderV2::new(
         order_id.to_string(),
         10_001,
         Some(42),
@@ -107,33 +111,37 @@ fn build_market_order(
         SpotOrderExecution::Market { aggressive_price },
         SpotOrderTimeInForce::Ioc,
         qty,
+        0,
+        SpotOrderStatus::Open,
+        None,
         reserved_base,
         reserved_quote,
         None,
+        1,
     )
 }
 
-fn taker_buy_limit(qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrder {
+fn taker_buy_limit(qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrderV2 {
     build_limit_order("taker-1", "buyer", SpotOrderSide::Buy, price, tif, qty)
 }
 
-fn taker_sell_limit(qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrder {
+fn taker_sell_limit(qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrderV2 {
     build_limit_order("taker-1", "seller", SpotOrderSide::Sell, price, tif, qty)
 }
 
-fn taker_buy_market(qty: u64, aggressive_price: u64) -> SpotOrder {
+fn taker_buy_market(qty: u64, aggressive_price: u64) -> SpotOrderV2 {
     build_market_order("taker-1", "buyer", SpotOrderSide::Buy, aggressive_price, qty)
 }
 
-fn taker_sell_market(qty: u64, aggressive_price: u64) -> SpotOrder {
+fn taker_sell_market(qty: u64, aggressive_price: u64) -> SpotOrderV2 {
     build_market_order("taker-1", "seller", SpotOrderSide::Sell, aggressive_price, qty)
 }
 
-fn maker_sell(order_id: &str, qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrder {
+fn maker_sell(order_id: &str, qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrderV2 {
     build_limit_order(order_id, "seller", SpotOrderSide::Sell, price, tif, qty)
 }
 
-fn maker_buy(order_id: &str, qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrder {
+fn maker_buy(order_id: &str, qty: u64, price: u64, tif: SpotOrderTimeInForce) -> SpotOrderV2 {
     build_limit_order(order_id, "buyer", SpotOrderSide::Buy, price, tif, qty)
 }
 

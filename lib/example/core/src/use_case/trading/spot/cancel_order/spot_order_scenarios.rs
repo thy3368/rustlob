@@ -1,9 +1,76 @@
 use proptest::prelude::*;
 
 use super::*;
-use crate::entity::{ActiveSpotOrderScenario, active_spot_order_scenario_strategy};
+use crate::entity::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce};
 
-/// 撤单用例对 active `SpotOrder` 场景的薄适配。
+/// active `SpotOrderV2` 的撤单测试场景。
+#[derive(Debug, Clone)]
+pub(super) struct ActiveSpotOrderScenario {
+    side: SpotOrderSide,
+    status: SpotOrderStatus,
+    filled_qty: u64,
+}
+
+impl ActiveSpotOrderScenario {
+    pub(super) fn order(&self) -> SpotOrderV2 {
+        let qty = 2;
+        let price = 10;
+        let (reserved_base, reserved_quote) = match self.side {
+            SpotOrderSide::Buy => (0, qty * price),
+            SpotOrderSide::Sell => (qty, 0),
+        };
+        SpotOrderV2::new(
+            "42".to_string(),
+            10_001,
+            Some(42),
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            self.side,
+            SpotOrderExecution::Limit { price },
+            SpotOrderTimeInForce::Gtc,
+            qty,
+            self.filled_qty,
+            self.status,
+            None,
+            reserved_base,
+            reserved_quote,
+            None,
+            1,
+        )
+    }
+
+    pub(super) fn status(&self) -> SpotOrderStatus {
+        self.status
+    }
+
+    pub(super) fn side(&self) -> SpotOrderSide {
+        self.side
+    }
+
+    pub(super) fn reserved_base(&self) -> u64 {
+        self.order().reserved_base
+    }
+
+    pub(super) fn reserved_quote(&self) -> u64 {
+        self.order().reserved_quote
+    }
+}
+
+fn active_spot_order_scenario_strategy() -> impl Strategy<Value = ActiveSpotOrderScenario> {
+    prop_oneof![
+        Just((SpotOrderStatus::Open, 0)),
+        Just((SpotOrderStatus::PartiallyFilled, 1)),
+        Just((SpotOrderStatus::Filled, 2)),
+        Just((SpotOrderStatus::Canceled, 1)),
+        Just((SpotOrderStatus::Rejected, 0)),
+    ]
+    .prop_flat_map(|(status, filled_qty)| {
+        prop_oneof![Just(SpotOrderSide::Buy), Just(SpotOrderSide::Sell)]
+            .prop_map(move |side| ActiveSpotOrderScenario { side, status, filled_qty })
+    })
+}
+
+/// 撤单用例对 active `SpotOrderV2` 场景的薄适配。
 ///
 /// 订单本身的业务矩阵统一来自 `entity/spot_order/spot_order_scenarios.rs`；
 /// 这里只补充撤单用例需要的账户快照和负向状态。
@@ -119,7 +186,7 @@ impl SpotOrderCancelScenario {
     }
 }
 
-/// 枚举所有含 active `SpotOrder` 的撤单状态场景。
+/// 枚举所有含 active `SpotOrderV2` 的撤单状态场景。
 pub(super) fn spot_order_cancel_scenario_strategy() -> impl Strategy<Value = SpotOrderCancelScenario>
 {
     prop_oneof![

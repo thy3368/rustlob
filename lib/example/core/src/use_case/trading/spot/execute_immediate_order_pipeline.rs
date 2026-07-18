@@ -15,7 +15,7 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
     SettleSpotTradeUseCase,
 };
-use crate::entity::{AssetReservation, Balance, SpotOrder, SpotOrderTimeInForce};
+use crate::entity::{AssetReservation, Balance, SpotOrderTimeInForce, SpotOrderV2};
 
 /// 串联立即下单、撮合、清结算三段现货执行流程的业务命令。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ pub struct ExecuteImmediateSpotOrderPipelineState {
     /// 第 1 段立即下单所需状态。
     pub place_state: PlaceImmediateOrderState,
     /// 已按撮合优先级排好的 maker 订单。
-    pub maker_orders: Vec<SpotOrder>,
+    pub maker_orders: Vec<SpotOrderV2>,
     /// 参与清结算的余额快照。
     pub settlement_balances: Vec<Balance>,
     /// 本批次已形成清结算真相的 trade id。
@@ -222,8 +222,8 @@ impl CommandUseCase4 for ExecuteImmediateSpotOrderPipelineUseCase {
 }
 
 fn should_enter_matching(
-    taker_order: &SpotOrder,
-    maker_orders: &[SpotOrder],
+    taker_order: &SpotOrderV2,
+    maker_orders: &[SpotOrderV2],
 ) -> Result<bool, ExecuteImmediateSpotOrderPipelineError> {
     if matches!(taker_order.time_in_force, SpotOrderTimeInForce::Ioc) {
         return Ok(true);
@@ -264,7 +264,7 @@ fn upsert_balance(balances: &mut Vec<Balance>, next_balance: Balance) {
 }
 
 fn settlement_reservations_after_place(
-    taker_order: &SpotOrder,
+    taker_order: &SpotOrderV2,
     match_output: &MatchSpotOrderChanges,
     base_asset_id: &str,
     quote_asset_id: &str,
@@ -342,8 +342,8 @@ mod tests {
         }
     }
 
-    fn maker_sell(order_id: &str, qty: u64, price: u64) -> SpotOrder {
-        SpotOrder::new(
+    fn maker_sell(order_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
+        SpotOrderV2::new(
             order_id.to_string(),
             10_001,
             None,
@@ -353,9 +353,13 @@ mod tests {
             crate::entity::SpotOrderExecution::Limit { price },
             SpotOrderTimeInForce::Gtc,
             qty,
+            0,
+            SpotOrderStatus::Open,
+            None,
             qty,
             0,
             None,
+            1,
         )
     }
 

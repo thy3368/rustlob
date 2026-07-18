@@ -3,16 +3,16 @@ use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
 use crate::entity::{
-    Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce,
+    Balance, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce, SpotOrderV2,
 };
 
 fn cmd() -> CancelSpotOrderCmd {
     CancelSpotOrderCmd { party_id: "trader-1".to_string(), asset: 10_001, order_id: 42 }
 }
 
-fn buy_open_order() -> SpotOrder {
-    SpotOrder::new(
+fn buy_open_order() -> SpotOrderV2 {
+    SpotOrderV2::new(
         "42".to_string(),
         10_001,
         Some(42),
@@ -23,13 +23,17 @@ fn buy_open_order() -> SpotOrder {
         SpotOrderTimeInForce::Gtc,
         2,
         0,
+        SpotOrderStatus::Open,
+        None,
+        0,
         20,
         None,
+        1,
     )
 }
 
-fn sell_open_order() -> SpotOrder {
-    SpotOrder::new(
+fn sell_open_order() -> SpotOrderV2 {
+    SpotOrderV2::new(
         "42".to_string(),
         10_001,
         Some(42),
@@ -39,9 +43,13 @@ fn sell_open_order() -> SpotOrder {
         SpotOrderExecution::Limit { price: 10 },
         SpotOrderTimeInForce::Gtc,
         2,
+        0,
+        SpotOrderStatus::Open,
+        None,
         2,
         0,
         None,
+        1,
     )
 }
 
@@ -70,7 +78,7 @@ fn quote_balance(available: u64, frozen: u64) -> Balance {
 }
 
 fn state(
-    open_order: SpotOrder,
+    open_order: SpotOrderV2,
     base_balance: Balance,
     quote_balance: Balance,
 ) -> CancelSpotOrderState {

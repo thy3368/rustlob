@@ -13,14 +13,14 @@ use crate::entity::{SpotOrderStatus, SpotOrderStatusReason};
 ///
 /// 这里组合两类状态：
 /// - 没有加载到订单；
-/// - 已加载到某种 active `SpotOrder` 状态，具体订单状态枚举放在
+/// - 已加载到某种 active `SpotOrderV2` 状态，具体订单状态枚举放在
 ///   `spot_order_scenarios.rs`。
 #[derive(Debug, Clone)]
 enum CancelSpotOrderGivenStateScenario {
     /// 按 asset + OID 没有加载到开放订单。
     MissingOpenOrder,
     /// 已加载到订单，由独立文件枚举订单状态。
-    SpotOrder(SpotOrderCancelScenario),
+    SpotOrderV2(SpotOrderCancelScenario),
 }
 
 impl CancelSpotOrderGivenStateScenario {
@@ -49,14 +49,14 @@ impl CancelSpotOrderGivenStateScenario {
                     version: 3,
                 },
             },
-            Self::SpotOrder(scenario) => scenario.state(),
+            Self::SpotOrderV2(scenario) => scenario.state(),
         }
     }
 
     fn expected_validate(&self) -> Result<(), CancelSpotOrderError> {
         match self {
             Self::MissingOpenOrder => Err(CancelSpotOrderError::OrderNotFound),
-            Self::SpotOrder(scenario) => scenario.expected_validate(),
+            Self::SpotOrderV2(scenario) => scenario.expected_validate(),
         }
     }
 }
@@ -65,13 +65,14 @@ fn given_state_scenario_strategy() -> impl Strategy<Value = CancelSpotOrderGiven
     prop_oneof![
         Just(CancelSpotOrderGivenStateScenario::MissingOpenOrder),
         spot_order_cancel_scenario_strategy()
-            .prop_map(CancelSpotOrderGivenStateScenario::SpotOrder),
+            .prop_map(CancelSpotOrderGivenStateScenario::SpotOrderV2),
     ]
 }
 
 fn cancelable_given_state_scenario_strategy()
 -> impl Strategy<Value = CancelSpotOrderGivenStateScenario> {
-    cancelable_spot_order_scenario_strategy().prop_map(CancelSpotOrderGivenStateScenario::SpotOrder)
+    cancelable_spot_order_scenario_strategy()
+        .prop_map(CancelSpotOrderGivenStateScenario::SpotOrderV2)
 }
 
 fn cmd() -> CancelSpotOrderCmd {
@@ -125,7 +126,7 @@ proptest! {
         );
 
         let expected_release = match scenario {
-            CancelSpotOrderGivenStateScenario::SpotOrder(scenario) => {
+            CancelSpotOrderGivenStateScenario::SpotOrderV2(scenario) => {
                 scenario
                     .expected_account_release()
                     .expect("cancelable strategy only generates releasable orders")

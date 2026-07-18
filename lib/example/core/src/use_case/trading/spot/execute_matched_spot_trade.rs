@@ -10,9 +10,9 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };
-use crate::entity::{AssetReservation, Balance, SpotOrder};
+use crate::entity::{AssetReservation, Balance, SpotOrderV2};
 #[cfg(test)]
-use crate::entity::{SpotOrderExecution, SpotOrderSide};
+use crate::entity::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus};
 
 /// 执行一次“撮合后立即清结算”的现货成交命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,9 +41,9 @@ impl IssuedByParty for ExecuteMatchedSpotTradeCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecuteMatchedSpotTradeState {
     /// 本次作为主动吃单方的订单。
-    pub taker_order: SpotOrder,
+    pub taker_order: SpotOrderV2,
     /// 已按撮合优先级排好的被动挂单。
-    pub maker_orders: Vec<SpotOrder>,
+    pub maker_orders: Vec<SpotOrderV2>,
     /// 本批次参与交割的余额快照。
     pub settlement_balances: Vec<Balance>,
     /// 已经存在清结算真相的 trade id，用于 core 层幂等拒绝。
@@ -247,12 +247,12 @@ fn build_limit_order(
     price: u64,
     time_in_force: crate::entity::SpotOrderTimeInForce,
     qty: u64,
-) -> SpotOrder {
+) -> SpotOrderV2 {
     let (reserved_base, reserved_quote) = match side {
         SpotOrderSide::Buy => (0, qty * price),
         SpotOrderSide::Sell => (qty, 0),
     };
-    SpotOrder::new(
+    SpotOrderV2::new(
         order_id.to_string(),
         10_001,
         Some(42),
@@ -262,14 +262,18 @@ fn build_limit_order(
         SpotOrderExecution::Limit { price },
         time_in_force,
         qty,
+        0,
+        SpotOrderStatus::Open,
+        None,
         reserved_base,
         reserved_quote,
         None,
+        1,
     )
 }
 
 #[cfg(test)]
-fn taker_buy_limit(qty: u64, price: u64) -> SpotOrder {
+fn taker_buy_limit(qty: u64, price: u64) -> SpotOrderV2 {
     build_limit_order(
         "taker-1",
         "buyer",
@@ -281,7 +285,7 @@ fn taker_buy_limit(qty: u64, price: u64) -> SpotOrder {
 }
 
 #[cfg(test)]
-fn taker_buy_alo(qty: u64, price: u64) -> SpotOrder {
+fn taker_buy_alo(qty: u64, price: u64) -> SpotOrderV2 {
     build_limit_order(
         "taker-1",
         "buyer",
@@ -293,7 +297,7 @@ fn taker_buy_alo(qty: u64, price: u64) -> SpotOrder {
 }
 
 #[cfg(test)]
-fn maker_sell(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrder {
+fn maker_sell(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
     build_limit_order(
         order_id,
         account_id,
@@ -305,7 +309,7 @@ fn maker_sell(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrd
 }
 
 #[cfg(test)]
-fn maker_buy(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrder {
+fn maker_buy(order_id: &str, account_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
     build_limit_order(
         order_id,
         account_id,
@@ -323,8 +327,8 @@ fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Bal
 
 #[cfg(test)]
 fn execute_state(
-    taker_order: SpotOrder,
-    maker_orders: Vec<SpotOrder>,
+    taker_order: SpotOrderV2,
+    maker_orders: Vec<SpotOrderV2>,
     settlement_balances: Vec<Balance>,
 ) -> ExecuteMatchedSpotTradeState {
     ExecuteMatchedSpotTradeState {

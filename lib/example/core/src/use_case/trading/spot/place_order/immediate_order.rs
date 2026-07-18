@@ -10,8 +10,8 @@ use super::{
 };
 use crate::MarketRules;
 use crate::entity::{
-    AssetReservation, Balance, BalanceLedgerEntry, ReservationCreated, SpotOrder,
-    SpotOrderExecution,
+    AssetReservation, Balance, BalanceLedgerEntry, ReservationCreated, SpotOrderExecution,
+    SpotOrderStatus, SpotOrderV2,
 };
 
 /// 立即执行单需要的已加载业务状态。
@@ -149,7 +149,7 @@ impl IssuedByParty for PlaceImmediateOrderCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceImmediateOrderChanges {
     /// 本次立即单创建出来的 taker 订单。
-    pub created_order: SpotOrder,
+    pub created_order: SpotOrderV2,
     /// 本次立即单创建出来的现货资金 reservation。
     pub created_reservation: AssetReservation,
     /// `OrderEstablished -> ReservationCreated` 的 append-only 事实。
@@ -181,7 +181,7 @@ impl PlaceImmediateOrderUseCase {
             PlaceOrderSide::Buy => (0, notional_quote),
             PlaceOrderSide::Sell => (qty, 0),
         };
-        let created_order = SpotOrder::new(
+        let created_order = SpotOrderV2::new(
             order_id.clone(),
             cmd.asset,
             None,
@@ -191,9 +191,13 @@ impl PlaceImmediateOrderUseCase {
             cmd.execution.spot_execution(),
             cmd.execution.stored_time_in_force(),
             qty,
+            0,
+            SpotOrderStatus::Open,
+            None,
             reserved_base,
             reserved_quote,
             cmd.cloid.clone(),
+            1,
         );
         let created_reservation = created_order
             .to_reservation(

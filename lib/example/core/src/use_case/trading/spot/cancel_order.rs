@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    AssetReservation, Balance, ReservationCloseReason, ReservationReleased, SpotOrder,
-    SpotOrderStatus, SpotOrderStatusReason,
+    AssetReservation, Balance, ReservationCloseReason, ReservationReleased, SpotOrderV2,
 };
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
@@ -15,7 +14,7 @@ use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderState {
     /// 按 `asset + order_id` 查到的开放订单；不存在表示该订单不能撤销。
-    pub open_order: Option<SpotOrder>,
+    pub open_order: Option<SpotOrderV2>,
     /// 当前开放订单对应的资金 reservation。
     pub reservation: Option<AssetReservation>,
     /// 订单所在账户 ID。
@@ -95,7 +94,7 @@ pub struct CancelSpotOrderUseCase;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderChanges {
     /// 被撤销订单的 before/after 对。
-    pub canceled_order: UpdatedEntityPair<SpotOrder>,
+    pub canceled_order: UpdatedEntityPair<SpotOrderV2>,
     /// 被撤销 reservation 的 before/after 对。
     pub released_reservation: UpdatedEntityPair<AssetReservation>,
     /// 本次撤单对应的 reservation release append-only 事实。
@@ -212,11 +211,7 @@ fn derive_cancel_changes(
     let release_amount = reservation_before.remaining_amount;
     let is_quote_reservation = reservation_before.is_asset(state.quote_balance.asset_id.as_str());
 
-    let next_order_version =
-        order_after.version.checked_add(1).ok_or(CancelSpotOrderError::ArithmeticOverflow)?;
-    order_after.status = SpotOrderStatus::Canceled;
-    order_after.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-    order_after.version = next_order_version;
+    order_after.cancel_by_user().map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
 
     let reservation_after = reservation_before
         .release(release_amount, Some(ReservationCloseReason::Canceled))
@@ -296,11 +291,11 @@ mod compute_output_and_events_happy_path;
 mod tests {
     use super::*;
     use crate::entity::{
-        Balance, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce,
+        Balance, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce, SpotOrderV2,
     };
 
-    fn buy_order() -> SpotOrder {
-        SpotOrder::new(
+    fn buy_order() -> SpotOrderV2 {
+        SpotOrderV2::new(
             "42".to_string(),
             10_001,
             Some(42),
@@ -311,8 +306,12 @@ mod tests {
             SpotOrderTimeInForce::Gtc,
             2,
             0,
+            crate::entity::SpotOrderStatus::Open,
+            None,
+            0,
             20,
             None,
+            1,
         )
     }
 
@@ -340,7 +339,7 @@ mod tests {
         }
     }
 
-    fn state(open_order: Option<SpotOrder>) -> CancelSpotOrderState {
+    fn state(open_order: Option<SpotOrderV2>) -> CancelSpotOrderState {
         let reservation =
             open_order.as_ref().map(|order| order.to_reservation("BTC", "USDT").unwrap());
         CancelSpotOrderState {

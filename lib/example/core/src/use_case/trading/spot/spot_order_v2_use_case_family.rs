@@ -5,6 +5,11 @@ use common_entity::{
     Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
+use spot_entity::spot_order_v2::{
+    SpotOrderV2, SpotOrderV2MatchError, SpotOrderV2MatchingDecision, SpotTradeFeeRole,
+    spot_order_v2_ensure_matchable, spot_order_v2_matching_decision,
+    spot_order_v2_next_trade_terms,
+};
 use thiserror::Error;
 
 use crate::SpotTrade;
@@ -13,15 +18,10 @@ use crate::entity::account::balance_ledger_entry_v2::{
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
-use crate::entity::spot::spot_order::SpotOrderSide;
-use crate::entity::spot::spot_order_v2::{
-    SpotOrderV2, SpotOrderV2MatchError, SpotOrderV2MatchingDecision, SpotTradeFeeRole,
-    spot_order_v2_ensure_matchable, spot_order_v2_matching_decision,
-    spot_order_v2_next_trade_terms,
-};
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationConsumed, ReservationKind,
-    ReservationMarketKind, ReservationReleased, SettlementTransferVoucher,
+    ReservationMarketKind, ReservationReleased, SettlementTransferVoucher, SpotOrderSide,
+    spot as spot_entity,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -667,17 +667,15 @@ impl SpotOrderV2UseCaseFamily {
             )?;
 
             let settlement_id = format!("spot-settlement:{}", trade.trade_id);
-            let voucher = SettlementTransferVoucher::build_spot_voucher_with_fees(
-                format!("spot-voucher:{}", trade.trade_id),
-                settlement_id.clone(),
-                &trade,
-                base_asset_id,
-                quote_asset_id,
-                fee_account_id.to_string(),
-                trade.buyer_fee(),
-                trade.seller_fee(),
-            )
-            .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
+            let voucher = trade
+                .derive_spot_settlement_transfer_voucher_with_fees(
+                    format!("spot-voucher:{}", trade.trade_id),
+                    settlement_id.clone(),
+                    base_asset_id,
+                    quote_asset_id,
+                    fee_account_id.to_string(),
+                )
+                .ok_or(SpotOrderV2UseCaseFamilyError::ArithmeticOverflow)?;
 
             apply_trade_balance_effects(
                 &trade,

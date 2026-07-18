@@ -4,7 +4,7 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::{SpotOrder, SpotOrderMatchError, SpotTrade};
+use crate::entity::{SpotOrderV2, SpotOrderV2MatchError, SpotTrade};
 
 /// 撮合现货 taker 订单时需要的已加载业务状态。
 ///
@@ -13,9 +13,9 @@ use crate::entity::{SpotOrder, SpotOrderMatchError, SpotTrade};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchSpotOrderState {
     /// 本次作为主动吃单方的订单。
-    pub taker_order: SpotOrder,
+    pub taker_order: SpotOrderV2,
     /// 已按撮合优先级排好的被动挂单。
-    pub maker_orders: Vec<SpotOrder>,
+    pub maker_orders: Vec<SpotOrderV2>,
 }
 
 /// 执行一次现货撮合批次的命令。
@@ -86,18 +86,20 @@ pub enum MatchSpotOrderError {
     ArithmeticOverflow,
 }
 
-impl From<SpotOrderMatchError> for MatchSpotOrderError {
-    fn from(value: SpotOrderMatchError) -> Self {
+impl From<SpotOrderV2MatchError> for MatchSpotOrderError {
+    fn from(value: SpotOrderV2MatchError) -> Self {
         match value {
-            SpotOrderMatchError::InconsistentExecutionState => Self::InconsistentOrderState,
-            SpotOrderMatchError::OrderNotMatchable => Self::OrderNotMatchable,
-            SpotOrderMatchError::MakerIsTaker => Self::MakerIsTaker,
-            SpotOrderMatchError::SameSideMaker => Self::SameSideMaker,
-            SpotOrderMatchError::MakerMustBeLimit => Self::MakerMustBeLimit,
-            SpotOrderMatchError::AssetMismatch => Self::AssetMismatch,
-            SpotOrderMatchError::SymbolMismatch => Self::SymbolMismatch,
-            SpotOrderMatchError::NoTradesMatched => Self::NoTradesMatched,
-            SpotOrderMatchError::ArithmeticOverflow => Self::ArithmeticOverflow,
+            SpotOrderV2MatchError::InconsistentExecutionState => Self::InconsistentOrderState,
+            SpotOrderV2MatchError::OrderNotMatchable => Self::OrderNotMatchable,
+            SpotOrderV2MatchError::MakerIsTaker => Self::MakerIsTaker,
+            SpotOrderV2MatchError::SameSideMaker => Self::SameSideMaker,
+            SpotOrderV2MatchError::MakerMustBeLimit => Self::MakerMustBeLimit,
+            SpotOrderV2MatchError::AssetMismatch => Self::AssetMismatch,
+            SpotOrderV2MatchError::SymbolMismatch => Self::SymbolMismatch,
+            SpotOrderV2MatchError::NoTradesMatched => Self::NoTradesMatched,
+            SpotOrderV2MatchError::ArithmeticOverflow => Self::ArithmeticOverflow,
+            SpotOrderV2MatchError::OrderNotCancelable
+            | SpotOrderV2MatchError::QuoteNotionalUnavailable => Self::InconsistentOrderState,
         }
     }
 }
@@ -108,9 +110,9 @@ pub struct MatchSpotOrderChanges {
     /// 本次撮合新生成的成交事实。
     pub trades: Vec<SpotTrade>,
     /// 本次撮合中实际发生变化的 maker 订单 before/after，顺序与撮合顺序一致。
-    pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrder>>,
+    pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
     /// 本次撮合后的 taker 订单 before/after。
-    pub updated_taker_order: UpdatedEntityPair<SpotOrder>,
+    pub updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
 }
 
 /// Use case that matches one spot taker order against pre-sorted maker orders.
@@ -190,7 +192,8 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let mut taker_order = state.taker_order;
         let taker_order_before = taker_order.clone();
-        let mut taker_remaining = taker_order.remaining_qty()?;
+        let mut taker_remaining =
+            taker_order.remaining_qty().ok_or(MatchSpotOrderError::InconsistentOrderState)?;
         let mut total_taker_fill = 0_u64;
         let mut trades = Vec::new();
         let mut updated_maker_orders = Vec::new();
@@ -219,7 +222,8 @@ impl CommandUseCase4 for MatchSpotOrderUseCase {
 
             let maker_price =
                 maker_order.limit_price().ok_or(MatchSpotOrderError::MakerMustBeLimit)?;
-            let maker_remaining = maker_order.remaining_qty()?;
+            let maker_remaining =
+                maker_order.remaining_qty().ok_or(MatchSpotOrderError::InconsistentOrderState)?;
             let trade_qty = taker_remaining.min(maker_remaining);
             if trade_qty == 0 {
                 continue;
