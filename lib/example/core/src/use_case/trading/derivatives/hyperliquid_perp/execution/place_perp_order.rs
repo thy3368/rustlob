@@ -9,8 +9,8 @@ use crate::MarketRules;
 use crate::entity::{
     Balance, BalanceError, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, MarginReservation, ReservationCreated, ReservationKind,
-    ReservationMarketKind, required_position_margin,
+    HyperliquidPerpPositionSide, MarginReservation, ReservationKind, ReservationMarketKind,
+    required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -182,8 +182,6 @@ pub struct PlaceHyperliquidPerpOrderChanges {
     pub created_order: HyperliquidPerpOrder,
     /// 本次新创建的保证金 reservation；无需新增保证金时为空。
     pub created_reservation: Option<MarginReservation>,
-    /// `OrderEstablished -> ReservationCreated` 的 append-only 事实。
-    pub created_reservation_fact: Option<ReservationCreated>,
     /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
     pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
@@ -192,14 +190,11 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
             1 + self.updated_margin_balances.len()
-                + usize::from(self.created_reservation.is_some()) * 2,
+                + usize::from(self.created_reservation.is_some()),
         );
         events.push(self.created_order.track_create_event()?);
         if let Some(reservation) = &self.created_reservation {
             events.push(reservation.track_create_event()?);
-        }
-        if let Some(created_fact) = &self.created_reservation_fact {
-            events.push(created_fact.track_create_event()?);
         }
         for balance in &self.updated_margin_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
@@ -311,7 +306,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
                 created_reservation: None,
-                created_reservation_fact: None,
                 updated_margin_balances: Vec::new(),
             });
         }
@@ -321,7 +315,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
                 created_reservation: None,
-                created_reservation_fact: None,
                 updated_margin_balances: Vec::new(),
             });
         }
@@ -338,12 +331,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             )
             .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?,
         );
-        let created_reservation_fact = created_reservation.as_ref().map(|reservation| {
-            ReservationCreated::from_reservation(
-                format!("reservation-created:{}", reservation.reservation_id),
-                reservation,
-            )
-        });
         let previous_balance = state.margin_balance.clone();
         let mut next_balance = previous_balance.clone();
         next_balance.reserve(margin).map_err(map_margin_reserve_balance_error)?;
@@ -351,7 +338,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,
             created_reservation,
-            created_reservation_fact,
             updated_margin_balances: vec![UpdatedEntityPair {
                 before: previous_balance,
                 after: next_balance,

@@ -92,9 +92,9 @@ fn flat_account_buys_limit_order_and_freezes_margin_for_each_supported_tif() {
             false,
         );
         assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 3);
         assert_order_created_event(&events[0], "buy", "limit", expected_tif, 3, 101, false);
-        assert_balance_updated_event(&events[3], 9_939, 561);
+        assert_balance_updated_event(&events[2], 9_939, 561);
     }
 }
 
@@ -131,9 +131,9 @@ fn flat_account_sells_limit_order_and_freezes_full_order_margin() {
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "sell", "limit", "gtc", 3, 101, false);
-    assert_balance_updated_event(&events[3], 9_939, 561);
+    assert_balance_updated_event(&events[2], 9_939, 561);
 }
 
 #[test]
@@ -169,9 +169,9 @@ fn flat_account_buys_market_order_and_projects_market_ioc_with_aggressive_price(
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_933, 567);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "buy", "market", "ioc", 3, 111, false);
-    assert_balance_updated_event(&events[3], 9_933, 567);
+    assert_balance_updated_event(&events[2], 9_933, 567);
 }
 
 #[test]
@@ -207,9 +207,9 @@ fn flat_account_sells_market_order_and_projects_market_ioc_with_aggressive_price
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_933, 567);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "sell", "market", "ioc", 3, 111, false);
-    assert_balance_updated_event(&events[3], 9_933, 567);
+    assert_balance_updated_event(&events[2], 9_933, 567);
 }
 
 #[test]
@@ -249,9 +249,9 @@ fn long_position_buys_same_side_and_freezes_full_new_order_margin() {
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "buy", "limit", "gtc", 3, 101, false);
-    assert_balance_updated_event(&events[3], 9_939, 561);
+    assert_balance_updated_event(&events[2], 9_939, 561);
 }
 
 #[test]
@@ -291,9 +291,9 @@ fn short_position_sells_same_side_and_freezes_full_new_order_margin() {
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "sell", "limit", "gtc", 3, 101, false);
-    assert_balance_updated_event(&events[3], 9_939, 561);
+    assert_balance_updated_event(&events[2], 9_939, 561);
 }
 
 #[test]
@@ -502,9 +502,9 @@ fn long_position_places_opposite_sell_flip_and_only_freezes_net_new_short_margin
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "sell", "limit", "gtc", 8, 101, false);
-    assert_balance_updated_event(&events[3], 9_939, 561);
+    assert_balance_updated_event(&events[2], 9_939, 561);
 }
 
 #[test]
@@ -586,7 +586,7 @@ fn short_position_places_opposite_buy_flip_and_only_freezes_net_new_long_margin(
         false,
     );
     assert_single_balance_pair(&changes, 10_000, 500, 9_939, 561);
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 3);
     assert_order_created_event(&events[0], "buy", "limit", "gtc", 8, 101, false);
-    assert_balance_updated_event(&events[3], 9_939, 561);
+    assert_balance_updated_event(&events[2], 9_939, 561);
 }

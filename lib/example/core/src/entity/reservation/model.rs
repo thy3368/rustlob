@@ -99,18 +99,31 @@ impl ReservationCloseReason {
 /// 其中 `reserved_*` 仍可留在订单内作为初始快照或兼容字段，但剩余量 authoritative 来源应是这里。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reservation {
+    /// 本系统生成的稳定冻结凭证 ID。
     pub reservation_id: String,
+    /// 冻结所属账户 ID。
     pub owner_account_id: String,
+    /// 触发本次冻结的订单 ID，是 MI 因果链的前驱事实。
     pub caused_by_order_id: String,
+    /// 冻结归属市场，用于区分 spot / perp。
     pub market_kind: ReservationMarketKind,
+    /// 冻结业务角色，例如买单 quote、卖单 base 或 perp 开仓保证金。
     pub reservation_kind: ReservationKind,
+    /// 被冻结的资产或保证金资产 ID。
     pub asset_id: String,
+    /// 创建冻结时的原始冻结数量，必须大于 0。
     pub original_amount: u64,
+    /// 已因成交、开仓或结算等业务消耗的冻结数量。
     pub consumed_amount: u64,
+    /// 已因撤单、拒单、过期或剩余清理释放的冻结数量。
     pub released_amount: u64,
+    /// 当前 authoritative 剩余冻结数量。
     pub remaining_amount: u64,
+    /// 当前冻结生命周期状态。
     pub status: ReservationStatus,
+    /// 冻结闭合原因；仍 active 时为 `None`，终态时必须存在。
     pub close_reason: Option<ReservationCloseReason>,
+    /// 当前冻结实体版本，用于生成可回放更新事件。
     pub version: u64,
 }
 

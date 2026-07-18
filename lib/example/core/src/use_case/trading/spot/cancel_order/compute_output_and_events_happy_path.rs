@@ -141,12 +141,11 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_then_ledg
             order_id: result.canceled_order.after.order_id.clone()
         }
     );
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 4);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
-    assert!(events[2].is_created());
-    assert!(events[3].is_updated());
-    assert!(events[4].is_created());
+    assert!(events[2].is_updated());
+    assert!(events[3].is_created());
     assert_eq!(events[0].old_version, 1);
     assert_eq!(events[0].new_version, 2);
     assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
@@ -158,22 +157,22 @@ fn buy_order_cancel_output_releases_quote_and_emits_order_then_balance_then_ledg
     assert_eq!(events[1].new_version, 2);
     assert_eq!(event_field(&events[1], "asset_id"), Some("USDT"));
     assert_eq!(event_field_u64(&events[1], "remaining_amount"), Some(0));
-    assert_eq!(event_field(&events[2], "close_reason"), Some("canceled"));
+    assert_eq!(event_field(&events[1], "close_reason"), Some("canceled"));
     assert_eq!(
-        event_field(&events[3], "asset_id"),
+        event_field(&events[2], "asset_id"),
         Some(result.released_balances[0].after.asset_id.as_str())
     );
     assert_eq!(
-        event_field_u64(&events[3], "available"),
+        event_field_u64(&events[2], "available"),
         Some(result.released_balances[0].after.available)
     );
     assert_eq!(
-        event_field_u64(&events[3], "frozen"),
+        event_field_u64(&events[2], "frozen"),
         Some(result.released_balances[0].after.frozen)
     );
-    assert_eq!(event_field(&events[4], "asset_id"), Some("USDT"));
-    assert_eq!(event_field(&events[4], "reason"), Some("cancel_spot_order_release_quote"));
-    assert_eq!(event_field(&events[4], "reason_order_id"), Some("42"));
+    assert_eq!(event_field(&events[3], "asset_id"), Some("USDT"));
+    assert_eq!(event_field(&events[3], "reason"), Some("cancel_spot_order_release_quote"));
+    assert_eq!(event_field(&events[3], "reason_order_id"), Some("42"));
 
     Ok(())
 }
@@ -205,12 +204,11 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_then_ledg
             order_id: result.canceled_order.after.order_id.clone()
         }
     );
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 4);
     assert!(events[0].is_updated());
     assert!(events[1].is_updated());
-    assert!(events[2].is_created());
-    assert!(events[3].is_updated());
-    assert!(events[4].is_created());
+    assert!(events[2].is_updated());
+    assert!(events[3].is_created());
     assert_eq!(events[0].old_version, 1);
     assert_eq!(events[0].new_version, 2);
     assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
@@ -222,22 +220,22 @@ fn sell_order_cancel_output_releases_base_and_emits_order_then_balance_then_ledg
     assert_eq!(events[1].new_version, 2);
     assert_eq!(event_field(&events[1], "asset_id"), Some("BTC"));
     assert_eq!(event_field_u64(&events[1], "remaining_amount"), Some(0));
-    assert_eq!(event_field(&events[2], "close_reason"), Some("canceled"));
+    assert_eq!(event_field(&events[1], "close_reason"), Some("canceled"));
     assert_eq!(
-        event_field(&events[3], "asset_id"),
+        event_field(&events[2], "asset_id"),
         Some(result.released_balances[0].after.asset_id.as_str())
     );
     assert_eq!(
-        event_field_u64(&events[3], "available"),
+        event_field_u64(&events[2], "available"),
         Some(result.released_balances[0].after.available)
     );
     assert_eq!(
-        event_field_u64(&events[3], "frozen"),
+        event_field_u64(&events[2], "frozen"),
         Some(result.released_balances[0].after.frozen)
     );
-    assert_eq!(event_field(&events[4], "asset_id"), Some("BTC"));
-    assert_eq!(event_field(&events[4], "reason"), Some("cancel_spot_order_release_base"));
-    assert_eq!(event_field(&events[4], "reason_order_id"), Some("42"));
+    assert_eq!(event_field(&events[3], "asset_id"), Some("BTC"));
+    assert_eq!(event_field(&events[3], "reason"), Some("cancel_spot_order_release_base"));
+    assert_eq!(event_field(&events[3], "reason_order_id"), Some("42"));
 
     Ok(())
 }

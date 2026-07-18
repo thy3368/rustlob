@@ -5,9 +5,7 @@ use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{
-    AssetReservation, Balance, ReservationCloseReason, ReservationReleased, SpotOrderV2,
-};
+use crate::entity::{AssetReservation, Balance, ReservationCloseReason, SpotOrderV2};
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
 /// 撤销现货订单时需要的已加载业务状态。
@@ -97,8 +95,6 @@ pub struct CancelSpotOrderChanges {
     pub canceled_order: UpdatedEntityPair<SpotOrderV2>,
     /// 被撤销 reservation 的 before/after 对。
     pub released_reservation: UpdatedEntityPair<AssetReservation>,
-    /// 本次撤单对应的 reservation release append-only 事实。
-    pub created_reservation_released: ReservationReleased,
     /// 本次撤单释放的余额 before/after 对。
     pub released_balances: Vec<UpdatedEntityPair<Balance>>,
     /// 本次撤单生成的余额流水。
@@ -110,7 +106,7 @@ impl ReplayableChanges for CancelSpotOrderChanges {
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
-            3 + self.released_balances.len() + self.created_balance_ledger_entries.len(),
+            2 + self.released_balances.len() + self.created_balance_ledger_entries.len(),
         );
         events
             .push(self.canceled_order.after.track_update_event_from(&self.canceled_order.before)?);
@@ -119,7 +115,6 @@ impl ReplayableChanges for CancelSpotOrderChanges {
                 .after
                 .track_update_event_from(&self.released_reservation.before)?,
         );
-        events.push(self.created_reservation_released.track_create_event()?);
         for balance in &self.released_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
         }
@@ -216,13 +211,6 @@ fn derive_cancel_changes(
     let reservation_after = reservation_before
         .release(release_amount, Some(ReservationCloseReason::Canceled))
         .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
-    let created_reservation_released = ReservationReleased::new(
-        format!("reservation-released:cancel:{}", reservation_after.reservation_id),
-        &reservation_after,
-        release_amount,
-        order_after.order_id.clone(),
-        ReservationCloseReason::Canceled,
-    );
 
     let reason = if is_quote_reservation {
         BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order_after.order_id.clone() }
@@ -252,7 +240,6 @@ fn derive_cancel_changes(
             before: reservation_before,
             after: reservation_after,
         },
-        created_reservation_released,
         released_balances: vec![released_balance],
         created_balance_ledger_entries: vec![balance_ledger_entry],
     })

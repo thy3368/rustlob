@@ -50,7 +50,7 @@ fn single_buy_taker_trade_releases_buyer_quote_and_delivers_base()
     // - 调用 `compute_replayable_events`。
     //
     // Then:
-    // - 先产生 2 条 reservation update 和 2 条 reservation consumed event。
+    // - 先产生 2 条 reservation update event。
     // - 再按余额输入顺序产生 4 条 balance update event。
     // - 最后产生 4 条 balance ledger create event。
     // - 每条余额只表达本次真实变化的字段。
@@ -70,18 +70,16 @@ fn single_buy_taker_trade_releases_buyer_quote_and_delivers_base()
     let events = compute_events(&cmd(vec!["trade-1"]), state)?;
 
     // assert
-    assert_eq!(events.len(), 12);
+    assert_eq!(events.len(), 10);
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
     assert_eq!(event_field(&events[0], "reservation_id"), Some("reservation:trade-1-taker"));
     assert_eq!(event_field(&events[1], "reservation_id"), Some("reservation:trade-1-maker"));
-    assert_eq!(event_field(&events[2], "caused_by_ref_id"), Some("trade-1"));
-    assert_eq!(event_field(&events[3], "caused_by_ref_id"), Some("trade-1"));
-    assert_balance_update_event(&events[4], "buyer", "BTC", Some(2), None, 3, 4);
-    assert_balance_update_event(&events[5], "buyer", "USDT", None, Some(0), 3, 4);
-    assert_balance_update_event(&events[6], "seller", "USDT", Some(200), None, 3, 4);
-    assert_balance_update_event(&events[7], "seller", "BTC", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[2], "buyer", "BTC", Some(2), None, 3, 4);
+    assert_balance_update_event(&events[3], "buyer", "USDT", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[4], "seller", "USDT", Some(200), None, 3, 4);
+    assert_balance_update_event(&events[5], "seller", "BTC", None, Some(0), 3, 4);
     assert_balance_ledger_event(
-        &events[8],
+        &events[6],
         "buyer",
         "BTC",
         "settle_spot_trade_buyer_receive_base",
@@ -89,7 +87,7 @@ fn single_buy_taker_trade_releases_buyer_quote_and_delivers_base()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[9],
+        &events[7],
         "buyer",
         "USDT",
         "settle_spot_trade_buyer_release_frozen_quote",
@@ -97,7 +95,7 @@ fn single_buy_taker_trade_releases_buyer_quote_and_delivers_base()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[10],
+        &events[8],
         "seller",
         "USDT",
         "settle_spot_trade_seller_receive_quote",
@@ -105,7 +103,7 @@ fn single_buy_taker_trade_releases_buyer_quote_and_delivers_base()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[11],
+        &events[9],
         "seller",
         "BTC",
         "settle_spot_trade_seller_release_frozen_base",
@@ -148,16 +146,16 @@ fn single_sell_taker_trade_derives_buyer_from_maker_and_delivers_quote()
     let events = compute_events(&cmd(vec!["trade-1"]), state)?;
 
     // assert
-    assert_eq!(events.len(), 12);
+    assert_eq!(events.len(), 10);
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
     assert_eq!(event_field(&events[0], "reservation_id"), Some("reservation:trade-1-maker"));
     assert_eq!(event_field(&events[1], "reservation_id"), Some("reservation:trade-1-taker"));
-    assert_balance_update_event(&events[4], "buyer", "BTC", Some(2), None, 3, 4);
-    assert_balance_update_event(&events[5], "buyer", "USDT", None, Some(0), 3, 4);
-    assert_balance_update_event(&events[6], "seller", "USDT", Some(200), None, 3, 4);
-    assert_balance_update_event(&events[7], "seller", "BTC", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[2], "buyer", "BTC", Some(2), None, 3, 4);
+    assert_balance_update_event(&events[3], "buyer", "USDT", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[4], "seller", "USDT", Some(200), None, 3, 4);
+    assert_balance_update_event(&events[5], "seller", "BTC", None, Some(0), 3, 4);
     assert_balance_ledger_event(
-        &events[8],
+        &events[6],
         "buyer",
         "BTC",
         "settle_spot_trade_buyer_receive_base",
@@ -165,7 +163,7 @@ fn single_sell_taker_trade_derives_buyer_from_maker_and_delivers_quote()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[9],
+        &events[7],
         "buyer",
         "USDT",
         "settle_spot_trade_buyer_release_frozen_quote",
@@ -173,7 +171,7 @@ fn single_sell_taker_trade_derives_buyer_from_maker_and_delivers_quote()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[10],
+        &events[8],
         "seller",
         "USDT",
         "settle_spot_trade_seller_receive_quote",
@@ -181,7 +179,7 @@ fn single_sell_taker_trade_derives_buyer_from_maker_and_delivers_quote()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[11],
+        &events[9],
         "seller",
         "BTC",
         "settle_spot_trade_seller_release_frozen_base",
@@ -207,7 +205,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
     // - 调用 `compute_replayable_events`。
     //
     // Then:
-    // - 先产生 4 条 reservation update 和 4 条 reservation consumed event。
+    // - 先产生 4 条 reservation update event。
     // - buyer BTC 只更新 1 次到聚合后的 3。
     // - buyer USDT 只更新 1 次并释放聚合后的 290。
     // - 每个 seller 的 BTC / USDT 各更新 1 次。
@@ -233,16 +231,16 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
     let events = compute_events(&cmd(vec!["trade-1", "trade-2"]), state)?;
 
     // assert
-    assert_eq!(events.len(), 20);
+    assert_eq!(events.len(), 16);
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
-    assert_balance_update_event(&events[8], "buyer", "BTC", Some(3), None, 3, 4);
-    assert_balance_update_event(&events[9], "buyer", "USDT", None, Some(0), 3, 4);
-    assert_balance_update_event(&events[10], "seller-1", "USDT", Some(200), None, 3, 4);
-    assert_balance_update_event(&events[11], "seller-1", "BTC", None, Some(0), 3, 4);
-    assert_balance_update_event(&events[12], "seller-2", "USDT", Some(90), None, 3, 4);
-    assert_balance_update_event(&events[13], "seller-2", "BTC", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[4], "buyer", "BTC", Some(3), None, 3, 4);
+    assert_balance_update_event(&events[5], "buyer", "USDT", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[6], "seller-1", "USDT", Some(200), None, 3, 4);
+    assert_balance_update_event(&events[7], "seller-1", "BTC", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[8], "seller-2", "USDT", Some(90), None, 3, 4);
+    assert_balance_update_event(&events[9], "seller-2", "BTC", None, Some(0), 3, 4);
     assert_balance_ledger_event(
-        &events[14],
+        &events[10],
         "buyer",
         "BTC",
         "settle_spot_trade_buyer_receive_base",
@@ -250,7 +248,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
         "settle-1-1,settle-1-2",
     );
     assert_balance_ledger_event(
-        &events[15],
+        &events[11],
         "buyer",
         "USDT",
         "settle_spot_trade_buyer_release_frozen_quote",
@@ -258,7 +256,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
         "settle-1-1,settle-1-2",
     );
     assert_balance_ledger_event(
-        &events[16],
+        &events[12],
         "seller-1",
         "USDT",
         "settle_spot_trade_seller_receive_quote",
@@ -266,7 +264,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[17],
+        &events[13],
         "seller-1",
         "BTC",
         "settle_spot_trade_seller_release_frozen_base",
@@ -274,7 +272,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[18],
+        &events[14],
         "seller-2",
         "USDT",
         "settle_spot_trade_seller_receive_quote",
@@ -282,7 +280,7 @@ fn batch_settlement_aggregates_buyer_deltas_and_updates_each_seller_once()
         "settle-1-2",
     );
     assert_balance_ledger_event(
-        &events[19],
+        &events[15],
         "seller-2",
         "BTC",
         "settle_spot_trade_seller_release_frozen_base",
@@ -325,16 +323,16 @@ fn settlement_emits_only_affected_balance_updates() -> Result<(), SettleSpotTrad
     let events = compute_events(&cmd(vec!["trade-1"]), state)?;
 
     // assert
-    assert_eq!(events.len(), 12);
+    assert_eq!(events.len(), 10);
     assert!(balance_event(&events, "buyer", "ETH").is_none());
     assert!(ledger_event(&events, "buyer", "ETH").is_none());
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
-    assert_balance_update_event(&events[4], "buyer", "BTC", Some(2), None, 3, 4);
-    assert_balance_update_event(&events[5], "buyer", "USDT", None, Some(0), 3, 4);
-    assert_balance_update_event(&events[6], "seller", "USDT", Some(200), None, 3, 4);
-    assert_balance_update_event(&events[7], "seller", "BTC", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[2], "buyer", "BTC", Some(2), None, 3, 4);
+    assert_balance_update_event(&events[3], "buyer", "USDT", None, Some(0), 3, 4);
+    assert_balance_update_event(&events[4], "seller", "USDT", Some(200), None, 3, 4);
+    assert_balance_update_event(&events[5], "seller", "BTC", None, Some(0), 3, 4);
     assert_balance_ledger_event(
-        &events[8],
+        &events[6],
         "buyer",
         "BTC",
         "settle_spot_trade_buyer_receive_base",
@@ -342,7 +340,7 @@ fn settlement_emits_only_affected_balance_updates() -> Result<(), SettleSpotTrad
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[9],
+        &events[7],
         "buyer",
         "USDT",
         "settle_spot_trade_buyer_release_frozen_quote",
@@ -350,7 +348,7 @@ fn settlement_emits_only_affected_balance_updates() -> Result<(), SettleSpotTrad
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[10],
+        &events[8],
         "seller",
         "USDT",
         "settle_spot_trade_seller_receive_quote",
@@ -358,7 +356,7 @@ fn settlement_emits_only_affected_balance_updates() -> Result<(), SettleSpotTrad
         "settle-1-1",
     );
     assert_balance_ledger_event(
-        &events[11],
+        &events[9],
         "seller",
         "BTC",
         "settle_spot_trade_seller_release_frozen_base",

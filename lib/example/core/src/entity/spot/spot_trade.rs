@@ -6,16 +6,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    AssetReservation, ReservationConsumed, ReservationKind, ReservationMarketKind, SettlementKind,
-    SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
+    SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
 use crate::{SpotOrderSide, SpotTradeFeeRole};
 
 #[cfg(test)]
 mod spot_trade_bdd_notional_quote;
-#[cfg(test)]
-mod spot_trade_bdd_reservation_consumed_derivation;
-
 #[cfg(test)]
 mod spot_trade_bdd_settlement_transfer_voucher;
 
@@ -54,29 +50,6 @@ pub struct SpotTrade {
     pub taker_fee: u64,
     /// maker 为本笔成交支付的 quote 手续费金额。
     pub maker_fee: u64,
-}
-
-/// 从 `SpotTrade` 派生 reservation consumed fact 时的业务拒绝原因。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum SpotTradeReservationConsumedDerivationError {
-    /// 成交 quote 名义价值 `price * qty` 溢出。
-    #[error("arithmetic overflow while deriving reservation consumed from spot trade")]
-    ArithmeticOverflow,
-    /// reservation owner 不是成交真实买方或卖方。
-    #[error("reservation owner does not match the trade party")]
-    ReservationOwnerMismatch,
-    /// reservation 关联订单不是成交真实买方或卖方订单。
-    #[error("reservation order does not match the trade order")]
-    ReservationOrderMismatch,
-    /// reservation 资产不是成交要求的 base / quote 资产。
-    #[error("reservation asset does not match the trade asset")]
-    ReservationAssetMismatch,
-    /// reservation kind 不是本次派生要求的 spot 买方 quote / 卖方 base。
-    #[error("reservation kind does not match the trade reservation role")]
-    ReservationKindMismatch,
-    /// reservation market 不是 spot。
-    #[error("reservation market does not match spot")]
-    ReservationMarketMismatch,
 }
 
 impl SpotTrade {
@@ -191,87 +164,6 @@ impl SpotTrade {
             SpotOrderSide::Buy => self.maker_fee,
             SpotOrderSide::Sell => self.taker_fee,
         }
-    }
-
-    /// 从现货成交事实派生买方 quote reservation consumed 单据。
-    ///
-    /// 调用方应传入已经由 `Reservation::consume(...)` 推进后的 reservation。
-    /// 本方法只校验该 reservation 是否属于本成交的真实买方 quote 冻结，并派生 append-only fact；
-    /// 它不会推进 reservation 生命周期。
-    pub fn derive_buyer_quote_reservation_consumed(
-        &self,
-        event_id: String,
-        consumed_reservation_after: &AssetReservation,
-        quote_asset_id: &str,
-    ) -> Result<ReservationConsumed, SpotTradeReservationConsumedDerivationError> {
-        let amount = self
-            .notional_quote()
-            .ok_or(SpotTradeReservationConsumedDerivationError::ArithmeticOverflow)?;
-        self.validate_consumed_reservation_after(
-            consumed_reservation_after,
-            self.buyer_account_id(),
-            self.buyer_order_id(),
-            quote_asset_id,
-            ReservationKind::SpotBuyQuote,
-        )?;
-        Ok(ReservationConsumed::new(
-            event_id,
-            consumed_reservation_after,
-            amount,
-            self.trade_id.clone(),
-        ))
-    }
-
-    /// 从现货成交事实派生卖方 base reservation consumed 单据。
-    ///
-    /// 调用方应传入已经由 `Reservation::consume(...)` 推进后的 reservation。
-    /// 本方法只校验该 reservation 是否属于本成交的真实卖方 base 冻结，并派生 append-only fact；
-    /// 它不会推进 reservation 生命周期。
-    pub fn derive_seller_base_reservation_consumed(
-        &self,
-        event_id: String,
-        consumed_reservation_after: &AssetReservation,
-        base_asset_id: &str,
-    ) -> Result<ReservationConsumed, SpotTradeReservationConsumedDerivationError> {
-        self.validate_consumed_reservation_after(
-            consumed_reservation_after,
-            self.seller_account_id(),
-            self.seller_order_id(),
-            base_asset_id,
-            ReservationKind::SpotSellBase,
-        )?;
-        Ok(ReservationConsumed::new(
-            event_id,
-            consumed_reservation_after,
-            self.qty,
-            self.trade_id.clone(),
-        ))
-    }
-
-    fn validate_consumed_reservation_after(
-        &self,
-        reservation: &AssetReservation,
-        expected_owner_account_id: &str,
-        expected_order_id: &str,
-        expected_asset_id: &str,
-        expected_kind: ReservationKind,
-    ) -> Result<(), SpotTradeReservationConsumedDerivationError> {
-        if reservation.market_kind != ReservationMarketKind::Spot {
-            return Err(SpotTradeReservationConsumedDerivationError::ReservationMarketMismatch);
-        }
-        if reservation.reservation_kind != expected_kind {
-            return Err(SpotTradeReservationConsumedDerivationError::ReservationKindMismatch);
-        }
-        if !reservation.belongs_to_account(expected_owner_account_id) {
-            return Err(SpotTradeReservationConsumedDerivationError::ReservationOwnerMismatch);
-        }
-        if !reservation.is_for_order(expected_order_id) {
-            return Err(SpotTradeReservationConsumedDerivationError::ReservationOrderMismatch);
-        }
-        if !reservation.is_asset(expected_asset_id) {
-            return Err(SpotTradeReservationConsumedDerivationError::ReservationAssetMismatch);
-        }
-        Ok(())
     }
 
     /// 从现货成交事实派生 principal-only settlement transfer voucher。

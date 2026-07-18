@@ -113,7 +113,7 @@ proptest! {
             .to_replayable_events()
             .expect("cancelable stored order state should project events");
 
-        prop_assert_eq!(events.len(), 5);
+        prop_assert_eq!(events.len(), 4);
         prop_assert!(events[0].is_updated());
         prop_assert!(events[1].is_updated());
         prop_assert!(events[2].is_created());

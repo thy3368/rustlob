@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(changes.match_changes.updated_taker_order.after.status, SpotOrderStatus::Filled);
         let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
         assert_eq!(settle_changes.updated_reservations.len(), 2);
-        assert_eq!(settle_changes.created_reservation_consumed.len(), 2);
+        assert_eq!(settle_changes.updated_reservations.len(), 2);
         assert!(events.iter().any(|event| event_field(event, "trade_id") == Some("match-1-1")));
         assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
         assert!(events.iter().any(|event| {

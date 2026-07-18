@@ -56,9 +56,8 @@ pub use perp::trade::hyperliquid_perp_position::{
 };
 pub use perp::trade::hyperliquid_perp_trade::HyperliquidPerpTrade;
 pub use reservation::{
-    AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationConsumed,
-    ReservationCreated, ReservationError, ReservationKind, ReservationMarketKind,
-    ReservationReleased, ReservationStatus,
+    AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationError,
+    ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 use spot as spot_entity;
 pub use spot::spot_trade::SpotTrade;

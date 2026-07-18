@@ -8,10 +8,9 @@ use cmd_handler::command_use_case_def2::{
 use common_entity::Entity;
 use thiserror::Error;
 
-use crate::entity::spot::spot_trade::SpotTradeReservationConsumedDerivationError;
 use crate::entity::{
-    AssetReservation, Balance, ReservationCloseReason, ReservationConsumed, SpotOrderSide,
-    SpotTrade,
+    AssetReservation, Balance, ReservationCloseReason, ReservationKind, ReservationMarketKind,
+    SpotOrderSide, SpotTrade,
 };
 use crate::{BalanceLedgerEntry, BalanceLedgerReason};
 
@@ -92,10 +91,10 @@ pub enum SettleSpotTradeError {
 /// 本批次清结算的 typed output。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleSpotTradeChanges {
-    /// 本批次被 trade 消耗的 reservation before/after。
+    /// 本批次被 trade 消耗的 reservation 单步 before/after。
+    ///
+    /// 同一 reservation 在一个批次内被多笔 trade 消耗时，这里按发生顺序记录连续版本链。
     pub updated_reservations: Vec<UpdatedEntityPair<AssetReservation>>,
-    /// 本批次生成的 reservation consumed append-only 事实。
-    pub created_reservation_consumed: Vec<ReservationConsumed>,
     /// 本批次实际受影响的余额 before/after。
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     /// 本批次对应的余额流水。
@@ -114,15 +113,11 @@ impl ReplayableChanges for SettleSpotTradeChanges {
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
             self.updated_reservations.len()
-                + self.created_reservation_consumed.len()
                 + self.updated_balances.len()
                 + self.created_balance_ledger_entries.len(),
         );
         for reservation in &self.updated_reservations {
             events.push(reservation.after.track_update_event_from(&reservation.before)?);
-        }
-        for consumed in &self.created_reservation_consumed {
-            events.push(consumed.track_create_event()?);
         }
         for balance in &self.updated_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
@@ -182,7 +177,7 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         let deltas = settlement_deltas(&state.trades, &state.base_asset_id, &state.quote_asset_id)?;
-        let (updated_reservations, created_reservation_consumed) = consume_reservations_for_trades(
+        let updated_reservations = consume_reservations_for_trades(
             &state.trades,
             &state.reservations,
             &state.base_asset_id,
@@ -238,7 +233,6 @@ impl CommandUseCase4 for SettleSpotTradeUseCase {
 
         Ok(SettleSpotTradeChanges {
             updated_reservations,
-            created_reservation_consumed,
             updated_balances,
             created_balance_ledger_entries,
         })
@@ -290,17 +284,12 @@ fn consume_reservations_for_trades(
     reservations: &[AssetReservation],
     base_asset_id: &str,
     quote_asset_id: &str,
-) -> Result<
-    (Vec<UpdatedEntityPair<AssetReservation>>, Vec<ReservationConsumed>),
-    SettleSpotTradeError,
-> {
-    let mut original_by_id = HashMap::<String, AssetReservation>::new();
+) -> Result<Vec<UpdatedEntityPair<AssetReservation>>, SettleSpotTradeError> {
     let mut current_by_id = HashMap::<String, AssetReservation>::new();
     let mut lookup = HashMap::<String, String>::new();
 
     for reservation in reservations {
         let reservation_id = reservation.entity_id();
-        original_by_id.insert(reservation_id.clone(), reservation.clone());
         current_by_id.insert(reservation_id.clone(), reservation.clone());
         lookup.insert(
             reservation_lookup_key(
@@ -312,8 +301,7 @@ fn consume_reservations_for_trades(
         );
     }
 
-    let mut touched_reservation_ids = Vec::<String>::new();
-    let mut created_consumed = Vec::<ReservationConsumed>::new();
+    let mut updated_reservations = Vec::<UpdatedEntityPair<AssetReservation>>::new();
 
     for trade in trades {
         let quote_amount =
@@ -326,8 +314,7 @@ fn consume_reservations_for_trades(
             quote_amount,
             &lookup,
             &mut current_by_id,
-            &mut touched_reservation_ids,
-            &mut created_consumed,
+            &mut updated_reservations,
         )?;
         consume_one_reservation(
             trade,
@@ -337,27 +324,11 @@ fn consume_reservations_for_trades(
             trade.qty,
             &lookup,
             &mut current_by_id,
-            &mut touched_reservation_ids,
-            &mut created_consumed,
+            &mut updated_reservations,
         )?;
     }
 
-    let updated_reservations = touched_reservation_ids
-        .into_iter()
-        .map(|reservation_id| {
-            let before = original_by_id
-                .get(&reservation_id)
-                .cloned()
-                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            let after = current_by_id
-                .get(&reservation_id)
-                .cloned()
-                .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-            Ok(UpdatedEntityPair { before, after })
-        })
-        .collect::<Result<Vec<_>, SettleSpotTradeError>>()?;
-
-    Ok((updated_reservations, created_consumed))
+    Ok(updated_reservations)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -369,8 +340,7 @@ fn consume_one_reservation(
     amount: u64,
     lookup: &HashMap<String, String>,
     current_by_id: &mut HashMap<String, AssetReservation>,
-    touched_reservation_ids: &mut Vec<String>,
-    created_consumed: &mut Vec<ReservationConsumed>,
+    updated_reservations: &mut Vec<UpdatedEntityPair<AssetReservation>>,
 ) -> Result<(), SettleSpotTradeError> {
     let reservation_id = lookup
         .get(&reservation_lookup_key(order_id, account_id, asset_id))
@@ -384,7 +354,20 @@ fn consume_one_reservation(
         .get(&reservation_id)
         .cloned()
         .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
-    let close_reason = if reservation.remaining_amount == amount {
+    let expected_kind =
+        if account_id == trade.buyer_account_id() && order_id == trade.buyer_order_id() {
+            ReservationKind::SpotBuyQuote
+        } else if account_id == trade.seller_account_id() && order_id == trade.seller_order_id() {
+            ReservationKind::SpotSellBase
+        } else {
+            return Err(SettleSpotTradeError::ReservationNotFound {
+                order_id: order_id.to_string(),
+                account_id: account_id.to_string(),
+                asset_id: asset_id.to_string(),
+            });
+        };
+    validate_trade_reservation(&reservation, account_id, order_id, asset_id, expected_kind)?;
+    let close_reason = if amount == reservation.remaining_amount {
         Some(ReservationCloseReason::Filled)
     } else {
         None
@@ -392,34 +375,34 @@ fn consume_one_reservation(
     let after = reservation.consume(amount, close_reason).map_err(|_| {
         SettleSpotTradeError::InsufficientReservationRemaining { order_id: order_id.to_string() }
     })?;
-    current_by_id.insert(reservation_id.clone(), after.clone());
-    if !touched_reservation_ids.iter().any(|existing| existing == &reservation_id) {
-        touched_reservation_ids.push(reservation_id.clone());
+    current_by_id.insert(reservation_id.clone(), after);
+    let after = current_by_id
+        .get(&reservation_id)
+        .cloned()
+        .ok_or(SettleSpotTradeError::ArithmeticOverflow)?;
+    updated_reservations.push(UpdatedEntityPair { before: reservation, after });
+    Ok(())
+}
+
+fn validate_trade_reservation(
+    reservation: &AssetReservation,
+    expected_owner_account_id: &str,
+    expected_order_id: &str,
+    expected_asset_id: &str,
+    expected_kind: ReservationKind,
+) -> Result<(), SettleSpotTradeError> {
+    if reservation.market_kind != ReservationMarketKind::Spot
+        || reservation.reservation_kind != expected_kind
+        || !reservation.belongs_to_account(expected_owner_account_id)
+        || !reservation.is_for_order(expected_order_id)
+        || !reservation.is_asset(expected_asset_id)
+    {
+        return Err(SettleSpotTradeError::ReservationNotFound {
+            order_id: expected_order_id.to_string(),
+            account_id: expected_owner_account_id.to_string(),
+            asset_id: expected_asset_id.to_string(),
+        });
     }
-    let event_id = format!(
-        "reservation-consumed:{}:{}:{}",
-        trade.trade_id,
-        reservation_id,
-        created_consumed.len() + 1
-    );
-    let consumed =
-        if account_id == trade.buyer_account_id() && order_id == trade.buyer_order_id() {
-            trade.derive_buyer_quote_reservation_consumed(event_id, &after, asset_id)
-        } else if account_id == trade.seller_account_id() && order_id == trade.seller_order_id() {
-            trade.derive_seller_base_reservation_consumed(event_id, &after, asset_id)
-        } else {
-            return Err(SettleSpotTradeError::ReservationNotFound {
-                order_id: order_id.to_string(),
-                account_id: account_id.to_string(),
-                asset_id: asset_id.to_string(),
-            });
-        }
-        .map_err(|error| {
-            map_spot_trade_reservation_consumed_derivation_error(
-                error, order_id, account_id, asset_id,
-            )
-        })?;
-    created_consumed.push(consumed);
     Ok(())
 }
 
@@ -613,30 +596,6 @@ fn map_spot_settlement_balance_ledger_error(
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
         | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             SettleSpotTradeError::ArithmeticOverflow
-        }
-    }
-}
-
-fn map_spot_trade_reservation_consumed_derivation_error(
-    error: SpotTradeReservationConsumedDerivationError,
-    order_id: &str,
-    account_id: &str,
-    asset_id: &str,
-) -> SettleSpotTradeError {
-    match error {
-        SpotTradeReservationConsumedDerivationError::ArithmeticOverflow => {
-            SettleSpotTradeError::ArithmeticOverflow
-        }
-        SpotTradeReservationConsumedDerivationError::ReservationOwnerMismatch
-        | SpotTradeReservationConsumedDerivationError::ReservationOrderMismatch
-        | SpotTradeReservationConsumedDerivationError::ReservationAssetMismatch
-        | SpotTradeReservationConsumedDerivationError::ReservationKindMismatch
-        | SpotTradeReservationConsumedDerivationError::ReservationMarketMismatch => {
-            SettleSpotTradeError::ReservationNotFound {
-                order_id: order_id.to_string(),
-                account_id: account_id.to_string(),
-                asset_id: asset_id.to_string(),
-            }
         }
     }
 }
@@ -940,7 +899,7 @@ mod tests {
             result.to_replayable_events().map_err(|_| SettleSpotTradeError::ArithmeticOverflow)?;
 
         assert_eq!(result.updated_reservations.len(), 2);
-        assert_eq!(result.created_reservation_consumed.len(), 2);
+        assert_eq!(result.updated_reservations.len(), 2);
         assert!(result.updated_balances.iter().any(|balance| {
             balance.after.account_id == "buyer"
                 && balance.after.asset_id == "BTC"

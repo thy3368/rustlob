@@ -19,9 +19,8 @@ use crate::entity::account::balance_ledger_entry_v2::{
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::{
-    Balance, Reservation, ReservationCloseReason, ReservationConsumed, ReservationKind,
-    ReservationMarketKind, ReservationReleased, SettlementTransferVoucher, SpotOrderSide,
-    spot as spot_entity,
+    Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
+    SettlementTransferVoucher, SpotOrderSide, spot as spot_entity,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -94,8 +93,8 @@ pub struct PlaceSpotOrderV2AfterChanges {
     pub created_trades: Vec<SpotTrade>,
     pub created_vouchers: Vec<SettlementTransferVoucher>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub created_reservation_consumed: Vec<ReservationConsumed>,
-    pub created_reservation_released: Vec<ReservationReleased>,
+    pub updated_principal_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
+    pub updated_fee_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,7 +104,8 @@ pub struct CancelSpotOrderV2AfterChanges {
     pub fee_reservation_after: Reservation,
     pub balances_after: Vec<Balance>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub created_reservation_released: Vec<ReservationReleased>,
+    pub updated_principal_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
+    pub updated_fee_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,8 +124,6 @@ pub struct PlaceSpotOrderV2Changes {
     pub created_trades: Vec<SpotTrade>,
     pub created_vouchers: Vec<SettlementTransferVoucher>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub created_reservation_consumed: Vec<ReservationConsumed>,
-    pub created_reservation_released: Vec<ReservationReleased>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,7 +133,6 @@ pub struct CancelSpotOrderV2Changes {
     pub updated_fee_reservation: UpdatedEntityPair<Reservation>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub created_reservation_released: Vec<ReservationReleased>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,21 +190,11 @@ impl ReplayableChanges for PlaceSpotOrderV2Changes {
                 .after
                 .track_update_event_from(&self.updated_taker_order.before)?,
         );
-        events.extend(reservation_replay_events_from_actions(
-            &self.updated_principal_reservations,
-            &self.created_reservation_consumed,
-            &self.created_reservation_released,
-        )?);
-        events.extend(reservation_replay_events_from_actions(
-            &self.updated_fee_reservations,
-            &self.created_reservation_consumed,
-            &self.created_reservation_released,
-        )?);
-        for consumed in &self.created_reservation_consumed {
-            events.push(consumed.track_create_event()?);
+        for reservation in &self.updated_principal_reservations {
+            events.push(reservation.after.track_update_event_from(&reservation.before)?);
         }
-        for released in &self.created_reservation_released {
-            events.push(released.track_create_event()?);
+        for reservation in &self.updated_fee_reservations {
+            events.push(reservation.after.track_update_event_from(&reservation.before)?);
         }
         for voucher in &self.created_vouchers {
             events.push(voucher.track_create_event()?);
@@ -229,19 +216,16 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
         let mut events = Vec::new();
         events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
-        events.extend(reservation_replay_events_from_actions(
-            std::slice::from_ref(&self.updated_principal_reservation),
-            &[],
-            &self.created_reservation_released,
-        )?);
-        events.extend(reservation_replay_events_from_actions(
-            std::slice::from_ref(&self.updated_fee_reservation),
-            &[],
-            &self.created_reservation_released,
-        )?);
-        for released in &self.created_reservation_released {
-            events.push(released.track_create_event()?);
-        }
+        events.push(
+            self.updated_principal_reservation
+                .after
+                .track_update_event_from(&self.updated_principal_reservation.before)?,
+        );
+        events.push(
+            self.updated_fee_reservation
+                .after
+                .track_update_event_from(&self.updated_fee_reservation.before)?,
+        );
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
             &self.created_balance_ledger_entries,
@@ -464,22 +448,12 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                     after: after.taker_order_after,
                 },
                 updated_maker_orders: zip_pairs(maker_orders, after.maker_orders_after)?,
-                updated_principal_reservations: zip_pairs(
-                    std::iter::once(taker_principal_reservation)
-                        .chain(maker_principal_reservations)
-                        .collect(),
-                    after.principal_reservations_after,
-                )?,
-                updated_fee_reservations: zip_pairs(
-                    std::iter::once(taker_fee_reservation).chain(maker_fee_reservations).collect(),
-                    after.fee_reservations_after,
-                )?,
+                updated_principal_reservations: after.updated_principal_reservation_steps,
+                updated_fee_reservations: after.updated_fee_reservation_steps,
                 updated_balances: merge_balance_pairs(settlement_balances, after.balances_after)?,
                 created_trades: after.created_trades,
                 created_vouchers: after.created_vouchers,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
-                created_reservation_consumed: after.created_reservation_consumed,
-                created_reservation_released: after.created_reservation_released,
             })),
             (
                 SpotOrderV2GivenState::Cancel {
@@ -502,7 +476,6 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                 },
                 updated_balances: merge_balance_pairs(balances, after.balances_after)?,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
-                created_reservation_released: after.created_reservation_released,
             })),
             _ => Err(SpotOrderV2UseCaseFamilyError::BranchMismatch),
         }
@@ -538,8 +511,8 @@ impl SpotOrderV2UseCaseFamily {
         let mut created_trades = Vec::new();
         let mut created_vouchers = Vec::new();
         let mut created_balance_ledger_entries = Vec::new();
-        let mut created_reservation_consumed = Vec::new();
-        let mut created_reservation_released = Vec::new();
+        let mut updated_principal_reservation_steps = Vec::new();
+        let mut updated_fee_reservation_steps = Vec::new();
 
         match spot_order_v2_matching_decision(taker_order, maker_orders.first())? {
             SpotOrderV2MatchingDecision::Rest => {
@@ -552,8 +525,8 @@ impl SpotOrderV2UseCaseFamily {
                     created_trades,
                     created_vouchers,
                     created_balance_ledger_entries,
-                    created_reservation_consumed,
-                    created_reservation_released,
+                    updated_principal_reservation_steps,
+                    updated_fee_reservation_steps,
                 }));
             }
             SpotOrderV2MatchingDecision::RejectAlo => {
@@ -564,7 +537,8 @@ impl SpotOrderV2UseCaseFamily {
                     &mut fee_reservations_after[0],
                     &mut balance_book,
                     &mut created_balance_ledger_entries,
-                    &mut created_reservation_released,
+                    &mut updated_principal_reservation_steps,
+                    &mut updated_fee_reservation_steps,
                     maker_fee_bps,
                     taker_fee_bps,
                 )?;
@@ -577,8 +551,8 @@ impl SpotOrderV2UseCaseFamily {
                     created_trades,
                     created_vouchers,
                     created_balance_ledger_entries,
-                    created_reservation_consumed,
-                    created_reservation_released,
+                    updated_principal_reservation_steps,
+                    updated_fee_reservation_steps,
                 }));
             }
             SpotOrderV2MatchingDecision::Match => {}
@@ -636,8 +610,7 @@ impl SpotOrderV2UseCaseFamily {
                     trade_notional,
                 ),
                 ReservationCloseReason::Filled,
-                trade.trade_id.clone(),
-                &mut created_reservation_consumed,
+                &mut updated_principal_reservation_steps,
             )?;
             consume_reservation(
                 &mut principal_reservations_after[index + 1],
@@ -647,23 +620,20 @@ impl SpotOrderV2UseCaseFamily {
                     trade_notional,
                 ),
                 ReservationCloseReason::Filled,
-                trade.trade_id.clone(),
-                &mut created_reservation_consumed,
+                &mut updated_principal_reservation_steps,
             )?;
 
             consume_reservation(
                 &mut fee_reservations_after[0],
                 trade.taker_fee,
                 ReservationCloseReason::Filled,
-                trade.trade_id.clone(),
-                &mut created_reservation_consumed,
+                &mut updated_fee_reservation_steps,
             )?;
             consume_reservation(
                 &mut fee_reservations_after[index + 1],
                 trade.maker_fee,
                 ReservationCloseReason::Filled,
-                trade.trade_id.clone(),
-                &mut created_reservation_consumed,
+                &mut updated_fee_reservation_steps,
             )?;
 
             let settlement_id = format!("spot-settlement:{}", trade.trade_id);
@@ -698,7 +668,8 @@ impl SpotOrderV2UseCaseFamily {
             &mut fee_reservations_after[0],
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            &mut created_reservation_released,
+            &mut updated_principal_reservation_steps,
+            &mut updated_fee_reservation_steps,
             maker_fee_bps,
             taker_fee_bps,
         )?;
@@ -712,8 +683,8 @@ impl SpotOrderV2UseCaseFamily {
             created_trades,
             created_vouchers,
             created_balance_ledger_entries,
-            created_reservation_consumed,
-            created_reservation_released,
+            updated_principal_reservation_steps,
+            updated_fee_reservation_steps,
         }))
     }
 
@@ -736,7 +707,8 @@ impl SpotOrderV2UseCaseFamily {
         let mut fee_reservation_after = fee_reservation.clone();
         let mut balance_book = BalanceBook::new(balances);
         let mut created_balance_ledger_entries = Vec::new();
-        let mut created_reservation_released = Vec::new();
+        let mut updated_principal_reservation_steps = Vec::new();
+        let mut updated_fee_reservation_steps = Vec::new();
 
         release_remaining_for_cancel(
             order,
@@ -744,7 +716,8 @@ impl SpotOrderV2UseCaseFamily {
             &mut fee_reservation_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            &mut created_reservation_released,
+            &mut updated_principal_reservation_steps,
+            &mut updated_fee_reservation_steps,
             maker_fee_bps,
             taker_fee_bps,
         )?;
@@ -755,7 +728,8 @@ impl SpotOrderV2UseCaseFamily {
             fee_reservation_after,
             balances_after: balance_book.into_balances(),
             created_balance_ledger_entries,
-            created_reservation_released,
+            updated_principal_reservation_steps,
+            updated_fee_reservation_steps,
         }))
     }
 }
@@ -829,23 +803,16 @@ fn consume_reservation(
     reservation: &mut Reservation,
     amount: u64,
     terminal_reason: ReservationCloseReason,
-    caused_by_ref_id: String,
-    out: &mut Vec<ReservationConsumed>,
+    out: &mut Vec<UpdatedEntityPair<Reservation>>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
     if amount == 0 {
         return Ok(());
     }
-    let close_reason =
-        if reservation.remaining_amount == amount { Some(terminal_reason) } else { None };
-    let after =
-        reservation.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
+    let before = reservation.clone();
+    let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
+    let after = before.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
     *reservation = after.clone();
-    out.push(ReservationConsumed::new(
-        format!("reservation-consumed:{}:{}", reservation.reservation_id, out.len() + 1),
-        &after,
-        amount,
-        caused_by_ref_id,
-    ));
+    out.push(UpdatedEntityPair { before, after });
     Ok(())
 }
 
@@ -856,7 +823,8 @@ fn release_remaining_for_terminal(
     fee_reservation: &mut Reservation,
     balance_book: &mut BalanceBook,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
-    released_events: &mut Vec<ReservationReleased>,
+    principal_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
+    fee_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
@@ -873,28 +841,19 @@ fn release_remaining_for_terminal(
                 crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
                 crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
             };
-            let after = principal_reservation
+            let before = principal_reservation.clone();
+            let after = before
                 .release(release_amount, Some(close_reason))
                 .map_err(map_reservation_error_to_family)?;
             *principal_reservation = after.clone();
             release_to_balance(
                 order_after,
-                &after.asset_id,
+                &principal_reservation.asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            released_events.push(ReservationReleased::new(
-                format!(
-                    "reservation-released:{}:{}",
-                    after.reservation_id,
-                    released_events.len() + 1
-                ),
-                &after,
-                release_amount,
-                order_after.order_id().to_string(),
-                close_reason,
-            ));
+            principal_steps.push(UpdatedEntityPair { before, after });
         }
     }
 
@@ -909,28 +868,19 @@ fn release_remaining_for_terminal(
                 crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
                 crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
             };
-            let after = fee_reservation
+            let before = fee_reservation.clone();
+            let after = before
                 .release(release_amount, Some(close_reason))
                 .map_err(map_reservation_error_to_family)?;
             *fee_reservation = after.clone();
             release_to_balance(
                 order_after,
-                &after.asset_id,
+                &fee_reservation.asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            released_events.push(ReservationReleased::new(
-                format!(
-                    "reservation-released:{}:{}",
-                    after.reservation_id,
-                    released_events.len() + 1
-                ),
-                &after,
-                release_amount,
-                order_after.order_id().to_string(),
-                close_reason,
-            ));
+            fee_steps.push(UpdatedEntityPair { before, after });
         }
     }
     Ok(())
@@ -943,7 +893,8 @@ fn release_remaining_for_cancel(
     fee_reservation: &mut Reservation,
     balance_book: &mut BalanceBook,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
-    released_events: &mut Vec<ReservationReleased>,
+    principal_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
+    fee_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyError> {
@@ -952,55 +903,37 @@ fn release_remaining_for_cancel(
     if let Some(requirement) = requirements.principal {
         let release_amount = principal_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
-            let after = principal_reservation
+            let before = principal_reservation.clone();
+            let after = before
                 .release(release_amount, Some(ReservationCloseReason::Canceled))
                 .map_err(map_reservation_error_to_family)?;
             *principal_reservation = after.clone();
             release_to_balance(
                 order,
-                &after.asset_id,
+                &principal_reservation.asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            released_events.push(ReservationReleased::new(
-                format!(
-                    "reservation-released:{}:{}",
-                    after.reservation_id,
-                    released_events.len() + 1
-                ),
-                &after,
-                release_amount,
-                order.order_id().to_string(),
-                ReservationCloseReason::Canceled,
-            ));
+            principal_steps.push(UpdatedEntityPair { before, after });
         }
     }
     if let Some(requirement) = requirements.fee {
         let release_amount = fee_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
-            let after = fee_reservation
+            let before = fee_reservation.clone();
+            let after = before
                 .release(release_amount, Some(ReservationCloseReason::Canceled))
                 .map_err(map_reservation_error_to_family)?;
             *fee_reservation = after.clone();
             release_to_balance(
                 order,
-                &after.asset_id,
+                &fee_reservation.asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            released_events.push(ReservationReleased::new(
-                format!(
-                    "reservation-released:{}:{}",
-                    after.reservation_id,
-                    released_events.len() + 1
-                ),
-                &after,
-                release_amount,
-                order.order_id().to_string(),
-                ReservationCloseReason::Canceled,
-            ));
+            fee_steps.push(UpdatedEntityPair { before, after });
         }
     }
     Ok(())
@@ -1341,69 +1274,6 @@ fn balance_replay_events_from_ledger_entries(
     Ok(events)
 }
 
-fn reservation_replay_events_from_actions(
-    updated_reservations: &[UpdatedEntityPair<Reservation>],
-    consumed_events: &[ReservationConsumed],
-    released_events: &[ReservationReleased],
-) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-    let mut current_reservations =
-        HashMap::<String, Reservation>::with_capacity(updated_reservations.len());
-    let mut expected_after_reservations =
-        HashMap::<String, Reservation>::with_capacity(updated_reservations.len());
-    for reservation in updated_reservations {
-        let reservation_id = reservation.before.entity_id();
-        current_reservations.insert(reservation_id.clone(), reservation.before.clone());
-        expected_after_reservations.insert(reservation_id, reservation.after.clone());
-    }
-
-    let mut events = Vec::new();
-    for consumed in consumed_events {
-        let Some(before) = current_reservations.get(&consumed.reservation_id).cloned() else {
-            continue;
-        };
-        let close_reason = if consumed.remaining_amount_after == 0 {
-            Some(ReservationCloseReason::Filled)
-        } else {
-            None
-        };
-        let after = before
-            .consume(consumed.amount, close_reason)
-            .map_err(|error| common_entity::EntityError::Custom(error.to_string()))?;
-        if after.remaining_amount != consumed.remaining_amount_after {
-            return Err(common_entity::EntityError::Custom(
-                "reservation consume replay chain mismatch".to_string(),
-            ));
-        }
-        events.push(after.track_update_event_from(&before)?);
-        current_reservations.insert(consumed.reservation_id.clone(), after);
-    }
-
-    for released in released_events {
-        let Some(before) = current_reservations.get(&released.reservation_id).cloned() else {
-            continue;
-        };
-        let after = before
-            .release(released.amount, Some(released.close_reason))
-            .map_err(|error| common_entity::EntityError::Custom(error.to_string()))?;
-        if after.remaining_amount != released.remaining_amount_after {
-            return Err(common_entity::EntityError::Custom(
-                "reservation release replay chain mismatch".to_string(),
-            ));
-        }
-        events.push(after.track_update_event_from(&before)?);
-        current_reservations.insert(released.reservation_id.clone(), after);
-    }
-
-    for (reservation_id, expected_after) in expected_after_reservations {
-        if current_reservations.get(&reservation_id) != Some(&expected_after) {
-            return Err(common_entity::EntityError::Custom(
-                "reservation replay chain does not reach case-level after state".to_string(),
-            ));
-        }
-    }
-    Ok(events)
-}
-
 struct BalanceBook {
     balances: HashMap<String, Balance>,
 }
@@ -1565,8 +1435,8 @@ mod tests {
         assert!(after.created_trades.is_empty());
         assert!(after.created_vouchers.is_empty());
         assert!(after.created_balance_ledger_entries.is_empty());
-        assert!(after.created_reservation_consumed.is_empty());
-        assert!(after.created_reservation_released.is_empty());
+        assert!(after.updated_principal_reservation_steps.is_empty());
+        assert!(after.updated_fee_reservation_steps.is_empty());
     }
 
     #[test]
@@ -1629,7 +1499,8 @@ mod tests {
             changes.updated_taker_order.after.status_reason(),
             Some(SpotOrderStatusReason::IocCancelRejected)
         );
-        assert!(!changes.created_reservation_released.is_empty());
+        assert!(!changes.updated_principal_reservations.is_empty());
+        assert!(!changes.updated_fee_reservations.is_empty());
         assert!(!changes.created_balance_ledger_entries.is_empty());
         assert!(!changes.to_replayable_events().unwrap().is_empty());
     }
@@ -1762,8 +1633,14 @@ mod tests {
             Some(SpotOrderStatusReason::BadAloPxRejected)
         );
         assert!(after.created_trades.is_empty());
-        assert!(after.created_reservation_consumed.is_empty());
-        assert!(!after.created_reservation_released.is_empty());
+        assert!(!after.updated_principal_reservation_steps.is_empty());
+        assert!(!after.updated_fee_reservation_steps.is_empty());
+        assert!(
+            after
+                .updated_principal_reservation_steps
+                .iter()
+                .all(|step| { step.after.released_amount > step.before.released_amount })
+        );
     }
 
     #[test]
@@ -1811,7 +1688,8 @@ mod tests {
             changes.updated_order.after.status_reason(),
             Some(SpotOrderStatusReason::CanceledByUser)
         );
-        assert_eq!(changes.created_reservation_released.len(), 2);
+        assert_eq!(changes.updated_principal_reservation.after.remaining_amount, 0);
+        assert_eq!(changes.updated_fee_reservation.after.remaining_amount, 0);
         assert!(!changes.created_balance_ledger_entries.is_empty());
         assert!(!changes.to_replayable_events().unwrap().is_empty());
     }

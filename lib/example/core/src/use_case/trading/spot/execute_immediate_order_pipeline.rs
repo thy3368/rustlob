@@ -433,7 +433,7 @@ mod tests {
 
         let events = pipeline_events(&pipeline_cmd(), state)?;
 
-        assert_eq!(events.len(), 5);
+        assert_eq!(events.len(), 4);
         assert!(events.iter().all(|event| !has_field(event, "trade_id")));
         assert!(events.iter().any(|event| {
             event.is_created()
@@ -452,7 +452,7 @@ mod tests {
 
         let events = pipeline_events(&cmd, state)?;
 
-        assert_eq!(events.len(), 6);
+        assert_eq!(events.len(), 5);
         let taker_update = events
             .iter()
             .find(|event| event.is_updated() && event_field(event, "status") == Some("rejected"))

@@ -10,8 +10,7 @@ use super::{
 };
 use crate::MarketRules;
 use crate::entity::{
-    AssetReservation, Balance, BalanceLedgerEntry, ReservationCreated, SpotOrderExecution,
-    SpotOrderStatus, SpotOrderV2,
+    AssetReservation, Balance, BalanceLedgerEntry, SpotOrderExecution, SpotOrderStatus, SpotOrderV2,
 };
 
 /// 立即执行单需要的已加载业务状态。
@@ -152,8 +151,6 @@ pub struct PlaceImmediateOrderChanges {
     pub created_order: SpotOrderV2,
     /// 本次立即单创建出来的现货资金 reservation。
     pub created_reservation: AssetReservation,
-    /// `OrderEstablished -> ReservationCreated` 的 append-only 事实。
-    pub created_reservation_fact: ReservationCreated,
     /// 本次下单影响到的那条余额 before/after。
     pub updated_balance: UpdatedEntityPair<Balance>,
     /// 本次余额冻结对应的余额流水。
@@ -205,10 +202,6 @@ impl PlaceImmediateOrderUseCase {
                 state.quote_balance.asset_id.as_str(),
             )
             .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
-        let created_reservation_fact = ReservationCreated::from_reservation(
-            format!("reservation-created:{}", created_reservation.reservation_id),
-            &created_reservation,
-        );
 
         let (updated_balance, created_balance_ledger_entry) = match side {
             PlaceOrderSide::Buy => {
@@ -262,7 +255,6 @@ impl PlaceImmediateOrderUseCase {
         Ok(PlaceImmediateOrderChanges {
             created_order,
             created_reservation,
-            created_reservation_fact,
             updated_balance,
             created_balance_ledger_entry,
         })
@@ -276,7 +268,6 @@ impl ReplayableChanges for PlaceImmediateOrderChanges {
         Ok(vec![
             self.created_order.track_create_event()?,
             self.created_reservation.track_create_event()?,
-            self.created_reservation_fact.track_create_event()?,
             self.updated_balance.after.track_update_event_from(&self.updated_balance.before)?,
             self.created_balance_ledger_entry.track_create_event()?,
         ])
