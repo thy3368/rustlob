@@ -3,7 +3,6 @@ use common_entity::{
     FinancialClassification, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::entity::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
