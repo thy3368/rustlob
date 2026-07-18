@@ -312,7 +312,7 @@ impl Entity for Reservation {
     where
         Self: Sized,
     {
-        AggregateRole::AggregateRoot
+        AggregateRole::AggregateMember
     }
 
     fn financial_classification() -> FinancialClassification
