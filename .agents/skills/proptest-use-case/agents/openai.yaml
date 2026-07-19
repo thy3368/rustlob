@@ -1,4 +1,0 @@
-interface:
-  display_name: "Proptest Use Case"
-  short_description: "Write proptest for Rust use cases"
-  default_prompt: "Use $proptest-use-case to write property-based tests for RustLOB command use cases; use $proptest-entity for independent entity scenario coverage."

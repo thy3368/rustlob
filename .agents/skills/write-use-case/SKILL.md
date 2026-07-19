@@ -15,14 +15,13 @@ Start from these source files:
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Executor: `lib/common/cmd_handler/src/command_use_case_def2/executor.rs`
 - Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
-- Shared constraints: `.agents/skills/shared/use_case_entity_constraints.md`
-- Shared boundary reference: `.agents/skills/shared/use_case_entity_aggregate_boundary.md`
+- Shared canonical `use_case` / `entity` facts: `.agents/skills/shared/use_case_entity_constraints.md`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 - Shared entity classification reference: `.agents/skills/shared/entity_four_color_classification.md`
 
 Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
-Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case.
-If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before writing or refactoring.
+Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case. It is the only shared canonical reference for `use case` / `entity` boundary facts, `aggregate role`, `MI chain root`, and `replay/version` semantics.
+If stronger architecture policy is needed, use a dedicated policy source instead of assuming it is encoded in the shared constraints file.
 If the task requires deciding how a `changes/entity` object should be classified, or whether it should be an `entity`, `value object`, `role object`, or `description/policy`, read `.agents/skills/shared/entity_four_color_classification.md` before writing or refactoring.
 Read `.agents/skills/shared/changes_pair_first_rule.md` before shaping `Changes`.
 If the task is to critique or score a use case:
@@ -113,7 +112,7 @@ Required tests:
 - `CommandUseCaseExecutor4::execute()` covers one happy path and one rejection path using stub `CommandUseCaseOutbound`.
 
 Testing split:
-- `compute_changes()` happy-path tests must use the sibling skill `write-use-case-happy-path-tests` and stay as business specification tests.
+- `compute_changes()` happy-path tests must use the sibling skill `use-case-happy-test-tdd` and stay as business specification tests.
 - Assert `changes` first, then assert `changes.to_replayable_events()` when the replayable-event contract matters.
 - Keep `pre_check_command()` and `validate_against_state()` tests separate from the happy-path spec file.
 - Use `proptest` only to add invariant coverage; do not replace happy-path spec tests with it.

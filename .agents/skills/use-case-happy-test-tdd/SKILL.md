@@ -1,21 +1,16 @@
 ---
 name: use-case-happy-test-tdd
-description: Strict RustLOB `CommandUseCase4` happy-path TDD for reviewing happy coverage, completing happy-path business matrices, adding one missing happy scenario at a time, and driving minimal core business fixes from a failing spec test.
+description: Write or rewrite RustLOB `CommandUseCase4` happy-path specification tests, or run strict happy-path TDD repair for coverage gaps. Use when Codex should add spec-only happy tests for `compute_changes()` / `to_replayable_events()`, review happy coverage, complete a business matrix, choose one missing matrix cell, write the failing spec test first, and make the minimal core business repair.
 ---
 
 # Use Case Happy Test TDD
 
-Use this skill when the task is not just to write a happy-path test, but to use one missing happy-path spec test as a business repair loop for a RustLOB `CommandUseCase4` use case.
+Use this skill as the single happy-path test entry point for RustLOB `CommandUseCase4` use cases.
 
-This skill is stricter than `write-use-case-happy-path-tests`:
-- it must review current happy coverage first
-- it must reconstruct the full happy-path business matrix first
-- it must use a fixed review scorecard
-- it must choose exactly one highest-value missing matrix cell by default
-- it must write the missing spec test before repairing code
-- it must stop once that one matrix gap is demonstrably closed
+It supports two modes:
 
-Keep this skill independent. Do not rewrite or subsume `write-use-case-happy-path-tests`.
+- `Spec-only mode`: use when the user asks to add, write, rewrite, or improve happy-path spec tests. Start from real code and current semantics. Do not repair business code by default; if a new test reveals a behavior gap, report it unless the user also asked for a fix.
+- `TDD repair mode`: use when the user asks for review, coverage gaps, TDD, repair, or fixing happy-path behavior. Run the strict loop: `matrix -> scorecard -> choose one missing cell -> failing spec test -> minimal business repair -> matrix gap closed`.
 
 ## Scope
 
@@ -24,7 +19,7 @@ This skill only covers:
 - `ReplayableChanges::to_replayable_events()`
 - supported successful business semantics
 - happy-path event contracts, including event order when multiple events matter
-- minimal business repair in the use case
+- minimal business repair in the use case during TDD repair mode
 - dependent entity repair only when the missing happy semantics are a reusable domain rule
 
 This skill does not cover:
@@ -38,103 +33,166 @@ This skill does not cover:
 
 ## Read First
 
-Load these files before doing any review or TDD work:
+Load these files before writing or reviewing happy-path tests:
 - Main calibration example: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_happy_path.rs`
-- Existing happy-test calibration breakdown: `.agents/skills/write-use-case-happy-path-tests/references/example_breakdown.md`
+- Style template: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_spec_style_template.rs`
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
-- Shared boundary reference: `.agents/skills/shared/use_case_entity_aggregate_boundary.md`
+- Shared canonical `use_case` / `entity` facts: `.agents/skills/shared/use_case_entity_constraints.md`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 
-Load these references from this skill:
-- `references/tdd-loop.md`
-- `references/review-scorecard.md`
-- `references/matrix-completion.md`
+Load these references from this skill as needed:
+- `references/example_breakdown.md` for calibration-test structure
+- `references/checklist.md` before finishing spec-only test work
+- `references/tdd-loop.md` for TDD repair mode
+- `references/review-scorecard.md` for coverage review
+- `references/matrix-completion.md` for matrix reconstruction
 
-Read the calibration example as style input. Apply the stricter TDD workflow from this skill on top of it.
-If the task involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action should be promoted into a `use case`, read `.agents/skills/shared/use_case_entity_aggregate_boundary.md` before review or repair.
-Read `.agents/skills/shared/changes_pair_first_rule.md` before reviewing happy-path semantics or repairing `Changes`.
+Read the calibration example as style input. Read `.agents/skills/shared/changes_pair_first_rule.md` before deriving assertions from `Changes`, reviewing happy-path semantics, or repairing `Changes`.
+Read `.agents/skills/shared/use_case_entity_constraints.md` before review or repair when the task involves `use case` vs `entity`, aggregate role, `MI chain root`, or replay/version semantics.
+If stronger architecture policy is needed, treat it as a separate source rather than as part of the shared constraints file.
 
-## Required Workflow
+## Mode Selection
+
+Choose `Spec-only mode` when the user asks for:
+- writing or rewriting happy-path tests
+- adding missing happy spec coverage without asking to repair production code
+- turning current successful behavior into business-spec tests
+
+Choose `TDD repair mode` when the user asks for:
+- review or scoring of current happy coverage
+- finding coverage gaps
+- TDD
+- repair, fix, or implementation changes driven by a missing happy scenario
+- closing one missing happy matrix cell end to end
+
+If the request is ambiguous, default to `Spec-only mode` for test-writing wording and `TDD repair mode` for review/fix wording.
+
+## Common Workflow
 
 1. Read the real current code first.
-- Read the real use case implementation.
-- Read the command, state, changes, projection logic, error, and entity methods the use case relies on.
-- Read the current happy-path tests before proposing new coverage.
-- Start from the repository's real business semantics, not an imagined spec.
+- Inspect `compute_changes()`.
+- Inspect the command, state, changes, projection logic, error type, and entity methods the use case relies on.
+- Read current happy-path tests and helper terminology before proposing new coverage.
+- Start from repository semantics, not an imagined spec.
 
-2. Reconstruct the happy-path business matrix from semantics.
-- Derive scenario axes from domain meaning, not from branch names alone.
-- Every matrix must include these observation dimensions where applicable:
+2. Derive business scenarios from semantics.
+- Extract the business action, actors, success outcomes, and finish states.
+- Derive axes from domain meaning, not from branch names alone.
+- Include these observation dimensions where applicable:
   - actor / intent
   - liquidity relation or matching condition
   - finish state
   - event shape
   - status transition
-- Add use-case-specific axes when needed, but do not reduce the matrix to branch-by-branch coverage.
+- Add use-case-specific axes when needed, such as side, execution mode, time-in-force, fill pattern, or multi-party interaction shape.
 
-3. Write the matrix before adding any test.
-- Show the scenario axes.
-- Show the currently covered cells.
-- Show the missing cells.
+3. Write the happy-path matrix before adding any test.
+- At the top of the test file or in the review output, list scenario dimensions, outcome kinds, event expectations, and current coverage.
+- Show covered cells and missing cells.
 - Every proposed test must map to one concrete matrix cell.
 
-4. Review current coverage with the fixed scorecard.
+4. Choose the smallest useful scenario set.
+- Each test should protect one core business rule or one concrete matrix cell.
+- Avoid multiple unrelated rules in one test.
+- Do not add cases that only repeat the same rule with cosmetic input changes.
+
+5. Write spec-style tests.
+- Name tests as business sentences, preferably `who + condition + outcome`.
+- Use comments in this exact shape:
+  - `Rule:`
+  - `Given:`
+  - `When:`
+  - `Then:`
+- Comments must explain business meaning, not Rust mechanics.
+- Structure each body as `arrange`, `act`, `assert`.
+
+6. Assert business facts and event order.
+- Assert `Changes` first when the business truth lives there.
+- For update scenarios, assert pair-first semantics before touching projected event fields.
+- Assert `changes.to_replayable_events()` after asserting `Changes` when event projection matters.
+- Assert `events.len()`, but never stop there.
+- Assert identity fields that make each event meaningful.
+- Assert trade price, quantity, and side when trade facts matter.
+- Assert maker update events for makers whose state changes.
+- Assert taker update events for the taker finish state.
+- Assert order status transitions and versions on update events.
+- Assert exact event order for multi-event flows when order is part of replay or business meaning.
+- If `filled_qty` did not change, assert `None`, not `Some(0)`.
+- If the scenario ends with a business reject or cancel reason, assert `status_reason`.
+- If the scenario ends as a normal successful fill or partial fill without reject semantics, assert `status_reason == None`.
+
+Prefer helpers that encode business facts, such as:
+- `assert_trade_event_for_accounts(...)`
+- `assert_order_update_event(...)`
+
+Do not add helpers that only rename a trivial `assert_eq!`.
+
+## Spec-Only Mode
+
+Use this mode to produce happy-path spec tests without defaulting into production repair.
+
+Required output:
+1. the happy-path matrix or the matrix header added to the test file
+2. the selected scenario cells or scenario set
+3. the new or rewritten spec tests
+4. verification that the tests compile/run, or the exact reason verification could not be completed
+
+Before finishing, verify:
+- the file header includes scenario dimensions, outcome kinds, event expectations, and `current coverage`
+- every test maps to one matrix cell or one core happy-path rule
+- every test name is a business sentence
+- every test uses `Rule/Given/When/Then`
+- every test body uses `arrange/act/assert`
+- `Changes` semantics are asserted before replayable-event projection details when both are relevant
+- update scenarios verify pair `after` and projected update events one by one
+- event order is asserted when multiple events are emitted
+- `filled_qty` and `status_reason` assertions match the business semantics
+
+If a spec-only test exposes a production behavior gap, do not silently repair it. State the gap and ask or proceed only if the user's request included fixing behavior.
+
+## TDD Repair Mode
+
+Use this mode to close one missing happy-path matrix cell end to end.
+
+Required workflow:
+
+1. Reconstruct the happy-path business matrix from semantics.
+- Show scenario axes.
+- Show currently covered cells.
+- Show missing cells.
+
+2. Review current coverage with the fixed scorecard.
 - Use the exact five sections defined in `references/review-scorecard.md`.
 - No freeform-only review is allowed.
 - Treat duplicate pair + duplicate `*_after` fields as a scorecard violation, not a harmless style choice.
 
-5. Select one missing highest-value matrix cell by default.
+3. Select one missing highest-value matrix cell by default.
 - Default unit of work is exactly one missing matrix cell.
 - Prefer the highest-value gap that closes a real business-semantic blind spot.
 - Do not batch-fill multiple cells unless the user explicitly asks.
 
-6. Write the happy-path spec test first.
+4. Write the happy-path spec test first.
 - Use spec-style comments and business naming.
 - Tie the test to the exact chosen matrix cell.
 - Keep the test focused on one happy-path rule.
 
-7. Confirm the failure exposes a real business gap.
+5. Confirm the failure exposes a real business gap.
 - Run the test or otherwise prove the current coverage/behavior is missing that cell.
 - If the test passes already, do not force a repair. Re-evaluate the chosen cell.
 
-8. Apply the smallest business repair.
+6. Apply the smallest business repair.
 - Prefer repairing the use case first.
 - Only repair an entity when the missing happy semantics are a reusable business rule that belongs in the domain model.
 - Do not change adapter or infra behavior to satisfy a core happy-path business gap.
 - Prefer missing `Changes` semantics first; repair event projection separately only when the business change is already correct and the replayable contract is wrong.
 - If update `Changes` currently keeps pair plus duplicate `after`, repair the pair-first shape before tolerating dual-track assertions.
 
-9. Verify the exact matrix gap is now closed.
+7. Verify the exact matrix gap is now closed.
 - Re-run the new test and relevant nearby tests.
 - State which exact matrix cell is now covered.
 - Stop after closing that one cell unless the user explicitly asks for more.
 
-## TDD Stop Rule
-
-The default stopping condition is strict:
-- one missing matrix cell is chosen
-- one new happy spec test is written first
-- the test initially fails or the gap is otherwise proven missing
-- the minimal core business repair makes that test pass
-- the exact matrix cell now covered is named explicitly
-
-Do not continue to add more happy-path cells by default after that point.
-
-## Repair Boundary
-
-Apply this boundary strictly:
-- prefer repairing the use case first when the gap is cross-aggregate coordination or business-boundary semantics
-- allow single-entity repair when the missing semantics are a reusable entity `behavior method`
-- allow aggregate-root repair when the missing semantics are same-aggregate consistency behavior
-- if the missing gap is only a derived judgment or calculation, do not promote it into an independent `use case`
-- never move business repair into adapter or infra
-- prioritize repairing `Changes` into pair-first semantics over adding tests that normalize duplicate fields
-
-If you recommend entity repair, explain why the rule is reusable domain behavior rather than one use case's orchestration detail.
-
-## Output Contract
-
-Always produce, in order:
+Required output, in order:
 1. the happy-path matrix
 2. the fixed five-part review scorecard
 3. the chosen single matrix cell
@@ -148,39 +206,45 @@ If the current happy coverage is already sufficient for the user's ask:
 - state that no higher-value missing cell remains for this task
 - do not invent extra tests or broad rewrites
 
+## Repair Boundary
+
+Apply this boundary strictly in TDD repair mode:
+- prefer repairing the use case first when the gap is cross-aggregate coordination or business-boundary semantics
+- allow single-entity repair when the missing semantics are a reusable entity `behavior method`
+- allow aggregate-root repair when the missing semantics are same-aggregate consistency behavior
+- if the missing gap is only a derived judgment or calculation, do not promote it into an independent `use case`
+- never move business repair into adapter or infra
+- prioritize repairing `Changes` into pair-first semantics over adding tests that normalize duplicate fields
+
+If you recommend entity repair, explain why the rule is reusable domain behavior rather than one use case's orchestration detail.
+
 ## Validation Scenarios
 
-Validate the skill behavior against these scenario types:
+Validate skill behavior against these scenario types:
 
-1. Partial happy coverage in a real use case.
+1. Spec-only happy-path test writing.
+- Expected behavior:
+  - read real code first
+  - write the matrix first
+  - add business-sentence tests with `Rule/Given/When/Then`
+  - assert `Changes` before event projection
+  - avoid repairing production code unless asked
+
+2. Partial happy coverage in a real use case.
 - Expected behavior:
   - emit the matrix first
   - use the fixed scorecard to identify a concrete gap
-  - choose exactly one missing matrix cell
+  - choose exactly one missing matrix cell in TDD repair mode
   - tie the new spec test to that exact cell
 
-2. Missing happy semantics that belong in an entity rule.
+3. Missing happy semantics that belong in an entity rule.
 - Expected behavior:
   - explain why the rule is reusable domain logic
   - allow repair in the entity
   - leave adapter and infra untouched
 
-3. Use case with already-sufficient happy coverage for the current ask.
+4. Use case with already-sufficient happy coverage for the current ask.
 - Expected behavior:
-  - still perform the review
+  - still perform the review when in TDD repair mode
   - find no higher-value missing cell to add
   - avoid inventing extra tests or broad rewrites
-
-## Acceptance Criteria
-
-Before finishing a task under this skill, verify that the workflow:
-- starts from real code, not a freeform imagined rule set
-- emits a matrix before new test design
-- uses the fixed five-part review scorecard
-- maps each new test to one exact matrix cell
-- repairs one cell only by default
-- asserts `Changes` semantics before replayable-event projection when both matter
-- does not normalize duplicate pair + `*_after` fields in new tests; it pushes repair back into `Changes`
-- treats event order as part of the business contract when multiple events matter
-- keeps business repair in core, never adapter or infra
-- only pushes logic into an entity when the rule is reusable domain behavior

@@ -25,10 +25,12 @@ description: >
 
 开始回答前，先读取共享约束文件：
 
-- `../shared/use_case_entity_constraints.md`
+- `../shared/use_case_entity_constraints.md` as the only shared canonical reference for `use case` / `entity` boundary facts, `aggregate role`, `MI chain root`, and `replay/version` semantics
 - `../shared/entity_four_color_classification.md` when the task involves classifying a domain object/entity, deciding whether something should be an `entity`, `aggregate root`, `value object`, `role object`, or `policy/description`
-- `../shared/use_case_entity_aggregate_boundary.md` when the question involves `use case` vs `entity`, `behavior method`, `helper/query method`, `aggregate root`, `state machine`, or whether an action deserves an independent `use case`
 - `../shared/use_case_review_scorecard.md` when the task is to score or lightly review a `use case`
+
+如果需要比 shared facts 更强的架构政策，使用本 skill 自身的 `Design Rules` 或其他专门 policy 文档，
+不要把这些更强规则误归因给 `use_case_entity_constraints.md`。
 
 ## Design Rules
 

@@ -12,7 +12,7 @@ This skill is only for `use case group` discovery, boundary definition, and outp
 It is not:
 - the canonical definition of `Moment-Interval`
 - the canonical reference for `MI` naming, audit, or `settled fact`
-- the canonical reference for `use case / entity / aggregate` boundaries
+- the place to invent stronger `use case / entity / aggregate` hard rules beyond the shared canonical references
 - a code-writing skill
 
 It produces a business grouping spec that later implementation, review, and modeling work can continue to use.
@@ -81,8 +81,8 @@ Read the references in this order.
    Extended judgment for `main_mi` / `secondary_mis`, append-only facts, naming calibration, and `settled fact`.
 4. [`references/review_checklist.md`](references/review_checklist.md)
    Completeness and end-to-end closure review for a proposed group.
-5. [`../shared/use_case_entity_aggregate_boundary.md`](../shared/use_case_entity_aggregate_boundary.md)
-   Boundary split for `use case`, `entity behavior method`, `aggregate`, and cross-aggregate coordination.
+5. [`../shared/use_case_entity_constraints.md`](../shared/use_case_entity_constraints.md)
+   The only shared canonical reference for `use case` / `entity` boundary facts, `aggregate role`, `MI chain root`, and `replay/version` semantics.
 
 If a task extends to `MI -> entity` naming calibration, audit-voucher facts, or final-settlement closure, do not answer from examples in this file first. Route to the shared references, then use this skill only to organize the group output.
 
@@ -95,7 +95,7 @@ Routing order:
 2. `moment_interval_definition.md` for base definition and minimum threshold
 3. `mi.md` for advanced `MI` judgment, naming, append-only facts, and `settled fact`
 4. `review_checklist.md` for completeness and closure review
-5. `use_case_entity_aggregate_boundary.md` for `use case / entity / aggregate` placement
+5. `use_case_entity_constraints.md` for shared `use case / entity` boundary facts and aggregate-role semantics
 
 Examples in this file are only calibration examples. They never override the shared references.
 
@@ -130,8 +130,8 @@ Use this fixed sequence.
    - `final_settled_fact`
 5. Use [`references/review_checklist.md`](references/review_checklist.md) to verify the chain truly closes inside the declared `group_boundary`.
    If the chain stops at an intermediate fact, either narrow the boundary or continue the chain.
-6. Use [`../shared/use_case_entity_aggregate_boundary.md`](../shared/use_case_entity_aggregate_boundary.md) to split which actions are independent `use_case` values.
-   Keep cross-aggregate coordination in `use case`; do not bury it in one `entity` or `aggregate` method.
+6. Read [`../shared/use_case_entity_constraints.md`](../shared/use_case_entity_constraints.md) before splitting `use_case` / `entity` boundary facts, aggregate roles, or replay/version semantics.
+   If you need a stronger architecture policy than that file states, treat it as a separate policy decision rather than as a shared code fact.
 7. Organize the final output.
    The output must clearly separate group center, closure fact, use case boundaries, and non-use-case items.
 
