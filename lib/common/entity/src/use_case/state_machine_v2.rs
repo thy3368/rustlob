@@ -39,7 +39,7 @@
 //! ```rust
 //! use entity::{
 //!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent, FieldDiff,
-//!     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter,
+//!     MiStateMachineV2, MiStateMachineOwnedV2BeforeAfter,
 //!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
 //! };
 //!
@@ -491,7 +491,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
 ///
 /// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
-pub trait MiStateMachineOwnedV2: MiStateMachineV2Unchecked {
+pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
     fn compute_after_changes(
         &self,
         cmd: &Self::Command,
@@ -503,14 +503,14 @@ pub trait MiStateMachineOwnedV2: MiStateMachineV2Unchecked {
     }
 }
 
-impl<T> MiStateMachineOwnedV2 for T where T: MiStateMachineV2Unchecked {}
+impl<T> MiStateMachineV2 for T where T: MiStateMachineV2Unchecked {}
 
 /// 在同一多聚合 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
 ///
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait MiStateMachineOwnedV2BeforeAfter: MiStateMachineOwnedV2 {
+pub trait MiStateMachineOwnedV2BeforeAfter: MiStateMachineV2 {
     /// 最终可 replay 的 before/after changes。
     type BeforeAfterChanges: ReplayableChanges;
 
@@ -529,8 +529,7 @@ pub trait MiStateMachineOwnedV2BeforeAfter: MiStateMachineOwnedV2 {
         cmd: &Self::Command,
         given_state: Self::GivenState,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
-        let after =
-            <Self as MiStateMachineOwnedV2>::compute_after_changes(self, cmd, &given_state)?;
+        let after = <Self as MiStateMachineV2>::compute_after_changes(self, cmd, &given_state)?;
         Self::merge_before_and_after(given_state, after)
     }
 }
@@ -540,8 +539,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        EntityError, EntityReplayableEvent, MiStateMachineOwnedV2,
-        MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+        EntityError, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2,
+        MiStateMachineV2Unchecked,
     };
 
     #[derive(Debug, Clone, PartialEq, Eq)]
