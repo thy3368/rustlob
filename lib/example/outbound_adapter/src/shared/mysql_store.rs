@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use example_core::{
-    Balance, MarketRules, SpotOrder, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce,
+    Balance, MarketRules, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
+    SpotOrderV2,
 };
 use mysql::params;
 use mysql::prelude::Queryable;
@@ -216,7 +217,17 @@ impl MySqlStore {
                     let side = decode_side_mysql(side.as_str())?;
                     let execution = decode_execution_mysql(execution.as_str(), price)?;
                     let time_in_force = decode_time_in_force_mysql(time_in_force.as_str())?;
-                    let order = SpotOrder::new(
+                    let reservation = SpotOrderV2::principal_reservation(
+                        order_id.as_str(),
+                        account_id.as_str(),
+                        side,
+                        qty,
+                        price,
+                        "BTC",
+                        "USDT",
+                    )
+                    .ok()?;
+                    let order = SpotOrderV2::new(
                         order_id.clone(),
                         asset,
                         None,
@@ -226,9 +237,14 @@ impl MySqlStore {
                         execution,
                         time_in_force,
                         qty,
+                        0,
+                        SpotOrderStatus::Open,
+                        None,
                         reserved_base,
                         reserved_quote,
+                        reservation,
                         None,
+                        1,
                     );
                     Some((order_id, order))
                 },

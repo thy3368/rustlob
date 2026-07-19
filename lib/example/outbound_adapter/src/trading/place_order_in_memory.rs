@@ -2,8 +2,8 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use example_core::{
     Balance, MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderState, Reservation,
-    ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrder,
-    SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce,
+    ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,
 };
 
 use crate::shared::{
@@ -53,7 +53,7 @@ impl InMemoryPlaceOrderOutbound {
         self.store.seed_market_rules(market_rules)
     }
 
-    pub fn seed_order(&self, order: SpotOrder) -> Result<(), crate::StoreError> {
+    pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), crate::StoreError> {
         self.store.seed_order(order)
     }
 
@@ -109,7 +109,8 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
         for event in events {
             if event.is_created()
                 && event_string_field(event, "reservation_id").is_some()
-                && event_string_field(event, "status").is_some()
+                && event_string_field(event, "owner_account_id").is_some()
+                && event_string_field(event, "caused_by_order_id").is_some()
             {
                 let reservation = decode_created_reservation(event)?;
                 state.reservations.insert(reservation.reservation_id.clone(), reservation);
@@ -117,9 +118,11 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
             }
 
             if event.is_created() && event_string_field(event, "order_id").is_some() {
-                let order = SpotOrder::new(
-                    event_string_field(event, "order_id")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                let order = SpotOrderV2::new(
+                    {
+                        event_string_field(event, "order_id")
+                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                    },
                     event_u64_field(event, "asset")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
                         as u32,
@@ -133,11 +136,17 @@ impl CommandUseCaseOutbound for InMemoryPlaceOrderOutbound {
                     decode_time_in_force(event)?,
                     event_u64_field(event, "qty")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                    event_u64_field(event, "filled_qty")
+                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                    decode_status(event)?,
+                    None,
                     event_u64_field(event, "reserved_base")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                     event_u64_field(event, "reserved_quote")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                    decode_embedded_order_reservation(event)?,
                     event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
+                    event_u64_field(event, "version").unwrap_or(1),
                 );
                 state.orders.insert(order.order_id.clone(), order);
                 state.next_order_sequence = state
@@ -237,6 +246,58 @@ fn decode_time_in_force(
         Some("alo") => Ok(SpotOrderTimeInForce::Alo),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
+}
+
+fn decode_status(
+    event: &EntityReplayableEvent,
+) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
+    match event_string_field(event, "status").as_deref() {
+        Some("open") => Ok(SpotOrderStatus::Open),
+        Some("partially_filled") => Ok(SpotOrderStatus::PartiallyFilled),
+        Some("filled") => Ok(SpotOrderStatus::Filled),
+        Some("canceled") => Ok(SpotOrderStatus::Canceled),
+        Some("rejected") => Ok(SpotOrderStatus::Rejected),
+        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_embedded_order_reservation(
+    event: &EntityReplayableEvent,
+) -> Result<Reservation, PlaceOrderOutboundError> {
+    let order_id =
+        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let account_id = event_string_field(event, "account_id")
+        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let reservation_id = event_string_field(event, "reservation_id")
+        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    Ok(Reservation {
+        reservation_id,
+        owner_account_id: account_id,
+        caused_by_order_id: order_id,
+        market_kind: ReservationMarketKind::Spot,
+        reservation_kind: decode_reservation_kind(
+            event_string_field(event, "reservation_kind")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .as_str(),
+        )?,
+        asset_id: event_string_field(event, "reservation_asset_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        original_amount: event_u64_field(event, "reservation_original_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        consumed_amount: event_u64_field(event, "reservation_consumed_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        released_amount: event_u64_field(event, "reservation_released_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        remaining_amount: event_u64_field(event, "reservation_remaining_amount")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        status: decode_reservation_status(
+            event_string_field(event, "reservation_status")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .as_str(),
+        )?,
+        close_reason: None,
+        version: 1,
+    })
 }
 
 fn decode_created_reservation(
