@@ -16,8 +16,8 @@
 
 ## Core
 
-- `use_case`: `PlaceOrderUseCase`
-- `entity`: `TradingAccount`, `MarketRules`, `PlaceOrderState`
+- `use_case`: `SpotOrderV2UseCaseFamilyV3`
+- `entity`: `TradingAccount`, `MarketRules`, `SpotOrderV2GivenStateV3`
 
 `core` 只表达业务动作、业务状态和业务错误，不依赖任何 inbound/outbound adapter。
 
@@ -25,9 +25,9 @@
 
 ### inbound
 
-- `http.rs` 把 HTTP 风格请求 DTO 翻译成 `CommandEnvelope<PlaceOrderCmd>`
+- `http.rs` 把 HTTP 风格请求 DTO 翻译成 `CommandEnvelope<SpotOrderV2CommandV3>`
 - `http.rs` 也持有 `POST /orders` 的 route / handler / error mapping
-- `cli.rs` 把 CLI 风格命令 DTO 翻译成 `CommandEnvelope<PlaceOrderCmd>`
+- `cli.rs` 把 CLI 风格命令 DTO 翻译成 `CommandEnvelope<SpotOrderV2CommandV3>`
 - `cli.rs` 也持有参数解析和 usage 文案
 - 两个入口都调用 `CommandUseCaseExecutor2`
 - 两个入口各自用 reply mapper 把领域事件翻译成对外响应
@@ -102,22 +102,16 @@ request
   -> inbound_adapter.http_reply_mapper / cli_reply_mapper
   -> response
 
-spot pipeline worker
-  -> inbound_adapter.event
-  -> core.use_case
-  -> outbound_adapter(use-case specific)
 ```
 
 ## Supported Inbound Styles
 
 - HTTP: `handle_place_order_http(...)`
 - HTTP: `handle_deposit_quote_http(...)`
-- Event: `handle_spot_order_placed_event(...)`
-- Event: `handle_spot_trade_matched_event(...)`
 - CLI: `run_place_order_cli(...)`
 - CLI: `run_deposit_quote_cli(...)`
 
-这两个入口都只做输入翻译和输出翻译，不直接 new outbound。
+这些入口都只做输入翻译和输出翻译，不直接 new outbound。
 HTTP 入口目前同时支持：
 
 - `axum`
