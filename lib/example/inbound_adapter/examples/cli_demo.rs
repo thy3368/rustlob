@@ -33,7 +33,7 @@ fn run() -> Result<(), example_inbound_adapter::CliInboundError> {
     println!("{command:#?}");
 
     let response = run_place_order_cli(command, app.place_order_outbound())
-        .map_err(example_inbound_adapter::CliInboundError::from_execution_error)?;
+        .map_err(example_inbound_adapter::CliInboundError::from_mi_execution_error)?;
     println!("== CLI Response ==");
     println!("{response:#?}");
 
