@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-use example_core::SpotOrderV2UseCaseFamily;
+use example_core::SpotOrderV2UseCaseFamilyV3;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -106,7 +106,7 @@ fn execute_with_outbound<OB>(
     outbound: &OB,
 ) -> Vec<reply::CancelByCloidStatusWire>
 where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
     OB::Error: std::fmt::Display,
 {
     let party_id =
@@ -137,10 +137,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core::{SpotOrderV2Command, SpotOrderV2GivenState};
+    use example_core::{SpotOrderV2CommandV3, SpotOrderV2GivenStateV3};
 
     use super::*;
-    use crate::exchange::actions::cancel::{CancelSpotOrderV2Lookup, CancelSpotOrderV2Request};
+    use crate::exchange::actions::cancel::{CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request};
 
     #[test]
     fn parses_request() {
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(mapped.asset, 10000);
         assert_eq!(
             mapped.lookup,
-            CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
+            CancelSpotOrderV2LookupV3::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
         );
     }
 
@@ -211,17 +211,17 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct ObservingCancelOutbound {
-        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
+        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
     }
 
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for ObservingCancelOutbound {
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
             &self,
-            cmd: &SpotOrderV2Command,
-        ) -> Result<SpotOrderV2GivenState, Self::Error> {
-            let SpotOrderV2Command::Cancel(request) = cmd else {
+            cmd: &SpotOrderV2CommandV3,
+        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
+            let SpotOrderV2CommandV3::Cancel(request) = cmd else {
                 panic!("expected cancel command");
             };
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
@@ -261,7 +261,9 @@ mod tests {
 
         assert_eq!(
             *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
-            Some(CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string()))
+            Some(CancelSpotOrderV2LookupV3::Cloid(
+                "0x1234567890abcdef1234567890abcdef".to_string()
+            ))
         );
         assert_eq!(
             statuses,

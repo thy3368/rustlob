@@ -2,12 +2,12 @@ use cmd_handler::command_use_case_def2::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
 };
-pub use example_core::CancelSpotOrderV2Lookup;
+pub use example_core::CancelSpotOrderV2LookupV3;
 #[cfg(test)]
-use example_core::{Balance, Reservation, SpotOrderV2};
+use example_core::{Balance, SpotOrderV2};
 use example_core::{
-    CancelSpotOrderV2Cmd, SpotOrderV2CaseChanges, SpotOrderV2Command, SpotOrderV2GivenState,
-    SpotOrderV2UseCaseFamily,
+    CancelSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
+    SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
 };
 use serde::{Deserialize, Serialize};
 
@@ -73,27 +73,27 @@ pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
 pub struct CancelSpotOrderV2Request {
     pub party_id: String,
     pub asset: u32,
-    pub lookup: CancelSpotOrderV2Lookup,
+    pub lookup: CancelSpotOrderV2LookupV3,
 }
 
 impl CancelSpotOrderV2Request {
     fn from_wire_cancel(party_id: String, cancel: &CancelItemWire) -> Self {
-        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2Lookup::Oid(cancel.o) }
+        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2LookupV3::Oid(cancel.o) }
     }
 
     #[allow(dead_code)]
     pub fn from_cloid(party_id: String, asset: u32, cloid: String) -> Self {
-        Self { party_id, asset, lookup: CancelSpotOrderV2Lookup::Cloid(cloid) }
+        Self { party_id, asset, lookup: CancelSpotOrderV2LookupV3::Cloid(cloid) }
     }
 }
 
 pub struct SpotOrderV2CancelExecutionSpec;
 
-impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamily> for SpotOrderV2CancelExecutionSpec {
+impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
 
-    fn command(request: &Self::Request) -> SpotOrderV2Command {
-        SpotOrderV2Command::Cancel(CancelSpotOrderV2Cmd {
+    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
+        SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3 {
             party_id: request.party_id.clone(),
             asset: request.asset,
             lookup: request.lookup.clone(),
@@ -110,13 +110,13 @@ pub enum DefaultSpotOrderV2CancelOutboundError {
 #[derive(Debug, Default)]
 pub struct DefaultSpotOrderV2CancelOutbound;
 
-impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for DefaultSpotOrderV2CancelOutbound {
+impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2CancelOutbound {
     type Error = DefaultSpotOrderV2CancelOutboundError;
 
     fn load_given_state(
         &self,
-        _cmd: &SpotOrderV2Command,
-    ) -> Result<SpotOrderV2GivenState, Self::Error> {
+        _cmd: &SpotOrderV2CommandV3,
+    ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
         Err(DefaultSpotOrderV2CancelOutboundError::StateUnavailable)
     }
 
@@ -177,15 +177,15 @@ pub fn execute_cancel_spot_order_v2<OB>(
     request: &CancelSpotOrderV2Request,
     outbound: &OB,
 ) -> Result<
-    MiFamilyExecutionResult<SpotOrderV2CaseChanges>,
-    MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyError, OB::Error>,
+    MiFamilyExecutionResult<SpotOrderV2CaseChangesV3>,
+    MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
 >
 where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     MiStateMachineFamilyExecutor
-        .execute::<SpotOrderV2UseCaseFamily, SpotOrderV2CancelExecutionSpec, OB>(
-            &SpotOrderV2UseCaseFamily,
+        .execute::<SpotOrderV2UseCaseFamilyV3, SpotOrderV2CancelExecutionSpec, OB>(
+            &SpotOrderV2UseCaseFamilyV3,
             request,
             outbound,
         )
@@ -193,7 +193,7 @@ where
 
 fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::CancelStatusWire>
 where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamily>,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
     OB::Error: std::fmt::Display,
 {
     let party_id =
@@ -240,10 +240,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core::{
-        ReservationKind, ReservationMarketKind, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
-        SpotOrderTimeInForce,
-    };
+    use example_core::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce};
 
     use super::*;
 
@@ -315,23 +312,44 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct FakeSpotOrderV2CancelOutbound {
-        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
+        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
     }
 
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamily> for FakeSpotOrderV2CancelOutbound {
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
             &self,
-            cmd: &SpotOrderV2Command,
-        ) -> Result<SpotOrderV2GivenState, Self::Error> {
-            let SpotOrderV2Command::Cancel(request) = cmd else {
+            cmd: &SpotOrderV2CommandV3,
+        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
+            let SpotOrderV2CommandV3::Cancel(request) = cmd else {
                 panic!("expected cancel command");
             };
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
 
-            let order = SpotOrderV2::new(
+            let principal_reservation = SpotOrderV2::principal_reservation(
+                "order-1",
+                request.party_id.as_str(),
+                SpotOrderSide::Buy,
+                2,
+                100,
+                "BTC",
+                "USDT",
+            )
+            .map_err(|_| FakeOutboundError)?;
+            let fee_reservation = SpotOrderV2::fee_reservation(
+                "order-1",
+                request.party_id.as_str(),
+                SpotOrderSide::Buy,
+                2,
+                100,
+                "USDT",
+                5,
+                10,
+            )
+            .map_err(|_| FakeOutboundError)?;
+            let order = SpotOrderV2::new_with_fee_reservation(
                 "order-1".to_string(),
                 request.asset,
                 Some(77738308),
@@ -346,25 +364,13 @@ mod tests {
                 None,
                 0,
                 200,
+                principal_reservation,
+                fee_reservation,
                 None,
                 1,
             );
 
-            Ok(SpotOrderV2GivenState::Cancel {
-                principal_reservation: reservation(
-                    &order.order_id,
-                    &order.account_id,
-                    ReservationKind::SpotBuyQuote,
-                    "USDT",
-                    200,
-                ),
-                fee_reservation: reservation(
-                    &order.order_id,
-                    &order.account_id,
-                    ReservationKind::SpotBuyFeeQuote,
-                    "USDT",
-                    1,
-                ),
+            Ok(SpotOrderV2GivenStateV3::Cancel {
                 balances: vec![Balance::new(
                     request.party_id.clone(),
                     "USDT".to_string(),
@@ -402,25 +408,6 @@ mod tests {
         }
     }
 
-    fn reservation(
-        order_id: &str,
-        account_id: &str,
-        kind: ReservationKind,
-        asset_id: &str,
-        amount: u64,
-    ) -> Reservation {
-        Reservation::new(
-            format!("reservation:{order_id}:{asset_id}:{kind:?}"),
-            account_id.to_string(),
-            order_id.to_string(),
-            ReservationMarketKind::Spot,
-            kind,
-            asset_id.to_string(),
-            amount,
-        )
-        .expect("test reservation should be valid")
-    }
-
     #[test]
     fn spot_order_v2_cancel_request_maps_wire_and_executes_with_fake_outbound() {
         let wire =
@@ -437,13 +424,22 @@ mod tests {
 
         assert_eq!(
             *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
-            Some(CancelSpotOrderV2Lookup::Oid(77738308))
+            Some(CancelSpotOrderV2LookupV3::Oid(77738308))
         );
-        let SpotOrderV2CaseChanges::Cancel(changes) = result.changes else {
+        let SpotOrderV2CaseChangesV3::Cancel(changes) = result.changes else {
             panic!("expected cancel changes");
         };
-        assert_eq!(changes.updated_order.after.status, SpotOrderStatus::Canceled);
-        assert_eq!(changes.created_reservation_released.len(), 2);
+        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
+        assert_eq!(
+            changes
+                .updated_order
+                .after
+                .to_reservation("BTC", "USDT")
+                .expect("principal reservation should project")
+                .remaining_amount,
+            0
+        );
+        assert_eq!(changes.updated_order.after.to_fee_reservation().remaining_amount, 0);
         assert!(!result.events.is_empty());
     }
 
