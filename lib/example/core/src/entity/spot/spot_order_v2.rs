@@ -14,6 +14,7 @@ use super::spot_trade::SpotTrade;
 use crate::entity::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
     ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
+    ReservationStatus,
 };
 
 #[cfg(test)]
@@ -219,6 +220,10 @@ pub struct PlaceSpotOrderV2Input {
     pub base_balance_entity_id: String,
     /// quote 余额实体 ID。
     pub quote_balance_entity_id: String,
+    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub maker_fee_bps: u64,
+    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub taker_fee_bps: u64,
     /// 客户端自定义订单 ID。
     pub client_order_id: Option<String>,
 }
@@ -385,6 +390,11 @@ pub struct SpotOrderV2 {
     /// `reserved_base` / `reserved_quote` 仍作为历史快照字段保留，但订单生命周期中的
     /// authoritative principal 冻结状态从这里读取和回放。
     pub reservation: Reservation,
+    /// 订单 fee 冻结凭证。
+    ///
+    /// v3 下单/撤单用例以订单聚合内的 fee reservation 为权威状态；余额流水仍负责
+    /// 表达冻结资金的审计变化。
+    pub fee_reservation: Reservation,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 当前订单实体版本，用于生成可重放更新事件。
@@ -416,6 +426,61 @@ impl SpotOrderV2 {
         client_order_id: Option<String>,
         version: u64,
     ) -> Self {
+        let fee_reservation = Self::default_fee_reservation_from_order_parts(
+            order_id.as_str(),
+            account_id.as_str(),
+            side,
+            qty,
+            match execution {
+                SpotOrderExecution::Limit { price }
+                | SpotOrderExecution::Market { aggressive_price: price } => price,
+            },
+            "USDT",
+        );
+        Self::new_with_fee_reservation(
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            execution,
+            time_in_force,
+            qty,
+            filled_qty,
+            status,
+            status_reason,
+            reserved_base,
+            reserved_quote,
+            reservation,
+            fee_reservation,
+            client_order_id,
+            version,
+        )
+    }
+
+    /// 从已校验业务事实或回放事件构造带 fee reservation 的订单快照。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_fee_reservation(
+        order_id: String,
+        asset: u32,
+        exchange_oid: Option<u64>,
+        account_id: String,
+        symbol: String,
+        side: SpotOrderSide,
+        execution: SpotOrderExecution,
+        time_in_force: SpotOrderTimeInForce,
+        qty: u64,
+        filled_qty: u64,
+        status: SpotOrderStatus,
+        status_reason: Option<SpotOrderStatusReason>,
+        reserved_base: u64,
+        reserved_quote: u64,
+        reservation: Reservation,
+        fee_reservation: Reservation,
+        client_order_id: Option<String>,
+        version: u64,
+    ) -> Self {
         Self {
             order_id,
             asset,
@@ -432,6 +497,7 @@ impl SpotOrderV2 {
             reserved_base,
             reserved_quote,
             reservation,
+            fee_reservation,
             client_order_id,
             version,
         }
@@ -483,6 +549,16 @@ impl SpotOrderV2 {
             input.base_asset_id.as_str(),
             input.quote_asset_id.as_str(),
         )?;
+        let fee_reservation = Self::fee_reservation(
+            input.order_id.as_str(),
+            input.account_id.as_str(),
+            input.side,
+            input.qty,
+            order_price,
+            input.quote_asset_id.as_str(),
+            input.maker_fee_bps,
+            input.taker_fee_bps,
+        )?;
         let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
             format!("balance-ledger:freeze:{}", input.order_id),
             input.account_id.clone(),
@@ -492,7 +568,7 @@ impl SpotOrderV2 {
             BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
         )?;
 
-        let order = Self::new(
+        let order = Self::new_with_fee_reservation(
             input.order_id,
             input.asset,
             None,
@@ -508,6 +584,7 @@ impl SpotOrderV2 {
             reserved_base,
             reserved_quote,
             reservation,
+            fee_reservation,
             input.client_order_id,
             1,
         );
@@ -543,6 +620,90 @@ impl SpotOrderV2 {
             asset_id,
             amount,
         )
+    }
+
+    /// 为 spot 订单构造 fee reservation。
+    #[allow(clippy::too_many_arguments)]
+    pub fn fee_reservation(
+        order_id: &str,
+        account_id: &str,
+        side: SpotOrderSide,
+        qty: u64,
+        order_price: u64,
+        quote_asset_id: &str,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+    ) -> Result<Reservation, ReservationError> {
+        let fee_bps = maker_fee_bps.max(taker_fee_bps);
+        let amount = if fee_bps == 0 {
+            1
+        } else {
+            let notional =
+                qty.checked_mul(order_price).ok_or(ReservationError::ArithmeticOverflow)?;
+            let scaled =
+                notional.checked_mul(fee_bps).ok_or(ReservationError::ArithmeticOverflow)?;
+            let numerator = scaled
+                .checked_add(
+                    FEE_BPS_DENOMINATOR
+                        .checked_sub(1)
+                        .ok_or(ReservationError::ArithmeticOverflow)?,
+                )
+                .ok_or(ReservationError::ArithmeticOverflow)?;
+            numerator / FEE_BPS_DENOMINATOR
+        };
+        let kind = match side {
+            SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+            SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        };
+        Reservation::new(
+            format!("reservation:{order_id}:fee"),
+            account_id.to_string(),
+            order_id.to_string(),
+            ReservationMarketKind::Spot,
+            kind,
+            quote_asset_id.to_string(),
+            amount,
+        )
+    }
+
+    fn default_fee_reservation_from_order_parts(
+        order_id: &str,
+        account_id: &str,
+        side: SpotOrderSide,
+        qty: u64,
+        order_price: u64,
+        quote_asset_id: &str,
+    ) -> Reservation {
+        match Self::fee_reservation(
+            order_id,
+            account_id,
+            side,
+            qty,
+            order_price,
+            quote_asset_id,
+            1,
+            1,
+        ) {
+            Ok(reservation) => reservation,
+            Err(_) => Reservation {
+                reservation_id: format!("reservation:{order_id}:fee:fallback"),
+                owner_account_id: account_id.to_string(),
+                caused_by_order_id: order_id.to_string(),
+                market_kind: ReservationMarketKind::Spot,
+                reservation_kind: match side {
+                    SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+                    SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+                },
+                asset_id: quote_asset_id.to_string(),
+                original_amount: 1,
+                consumed_amount: 0,
+                released_amount: 0,
+                remaining_amount: 1,
+                status: ReservationStatus::Active,
+                close_reason: None,
+                version: 1,
+            },
+        }
     }
 
     /// 返回带交易所 `oid` 的订单快照。
@@ -667,6 +828,11 @@ impl SpotOrderV2 {
         _quote_asset_id: &str,
     ) -> Result<Reservation, ReservationError> {
         Ok(self.reservation.clone())
+    }
+
+    /// 返回该订单内嵌的 fee reservation 快照。
+    pub fn to_fee_reservation(&self) -> Reservation {
+        self.fee_reservation.clone()
     }
 
     /// 返回订单当前剩余可成交数量。
@@ -1145,7 +1311,7 @@ impl SpotOrderV2 {
 
     /// 可 BDD 规格化的聚合根行为：撤销现货订单并派生解冻流水。
     ///
-    /// 该方法只释放订单内 principal reservation，并返回下游余额流水单据；
+    /// 该方法释放订单内 principal reservation，并返回下游余额流水单据；
     /// 实际余额落账仍由 use case 编排。
     pub(crate) fn cancel(
         &mut self,
@@ -1397,6 +1563,46 @@ impl FieldDiff for SpotOrderV2 {
             ),
             EntityFieldChange::new("reservation_status", "", self.reservation.status.as_str()),
             EntityFieldChange::new(
+                "fee_reservation_id",
+                "",
+                self.fee_reservation.reservation_id.clone(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_asset_id",
+                "",
+                self.fee_reservation.asset_id.clone(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_kind",
+                "",
+                self.fee_reservation.reservation_kind.as_str(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_original_amount",
+                "",
+                self.fee_reservation.original_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_consumed_amount",
+                "",
+                self.fee_reservation.consumed_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_released_amount",
+                "",
+                self.fee_reservation.released_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_remaining_amount",
+                "",
+                self.fee_reservation.remaining_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "fee_reservation_status",
+                "",
+                self.fee_reservation.status.as_str(),
+            ),
+            EntityFieldChange::new(
                 "client_order_id",
                 "",
                 self.client_order_id.clone().unwrap_or_default(),
@@ -1506,6 +1712,54 @@ impl FieldDiff for SpotOrderV2 {
         );
         push_change(
             &mut changes,
+            "fee_reservation_id",
+            &self.fee_reservation.reservation_id,
+            &other.fee_reservation.reservation_id,
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_asset_id",
+            &self.fee_reservation.asset_id,
+            &other.fee_reservation.asset_id,
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_kind",
+            self.fee_reservation.reservation_kind.as_str(),
+            other.fee_reservation.reservation_kind.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_original_amount",
+            self.fee_reservation.original_amount.to_string(),
+            other.fee_reservation.original_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_consumed_amount",
+            self.fee_reservation.consumed_amount.to_string(),
+            other.fee_reservation.consumed_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_released_amount",
+            self.fee_reservation.released_amount.to_string(),
+            other.fee_reservation.released_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_remaining_amount",
+            self.fee_reservation.remaining_amount.to_string(),
+            other.fee_reservation.remaining_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "fee_reservation_status",
+            self.fee_reservation.status.as_str(),
+            other.fee_reservation.status.as_str(),
+        );
+        push_change(
+            &mut changes,
             "client_order_id",
             self.client_order_id.clone().unwrap_or_default(),
             other.client_order_id.clone().unwrap_or_default(),
@@ -1572,7 +1826,11 @@ impl Entity for SpotOrderV2 {
             | "reservation_id"
             | "reservation_asset_id"
             | "reservation_kind"
-            | "reservation_status" => 0,
+            | "reservation_status"
+            | "fee_reservation_id"
+            | "fee_reservation_asset_id"
+            | "fee_reservation_kind"
+            | "fee_reservation_status" => 0,
             "asset"
             | "exchange_oid"
             | "qty"
@@ -1584,7 +1842,11 @@ impl Entity for SpotOrderV2 {
             | "reservation_original_amount"
             | "reservation_consumed_amount"
             | "reservation_released_amount"
-            | "reservation_remaining_amount" => 1,
+            | "reservation_remaining_amount"
+            | "fee_reservation_original_amount"
+            | "fee_reservation_consumed_amount"
+            | "fee_reservation_released_amount"
+            | "fee_reservation_remaining_amount" => 1,
             _ => 0,
         }
     }

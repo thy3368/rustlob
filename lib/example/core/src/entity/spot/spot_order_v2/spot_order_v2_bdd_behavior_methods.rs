@@ -65,6 +65,8 @@ fn place_input(side: SpotOrderSide) -> PlaceSpotOrderV2Input {
         quote_asset_id: "USDT".to_string(),
         base_balance_entity_id: "balance:placer:BTC".to_string(),
         quote_balance_entity_id: "balance:placer:USDT".to_string(),
+        maker_fee_bps: 5,
+        taker_fee_bps: 10,
         client_order_id: Some("client-1".to_string()),
     }
 }

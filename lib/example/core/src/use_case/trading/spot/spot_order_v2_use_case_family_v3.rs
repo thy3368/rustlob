@@ -11,7 +11,6 @@ use spot_entity::spot_order_v2::{
 };
 use thiserror::Error;
 
-use super::spot_order_v2_use_case_family::{CancelSpotOrderV2Cmd, PlaceSpotOrderV2Cmd};
 use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
@@ -26,10 +25,36 @@ use crate::{
     SpotOrderTimeInForce, SpotTrade,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PlaceSpotOrderV2CmdV3 {
+    pub party_id: String,
+    pub asset: u32,
+    pub is_buy: bool,
+    pub price: String,
+    pub size: String,
+    pub tif: String,
+    pub cloid: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CancelSpotOrderV2CmdV3 {
+    pub party_id: String,
+    pub asset: u32,
+    pub lookup: CancelSpotOrderV2LookupV3,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum CancelSpotOrderV2LookupV3 {
+    #[default]
+    Missing,
+    Oid(u64),
+    Cloid(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2CommandV3 {
-    Place(PlaceSpotOrderV2Cmd),
-    Cancel(CancelSpotOrderV2Cmd),
+    Place(PlaceSpotOrderV2CmdV3),
+    Cancel(CancelSpotOrderV2CmdV3),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,10 +62,6 @@ pub enum SpotOrderV2GivenStateV3 {
     Place {
         taker_order: SpotOrderV2,
         maker_orders: Vec<SpotOrderV2>,
-        taker_principal_reservation: Reservation,
-        taker_fee_reservation: Reservation,
-        maker_principal_reservations: Vec<Reservation>,
-        maker_fee_reservations: Vec<Reservation>,
         settlement_balances: Vec<Balance>,
         base_asset_id: String,
         quote_asset_id: String,
@@ -50,8 +71,6 @@ pub enum SpotOrderV2GivenStateV3 {
     },
     Cancel {
         order: SpotOrderV2,
-        principal_reservation: Reservation,
-        fee_reservation: Reservation,
         balances: Vec<Balance>,
         base_asset_id: String,
         quote_asset_id: String,
@@ -73,12 +92,8 @@ pub struct PlaceSpotOrderV2AfterChangesV3 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2AfterChangesV3 {
     pub order_after: SpotOrderV2,
-    pub principal_reservation_after: Reservation,
-    pub fee_reservation_after: Reservation,
     pub balances_after: Vec<Balance>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    pub updated_principal_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
-    pub updated_fee_reservation_steps: Vec<UpdatedEntityPair<Reservation>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,8 +115,6 @@ pub struct PlaceSpotOrderV2ChangesV3 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2ChangesV3 {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
-    pub updated_principal_reservation: UpdatedEntityPair<Reservation>,
-    pub updated_fee_reservation: UpdatedEntityPair<Reservation>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
 }
@@ -191,16 +204,6 @@ impl ReplayableChanges for CancelSpotOrderV2ChangesV3 {
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
         let mut events = Vec::new();
         events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
-        events.push(
-            self.updated_principal_reservation
-                .after
-                .track_update_event_from(&self.updated_principal_reservation.before)?,
-        );
-        events.push(
-            self.updated_fee_reservation
-                .after
-                .track_update_event_from(&self.updated_fee_reservation.before)?,
-        );
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
             &self.created_balance_ledger_entries,
@@ -252,14 +255,12 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 SpotOrderV2GivenStateV3::Place {
                     taker_order,
                     maker_orders,
-                    taker_principal_reservation,
-                    taker_fee_reservation,
-                    maker_principal_reservations,
-                    maker_fee_reservations,
                     settlement_balances,
                     base_asset_id,
                     quote_asset_id,
                     fee_account_id,
+                    maker_fee_bps,
+                    taker_fee_bps,
                     ..
                 },
             ) => {
@@ -272,6 +273,8 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                     settlement_balances,
                     base_asset_id,
                     quote_asset_id,
+                    *maker_fee_bps,
+                    *taker_fee_bps,
                 )?;
                 let placed = SpotOrderV2::place(input)?.order;
                 if &placed != taker_order {
@@ -279,38 +282,29 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 }
                 validate_reservation_for_order(
                     taker_order,
-                    taker_principal_reservation,
+                    &taker_order.reservation,
                     expected_principal_kind_for(taker_order.side()),
                     base_asset_id,
                     quote_asset_id,
                 )?;
                 validate_reservation_for_order(
                     taker_order,
-                    taker_fee_reservation,
+                    &taker_order.fee_reservation,
                     expected_fee_kind_for(taker_order.side()),
                     quote_asset_id,
                     quote_asset_id,
                 )?;
-                if maker_principal_reservations.len() != maker_orders.len()
-                    || maker_fee_reservations.len() != maker_orders.len()
-                {
-                    return Err(SpotOrderV2UseCaseFamilyV3Error::ReservationCountMismatch);
-                }
-                for (maker, reservation) in
-                    maker_orders.iter().zip(maker_principal_reservations.iter())
-                {
+                for maker in maker_orders {
                     validate_reservation_for_order(
                         maker,
-                        reservation,
+                        &maker.reservation,
                         expected_principal_kind_for(maker.side()),
                         base_asset_id,
                         quote_asset_id,
                     )?;
-                }
-                for (maker, reservation) in maker_orders.iter().zip(maker_fee_reservations.iter()) {
                     validate_reservation_for_order(
                         maker,
-                        reservation,
+                        &maker.fee_reservation,
                         expected_fee_kind_for(maker.side()),
                         quote_asset_id,
                         quote_asset_id,
@@ -323,8 +317,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 SpotOrderV2CommandV3::Cancel(_),
                 SpotOrderV2GivenStateV3::Cancel {
                     order,
-                    principal_reservation,
-                    fee_reservation,
                     balances,
                     base_asset_id,
                     quote_asset_id,
@@ -335,19 +327,19 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 order_after.cancel(CancelSpotOrderV2Input {
                     balance_entity_id: balance_entity_id_for_reservation(
                         balances,
-                        principal_reservation,
+                        &order.reservation,
                     )?,
                 })?;
                 validate_reservation_for_order(
                     order,
-                    principal_reservation,
+                    &order.reservation,
                     expected_principal_kind_for(order.side()),
                     base_asset_id,
                     quote_asset_id,
                 )?;
                 validate_reservation_for_order(
                     order,
-                    fee_reservation,
+                    &order.fee_reservation,
                     expected_fee_kind_for(order.side()),
                     quote_asset_id,
                     quote_asset_id,
@@ -369,10 +361,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 SpotOrderV2GivenStateV3::Place {
                     taker_order,
                     maker_orders,
-                    taker_principal_reservation,
-                    taker_fee_reservation,
-                    maker_principal_reservations,
-                    maker_fee_reservations,
                     settlement_balances,
                     base_asset_id,
                     quote_asset_id,
@@ -384,10 +372,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 place_cmd,
                 taker_order,
                 maker_orders,
-                taker_principal_reservation,
-                taker_fee_reservation,
-                maker_principal_reservations,
-                maker_fee_reservations,
                 settlement_balances,
                 base_asset_id,
                 quote_asset_id,
@@ -399,8 +383,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 SpotOrderV2CommandV3::Cancel(_),
                 SpotOrderV2GivenStateV3::Cancel {
                     order,
-                    principal_reservation,
-                    fee_reservation,
                     balances,
                     base_asset_id,
                     quote_asset_id,
@@ -409,8 +391,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 },
             ) => self.compute_cancel_after(
                 order,
-                principal_reservation,
-                fee_reservation,
                 balances,
                 base_asset_id,
                 quote_asset_id,
@@ -434,10 +414,6 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                 SpotOrderV2GivenStateV3::Place {
                     taker_order,
                     maker_orders,
-                    taker_principal_reservation: _,
-                    taker_fee_reservation: _,
-                    maker_principal_reservations: _,
-                    maker_fee_reservations: _,
                     settlement_balances,
                     ..
                 },
@@ -454,24 +430,10 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
             })),
             (
-                SpotOrderV2GivenStateV3::Cancel {
-                    order,
-                    principal_reservation,
-                    fee_reservation,
-                    balances,
-                    ..
-                },
+                SpotOrderV2GivenStateV3::Cancel { order, balances, .. },
                 SpotOrderV2AfterChangesV3::Cancel(after),
             ) => Ok(SpotOrderV2CaseChangesV3::Cancel(CancelSpotOrderV2ChangesV3 {
                 updated_order: UpdatedEntityPair { before: order, after: after.order_after },
-                updated_principal_reservation: UpdatedEntityPair {
-                    before: principal_reservation,
-                    after: after.principal_reservation_after,
-                },
-                updated_fee_reservation: UpdatedEntityPair {
-                    before: fee_reservation,
-                    after: after.fee_reservation_after,
-                },
                 updated_balances: merge_balance_pairs(balances, after.balances_after)?,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
             })),
@@ -484,13 +446,9 @@ impl SpotOrderV2UseCaseFamilyV3 {
     #[allow(clippy::too_many_arguments)]
     fn compute_place_after(
         &self,
-        cmd: &PlaceSpotOrderV2Cmd,
+        cmd: &PlaceSpotOrderV2CmdV3,
         taker_order: &SpotOrderV2,
         maker_orders: &[SpotOrderV2],
-        _taker_principal_reservation: &Reservation,
-        taker_fee_reservation: &Reservation,
-        maker_principal_reservations: &[Reservation],
-        maker_fee_reservations: &[Reservation],
         settlement_balances: &[Balance],
         base_asset_id: &str,
         quote_asset_id: &str,
@@ -499,36 +457,27 @@ impl SpotOrderV2UseCaseFamilyV3 {
         taker_fee_bps: u64,
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
         let mut maker_orders_after = maker_orders.to_vec();
-        let mut fee_reservations_after = std::iter::once(taker_fee_reservation.clone())
-            .chain(maker_fee_reservations.iter().cloned())
-            .collect::<Vec<_>>();
-        let mut balance_book = BalanceBook::new(settlement_balances);
+        let mut balance_book = BalanceMap::new(settlement_balances);
         let place_input = place_input_from_cmd(
             cmd,
             taker_order,
             settlement_balances,
             base_asset_id,
             quote_asset_id,
+            maker_fee_bps,
+            taker_fee_bps,
         )?;
         let place_outcome = SpotOrderV2::place(place_input)?;
         if place_outcome.order != *taker_order {
             return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
         }
         let mut taker_after = place_outcome.order;
-        let placed_principal_reservation = taker_after
-            .to_reservation(base_asset_id, quote_asset_id)
-            .map_err(map_reservation_error_to_family)?;
-        let mut principal_reservations_after = std::iter::once(placed_principal_reservation)
-            .chain(maker_principal_reservations.iter().cloned())
-            .collect::<Vec<_>>();
         let mut created_balance_ledger_entries = Vec::new();
         let freeze_ledger_entry =
             apply_behavior_ledger_entry(place_outcome.freeze_ledger_entry, &mut balance_book)?;
         created_balance_ledger_entries.push(freeze_ledger_entry);
         let mut created_trades = Vec::new();
         let mut created_vouchers = Vec::new();
-        let mut updated_principal_reservation_steps = Vec::new();
-        let mut updated_fee_reservation_steps = Vec::new();
 
         match spot_order_v2_matching_decision(taker_order, maker_orders.first())? {
             SpotOrderV2MatchingDecision::Rest => {
@@ -544,13 +493,9 @@ impl SpotOrderV2UseCaseFamilyV3 {
             SpotOrderV2MatchingDecision::RejectAlo => {
                 taker_after.reject_as_bad_alo()?;
                 release_remaining_for_terminal(
-                    &taker_after,
-                    &mut principal_reservations_after[0],
-                    &mut fee_reservations_after[0],
+                    &mut taker_after,
                     &mut balance_book,
                     &mut created_balance_ledger_entries,
-                    &mut updated_principal_reservation_steps,
-                    &mut updated_fee_reservation_steps,
                     maker_fee_bps,
                     taker_fee_bps,
                 )?;
@@ -585,34 +530,33 @@ impl SpotOrderV2UseCaseFamilyV3 {
                 .checked_add(trade.qty)
                 .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
 
+            let taker_principal_consume =
+                principal_consume_amount_for_taker(&taker_after, trade.qty, trade_notional);
             consume_reservation(
-                &mut principal_reservations_after[0],
-                principal_consume_amount_for_taker(&taker_after, trade.qty, trade_notional),
+                &mut taker_after.reservation,
+                taker_principal_consume,
                 ReservationCloseReason::Filled,
-                &mut updated_principal_reservation_steps,
             )?;
+            let maker_principal_consume = principal_consume_amount_for_maker(
+                &maker_orders_after[index],
+                trade.qty,
+                trade_notional,
+            );
             consume_reservation(
-                &mut principal_reservations_after[index + 1],
-                principal_consume_amount_for_maker(
-                    &maker_orders_after[index],
-                    trade.qty,
-                    trade_notional,
-                ),
+                &mut maker_orders_after[index].reservation,
+                maker_principal_consume,
                 ReservationCloseReason::Filled,
-                &mut updated_principal_reservation_steps,
             )?;
 
             consume_reservation(
-                &mut fee_reservations_after[0],
+                &mut taker_after.fee_reservation,
                 trade.taker_fee,
                 ReservationCloseReason::Filled,
-                &mut updated_fee_reservation_steps,
             )?;
             consume_reservation(
-                &mut fee_reservations_after[index + 1],
+                &mut maker_orders_after[index].fee_reservation,
                 trade.maker_fee,
                 ReservationCloseReason::Filled,
-                &mut updated_fee_reservation_steps,
             )?;
 
             let settlement_id = format!("spot-settlement:{}", trade.trade_id);
@@ -640,16 +584,16 @@ impl SpotOrderV2UseCaseFamilyV3 {
             created_vouchers.push(voucher);
         }
 
+        let taker_reservation_after_match = taker_after.reservation.clone();
+        let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
         taker_after = taker_before_match;
+        taker_after.reservation = taker_reservation_after_match;
+        taker_after.fee_reservation = taker_fee_reservation_after_match;
         taker_after.finish_after_match(total_taker_fill)?;
         release_remaining_for_terminal(
-            &taker_after,
-            &mut principal_reservations_after[0],
-            &mut fee_reservations_after[0],
+            &mut taker_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            &mut updated_principal_reservation_steps,
-            &mut updated_fee_reservation_steps,
             maker_fee_bps,
             taker_fee_bps,
         )?;
@@ -668,8 +612,6 @@ impl SpotOrderV2UseCaseFamilyV3 {
     fn compute_cancel_after(
         &self,
         order: &SpotOrderV2,
-        principal_reservation: &Reservation,
-        fee_reservation: &Reservation,
         balances: &[Balance],
         _base_asset_id: &str,
         _quote_asset_id: &str,
@@ -677,48 +619,28 @@ impl SpotOrderV2UseCaseFamilyV3 {
         taker_fee_bps: u64,
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
         let mut order_after = order.clone();
-        let mut principal_reservation_after = principal_reservation.clone();
-        let mut fee_reservation_after = fee_reservation.clone();
-        let mut balance_book = BalanceBook::new(balances);
+        let mut balance_book = BalanceMap::new(balances);
         let mut created_balance_ledger_entries = Vec::new();
-        let mut updated_principal_reservation_steps = Vec::new();
-        let mut updated_fee_reservation_steps = Vec::new();
 
         let cancel_outcome = order_after.cancel(CancelSpotOrderV2Input {
-            balance_entity_id: balance_entity_id_for_reservation(balances, principal_reservation)?,
+            balance_entity_id: balance_entity_id_for_reservation(balances, &order.reservation)?,
         })?;
-        let principal_before = principal_reservation_after.clone();
-        principal_reservation_after = order_after
-            .to_reservation(_base_asset_id, _quote_asset_id)
-            .map_err(map_reservation_error_to_family)?;
-        updated_principal_reservation_steps.push(UpdatedEntityPair {
-            before: principal_before,
-            after: principal_reservation_after.clone(),
-        });
         let unfreeze_ledger_entry =
             apply_behavior_ledger_entry(cancel_outcome.unfreeze_ledger_entry, &mut balance_book)?;
         created_balance_ledger_entries.push(unfreeze_ledger_entry);
 
         release_remaining_for_cancel(
-            order,
-            &mut principal_reservation_after,
-            &mut fee_reservation_after,
+            &mut order_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            &mut updated_principal_reservation_steps,
-            &mut updated_fee_reservation_steps,
             maker_fee_bps,
             taker_fee_bps,
         )?;
 
         Ok(SpotOrderV2AfterChangesV3::Cancel(CancelSpotOrderV2AfterChangesV3 {
             order_after,
-            principal_reservation_after,
-            fee_reservation_after,
             balances_after: balance_book.into_balances(),
             created_balance_ledger_entries,
-            updated_principal_reservation_steps,
-            updated_fee_reservation_steps,
         }))
     }
 }
@@ -758,11 +680,13 @@ fn parse_tif(raw: &str) -> Result<SpotOrderTimeInForce, SpotOrderV2UseCaseFamily
 }
 
 fn place_input_from_cmd(
-    cmd: &PlaceSpotOrderV2Cmd,
+    cmd: &PlaceSpotOrderV2CmdV3,
     template: &SpotOrderV2,
     settlement_balances: &[Balance],
     base_asset_id: &str,
     quote_asset_id: &str,
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
 ) -> Result<PlaceSpotOrderV2Input, SpotOrderV2UseCaseFamilyV3Error> {
     let side = if cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
     let price = parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?;
@@ -785,6 +709,8 @@ fn place_input_from_cmd(
         quote_asset_id: quote_asset_id.to_string(),
         base_balance_entity_id,
         quote_balance_entity_id,
+        maker_fee_bps,
+        taker_fee_bps,
         client_order_id: cmd.cloid.clone(),
     })
 }
@@ -867,7 +793,6 @@ fn consume_reservation(
     reservation: &mut Reservation,
     amount: u64,
     terminal_reason: ReservationCloseReason,
-    out: &mut Vec<UpdatedEntityPair<Reservation>>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     if amount == 0 {
         return Ok(());
@@ -875,27 +800,22 @@ fn consume_reservation(
     let before = reservation.clone();
     let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
     let after = before.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
-    *reservation = after.clone();
-    out.push(UpdatedEntityPair { before, after });
+    *reservation = after;
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn release_remaining_for_terminal(
-    order_after: &SpotOrderV2,
-    principal_reservation: &mut Reservation,
-    fee_reservation: &mut Reservation,
-    balance_book: &mut BalanceBook,
+    order_after: &mut SpotOrderV2,
+    balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
-    principal_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
-    fee_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     let requirements = order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
 
     if let Some(requirement) = requirements.principal {
-        let release_amount = principal_reservation.remaining_amount.min(requirement.amount);
+        let release_amount = order_after.reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let close_reason = match requirement.reason {
                 crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
@@ -905,24 +825,24 @@ fn release_remaining_for_terminal(
                 crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
                 crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
             };
-            let before = principal_reservation.clone();
-            let after = before
+            let after = order_after
+                .reservation
                 .release(release_amount, Some(close_reason))
                 .map_err(map_reservation_error_to_family)?;
-            *principal_reservation = after.clone();
+            let asset_id = after.asset_id.clone();
+            order_after.reservation = after;
             release_to_balance(
                 order_after,
-                &principal_reservation.asset_id,
+                &asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            principal_steps.push(UpdatedEntityPair { before, after });
         }
     }
 
     if let Some(requirement) = requirements.fee {
-        let release_amount = fee_reservation.remaining_amount.min(requirement.amount);
+        let release_amount = order_after.fee_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
             let close_reason = match requirement.reason {
                 crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
@@ -932,19 +852,19 @@ fn release_remaining_for_terminal(
                 crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
                 crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
             };
-            let before = fee_reservation.clone();
-            let after = before
+            let after = order_after
+                .fee_reservation
                 .release(release_amount, Some(close_reason))
                 .map_err(map_reservation_error_to_family)?;
-            *fee_reservation = after.clone();
+            let asset_id = after.asset_id.clone();
+            order_after.fee_reservation = after;
             release_to_balance(
                 order_after,
-                &fee_reservation.asset_id,
+                &asset_id,
                 release_amount,
                 balance_book,
                 ledger_entries,
             )?;
-            fee_steps.push(UpdatedEntityPair { before, after });
         }
     }
     Ok(())
@@ -952,52 +872,22 @@ fn release_remaining_for_terminal(
 
 #[allow(clippy::too_many_arguments)]
 fn release_remaining_for_cancel(
-    order: &SpotOrderV2,
-    principal_reservation: &mut Reservation,
-    fee_reservation: &mut Reservation,
-    balance_book: &mut BalanceBook,
+    order: &mut SpotOrderV2,
+    balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
-    principal_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
-    fee_steps: &mut Vec<UpdatedEntityPair<Reservation>>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
-    let requirements = order.cancel_release_requirements(maker_fee_bps, taker_fee_bps);
-
-    if let Some(requirement) = requirements.principal {
-        let release_amount = principal_reservation.remaining_amount.min(requirement.amount);
+    if let Some(requirement) = order.fee_hold_requirement(maker_fee_bps, taker_fee_bps) {
+        let release_amount = order.fee_reservation.remaining_amount.min(requirement.amount);
         if release_amount > 0 {
-            let before = principal_reservation.clone();
-            let after = before
+            let after = order
+                .fee_reservation
                 .release(release_amount, Some(ReservationCloseReason::Canceled))
                 .map_err(map_reservation_error_to_family)?;
-            *principal_reservation = after.clone();
-            release_to_balance(
-                order,
-                &principal_reservation.asset_id,
-                release_amount,
-                balance_book,
-                ledger_entries,
-            )?;
-            principal_steps.push(UpdatedEntityPair { before, after });
-        }
-    }
-    if let Some(requirement) = requirements.fee {
-        let release_amount = fee_reservation.remaining_amount.min(requirement.amount);
-        if release_amount > 0 {
-            let before = fee_reservation.clone();
-            let after = before
-                .release(release_amount, Some(ReservationCloseReason::Canceled))
-                .map_err(map_reservation_error_to_family)?;
-            *fee_reservation = after.clone();
-            release_to_balance(
-                order,
-                &fee_reservation.asset_id,
-                release_amount,
-                balance_book,
-                ledger_entries,
-            )?;
-            fee_steps.push(UpdatedEntityPair { before, after });
+            let asset_id = after.asset_id.clone();
+            order.fee_reservation = after;
+            release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)?;
         }
     }
     Ok(())
@@ -1007,7 +897,7 @@ fn release_to_balance(
     order: &SpotOrderV2,
     asset_id: &str,
     amount: u64,
-    balance_book: &mut BalanceBook,
+    balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     let reason = match order.side() {
@@ -1075,7 +965,7 @@ fn apply_balance_ledger_entry(
 
 fn apply_behavior_ledger_entry(
     mut entry: BalanceLedgerEntryV2,
-    balance_book: &mut BalanceBook,
+    balance_book: &mut BalanceMap,
 ) -> Result<BalanceLedgerEntryV2, SpotOrderV2UseCaseFamilyV3Error> {
     let balance = balance_book.get_by_entity_id_mut(&entry.balance_entity_id)?;
     entry.apply_to(balance)?;
@@ -1089,7 +979,7 @@ fn apply_trade_balance_effects(
     base_asset_id: &str,
     quote_asset_id: &str,
     fee_account_id: &str,
-    balance_book: &mut BalanceBook,
+    balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     let trade_ids = vec![trade.trade_id.clone()];
@@ -1347,11 +1237,11 @@ fn balance_replay_events_from_ledger_entries(
     Ok(events)
 }
 
-struct BalanceBook {
+struct BalanceMap {
     balances: HashMap<String, Balance>,
 }
 
-impl BalanceBook {
+impl BalanceMap {
     fn new(balances: &[Balance]) -> Self {
         Self {
             balances: balances
@@ -1408,6 +1298,8 @@ mod tests {
             quote_asset_id: "USDT".to_string(),
             base_balance_entity_id: "buyer:BTC".to_string(),
             quote_balance_entity_id: "buyer:USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
             client_order_id: None,
         })
         .unwrap()
@@ -1415,7 +1307,7 @@ mod tests {
     }
 
     fn place_cmd(tif: &str) -> SpotOrderV2CommandV3 {
-        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2Cmd {
+        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2CmdV3 {
             party_id: "buyer".to_string(),
             asset: 10_001,
             is_buy: true,
@@ -1448,31 +1340,8 @@ mod tests {
         )
     }
 
-    fn reservation(
-        order_id: &str,
-        account_id: &str,
-        kind: ReservationKind,
-        asset_id: &str,
-        amount: u64,
-    ) -> Reservation {
-        Reservation::new(
-            format!("reservation:{order_id}:{asset_id}:{kind:?}"),
-            account_id.to_string(),
-            order_id.to_string(),
-            ReservationMarketKind::Spot,
-            kind,
-            asset_id.to_string(),
-            amount,
-        )
-        .unwrap()
-    }
-
     fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Balance {
         Balance::new(account_id.to_string(), asset_id.to_string(), available, frozen, 1)
-    }
-
-    fn taker_principal(order: &SpotOrderV2) -> Reservation {
-        order.to_reservation("BTC", "USDT").unwrap()
     }
 
     #[test]
@@ -1480,18 +1349,6 @@ mod tests {
         let family = SpotOrderV2UseCaseFamilyV3;
         let taker = buy_order(SpotOrderTimeInForce::Gtc);
         let makers = vec![sell_order("maker-1", "seller", 110, 1)];
-        let principal = taker_principal(&taker);
-        let fee = reservation(
-            &taker.order_id(),
-            &taker.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
-        let maker_principal =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellBase, "BTC", 1)];
-        let maker_fee =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellFeeQuote, "USDT", 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
             balance("buyer", "BTC", 0, 0),
@@ -1502,10 +1359,6 @@ mod tests {
         let state = SpotOrderV2GivenStateV3::Place {
             taker_order: taker.clone(),
             maker_orders: makers.clone(),
-            taker_principal_reservation: principal.clone(),
-            taker_fee_reservation: fee.clone(),
-            maker_principal_reservations: maker_principal.clone(),
-            maker_fee_reservations: maker_fee.clone(),
             settlement_balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1536,18 +1389,6 @@ mod tests {
         let family = SpotOrderV2UseCaseFamilyV3;
         let taker = buy_order(SpotOrderTimeInForce::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
-        let principal = taker_principal(&taker);
-        let fee = reservation(
-            &taker.order_id(),
-            &taker.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
-        let maker_principal =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellBase, "BTC", 1)];
-        let maker_fee =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellFeeQuote, "USDT", 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
             balance("buyer", "BTC", 0, 0),
@@ -1558,10 +1399,6 @@ mod tests {
         let state = SpotOrderV2GivenStateV3::Place {
             taker_order: taker.clone(),
             maker_orders: makers.clone(),
-            taker_principal_reservation: principal.clone(),
-            taker_fee_reservation: fee.clone(),
-            maker_principal_reservations: maker_principal.clone(),
-            maker_fee_reservations: maker_fee.clone(),
             settlement_balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1593,18 +1430,6 @@ mod tests {
         let family = SpotOrderV2UseCaseFamilyV3;
         let taker = buy_order(SpotOrderTimeInForce::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
-        let principal = taker_principal(&taker);
-        let fee = reservation(
-            &taker.order_id(),
-            &taker.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
-        let maker_principal =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellBase, "BTC", 1)];
-        let maker_fee =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellFeeQuote, "USDT", 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
             balance("buyer", "BTC", 0, 0),
@@ -1615,10 +1440,6 @@ mod tests {
         let state = SpotOrderV2GivenStateV3::Place {
             taker_order: taker.clone(),
             maker_orders: makers.clone(),
-            taker_principal_reservation: principal.clone(),
-            taker_fee_reservation: fee.clone(),
-            maker_principal_reservations: maker_principal.clone(),
-            maker_fee_reservations: maker_fee.clone(),
             settlement_balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1653,18 +1474,6 @@ mod tests {
         let family = SpotOrderV2UseCaseFamilyV3;
         let taker = buy_order(SpotOrderTimeInForce::Alo);
         let makers = vec![sell_order("maker-1", "seller", 99, 1)];
-        let principal = taker_principal(&taker);
-        let fee = reservation(
-            &taker.order_id(),
-            &taker.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
-        let maker_principal =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellBase, "BTC", 1)];
-        let maker_fee =
-            vec![reservation("maker-1", "seller", ReservationKind::SpotSellFeeQuote, "USDT", 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
             balance("buyer", "BTC", 0, 0),
@@ -1675,10 +1484,6 @@ mod tests {
         let state = SpotOrderV2GivenStateV3::Place {
             taker_order: taker.clone(),
             maker_orders: makers.clone(),
-            taker_principal_reservation: principal.clone(),
-            taker_fee_reservation: fee.clone(),
-            maker_principal_reservations: maker_principal.clone(),
-            maker_fee_reservations: maker_fee.clone(),
             settlement_balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1711,19 +1516,9 @@ mod tests {
     fn cancel_open_order_releases_principal_and_fee() {
         let family = SpotOrderV2UseCaseFamilyV3;
         let order = buy_order(SpotOrderTimeInForce::Gtc);
-        let principal = taker_principal(&order);
-        let fee = reservation(
-            &order.order_id(),
-            &order.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
         let balances = vec![balance("buyer", "USDT", 1000, 201)];
         let state = SpotOrderV2GivenStateV3::Cancel {
             order: order.clone(),
-            principal_reservation: principal.clone(),
-            fee_reservation: fee.clone(),
             balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1733,7 +1528,7 @@ mod tests {
 
         let SpotOrderV2CaseChangesV3::Cancel(changes) = family
             .compute_before_after_changes(
-                &SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2Cmd::default()),
+                &SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3::default()),
                 state,
             )
             .unwrap()
@@ -1746,8 +1541,8 @@ mod tests {
             changes.updated_order.after.status_reason(),
             Some(SpotOrderStatusReason::CanceledByUser)
         );
-        assert_eq!(changes.updated_principal_reservation.after.remaining_amount, 0);
-        assert_eq!(changes.updated_fee_reservation.after.remaining_amount, 0);
+        assert_eq!(changes.updated_order.after.reservation.remaining_amount, 0);
+        assert_eq!(changes.updated_order.after.fee_reservation.remaining_amount, 0);
         assert!(!changes.created_balance_ledger_entries.is_empty());
         assert!(!changes.to_replayable_events().unwrap().is_empty());
     }
@@ -1756,19 +1551,9 @@ mod tests {
     fn validate_rejects_branch_mismatch() {
         let family = SpotOrderV2UseCaseFamilyV3;
         let order = buy_order(SpotOrderTimeInForce::Gtc);
-        let principal = taker_principal(&order);
-        let fee = reservation(
-            &order.order_id(),
-            &order.account_id(),
-            ReservationKind::SpotBuyFeeQuote,
-            "USDT",
-            1,
-        );
         let balances = vec![balance("buyer", "USDT", 1000, 201)];
         let state = SpotOrderV2GivenStateV3::Cancel {
             order: order.clone(),
-            principal_reservation: principal.clone(),
-            fee_reservation: fee.clone(),
             balances: balances.clone(),
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
