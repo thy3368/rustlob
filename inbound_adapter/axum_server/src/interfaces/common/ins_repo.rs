@@ -5,6 +5,7 @@ use base_types::account::balance::Balance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use base_types::spot_topic::SpotTopic;
 use db_repo::MySqlDbRepo;
+use diff::ChangeLog;
 use lob_repo::adapter::distributed_lob_repo::DistributedLobRepo;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::adapter::local_lob_impl::LocalLob;
@@ -21,10 +22,12 @@ use push::push::subscription_service::SubscriptionService;
 use rust_queue::queue::queue::Queue;
 use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
 use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+use spot_behavior::proc::behavior::v2::spot_trade_behavior::SpotTradeCmdOrQuery;
+use spot_behavior::proc::v2::processor::kafka::event_publisher::{EventPublisher, PublishError};
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
-use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade::SpotTradeBehaviorV4Impl;
 
 use crate::interfaces::spot::websocket::md_sse_controller::SpotMarketDataSSEImpl;
 use crate::interfaces::spot::websocket::ud_sse_controller::SpotUserDataSSEImpl;
@@ -80,11 +83,6 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
 });
 
 use rust_queue::queue::queue_impl::kafka_queue::KafkaConfig;
-use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig as SpotKafkaConfig;
-use spot_behavior::proc::v2::actor::spot_trade_k_line_stage::SpotKLineStage;
-use spot_behavior::proc::v2::actor::spot_trade_match_stage::SpotMatchStage;
-use spot_behavior::proc::v2::actor::spot_trade_push_stage::SpotPushStage;
-use spot_behavior::proc::v2::actor::spot_trade_settlement_stage::SpotSettlementStage;
 
 // Kafka 队列配置：10分区 3副本
 static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
@@ -108,26 +106,59 @@ static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
 // Arc<EmbeddedLobRepo<SpotOrder>>
 //
 
+struct NoopEventPublisher;
+
+impl EventPublisher for NoopEventPublisher {
+    fn publish_command(&self, _log: &SpotTradeCmdOrQuery) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_order_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_balance_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_trade_log(&self, _log: &ChangeLog) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_order_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_balance_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
+        Ok(())
+    }
+
+    fn publish_trade_logs(&self, _logs: &[ChangeLog]) -> Result<(), PublishError> {
+        Ok(())
+    }
+}
+
+static NOOP_EVENT_PUBLISHER: Lazy<Arc<dyn EventPublisher>> =
+    Lazy::new(|| Arc::new(NoopEventPublisher));
+
 // 核心服务单例（直接包装在 Arc 中）
-static SPOT_TRADE_BEHAVIOR_V2_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Lazy::new(|| {
-    Arc::new(SpotTradeBehaviorV2Impl::new(
+static SPOT_TRADE_BEHAVIOR_V4_EMBEDDED: Lazy<Arc<SpotTradeBehaviorV4Impl>> = Lazy::new(|| {
+    Arc::new(SpotTradeBehaviorV4Impl::new(
         BALANCE_REPO.clone(),
         TRADE_REPO.clone(),
         ORDER_REPO.clone(),
-        USER_DATA_REPO.clone(),
-        MARKET_DATA_REPO.clone(),
         EMBEDDED_LOB_REPO.clone(),
+        NOOP_EVENT_PUBLISHER.clone(),
     ))
 });
 
-static SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV2Impl>> = Lazy::new(|| {
-    Arc::new(SpotTradeBehaviorV2Impl::new(
+static SPOT_TRADE_BEHAVIOR_V4_DISTRIBUTED: Lazy<Arc<SpotTradeBehaviorV4Impl>> = Lazy::new(|| {
+    Arc::new(SpotTradeBehaviorV4Impl::new(
         BALANCE_REPO.clone(),
         TRADE_REPO.clone(),
         ORDER_REPO.clone(),
-        USER_DATA_REPO.clone(),
-        MARKET_DATA_REPO.clone(),
         DISTRIBUTED_LOB_REPO.clone(),
+        NOOP_EVENT_PUBLISHER.clone(),
     ))
 });
 
@@ -150,33 +181,12 @@ static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =
 static SPOT_USER_DATA_SSE_IMPL: Lazy<Arc<SpotUserDataSSEImpl>> =
     Lazy::new(|| Arc::new(SpotUserDataSSEImpl::new()));
 
-// Stage 单例（Kafka 事件驱动流程）
-static SPOT_MATCH_STAGE: Lazy<Arc<SpotMatchStage>> = Lazy::new(|| {
-    let kafka_config = SpotKafkaConfig::default_local();
-    SpotMatchStage::create_and_start(SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(), kafka_config)
-});
-
-static SPOT_K_LINE_STAGE: Lazy<Arc<SpotKLineStage>> = Lazy::new(|| {
-    let kafka_config = SpotKafkaConfig::default_local();
-    SpotKLineStage::create_and_start(K_LINE_SERVICE.clone(), kafka_config)
-});
-
-static SPOT_PUSH_STAGE: Lazy<Arc<SpotPushStage>> = Lazy::new(|| {
-    let kafka_config = SpotKafkaConfig::default_local();
-    SpotPushStage::create_and_start(PUSH_SERVICE.clone(), kafka_config)
-});
-
-static SPOT_SETTLEMENT_STAGE: Lazy<Arc<SpotSettlementStage>> = Lazy::new(|| {
-    let kafka_config = SpotKafkaConfig::default_local();
-    SpotSettlementStage::create_and_start(SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone(), kafka_config)
-});
-
-pub fn get_spot_trade_behavior_v2_embedded() -> Arc<SpotTradeBehaviorV2Impl> {
-    SPOT_TRADE_BEHAVIOR_V2_EMBEDDED.clone()
+pub fn get_spot_trade_behavior_v4_embedded() -> Arc<SpotTradeBehaviorV4Impl> {
+    SPOT_TRADE_BEHAVIOR_V4_EMBEDDED.clone()
 }
 
-pub fn get_spot_trade_behavior_v2_distributed() -> Arc<SpotTradeBehaviorV2Impl> {
-    SPOT_TRADE_BEHAVIOR_V2_DISTRIBUTED.clone()
+pub fn get_spot_trade_behavior_v4_distributed() -> Arc<SpotTradeBehaviorV4Impl> {
+    SPOT_TRADE_BEHAVIOR_V4_DISTRIBUTED.clone()
 }
 
 pub fn get_spot_market_data_service() -> Arc<SpotMarketDataImpl> {
@@ -240,21 +250,4 @@ pub fn get_user_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> {
 
 pub fn get_market_data_repo() -> Arc<MySqlDbRepo<SpotOrder>> {
     MARKET_DATA_REPO.clone()
-}
-
-// Stage 访问方法
-pub fn get_spot_match_stage() -> Arc<SpotMatchStage> {
-    SPOT_MATCH_STAGE.clone()
-}
-
-pub fn get_spot_k_line_stage() -> Arc<SpotKLineStage> {
-    SPOT_K_LINE_STAGE.clone()
-}
-
-pub fn get_spot_push_stage() -> Arc<SpotPushStage> {
-    SPOT_PUSH_STAGE.clone()
-}
-
-pub fn get_spot_settlement_stage() -> Arc<SpotSettlementStage> {
-    SPOT_SETTLEMENT_STAGE.clone()
 }

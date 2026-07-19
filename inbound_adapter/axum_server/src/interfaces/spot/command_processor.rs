@@ -1,14 +1,7 @@
-use std::sync::Arc;
-
 use axum::Router;
 use axum::routing::{get, post};
-use base_types::account::balance::Balance;
 use base_types::actor_x::ActorX;
-use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use db_repo::MySqlDbRepo;
 use immutable_derive::immutable;
-use lob_repo::adapter::distributed_lob_repo::DistributedLobRepo;
-use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataCmdAny, SpotMarketDataResAny,
 };
@@ -21,12 +14,10 @@ use spot_behavior::proc::behavior::v2::spot_user_data_behavior::{
 use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
     SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny,
 };
-use spot_behavior::proc::v2::actor::kafka_config::KafkaConfig;
-use spot_behavior::proc::v2::actor::spot_trade_acquiring_stage::SpotAcquiringStage;
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
-use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade_v2::SpotTradeBehaviorV2Impl;
+use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade::SpotTradeBehaviorV4Impl;
 
 use crate::interfaces::common::http_handler_util::handle_generic;
 use crate::interfaces::common::ins_repo;
@@ -42,7 +33,7 @@ impl CommandProcessor {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
 
         // 使用 id_repo 中的单例服务
-        let trade_v2_service = ins_repo::get_spot_trade_behavior_v2_distributed();
+        let trade_v2_service = ins_repo::get_spot_trade_behavior_v4_distributed();
         let market_data_service = ins_repo::get_spot_market_data_service();
         let user_data_service = ins_repo::get_spot_user_data_service();
         let listen_key_service = ins_repo::get_spot_user_data_listen_key_service();
@@ -51,7 +42,7 @@ impl CommandProcessor {
             .route(
                 "/api/spot/v2/",
                 post(
-                    handle_generic::<SpotTradeBehaviorV2Impl, SpotTradeCmdOrQuery, SpotTradeResAny>,
+                    handle_generic::<SpotTradeBehaviorV4Impl, SpotTradeCmdOrQuery, SpotTradeResAny>,
                 ),
             )
             .with_state(trade_v2_service);
@@ -122,13 +113,7 @@ impl CommandProcessor {
         // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
 
         // 使用 id_repo 中的单例服务
-        let trade_v2_behavior = ins_repo::get_spot_trade_behavior_v2_embedded();
-        let kafka_config = KafkaConfig::default_local();
-        let trade_v2_service = Arc::new(SpotAcquiringStage::new(trade_v2_behavior, kafka_config));
-
-        // 启动 SpotAcquiringStage
-        trade_v2_service.start();
-        tracing::info!("✅ SpotAcquiringStage started");
+        let trade_v2_service = ins_repo::get_spot_trade_behavior_v4_embedded();
 
         let market_data_service = ins_repo::get_spot_market_data_service();
         let user_data_service = ins_repo::get_spot_user_data_service();
@@ -136,7 +121,9 @@ impl CommandProcessor {
         let trade_v2_routes = Router::new()
             .route(
                 "/api/spot/v2/",
-                post(handle_generic::<SpotAcquiringStage, SpotTradeCmdOrQuery, SpotTradeResAny>),
+                post(
+                    handle_generic::<SpotTradeBehaviorV4Impl, SpotTradeCmdOrQuery, SpotTradeResAny>,
+                ),
             )
             .with_state(trade_v2_service);
 
@@ -191,19 +178,6 @@ impl CommandProcessor {
         let push_service = ins_repo::get_push_service();
         push_service.start();
         tracing::info!("✅ Push service started");
-
-        // 初始化并启动所有 Stage（Kafka 事件驱动流程）
-        let _match_stage = ins_repo::get_spot_match_stage();
-        tracing::info!("✅ SpotMatchStage started");
-
-        let _kline_stage = ins_repo::get_spot_k_line_stage();
-        tracing::info!("✅ SpotKLineStage started");
-
-        let _push_stage = ins_repo::get_spot_push_stage();
-        tracing::info!("✅ SpotPushStage started");
-
-        let _settlement_stage = ins_repo::get_spot_settlement_stage();
-        tracing::info!("✅ SpotSettlementStage started");
 
         Ok(())
     }
