@@ -36,6 +36,17 @@ pub struct PlaceSpotOrderV2CmdV3 {
     pub cloid: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceSpotOrderV2TakerTemplateContextV3<'a> {
+    pub order_id: String,
+    pub symbol: String,
+    pub settlement_balances: &'a [Balance],
+    pub base_asset_id: String,
+    pub quote_asset_id: String,
+    pub maker_fee_bps: u64,
+    pub taker_fee_bps: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CancelSpotOrderV2CmdV3 {
     pub party_id: String,
@@ -645,6 +656,20 @@ impl SpotOrderV2UseCaseFamilyV3 {
     }
 }
 
+/// Build the authoritative taker order template required by
+/// [`SpotOrderV2GivenStateV3::Place`].
+///
+/// Adapter layers provide market context and already-loaded balances; this helper owns the
+/// command-to-order derivation, including order id, symbol, balance entity ids, TIF, fee bps, and
+/// the principal / fee reservations embedded in [`SpotOrderV2`].
+pub fn build_place_spot_order_v2_taker_template_v3(
+    cmd: &PlaceSpotOrderV2CmdV3,
+    context: PlaceSpotOrderV2TakerTemplateContextV3<'_>,
+) -> Result<SpotOrderV2, SpotOrderV2UseCaseFamilyV3Error> {
+    let input = place_input_from_context(cmd, &context)?;
+    Ok(SpotOrderV2::place(input)?.order)
+}
+
 fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
     match side {
         SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
@@ -688,29 +713,53 @@ fn place_input_from_cmd(
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<PlaceSpotOrderV2Input, SpotOrderV2UseCaseFamilyV3Error> {
+    place_input_from_context(
+        cmd,
+        &PlaceSpotOrderV2TakerTemplateContextV3 {
+            order_id: template.order_id().to_string(),
+            symbol: template.symbol().to_string(),
+            settlement_balances,
+            base_asset_id: base_asset_id.to_string(),
+            quote_asset_id: quote_asset_id.to_string(),
+            maker_fee_bps,
+            taker_fee_bps,
+        },
+    )
+}
+
+fn place_input_from_context(
+    cmd: &PlaceSpotOrderV2CmdV3,
+    context: &PlaceSpotOrderV2TakerTemplateContextV3<'_>,
+) -> Result<PlaceSpotOrderV2Input, SpotOrderV2UseCaseFamilyV3Error> {
     let side = if cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
     let price = parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?;
     let qty = parse_positive_u64(&cmd.size, SpotOrderV2UseCaseFamilyV3Error::InvalidSize)?;
-    let base_balance_entity_id =
-        balance_entity_id_for_account_asset(settlement_balances, &cmd.party_id, base_asset_id)?;
-    let quote_balance_entity_id =
-        balance_entity_id_for_account_asset(settlement_balances, &cmd.party_id, quote_asset_id)?;
+    let base_balance_entity_id = balance_entity_id_for_account_asset(
+        context.settlement_balances,
+        &cmd.party_id,
+        &context.base_asset_id,
+    )?;
+    let quote_balance_entity_id = balance_entity_id_for_account_asset(
+        context.settlement_balances,
+        &cmd.party_id,
+        &context.quote_asset_id,
+    )?;
 
     Ok(PlaceSpotOrderV2Input {
-        order_id: template.order_id().to_string(),
+        order_id: context.order_id.clone(),
         asset: cmd.asset,
         account_id: cmd.party_id.clone(),
-        symbol: template.symbol().to_string(),
+        symbol: context.symbol.clone(),
         side,
         execution: SpotOrderExecution::Limit { price },
         time_in_force: parse_tif(&cmd.tif)?,
         qty,
-        base_asset_id: base_asset_id.to_string(),
-        quote_asset_id: quote_asset_id.to_string(),
+        base_asset_id: context.base_asset_id.clone(),
+        quote_asset_id: context.quote_asset_id.clone(),
         base_balance_entity_id,
         quote_balance_entity_id,
-        maker_fee_bps,
-        taker_fee_bps,
+        maker_fee_bps: context.maker_fee_bps,
+        taker_fee_bps: context.taker_fee_bps,
         client_order_id: cmd.cloid.clone(),
     })
 }
@@ -1278,7 +1327,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter};
+    use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2};
 
     use super::*;
     use crate::entity::spot::spot_order_v2::test_principal_reservation;

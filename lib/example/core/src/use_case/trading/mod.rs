@@ -53,16 +53,14 @@ pub use derivatives::{
 };
 pub use spot::place_order::{
     PlaceConditionalOrderCmd, PlaceConditionalOrderOutput, PlaceConditionalOrderState,
-    PlaceConditionalOrderUseCase, PlaceImmediateOrderChanges, PlaceImmediateOrderCmd,
-    PlaceImmediateOrderCmd as PlaceOrderCmd, PlaceImmediateOrderExecution,
-    PlaceImmediateOrderState, PlaceImmediateOrderState as PlaceOrderState,
-    PlaceImmediateOrderUseCase, PlaceImmediateOrderUseCase as PlaceOrderUseCase, PlaceOrderError,
-    PlaceOrderExecution, PlaceOrderSide, PlaceOrderTimeInForce, PlaceOrderTriggerRole,
+    PlaceConditionalOrderUseCase, PlaceOrderError, PlaceOrderExecution, PlaceOrderSide,
+    PlaceOrderTimeInForce, PlaceOrderTriggerRole,
 };
 pub use spot::{
     CancelSpotOrderV2AfterChangesV3, CancelSpotOrderV2ChangesV3, CancelSpotOrderV2CmdV3,
     CancelSpotOrderV2LookupV3, PlaceSpotOrderV2AfterChangesV3, PlaceSpotOrderV2ChangesV3,
-    PlaceSpotOrderV2CmdV3, SpotOrderV2AfterChangesV3, SpotOrderV2CaseChangesV3,
-    SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
-    SpotOrderV2UseCaseFamilyV3Error,
+    PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3, SpotOrderV2AfterChangesV3,
+    SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
+    SpotOrderV2UseCaseFamilyV3, SpotOrderV2UseCaseFamilyV3Error,
+    build_place_spot_order_v2_taker_template_v3,
 };

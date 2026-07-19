@@ -1,3 +1,5 @@
+use common_entity::MiStateMachineV2Unchecked;
+
 use super::test_support::sample_cmd;
 use super::*;
 

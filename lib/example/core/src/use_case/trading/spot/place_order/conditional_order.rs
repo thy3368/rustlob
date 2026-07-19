@@ -1,5 +1,5 @@
-use cmd_handler::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
-use common_entity::Entity;
+use cmd_handler::command_use_case_def2::IssuedByParty;
+use common_entity::{Entity, EntityReplayableEvent, MiStateMachineV2Unchecked, ReplayableChanges};
 
 use super::{
     PlaceOrderError, PlaceOrderExecution, PlaceOrderSide, PlaceOrderTriggerRole,
@@ -90,18 +90,28 @@ pub struct PlaceConditionalOrderOutput {
     pub order: SpotConditionalOrder,
 }
 
+impl ReplayableChanges for PlaceConditionalOrderOutput {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        Ok(vec![self.order.track_create_event()?])
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceConditionalOrderUseCase;
 
-impl CommandUseCase3 for PlaceConditionalOrderUseCase {
+impl PlaceConditionalOrderUseCase {
+    pub fn role(&self) -> &'static str {
+        "Trader"
+    }
+}
+
+impl MiStateMachineV2Unchecked for PlaceConditionalOrderUseCase {
     type Command = PlaceConditionalOrderCmd;
     type GivenState = PlaceConditionalOrderState;
     type Error = PlaceOrderError;
-    type Output = PlaceConditionalOrderOutput;
-
-    fn role(&self) -> &'static str {
-        "Trader"
-    }
+    type AfterChanges = PlaceConditionalOrderOutput;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         check_common_command(cmd.side, cmd.quantity)?;
@@ -115,7 +125,7 @@ impl CommandUseCase3 for PlaceConditionalOrderUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -131,11 +141,11 @@ impl CommandUseCase3 for PlaceConditionalOrderUseCase {
         )
     }
 
-    fn compute_output_and_events(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
+        state: &Self::GivenState,
+    ) -> Result<Self::AfterChanges, Self::Error> {
         let qty = cmd.qty()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
 
@@ -153,13 +163,8 @@ impl CommandUseCase3 for PlaceConditionalOrderUseCase {
             qty,
             cmd.client_order_id.clone(),
         );
-        let order_event =
-            order.track_create_event().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
-        Ok(UseCaseOutput {
-            output: PlaceConditionalOrderOutput { order },
-            events: vec![order_event],
-        })
+        Ok(PlaceConditionalOrderOutput { order })
     }
 }
 

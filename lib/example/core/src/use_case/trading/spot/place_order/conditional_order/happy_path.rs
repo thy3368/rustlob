@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::CommandUseCase3;
+use common_entity::{MiStateMachineV2, MiStateMachineV2Unchecked, ReplayableChanges};
 
 use super::test_support::{event_field, sample_cmd, sample_state};
 use super::*;
@@ -19,19 +19,19 @@ fn pre_check_accepts_market_execution() {
 }
 
 #[test]
-fn validate_against_state_does_not_require_available_quote() {
+fn validate_against_given_state_does_not_require_available_quote() {
     let use_case = PlaceConditionalOrderUseCase;
     let state = sample_state();
 
-    let result = use_case.validate_against_state(&sample_cmd(), &state);
+    let result = use_case.validate_against_given_state(&sample_cmd(), &state);
     assert_eq!(result, Ok(()));
 }
 
 #[test]
-fn compute_output_and_events_only_creates_order() -> Result<(), PlaceOrderError> {
+fn compute_after_changes_only_creates_order() -> Result<(), PlaceOrderError> {
     let use_case = PlaceConditionalOrderUseCase;
-    let result = use_case.compute_output_and_events(&sample_cmd(), sample_state())?;
-    let events = result.events;
+    let result = use_case.compute_after_changes(&sample_cmd(), &sample_state())?;
+    let events = result.to_replayable_events().map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
     assert_eq!(events.len(), 1);
     assert!(events[0].is_created());
@@ -40,9 +40,9 @@ fn compute_output_and_events_only_creates_order() -> Result<(), PlaceOrderError>
     assert_eq!(field_as_u64(&events[0], "trigger_price"), Some(90));
     assert_eq!(event_field(&events[0], "trigger_role"), Some("stop_loss"));
     assert_eq!(event_field(&events[0], "execution"), Some("market"));
-    assert_eq!(result.output.order.trigger_order_id, "trader-1-BTCUSDT-7");
-    assert_eq!(result.output.order.trigger_price, 90);
-    assert_eq!(result.output.order.client_order_id, None);
+    assert_eq!(result.order.trigger_order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(result.order.trigger_price, 90);
+    assert_eq!(result.order.client_order_id, None);
 
     Ok(())
 }
