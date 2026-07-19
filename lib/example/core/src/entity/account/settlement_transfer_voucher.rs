@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityUseCaseApiSurface, FinancialClassification, FourColorArchetype,
+    EntityUseCaseApiSurface, FieldDiff, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -169,6 +169,28 @@ impl SettlementTransferLeg {
     }
 }
 
+impl FieldDiff for SettlementTransferLeg {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![
+            EntityFieldChange::new("leg_id", "", self.leg_id.clone()),
+            EntityFieldChange::new("from_account_id", "", self.from_account_id.clone()),
+            EntityFieldChange::new("to_account_id", "", self.to_account_id.clone()),
+            EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
+            EntityFieldChange::new("amount", "", self.amount.to_string()),
+            EntityFieldChange::new("purpose", "", self.purpose.as_str()),
+            EntityFieldChange::new(
+                "balance_ledger_entry_id",
+                "",
+                self.balance_ledger_entry_id.clone(),
+            ),
+        ]
+    }
+
+    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+        Vec::new()
+    }
+}
+
 impl Entity for SettlementTransferLeg {
     type Id = String;
 
@@ -191,27 +213,6 @@ impl Entity for SettlementTransferLeg {
     fn entity_version(&self) -> u64 {
         1
     }
-
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![
-            EntityFieldChange::new("leg_id", "", self.leg_id.clone()),
-            EntityFieldChange::new("from_account_id", "", self.from_account_id.clone()),
-            EntityFieldChange::new("to_account_id", "", self.to_account_id.clone()),
-            EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
-            EntityFieldChange::new("amount", "", self.amount.to_string()),
-            EntityFieldChange::new("purpose", "", self.purpose.as_str()),
-            EntityFieldChange::new(
-                "balance_ledger_entry_id",
-                "",
-                self.balance_ledger_entry_id.clone(),
-            ),
-        ]
-    }
-
-    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
-    }
-
     fn replay_field_type(field_name: &str) -> u8 {
         if field_name == "amount" { 1 } else { 0 }
     }
@@ -528,41 +529,7 @@ enum TransferDirection {
     Received,
 }
 
-impl Entity for SettlementTransferVoucher {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.voucher_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE
-    }
-
-    fn four_color_archetype() -> FourColorArchetype {
-        FourColorArchetype::MomentInterval
-    }
-
-    fn mutation_model() -> EntityMutationModel {
-        EntityMutationModel::AppendOnlyRecord
-    }
-
-    fn aggregate_role() -> AggregateRole {
-        AggregateRole::AggregateRoot
-    }
-
-    fn financial_classification() -> FinancialClassification {
-        FinancialClassification::AccountingVoucher
-    }
-
-    fn use_case_api_surface() -> EntityUseCaseApiSurface {
-        EntityUseCaseApiSurface::MinimalBusinessApi
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for SettlementTransferVoucher {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         let mut changes = vec![
             EntityFieldChange::new("voucher_id", "", self.voucher_id.clone()),
@@ -619,7 +586,42 @@ impl Entity for SettlementTransferVoucher {
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
+}
 
+impl Entity for SettlementTransferVoucher {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.voucher_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE
+    }
+
+    fn four_color_archetype() -> FourColorArchetype {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn mutation_model() -> EntityMutationModel {
+        EntityMutationModel::AppendOnlyRecord
+    }
+
+    fn aggregate_role() -> AggregateRole {
+        AggregateRole::AggregateRoot
+    }
+
+    fn financial_classification() -> FinancialClassification {
+        FinancialClassification::AccountingVoucher
+    }
+
+    fn use_case_api_surface() -> EntityUseCaseApiSurface {
+        EntityUseCaseApiSurface::MinimalBusinessApi
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         if matches!(field_name, "leg_count")
             || (field_name.starts_with("leg_") && field_name.ends_with("_amount"))

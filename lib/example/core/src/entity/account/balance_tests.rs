@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange};
+use common_entity::{Entity, EntityFieldChange, FieldDiff};
 use serde_json::json;
 
 use super::balance::Balance;

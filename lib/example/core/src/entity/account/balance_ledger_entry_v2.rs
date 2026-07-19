@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
     FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
@@ -312,37 +312,7 @@ impl BalanceLedgerEntryV2 {
     }
 }
 
-impl Entity for BalanceLedgerEntryV2 {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.entry_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        BALANCE_LEDGER_ENTRY_ENTITY_TYPE
-    }
-
-    fn four_color_archetype() -> FourColorArchetype {
-        FourColorArchetype::MomentInterval
-    }
-
-    fn mutation_model() -> EntityMutationModel {
-        EntityMutationModel::AppendOnlyRecord
-    }
-
-    fn aggregate_role() -> AggregateRole {
-        AggregateRole::AggregateRoot
-    }
-
-    fn financial_classification() -> FinancialClassification {
-        FinancialClassification::LedgerEntry
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for BalanceLedgerEntryV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("entry_id", "", self.entry_id.clone()),
@@ -399,7 +369,38 @@ impl Entity for BalanceLedgerEntryV2 {
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
+}
 
+impl Entity for BalanceLedgerEntryV2 {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.entry_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        BALANCE_LEDGER_ENTRY_ENTITY_TYPE
+    }
+
+    fn four_color_archetype() -> FourColorArchetype {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn mutation_model() -> EntityMutationModel {
+        EntityMutationModel::AppendOnlyRecord
+    }
+
+    fn aggregate_role() -> AggregateRole {
+        AggregateRole::AggregateRoot
+    }
+
+    fn financial_classification() -> FinancialClassification {
+        FinancialClassification::LedgerEntry
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "entry_id"

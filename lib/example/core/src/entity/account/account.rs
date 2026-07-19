@@ -1,4 +1,6 @@
-use common_entity::{AggregateRole, Entity, EntityError, EntityFieldChange, FourColorArchetype};
+use common_entity::{
+    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FourColorArchetype,
+};
 use serde::{Deserialize, Serialize};
 
 const ACCOUNT_ENTITY_TYPE: u8 = 1;
@@ -103,6 +105,31 @@ impl Account {
     }
 }
 
+impl FieldDiff for Account {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![
+            EntityFieldChange::new("account_id", "", self.account_id.clone()),
+            EntityFieldChange::new("user_id", "", self.user_id.clone()),
+            EntityFieldChange::new("status", "", self.status.as_str()),
+        ]
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let mut changes = Vec::new();
+        if self.user_id != other.user_id {
+            changes.push(EntityFieldChange::new("user_id", &self.user_id, &other.user_id));
+        }
+        if self.status != other.status {
+            changes.push(EntityFieldChange::new(
+                "status",
+                self.status.as_str(),
+                other.status.as_str(),
+            ));
+        }
+        changes
+    }
+}
+
 impl Entity for Account {
     type Id = String;
 
@@ -131,30 +158,6 @@ impl Entity for Account {
     fn entity_version(&self) -> u64 {
         self.version
     }
-
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![
-            EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("user_id", "", self.user_id.clone()),
-            EntityFieldChange::new("status", "", self.status.as_str()),
-        ]
-    }
-
-    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
-        if self.user_id != other.user_id {
-            changes.push(EntityFieldChange::new("user_id", &self.user_id, &other.user_id));
-        }
-        if self.status != other.status {
-            changes.push(EntityFieldChange::new(
-                "status",
-                self.status.as_str(),
-                other.status.as_str(),
-            ));
-        }
-        changes
-    }
-
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "account_id" | "user_id" | "status" => 0,

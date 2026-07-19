@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -189,21 +189,7 @@ impl Balance {
     }
 }
 
-impl Entity for Balance {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        format!("{}:{}", self.account_id, self.asset_id)
-    }
-
-    fn entity_type() -> u8 {
-        BALANCE_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for Balance {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
@@ -250,7 +236,22 @@ impl Entity for Balance {
         }
         changes
     }
+}
 
+impl Entity for Balance {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        format!("{}:{}", self.account_id, self.asset_id)
+    }
+
+    fn entity_type() -> u8 {
+        BALANCE_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "account_id" | "asset_id" | "identifier" => 0,
