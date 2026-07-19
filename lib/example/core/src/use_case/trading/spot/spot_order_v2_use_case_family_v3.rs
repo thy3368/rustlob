@@ -296,35 +296,9 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 if &placed != taker_order {
                     return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
                 }
-                validate_reservation_for_order(
-                    taker_order,
-                    &taker_order.reservation,
-                    expected_principal_kind_for(taker_order.side()),
-                    base_asset_id,
-                    quote_asset_id,
-                )?;
-                validate_reservation_for_order(
-                    taker_order,
-                    &taker_order.fee_reservation,
-                    expected_fee_kind_for(taker_order.side()),
-                    quote_asset_id,
-                    quote_asset_id,
-                )?;
+                validate_all_reservations_for_order(taker_order, base_asset_id, quote_asset_id)?;
                 for maker in maker_orders {
-                    validate_reservation_for_order(
-                        maker,
-                        &maker.reservation,
-                        expected_principal_kind_for(maker.side()),
-                        base_asset_id,
-                        quote_asset_id,
-                    )?;
-                    validate_reservation_for_order(
-                        maker,
-                        &maker.fee_reservation,
-                        expected_fee_kind_for(maker.side()),
-                        quote_asset_id,
-                        quote_asset_id,
-                    )?;
+                    validate_all_reservations_for_order(maker, base_asset_id, quote_asset_id)?;
                 }
                 taker_order.ensure_matchable()?;
                 Ok(())
@@ -346,20 +320,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                         &order.reservation,
                     )?,
                 })?;
-                validate_reservation_for_order(
-                    order,
-                    &order.reservation,
-                    expected_principal_kind_for(order.side()),
-                    base_asset_id,
-                    quote_asset_id,
-                )?;
-                validate_reservation_for_order(
-                    order,
-                    &order.fee_reservation,
-                    expected_fee_kind_for(order.side()),
-                    quote_asset_id,
-                    quote_asset_id,
-                )?;
+                validate_all_reservations_for_order(order, base_asset_id, quote_asset_id)?;
                 Ok(())
             }
             _ => Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch),
@@ -384,35 +345,32 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                     maker_fee_bps,
                     taker_fee_bps,
                 },
-            ) => self.compute_place_after(
-                place_cmd,
+            ) => self.compute_place_after(PlaceAfterContext {
+                cmd: place_cmd,
                 taker_order,
                 maker_orders,
                 settlement_balances,
                 base_asset_id,
                 quote_asset_id,
                 fee_account_id,
-                *maker_fee_bps,
-                *taker_fee_bps,
-            ),
+                maker_fee_bps: *maker_fee_bps,
+                taker_fee_bps: *taker_fee_bps,
+            }),
             (
                 SpotOrderV2CommandV3::Cancel(_),
                 SpotOrderV2GivenStateV3::Cancel {
                     order,
                     balances,
-                    base_asset_id,
-                    quote_asset_id,
                     maker_fee_bps,
                     taker_fee_bps,
+                    ..
                 },
-            ) => self.compute_cancel_after(
+            ) => self.compute_cancel_after(CancelAfterContext {
                 order,
                 balances,
-                base_asset_id,
-                quote_asset_id,
-                *maker_fee_bps,
-                *taker_fee_bps,
-            ),
+                maker_fee_bps: *maker_fee_bps,
+                taker_fee_bps: *taker_fee_bps,
+            }),
             _ => Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch),
         }
     }
@@ -458,33 +416,43 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
     }
 }
 
+struct PlaceAfterContext<'a> {
+    cmd: &'a PlaceSpotOrderV2CmdV3,
+    taker_order: &'a SpotOrderV2,
+    maker_orders: &'a [SpotOrderV2],
+    settlement_balances: &'a [Balance],
+    base_asset_id: &'a str,
+    quote_asset_id: &'a str,
+    fee_account_id: &'a str,
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
+}
+
+struct CancelAfterContext<'a> {
+    order: &'a SpotOrderV2,
+    balances: &'a [Balance],
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
+}
+
 impl SpotOrderV2UseCaseFamilyV3 {
-    #[allow(clippy::too_many_arguments)]
     fn compute_place_after(
         &self,
-        cmd: &PlaceSpotOrderV2CmdV3,
-        taker_order: &SpotOrderV2,
-        maker_orders: &[SpotOrderV2],
-        settlement_balances: &[Balance],
-        base_asset_id: &str,
-        quote_asset_id: &str,
-        fee_account_id: &str,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
+        context: PlaceAfterContext<'_>,
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
-        let mut maker_orders_after = maker_orders.to_vec();
-        let mut balance_book = BalanceMap::new(settlement_balances);
+        let mut maker_orders_after = context.maker_orders.to_vec();
+        let mut balance_book = BalanceMap::new(context.settlement_balances);
         let place_input = place_input_from_cmd(
-            cmd,
-            taker_order,
-            settlement_balances,
-            base_asset_id,
-            quote_asset_id,
-            maker_fee_bps,
-            taker_fee_bps,
+            context.cmd,
+            context.taker_order,
+            context.settlement_balances,
+            context.base_asset_id,
+            context.quote_asset_id,
+            context.maker_fee_bps,
+            context.taker_fee_bps,
         )?;
         let place_outcome = SpotOrderV2::place(place_input)?;
-        if place_outcome.order != *taker_order {
+        if place_outcome.order != *context.taker_order {
             return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
         }
         let mut taker_after = place_outcome.order;
@@ -495,7 +463,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
         let mut created_trades = Vec::new();
         let mut created_vouchers = Vec::new();
 
-        match spot_order_v2_matching_decision(taker_order, maker_orders.first())? {
+        match spot_order_v2_matching_decision(context.taker_order, context.maker_orders.first())? {
             SpotOrderV2MatchingDecision::Rest => {
                 return Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
                     taker_order_after: taker_after,
@@ -512,8 +480,8 @@ impl SpotOrderV2UseCaseFamilyV3 {
                     &mut taker_after,
                     &mut balance_book,
                     &mut created_balance_ledger_entries,
-                    maker_fee_bps,
-                    taker_fee_bps,
+                    context.maker_fee_bps,
+                    context.taker_fee_bps,
                 )?;
                 return Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
                     taker_order_after: taker_after,
@@ -532,8 +500,8 @@ impl SpotOrderV2UseCaseFamilyV3 {
             &mut maker_orders_after,
             MatchSpotOrderV2Input {
                 match_id: format!("spot-match:{}", taker_after.order_id()),
-                maker_fee_bps,
-                taker_fee_bps,
+                maker_fee_bps: context.maker_fee_bps,
+                taker_fee_bps: context.taker_fee_bps,
             },
         )?;
         let mut total_taker_fill = 0_u64;
@@ -580,20 +548,22 @@ impl SpotOrderV2UseCaseFamilyV3 {
                 .derive_spot_settlement_transfer_voucher_with_fees(
                     format!("spot-voucher:{}", trade.trade_id),
                     settlement_id.clone(),
-                    base_asset_id,
-                    quote_asset_id,
-                    fee_account_id.to_string(),
+                    context.base_asset_id,
+                    context.quote_asset_id,
+                    context.fee_account_id.to_string(),
                 )
                 .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
 
             apply_trade_balance_effects(
                 &trade,
-                &settlement_id,
-                base_asset_id,
-                quote_asset_id,
-                fee_account_id,
-                &mut balance_book,
-                &mut created_balance_ledger_entries,
+                TradeBalanceEffectsContext {
+                    settlement_id: &settlement_id,
+                    base_asset_id: context.base_asset_id,
+                    quote_asset_id: context.quote_asset_id,
+                    fee_account_id: context.fee_account_id,
+                    balance_book: &mut balance_book,
+                    ledger_entries: &mut created_balance_ledger_entries,
+                },
             )?;
 
             created_trades.push(trade);
@@ -610,8 +580,8 @@ impl SpotOrderV2UseCaseFamilyV3 {
             &mut taker_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            maker_fee_bps,
-            taker_fee_bps,
+            context.maker_fee_bps,
+            context.taker_fee_bps,
         )?;
 
         Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
@@ -624,22 +594,19 @@ impl SpotOrderV2UseCaseFamilyV3 {
         }))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn compute_cancel_after(
         &self,
-        order: &SpotOrderV2,
-        balances: &[Balance],
-        _base_asset_id: &str,
-        _quote_asset_id: &str,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
+        context: CancelAfterContext<'_>,
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
-        let mut order_after = order.clone();
-        let mut balance_book = BalanceMap::new(balances);
+        let mut order_after = context.order.clone();
+        let mut balance_book = BalanceMap::new(context.balances);
         let mut created_balance_ledger_entries = Vec::new();
 
         let cancel_outcome = order_after.cancel(CancelSpotOrderV2Input {
-            balance_entity_id: balance_entity_id_for_reservation(balances, &order.reservation)?,
+            balance_entity_id: balance_entity_id_for_reservation(
+                context.balances,
+                &context.order.reservation,
+            )?,
         })?;
         let unfreeze_ledger_entry =
             apply_behavior_ledger_entry(cancel_outcome.unfreeze_ledger_entry, &mut balance_book)?;
@@ -649,8 +616,8 @@ impl SpotOrderV2UseCaseFamilyV3 {
             &mut order_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
-            maker_fee_bps,
-            taker_fee_bps,
+            context.maker_fee_bps,
+            context.taker_fee_bps,
         )?;
 
         Ok(SpotOrderV2AfterChangesV3::Cancel(CancelSpotOrderV2AfterChangesV3 {
@@ -821,6 +788,27 @@ fn validate_reservation_for_order(
     Ok(())
 }
 
+fn validate_all_reservations_for_order(
+    order: &SpotOrderV2,
+    base_asset_id: &str,
+    quote_asset_id: &str,
+) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
+    validate_reservation_for_order(
+        order,
+        &order.reservation,
+        expected_principal_kind_for(order.side()),
+        base_asset_id,
+        quote_asset_id,
+    )?;
+    validate_reservation_for_order(
+        order,
+        &order.fee_reservation,
+        expected_fee_kind_for(order.side()),
+        base_asset_id,
+        quote_asset_id,
+    )
+}
+
 fn principal_consume_amount_for_taker(
     order: &SpotOrderV2,
     trade_qty: u64,
@@ -858,7 +846,11 @@ fn consume_reservation(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+enum OrderReservationSlot {
+    Principal,
+    Fee,
+}
+
 fn release_remaining_for_terminal(
     order_after: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
@@ -869,62 +861,29 @@ fn release_remaining_for_terminal(
     let requirements = order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
 
     if let Some(requirement) = requirements.principal {
-        let release_amount = order_after.reservation.remaining_amount.min(requirement.amount);
-        if release_amount > 0 {
-            let close_reason = match requirement.reason {
-                crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
-                crate::SpotOrderReleaseReason::IocUnfilled => {
-                    ReservationCloseReason::IocRemainderCanceled
-                }
-                crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
-                crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
-            };
-            let after = order_after
-                .reservation
-                .release(release_amount, Some(close_reason))
-                .map_err(map_reservation_error_to_family)?;
-            let asset_id = after.asset_id.clone();
-            order_after.reservation = after;
-            release_to_balance(
-                order_after,
-                &asset_id,
-                release_amount,
-                balance_book,
-                ledger_entries,
-            )?;
-        }
+        release_order_reservation(
+            order_after,
+            OrderReservationSlot::Principal,
+            requirement.amount,
+            reservation_close_reason_for_order_release(requirement.reason),
+            balance_book,
+            ledger_entries,
+        )?;
     }
 
     if let Some(requirement) = requirements.fee {
-        let release_amount = order_after.fee_reservation.remaining_amount.min(requirement.amount);
-        if release_amount > 0 {
-            let close_reason = match requirement.reason {
-                crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
-                crate::SpotOrderReleaseReason::IocUnfilled => {
-                    ReservationCloseReason::IocRemainderCanceled
-                }
-                crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
-                crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
-            };
-            let after = order_after
-                .fee_reservation
-                .release(release_amount, Some(close_reason))
-                .map_err(map_reservation_error_to_family)?;
-            let asset_id = after.asset_id.clone();
-            order_after.fee_reservation = after;
-            release_to_balance(
-                order_after,
-                &asset_id,
-                release_amount,
-                balance_book,
-                ledger_entries,
-            )?;
-        }
+        release_order_reservation(
+            order_after,
+            OrderReservationSlot::Fee,
+            requirement.amount,
+            reservation_close_reason_for_order_release(requirement.reason),
+            balance_book,
+            ledger_entries,
+        )?;
     }
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn release_remaining_for_cancel(
     order: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
@@ -933,18 +892,54 @@ fn release_remaining_for_cancel(
     taker_fee_bps: u64,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     if let Some(requirement) = order.fee_hold_requirement(maker_fee_bps, taker_fee_bps) {
-        let release_amount = order.fee_reservation.remaining_amount.min(requirement.amount);
-        if release_amount > 0 {
-            let after = order
-                .fee_reservation
-                .release(release_amount, Some(ReservationCloseReason::Canceled))
-                .map_err(map_reservation_error_to_family)?;
-            let asset_id = after.asset_id.clone();
-            order.fee_reservation = after;
-            release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)?;
-        }
+        release_order_reservation(
+            order,
+            OrderReservationSlot::Fee,
+            requirement.amount,
+            ReservationCloseReason::Canceled,
+            balance_book,
+            ledger_entries,
+        )?;
     }
     Ok(())
+}
+
+fn reservation_close_reason_for_order_release(
+    reason: crate::SpotOrderReleaseReason,
+) -> ReservationCloseReason {
+    match reason {
+        crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
+        crate::SpotOrderReleaseReason::IocUnfilled => ReservationCloseReason::IocRemainderCanceled,
+        crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
+        crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
+    }
+}
+
+fn release_order_reservation(
+    order: &mut SpotOrderV2,
+    slot: OrderReservationSlot,
+    max_amount: u64,
+    close_reason: ReservationCloseReason,
+    balance_book: &mut BalanceMap,
+    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
+    let (asset_id, release_amount) = {
+        let reservation = match slot {
+            OrderReservationSlot::Principal => &mut order.reservation,
+            OrderReservationSlot::Fee => &mut order.fee_reservation,
+        };
+        let release_amount = reservation.remaining_amount.min(max_amount);
+        if release_amount == 0 {
+            return Ok(());
+        }
+        let after = reservation
+            .release(release_amount, Some(close_reason))
+            .map_err(map_reservation_error_to_family)?;
+        let asset_id = after.asset_id.clone();
+        *reservation = after;
+        (asset_id, release_amount)
+    };
+    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
 }
 
 fn release_to_balance(
@@ -1017,6 +1012,32 @@ fn apply_balance_ledger_entry(
     Ok(entry)
 }
 
+struct BalanceLedgerDraft {
+    operation: BalanceLedgerOperation,
+    entry_id: String,
+    account_id: String,
+    asset_id: String,
+    amount: u64,
+    reason: BalanceLedgerReason,
+}
+
+fn push_applied_balance_ledger_entry(
+    balance_book: &mut BalanceMap,
+    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    draft: BalanceLedgerDraft,
+) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
+    let balance = balance_book.get_mut(&draft.account_id, &draft.asset_id)?;
+    let entry = apply_balance_ledger_entry(
+        draft.operation,
+        draft.entry_id,
+        balance,
+        draft.amount,
+        draft.reason,
+    )?;
+    ledger_entries.push(entry);
+    Ok(())
+}
+
 fn apply_behavior_ledger_entry(
     mut entry: BalanceLedgerEntryV2,
     balance_book: &mut BalanceMap,
@@ -1026,18 +1047,21 @@ fn apply_behavior_ledger_entry(
     Ok(entry)
 }
 
-#[allow(clippy::too_many_arguments)]
+struct TradeBalanceEffectsContext<'a> {
+    settlement_id: &'a str,
+    base_asset_id: &'a str,
+    quote_asset_id: &'a str,
+    fee_account_id: &'a str,
+    balance_book: &'a mut BalanceMap,
+    ledger_entries: &'a mut Vec<BalanceLedgerEntryV2>,
+}
+
 fn apply_trade_balance_effects(
     trade: &SpotTrade,
-    settlement_id: &str,
-    base_asset_id: &str,
-    quote_asset_id: &str,
-    fee_account_id: &str,
-    balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    context: TradeBalanceEffectsContext<'_>,
 ) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
     let trade_ids = vec![trade.trade_id.clone()];
-    let settlement_ids = vec![settlement_id.to_string()];
+    let settlement_ids = vec![context.settlement_id.to_string()];
 
     let buyer_receive_base_reason = BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
         trade_ids: trade_ids.clone(),
@@ -1061,101 +1085,117 @@ fn apply_trade_balance_effects(
     let buyer_account_id = trade.buyer_account_id().to_string();
     let seller_account_id = trade.seller_account_id().to_string();
 
-    {
-        let balance = balance_book.get_mut(&buyer_account_id, base_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::CreditAvailable,
-            format!("balance-ledger:{}:buyer-base", settlement_id),
-            balance,
-            trade.qty,
-            buyer_receive_base_reason,
-        )?);
-    }
-    {
-        let balance = balance_book.get_mut(&buyer_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::DebitFrozen,
-            format!("balance-ledger:{}:buyer-quote", settlement_id),
-            balance,
-            quote_notional,
-            buyer_release_quote_reason,
-        )?);
-    }
-    {
-        let balance = balance_book.get_mut(&seller_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::CreditAvailable,
-            format!("balance-ledger:{}:seller-quote", settlement_id),
-            balance,
-            quote_notional,
-            seller_receive_quote_reason,
-        )?);
-    }
-    {
-        let balance = balance_book.get_mut(&seller_account_id, base_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::DebitFrozen,
-            format!("balance-ledger:{}:seller-base", settlement_id),
-            balance,
-            trade.qty,
-            seller_release_base_reason,
-        )?);
-    }
+    push_applied_balance_ledger_entry(
+        context.balance_book,
+        context.ledger_entries,
+        BalanceLedgerDraft {
+            operation: BalanceLedgerOperation::CreditAvailable,
+            entry_id: format!("balance-ledger:{}:buyer-base", context.settlement_id),
+            account_id: buyer_account_id.clone(),
+            asset_id: context.base_asset_id.to_string(),
+            amount: trade.qty,
+            reason: buyer_receive_base_reason,
+        },
+    )?;
+    push_applied_balance_ledger_entry(
+        context.balance_book,
+        context.ledger_entries,
+        BalanceLedgerDraft {
+            operation: BalanceLedgerOperation::DebitFrozen,
+            entry_id: format!("balance-ledger:{}:buyer-quote", context.settlement_id),
+            account_id: buyer_account_id.clone(),
+            asset_id: context.quote_asset_id.to_string(),
+            amount: quote_notional,
+            reason: buyer_release_quote_reason,
+        },
+    )?;
+    push_applied_balance_ledger_entry(
+        context.balance_book,
+        context.ledger_entries,
+        BalanceLedgerDraft {
+            operation: BalanceLedgerOperation::CreditAvailable,
+            entry_id: format!("balance-ledger:{}:seller-quote", context.settlement_id),
+            account_id: seller_account_id.clone(),
+            asset_id: context.quote_asset_id.to_string(),
+            amount: quote_notional,
+            reason: seller_receive_quote_reason,
+        },
+    )?;
+    push_applied_balance_ledger_entry(
+        context.balance_book,
+        context.ledger_entries,
+        BalanceLedgerDraft {
+            operation: BalanceLedgerOperation::DebitFrozen,
+            entry_id: format!("balance-ledger:{}:seller-base", context.settlement_id),
+            account_id: seller_account_id.clone(),
+            asset_id: context.base_asset_id.to_string(),
+            amount: trade.qty,
+            reason: seller_release_base_reason,
+        },
+    )?;
     if let Some((buyer_fee_account_id, buyer_fee_amount)) = fee_payer_for_buyer(trade) {
-        let balance = balance_book.get_mut(&buyer_fee_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::DebitFrozen,
-            format!("balance-ledger:{}:buyer-fee", settlement_id),
-            balance,
-            buyer_fee_amount,
-            BalanceLedgerReason::SettleSpotTrade {
-                trade_id: trade.trade_id.clone(),
-                match_id: trade.match_id.clone(),
-                settlement_batch_id: settlement_id.to_string(),
-                purpose: SettlementTransferPurpose::TradingFee,
+        let reason = BalanceLedgerReason::SettleSpotTrade {
+            trade_id: trade.trade_id.clone(),
+            match_id: trade.match_id.clone(),
+            settlement_batch_id: context.settlement_id.to_string(),
+            purpose: SettlementTransferPurpose::TradingFee,
+        };
+        push_applied_balance_ledger_entry(
+            context.balance_book,
+            context.ledger_entries,
+            BalanceLedgerDraft {
+                operation: BalanceLedgerOperation::DebitFrozen,
+                entry_id: format!("balance-ledger:{}:buyer-fee", context.settlement_id),
+                account_id: buyer_fee_account_id,
+                asset_id: context.quote_asset_id.to_string(),
+                amount: buyer_fee_amount,
+                reason: reason.clone(),
             },
-        )?);
-        let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::CreditAvailable,
-            format!("balance-ledger:{}:buyer-fee-recv", settlement_id),
-            fee_balance,
-            buyer_fee_amount,
-            BalanceLedgerReason::SettleSpotTrade {
-                trade_id: trade.trade_id.clone(),
-                match_id: trade.match_id.clone(),
-                settlement_batch_id: settlement_id.to_string(),
-                purpose: SettlementTransferPurpose::TradingFee,
+        )?;
+        push_applied_balance_ledger_entry(
+            context.balance_book,
+            context.ledger_entries,
+            BalanceLedgerDraft {
+                operation: BalanceLedgerOperation::CreditAvailable,
+                entry_id: format!("balance-ledger:{}:buyer-fee-recv", context.settlement_id),
+                account_id: context.fee_account_id.to_string(),
+                asset_id: context.quote_asset_id.to_string(),
+                amount: buyer_fee_amount,
+                reason,
             },
-        )?);
+        )?;
     }
     if let Some((seller_fee_account_id, seller_fee_amount)) = fee_payer_for_seller(trade) {
-        let balance = balance_book.get_mut(&seller_fee_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::DebitFrozen,
-            format!("balance-ledger:{}:seller-fee", settlement_id),
-            balance,
-            seller_fee_amount,
-            BalanceLedgerReason::SettleSpotTrade {
-                trade_id: trade.trade_id.clone(),
-                match_id: trade.match_id.clone(),
-                settlement_batch_id: settlement_id.to_string(),
-                purpose: SettlementTransferPurpose::TradingFee,
+        let reason = BalanceLedgerReason::SettleSpotTrade {
+            trade_id: trade.trade_id.clone(),
+            match_id: trade.match_id.clone(),
+            settlement_batch_id: context.settlement_id.to_string(),
+            purpose: SettlementTransferPurpose::TradingFee,
+        };
+        push_applied_balance_ledger_entry(
+            context.balance_book,
+            context.ledger_entries,
+            BalanceLedgerDraft {
+                operation: BalanceLedgerOperation::DebitFrozen,
+                entry_id: format!("balance-ledger:{}:seller-fee", context.settlement_id),
+                account_id: seller_fee_account_id,
+                asset_id: context.quote_asset_id.to_string(),
+                amount: seller_fee_amount,
+                reason: reason.clone(),
             },
-        )?);
-        let fee_balance = balance_book.get_mut(fee_account_id, quote_asset_id)?;
-        ledger_entries.push(apply_balance_ledger_entry(
-            BalanceLedgerOperation::CreditAvailable,
-            format!("balance-ledger:{}:seller-fee-recv", settlement_id),
-            fee_balance,
-            seller_fee_amount,
-            BalanceLedgerReason::SettleSpotTrade {
-                trade_id: trade.trade_id.clone(),
-                match_id: trade.match_id.clone(),
-                settlement_batch_id: settlement_id.to_string(),
-                purpose: SettlementTransferPurpose::TradingFee,
+        )?;
+        push_applied_balance_ledger_entry(
+            context.balance_book,
+            context.ledger_entries,
+            BalanceLedgerDraft {
+                operation: BalanceLedgerOperation::CreditAvailable,
+                entry_id: format!("balance-ledger:{}:seller-fee-recv", context.settlement_id),
+                account_id: context.fee_account_id.to_string(),
+                asset_id: context.quote_asset_id.to_string(),
+                amount: seller_fee_amount,
+                reason,
             },
-        )?);
+        )?;
     }
     Ok(())
 }

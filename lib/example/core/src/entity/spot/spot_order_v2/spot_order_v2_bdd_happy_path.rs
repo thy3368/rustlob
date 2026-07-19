@@ -73,12 +73,14 @@ fn fill_moves_order_to_partially_filled_and_filled() -> Result<(), SpotOrderV2Ma
 }
 
 #[test]
-fn cancel_by_user_marks_order_canceled() -> Result<(), SpotOrderV2MatchError> {
+fn cancel_marks_order_canceled() -> Result<(), SpotOrderV2BehaviorError> {
     // Given：订单仍处于可撤状态。
     let mut order = buy_order();
 
     // When：用户主动撤单。
-    order.cancel_by_user()?;
+    order.cancel(CancelSpotOrderV2Input {
+        balance_entity_id: "balance:trader-1:USDT".to_string(),
+    })?;
 
     // Then：订单标记为用户撤销。
     assert_eq!(order.status, SpotOrderStatus::Canceled);
