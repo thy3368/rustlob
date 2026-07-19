@@ -73,12 +73,7 @@ impl InMemoryDemoApp {
         let deposit_quote_outbound = InMemoryDepositQuoteOutbound::from_store(store.clone());
         let withdraw_quote_outbound = InMemoryWithdrawQuoteOutbound::from_store(store.clone());
 
-        Ok(Self {
-            store,
-            place_order_outbound,
-            deposit_quote_outbound,
-            withdraw_quote_outbound,
-        })
+        Ok(Self { store, place_order_outbound, deposit_quote_outbound, withdraw_quote_outbound })
     }
 
     fn snapshot(&self) -> Result<StoreSnapshot, StoreError> {
