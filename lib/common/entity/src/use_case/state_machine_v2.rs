@@ -38,7 +38,7 @@
 //!
 //! ```rust
 //! use entity::{
-//!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
+//!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent, FieldDiff,
 //!     MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter,
 //!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
 //! };
@@ -84,21 +84,7 @@
 //!     }
 //! }
 //!
-//! impl Entity for Order {
-//!     type Id = i64;
-//!
-//!     fn entity_id(&self) -> Self::Id {
-//!         self.id
-//!     }
-//!
-//!     fn entity_type() -> u8 {
-//!         31
-//!     }
-//!
-//!     fn entity_version(&self) -> u64 {
-//!         self.version
-//!     }
-//!
+//! impl FieldDiff for Order {
 //!     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
 //!         let mut changes = Vec::new();
 //!         if self.status != other.status {
@@ -116,6 +102,22 @@
 //!             ));
 //!         }
 //!         changes
+//!     }
+//! }
+//!
+//! impl Entity for Order {
+//!     type Id = i64;
+//!
+//!     fn entity_id(&self) -> Self::Id {
+//!         self.id
+//!     }
+//!
+//!     fn entity_type() -> u8 {
+//!         31
+//!     }
+//!
+//!     fn entity_version(&self) -> u64 {
+//!         self.version
 //!     }
 //!
 //!     fn replay_field_type(field_name: &str) -> u8 {
@@ -148,6 +150,20 @@
 //!     }
 //! }
 //!
+//! impl FieldDiff for CashBalance {
+//!     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+//!         if self.available == other.available {
+//!             Vec::new()
+//!         } else {
+//!             vec![EntityFieldChange::new(
+//!                 "available",
+//!                 self.available.to_string(),
+//!                 other.available.to_string(),
+//!             )]
+//!         }
+//!     }
+//! }
+//!
 //! impl Entity for CashBalance {
 //!     type Id = i64;
 //!
@@ -161,18 +177,6 @@
 //!
 //!     fn entity_version(&self) -> u64 {
 //!         self.version
-//!     }
-//!
-//!     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-//!         if self.available == other.available {
-//!             Vec::new()
-//!         } else {
-//!             vec![EntityFieldChange::new(
-//!                 "available",
-//!                 self.available.to_string(),
-//!                 other.available.to_string(),
-//!             )]
-//!         }
 //!     }
 //!
 //!     fn replay_field_type(field_name: &str) -> u8 {
@@ -202,21 +206,7 @@
 //!     }
 //! }
 //!
-//! impl Entity for BalanceHold {
-//!     type Id = i64;
-//!
-//!     fn entity_id(&self) -> Self::Id {
-//!         self.id
-//!     }
-//!
-//!     fn entity_type() -> u8 {
-//!         33
-//!     }
-//!
-//!     fn entity_version(&self) -> u64 {
-//!         self.version
-//!     }
-//!
+//! impl FieldDiff for BalanceHold {
 //!     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
 //!         let mut changes = Vec::new();
 //!         if self.reserved != other.reserved {
@@ -234,6 +224,22 @@
 //!             ));
 //!         }
 //!         changes
+//!     }
+//! }
+//!
+//! impl Entity for BalanceHold {
+//!     type Id = i64;
+//!
+//!     fn entity_id(&self) -> Self::Id {
+//!         self.id
+//!     }
+//!
+//!     fn entity_type() -> u8 {
+//!         33
+//!     }
+//!
+//!     fn entity_version(&self) -> u64 {
+//!         self.version
 //!     }
 //!
 //!     fn replay_field_type(field_name: &str) -> u8 {

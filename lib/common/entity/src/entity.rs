@@ -231,8 +231,21 @@ pub struct MiCausalSourceMetadata {
     pub source_role: &'static str,
 }
 
+/// 可复用的字段级 diff 契约。
+///
+/// 纯值对象可以只实现该 trait 来复用 [`EntityFieldChange`] 表达字段变化；
+/// 只有需要 identity、version、replay、audit 或生命周期语义的对象才应实现 [`Entity`]。
+pub trait FieldDiff {
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
+
+    #[inline]
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        Vec::new()
+    }
+}
+
 /// Enhanced entity contract for generating compact replayable entity events.
-pub trait Entity: Clone + Debug + Send + Sync + 'static {
+pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
 
     fn entity_id(&self) -> Self::Id;
@@ -362,13 +375,6 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
     }
 
     fn entity_version(&self) -> u64;
-
-    fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
-
-    #[inline]
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        Vec::new()
-    }
 
     #[inline]
     fn replay_field_type(_field_name: &str) -> u8 {
@@ -514,6 +520,16 @@ mod tests {
         version: u64,
     }
 
+    impl FieldDiff for TestEntity {
+        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+            let mut changes = Vec::new();
+            if self.value != other.value {
+                changes.push(EntityFieldChange::new("value", &self.value, &other.value));
+            }
+            changes
+        }
+    }
+
     impl Entity for TestEntity {
         type Id = i64;
 
@@ -527,14 +543,6 @@ mod tests {
 
         fn entity_version(&self) -> u64 {
             self.version
-        }
-
-        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-            let mut changes = Vec::new();
-            if self.value != other.value {
-                changes.push(EntityFieldChange::new("value", &self.value, &other.value));
-            }
-            changes
         }
 
         fn replay_field_type(field_name: &str) -> u8 {
@@ -551,6 +559,12 @@ mod tests {
         version: u64,
     }
 
+    impl FieldDiff for StringIdEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
+    }
+
     impl Entity for StringIdEntity {
         type Id = String;
 
@@ -565,16 +579,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct MomentIntervalEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for MomentIntervalEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for MomentIntervalEntity {
@@ -598,16 +614,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct AppendOnlyEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for AppendOnlyEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for AppendOnlyEntity {
@@ -631,16 +649,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct AggregateRootEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for AggregateRootEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for AggregateRootEntity {
@@ -664,16 +684,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct AggregateMemberEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for AggregateMemberEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for AggregateMemberEntity {
@@ -697,16 +719,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct MinimalBusinessApiEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for MinimalBusinessApiEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for MinimalBusinessApiEntity {
@@ -730,16 +754,18 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
-
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
-        }
     }
 
     #[derive(Debug, Clone)]
     struct AccountingVoucherEntity {
         id: i64,
         version: u64,
+    }
+
+    impl FieldDiff for AccountingVoucherEntity {
+        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+            Vec::new()
+        }
     }
 
     impl Entity for AccountingVoucherEntity {
@@ -763,9 +789,32 @@ mod tests {
         fn entity_version(&self) -> u64 {
             self.version
         }
+    }
 
-        fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-            Vec::new()
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct PriceAmount {
+        amount: u64,
+        scale: u8,
+    }
+
+    impl FieldDiff for PriceAmount {
+        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+            let mut changes = Vec::new();
+            if self.amount != other.amount {
+                changes.push(EntityFieldChange::new(
+                    "amount",
+                    self.amount.to_string(),
+                    other.amount.to_string(),
+                ));
+            }
+            if self.scale != other.scale {
+                changes.push(EntityFieldChange::new(
+                    "scale",
+                    self.scale.to_string(),
+                    other.scale.to_string(),
+                ));
+            }
+            changes
         }
     }
 
@@ -886,6 +935,26 @@ mod tests {
         assert_eq!(AggregateRole::Unclassified.as_str(), "unclassified");
         assert_eq!(AggregateRole::AggregateRoot.as_str(), "aggregate_root");
         assert_eq!(AggregateRole::AggregateMember.as_str(), "aggregate_member");
+    }
+
+    #[test]
+    fn field_diff_defaults_to_no_created_field_changes() {
+        let value_object = PriceAmount { amount: 100, scale: 2 };
+
+        assert!(value_object.created_field_changes().is_empty());
+    }
+
+    #[test]
+    fn value_object_can_reuse_field_diff_without_entity_identity() {
+        let old = PriceAmount { amount: 100, scale: 2 };
+        let new = PriceAmount { amount: 125, scale: 2 };
+
+        let changes = old.diff(&new);
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].field_name.as_ref(), "amount");
+        assert_eq!(changes[0].old_value, "100");
+        assert_eq!(changes[0].new_value, "125");
     }
 
     #[test]

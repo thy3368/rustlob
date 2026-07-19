@@ -7,7 +7,8 @@ mod entity_field_change;
 mod use_case;
 pub use entity::{
     AggregateRole, Entity, EntityMutationModel, EntityUseCaseApiPolicy, EntityUseCaseApiSurface,
-    FinancialClassification, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
+    FieldDiff, FinancialClassification, FourColorArchetype, MiCausalRelation,
+    MiCausalSourceMetadata,
 };
 pub use entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
