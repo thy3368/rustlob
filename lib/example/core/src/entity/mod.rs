@@ -11,7 +11,8 @@ pub mod account;
 pub use account::account::{Account, AccountStatus};
 pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerOperation,
+    BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
+    BalanceLedgerOperation,
 };
 pub use account::balance_ledger_reason::BalanceLedgerReason;
 pub use account::settlement_transfer_voucher::{
@@ -68,7 +69,9 @@ pub use spot_entity::spot_order_primitives::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
 pub use spot_entity::spot_order_v2::{
+    CancelSpotOrderV2Input, CancelSpotOrderV2Outcome, MatchSpotOrderV2Input,
+    MatchSpotOrderV2Outcome, PlaceSpotOrderV2Input, PlaceSpotOrderV2Outcome,
     SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
-    SpotOrderV2MatchError, SpotTradeFeeRole,
+    SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotTradeFeeRole,
 };

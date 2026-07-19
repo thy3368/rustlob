@@ -10,8 +10,14 @@ use super::spot_order_primitives::{
     SpotOrderTimeInForce, option_status_reason_value, option_u64_value, push_change,
     stable_order_entity_id,
 };
-use crate::entity::{Reservation, ReservationError, ReservationKind, ReservationMarketKind};
+use super::spot_trade::SpotTrade;
+use crate::entity::{
+    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
+    ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
+};
 
+#[cfg(test)]
+mod spot_order_v2_bdd_behavior_methods;
 #[cfg(test)]
 mod spot_order_v2_bdd_happy_path;
 
@@ -186,6 +192,137 @@ pub enum SpotOrderV2MatchError {
     QuoteNotionalUnavailable,
 }
 
+/// 下单行为输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceSpotOrderV2Input {
+    /// 本系统生成的稳定订单 ID。
+    pub order_id: String,
+    /// Hyperliquid 现货资产编号。
+    pub asset: u32,
+    /// 拥有该订单的交易账户 ID。
+    pub account_id: String,
+    /// 交易对展示名。
+    pub symbol: String,
+    /// 买卖方向。
+    pub side: SpotOrderSide,
+    /// 执行意图。
+    pub execution: SpotOrderExecution,
+    /// 订单有效方式。
+    pub time_in_force: SpotOrderTimeInForce,
+    /// base 计价下单数量。
+    pub qty: u64,
+    /// base 资产 ID。
+    pub base_asset_id: String,
+    /// quote 资产 ID。
+    pub quote_asset_id: String,
+    /// base 余额实体 ID。
+    pub base_balance_entity_id: String,
+    /// quote 余额实体 ID。
+    pub quote_balance_entity_id: String,
+    /// 客户端自定义订单 ID。
+    pub client_order_id: Option<String>,
+}
+
+/// 下单行为结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceSpotOrderV2Outcome {
+    /// 新创建的订单聚合。
+    pub order: SpotOrderV2,
+    /// 本次下单直接派生的冻结流水。
+    pub freeze_ledger_entry: BalanceLedgerEntryV2,
+}
+
+/// 撮合行为输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchSpotOrderV2Input {
+    /// 一次撮合批次 ID。
+    pub match_id: String,
+    /// maker 手续费 bps。
+    pub maker_fee_bps: u64,
+    /// taker 手续费 bps。
+    pub taker_fee_bps: u64,
+}
+
+/// 撮合行为结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchSpotOrderV2Outcome {
+    /// 本次撮合直接派生的成交事实。
+    pub trades: Vec<SpotTrade>,
+}
+
+/// 撤单行为输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CancelSpotOrderV2Input {
+    /// 被释放冻结余额对应的余额实体 ID。
+    pub balance_entity_id: String,
+}
+
+/// 撤单行为结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CancelSpotOrderV2Outcome {
+    /// 本次撤单直接派生的解冻流水。
+    pub unfreeze_ledger_entry: BalanceLedgerEntryV2,
+}
+
+/// `SpotOrderV2` 三个聚合行为入口的业务错误。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SpotOrderV2BehaviorError {
+    /// 下单数量必须大于零。
+    #[error("spot order quantity must be greater than zero")]
+    InvalidQuantity,
+    /// 下单价格必须大于零。
+    #[error("spot order price must be greater than zero")]
+    InvalidPrice,
+    /// 订单当前生命周期状态不允许继续撮合。
+    #[error("order is not matchable")]
+    OrderNotMatchable,
+    /// 订单当前生命周期状态不允许用户撤单。
+    #[error("order is not cancelable")]
+    OrderNotCancelable,
+    /// maker 和 taker 不能是同一张订单。
+    #[error("maker order must not be the taker order")]
+    MakerIsTaker,
+    /// maker 和 taker 必须方向相反。
+    #[error("maker order has the same side as taker")]
+    SameSideMaker,
+    /// maker 必须是限价单。
+    #[error("maker order must be a limit order")]
+    MakerMustBeLimit,
+    /// maker 和 taker 必须交易同一现货 asset。
+    #[error("maker order trades a different asset")]
+    AssetMismatch,
+    /// maker 和 taker 必须交易同一展示交易对。
+    #[error("maker order trades a different symbol")]
+    SymbolMismatch,
+    /// 订单行为推导发生整数溢出。
+    #[error("arithmetic overflow while deriving spot order behavior")]
+    ArithmeticOverflow,
+    /// principal reservation 行为失败。
+    #[error("reservation behavior failed: {0}")]
+    Reservation(#[from] ReservationError),
+    /// 余额流水派生失败。
+    #[error("balance ledger entry derivation failed: {0}")]
+    BalanceLedger(#[from] BalanceLedgerEntryV2Error),
+}
+
+impl From<SpotOrderV2MatchError> for SpotOrderV2BehaviorError {
+    fn from(error: SpotOrderV2MatchError) -> Self {
+        match error {
+            SpotOrderV2MatchError::InconsistentExecutionState
+            | SpotOrderV2MatchError::OrderNotMatchable
+            | SpotOrderV2MatchError::NoTradesMatched
+            | SpotOrderV2MatchError::QuoteNotionalUnavailable => Self::OrderNotMatchable,
+            SpotOrderV2MatchError::OrderNotCancelable => Self::OrderNotCancelable,
+            SpotOrderV2MatchError::MakerIsTaker => Self::MakerIsTaker,
+            SpotOrderV2MatchError::SameSideMaker => Self::SameSideMaker,
+            SpotOrderV2MatchError::MakerMustBeLimit => Self::MakerMustBeLimit,
+            SpotOrderV2MatchError::AssetMismatch => Self::AssetMismatch,
+            SpotOrderV2MatchError::SymbolMismatch => Self::SymbolMismatch,
+            SpotOrderV2MatchError::ArithmeticOverflow => Self::ArithmeticOverflow,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SpotOrderFinalization {
     pub(crate) next_filled_qty: u64,
@@ -298,6 +435,84 @@ impl SpotOrderV2 {
             client_order_id,
             version,
         }
+    }
+
+    /// 可 BDD 规格化的聚合根行为：创建现货订单并派生冻结流水。
+    ///
+    /// 该方法只创建订单聚合和下游余额流水单据，不执行余额落账。
+    pub(crate) fn place(
+        input: PlaceSpotOrderV2Input,
+    ) -> Result<PlaceSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
+        if input.qty == 0 {
+            return Err(SpotOrderV2BehaviorError::InvalidQuantity);
+        }
+
+        let order_price = input.execution.order_price();
+        if order_price == 0 {
+            return Err(SpotOrderV2BehaviorError::InvalidPrice);
+        }
+
+        let quote_notional = input
+            .qty
+            .checked_mul(order_price)
+            .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
+        let (reserved_base, reserved_quote, freeze_asset_id, freeze_balance_entity_id, amount) =
+            match input.side {
+                SpotOrderSide::Buy => (
+                    0,
+                    quote_notional,
+                    input.quote_asset_id.clone(),
+                    input.quote_balance_entity_id.clone(),
+                    quote_notional,
+                ),
+                SpotOrderSide::Sell => (
+                    input.qty,
+                    0,
+                    input.base_asset_id.clone(),
+                    input.base_balance_entity_id.clone(),
+                    input.qty,
+                ),
+            };
+
+        let reservation = Self::principal_reservation(
+            input.order_id.as_str(),
+            input.account_id.as_str(),
+            input.side,
+            input.qty,
+            order_price,
+            input.base_asset_id.as_str(),
+            input.quote_asset_id.as_str(),
+        )?;
+        let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
+            format!("balance-ledger:freeze:{}", input.order_id),
+            input.account_id.clone(),
+            freeze_asset_id,
+            freeze_balance_entity_id,
+            amount,
+            BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
+        )?;
+
+        let order = Self::new(
+            input.order_id,
+            input.asset,
+            None,
+            input.account_id,
+            input.symbol,
+            input.side,
+            input.execution,
+            input.time_in_force,
+            input.qty,
+            0,
+            SpotOrderStatus::Open,
+            None,
+            reserved_base,
+            reserved_quote,
+            reservation,
+            input.client_order_id,
+            1,
+        );
+
+        Ok(PlaceSpotOrderV2Outcome { order, freeze_ledger_entry })
     }
 
     /// 为 spot 订单构造 principal reservation。
@@ -855,6 +1070,69 @@ impl SpotOrderV2 {
         self.fill(added_fill_qty)
     }
 
+    /// 可 BDD 规格化的聚合根行为：taker 按 maker 优先级数组逐笔撮合。
+    ///
+    /// 该方法推进 taker / maker 订单状态，并返回本次撮合直接派生的成交事实。
+    /// 没有 crossing maker 时返回空成交列表，由 use case 继续处理 TIF / ALO 规则。
+    pub(crate) fn match_with_makers(
+        &mut self,
+        makers: &mut [SpotOrderV2],
+        input: MatchSpotOrderV2Input,
+    ) -> Result<MatchSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
+        self.ensure_matchable()?;
+
+        let mut trades = Vec::new();
+        for maker in makers.iter_mut() {
+            let Some(terms) = spot_order_v2_next_trade_terms(self, maker)? else {
+                break;
+            };
+
+            let taker_fee = self
+                .fee_consume_requirement_for_trade(
+                    terms.trade_qty,
+                    terms.maker_price,
+                    SpotTradeFeeRole::Taker,
+                    input.maker_fee_bps,
+                    input.taker_fee_bps,
+                )?
+                .amount;
+            let maker_fee = maker
+                .fee_consume_requirement_for_trade(
+                    terms.trade_qty,
+                    terms.maker_price,
+                    SpotTradeFeeRole::Maker,
+                    input.maker_fee_bps,
+                    input.taker_fee_bps,
+                )?
+                .amount;
+            let trade = SpotTrade::new(
+                format!("{}-{}", input.match_id, trades.len() + 1),
+                input.match_id.clone(),
+                self.asset,
+                self.symbol.clone(),
+                self.order_id.clone(),
+                maker.order_id.clone(),
+                self.account_id.clone(),
+                maker.account_id.clone(),
+                self.side,
+                terms.maker_price,
+                terms.trade_qty,
+                taker_fee,
+                maker_fee,
+            );
+
+            maker.fill(terms.trade_qty)?;
+            self.fill(terms.trade_qty)?;
+            trades.push(trade);
+
+            if self.remaining_qty().ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)? == 0 {
+                break;
+            }
+        }
+
+        Ok(MatchSpotOrderV2Outcome { trades })
+    }
+
     /// 领域方法：按用户主动撤单语义关闭订单。
     ///
     /// 可 BDD 规格化的聚合根行为：可撤订单被用户主动撤销。
@@ -863,6 +1141,40 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2MatchError::OrderNotCancelable);
         }
         self.transition_to(SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::CanceledByUser))
+    }
+
+    /// 可 BDD 规格化的聚合根行为：撤销现货订单并派生解冻流水。
+    ///
+    /// 该方法只释放订单内 principal reservation，并返回下游余额流水单据；
+    /// 实际余额落账仍由 use case 编排。
+    pub(crate) fn cancel(
+        &mut self,
+        input: CancelSpotOrderV2Input,
+    ) -> Result<CancelSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
+        if !self.can_be_cancelled() {
+            return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
+        }
+
+        let release_amount = self.reservation.remaining_amount;
+        if release_amount == 0 {
+            return Err(SpotOrderV2BehaviorError::Reservation(ReservationError::InvalidAmount));
+        }
+
+        let released_reservation =
+            self.reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
+        let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
+            format!("balance-ledger:unfreeze:{}", self.order_id),
+            self.account_id.clone(),
+            self.reservation.asset_id.clone(),
+            input.balance_entity_id,
+            release_amount,
+            BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id.clone() },
+        )?;
+
+        self.cancel_by_user()?;
+        self.reservation = released_reservation;
+
+        Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry })
     }
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
