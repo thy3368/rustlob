@@ -1,7 +1,7 @@
 # Entity Method Constraints
 
 这是 entity 方法设计的 shared architecture policy。它不是
-`lib/common/entity/src/entity.rs` 或 `CommandUseCase6` 的代码事实源；分类事实仍以
+`lib/common/entity/src/entity.rs` 或 `MiStateMachineV2Unchecked` 的代码事实源；分类事实仍以
 `.agents/skills/shared/entity_four_color_classification.md` 为准，`use case` / `entity`
 边界事实仍以 `.agents/skills/shared/use_case_entity_constraints.md` 为准。
 
@@ -14,6 +14,7 @@ Split candidate entity methods into four buckets:
 
 - `Behavior Method` / `行为方法`
   - 创建、推进、关闭、取消、拒绝、消耗、释放、补偿等会改变业务生命周期或合法状态的方法。
+  - 也可以基于 entity / aggregate root 已稳定的业务事实，派生直接下游业务单据。
   - Aggregate-root behavior may coordinate multiple objects inside the same aggregate.
 - `Business Query Method` / `业务查询方法`
   - 回答身份、归属、资产、市场、状态、资格、可用量、剩余量、业务摘要、业务要求等事实的方法。
@@ -45,7 +46,9 @@ Allow a candidate to become an entity method only when it is one of these:
   eligible, expired, terminal, or otherwise self-consistent.
 - `Behavior Method`: applying fill, finishing after a match, canceling by user, rejecting under a
   named business reason, consuming or releasing a reservation, or another state-changing business
-  progression.
+  progression; it may also derive direct downstream business documents, such as order placement
+  deriving a freeze ledger entry, order matching deriving `SpotTrade`, or order cancellation
+  deriving an unfreeze ledger entry.
 - `Technical/Internal Method`: small calculations needed to implement public entity methods.
 
 Do not expose these as use-case-visible entity methods:
@@ -96,10 +99,12 @@ Do not expose these as use-case-visible entity methods:
   - `HyperliquidPerpTrade -> SettlementTransferVoucher`
   - `SettlementTransferVoucher -> BalanceLedgerEntryV2`
 - 这类方法属于有业务语义的单据派生方法，不是普通 getter，也不是 adapter glue。
+- 上游 entity 方法只能生成直接下游单据，不跨级生成间接单据，也不编排多个聚合。
 - 上游单据工厂方法只生成下游单据，不执行下游单据自身的状态应用行为。
 - 下游单据自身的不变量、构造校验、状态应用行为仍由下游单据负责。
 - 需要跨聚合状态修改、余额应用、持久化、发布时，由 `use case` 编排。
-- 不要把 `apply_to(balance)`、账户余额变更、仓位变更、外部发布等动作归入上游单据工厂方法。
+- 不要把 `apply_to(balance)`、账户余额变更、仓位变更、余额记账、外部发布、持久化等动作
+  归入上游单据工厂方法。
 
 ## Rustdoc Tags
 
@@ -138,6 +143,17 @@ For `lib/example/core/src/entity/reservation/model.rs`, keep the four-way split 
 This calibration matches the current `Reservation` implementation: public fields still exist for
 serialization/replay compatibility, while lifecycle progression goes through `new`, `consume`, and
 `release`.
+
+## SpotOrderV2 Calibration
+
+For `SpotOrderV2`, treat direct downstream document derivation as part of behavior methods, not as a
+separate fifth category:
+
+- `place`: creates a spot order and derives the direct downstream freeze ledger entry.
+- `match_with_makers`: advances taker/maker order state and derives direct downstream `SpotTrade`
+  documents.
+- `cancel`: cancels the order, releases its internal reservation, and derives the direct downstream
+  unfreeze ledger entry.
 
 ## Tests
 
