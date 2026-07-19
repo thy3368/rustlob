@@ -1,5 +1,4 @@
 mod cli;
-mod event;
 mod http;
 
 pub use cli::{
@@ -7,10 +6,6 @@ pub use cli::{
     PLACE_ORDER_CLI_DEFAULT_SYMBOL, PLACE_ORDER_CLI_DEFAULT_TRADER_ID, ParsePlaceOrderCliArgsError,
     PlaceOrderCliCommand, PlaceOrderCliResponse, parse_place_order_cli_args, place_order_cli_usage,
     run_place_order_cli,
-};
-pub use event::{
-    MatchSpotOrderEventRequest, SettleSpotTradeEventRequest, handle_spot_order_placed_event,
-    handle_spot_trade_matched_event,
 };
 pub(crate) use http::create_order_http_api_descriptor;
 pub use http::{

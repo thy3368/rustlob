@@ -218,8 +218,8 @@ mod tests {
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
         assert_eq!(response.reserved_quote, 300);
         assert_eq!(response.remaining_quote, 700);
-        assert_eq!(response.domain_event_count, 5);
-        assert_eq!(counts, (5, 5));
+        assert_eq!(response.domain_event_count, 4);
+        assert_eq!(counts, (4, 4));
 
         Ok(())
     }
@@ -252,6 +252,6 @@ mod tests {
         assert_eq!(body["order_id"], "trader-1-BTCUSDT-11");
         assert_eq!(body["reserved_quote"], 300);
         assert_eq!(body["remaining_quote"], 700);
-        assert_eq!(body["domain_event_count"], 5);
+        assert_eq!(body["domain_event_count"], 4);
     }
 }

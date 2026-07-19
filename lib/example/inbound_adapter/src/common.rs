@@ -3,15 +3,12 @@ use axum::response::{IntoResponse, Response};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
-    CommandUseCaseOutbound, ReplayableChanges, UseCaseChanges, UseCaseReplyMapper,
+    CommandUseCaseOutbound, UseCaseReplyMapper,
 };
 use example_core::{
-    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase,
-    MatchSpotOrderChanges, MatchSpotOrderCmd, MatchSpotOrderError, MatchSpotOrderState,
-    MatchSpotOrderUseCase, PlaceOrderCmd, PlaceOrderError, PlaceOrderState, PlaceOrderUseCase,
-    SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError, SettleSpotTradeState,
-    SettleSpotTradeUseCase, WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState,
-    WithdrawQuoteUseCase,
+    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, PlaceOrderCmd,
+    PlaceOrderError, PlaceOrderState, PlaceOrderUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
+    WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 pub use inbound_adapter_support::{
     ApiErrorBody as ExampleHttpErrorBody, ApiErrorResponse as ExampleHttpErrorResponse,
@@ -176,42 +173,6 @@ where
     OB::Error: 'static,
 {
     execute_with_mapper(&DepositQuoteUseCase, envelope, outbound, mapper)
-}
-
-pub(crate) fn execute_match_spot_order<OB>(
-    envelope: CommandEnvelope<MatchSpotOrderCmd>,
-    outbound: &OB,
-) -> Result<
-    UseCaseChanges<MatchSpotOrderChanges>,
-    CommandUseCaseExecutionError<MatchSpotOrderError, OB::Error>,
->
-where
-    OB: ?Sized
-        + Send
-        + Sync
-        + CommandUseCaseOutbound<Command = MatchSpotOrderCmd, State = MatchSpotOrderState>,
-    OB::Error: 'static,
-{
-    let executor = cmd_handler::command_use_case_def2::CommandUseCaseExecutor4;
-    executor.execute(&MatchSpotOrderUseCase, envelope, outbound, &())
-}
-
-pub(crate) fn execute_settle_spot_trade<OB>(
-    envelope: CommandEnvelope<SettleSpotTradeCmd>,
-    outbound: &OB,
-) -> Result<
-    UseCaseChanges<SettleSpotTradeChanges>,
-    CommandUseCaseExecutionError<SettleSpotTradeError, OB::Error>,
->
-where
-    OB: ?Sized
-        + Send
-        + Sync
-        + CommandUseCaseOutbound<Command = SettleSpotTradeCmd, State = SettleSpotTradeState>,
-    OB::Error: 'static,
-{
-    let executor = cmd_handler::command_use_case_def2::CommandUseCaseExecutor4;
-    executor.execute(&SettleSpotTradeUseCase, envelope, outbound, &())
 }
 
 pub(crate) fn execute_withdraw_quote_with_mapper<OB, M>(
