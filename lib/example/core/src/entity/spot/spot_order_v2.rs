@@ -328,13 +328,6 @@ impl From<SpotOrderV2MatchError> for SpotOrderV2BehaviorError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SpotOrderFinalization {
-    pub(crate) next_filled_qty: u64,
-    pub(crate) status: SpotOrderStatus,
-    pub(crate) status_reason: Option<SpotOrderStatusReason>,
-}
-
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
 
 fn quote_notional(qty: u64, price: u64) -> Option<u64> {
@@ -720,31 +713,6 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 返回带交易所 `oid` 的订单快照。
-    pub fn with_exchange_oid(mut self, exchange_oid: u64) -> Self {
-        self.exchange_oid = Some(exchange_oid);
-        self
-    }
-
-    /// 返回带指定执行状态的订单快照。
-    pub fn with_execution_state(mut self, status: SpotOrderStatus, filled_qty: u64) -> Self {
-        self.status = status;
-        self.filled_qty = filled_qty;
-        self
-    }
-
-    /// 返回带 Hyperliquid 细分状态原因的订单快照。
-    pub fn with_status_reason(mut self, status_reason: SpotOrderStatusReason) -> Self {
-        self.status_reason = Some(status_reason);
-        self
-    }
-
-    /// 返回带指定实体版本的订单快照。
-    pub fn with_version(mut self, version: u64) -> Self {
-        self.version = version;
-        self
-    }
-
     /// 返回本系统生成的稳定订单 ID。
     pub fn order_id(&self) -> &str {
         &self.order_id
@@ -800,8 +768,7 @@ impl SpotOrderV2 {
         self.symbol == symbol
     }
 
-    /// 返回订单限价价格。
-    pub fn limit_price(&self) -> Option<u64> {
+    fn limit_price(&self) -> Option<u64> {
         self.execution.limit_price()
     }
 
@@ -815,24 +782,6 @@ impl SpotOrderV2 {
     /// 市价意图没有稳定限价价格，或乘法溢出时返回 `None`。
     pub fn notional_quote(&self) -> Option<u64> {
         self.qty.checked_mul(self.limit_price()?)
-    }
-
-    /// 返回冻结 quote 余额所需使用的价格上限。
-    pub fn reservation_quote(&self) -> Option<u64> {
-        self.qty.checked_mul(self.order_price())
-    }
-
-    /// 返回该订单派生出的统一 reservation kind。
-    pub fn reservation_kind(&self) -> ReservationKind {
-        match self.side {
-            SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
-            SpotOrderSide::Sell => ReservationKind::SpotSellBase,
-        }
-    }
-
-    /// 返回该订单应冻结的 reservation 数量。
-    pub fn reservation_amount(&self) -> u64 {
-        self.reservation.original_amount
     }
 
     /// 返回该订单内嵌的 principal reservation 快照。
@@ -850,7 +799,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单当前剩余可成交数量。
-    pub(crate) fn remaining_qty(&self) -> Option<u64> {
+    fn remaining_qty(&self) -> Option<u64> {
         self.qty.checked_sub(self.filled_qty)
     }
 
@@ -1107,7 +1056,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否应进入撮合。
-    pub(crate) fn should_enter_matching(
+    fn should_enter_matching(
         &self,
         best_maker: Option<&SpotOrderV2>,
     ) -> Result<bool, SpotOrderV2MatchError> {
@@ -1140,7 +1089,7 @@ impl SpotOrderV2 {
     }
 
     /// 校验该 maker 是否可以作为给定 taker 的撮合对手方。
-    pub(crate) fn ensure_compatible_maker_for(
+    fn ensure_compatible_maker_for(
         &self,
         taker: &SpotOrderV2,
     ) -> Result<(), SpotOrderV2MatchError> {
@@ -1163,7 +1112,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会以当前价格和 maker 价格交叉成交。
-    pub(crate) fn crosses_maker_price(&self, maker_price: u64) -> bool {
+    fn crosses_maker_price(&self, maker_price: u64) -> bool {
         match self.side {
             SpotOrderSide::Buy => self.order_price() >= maker_price,
             SpotOrderSide::Sell => self.order_price() <= maker_price,
@@ -1171,7 +1120,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会和给定 maker 订单成交。
-    pub(crate) fn crosses_order(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
+    fn crosses_order(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
         if self.side == maker.side {
             return Err(SpotOrderV2MatchError::SameSideMaker);
         }
@@ -1181,7 +1130,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会因 ALO 语义在进入撮合前被拒绝。
-    pub(crate) fn would_be_rejected_as_alo(
+    fn would_be_rejected_as_alo(
         &self,
         best_maker: Option<&SpotOrderV2>,
     ) -> Result<bool, SpotOrderV2MatchError> {
@@ -1193,7 +1142,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回给定成交后数量对应的撮合状态。
-    pub(crate) fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus {
+    fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus {
         if next_filled_qty == self.qty {
             SpotOrderStatus::Filled
         } else {
@@ -1236,11 +1185,6 @@ impl SpotOrderV2 {
         self.filled_qty = next_filled_qty;
         self.transition_to(next_version, self.matched_status_for(next_filled_qty), None);
         Ok(())
-    }
-
-    /// 应用一次 maker 成交推进。
-    pub(crate) fn apply_fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
-        self.fill(added_fill_qty)
     }
 
     /// 可 BDD 规格化的聚合根行为：taker 按 maker 优先级数组逐笔撮合。
@@ -1306,22 +1250,6 @@ impl SpotOrderV2 {
         Ok(MatchSpotOrderV2Outcome { trades })
     }
 
-    /// 领域方法：按用户主动撤单语义关闭订单。
-    ///
-    /// 可 BDD 规格化的聚合根行为：可撤订单被用户主动撤销。
-    pub(crate) fn cancel_by_user(&mut self) -> Result<(), SpotOrderV2MatchError> {
-        if !self.can_be_cancelled() {
-            return Err(SpotOrderV2MatchError::OrderNotCancelable);
-        }
-        let next_version = self.next_version()?;
-        self.transition_to(
-            next_version,
-            SpotOrderStatus::Canceled,
-            Some(SpotOrderStatusReason::CanceledByUser),
-        );
-        Ok(())
-    }
-
     /// 可 BDD 规格化的聚合根行为：撤销现货订单并派生解冻流水。
     ///
     /// 该方法释放订单内 principal reservation，并返回下游余额流水单据；
@@ -1349,9 +1277,14 @@ impl SpotOrderV2 {
             release_amount,
             BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id.clone() },
         )?;
+        let next_version = self.next_version()?;
 
-        self.cancel_by_user()?;
         self.reservation = released_reservation;
+        self.transition_to(
+            next_version,
+            SpotOrderStatus::Canceled,
+            Some(SpotOrderStatusReason::CanceledByUser),
+        );
 
         Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry })
     }
@@ -1412,31 +1345,6 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 返回本轮撮合结束后 taker 订单应进入的生命周期状态。
-    pub(crate) fn finalize_after_match(
-        &self,
-        added_fill_qty: u64,
-    ) -> Result<SpotOrderFinalization, SpotOrderV2MatchError> {
-        let mut order = self.clone();
-        order.finish_after_match(added_fill_qty)?;
-        Ok(SpotOrderFinalization {
-            next_filled_qty: order.filled_qty,
-            status: order.status,
-            status_reason: order.status_reason,
-        })
-    }
-
-    /// 应用 taker 撮合结束后的目标状态。
-    pub(crate) fn apply_finalization(
-        &mut self,
-        finalization: SpotOrderFinalization,
-    ) -> Result<(), SpotOrderV2MatchError> {
-        let next_version = self.next_version()?;
-        self.filled_qty = finalization.next_filled_qty;
-        self.transition_to(next_version, finalization.status, finalization.status_reason);
-        Ok(())
-    }
-
     /// 领域方法：将 ALO 订单按“会立即吃单”语义拒绝。
     ///
     /// 可 BDD 规格化的聚合根行为：ALO 会立即吃单时被拒绝。
@@ -1448,16 +1356,6 @@ impl SpotOrderV2 {
             Some(SpotOrderStatusReason::BadAloPxRejected),
         );
         Ok(())
-    }
-
-    /// 返回撤单时应释放的 base 余额。
-    pub fn base_to_release_on_cancel(&self) -> u64 {
-        self.reserved_base
-    }
-
-    /// 返回撤单时应释放的 quote 余额。
-    pub fn quote_to_release_on_cancel(&self) -> u64 {
-        self.reserved_quote
     }
 
     fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
@@ -1502,13 +1400,6 @@ pub(crate) fn spot_order_v2_matching_decision(
     } else {
         Ok(SpotOrderV2MatchingDecision::Rest)
     }
-}
-
-/// 校验订单当前生命周期可作为 taker 进入撮合流程。
-pub(crate) fn spot_order_v2_ensure_matchable(
-    order: &SpotOrderV2,
-) -> Result<(), SpotOrderV2MatchError> {
-    order.ensure_matchable()
 }
 
 /// 推导 taker 与 maker 的下一笔成交条款。
@@ -2299,7 +2190,7 @@ mod tests {
     }
 
     #[test]
-    fn cancel_by_user_rejects_non_cancelable_order() {
+    fn cancel_rejects_non_cancelable_order_without_partial_mutation() {
         let mut filled = SpotOrderV2 {
             filled_qty: 2,
             status: SpotOrderStatus::Filled,
@@ -2307,7 +2198,12 @@ mod tests {
             ..buy_order()
         };
 
-        assert_eq!(filled.cancel_by_user(), Err(SpotOrderV2MatchError::OrderNotCancelable));
+        assert_eq!(
+            filled.cancel(CancelSpotOrderV2Input {
+                balance_entity_id: "balance:trader-1:USDT".to_string(),
+            }),
+            Err(SpotOrderV2BehaviorError::OrderNotCancelable)
+        );
         assert_eq!(filled.status, SpotOrderStatus::Filled);
         assert_eq!(filled.version, 1);
     }
