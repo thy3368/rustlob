@@ -17,20 +17,20 @@ pub use use_case::mi_family_executor::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
 };
-/// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
-///
-/// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
-pub use use_case::state_machine_v2::MiStateMachineOwnedV2 as MultiAggregateUseCase;
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
 pub use use_case::state_machine_v2::MiStateMachineOwnedV2BeforeAfter as MultiAggregateUseCaseBeforeAfter;
+/// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
+///
+/// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
+pub use use_case::state_machine_v2::MiStateMachineV2 as MultiAggregateUseCase;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use use_case::state_machine_v2::MiStateMachineV2Unchecked as MultiAggregateUseCaseUnchecked;
 pub use use_case::state_machine_v2::{
-    MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+    MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2, MiStateMachineV2Unchecked,
 };
 pub use use_case::use_case_support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
 
