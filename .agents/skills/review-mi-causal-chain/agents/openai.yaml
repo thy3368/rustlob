@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review MI Causal Chain"
+  short_description: "Score and improve MI causal chains"
+  default_prompt: "Use $review-mi-causal-chain to review this business MI causal chain, score it out of 100, identify broken causal links, and suggest concrete improvements."

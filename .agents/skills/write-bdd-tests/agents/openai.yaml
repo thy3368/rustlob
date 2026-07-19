@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write BDD Tests"
+  short_description: "用 BDD 反向验证实体与用例设计"
+  default_prompt: "Use $write-bdd-tests to add BDD tests that validate entity behavior methods or use case design."

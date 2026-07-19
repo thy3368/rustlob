@@ -1,4 +1,0 @@
-interface:
-  display_name: "Workflow Use Case Modeling"
-  short_description: "Generate workflow modules and use case skeletons"
-  default_prompt: "Use $workflow-use-case-modeling to map workflow to modules and generate CommandUseCase3 skeletons with tests."

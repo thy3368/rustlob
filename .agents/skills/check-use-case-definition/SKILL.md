@@ -13,7 +13,7 @@ Use this skill for RustLOB `CommandUseCase3` business-definition checks. Prefer 
 - Explicit targets: `python3 scripts/check_use_case_business_definition.py <path ...>`
 - Whole repo: `python3 scripts/check_use_case_business_definition.py --all`
 - Machine-readable output: add `--json`
-- The local script is a compatibility wrapper over the workflow/use-case review tool, so keep the CLI focused on review inputs and thresholds.
+- The skill-local script delegates directly to the repository checker at `scripts/check_use_case_business_definition.py`, preserving CLI arguments and exit codes.
 
 2. Treat the script as the primary judge.
 - The rubric source is `.agents/skills/shared/use_case_review_scorecard.md`.
