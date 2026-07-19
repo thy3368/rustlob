@@ -2,10 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use example_core::{
-    Balance, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd, MarketRules,
-    PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
-};
+use example_core::{Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3};
 use veldra_core::entity::{
     AccountAssetKey, BlockExecutionBody, ExchangeState, NewBlock, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand,
@@ -47,6 +44,9 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
     let mut asset_pairs_by_symbol = BTreeMap::new();
     asset_pairs_by_symbol.insert("BTCUSDT".to_string(), SpotAssetPair::new("BTC", "USDT"));
 
+    let mut symbol_by_asset = BTreeMap::new();
+    symbol_by_asset.insert(10_001, "BTCUSDT".to_string());
+
     let mut trading_enabled_by_symbol = BTreeMap::new();
     trading_enabled_by_symbol.insert("BTCUSDT".to_string(), true);
 
@@ -75,6 +75,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
         exchange_state: ExchangeState {
             spot: veldra_core::entity::SpotState {
                 market_rules_by_symbol,
+                symbol_by_asset,
                 asset_pairs_by_symbol,
                 trading_enabled_by_symbol,
                 balances: spot_balances,
@@ -97,25 +98,15 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                 account_id: "trader-1".to_string(),
                 nonce: 1,
                 timestamp_ns: 1_000,
-                command: ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(
-                    ExecuteImmediateSpotOrderPipelineCmd {
-                        place: PlaceImmediateOrderCmd {
-                            party_id: "trader-1".to_string(),
-                            asset: 10_001,
-                            symbol: "BTCUSDT".to_string(),
-                            is_buy: true,
-                            size: 2,
-                            reduce_only: false,
-                            execution: PlaceImmediateOrderExecution::Limit {
-                                price: 100,
-                                time_in_force: PlaceOrderTimeInForce::Gtc,
-                            },
-                            cloid: Some("cl-1".to_string()),
-                        },
-                        match_id: "match-1".to_string(),
-                        maker_fee_bps: 5,
-                        taker_fee_bps: 10,
-                        settlement_batch_id: "settle-1".to_string(),
+                command: ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(
+                    PlaceSpotOrderV2CmdV3 {
+                        party_id: "trader-1".to_string(),
+                        asset: 10_001,
+                        is_buy: true,
+                        price: "100".to_string(),
+                        size: "2".to_string(),
+                        tif: "Gtc".to_string(),
+                        cloid: Some("cl-1".to_string()),
                     },
                 )),
             },
