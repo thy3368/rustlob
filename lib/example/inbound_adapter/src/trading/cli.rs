@@ -1,18 +1,14 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    UseCaseReplyMapper,
+    MiFamilyExecutionError, MiFamilyOutbound, MiStateMachineFamilyExecutor, UseCaseReplyMapper,
 };
 use example_core::{
-    PlaceImmediateOrderExecution, PlaceOrderCmd, PlaceOrderError, PlaceOrderState,
-    PlaceOrderTimeInForce,
+    PlaceSpotOrderV2CmdV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
+    SpotOrderV2UseCaseFamilyV3Error,
 };
 use serde::Serialize;
 
-use crate::common::{
-    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_place_order_with_mapper,
-    find_string_field, find_u64_field,
-};
+use crate::common::{ExampleCliParseErrorMapping, find_string_field, find_u64_field};
 
 pub const PLACE_ORDER_CLI_BIN: &str = "cli_demo";
 pub const PLACE_ORDER_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
@@ -58,63 +54,30 @@ impl ExampleCliParseErrorMapping for ParsePlaceOrderCliArgsError {
     }
 }
 
-impl ExampleBusinessErrorMapping for PlaceOrderError {
-    fn inbound_error_code(&self) -> &'static str {
-        match self {
-            PlaceOrderError::UnsupportedSide => "unsupported_side",
-            PlaceOrderError::UnsupportedReduceOnly => "unsupported_reduce_only",
-            PlaceOrderError::InvalidQty => "invalid_qty",
-            PlaceOrderError::InvalidPrice => "invalid_price",
-            PlaceOrderError::InvalidTriggerPrice => "invalid_trigger_price",
-            PlaceOrderError::QtyBelowMin => "qty_below_min",
-            PlaceOrderError::TradingDisabled => "trading_disabled",
-            PlaceOrderError::SymbolNotTradable => "symbol_not_tradable",
-            PlaceOrderError::AccountMismatch => "account_mismatch",
-            PlaceOrderError::InsufficientQuoteBalance => "insufficient_quote_balance",
-            PlaceOrderError::InsufficientBaseBalance => "insufficient_base_balance",
-            PlaceOrderError::ArithmeticOverflow => "arithmetic_overflow",
-        }
-    }
-
-    fn http_status_code(&self) -> u16 {
-        match self {
-            PlaceOrderError::ArithmeticOverflow => 500,
-            PlaceOrderError::UnsupportedSide
-            | PlaceOrderError::UnsupportedReduceOnly
-            | PlaceOrderError::InvalidQty
-            | PlaceOrderError::InvalidPrice
-            | PlaceOrderError::InvalidTriggerPrice
-            | PlaceOrderError::QtyBelowMin
-            | PlaceOrderError::TradingDisabled
-            | PlaceOrderError::SymbolNotTradable
-            | PlaceOrderError::AccountMismatch
-            | PlaceOrderError::InsufficientQuoteBalance
-            | PlaceOrderError::InsufficientBaseBalance => 400,
-        }
+impl PlaceOrderCliCommand {
+    fn into_command(self) -> SpotOrderV2CommandV3 {
+        let _adapter_symbol = self.symbol;
+        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2CmdV3 {
+            party_id: self.trader_id,
+            asset: 10_001,
+            is_buy: true,
+            price: self.price.to_string(),
+            size: self.qty.to_string(),
+            tif: "Gtc".to_string(),
+            cloid: None,
+        })
     }
 }
 
-impl PlaceOrderCliCommand {
-    fn into_envelope(self) -> CommandEnvelope<PlaceOrderCmd> {
-        CommandEnvelope {
-            meta: CommandMeta {
-                trace_id: Some("cli-place-order".to_string()),
-                command_id: Some(format!("cli:{}:{}:{}", self.trader_id, self.symbol, self.price)),
-            },
-            command: PlaceOrderCmd {
-                party_id: self.trader_id,
-                asset: 10_001,
-                symbol: self.symbol,
-                is_buy: true,
-                size: self.qty,
-                reduce_only: false,
-                execution: PlaceImmediateOrderExecution::Limit {
-                    price: self.price,
-                    time_in_force: PlaceOrderTimeInForce::Gtc,
-                },
-                cloid: None,
-            },
-        }
+struct PlaceOrderCliExecutionSpec;
+
+impl cmd_handler::command_use_case_def2::MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3>
+    for PlaceOrderCliExecutionSpec
+{
+    type Request = SpotOrderV2CommandV3;
+
+    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
+        request.clone()
     }
 }
 
@@ -192,15 +155,17 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
 pub fn run_place_order_cli<OB>(
     command: PlaceOrderCliCommand,
     outbound: &OB,
-) -> Result<PlaceOrderCliResponse, CommandUseCaseExecutionError<PlaceOrderError, OB::Error>>
+) -> Result<PlaceOrderCliResponse, MiFamilyExecutionError<SpotOrderV2UseCaseFamilyV3Error, OB::Error>>
 where
-    OB: ?Sized
-        + Send
-        + Sync
-        + CommandUseCaseOutbound<Command = PlaceOrderCmd, State = PlaceOrderState>,
-    OB::Error: 'static,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
-    execute_place_order_with_mapper(command.into_envelope(), outbound, &PlaceOrderCliReplyMapper)
+    let command = command.into_command();
+    let result = MiStateMachineFamilyExecutor.execute::<
+        SpotOrderV2UseCaseFamilyV3,
+        PlaceOrderCliExecutionSpec,
+        OB,
+    >(&SpotOrderV2UseCaseFamilyV3, &command, outbound)?;
+    Ok(PlaceOrderCliReplyMapper.map(result.events))
 }
 
 #[cfg(test)]
@@ -219,7 +184,8 @@ mod tests {
             price: 100,
         };
 
-        let response = run_place_order_cli(command, &outbound)?;
+        let response =
+            run_place_order_cli(command, &outbound).expect("v3 place order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
@@ -227,7 +193,7 @@ mod tests {
             response.summary,
             "accepted order_id=trader-1-BTCUSDT-11 reserved_quote=200 remaining_quote=800"
         );
-        assert_eq!(counts, (4, 4));
+        assert_eq!(counts, (3, 3));
 
         Ok(())
     }

@@ -6,26 +6,19 @@ use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    UseCaseReplyMapper,
+    MiFamilyExecutionError, MiFamilyOutbound, MiStateMachineFamilyExecutor, UseCaseReplyMapper,
 };
 use example_core::{
-    PlaceImmediateOrderExecution, PlaceOrderCmd, PlaceOrderError, PlaceOrderState,
-    PlaceOrderTimeInForce,
+    PlaceSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
+    SpotOrderV2UseCaseFamilyV3, SpotOrderV2UseCaseFamilyV3Error,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::{
-    HttpInboundError, execute_place_order_with_mapper, find_string_field, find_u64_field,
-};
+use crate::common::{HttpInboundError, find_string_field, find_u64_field};
 
 pub trait PlaceOrderOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
-    type Outbound: CommandUseCaseOutbound<
-            Command = PlaceOrderCmd,
-            State = PlaceOrderState,
-            Error = Self::OutboundError,
-        >;
+    type Outbound: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>;
 
     fn place_order_outbound(&self) -> &Self::Outbound;
 }
@@ -41,22 +34,55 @@ pub struct PlaceOrderHttpRequest {
 }
 
 impl PlaceOrderHttpRequest {
-    fn into_envelope(self) -> CommandEnvelope<PlaceOrderCmd> {
-        CommandEnvelope {
-            meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
-            command: PlaceOrderCmd {
-                party_id: self.trader_id,
-                asset: 10_001,
-                symbol: self.symbol,
-                is_buy: true,
-                size: self.qty,
-                reduce_only: false,
-                execution: PlaceImmediateOrderExecution::Limit {
-                    price: self.price,
-                    time_in_force: PlaceOrderTimeInForce::Gtc,
-                },
-                cloid: None,
-            },
+    fn into_command(self) -> SpotOrderV2CommandV3 {
+        let _adapter_symbol = self.symbol;
+        let _trace_id = self.trace_id;
+        let _command_id = self.command_id;
+        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2CmdV3 {
+            party_id: self.trader_id,
+            asset: 10_001,
+            is_buy: true,
+            price: self.price.to_string(),
+            size: self.qty.to_string(),
+            tif: "Gtc".to_string(),
+            cloid: None,
+        })
+    }
+}
+
+struct PlaceOrderHttpExecutionSpec;
+
+impl cmd_handler::command_use_case_def2::MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3>
+    for PlaceOrderHttpExecutionSpec
+{
+    type Request = SpotOrderV2CommandV3;
+
+    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
+        request.clone()
+    }
+}
+
+impl crate::common::ExampleBusinessErrorMapping for SpotOrderV2UseCaseFamilyV3Error {
+    fn inbound_error_code(&self) -> &'static str {
+        match self {
+            SpotOrderV2UseCaseFamilyV3Error::InvalidPrice => "invalid_price",
+            SpotOrderV2UseCaseFamilyV3Error::InvalidSize => "invalid_qty",
+            SpotOrderV2UseCaseFamilyV3Error::InvalidTimeInForce => "invalid_time_in_force",
+            SpotOrderV2UseCaseFamilyV3Error::InsufficientAvailableBalance => {
+                "insufficient_available_balance"
+            }
+            SpotOrderV2UseCaseFamilyV3Error::InsufficientFrozenBalance => {
+                "insufficient_frozen_balance"
+            }
+            SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow => "arithmetic_overflow",
+            _ => "spot_order_v2_rejected",
+        }
+    }
+
+    fn http_status_code(&self) -> u16 {
+        match self {
+            SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow => 500,
+            _ => 400,
         }
     }
 }
@@ -89,15 +115,21 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
 pub fn handle_place_order_http<OB>(
     request: PlaceOrderHttpRequest,
     outbound: &OB,
-) -> Result<PlaceOrderHttpResponse, CommandUseCaseExecutionError<PlaceOrderError, OB::Error>>
+) -> Result<
+    PlaceOrderHttpResponse,
+    MiFamilyExecutionError<SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
+>
 where
-    OB: ?Sized
-        + Send
-        + Sync
-        + CommandUseCaseOutbound<Command = PlaceOrderCmd, State = PlaceOrderState>,
-    OB::Error: 'static,
+    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
-    execute_place_order_with_mapper(request.into_envelope(), outbound, &PlaceOrderHttpReplyMapper)
+    let command = request.into_command();
+    let result = MiStateMachineFamilyExecutor.execute::<
+        SpotOrderV2UseCaseFamilyV3,
+        PlaceOrderHttpExecutionSpec,
+        OB,
+    >(&SpotOrderV2UseCaseFamilyV3, &command, outbound)?;
+    let _changes: SpotOrderV2CaseChangesV3 = result.changes;
+    Ok(PlaceOrderHttpReplyMapper.map(result.events))
 }
 
 pub fn build_orders_http_router<S>() -> Router<Arc<S>>
@@ -141,7 +173,8 @@ async fn create_order<S>(
 where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
-    let response = handle_place_order_http(payload, state.place_order_outbound())?;
+    let response = handle_place_order_http(payload, state.place_order_outbound())
+        .map_err(HttpInboundError::from_mi_execution_error)?;
     Ok(Json(response))
 }
 
@@ -153,7 +186,8 @@ where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
     let response =
-        handle_place_order_http(payload.into_inner(), state.get_ref().place_order_outbound())?;
+        handle_place_order_http(payload.into_inner(), state.get_ref().place_order_outbound())
+            .map_err(HttpInboundError::from_mi_execution_error)?;
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -212,14 +246,15 @@ mod tests {
             price: 100,
         };
 
-        let response = handle_place_order_http(request, &outbound)?;
+        let response =
+            handle_place_order_http(request, &outbound).expect("v3 place order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
         assert_eq!(response.reserved_quote, 300);
         assert_eq!(response.remaining_quote, 700);
-        assert_eq!(response.domain_event_count, 4);
-        assert_eq!(counts, (4, 4));
+        assert_eq!(response.domain_event_count, 3);
+        assert_eq!(counts, (3, 3));
 
         Ok(())
     }
@@ -252,6 +287,6 @@ mod tests {
         assert_eq!(body["order_id"], "trader-1-BTCUSDT-11");
         assert_eq!(body["reserved_quote"], 300);
         assert_eq!(body["remaining_quote"], 700);
-        assert_eq!(body["domain_event_count"], 4);
+        assert_eq!(body["domain_event_count"], 3);
     }
 }

@@ -3,12 +3,12 @@ use axum::response::{IntoResponse, Response};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
-    CommandUseCaseOutbound, UseCaseReplyMapper,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, MiFamilyExecutionError,
+    UseCaseReplyMapper,
 };
 use example_core::{
-    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, PlaceOrderCmd,
-    PlaceOrderError, PlaceOrderState, PlaceOrderUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
-    WithdrawQuoteState, WithdrawQuoteUseCase,
+    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
+    WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 pub use inbound_adapter_support::{
     ApiErrorBody as ExampleHttpErrorBody, ApiErrorResponse as ExampleHttpErrorResponse,
@@ -39,6 +39,14 @@ impl HttpInboundError {
 
     pub fn status_code(&self) -> u16 {
         self.0.status_code()
+    }
+
+    pub fn from_mi_execution_error<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> Self
+    where
+        BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
+        OE: std::error::Error + Send + Sync + 'static,
+    {
+        Self::from_execution_error(mi_error_to_command_error(error))
     }
 }
 
@@ -102,6 +110,14 @@ impl CliInboundError {
         ))
     }
 
+    pub fn from_mi_execution_error<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> Self
+    where
+        BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
+        OE: std::error::Error + Send + Sync + 'static,
+    {
+        Self::from_execution_error(mi_error_to_command_error(error))
+    }
+
     pub fn runtime<E>(code: &'static str, error: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -111,6 +127,33 @@ impl CliInboundError {
 
     pub fn exit_code(&self) -> i32 {
         self.0.exit_code()
+    }
+}
+
+fn mi_error_to_command_error<BE, OE>(
+    error: MiFamilyExecutionError<BE, OE>,
+) -> CommandUseCaseExecutionError<BE, OE>
+where
+    BE: std::error::Error + 'static,
+    OE: std::error::Error + 'static,
+{
+    match error {
+        MiFamilyExecutionError::Business(error) => CommandUseCaseExecutionError::Business(error),
+        MiFamilyExecutionError::ProjectEvents(error) => {
+            CommandUseCaseExecutionError::event_project(error)
+        }
+        MiFamilyExecutionError::LoadState(error) => {
+            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::LoadState, error)
+        }
+        MiFamilyExecutionError::Persist(error) => {
+            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Persist, error)
+        }
+        MiFamilyExecutionError::Replay(error) => {
+            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Replay, error)
+        }
+        MiFamilyExecutionError::Publish(error) => {
+            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Publish, error)
+        }
     }
 }
 
@@ -141,22 +184,6 @@ where
     let executor = CommandUseCaseExecutor4;
     let result = executor.execute(use_case, envelope, outbound, &())?;
     Ok(mapper.map(result.events))
-}
-
-pub(crate) fn execute_place_order_with_mapper<OB, M>(
-    envelope: CommandEnvelope<PlaceOrderCmd>,
-    outbound: &OB,
-    mapper: &M,
-) -> Result<M::Reply, CommandUseCaseExecutionError<PlaceOrderError, OB::Error>>
-where
-    OB: ?Sized
-        + Send
-        + Sync
-        + CommandUseCaseOutbound<Command = PlaceOrderCmd, State = PlaceOrderState>,
-    M: UseCaseReplyMapper,
-    OB::Error: 'static,
-{
-    execute_with_mapper(&PlaceOrderUseCase, envelope, outbound, mapper)
 }
 
 pub(crate) fn execute_deposit_quote_with_mapper<OB, M>(
@@ -223,10 +250,11 @@ pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
     use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
+    use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, MiFamilyOutbound};
     use example_core::{
-        Balance, DepositQuoteCmd, DepositQuoteState, MarketRules, PlaceOrderCmd, PlaceOrderState,
-        WithdrawQuoteCmd, WithdrawQuoteState,
+        Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
+        SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
+        WithdrawQuoteCmd, WithdrawQuoteState, build_place_spot_order_v2_taker_template_v3,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum TestOutboundError {
@@ -316,25 +344,43 @@ pub(crate) mod tests {
         }
     }
 
-    impl CommandUseCaseOutbound for PlaceOrderTestOutbound {
-        type Command = PlaceOrderCmd;
-        type State = PlaceOrderState;
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
-        fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
-            Ok(PlaceOrderState {
-                trading_enabled: true,
-                next_order_sequence: 11,
-                account_id: "trader-1".to_string(),
-                base_balance: Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
-                quote_balance: Balance::new(
-                    "trader-1".to_string(),
-                    "USDT".to_string(),
-                    1_000,
-                    0,
-                    5,
-                ),
-                market_rules: MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
+        fn load_given_state(
+            &self,
+            cmd: &SpotOrderV2CommandV3,
+        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
+            let SpotOrderV2CommandV3::Place(cmd) = cmd else {
+                return Err(TestOutboundError::StoreUnavailable);
+            };
+            let settlement_balances = vec![
+                Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
+                Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
+                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+            ];
+            let taker_order = build_place_spot_order_v2_taker_template_v3(
+                cmd,
+                PlaceSpotOrderV2TakerTemplateContextV3 {
+                    order_id: "trader-1-BTCUSDT-11".to_string(),
+                    symbol: "BTCUSDT".to_string(),
+                    settlement_balances: &settlement_balances,
+                    base_asset_id: "BTC".to_string(),
+                    quote_asset_id: "USDT".to_string(),
+                    maker_fee_bps: 5,
+                    taker_fee_bps: 10,
+                },
+            )
+            .map_err(|_| TestOutboundError::StoreUnavailable)?;
+            Ok(SpotOrderV2GivenStateV3::Place {
+                taker_order,
+                maker_orders: Vec::new(),
+                settlement_balances,
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                fee_account_id: "fee".to_string(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
             })
         }
 
