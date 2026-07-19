@@ -100,9 +100,7 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound
                 1,
             ));
         }
-        if !state
-            .balances
-            .contains_key(&balance_key(cmd.party_id.as_str(), base_asset_id.as_str()))
+        if !state.balances.contains_key(&balance_key(cmd.party_id.as_str(), base_asset_id.as_str()))
             || !state
                 .balances
                 .contains_key(&balance_key(cmd.party_id.as_str(), quote_asset_id.as_str()))
@@ -110,7 +108,8 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
 
-        let order_id = format!("{}-{}-{}", cmd.party_id, market_rules.symbol, state.next_order_sequence);
+        let order_id =
+            format!("{}-{}-{}", cmd.party_id, market_rules.symbol, state.next_order_sequence);
         let taker_order = build_place_spot_order_v2_taker_template_v3(
             cmd,
             PlaceSpotOrderV2TakerTemplateContextV3 {
@@ -130,7 +129,10 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound
                 order.trades_asset(cmd.asset)
                     && order.trades_symbol(market_rules.symbol.as_str())
                     && order.side() != taker_order.side()
-                    && matches!(order.status(), SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+                    && matches!(
+                        order.status(),
+                        SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+                    )
             })
             .cloned()
             .collect();
@@ -472,16 +474,22 @@ pub(crate) fn symbol_for_asset(asset: u32) -> &'static str {
     }
 }
 
-fn decode_created_trade(event: &EntityReplayableEvent) -> Result<SpotTrade, PlaceOrderOutboundError> {
+fn decode_created_trade(
+    event: &EntityReplayableEvent,
+) -> Result<SpotTrade, PlaceOrderOutboundError> {
     Ok(SpotTrade::new(
         event_string_field(event, "trade_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_string_field(event, "match_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32,
         event_string_field(event, "symbol").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "taker_order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "maker_order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "taker_account_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "maker_account_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        event_string_field(event, "taker_order_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        event_string_field(event, "maker_order_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        event_string_field(event, "taker_account_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        event_string_field(event, "maker_account_id")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         decode_trade_side(event)?,
         event_u64_field(event, "price").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
@@ -490,7 +498,9 @@ fn decode_created_trade(event: &EntityReplayableEvent) -> Result<SpotTrade, Plac
     ))
 }
 
-fn decode_trade_side(event: &EntityReplayableEvent) -> Result<SpotOrderSide, PlaceOrderOutboundError> {
+fn decode_trade_side(
+    event: &EntityReplayableEvent,
+) -> Result<SpotOrderSide, PlaceOrderOutboundError> {
     match event_string_field(event, "taker_side").as_deref() {
         Some("buy") => Ok(SpotOrderSide::Buy),
         Some("sell") => Ok(SpotOrderSide::Sell),
