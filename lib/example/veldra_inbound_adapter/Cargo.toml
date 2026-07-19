@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 actix-web = "4"
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 example_core = { path = "../core" }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
