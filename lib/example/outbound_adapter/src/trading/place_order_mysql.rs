@@ -1,12 +1,14 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
+use cmd_handler::command_use_case_def2::MiFamilyOutbound;
 use example_core::{
-    MarketRules, ORDER_ENTITY_TYPE, PlaceImmediateOrderCmd, PlaceImmediateOrderState,
+    Balance, MarketRules, ORDER_ENTITY_TYPE, PlaceSpotOrderV2TakerTemplateContextV3,
+    SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
+    build_place_spot_order_v2_taker_template_v3,
 };
 use mysql::params;
 use mysql::prelude::Queryable;
 
-use super::place_order_in_memory::{base_asset_id_for, quote_asset_id_for};
+use super::place_order_in_memory::{base_asset_id_for, quote_asset_id_for, symbol_for_asset};
 use crate::shared::{
     ACCOUNT_TABLE, EVENT_TABLE, MARKET_RULES_TABLE, MySqlStore, ORDER_TABLE,
     PlaceOrderOutboundError, StoreSnapshot, event_string_field_mysql, event_u64_field_mysql,
@@ -59,13 +61,22 @@ impl MySqlPlaceOrderOutbound {
     }
 }
 
-impl CommandUseCaseOutbound for MySqlPlaceOrderOutbound {
-    type Command = PlaceImmediateOrderCmd;
-    type State = PlaceImmediateOrderState;
+const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
+const DEFAULT_MAKER_FEE_BPS: u64 = 5;
+const DEFAULT_TAKER_FEE_BPS: u64 = 10;
+
+impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
-    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+    fn load_given_state(
+        &self,
+        cmd: &SpotOrderV2CommandV3,
+    ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
+        let SpotOrderV2CommandV3::Place(cmd) = cmd else {
+            return Err(PlaceOrderOutboundError::UnsupportedCommandBranch);
+        };
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
+        let requested_symbol = symbol_for_asset(cmd.asset);
 
         let account_row: Option<(String, u64, u64, u64, u64, u64)> = conn
             .exec_first(
@@ -87,7 +98,7 @@ impl CommandUseCaseOutbound for MySqlPlaceOrderOutbound {
                      FROM {MARKET_RULES_TABLE}
                      WHERE symbol = :symbol"
                 ),
-                params! { "symbol" => cmd.symbol.as_str() },
+                params! { "symbol" => requested_symbol },
             )
             .map_err(map_mysql_error)?;
         let (symbol, min_qty) =
@@ -100,25 +111,48 @@ impl CommandUseCaseOutbound for MySqlPlaceOrderOutbound {
             .map_err(map_mysql_error)?
             .unwrap_or(1);
 
-        Ok(PlaceImmediateOrderState {
-            trading_enabled: true,
-            next_order_sequence,
-            account_id: account_id.clone(),
-            base_balance: example_core::Balance::new(
+        let base_asset_id = base_asset_id_for(symbol.as_str()).to_string();
+        let quote_asset_id = quote_asset_id_for(symbol.as_str()).to_string();
+        let settlement_balances = vec![
+            Balance::new(
                 account_id.clone(),
-                base_asset_id_for(symbol.as_str()).to_string(),
+                base_asset_id.clone(),
                 available_base,
                 frozen_base,
                 version,
             ),
-            quote_balance: example_core::Balance::new(
-                account_id,
-                quote_asset_id_for(symbol.as_str()).to_string(),
+            Balance::new(
+                account_id.clone(),
+                quote_asset_id.clone(),
                 available_quote,
                 frozen_quote,
                 version,
             ),
-            market_rules: MarketRules { symbol, min_qty },
+            Balance::new(DEFAULT_FEE_ACCOUNT_ID.to_string(), quote_asset_id.clone(), 0, 0, 1),
+        ];
+        let order_id = format!("{}-{}-{}", cmd.party_id, symbol, next_order_sequence);
+        let taker_order = build_place_spot_order_v2_taker_template_v3(
+            cmd,
+            PlaceSpotOrderV2TakerTemplateContextV3 {
+                order_id,
+                symbol,
+                settlement_balances: &settlement_balances,
+                base_asset_id: base_asset_id.clone(),
+                quote_asset_id: quote_asset_id.clone(),
+                maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
+                taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
+            },
+        )?;
+
+        Ok(SpotOrderV2GivenStateV3::Place {
+            taker_order,
+            maker_orders: Vec::new(),
+            settlement_balances,
+            base_asset_id,
+            quote_asset_id,
+            fee_account_id: DEFAULT_FEE_ACCOUNT_ID.to_string(),
+            maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
+            taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
         })
     }
 

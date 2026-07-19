@@ -18,8 +18,18 @@ pub enum PlaceOrderOutboundError {
     SequenceOverflow,
     #[error("broker publish failed")]
     BrokerPublishFailed,
+    #[error("unsupported spot order command branch")]
+    UnsupportedCommandBranch,
+    #[error("failed to build spot order v2 given state: {0}")]
+    BuildSpotOrderV2State(String),
     #[error(transparent)]
     Store(#[from] StoreError),
+}
+
+impl From<example_core::SpotOrderV2UseCaseFamilyV3Error> for PlaceOrderOutboundError {
+    fn from(error: example_core::SpotOrderV2UseCaseFamilyV3Error) -> Self {
+        Self::BuildSpotOrderV2State(error.to_string())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
