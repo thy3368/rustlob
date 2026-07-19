@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
-use example_core::{PlaceImmediateOrderExecution, PlaceOrderTimeInForce};
-
 use super::BuildBlockError;
 use crate::entity::{CommandEnvelope, ProductCommand, SpotCommand, TreasuryCommand};
 
@@ -102,24 +100,17 @@ fn command_priority(command: &CommandEnvelope<ProductCommand>) -> u8 {
 fn is_alo_priority_command(command: &ProductCommand) -> bool {
     matches!(
         command,
-        ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command))
-            if matches!(
-                command.place.execution,
-                PlaceImmediateOrderExecution::Limit {
-                    time_in_force: PlaceOrderTimeInForce::Alo,
-                    ..
-                }
-            )
+        ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command))
+            if matches!(command.tif.as_str(), "alo" | "Alo")
     )
 }
 
 fn command_party_id(command: &ProductCommand) -> Option<&str> {
     // 用 payload 中的业务发起方反查 envelope.account_id，防止包裹层身份被串改。
     match command {
-        ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command)) => {
-            Some(command.place.party_id.as_str())
+        ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command)) => {
+            Some(command.party_id.as_str())
         }
-        ProductCommand::Spot(SpotCommand::CancelOrder(command)) => Some(command.party_id.as_str()),
         ProductCommand::Treasury(TreasuryCommand::DepositQuote(command)) => {
             Some(command.party_id.as_str())
         }

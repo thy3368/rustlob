@@ -1,17 +1,21 @@
-use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteChanges, DepositQuoteCmd,
-    ExecuteImmediateSpotOrderPipelineCmd, WithdrawQuoteChanges, WithdrawQuoteCmd,
-};
+use example_core::{Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges, WithdrawQuoteCmd};
 
-use crate::use_case::BuildBlockError;
-use crate::use_case::block_execution::handler::cancel_order_block_command_handler::{CancelOrderBlockCommandHandler, CANCEL_ORDER_BLOCK_COMMAND_HANDLER};
-use crate::use_case::block_execution::handler::deposit_quote_block_command_handler::{DepositQuoteBlockCommandHandler, DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER};
-use crate::use_case::block_execution::handler::execute_immediate_order_pipeline_block_command_handler::{ExecuteImmediateOrderPipelineBlockCommandHandler, EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER};
-use crate::use_case::block_execution::handler::perp_unsupported_block_command_handler::{PerpUnsupportedBlockCommandHandler, PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER};
-use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::{WithdrawQuoteBlockCommandHandler, WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER};
 use crate::entity::{
-    AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotCommand,
-    TreasuryCommand, TreasuryState,
+    AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotCommand, TreasuryCommand,
+    TreasuryState,
+};
+use crate::use_case::BuildBlockError;
+use crate::use_case::block_execution::handler::deposit_quote_block_command_handler::{
+    DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER, DepositQuoteBlockCommandHandler,
+};
+use crate::use_case::block_execution::handler::perp_unsupported_block_command_handler::{
+    PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER, PerpUnsupportedBlockCommandHandler,
+};
+use crate::use_case::block_execution::handler::place_spot_order_v2_block_command_handler::{
+    PLACE_SPOT_ORDER_V2_BLOCK_COMMAND_HANDLER, PlaceSpotOrderV2BlockCommandHandler,
+};
+use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::{
+    WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER, WithdrawQuoteBlockCommandHandler,
 };
 
 pub(in crate::use_case::block_execution) trait BlockCommandHandler {
@@ -35,11 +39,7 @@ pub(in crate::use_case::block_execution) trait BlockCommandHandler {
 }
 
 pub(in crate::use_case::block_execution) enum ResolvedBlockCommandHandler<'a> {
-    ExecuteImmediateOrderPipeline(
-        &'static ExecuteImmediateOrderPipelineBlockCommandHandler,
-        &'a ExecuteImmediateSpotOrderPipelineCmd,
-    ),
-    CancelOrder(&'static CancelOrderBlockCommandHandler, &'a CancelSpotOrderCmd),
+    PlaceSpotOrderV2(&'static PlaceSpotOrderV2BlockCommandHandler, &'a PlaceSpotOrderV2CmdV3),
     DepositQuote(&'static DepositQuoteBlockCommandHandler, &'a DepositQuoteCmd),
     WithdrawQuote(&'static WithdrawQuoteBlockCommandHandler, &'a WithdrawQuoteCmd),
     PerpUnsupported(&'static PerpUnsupportedBlockCommandHandler),
@@ -49,14 +49,11 @@ pub(in crate::use_case::block_execution) fn resolve_block_command_handler(
     command: &ProductCommand,
 ) -> ResolvedBlockCommandHandler<'_> {
     match command {
-        ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command)) => {
-            ResolvedBlockCommandHandler::ExecuteImmediateOrderPipeline(
-                &EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER,
+        ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command)) => {
+            ResolvedBlockCommandHandler::PlaceSpotOrderV2(
+                &PLACE_SPOT_ORDER_V2_BLOCK_COMMAND_HANDLER,
                 command,
             )
-        }
-        ProductCommand::Spot(SpotCommand::CancelOrder(command)) => {
-            ResolvedBlockCommandHandler::CancelOrder(&CANCEL_ORDER_BLOCK_COMMAND_HANDLER, command)
         }
         ProductCommand::Treasury(TreasuryCommand::DepositQuote(command)) => {
             ResolvedBlockCommandHandler::DepositQuote(&DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER, command)

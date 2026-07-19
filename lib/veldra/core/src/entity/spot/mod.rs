@@ -8,6 +8,7 @@ use crate::entity::{AccountAssetKey, stable_hash_hex};
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SpotState {
     pub market_rules_by_symbol: BTreeMap<String, MarketRules>,
+    pub symbol_by_asset: BTreeMap<u32, String>,
     pub asset_pairs_by_symbol: BTreeMap<String, SpotAssetPair>,
     pub trading_enabled_by_symbol: BTreeMap<String, bool>,
     pub balances: BTreeMap<AccountAssetKey, Balance>,
@@ -29,6 +30,11 @@ impl SpotState {
             .iter()
             .map(|(symbol, pair)| format!("{symbol}:{}", pair.commitment()))
             .collect::<Vec<_>>();
+        let symbol_by_asset = self
+            .symbol_by_asset
+            .iter()
+            .map(|(asset, symbol)| format!("{asset}:{symbol}"))
+            .collect::<Vec<_>>();
         let runtime = self
             .trading_enabled_by_symbol
             .iter()
@@ -47,6 +53,7 @@ impl SpotState {
 
         stable_hash_hex(&[
             stable_hash_hex(&market_rules).as_str(),
+            stable_hash_hex(&symbol_by_asset).as_str(),
             stable_hash_hex(&asset_pairs).as_str(),
             stable_hash_hex(&runtime).as_str(),
             stable_hash_hex(&balances).as_str(),

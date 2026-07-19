@@ -1,8 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use example_core::{
-    CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
-    PlaceOrderTimeInForce, WithdrawQuoteCmd,
-};
+use example_core::{DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteCmd};
 use serde::{Deserialize, Serialize};
 
 use super::{PerpState, SpotState, TreasuryState, stable_hash_hex};
@@ -67,41 +64,21 @@ impl ProductCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotCommand {
-    ExecuteImmediateOrderPipeline(ExecuteImmediateSpotOrderPipelineCmd),
-    CancelOrder(CancelSpotOrderCmd),
+    PlaceSpotOrderV2(PlaceSpotOrderV2CmdV3),
 }
 
 impl SpotCommand {
     pub fn commitment(&self) -> String {
         match self {
-            Self::ExecuteImmediateOrderPipeline(command) => {
-                let execution = match command.place.execution {
-                    example_core::PlaceImmediateOrderExecution::Limit { price, time_in_force } => {
-                        format!("limit:{price}:{}", spot_tif(time_in_force))
-                    }
-                    example_core::PlaceImmediateOrderExecution::Market { aggressive_price } => {
-                        format!("market:{aggressive_price}")
-                    }
-                };
-                stable_hash_hex(&[
-                    "spot.execute_immediate_pipeline",
-                    command.place.party_id.as_str(),
-                    command.place.symbol.as_str(),
-                    command.place.asset.to_string().as_str(),
-                    if command.place.is_buy { "buy" } else { "sell" },
-                    command.place.size.to_string().as_str(),
-                    if command.place.reduce_only { "reduce_only" } else { "open" },
-                    execution.as_str(),
-                    command.place.cloid.as_deref().unwrap_or_default(),
-                    command.match_id.as_str(),
-                    command.settlement_batch_id.as_str(),
-                ])
-            }
-            Self::CancelOrder(command) => stable_hash_hex(&[
-                "spot.cancel_order",
+            Self::PlaceSpotOrderV2(command) => stable_hash_hex(&[
+                "spot.place_spot_order_v2",
                 command.party_id.as_str(),
                 command.asset.to_string().as_str(),
-                command.order_id.to_string().as_str(),
+                if command.is_buy { "buy" } else { "sell" },
+                command.price.as_str(),
+                command.size.as_str(),
+                command.tif.as_str(),
+                command.cloid.as_deref().unwrap_or_default(),
             ]),
         }
     }
@@ -177,12 +154,4 @@ pub fn build_new_block(
         events_root,
         post_state_root,
     )
-}
-
-fn spot_tif(value: PlaceOrderTimeInForce) -> &'static str {
-    match value {
-        PlaceOrderTimeInForce::Gtc => "gtc",
-        PlaceOrderTimeInForce::Ioc => "ioc",
-        PlaceOrderTimeInForce::Alo => "alo",
-    }
 }

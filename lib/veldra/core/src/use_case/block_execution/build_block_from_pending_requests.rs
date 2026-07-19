@@ -1,10 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::ReplayableChanges;
 use common_entity::MiStateMachineV2Unchecked;
-use example_core::{
-    CancelSpotOrderChanges, DepositQuoteChanges, ExecuteImmediateSpotOrderPipelineChanges,
-    WithdrawQuoteChanges,
-};
+use example_core::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
 
 use super::{
     BlockEntityChange, BuildBlockError, BuildBlockFromCommandsChanges,
@@ -90,10 +87,7 @@ fn validate_batch_commands(
 ) -> Result<(), BuildBlockError> {
     for envelope in commands {
         match resolve_block_command_handler(&envelope.command) {
-            ResolvedBlockCommandHandler::ExecuteImmediateOrderPipeline(handler, command) => {
-                handler.validate(command, exchange_state)?;
-            }
-            ResolvedBlockCommandHandler::CancelOrder(handler, command) => {
+            ResolvedBlockCommandHandler::PlaceSpotOrderV2(handler, command) => {
                 handler.validate(command, exchange_state)?;
             }
             ResolvedBlockCommandHandler::DepositQuote(handler, command) => {
@@ -116,14 +110,9 @@ fn execute_batch_commands(
 
     for envelope in commands {
         match resolve_block_command_handler(&envelope.command) {
-            ResolvedBlockCommandHandler::ExecuteImmediateOrderPipeline(handler, command) => {
+            ResolvedBlockCommandHandler::PlaceSpotOrderV2(handler, command) => {
                 let execution = handler.execute(envelope, command, exchange_state)?;
-                ordered_changes.extend(extract_spot_pipeline_changes(&execution.changes));
-                handler.apply(exchange_state, &execution);
-            }
-            ResolvedBlockCommandHandler::CancelOrder(handler, command) => {
-                let execution = handler.execute(envelope, command, exchange_state)?;
-                ordered_changes.extend(extract_spot_cancel_changes(&execution));
+                ordered_changes.extend(extract_place_spot_order_v2_changes(&execution.changes));
                 handler.apply(exchange_state, &execution);
             }
             ResolvedBlockCommandHandler::DepositQuote(handler, command) => {
@@ -169,41 +158,56 @@ fn build_block_changes(
     }
 }
 
-fn extract_spot_pipeline_changes(
-    execution: &ExecuteImmediateSpotOrderPipelineChanges,
+fn extract_place_spot_order_v2_changes(
+    execution: &PlaceSpotOrderV2ChangesV3,
 ) -> Vec<BlockEntityChange> {
-    let mut ordered_changes = Vec::new();
-    let place_output = &execution.place_output;
-    ordered_changes.push(BlockEntityChange::SpotOrderCreated(place_output.created_order.clone()));
-    ordered_changes.push(BlockEntityChange::BalanceUpdated(place_output.updated_balance.clone()));
-
-    if let Some(match_output) = &execution.match_output {
-        for (trade, maker_update) in
-            match_output.trades.iter().zip(&match_output.updated_maker_orders)
-        {
-            ordered_changes.push(BlockEntityChange::SpotTradeCreated(trade.clone()));
-            ordered_changes.push(BlockEntityChange::SpotOrderUpdated(maker_update.clone()));
-        }
-        ordered_changes
-            .push(BlockEntityChange::SpotOrderUpdated(match_output.updated_taker_order.clone()));
+    let mut changes = Vec::new();
+    if execution.updated_taker_order.before == execution.updated_taker_order.after {
+        changes.push(BlockEntityChange::SpotOrderCreated(
+            execution.updated_taker_order.after.clone(),
+        ));
+    } else {
+        changes.push(BlockEntityChange::SpotOrderUpdated(
+            execution.updated_taker_order.clone(),
+        ));
     }
-
-    if let Some(settle_changes) = &execution.settle_changes {
-        for balance in &settle_changes.updated_balances {
-            ordered_changes.push(BlockEntityChange::BalanceUpdated(balance.clone()));
-        }
-    }
-
-    ordered_changes
-}
-
-fn extract_spot_cancel_changes(execution: &CancelSpotOrderChanges) -> Vec<BlockEntityChange> {
-    let mut ordered_changes = Vec::with_capacity(1 + execution.released_balances.len());
-    ordered_changes.push(BlockEntityChange::SpotOrderUpdated(execution.canceled_order.clone()));
-    for balance in &execution.released_balances {
-        ordered_changes.push(BlockEntityChange::BalanceUpdated(balance.clone()));
-    }
-    ordered_changes
+    changes.extend(
+        execution
+            .updated_maker_orders
+            .iter()
+            .cloned()
+            .map(BlockEntityChange::SpotOrderUpdated),
+    );
+    changes.extend(
+        execution
+            .updated_balances
+            .iter()
+            .filter(|pair| pair.before != pair.after)
+            .cloned()
+            .map(BlockEntityChange::BalanceUpdated),
+    );
+    changes.extend(
+        execution
+            .created_trades
+            .iter()
+            .cloned()
+            .map(BlockEntityChange::SpotTradeCreated),
+    );
+    changes.extend(
+        execution
+            .created_vouchers
+            .iter()
+            .cloned()
+            .map(BlockEntityChange::SettlementTransferVoucherCreated),
+    );
+    changes.extend(
+        execution
+            .created_balance_ledger_entries
+            .iter()
+            .cloned()
+            .map(BlockEntityChange::BalanceLedgerEntryCreated),
+    );
+    changes
 }
 
 fn extract_deposit_quote_change(execution: &DepositQuoteChanges) -> BlockEntityChange {

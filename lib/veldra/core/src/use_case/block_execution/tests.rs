@@ -3,35 +3,31 @@ use std::collections::BTreeMap;
 use cmd_handler::command_use_case_def2::ReplayableChanges;
 use common_entity::MiStateMachineV2Unchecked;
 use example_core::{
-    Balance, CancelSpotOrderCmd, DepositQuoteCmd, ExecuteImmediateSpotOrderPipelineCmd,
-    MarketRules, PlaceImmediateOrderCmd, PlaceImmediateOrderExecution, PlaceOrderTimeInForce,
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce, SpotOrderV2, WithdrawQuoteCmd,
+    Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3, SpotOrderTimeInForce,
+    WithdrawQuoteCmd,
 };
 
-use crate::entity::stable_hash_hex;
+use super::*;
+use crate::entity::{
+    AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotAssetPair,
+    SpotCommand, TreasuryCommand, stable_hash_hex,
+};
 use crate::use_case::block_execution::canonical_batch::{
     canonical_sort_commands, validate_and_clone_canonical_commands,
 };
 use crate::use_case::block_execution::handler::block_command_handler::{
     BlockCommandHandler, ResolvedBlockCommandHandler, resolve_block_command_handler,
 };
-use crate::use_case::block_execution::handler::cancel_order_block_command_handler::CANCEL_ORDER_BLOCK_COMMAND_HANDLER;
 use crate::use_case::block_execution::handler::deposit_quote_block_command_handler::DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER;
-use crate::use_case::block_execution::handler::execute_immediate_order_pipeline_block_command_handler::EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER;
+use crate::use_case::block_execution::handler::place_spot_order_v2_block_command_handler::PLACE_SPOT_ORDER_V2_BLOCK_COMMAND_HANDLER;
 use crate::use_case::block_execution::handler::withdraw_quote_block_command_handler::WITHDRAW_QUOTE_BLOCK_COMMAND_HANDLER;
-use super::*;
-use crate::entity::{
-    AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotAssetPair,
-    SpotCommand, TreasuryCommand,
-};
 
 fn sample_command() -> BuildBlockFromCommandsCommand {
     BuildBlockFromCommandsCommand { block_height: 2 }
 }
 
 fn sample_envelope() -> CommandEnvelope<ProductCommand> {
-    sample_spot_envelope_with("cmd-1", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc)
+    sample_spot_envelope_with("cmd-1", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc)
 }
 
 fn sample_spot_envelope_with(
@@ -39,31 +35,27 @@ fn sample_spot_envelope_with(
     account_id: &str,
     nonce: u64,
     timestamp_ns: u64,
-    time_in_force: PlaceOrderTimeInForce,
+    time_in_force: SpotOrderTimeInForce,
 ) -> CommandEnvelope<ProductCommand> {
     CommandEnvelope {
         command_id: command_id.to_string(),
         account_id: account_id.to_string(),
         nonce,
         timestamp_ns,
-        command: ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(
-            ExecuteImmediateSpotOrderPipelineCmd {
-                place: PlaceImmediateOrderCmd {
-                    party_id: account_id.to_string(),
-                    asset: 10_001,
-                    symbol: "BTCUSDT".to_string(),
-                    is_buy: true,
-                    size: 2,
-                    reduce_only: false,
-                    execution: PlaceImmediateOrderExecution::Limit { price: 100, time_in_force },
-                    cloid: Some("cl-1".to_string()),
-                },
-                match_id: "match-1".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
-                settlement_batch_id: "settle-1".to_string(),
-            },
-        )),
+        command: ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(PlaceSpotOrderV2CmdV3 {
+            party_id: account_id.to_string(),
+            asset: 10_001,
+            is_buy: true,
+            price: "100".to_string(),
+            size: "2".to_string(),
+            tif: match time_in_force {
+                SpotOrderTimeInForce::Gtc => "Gtc",
+                SpotOrderTimeInForce::Ioc => "Ioc",
+                SpotOrderTimeInForce::Alo => "Alo",
+            }
+            .to_string(),
+            cloid: Some("cl-1".to_string()),
+        })),
     }
 }
 
@@ -74,6 +66,9 @@ fn sample_state() -> BuildBlockFromCommandsState {
 
     let mut asset_pairs_by_symbol = BTreeMap::new();
     asset_pairs_by_symbol.insert("BTCUSDT".to_string(), SpotAssetPair::new("BTC", "USDT"));
+
+    let mut symbol_by_asset = BTreeMap::new();
+    symbol_by_asset.insert(10_001, "BTCUSDT".to_string());
 
     let mut trading_enabled_by_symbol = BTreeMap::new();
     trading_enabled_by_symbol.insert("BTCUSDT".to_string(), true);
@@ -97,6 +92,7 @@ fn sample_state() -> BuildBlockFromCommandsState {
         exchange_state: ExchangeState {
             spot: crate::entity::SpotState {
                 market_rules_by_symbol,
+                symbol_by_asset,
                 asset_pairs_by_symbol,
                 trading_enabled_by_symbol,
                 balances,
@@ -134,29 +130,6 @@ fn treasury_envelope_with(
     }
 }
 
-fn cancel_envelope() -> CommandEnvelope<ProductCommand> {
-    cancel_envelope_with("cmd-3", "trader-1", 3, 1_002)
-}
-
-fn cancel_envelope_with(
-    command_id: &str,
-    account_id: &str,
-    nonce: u64,
-    timestamp_ns: u64,
-) -> CommandEnvelope<ProductCommand> {
-    CommandEnvelope {
-        command_id: command_id.to_string(),
-        account_id: account_id.to_string(),
-        nonce,
-        timestamp_ns,
-        command: ProductCommand::Spot(SpotCommand::CancelOrder(CancelSpotOrderCmd {
-            party_id: account_id.to_string(),
-            asset: 10_001,
-            order_id: 42,
-        })),
-    }
-}
-
 fn withdraw_envelope() -> CommandEnvelope<ProductCommand> {
     CommandEnvelope {
         command_id: "cmd-4".to_string(),
@@ -168,76 +141,6 @@ fn withdraw_envelope() -> CommandEnvelope<ProductCommand> {
             amount: 250,
         })),
     }
-}
-
-fn open_buy_order() -> SpotOrderV2 {
-    SpotOrderV2::new(
-        "order-42".to_string(),
-        10_001,
-        Some(42),
-        "trader-1".to_string(),
-        "BTCUSDT".to_string(),
-        SpotOrderSide::Buy,
-        SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
-        2,
-        0,
-        SpotOrderStatus::Open,
-        None,
-        0,
-        200,
-        None,
-        0,
-    )
-}
-
-fn open_sell_order() -> SpotOrderV2 {
-    SpotOrderV2::new(
-        "order-42".to_string(),
-        10_001,
-        Some(42),
-        "trader-1".to_string(),
-        "BTCUSDT".to_string(),
-        SpotOrderSide::Sell,
-        SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
-        2,
-        2,
-        SpotOrderStatus::Open,
-        None,
-        2,
-        0,
-        None,
-        0,
-    )
-}
-
-fn state_with_open_buy_order() -> BuildBlockFromCommandsState {
-    let mut state = sample_state();
-    let order = open_buy_order();
-    let reservation = order.to_reservation("BTC", "USDT").unwrap();
-    state.exchange_state.spot.balances.insert(
-        AccountAssetKey::new("trader-1", "USDT"),
-        Balance::new("trader-1".to_string(), "USDT".to_string(), 9_800, 200, 3),
-    );
-    state.exchange_state.spot.orders.insert("order-42".to_string(), order);
-    state.exchange_state.spot.reservations.insert(reservation.reservation_id.clone(), reservation);
-    state.commands = vec![cancel_envelope()];
-    state
-}
-
-fn state_with_open_sell_order() -> BuildBlockFromCommandsState {
-    let mut state = sample_state();
-    let order = open_sell_order();
-    let reservation = order.to_reservation("BTC", "USDT").unwrap();
-    state.exchange_state.spot.balances.insert(
-        AccountAssetKey::new("trader-1", "BTC"),
-        Balance::new("trader-1".to_string(), "BTC".to_string(), 5, 2, 2),
-    );
-    state.exchange_state.spot.orders.insert("order-42".to_string(), order);
-    state.exchange_state.spot.reservations.insert(reservation.reservation_id.clone(), reservation);
-    state.commands = vec![cancel_envelope()];
-    state
 }
 
 fn block(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::NewBlock {
@@ -262,24 +165,6 @@ fn spot_balance_after<'a>(
                 if balance.after.account_id == account_id && balance.after.asset_id == asset_id =>
             {
                 Some(&balance.after)
-            }
-            _ => None,
-        })
-        .unwrap()
-}
-
-fn spot_order_after<'a>(
-    changes: &'a BuildBlockFromCommandsChanges,
-    order_id: &str,
-) -> &'a SpotOrderV2 {
-    changes
-        .ordered_changes
-        .iter()
-        .rev()
-        .find_map(|change| match change {
-            BlockEntityChange::SpotOrderCreated(order) if order.order_id == order_id => Some(order),
-            BlockEntityChange::SpotOrderUpdated(order) if order.after.order_id == order_id => {
-                Some(&order.after)
             }
             _ => None,
         })
@@ -316,9 +201,13 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     let new_block = block(&changes);
     let body = execution_body(&changes);
 
-    assert_eq!(changes.ordered_changes.len(), 2);
+    assert_eq!(changes.ordered_changes.len(), 3);
     assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
     assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
+    assert!(matches!(
+        changes.ordered_changes[2],
+        BlockEntityChange::BalanceLedgerEntryCreated(_)
+    ));
     assert_eq!(new_block.block_height, 2);
     assert_eq!(new_block.parent_block_hash, "parent-1");
     assert!(!new_block.commands_root.is_empty());
@@ -327,7 +216,7 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!(body.block_height, new_block.block_height);
     assert_eq!(body.block_hash, new_block.block_hash);
     assert_eq!(body.commands.len(), 1);
-    assert_eq!(events.len(), 2);
+    assert_eq!(events.len(), 3);
     assert_eq!(body.replayable_events, events);
 
     let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
@@ -381,63 +270,6 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
 }
 
 #[test]
-fn single_spot_cancel_command_builds_block() -> Result<(), BuildBlockError> {
-    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        &state_with_open_buy_order(),
-    )?;
-    let events = changes.to_replayable_events().expect("changes should project to events");
-
-    assert_eq!(changes.ordered_changes.len(), 2);
-    assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderUpdated(_)));
-    assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
-    assert_eq!(events.len(), 2);
-
-    let next_order = spot_order_after(&changes, "order-42");
-    assert_eq!(next_order.status, SpotOrderStatus::Canceled);
-    assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-    assert_eq!(next_order.version, 1);
-
-    let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
-    assert_eq!((next_usdt.available, next_usdt.frozen, next_usdt.version), (10_000, 0, 4));
-
-    Ok(())
-}
-
-#[test]
-fn spot_cancel_sell_order_releases_base_balance() -> Result<(), BuildBlockError> {
-    let changes = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        &state_with_open_sell_order(),
-    )?;
-
-    let next_order = spot_order_after(&changes, "order-42");
-    assert_eq!(next_order.status, SpotOrderStatus::Canceled);
-    assert_eq!(next_order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
-
-    let next_btc = spot_balance_after(&changes, "trader-1", "BTC");
-    assert_eq!((next_btc.available, next_btc.frozen, next_btc.version), (7, 0, 3));
-
-    Ok(())
-}
-
-#[test]
-fn spot_cancel_missing_order_returns_spot_execution_error() {
-    let mut state = sample_state();
-    state.commands = vec![cancel_envelope()];
-
-    let result = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
-        &BuildBlockFromCommandsUseCase,
-        &sample_command(),
-        &state,
-    );
-
-    assert_eq!(result, Err(BuildBlockError::SpotExecution("open order was not found".to_string())));
-}
-
-#[test]
 fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     let mut state = sample_state();
     state.exchange_state.treasury.balances.insert(
@@ -453,8 +285,8 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.ordered_changes.len(), 3);
-    assert_eq!(events.len(), 3);
+    assert_eq!(changes.ordered_changes.len(), 4);
+    assert_eq!(events.len(), 4);
 
     let treasury_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!(
@@ -477,7 +309,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!((spot_usdt_change.available, spot_usdt_change.frozen), (9_800, 200));
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2]);
+    assert_eq!(sequences, vec![0, 1, 2, 3]);
 
     Ok(())
 }
@@ -499,20 +331,16 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2]);
+    assert_eq!(sequences, vec![0, 1, 2, 3]);
 
     Ok(())
 }
 
 #[test]
-fn resolve_block_command_handler_maps_all_five_command_families() {
+fn resolve_block_command_handler_maps_supported_command_families() {
     assert!(matches!(
         resolve_block_command_handler(&sample_envelope().command),
-        ResolvedBlockCommandHandler::ExecuteImmediateOrderPipeline(_, _)
-    ));
-    assert!(matches!(
-        resolve_block_command_handler(&cancel_envelope().command),
-        ResolvedBlockCommandHandler::CancelOrder(_, _)
+        ResolvedBlockCommandHandler::PlaceSpotOrderV2(_, _)
     ));
     assert!(matches!(
         resolve_block_command_handler(&treasury_envelope().command),
@@ -529,45 +357,23 @@ fn resolve_block_command_handler_maps_all_five_command_families() {
 }
 
 #[test]
-fn execute_immediate_order_pipeline_handler_returns_changes_and_apply_patch()
--> Result<(), BuildBlockError> {
+fn place_spot_order_v2_handler_returns_changes_and_sequence() -> Result<(), BuildBlockError> {
     let state = sample_state();
     let envelope = sample_envelope();
-    let ProductCommand::Spot(SpotCommand::ExecuteImmediateOrderPipeline(command)) =
-        &envelope.command
-    else {
+    let ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command)) = &envelope.command else {
         unreachable!();
     };
 
-    let result = EXECUTE_IMMEDIATE_ORDER_PIPELINE_BLOCK_COMMAND_HANDLER.execute(
+    let result = PLACE_SPOT_ORDER_V2_BLOCK_COMMAND_HANDLER.execute(
         &envelope,
         command,
         &state.exchange_state,
     )?;
-    assert_eq!(result.apply_patch.next_order_sequence, 8);
-    assert!(result.apply_patch.settled_trade_ids_appended.is_empty());
-    assert!(result.changes.match_output.is_none());
-    assert!(result.changes.settle_changes.is_none());
-    assert_eq!(result.changes.place_output.created_order.order_id, "trader-1-BTCUSDT-7");
-
-    Ok(())
-}
-
-#[test]
-fn cancel_order_handler_returns_example_core_changes() -> Result<(), BuildBlockError> {
-    let state = state_with_open_buy_order();
-    let envelope = cancel_envelope();
-    let ProductCommand::Spot(SpotCommand::CancelOrder(command)) = &envelope.command else {
-        unreachable!();
-    };
-
-    let result =
-        CANCEL_ORDER_BLOCK_COMMAND_HANDLER.execute(&envelope, command, &state.exchange_state)?;
-    assert_eq!(result.canceled_order.before.status, SpotOrderStatus::Open);
-    assert_eq!(result.canceled_order.after.status, SpotOrderStatus::Canceled);
-    assert_eq!(result.released_balances.len(), 1);
-    assert_eq!(result.released_balances[0].before.frozen, 200);
-    assert_eq!(result.released_balances[0].after.frozen, 0);
+    assert_eq!(result.next_order_sequence, 8);
+    assert_eq!(
+        result.changes.updated_taker_order.after.order_id,
+        "trader-1-BTCUSDT-7"
+    );
 
     Ok(())
 }
@@ -619,7 +425,7 @@ fn deposit_and_withdraw_handlers_return_quote_changes() -> Result<(), BuildBlock
 fn validate_rejects_duplicate_command_id_in_batch() {
     let mut state = sample_state();
     state.commands = vec![
-        sample_spot_envelope_with("dup-cmd", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc),
+        sample_spot_envelope_with("dup-cmd", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc),
         treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
     ];
 
@@ -643,7 +449,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
         Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
     );
     state.commands = vec![
-        sample_spot_envelope_with("cmd-a", "trader-1", 7, 1_000, PlaceOrderTimeInForce::Gtc),
+        sample_spot_envelope_with("cmd-a", "trader-1", 7, 1_000, SpotOrderTimeInForce::Gtc),
         treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
     ];
 
@@ -666,7 +472,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
 fn validate_rejects_zero_timestamp_command() {
     let mut state = sample_state();
     state.commands =
-        vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, PlaceOrderTimeInForce::Gtc)];
+        vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, SpotOrderTimeInForce::Gtc)];
 
     let result = MiStateMachineV2Unchecked::validate_against_given_state(
         &BuildBlockFromCommandsUseCase,
@@ -707,9 +513,9 @@ fn validate_rejects_envelope_account_mismatch() {
 fn validate_rejects_non_canonical_command_order() {
     let mut state = sample_state();
     let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
     let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
     let result = MiStateMachineV2Unchecked::validate_against_given_state(
@@ -724,24 +530,24 @@ fn validate_rejects_non_canonical_command_order() {
 #[test]
 fn canonical_sort_prioritizes_alo_before_other_commands() {
     let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
-    let cancel = cancel_envelope_with("cmd-cancel", "trader-1", 3, 500);
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
+    let treasury = treasury_envelope_with("cmd-treasury", "trader-1", 3, 500, 1);
 
-    let sorted = canonical_sort_commands(&[gtc, cancel, alo]);
+    let sorted = canonical_sort_commands(&[gtc, treasury, alo]);
     let sorted_ids = sorted.iter().map(|command| command.command_id.as_str()).collect::<Vec<_>>();
 
-    assert_eq!(sorted_ids, vec!["cmd-alo", "cmd-cancel", "cmd-gtc"]);
+    assert_eq!(sorted_ids, vec!["cmd-alo", "cmd-treasury", "cmd-gtc"]);
 }
 
 #[test]
 fn compute_changes_rejects_non_canonical_batch() {
     let mut state = sample_state();
     let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, PlaceOrderTimeInForce::Alo);
+        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
     let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, PlaceOrderTimeInForce::Gtc);
+        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
     let result = MiStateMachineV2Unchecked::compute_after_changes_unchecked(
@@ -760,7 +566,7 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
         AccountAssetKey::new("trader-1", "USDT"),
         Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
     );
-    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 1, 10, PlaceOrderTimeInForce::Alo);
+    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 1, 10, SpotOrderTimeInForce::Alo);
     let treasury = treasury_envelope_with("cmd-treasury", "trader-1", 2, 30, 500);
     state.commands = vec![alo.clone(), treasury.clone()];
 
@@ -791,8 +597,8 @@ fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
 
     assert_eq!(block(&changes).block_height, 2);
     assert_eq!(execution_body(&changes).block_height, 2);
-    assert_eq!(changes.ordered_changes.len(), 2);
-    assert_eq!(events.len(), 2);
+    assert_eq!(changes.ordered_changes.len(), 3);
+    assert_eq!(events.len(), 3);
     assert_eq!(events.len(), changes.ordered_changes.len());
 
     Ok(())

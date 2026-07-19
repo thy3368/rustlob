@@ -3,7 +3,8 @@ use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
-use example_core::{Balance, SpotOrderV2, SpotTrade};
+use example_core::{Balance, BalanceLedgerEntryV2, SpotOrderV2, SpotTrade};
+use example_core::entity::SettlementTransferVoucher;
 use thiserror::Error;
 
 use crate::entity::{BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
@@ -29,6 +30,8 @@ pub enum BlockEntityChange {
     SpotOrderUpdated(UpdatedEntityPair<SpotOrderV2>),
     BalanceUpdated(UpdatedEntityPair<Balance>),
     SpotTradeCreated(SpotTrade),
+    SettlementTransferVoucherCreated(SettlementTransferVoucher),
+    BalanceLedgerEntryCreated(BalanceLedgerEntryV2),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -55,6 +58,12 @@ impl ReplayableChanges for BuildBlockFromCommandsChanges {
                 }
                 BlockEntityChange::SpotTradeCreated(trade) => {
                     events.push(trade.track_create_event()?);
+                }
+                BlockEntityChange::SettlementTransferVoucherCreated(voucher) => {
+                    events.push(voucher.track_create_event()?);
+                }
+                BlockEntityChange::BalanceLedgerEntryCreated(entry) => {
+                    events.push(entry.track_create_event()?);
                 }
             }
         }
@@ -99,6 +108,8 @@ pub enum BuildBlockError {
     MissingSpotMarketRules { symbol: String },
     #[error("missing spot asset pair for '{symbol}'")]
     MissingSpotAssetPair { symbol: String },
+    #[error("missing spot symbol for asset '{asset}'")]
+    MissingSpotAssetSymbol { asset: u32 },
     #[error("missing spot trading runtime for '{symbol}'")]
     MissingSpotTradingRuntime { symbol: String },
     #[error("missing spot balance for account '{account_id}' asset '{asset_id}'")]
