@@ -123,11 +123,12 @@ where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = request.into_command();
-    let result = MiStateMachineFamilyExecutor.execute::<
-        SpotOrderV2UseCaseFamilyV3,
-        PlaceOrderHttpExecutionSpec,
-        OB,
-    >(&SpotOrderV2UseCaseFamilyV3, &command, outbound)?;
+    let result = MiStateMachineFamilyExecutor
+        .execute::<SpotOrderV2UseCaseFamilyV3, PlaceOrderHttpExecutionSpec, OB>(
+            &SpotOrderV2UseCaseFamilyV3,
+            &command,
+            outbound,
+        )?;
     let _changes: SpotOrderV2CaseChangesV3 = result.changes;
     Ok(PlaceOrderHttpReplyMapper.map(result.events))
 }

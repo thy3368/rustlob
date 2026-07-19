@@ -160,11 +160,12 @@ where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = command.into_command();
-    let result = MiStateMachineFamilyExecutor.execute::<
-        SpotOrderV2UseCaseFamilyV3,
-        PlaceOrderCliExecutionSpec,
-        OB,
-    >(&SpotOrderV2UseCaseFamilyV3, &command, outbound)?;
+    let result = MiStateMachineFamilyExecutor
+        .execute::<SpotOrderV2UseCaseFamilyV3, PlaceOrderCliExecutionSpec, OB>(
+            &SpotOrderV2UseCaseFamilyV3,
+            &command,
+            outbound,
+        )?;
     Ok(PlaceOrderCliReplyMapper.map(result.events))
 }
 
