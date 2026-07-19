@@ -1,4 +1,7 @@
-use example_core::{Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges, WithdrawQuoteCmd};
+use example_core::{
+    Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges,
+    WithdrawQuoteCmd,
+};
 
 use crate::entity::{
     AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotCommand, TreasuryCommand,

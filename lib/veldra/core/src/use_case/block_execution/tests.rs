@@ -204,10 +204,7 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!(changes.ordered_changes.len(), 3);
     assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
     assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
-    assert!(matches!(
-        changes.ordered_changes[2],
-        BlockEntityChange::BalanceLedgerEntryCreated(_)
-    ));
+    assert!(matches!(changes.ordered_changes[2], BlockEntityChange::BalanceLedgerEntryCreated(_)));
     assert_eq!(new_block.block_height, 2);
     assert_eq!(new_block.parent_block_hash, "parent-1");
     assert!(!new_block.commands_root.is_empty());
@@ -370,10 +367,7 @@ fn place_spot_order_v2_handler_returns_changes_and_sequence() -> Result<(), Buil
         &state.exchange_state,
     )?;
     assert_eq!(result.next_order_sequence, 8);
-    assert_eq!(
-        result.changes.updated_taker_order.after.order_id,
-        "trader-1-BTCUSDT-7"
-    );
+    assert_eq!(result.changes.updated_taker_order.after.order_id, "trader-1-BTCUSDT-7");
 
     Ok(())
 }
@@ -512,10 +506,8 @@ fn validate_rejects_envelope_account_mismatch() {
 #[test]
 fn validate_rejects_non_canonical_command_order() {
     let mut state = sample_state();
-    let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
-    let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
+    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
+    let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
     let result = MiStateMachineV2Unchecked::validate_against_given_state(
@@ -529,10 +521,8 @@ fn validate_rejects_non_canonical_command_order() {
 
 #[test]
 fn canonical_sort_prioritizes_alo_before_other_commands() {
-    let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
-    let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
+    let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
+    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
     let treasury = treasury_envelope_with("cmd-treasury", "trader-1", 3, 500, 1);
 
     let sorted = canonical_sort_commands(&[gtc, treasury, alo]);
@@ -544,10 +534,8 @@ fn canonical_sort_prioritizes_alo_before_other_commands() {
 #[test]
 fn compute_changes_rejects_non_canonical_batch() {
     let mut state = sample_state();
-    let alo =
-        sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
-    let gtc =
-        sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
+    let alo = sample_spot_envelope_with("cmd-alo", "trader-1", 2, 2_000, SpotOrderTimeInForce::Alo);
+    let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
     let result = MiStateMachineV2Unchecked::compute_after_changes_unchecked(

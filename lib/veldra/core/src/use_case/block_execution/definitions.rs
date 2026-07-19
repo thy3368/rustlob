@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
-use example_core::{Balance, BalanceLedgerEntryV2, SpotOrderV2, SpotTrade};
 use example_core::entity::SettlementTransferVoucher;
+use example_core::{Balance, BalanceLedgerEntryV2, SpotOrderV2, SpotTrade};
 use thiserror::Error;
 
 use crate::entity::{BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand};

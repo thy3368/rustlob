@@ -76,10 +76,10 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
                 .spot
                 .reservations
                 .insert(order.reservation.reservation_id.clone(), order.reservation.clone());
-            exchange_state
-                .spot
-                .reservations
-                .insert(order.fee_reservation.reservation_id.clone(), order.fee_reservation.clone());
+            exchange_state.spot.reservations.insert(
+                order.fee_reservation.reservation_id.clone(),
+                order.fee_reservation.clone(),
+            );
         }
     }
 }
@@ -168,10 +168,9 @@ fn build_place_state(
 
     let mut settlement_balances = spot_state.balances.values().cloned().collect::<Vec<_>>();
     let fee_account_id = "fee".to_string();
-    if !settlement_balances
-        .iter()
-        .any(|balance| balance.account_id == fee_account_id && balance.asset_id == asset_pair.quote_asset_id)
-    {
+    if !settlement_balances.iter().any(|balance| {
+        balance.account_id == fee_account_id && balance.asset_id == asset_pair.quote_asset_id
+    }) {
         settlement_balances.push(example_core::Balance::new(
             fee_account_id.clone(),
             asset_pair.quote_asset_id.clone(),

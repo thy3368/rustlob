@@ -163,20 +163,13 @@ fn extract_place_spot_order_v2_changes(
 ) -> Vec<BlockEntityChange> {
     let mut changes = Vec::new();
     if execution.updated_taker_order.before == execution.updated_taker_order.after {
-        changes.push(BlockEntityChange::SpotOrderCreated(
-            execution.updated_taker_order.after.clone(),
-        ));
+        changes
+            .push(BlockEntityChange::SpotOrderCreated(execution.updated_taker_order.after.clone()));
     } else {
-        changes.push(BlockEntityChange::SpotOrderUpdated(
-            execution.updated_taker_order.clone(),
-        ));
+        changes.push(BlockEntityChange::SpotOrderUpdated(execution.updated_taker_order.clone()));
     }
     changes.extend(
-        execution
-            .updated_maker_orders
-            .iter()
-            .cloned()
-            .map(BlockEntityChange::SpotOrderUpdated),
+        execution.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
     );
     changes.extend(
         execution
@@ -186,13 +179,8 @@ fn extract_place_spot_order_v2_changes(
             .cloned()
             .map(BlockEntityChange::BalanceUpdated),
     );
-    changes.extend(
-        execution
-            .created_trades
-            .iter()
-            .cloned()
-            .map(BlockEntityChange::SpotTradeCreated),
-    );
+    changes
+        .extend(execution.created_trades.iter().cloned().map(BlockEntityChange::SpotTradeCreated));
     changes.extend(
         execution
             .created_vouchers
