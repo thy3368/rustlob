@@ -150,10 +150,13 @@ fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2Beha
     assert_eq!(outcome.trades[1].qty, 2);
     assert_eq!(taker.filled_qty, 3);
     assert_eq!(taker.status, SpotOrderStatus::Filled);
+    assert_eq!(taker.version, 3);
     assert_eq!(makers[0].filled_qty, 1);
     assert_eq!(makers[0].status, SpotOrderStatus::Filled);
+    assert_eq!(makers[0].version, 2);
     assert_eq!(makers[1].filled_qty, 2);
     assert_eq!(makers[1].status, SpotOrderStatus::PartiallyFilled);
+    assert_eq!(makers[1].version, 2);
     Ok(())
 }
 

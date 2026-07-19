@@ -5,6 +5,7 @@ use common_entity::{
     Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
+use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{
     SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotOrderV2MatchingDecision,
     spot_order_v2_matching_decision,
@@ -25,7 +26,7 @@ use crate::{
     SpotOrderTimeInForce, SpotTrade,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct PlaceSpotOrderV2CmdV3 {
     pub party_id: String,
     pub asset: u32,
@@ -47,14 +48,14 @@ pub struct PlaceSpotOrderV2TakerTemplateContextV3<'a> {
     pub taker_fee_bps: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2CmdV3 {
     pub party_id: String,
     pub asset: u32,
     pub lookup: CancelSpotOrderV2LookupV3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CancelSpotOrderV2LookupV3 {
     #[default]
     Missing,
@@ -62,7 +63,7 @@ pub enum CancelSpotOrderV2LookupV3 {
     Cloid(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderV2CommandV3 {
     Place(PlaceSpotOrderV2CmdV3),
     Cancel(CancelSpotOrderV2CmdV3),
@@ -190,11 +191,15 @@ impl ReplayableChanges for PlaceSpotOrderV2ChangesV3 {
         for maker in &self.updated_maker_orders {
             events.push(maker.after.track_update_event_from(&maker.before)?);
         }
-        events.push(
-            self.updated_taker_order
-                .after
-                .track_update_event_from(&self.updated_taker_order.before)?,
-        );
+        if self.updated_taker_order.before == self.updated_taker_order.after {
+            events.push(self.updated_taker_order.after.track_create_event()?);
+        } else {
+            events.push(
+                self.updated_taker_order
+                    .after
+                    .track_update_event_from(&self.updated_taker_order.before)?,
+            );
+        }
         for voucher in &self.created_vouchers {
             events.push(voucher.track_create_event()?);
         }

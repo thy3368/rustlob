@@ -337,6 +337,25 @@ pub(crate) struct SpotOrderFinalization {
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
 
+fn quote_notional(qty: u64, price: u64) -> Option<u64> {
+    qty.checked_mul(price)
+}
+
+fn fee_amount_round_up(notional: u64, fee_bps: u64) -> Option<u64> {
+    let scaled = notional.checked_mul(fee_bps)?;
+    let numerator = scaled.checked_add(FEE_BPS_DENOMINATOR.checked_sub(1)?)?;
+    Some(numerator / FEE_BPS_DENOMINATOR)
+}
+
+#[derive(Debug, Clone)]
+struct PlacePrincipalHoldPlan {
+    reserved_base: u64,
+    reserved_quote: u64,
+    freeze_asset_id: String,
+    freeze_balance_entity_id: String,
+    amount: u64,
+}
+
 /// `SpotOrderV2 v2` 的目标态订单聚合。
 ///
 /// 这是一个 `MomentInterval + AggregateRoot`，只表达订单自身的业务真相：
@@ -518,27 +537,9 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2BehaviorError::InvalidPrice);
         }
 
-        let quote_notional = input
-            .qty
-            .checked_mul(order_price)
+        let quote_notional = quote_notional(input.qty, order_price)
             .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
-        let (reserved_base, reserved_quote, freeze_asset_id, freeze_balance_entity_id, amount) =
-            match input.side {
-                SpotOrderSide::Buy => (
-                    0,
-                    quote_notional,
-                    input.quote_asset_id.clone(),
-                    input.quote_balance_entity_id.clone(),
-                    quote_notional,
-                ),
-                SpotOrderSide::Sell => (
-                    input.qty,
-                    0,
-                    input.base_asset_id.clone(),
-                    input.base_balance_entity_id.clone(),
-                    input.qty,
-                ),
-            };
+        let principal_hold = Self::place_principal_hold_plan(&input, quote_notional);
 
         let reservation = Self::principal_reservation(
             input.order_id.as_str(),
@@ -562,9 +563,9 @@ impl SpotOrderV2 {
         let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
             format!("balance-ledger:freeze:{}", input.order_id),
             input.account_id.clone(),
-            freeze_asset_id,
-            freeze_balance_entity_id,
-            amount,
+            principal_hold.freeze_asset_id,
+            principal_hold.freeze_balance_entity_id,
+            principal_hold.amount,
             BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
         )?;
 
@@ -581,8 +582,8 @@ impl SpotOrderV2 {
             0,
             SpotOrderStatus::Open,
             None,
-            reserved_base,
-            reserved_quote,
+            principal_hold.reserved_base,
+            principal_hold.reserved_quote,
             reservation,
             fee_reservation,
             input.client_order_id,
@@ -607,7 +608,7 @@ impl SpotOrderV2 {
             SpotOrderSide::Buy => (
                 ReservationKind::SpotBuyQuote,
                 quote_asset_id.to_string(),
-                qty.checked_mul(order_price).ok_or(ReservationError::ArithmeticOverflow)?,
+                quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?,
             ),
             SpotOrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
         };
@@ -639,17 +640,8 @@ impl SpotOrderV2 {
             1
         } else {
             let notional =
-                qty.checked_mul(order_price).ok_or(ReservationError::ArithmeticOverflow)?;
-            let scaled =
-                notional.checked_mul(fee_bps).ok_or(ReservationError::ArithmeticOverflow)?;
-            let numerator = scaled
-                .checked_add(
-                    FEE_BPS_DENOMINATOR
-                        .checked_sub(1)
-                        .ok_or(ReservationError::ArithmeticOverflow)?,
-                )
-                .ok_or(ReservationError::ArithmeticOverflow)?;
-            numerator / FEE_BPS_DENOMINATOR
+                quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?;
+            fee_amount_round_up(notional, fee_bps).ok_or(ReservationError::ArithmeticOverflow)?
         };
         let kind = match side {
             SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
@@ -702,6 +694,28 @@ impl SpotOrderV2 {
                 status: ReservationStatus::Active,
                 close_reason: None,
                 version: 1,
+            },
+        }
+    }
+
+    fn place_principal_hold_plan(
+        input: &PlaceSpotOrderV2Input,
+        quote_notional: u64,
+    ) -> PlacePrincipalHoldPlan {
+        match input.side {
+            SpotOrderSide::Buy => PlacePrincipalHoldPlan {
+                reserved_base: 0,
+                reserved_quote: quote_notional,
+                freeze_asset_id: input.quote_asset_id.clone(),
+                freeze_balance_entity_id: input.quote_balance_entity_id.clone(),
+                amount: quote_notional,
+            },
+            SpotOrderSide::Sell => PlacePrincipalHoldPlan {
+                reserved_base: input.qty,
+                reserved_quote: 0,
+                freeze_asset_id: input.base_asset_id.clone(),
+                freeze_balance_entity_id: input.base_balance_entity_id.clone(),
+                amount: input.qty,
             },
         }
     }
@@ -842,7 +856,7 @@ impl SpotOrderV2 {
 
     /// 返回订单建立时的 quote 冻结快照。
     fn initial_quote_hold_snapshot(&self) -> Option<u64> {
-        self.qty.checked_mul(self.order_price())
+        quote_notional(self.qty, self.order_price())
     }
 
     fn hold_asset(&self) -> SpotOrderHoldAsset {
@@ -881,14 +895,8 @@ impl SpotOrderV2 {
     }
 
     fn quote_fee_amount_with_bps_round_up(&self, fee_bps: u64) -> Option<u64> {
-        if fee_bps == 0 {
-            return Some(0);
-        }
-
         let notional = self.initial_quote_hold_snapshot()?;
-        let scaled = notional.checked_mul(fee_bps)?;
-        let numerator = scaled.checked_add(FEE_BPS_DENOMINATOR.checked_sub(1)?)?;
-        Some(numerator / FEE_BPS_DENOMINATOR)
+        fee_amount_round_up(notional, fee_bps)
     }
 
     /// 返回该订单建立时声明的冻结需求。
@@ -1021,14 +1029,10 @@ impl SpotOrderV2 {
             SpotTradeFeeRole::Taker => taker_fee_bps,
         };
 
-        let trade_notional =
-            trade_qty.checked_mul(trade_price).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        let scaled =
-            trade_notional.checked_mul(fee_bps).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        let numerator = scaled
-            .checked_add(FEE_BPS_DENOMINATOR - 1)
+        let trade_notional = quote_notional(trade_qty, trade_price)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-        let amount = numerator / FEE_BPS_DENOMINATOR;
+        let amount = fee_amount_round_up(trade_notional, fee_bps)
+            .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
 
         Ok(SpotOrderFeeConsumeRequirement { asset: self.fee_hold_asset(), amount, role, fee_bps })
     }
@@ -1199,14 +1203,17 @@ impl SpotOrderV2 {
 
     fn transition_to(
         &mut self,
+        next_version: u64,
         status: SpotOrderStatus,
         status_reason: Option<SpotOrderStatusReason>,
-    ) -> Result<(), SpotOrderV2MatchError> {
-        self.version =
-            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+    ) {
+        self.version = next_version;
         self.status = status;
         self.status_reason = status_reason;
-        Ok(())
+    }
+
+    fn next_version(&self) -> Result<u64, SpotOrderV2MatchError> {
+        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)
     }
 
     // 领域方法：订单生命周期推进
@@ -1225,9 +1232,9 @@ impl SpotOrderV2 {
         if next_filled_qty > self.qty {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
-        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        let next_version = self.next_version()?;
         self.filled_qty = next_filled_qty;
-        self.transition_to(self.matched_status_for(next_filled_qty), None)?;
+        self.transition_to(next_version, self.matched_status_for(next_filled_qty), None);
         Ok(())
     }
 
@@ -1306,7 +1313,13 @@ impl SpotOrderV2 {
         if !self.can_be_cancelled() {
             return Err(SpotOrderV2MatchError::OrderNotCancelable);
         }
-        self.transition_to(SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::CanceledByUser))
+        let next_version = self.next_version()?;
+        self.transition_to(
+            next_version,
+            SpotOrderStatus::Canceled,
+            Some(SpotOrderStatusReason::CanceledByUser),
+        );
+        Ok(())
     }
 
     /// 可 BDD 规格化的聚合根行为：撤销现货订单并派生解冻流水。
@@ -1345,19 +1358,27 @@ impl SpotOrderV2 {
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
     fn cancel_ioc_unfilled(&mut self, next_filled_qty: u64) -> Result<(), SpotOrderV2MatchError> {
-        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        let next_version = self.next_version()?;
         self.filled_qty = next_filled_qty;
         self.transition_to(
+            next_version,
             SpotOrderStatus::Canceled,
             Some(SpotOrderStatusReason::IocCancelRejected),
-        )
+        );
+        Ok(())
     }
 
     /// 领域方法：按 IOC / 市价订单无流动性语义拒绝订单。
     ///
     /// 可 BDD 规格化的聚合根行为：IOC 或市价订单因无流动性被拒绝。
     pub(crate) fn reject_as_no_liquidity(&mut self) -> Result<(), SpotOrderV2MatchError> {
-        self.transition_to(SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()))
+        let next_version = self.next_version()?;
+        self.transition_to(
+            next_version,
+            SpotOrderStatus::Rejected,
+            Some(self.no_liquidity_status_reason()),
+        );
+        Ok(())
     }
 
     /// 领域方法：应用 taker 本轮撮合结束后的业务结果。
@@ -1410,11 +1431,9 @@ impl SpotOrderV2 {
         &mut self,
         finalization: SpotOrderFinalization,
     ) -> Result<(), SpotOrderV2MatchError> {
-        self.version =
-            self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        let next_version = self.next_version()?;
         self.filled_qty = finalization.next_filled_qty;
-        self.status = finalization.status;
-        self.status_reason = finalization.status_reason;
+        self.transition_to(next_version, finalization.status, finalization.status_reason);
         Ok(())
     }
 
@@ -1422,7 +1441,13 @@ impl SpotOrderV2 {
     ///
     /// 可 BDD 规格化的聚合根行为：ALO 会立即吃单时被拒绝。
     pub(crate) fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderV2MatchError> {
-        self.transition_to(SpotOrderStatus::Rejected, Some(SpotOrderStatusReason::BadAloPxRejected))
+        let next_version = self.next_version()?;
+        self.transition_to(
+            next_version,
+            SpotOrderStatus::Rejected,
+            Some(SpotOrderStatusReason::BadAloPxRejected),
+        );
+        Ok(())
     }
 
     /// 返回撤单时应释放的 base 余额。
@@ -2285,6 +2310,16 @@ mod tests {
         assert_eq!(filled.cancel_by_user(), Err(SpotOrderV2MatchError::OrderNotCancelable));
         assert_eq!(filled.status, SpotOrderStatus::Filled);
         assert_eq!(filled.version, 1);
+    }
+
+    #[test]
+    fn fill_advances_version_once_without_partial_mutation() {
+        let mut order = buy_order();
+
+        assert_eq!(order.fill(1), Ok(()));
+        assert_eq!(order.filled_qty, 1);
+        assert_eq!(order.status, SpotOrderStatus::PartiallyFilled);
+        assert_eq!(order.version, 2);
     }
 
     #[test]
