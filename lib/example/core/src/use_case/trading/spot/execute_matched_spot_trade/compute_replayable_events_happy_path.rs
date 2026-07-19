@@ -66,15 +66,14 @@ fn full_fill_matches_and_settles_in_single_business_result()
     assert_eq!(changes.match_changes.updated_taker_order.after.status, SpotOrderStatus::Filled);
     let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
     assert_eq!(settle_changes.updated_reservations.len(), 2);
-    assert_eq!(settle_changes.updated_reservations.len(), 2);
     assert_eq!(settle_changes.updated_balances.len(), 4);
     assert_eq!(settle_changes.created_balance_ledger_entries.len(), 4);
 
     assert_eq!(events.len(), 13);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 2);
     assert_eq!(event_field(&events[3], "reservation_id"), Some("reservation:taker-1"));
-    assert_eq!(event_field(&events[7], "account_id"), Some("buyer"));
-    assert_eq!(event_field(&events[11], "reason"), Some("settle_spot_trade_buyer_receive_base"));
+    assert_eq!(event_field(&events[5], "account_id"), Some("buyer"));
+    assert_eq!(event_field(&events[9], "reason"), Some("settle_spot_trade_buyer_receive_base"));
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
 
     Ok(())
@@ -123,11 +122,10 @@ fn partial_fill_settles_only_the_matched_quantity() -> Result<(), ExecuteMatched
     );
     let settle_changes = changes.settle_changes.as_ref().expect("expected settlement changes");
     assert_eq!(settle_changes.updated_reservations.len(), 2);
-    assert_eq!(settle_changes.updated_reservations.len(), 2);
     assert_eq!(events.len(), 13);
     assert_trade_event(&events[0], "match-1-1", "maker-1", 100, 1);
     assert_eq!(event_field(&events[3], "reservation_id"), Some("reservation:taker-1"));
-    assert_eq!(event_field(&events[11], "reason_settlement_ids"), Some("settle-1-1"));
+    assert_eq!(event_field(&events[9], "reason_settlement_ids"), Some("settle-1-1"));
     assert!(events.iter().all(|event| event_field(event, "settlement_id").is_none()));
 
     Ok(())

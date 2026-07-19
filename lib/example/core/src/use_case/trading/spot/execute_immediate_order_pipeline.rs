@@ -290,6 +290,7 @@ mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
+    use crate::entity::spot::spot_order_v2::test_principal_reservation;
     use crate::entity::{SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason};
     use crate::{MarketRules, PlaceImmediateOrderExecution, PlaceOrderTimeInForce};
 
@@ -358,6 +359,7 @@ mod tests {
             None,
             qty,
             0,
+            test_principal_reservation(order_id, "maker-1", SpotOrderSide::Sell, qty, price),
             None,
             1,
         )

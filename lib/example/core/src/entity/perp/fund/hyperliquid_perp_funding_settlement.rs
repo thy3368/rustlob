@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
     FinancialClassification, FourColorArchetype,
 };
 
@@ -89,6 +89,31 @@ impl HyperliquidPerpFundingSettlement {
     }
 }
 
+impl FieldDiff for HyperliquidPerpFundingSettlement {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![
+            EntityFieldChange::new("funding_settlement_id", "", self.funding_settlement_id.clone()),
+            EntityFieldChange::new("funding_batch_id", "", self.funding_batch_id.clone()),
+            EntityFieldChange::new("account_id", "", self.account_id.clone()),
+            EntityFieldChange::new("position_id", "", self.position_id.clone()),
+            EntityFieldChange::new("asset", "", self.asset.to_string()),
+            EntityFieldChange::new("symbol", "", self.symbol.clone()),
+            EntityFieldChange::new("funding_time", "", self.funding_time.to_string()),
+            EntityFieldChange::new("side", "", self.side.as_str()),
+            EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("oracle_price", "", self.oracle_price.to_string()),
+            EntityFieldChange::new("notional", "", self.notional.to_string()),
+            EntityFieldChange::new("funding_rate_e8", "", self.funding_rate_e8.to_string()),
+            EntityFieldChange::new("funding_fee", "", self.funding_fee.to_string()),
+            EntityFieldChange::new("is_payment", "", self.is_payment.to_string()),
+        ]
+    }
+
+    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+        Vec::new()
+    }
+}
+
 impl Entity for HyperliquidPerpFundingSettlement {
     type Id = String;
 
@@ -131,30 +156,6 @@ impl Entity for HyperliquidPerpFundingSettlement {
     fn entity_version(&self) -> u64 {
         1
     }
-
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![
-            EntityFieldChange::new("funding_settlement_id", "", self.funding_settlement_id.clone()),
-            EntityFieldChange::new("funding_batch_id", "", self.funding_batch_id.clone()),
-            EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("position_id", "", self.position_id.clone()),
-            EntityFieldChange::new("asset", "", self.asset.to_string()),
-            EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("funding_time", "", self.funding_time.to_string()),
-            EntityFieldChange::new("side", "", self.side.as_str()),
-            EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("oracle_price", "", self.oracle_price.to_string()),
-            EntityFieldChange::new("notional", "", self.notional.to_string()),
-            EntityFieldChange::new("funding_rate_e8", "", self.funding_rate_e8.to_string()),
-            EntityFieldChange::new("funding_fee", "", self.funding_fee.to_string()),
-            EntityFieldChange::new("is_payment", "", self.is_payment.to_string()),
-        ]
-    }
-
-    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
-    }
-
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "funding_settlement_id"

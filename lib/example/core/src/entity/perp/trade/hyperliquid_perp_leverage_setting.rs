@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use crate::entity::HyperliquidPerpMarginMode;
 
@@ -74,21 +74,7 @@ impl HyperliquidPerpLeverageSetting {
     }
 }
 
-impl Entity for HyperliquidPerpLeverageSetting {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.setting_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_LEVERAGE_SETTING_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for HyperliquidPerpLeverageSetting {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
@@ -116,7 +102,22 @@ impl Entity for HyperliquidPerpLeverageSetting {
         );
         changes
     }
+}
 
+impl Entity for HyperliquidPerpLeverageSetting {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.setting_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_LEVERAGE_SETTING_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "account_id" | "margin_mode" => 0,

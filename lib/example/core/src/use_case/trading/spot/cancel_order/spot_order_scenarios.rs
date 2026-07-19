@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 
 use super::*;
+use crate::entity::spot::spot_order_v2::test_principal_reservation;
 use crate::entity::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce};
 
 /// active `SpotOrderV2` 的撤单测试场景。
@@ -34,6 +35,7 @@ impl ActiveSpotOrderScenario {
             None,
             reserved_base,
             reserved_quote,
+            test_principal_reservation("42", "trader-1", self.side, qty, price),
             None,
             1,
         )

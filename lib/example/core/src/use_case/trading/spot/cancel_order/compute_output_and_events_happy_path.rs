@@ -2,6 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
+use crate::entity::spot::spot_order_v2::test_principal_reservation;
 use crate::entity::{
     Balance, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
     SpotOrderTimeInForce, SpotOrderV2,
@@ -27,6 +28,7 @@ fn buy_open_order() -> SpotOrderV2 {
         None,
         0,
         20,
+        test_principal_reservation("42", "trader-1", SpotOrderSide::Buy, 2, 10),
         None,
         1,
     )
@@ -48,6 +50,7 @@ fn sell_open_order() -> SpotOrderV2 {
         None,
         2,
         0,
+        test_principal_reservation("42", "trader-1", SpotOrderSide::Sell, 2, 10),
         None,
         1,
     )

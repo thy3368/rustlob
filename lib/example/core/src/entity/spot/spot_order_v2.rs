@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FinancialClassification,
+    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
     FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
@@ -243,6 +243,11 @@ pub struct SpotOrderV2 {
     /// 该字段只保留订单内初始冻结事实或回放兼容语义，不代表余额侧 authoritative
     /// remaining hold。
     pub reserved_quote: u64,
+    /// 订单 principal 冻结凭证。
+    ///
+    /// `reserved_base` / `reserved_quote` 仍作为历史快照字段保留，但订单生命周期中的
+    /// authoritative principal 冻结状态从这里读取和回放。
+    pub reservation: Reservation,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 当前订单实体版本，用于生成可重放更新事件。
@@ -270,6 +275,7 @@ impl SpotOrderV2 {
         status_reason: Option<SpotOrderStatusReason>,
         reserved_base: u64,
         reserved_quote: u64,
+        reservation: Reservation,
         client_order_id: Option<String>,
         version: u64,
     ) -> Self {
@@ -288,9 +294,40 @@ impl SpotOrderV2 {
             status_reason,
             reserved_base,
             reserved_quote,
+            reservation,
             client_order_id,
             version,
         }
+    }
+
+    /// 为 spot 订单构造 principal reservation。
+    #[allow(clippy::too_many_arguments)]
+    pub fn principal_reservation(
+        order_id: &str,
+        account_id: &str,
+        side: SpotOrderSide,
+        qty: u64,
+        order_price: u64,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+    ) -> Result<Reservation, ReservationError> {
+        let (kind, asset_id, amount) = match side {
+            SpotOrderSide::Buy => (
+                ReservationKind::SpotBuyQuote,
+                quote_asset_id.to_string(),
+                qty.checked_mul(order_price).ok_or(ReservationError::ArithmeticOverflow)?,
+            ),
+            SpotOrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
+        };
+        Reservation::new(
+            format!("reservation:{order_id}"),
+            account_id.to_string(),
+            order_id.to_string(),
+            ReservationMarketKind::Spot,
+            kind,
+            asset_id,
+            amount,
+        )
     }
 
     /// 返回带交易所 `oid` 的订单快照。
@@ -405,31 +442,16 @@ impl SpotOrderV2 {
 
     /// 返回该订单应冻结的 reservation 数量。
     pub fn reservation_amount(&self) -> u64 {
-        match self.side {
-            SpotOrderSide::Buy => self.reservation_quote().unwrap_or(0),
-            SpotOrderSide::Sell => self.qty,
-        }
+        self.reservation.original_amount
     }
 
-    /// 为该订单构造初始 reservation 快照。
+    /// 返回该订单内嵌的 principal reservation 快照。
     pub fn to_reservation(
         &self,
-        base_asset_id: &str,
-        quote_asset_id: &str,
+        _base_asset_id: &str,
+        _quote_asset_id: &str,
     ) -> Result<Reservation, ReservationError> {
-        let asset_id = match self.side {
-            SpotOrderSide::Buy => quote_asset_id.to_string(),
-            SpotOrderSide::Sell => base_asset_id.to_string(),
-        };
-        Reservation::new(
-            format!("reservation:{}", self.order_id),
-            self.account_id.clone(),
-            self.order_id.clone(),
-            ReservationMarketKind::Spot,
-            self.reservation_kind(),
-            asset_id,
-            self.reservation_amount(),
-        )
+        Ok(self.reservation.clone())
     }
 
     /// 返回订单当前剩余可成交数量。
@@ -678,7 +700,11 @@ impl SpotOrderV2 {
     /// 返回 `reserved_quote` 是否仍符合买卖方向与订单快照语义。
     pub fn has_consistent_reserved_quote(&self) -> bool {
         match self.side {
-            SpotOrderSide::Buy => self.initial_quote_hold_snapshot() == Some(self.reserved_quote),
+            SpotOrderSide::Buy => {
+                self.reservation.reservation_kind == ReservationKind::SpotBuyQuote
+                    && self.reservation.original_amount == self.reserved_quote
+                    && self.initial_quote_hold_snapshot() == Some(self.reserved_quote)
+            }
             SpotOrderSide::Sell => self.reserved_quote == 0,
         }
     }
@@ -687,7 +713,11 @@ impl SpotOrderV2 {
     pub fn has_consistent_reserved_base(&self) -> bool {
         match self.side {
             SpotOrderSide::Buy => self.reserved_base == 0,
-            SpotOrderSide::Sell => self.reserved_base == self.qty,
+            SpotOrderSide::Sell => {
+                self.reservation.reservation_kind == ReservationKind::SpotSellBase
+                    && self.reservation.original_amount == self.reserved_base
+                    && self.reserved_base == self.qty
+            }
         }
     }
 
@@ -1004,49 +1034,7 @@ pub(crate) fn spot_order_v2_next_trade_terms(
     }
 }
 
-impl Entity for SpotOrderV2 {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.order_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        SPOT_ORDER_V2_ENTITY_TYPE
-    }
-
-    fn four_color_archetype() -> FourColorArchetype
-    where
-        Self: Sized,
-    {
-        FourColorArchetype::MomentInterval
-    }
-
-    fn aggregate_role() -> AggregateRole
-    where
-        Self: Sized,
-    {
-        AggregateRole::AggregateRoot
-    }
-
-    fn financial_classification() -> FinancialClassification
-    where
-        Self: Sized,
-    {
-        FinancialClassification::BusinessVoucher
-    }
-
-    fn is_mi_chain_root() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for SpotOrderV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("order_id", "", self.order_id.clone()),
@@ -1068,6 +1056,34 @@ impl Entity for SpotOrderV2 {
             ),
             EntityFieldChange::new("reserved_base", "", self.reserved_base.to_string()),
             EntityFieldChange::new("reserved_quote", "", self.reserved_quote.to_string()),
+            EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
+            EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
+            EntityFieldChange::new(
+                "reservation_kind",
+                "",
+                self.reservation.reservation_kind.as_str(),
+            ),
+            EntityFieldChange::new(
+                "reservation_original_amount",
+                "",
+                self.reservation.original_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "reservation_consumed_amount",
+                "",
+                self.reservation.consumed_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "reservation_released_amount",
+                "",
+                self.reservation.released_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "reservation_remaining_amount",
+                "",
+                self.reservation.remaining_amount.to_string(),
+            ),
+            EntityFieldChange::new("reservation_status", "", self.reservation.status.as_str()),
             EntityFieldChange::new(
                 "client_order_id",
                 "",
@@ -1130,6 +1146,54 @@ impl Entity for SpotOrderV2 {
         );
         push_change(
             &mut changes,
+            "reservation_id",
+            &self.reservation.reservation_id,
+            &other.reservation.reservation_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_asset_id",
+            &self.reservation.asset_id,
+            &other.reservation.asset_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_kind",
+            self.reservation.reservation_kind.as_str(),
+            other.reservation.reservation_kind.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_original_amount",
+            self.reservation.original_amount.to_string(),
+            other.reservation.original_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_consumed_amount",
+            self.reservation.consumed_amount.to_string(),
+            other.reservation.consumed_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_released_amount",
+            self.reservation.released_amount.to_string(),
+            other.reservation.released_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_remaining_amount",
+            self.reservation.remaining_amount.to_string(),
+            other.reservation.remaining_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_status",
+            self.reservation.status.as_str(),
+            other.reservation.status.as_str(),
+        );
+        push_change(
+            &mut changes,
             "client_order_id",
             self.client_order_id.clone().unwrap_or_default(),
             other.client_order_id.clone().unwrap_or_default(),
@@ -1138,19 +1202,105 @@ impl Entity for SpotOrderV2 {
 
         changes
     }
+}
 
+impl Entity for SpotOrderV2 {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.order_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        SPOT_ORDER_V2_ENTITY_TYPE
+    }
+
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateRoot
+    }
+
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::BusinessVoucher
+    }
+
+    fn is_mi_chain_root() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "order_id" | "account_id" | "symbol" | "side" | "execution" | "time_in_force"
-            | "status" | "status_reason" | "client_order_id" => 0,
-            "asset" | "exchange_oid" | "qty" | "filled_qty" | "price" | "reserved_base"
-            | "reserved_quote" | "version" => 1,
+            "order_id"
+            | "account_id"
+            | "symbol"
+            | "side"
+            | "execution"
+            | "time_in_force"
+            | "status"
+            | "status_reason"
+            | "client_order_id"
+            | "reservation_id"
+            | "reservation_asset_id"
+            | "reservation_kind"
+            | "reservation_status" => 0,
+            "asset"
+            | "exchange_oid"
+            | "qty"
+            | "filled_qty"
+            | "price"
+            | "reserved_base"
+            | "reserved_quote"
+            | "version"
+            | "reservation_original_amount"
+            | "reservation_consumed_amount"
+            | "reservation_released_amount"
+            | "reservation_remaining_amount" => 1,
             _ => 0,
         }
     }
 
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
         Ok(stable_order_entity_id(&self.order_id))
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_principal_reservation(
+    order_id: &str,
+    account_id: &str,
+    side: SpotOrderSide,
+    qty: u64,
+    order_price: u64,
+) -> Reservation {
+    match SpotOrderV2::principal_reservation(
+        order_id,
+        account_id,
+        side,
+        qty,
+        order_price,
+        "BTC",
+        "USDT",
+    ) {
+        Ok(reservation) => reservation,
+        Err(error) => panic!("invalid test spot order reservation: {error}"),
     }
 }
 
@@ -1174,6 +1324,7 @@ mod tests {
             None,
             0,
             200,
+            test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
             Some("cloid-1".to_string()),
             1,
         )
@@ -1195,6 +1346,7 @@ mod tests {
             None,
             3,
             0,
+            test_principal_reservation("order-sell", "trader-2", SpotOrderSide::Sell, 3, 105),
             None,
             1,
         )
@@ -1216,6 +1368,7 @@ mod tests {
             None,
             0,
             240,
+            test_principal_reservation("order-market-buy", "trader-3", SpotOrderSide::Buy, 2, 120),
             None,
             1,
         )
@@ -1237,6 +1390,13 @@ mod tests {
             None,
             1,
             0,
+            test_principal_reservation(
+                format!("maker-{price}").as_str(),
+                "maker",
+                SpotOrderSide::Sell,
+                1,
+                price,
+            ),
             None,
             1,
         )
@@ -1301,6 +1461,7 @@ mod tests {
             None,
             0,
             303,
+            test_principal_reservation("order-round-up", "trader-4", SpotOrderSide::Buy, 3, 101),
             None,
             1,
         );

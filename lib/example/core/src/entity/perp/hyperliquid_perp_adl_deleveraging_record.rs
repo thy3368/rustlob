@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 const HYPERLIQUID_PERP_ADL_DELEVERAGING_RECORD_ENTITY_TYPE: u8 = 19;
 
@@ -52,21 +52,7 @@ impl HyperliquidPerpAdlDeleveragingRecord {
     }
 }
 
-impl Entity for HyperliquidPerpAdlDeleveragingRecord {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.adl_deleveraging_record_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_ADL_DELEVERAGING_RECORD_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for HyperliquidPerpAdlDeleveragingRecord {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new(
@@ -99,7 +85,22 @@ impl Entity for HyperliquidPerpAdlDeleveragingRecord {
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
+}
 
+impl Entity for HyperliquidPerpAdlDeleveragingRecord {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.adl_deleveraging_record_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_ADL_DELEVERAGING_RECORD_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "adl_deleveraging_record_id"

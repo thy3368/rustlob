@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 
@@ -254,21 +254,7 @@ impl HyperliquidPerpOrder {
     }
 }
 
-impl Entity for HyperliquidPerpOrder {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.order_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_ORDER_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for HyperliquidPerpOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("order_id", "", self.order_id.clone()),
@@ -359,7 +345,22 @@ impl Entity for HyperliquidPerpOrder {
 
         changes
     }
+}
 
+impl Entity for HyperliquidPerpOrder {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.order_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_ORDER_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "order_id" | "account_id" | "symbol" | "side" | "execution" | "time_in_force"

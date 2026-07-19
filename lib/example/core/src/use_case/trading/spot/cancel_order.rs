@@ -165,6 +165,7 @@ impl CommandUseCase4 for CancelSpotOrderUseCase {
             state.reservation.as_ref().ok_or(CancelSpotOrderError::ReservationMismatch)?;
         if !reservation.belongs_to_account(&cmd.party_id)
             || !reservation.is_for_order(order.order_id.as_str())
+            || reservation != &order.reservation
             || reservation.remaining_amount == 0
         {
             return Err(CancelSpotOrderError::ReservationMismatch);
@@ -211,6 +212,7 @@ fn derive_cancel_changes(
     let reservation_after = reservation_before
         .release(release_amount, Some(ReservationCloseReason::Canceled))
         .map_err(|_| CancelSpotOrderError::ArithmeticOverflow)?;
+    order_after.reservation = reservation_after.clone();
 
     let reason = if is_quote_reservation {
         BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order_after.order_id.clone() }
@@ -277,6 +279,7 @@ mod compute_output_and_events_happy_path;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::spot::spot_order_v2::test_principal_reservation;
     use crate::entity::{
         Balance, SpotOrderExecution, SpotOrderSide, SpotOrderTimeInForce, SpotOrderV2,
     };
@@ -297,6 +300,7 @@ mod tests {
             None,
             0,
             20,
+            test_principal_reservation("42", "trader-1", SpotOrderSide::Buy, 2, 10),
             None,
             1,
         )

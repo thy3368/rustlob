@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use crate::entity::{HyperliquidPerpMarginMode, HyperliquidPerpPositionSide};
 
@@ -286,21 +286,7 @@ impl HyperliquidPerpLiquidation {
     }
 }
 
-impl Entity for HyperliquidPerpLiquidation {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.liquidation_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_LIQUIDATION_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for HyperliquidPerpLiquidation {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("liquidation_id", "", self.liquidation_id.clone()),
@@ -357,7 +343,22 @@ impl Entity for HyperliquidPerpLiquidation {
         );
         changes
     }
+}
 
+impl Entity for HyperliquidPerpLiquidation {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.liquidation_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_LIQUIDATION_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "liquidation_id"

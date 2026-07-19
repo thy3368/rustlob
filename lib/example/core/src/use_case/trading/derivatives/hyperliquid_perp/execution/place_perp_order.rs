@@ -818,8 +818,8 @@ mod tests {
 
             let changes = use_case().compute_changes(&cmd, state).unwrap();
             let events = changes.to_replayable_events().unwrap();
-            let next_available = event_field_u64(&events[3], "available").unwrap();
-            let next_frozen = event_field_u64(&events[3], "frozen").unwrap();
+            let next_available = event_field_u64(&events[2], "available").unwrap();
+            let next_frozen = event_field_u64(&events[2], "frozen").unwrap();
 
             prop_assert_eq!(next_available, 0);
             prop_assert_eq!(next_frozen, existing_frozen + margin);

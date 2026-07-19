@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use super::spot_order_primitives::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
@@ -6,6 +6,7 @@ use super::spot_order_primitives::{
     stable_order_entity_id,
 };
 use super::spot_order_v2::SpotOrderV2;
+use crate::entity::ReservationError;
 
 const SPOT_CONDITIONAL_ORDER_ENTITY_TYPE: u8 = 4;
 
@@ -167,8 +168,19 @@ impl SpotConditionalOrder {
         order_id: String,
         reserved_base: u64,
         reserved_quote: u64,
-    ) -> SpotOrderV2 {
-        SpotOrderV2::new(
+        base_asset_id: &str,
+        quote_asset_id: &str,
+    ) -> Result<SpotOrderV2, ReservationError> {
+        let reservation = SpotOrderV2::principal_reservation(
+            order_id.as_str(),
+            self.account_id.as_str(),
+            self.side,
+            self.qty,
+            self.execution.order_price(),
+            base_asset_id,
+            quote_asset_id,
+        )?;
+        Ok(SpotOrderV2::new(
             order_id,
             self.asset,
             self.exchange_oid,
@@ -183,27 +195,14 @@ impl SpotConditionalOrder {
             None,
             reserved_base,
             reserved_quote,
+            reservation,
             self.client_order_id.clone(),
             1,
-        )
+        ))
     }
 }
 
-impl Entity for SpotConditionalOrder {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.trigger_order_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        SPOT_CONDITIONAL_ORDER_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for SpotConditionalOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("trigger_order_id", "", self.trigger_order_id.clone()),
@@ -287,7 +286,22 @@ impl Entity for SpotConditionalOrder {
 
         changes
     }
+}
 
+impl Entity for SpotConditionalOrder {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.trigger_order_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        SPOT_CONDITIONAL_ORDER_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "trigger_order_id" | "account_id" | "symbol" | "side" | "trigger_role"
@@ -335,9 +349,9 @@ mod tests {
     }
 
     #[test]
-    fn conditional_order_triggers_active_order() {
+    fn conditional_order_triggers_active_order() -> Result<(), ReservationError> {
         let conditional = conditional_sell_order().with_exchange_oid(77);
-        let active = conditional.triggered_order("order-2".to_string(), 2, 0);
+        let active = conditional.triggered_order("order-2".to_string(), 2, 0, "BTC", "USDT")?;
 
         assert_eq!(active.order_id, "order-2");
         assert_eq!(active.asset, conditional.asset);
@@ -347,8 +361,11 @@ mod tests {
         assert_eq!(active.time_in_force, SpotOrderTimeInForce::Ioc);
         assert_eq!(active.reserved_base, 2);
         assert_eq!(active.reserved_quote, 0);
+        assert_eq!(active.reservation.caused_by_order_id, "order-2");
+        assert_eq!(active.reservation.asset_id, "BTC");
         assert!(active.has_consistent_reserved_base());
         assert!(active.has_consistent_reserved_quote());
+        Ok(())
     }
 
     #[test]

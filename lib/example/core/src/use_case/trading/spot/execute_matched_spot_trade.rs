@@ -10,6 +10,8 @@ use super::{
     MatchSpotOrderUseCase, SettleSpotTradeChanges, SettleSpotTradeCmd, SettleSpotTradeError,
     SettleSpotTradeState, SettleSpotTradeUseCase,
 };
+#[cfg(test)]
+use crate::entity::spot::spot_order_v2::test_principal_reservation;
 use crate::entity::{AssetReservation, Balance, SpotOrderV2};
 #[cfg(test)]
 use crate::entity::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus};
@@ -267,6 +269,7 @@ fn build_limit_order(
         None,
         reserved_base,
         reserved_quote,
+        test_principal_reservation(order_id, account_id, side, qty, price),
         None,
         1,
     )

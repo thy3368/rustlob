@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FinancialClassification,
+    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
     FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
 use serde::{Deserialize, Serialize};
@@ -290,60 +290,7 @@ impl Reservation {
     }
 }
 
-impl Entity for Reservation {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.reservation_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        RESERVATION_ENTITY_TYPE
-    }
-
-    fn four_color_archetype() -> FourColorArchetype
-    where
-        Self: Sized,
-    {
-        FourColorArchetype::MomentInterval
-    }
-
-    fn aggregate_role() -> AggregateRole
-    where
-        Self: Sized,
-    {
-        AggregateRole::AggregateMember
-    }
-
-    fn financial_classification() -> FinancialClassification
-    where
-        Self: Sized,
-    {
-        FinancialClassification::BusinessVoucher
-    }
-
-    fn is_mi_chain_root() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
-
-    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
-    where
-        Self: Sized,
-    {
-        &[MiCausalSourceMetadata {
-            source_fact_type: "order",
-            relation: MiCausalRelation::CausedBy,
-            source_role: "caused_by_order",
-        }]
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for Reservation {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("reservation_id", "", self.reservation_id.clone()),
@@ -434,7 +381,61 @@ impl Entity for Reservation {
         }
         changes
     }
+}
 
+impl Entity for Reservation {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.reservation_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        RESERVATION_ENTITY_TYPE
+    }
+
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateMember
+    }
+
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::BusinessVoucher
+    }
+
+    fn is_mi_chain_root() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
+    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
+    where
+        Self: Sized,
+    {
+        &[MiCausalSourceMetadata {
+            source_fact_type: "order",
+            relation: MiCausalRelation::CausedBy,
+            source_role: "caused_by_order",
+        }]
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "reservation_id" | "owner_account_id" | "caused_by_order_id" | "market_kind"

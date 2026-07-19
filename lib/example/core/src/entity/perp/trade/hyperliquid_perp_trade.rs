@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use crate::HyperliquidPerpOrderSide;
 use crate::entity::{
@@ -214,21 +214,7 @@ impl HyperliquidPerpTrade {
     }
 }
 
-impl Entity for HyperliquidPerpTrade {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.trade_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_TRADE_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for HyperliquidPerpTrade {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("trade_id", "", self.trade_id.clone()),
@@ -249,7 +235,22 @@ impl Entity for HyperliquidPerpTrade {
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
+}
 
+impl Entity for HyperliquidPerpTrade {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.trade_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_TRADE_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "trade_id" | "match_id" | "symbol" | "taker_order_id" | "maker_order_id"

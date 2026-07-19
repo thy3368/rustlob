@@ -434,10 +434,10 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamily {
                 SpotOrderV2GivenState::Place {
                     taker_order,
                     maker_orders,
-                    taker_principal_reservation,
-                    taker_fee_reservation,
-                    maker_principal_reservations,
-                    maker_fee_reservations,
+                    taker_principal_reservation: _,
+                    taker_fee_reservation: _,
+                    maker_principal_reservations: _,
+                    maker_fee_reservations: _,
                     settlement_balances,
                     ..
                 },
@@ -1311,6 +1311,7 @@ mod tests {
     use common_entity::{MiStateMachineOwnedV2, MiStateMachineOwnedV2BeforeAfter};
 
     use super::*;
+    use crate::entity::spot::spot_order_v2::test_principal_reservation;
     use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
 
     fn buy_order(tif: SpotOrderTimeInForce) -> SpotOrderV2 {
@@ -1329,6 +1330,7 @@ mod tests {
             None,
             0,
             200,
+            test_principal_reservation("taker-buy", "buyer", SpotOrderSide::Buy, 2, 100),
             None,
             1,
         )
@@ -1350,6 +1352,7 @@ mod tests {
             None,
             qty,
             0,
+            test_principal_reservation(order_id, account_id, SpotOrderSide::Sell, qty, price),
             None,
             1,
         )

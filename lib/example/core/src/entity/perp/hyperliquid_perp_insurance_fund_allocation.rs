@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 const HYPERLIQUID_PERP_INSURANCE_FUND_ALLOCATION_ENTITY_TYPE: u8 = 16;
 
@@ -36,21 +36,7 @@ impl HyperliquidPerpInsuranceFundAllocation {
     }
 }
 
-impl Entity for HyperliquidPerpInsuranceFundAllocation {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.insurance_fund_allocation_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_INSURANCE_FUND_ALLOCATION_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        1
-    }
-
+impl FieldDiff for HyperliquidPerpInsuranceFundAllocation {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new(
@@ -78,7 +64,22 @@ impl Entity for HyperliquidPerpInsuranceFundAllocation {
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
+}
 
+impl Entity for HyperliquidPerpInsuranceFundAllocation {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.insurance_fund_allocation_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_INSURANCE_FUND_ALLOCATION_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        1
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "insurance_fund_allocation_id"

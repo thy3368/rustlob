@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
     FinancialClassification, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
 use serde::{Deserialize, Serialize};
@@ -332,6 +332,30 @@ impl SpotTrade {
     }
 }
 
+impl FieldDiff for SpotTrade {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![
+            EntityFieldChange::new("trade_id", "", self.trade_id.clone()),
+            EntityFieldChange::new("match_id", "", self.match_id.clone()),
+            EntityFieldChange::new("asset", "", self.asset.to_string()),
+            EntityFieldChange::new("symbol", "", self.symbol.clone()),
+            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.clone()),
+            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.clone()),
+            EntityFieldChange::new("taker_account_id", "", self.taker_account_id.clone()),
+            EntityFieldChange::new("maker_account_id", "", self.maker_account_id.clone()),
+            EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
+            EntityFieldChange::new("price", "", self.price.to_string()),
+            EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
+            EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
+        ]
+    }
+
+    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
+        Vec::new()
+    }
+}
+
 impl Entity for SpotTrade {
     type Id = String;
 
@@ -392,29 +416,6 @@ impl Entity for SpotTrade {
     fn entity_version(&self) -> u64 {
         1
     }
-
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![
-            EntityFieldChange::new("trade_id", "", self.trade_id.clone()),
-            EntityFieldChange::new("match_id", "", self.match_id.clone()),
-            EntityFieldChange::new("asset", "", self.asset.to_string()),
-            EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.clone()),
-            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.clone()),
-            EntityFieldChange::new("taker_account_id", "", self.taker_account_id.clone()),
-            EntityFieldChange::new("maker_account_id", "", self.maker_account_id.clone()),
-            EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
-            EntityFieldChange::new("price", "", self.price.to_string()),
-            EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
-            EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
-        ]
-    }
-
-    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
-    }
-
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "trade_id" | "match_id" | "symbol" | "taker_order_id" | "maker_order_id"

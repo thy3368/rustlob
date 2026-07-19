@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange};
+use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 const HYPERLIQUID_PERP_ADL_EXECUTION_ENTITY_TYPE: u8 = 20;
 
@@ -104,21 +104,7 @@ impl HyperliquidPerpAdlExecution {
     }
 }
 
-impl Entity for HyperliquidPerpAdlExecution {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.adl_execution_id.clone()
-    }
-
-    fn entity_type() -> u8 {
-        HYPERLIQUID_PERP_ADL_EXECUTION_ENTITY_TYPE
-    }
-
-    fn entity_version(&self) -> u64 {
-        self.version
-    }
-
+impl FieldDiff for HyperliquidPerpAdlExecution {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("adl_execution_id", "", self.adl_execution_id.clone()),
@@ -164,7 +150,22 @@ impl Entity for HyperliquidPerpAdlExecution {
         push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         changes
     }
+}
 
+impl Entity for HyperliquidPerpAdlExecution {
+    type Id = String;
+
+    fn entity_id(&self) -> Self::Id {
+        self.adl_execution_id.clone()
+    }
+
+    fn entity_type() -> u8 {
+        HYPERLIQUID_PERP_ADL_EXECUTION_ENTITY_TYPE
+    }
+
+    fn entity_version(&self) -> u64 {
+        self.version
+    }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "adl_execution_id"

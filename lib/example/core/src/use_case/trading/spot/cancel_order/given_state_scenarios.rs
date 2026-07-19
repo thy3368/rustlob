@@ -116,9 +116,8 @@ proptest! {
         prop_assert_eq!(events.len(), 4);
         prop_assert!(events[0].is_updated());
         prop_assert!(events[1].is_updated());
-        prop_assert!(events[2].is_created());
-        prop_assert!(events[3].is_updated());
-        prop_assert!(events[4].is_created());
+        prop_assert!(events[2].is_updated());
+        prop_assert!(events[3].is_created());
         prop_assert_eq!(event_field(&events[0], "status"), Some(SpotOrderStatus::Canceled.as_str()));
         prop_assert_eq!(
             event_field(&events[0], "status_reason"),
@@ -138,11 +137,11 @@ proptest! {
         let next_available = expected_release.next_available.to_string();
 
         prop_assert_eq!(
-            event_field(&events[3], expected_release.available_field),
+            event_field(&events[2], expected_release.available_field),
             Some(next_available.as_str())
         );
-        prop_assert_eq!(event_field(&events[3], expected_release.frozen_field), Some("0"));
-        prop_assert!(event_field(&events[2], "close_reason").is_some());
-        prop_assert!(event_field(&events[4], "reason_order_id").is_some());
+        prop_assert_eq!(event_field(&events[2], expected_release.frozen_field), Some("0"));
+        prop_assert!(event_field(&events[1], "close_reason").is_some());
+        prop_assert!(event_field(&events[3], "reason_order_id").is_some());
     }
 }

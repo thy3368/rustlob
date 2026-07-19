@@ -178,6 +178,16 @@ impl PlaceImmediateOrderUseCase {
             PlaceOrderSide::Buy => (0, notional_quote),
             PlaceOrderSide::Sell => (qty, 0),
         };
+        let created_reservation = SpotOrderV2::principal_reservation(
+            order_id.as_str(),
+            cmd.party_id.as_str(),
+            side,
+            qty,
+            reserve_price,
+            state.base_balance.asset_id.as_str(),
+            state.quote_balance.asset_id.as_str(),
+        )
+        .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
         let created_order = SpotOrderV2::new(
             order_id.clone(),
             cmd.asset,
@@ -193,15 +203,10 @@ impl PlaceImmediateOrderUseCase {
             None,
             reserved_base,
             reserved_quote,
+            created_reservation.clone(),
             cmd.cloid.clone(),
             1,
         );
-        let created_reservation = created_order
-            .to_reservation(
-                state.base_balance.asset_id.as_str(),
-                state.quote_balance.asset_id.as_str(),
-            )
-            .map_err(|_| PlaceOrderError::ArithmeticOverflow)?;
 
         let (updated_balance, created_balance_ledger_entry) = match side {
             PlaceOrderSide::Buy => {

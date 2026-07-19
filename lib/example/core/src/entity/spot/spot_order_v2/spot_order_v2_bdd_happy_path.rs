@@ -19,6 +19,7 @@ fn buy_order() -> SpotOrderV2 {
         None,
         0,
         200,
+        test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
         Some("cloid-1".to_string()),
         1,
     )
@@ -41,6 +42,7 @@ fn market_buy_order() -> SpotOrderV2 {
         None,
         0,
         240,
+        test_principal_reservation("order-market-buy", "trader-3", SpotOrderSide::Buy, 2, 120),
         None,
         1,
     )

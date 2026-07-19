@@ -2,6 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
 use super::*;
+use crate::entity::spot::spot_order_v2::test_principal_reservation;
 use crate::entity::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
 };
@@ -85,6 +86,7 @@ fn build_limit_order(
         None,
         reserved_base,
         reserved_quote,
+        test_principal_reservation(order_id, account_id, side, qty, price),
         None,
         1,
     )
@@ -116,6 +118,7 @@ fn build_market_order(
         None,
         reserved_base,
         reserved_quote,
+        test_principal_reservation(order_id, account_id, side, qty, aggressive_price),
         None,
         1,
     )
