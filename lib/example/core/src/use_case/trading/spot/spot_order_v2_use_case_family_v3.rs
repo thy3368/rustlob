@@ -1428,8 +1428,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            qty,
-            0,
             test_principal_reservation(order_id, account_id, SpotOrderSide::Sell, qty, price),
             None,
             1,

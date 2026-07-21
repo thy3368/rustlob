@@ -1,16 +1,10 @@
-mod conditional_order;
-
-pub use conditional_order::{
-    PlaceConditionalOrderCmd, PlaceConditionalOrderOutput, PlaceConditionalOrderState,
-    PlaceConditionalOrderUseCase,
-};
 use thiserror::Error;
 
+use crate::MarketRules;
 pub use crate::entity::{
     SpotOrderSide as PlaceOrderSide, SpotOrderTimeInForce as PlaceOrderTimeInForce,
     SpotOrderTriggerRole as PlaceOrderTriggerRole,
 };
-use crate::MarketRules;
 
 /// 触发后或立即进入执行流程的现货执行意图。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
