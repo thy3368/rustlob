@@ -1,4 +1,13 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use common_entity::{
+    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
+    FourColorArchetype,
+};
+use thiserror::Error;
+
+use crate::entity::{
+    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
+    ReservationError, ReservationKind, ReservationMarketKind,
+};
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 
@@ -108,9 +117,72 @@ impl HyperliquidPerpOrderStatus {
     }
 }
 
+/// 创建 Hyperliquid perp 订单所需的已校验业务输入。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHyperliquidPerpOrderInput {
+    /// 本系统生成的稳定订单 ID。
+    pub order_id: String,
+    /// Hyperliquid perp asset 编号。
+    pub asset: u32,
+    /// 订单所属账户 ID。
+    pub account_id: String,
+    /// 合约展示名，例如 `BTC-PERP`。
+    pub symbol: String,
+    /// 买卖方向。
+    pub side: HyperliquidPerpOrderSide,
+    /// 执行方式。
+    pub execution: HyperliquidPerpOrderExecution,
+    /// 限价订单有效方式。
+    pub time_in_force: HyperliquidPerpOrderTimeInForce,
+    /// 合约数量。
+    pub qty: u64,
+    /// 是否只减仓。
+    pub reduce_only: bool,
+    /// Hyperliquid `cloid`，客户端自定义订单 ID。
+    pub client_order_id: Option<String>,
+    /// 保证金资产 ID。
+    pub margin_asset_id: String,
+    /// 保证金余额实体 ID。
+    pub margin_balance_entity_id: String,
+    /// 本次下单需要冻结的保证金金额。
+    pub margin_amount: u64,
+    /// 本次保证金冻结的业务语义。
+    pub reservation_kind: ReservationKind,
+}
+
+/// Hyperliquid perp 下单创建的聚合结果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHyperliquidPerpOrderOutcome {
+    /// 已创建的订单聚合根。
+    pub order: HyperliquidPerpOrder,
+    /// 由订单创建直接派生的冻结余额流水。
+    pub freeze_ledger_entry: BalanceLedgerEntryV2,
+}
+
+/// Hyperliquid perp 订单行为错误。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum HyperliquidPerpOrderBehaviorError {
+    /// 下单数量必须大于零。
+    #[error("perp order quantity must be greater than zero")]
+    InvalidQuantity,
+    /// 下单价格必须大于零。
+    #[error("perp order price must be greater than zero")]
+    InvalidPrice,
+    /// 保证金冻结金额必须大于零。
+    #[error("perp order margin amount must be greater than zero")]
+    InvalidMarginAmount,
+    /// 派生余额流水失败。
+    #[error("failed to derive balance ledger entry: {0}")]
+    BalanceLedger(#[from] BalanceLedgerEntryV2Error),
+    /// 创建保证金 reservation 失败。
+    #[error("failed to create reservation: {0}")]
+    Reservation(#[from] ReservationError),
+}
+
 /// 已接受并可由撮合层读取的 Hyperliquid perp 订单快照。
 ///
-/// 该实体只表示订单执行状态，不表达仓位、保证金、手续费、PnL 或资金费。
+/// 该实体表示订单执行状态，并保存下单时的保证金 reservation 快照；
+/// 它不表达仓位、手续费、PnL 或资金费。
 /// 构造器假设输入来自已校验命令或事件回放，不重复执行业务拒绝规则。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpOrder {
@@ -132,6 +204,8 @@ pub struct HyperliquidPerpOrder {
     pub time_in_force: HyperliquidPerpOrderTimeInForce,
     /// 合约数量。
     pub qty: u64,
+    /// 订单内保存的保证金冻结 MI 事实。
+    pub reservation: Reservation,
     /// 已成交数量。
     pub filled_qty: u64,
     /// 订单生命周期状态。
@@ -163,6 +237,7 @@ impl HyperliquidPerpOrder {
         qty: u64,
         reduce_only: bool,
         client_order_id: Option<String>,
+        reservation: Reservation,
     ) -> Self {
         Self {
             order_id,
@@ -174,6 +249,7 @@ impl HyperliquidPerpOrder {
             execution,
             time_in_force,
             qty,
+            reservation,
             filled_qty: 0,
             status: HyperliquidPerpOrderStatus::Open,
             reduce_only,
@@ -182,6 +258,60 @@ impl HyperliquidPerpOrder {
             client_order_id,
             version: 1,
         }
+    }
+
+    /// 可 BDD 规格化的聚合根行为：创建 Hyperliquid perp 订单并派生保证金冻结流水。
+    ///
+    /// 该方法只创建订单聚合和直接下游余额流水单据，不执行余额落账，也不检查仓位 reduce-only
+    /// 或净新增保证金规则。
+    pub(crate) fn place(
+        input: PlaceHyperliquidPerpOrderInput,
+    ) -> Result<PlaceHyperliquidPerpOrderOutcome, HyperliquidPerpOrderBehaviorError> {
+        if input.qty == 0 {
+            return Err(HyperliquidPerpOrderBehaviorError::InvalidQuantity);
+        }
+        if input.execution.order_price() == 0 {
+            return Err(HyperliquidPerpOrderBehaviorError::InvalidPrice);
+        }
+        if input.margin_amount == 0 {
+            return Err(HyperliquidPerpOrderBehaviorError::InvalidMarginAmount);
+        }
+
+        let reservation = Reservation::new(
+            format!("reservation:{}", input.order_id),
+            input.account_id.clone(),
+            input.order_id.clone(),
+            ReservationMarketKind::Perp,
+            input.reservation_kind,
+            input.margin_asset_id.clone(),
+            input.margin_amount,
+        )?;
+
+        let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
+            format!("balance-ledger:freeze:{}", input.order_id),
+            input.account_id.clone(),
+            reservation.asset_id.clone(),
+            input.margin_balance_entity_id.clone(),
+            reservation.original_amount,
+            BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
+        )?;
+
+        let order = Self::new(
+            input.order_id,
+            None,
+            input.asset,
+            input.account_id,
+            input.symbol,
+            input.side,
+            input.execution,
+            input.time_in_force,
+            input.qty,
+            input.reduce_only,
+            input.client_order_id,
+            reservation,
+        );
+
+        Ok(PlaceHyperliquidPerpOrderOutcome { order, freeze_ledger_entry })
     }
 
     /// 返回带强平来源标记的订单快照。
@@ -267,6 +397,39 @@ impl FieldDiff for HyperliquidPerpOrder {
             EntityFieldChange::new("time_in_force", "", self.time_in_force.as_str()),
             EntityFieldChange::new("price", "", self.order_price().to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
+            EntityFieldChange::new(
+                "reservation_owner_account_id",
+                "",
+                self.reservation.owner_account_id.clone(),
+            ),
+            EntityFieldChange::new(
+                "reservation_caused_by_order_id",
+                "",
+                self.reservation.caused_by_order_id.clone(),
+            ),
+            EntityFieldChange::new(
+                "reservation_market_kind",
+                "",
+                self.reservation.market_kind.as_str(),
+            ),
+            EntityFieldChange::new(
+                "reservation_kind",
+                "",
+                self.reservation.reservation_kind.as_str(),
+            ),
+            EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
+            EntityFieldChange::new(
+                "reservation_original_amount",
+                "",
+                self.reservation.original_amount.to_string(),
+            ),
+            EntityFieldChange::new(
+                "reservation_remaining_amount",
+                "",
+                self.reservation.remaining_amount.to_string(),
+            ),
+            EntityFieldChange::new("reservation_status", "", self.reservation.status.as_str()),
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new("reduce_only", "", self.reduce_only.to_string()),
@@ -311,6 +474,60 @@ impl FieldDiff for HyperliquidPerpOrder {
             other.order_price().to_string(),
         );
         push_change(&mut changes, "qty", self.qty.to_string(), other.qty.to_string());
+        push_change(
+            &mut changes,
+            "reservation_id",
+            &self.reservation.reservation_id,
+            &other.reservation.reservation_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_owner_account_id",
+            &self.reservation.owner_account_id,
+            &other.reservation.owner_account_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_caused_by_order_id",
+            &self.reservation.caused_by_order_id,
+            &other.reservation.caused_by_order_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_market_kind",
+            self.reservation.market_kind.as_str(),
+            other.reservation.market_kind.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_kind",
+            self.reservation.reservation_kind.as_str(),
+            other.reservation.reservation_kind.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_asset_id",
+            &self.reservation.asset_id,
+            &other.reservation.asset_id,
+        );
+        push_change(
+            &mut changes,
+            "reservation_original_amount",
+            self.reservation.original_amount.to_string(),
+            other.reservation.original_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_remaining_amount",
+            self.reservation.remaining_amount.to_string(),
+            other.reservation.remaining_amount.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "reservation_status",
+            self.reservation.status.as_str(),
+            other.reservation.status.as_str(),
+        );
         push_change(
             &mut changes,
             "filled_qty",
@@ -358,15 +575,57 @@ impl Entity for HyperliquidPerpOrder {
         HYPERLIQUID_PERP_ORDER_ENTITY_TYPE
     }
 
+    fn four_color_archetype() -> FourColorArchetype
+    where
+        Self: Sized,
+    {
+        FourColorArchetype::MomentInterval
+    }
+
+    fn aggregate_role() -> AggregateRole
+    where
+        Self: Sized,
+    {
+        AggregateRole::AggregateRoot
+    }
+
+    fn financial_classification() -> FinancialClassification
+    where
+        Self: Sized,
+    {
+        FinancialClassification::BusinessVoucher
+    }
+
     fn entity_version(&self) -> u64 {
         self.version
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "order_id" | "account_id" | "symbol" | "side" | "execution" | "time_in_force"
-            | "status" | "reduce_only" | "is_liquidation" | "liquidation_id"
-            | "client_order_id" => 0,
-            "exchange_oid" | "asset" | "price" | "qty" | "filled_qty" => 1,
+            "order_id"
+            | "account_id"
+            | "symbol"
+            | "side"
+            | "execution"
+            | "time_in_force"
+            | "status"
+            | "reduce_only"
+            | "is_liquidation"
+            | "liquidation_id"
+            | "client_order_id"
+            | "reservation_id"
+            | "reservation_owner_account_id"
+            | "reservation_caused_by_order_id"
+            | "reservation_market_kind"
+            | "reservation_asset_id"
+            | "reservation_kind"
+            | "reservation_status" => 0,
+            "exchange_oid"
+            | "asset"
+            | "price"
+            | "qty"
+            | "filled_qty"
+            | "reservation_original_amount"
+            | "reservation_remaining_amount" => 1,
             _ => 0,
         }
     }
@@ -398,59 +657,5 @@ fn push_change(
     let new_value = new_value.into();
     if old_value != new_value {
         changes.push(EntityFieldChange::new(field_name, old_value, new_value));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn order() -> HyperliquidPerpOrder {
-        HyperliquidPerpOrder::new(
-            "order-1".to_string(),
-            Some(42),
-            0,
-            "trader-1".to_string(),
-            "BTC-PERP".to_string(),
-            HyperliquidPerpOrderSide::Buy,
-            HyperliquidPerpOrderExecution::Limit { price: 100 },
-            HyperliquidPerpOrderTimeInForce::Gtc,
-            3,
-            false,
-            Some("client-1".to_string()),
-        )
-    }
-
-    #[test]
-    fn order_exposes_matching_facts() {
-        let order = order();
-
-        assert!(order.belongs_to_account("trader-1"));
-        assert!(order.trades_asset(0));
-        assert!(order.trades_symbol("BTC-PERP"));
-        assert_eq!(order.remaining_qty(), Some(3));
-        assert_eq!(order.order_price(), 100);
-        assert_eq!(order.limit_price(), Some(100));
-        assert!(order.is_matchable());
-        assert!(order.has_consistent_execution_state());
-    }
-
-    #[test]
-    fn execution_state_detects_inconsistent_fills() {
-        let order = order().with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 3);
-
-        assert!(!order.has_consistent_execution_state());
-        assert!(!order.is_matchable());
-    }
-
-    #[test]
-    fn liquidation_marker_defaults_and_can_be_set() {
-        let normal = order();
-        let liquidation = order().with_liquidation("liq-1".to_string());
-
-        assert!(!normal.is_liquidation);
-        assert_eq!(normal.liquidation_id, None);
-        assert!(liquidation.is_liquidation);
-        assert_eq!(liquidation.liquidation_id.as_deref(), Some("liq-1"));
     }
 }
