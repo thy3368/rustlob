@@ -62,11 +62,9 @@ pub use reservation::{
 };
 use spot as spot_entity;
 pub use spot::spot_trade::SpotTrade;
-pub use spot_entity::spot_conditional_order::{
-    SpotConditionalOrder, SpotConditionalOrderStatus, SpotOrderTriggerRole,
-};
 pub use spot_entity::spot_order_primitives::{
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTimeInForce, SpotOrderTriggerRole,
 };
 pub use spot_entity::spot_order_v2::{
     CancelSpotOrderV2Input, CancelSpotOrderV2Outcome, MatchSpotOrderV2Input,

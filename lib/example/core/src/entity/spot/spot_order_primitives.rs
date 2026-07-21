@@ -84,6 +84,24 @@ impl SpotOrderTimeInForce {
     }
 }
 
+/// 条件触发订单角色。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotOrderTriggerRole {
+    /// 止盈触发单。
+    TakeProfit,
+    /// 止损触发单。
+    StopLoss,
+}
+
+impl SpotOrderTriggerRole {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "take_profit",
+            Self::StopLoss => "stop_loss",
+        }
+    }
+}
+
 /// 已进入执行流程的现货订单生命周期状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderStatus {

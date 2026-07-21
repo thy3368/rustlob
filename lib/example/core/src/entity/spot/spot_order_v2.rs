@@ -5,11 +5,10 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::spot_conditional_order::SpotOrderTriggerRole;
 use super::spot_order_primitives::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce, option_status_reason_value, option_u64_value, push_change,
-    stable_order_entity_id,
+    SpotOrderTimeInForce, SpotOrderTriggerRole, option_status_reason_value, option_u64_value,
+    push_change, stable_order_entity_id,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -347,8 +346,6 @@ fn fee_amount_round_up(notional: u64, fee_bps: u64) -> Option<u64> {
 
 #[derive(Debug, Clone)]
 struct PlacePrincipalHoldPlan {
-    reserved_base: u64,
-    reserved_quote: u64,
     freeze_asset_id: String,
     freeze_balance_entity_id: String,
     amount: u64,
@@ -402,10 +399,6 @@ pub struct SpotActiveOrderState {
     pub time_in_force: SpotOrderTimeInForce,
     /// 已成交数量。
     pub filled_qty: u64,
-    /// 订单建立时记录的 base 冻结快照，主要用于卖单。
-    pub reserved_base: u64,
-    /// 订单建立时记录的 quote 冻结快照，主要用于买单。
-    pub reserved_quote: u64,
     /// 订单 principal 冻结凭证。
     pub reservation: Reservation,
     /// 订单 fee 冻结凭证。
@@ -502,20 +495,7 @@ pub struct SpotOrderV2 {
     pub status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
     pub status_reason: Option<SpotOrderStatusReason>,
-    /// 订单建立时记录的 base 冻结快照，主要用于卖单。
-    ///
-    /// 该字段只保留订单内初始冻结事实或回放兼容语义，不代表余额侧 authoritative
-    /// remaining hold。
-    pub reserved_base: u64,
-    /// 订单建立时记录的 quote 冻结快照，主要用于买单。
-    ///
-    /// 该字段只保留订单内初始冻结事实或回放兼容语义，不代表余额侧 authoritative
-    /// remaining hold。
-    pub reserved_quote: u64,
     /// 订单 principal 冻结凭证。
-    ///
-    /// `reserved_base` / `reserved_quote` 仍作为历史快照字段保留，但订单生命周期中的
-    /// authoritative principal 冻结状态从这里读取和回放。
     pub reservation: Reservation,
     /// 订单 fee 冻结凭证。
     ///
@@ -561,8 +541,6 @@ impl SpotOrderV2 {
             execution: SpotOrderExecution::Limit { price: 0 },
             time_in_force: SpotOrderTimeInForce::Gtc,
             filled_qty: 0,
-            reserved_base: 0,
-            reserved_quote: 0,
             reservation,
             fee_reservation,
         })
@@ -586,8 +564,6 @@ impl SpotOrderV2 {
         filled_qty: u64,
         status: SpotOrderStatus,
         status_reason: Option<SpotOrderStatusReason>,
-        reserved_base: u64,
-        reserved_quote: u64,
         reservation: Reservation,
         client_order_id: Option<String>,
         version: u64,
@@ -616,8 +592,6 @@ impl SpotOrderV2 {
             filled_qty,
             status,
             status_reason,
-            reserved_base,
-            reserved_quote,
             reservation,
             fee_reservation,
             client_order_id,
@@ -640,8 +614,6 @@ impl SpotOrderV2 {
         filled_qty: u64,
         status: SpotOrderStatus,
         status_reason: Option<SpotOrderStatusReason>,
-        reserved_base: u64,
-        reserved_quote: u64,
         reservation: Reservation,
         fee_reservation: Reservation,
         client_order_id: Option<String>,
@@ -660,8 +632,6 @@ impl SpotOrderV2 {
             execution,
             time_in_force,
             filled_qty,
-            reserved_base,
-            reserved_quote,
             reservation: reservation.clone(),
             fee_reservation: fee_reservation.clone(),
         };
@@ -689,8 +659,6 @@ impl SpotOrderV2 {
             filled_qty,
             status,
             status_reason,
-            reserved_base,
-            reserved_quote,
             reservation,
             fee_reservation,
             client_order_id,
@@ -736,12 +704,6 @@ impl SpotOrderV2 {
             maker_fee_bps,
             taker_fee_bps,
         )?;
-        let reserved_base = if side == SpotOrderSide::Sell { qty } else { 0 };
-        let reserved_quote = if side == SpotOrderSide::Buy {
-            quote_notional(qty, order_price).ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?
-        } else {
-            0
-        };
         Ok(Self::new_with_fee_reservation(
             order_id,
             asset,
@@ -755,8 +717,6 @@ impl SpotOrderV2 {
             0,
             SpotOrderStatus::Open,
             None,
-            reserved_base,
-            reserved_quote,
             reservation,
             fee_reservation,
             client_order_id,
@@ -824,8 +784,6 @@ impl SpotOrderV2 {
             filled_qty: 0,
             status: SpotOrderStatus::Open,
             status_reason: None,
-            reserved_base: 0,
-            reserved_quote: 0,
             reservation,
             fee_reservation,
             client_order_id,
@@ -893,8 +851,6 @@ impl SpotOrderV2 {
             0,
             SpotOrderStatus::Open,
             None,
-            principal_hold.reserved_base,
-            principal_hold.reserved_quote,
             reservation,
             fee_reservation,
             input.client_order_id,
@@ -935,13 +891,6 @@ impl SpotOrderV2 {
             input.maker_fee_bps,
             input.taker_fee_bps,
         )?;
-        let reserved_base = if self.side == SpotOrderSide::Sell { self.qty } else { 0 };
-        let reserved_quote = if self.side == SpotOrderSide::Buy {
-            quote_notional(self.qty, order_price)
-                .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?
-        } else {
-            0
-        };
         let next_version = self.next_version()?;
 
         self.execution = pending.trigger_execution;
@@ -949,8 +898,6 @@ impl SpotOrderV2 {
         self.filled_qty = 0;
         self.status = SpotOrderStatus::Open;
         self.status_reason = Some(SpotOrderStatusReason::Triggered);
-        self.reserved_base = reserved_base;
-        self.reserved_quote = reserved_quote;
         self.reservation = reservation;
         self.fee_reservation = fee_reservation;
         self.version = next_version;
@@ -1092,15 +1039,11 @@ impl SpotOrderV2 {
     ) -> PlacePrincipalHoldPlan {
         match input.side {
             SpotOrderSide::Buy => PlacePrincipalHoldPlan {
-                reserved_base: 0,
-                reserved_quote: quote_notional,
                 freeze_asset_id: input.quote_asset_id.clone(),
                 freeze_balance_entity_id: input.quote_balance_entity_id.clone(),
                 amount: quote_notional,
             },
             SpotOrderSide::Sell => PlacePrincipalHoldPlan {
-                reserved_base: input.qty,
-                reserved_quote: 0,
                 freeze_asset_id: input.base_asset_id.clone(),
                 freeze_balance_entity_id: input.base_balance_entity_id.clone(),
                 amount: input.qty,
@@ -1246,18 +1189,17 @@ impl SpotOrderV2 {
     }
 
     fn hold_snapshot_amount(&self) -> Option<u64> {
-        let amount = match self.side {
-            SpotOrderSide::Buy => self.initial_quote_hold_snapshot()?,
-            SpotOrderSide::Sell => self.qty,
-        };
+        let amount = self.reservation.original_amount;
         if amount == 0 { None } else { Some(amount) }
     }
 
     fn release_snapshot_amount(&self) -> Option<u64> {
-        let amount = match self.side {
-            SpotOrderSide::Buy => self.reserved_quote,
-            SpotOrderSide::Sell => self.reserved_base,
-        };
+        let amount = self.reservation.remaining_amount;
+        if amount == 0 { None } else { Some(amount) }
+    }
+
+    fn fee_release_remaining_amount(&self) -> Option<u64> {
+        let amount = self.fee_reservation.remaining_amount;
         if amount == 0 { None } else { Some(amount) }
     }
 
@@ -1351,42 +1293,25 @@ impl SpotOrderV2 {
     }
 
     /// 返回撤单语义下允许释放 fee reservation remainder 的订单侧 requirement。
-    fn fee_cancel_release_requirement(
-        &self,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
-    ) -> Option<SpotOrderReleaseRequirement> {
+    fn fee_cancel_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
         if !self.can_be_cancelled() {
             return None;
         }
 
-        let requirement = self.fee_hold_requirement(maker_fee_bps, taker_fee_bps)?;
-        if requirement.amount == 0 {
-            return None;
-        }
-
         Some(SpotOrderReleaseRequirement {
-            asset: requirement.asset,
-            amount: requirement.amount,
+            asset: self.fee_hold_asset(),
+            amount: self.fee_release_remaining_amount()?,
             reason: SpotOrderReleaseReason::Canceled,
         })
     }
 
     /// 返回订单终态下允许释放 fee reservation remainder 的订单侧 requirement。
-    fn fee_terminal_release_requirement(
-        &self,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
-    ) -> Option<SpotOrderReleaseRequirement> {
+    fn fee_terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
         let principal_release = self.terminal_release_requirement()?;
-        let requirement = self.fee_hold_requirement(maker_fee_bps, taker_fee_bps)?;
-        if requirement.amount == 0 {
-            return None;
-        }
 
         Some(SpotOrderReleaseRequirement {
-            asset: requirement.asset,
-            amount: requirement.amount,
+            asset: self.fee_hold_asset(),
+            amount: self.fee_release_remaining_amount()?,
             reason: principal_release.reason,
         })
     }
@@ -1417,6 +1342,7 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单在当前终态下是否存在订单侧释放需求。
+    #[cfg(test)]
     fn has_terminal_release(&self) -> bool {
         self.terminal_release_requirement().is_some()
     }
@@ -1424,24 +1350,24 @@ impl SpotOrderV2 {
     /// 返回用户撤单时订单侧允许释放的 principal / fee requirement。
     pub fn cancel_release_requirements(
         &self,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
+        _maker_fee_bps: u64,
+        _taker_fee_bps: u64,
     ) -> SpotOrderReleaseRequirements {
         SpotOrderReleaseRequirements {
             principal: self.cancel_release_requirement(),
-            fee: self.fee_cancel_release_requirement(maker_fee_bps, taker_fee_bps),
+            fee: self.fee_cancel_release_requirement(),
         }
     }
 
     /// 返回订单终态下允许释放的 principal / fee requirement。
     pub fn terminal_release_requirements(
         &self,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
+        _maker_fee_bps: u64,
+        _taker_fee_bps: u64,
     ) -> SpotOrderReleaseRequirements {
         SpotOrderReleaseRequirements {
             principal: self.terminal_release_requirement(),
-            fee: self.fee_terminal_release_requirement(maker_fee_bps, taker_fee_bps),
+            fee: self.fee_terminal_release_requirement(),
         }
     }
 
@@ -1461,26 +1387,25 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 返回 `reserved_quote` 是否仍符合买卖方向与订单快照语义。
-    pub fn has_consistent_reserved_quote(&self) -> bool {
+    /// 返回 principal reservation 是否仍符合买卖方向与订单冻结语义。
+    pub fn has_consistent_principal_reservation(&self) -> bool {
+        if self.reservation.market_kind != ReservationMarketKind::Spot {
+            return false;
+        }
+        if self.reservation.owner_account_id != self.account_id {
+            return false;
+        }
+        if self.reservation.caused_by_order_id != self.order_id {
+            return false;
+        }
         match self.side {
             SpotOrderSide::Buy => {
                 self.reservation.reservation_kind == ReservationKind::SpotBuyQuote
-                    && self.reservation.original_amount == self.reserved_quote
-                    && self.initial_quote_hold_snapshot() == Some(self.reserved_quote)
+                    && self.initial_quote_hold_snapshot() == Some(self.reservation.original_amount)
             }
-            SpotOrderSide::Sell => self.reserved_quote == 0,
-        }
-    }
-
-    /// 返回 `reserved_base` 是否仍符合买卖方向与订单快照语义。
-    pub fn has_consistent_reserved_base(&self) -> bool {
-        match self.side {
-            SpotOrderSide::Buy => self.reserved_base == 0,
             SpotOrderSide::Sell => {
                 self.reservation.reservation_kind == ReservationKind::SpotSellBase
-                    && self.reservation.original_amount == self.reserved_base
-                    && self.reserved_base == self.qty
+                    && self.reservation.original_amount == self.qty
             }
         }
     }
@@ -1591,8 +1516,6 @@ impl SpotOrderV2 {
             execution: self.execution,
             time_in_force: self.time_in_force,
             filled_qty: self.filled_qty,
-            reserved_base: self.reserved_base,
-            reserved_quote: self.reserved_quote,
             reservation: self.reservation.clone(),
             fee_reservation: self.fee_reservation.clone(),
         }
@@ -1933,8 +1856,6 @@ impl FieldDiff for SpotOrderV2 {
                 "",
                 option_status_reason_value(self.status_reason),
             ),
-            EntityFieldChange::new("reserved_base", "", self.reserved_base.to_string()),
-            EntityFieldChange::new("reserved_quote", "", self.reserved_quote.to_string()),
             EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
             EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
             EntityFieldChange::new(
@@ -2050,18 +1971,6 @@ impl FieldDiff for SpotOrderV2 {
             "status_reason",
             option_status_reason_value(self.status_reason),
             option_status_reason_value(other.status_reason),
-        );
-        push_change(
-            &mut changes,
-            "reserved_base",
-            self.reserved_base.to_string(),
-            other.reserved_base.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "reserved_quote",
-            self.reserved_quote.to_string(),
-            other.reserved_quote.to_string(),
         );
         push_change(
             &mut changes,
@@ -2237,8 +2146,6 @@ impl Entity for SpotOrderV2 {
             | "qty"
             | "filled_qty"
             | "price"
-            | "reserved_base"
-            | "reserved_quote"
             | "version"
             | "reservation_original_amount"
             | "reservation_consumed_amount"
@@ -2297,8 +2204,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            0,
-            200,
             test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
             Some("cloid-1".to_string()),
             1,
@@ -2319,8 +2224,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            3,
-            0,
             test_principal_reservation("order-sell", "trader-2", SpotOrderSide::Sell, 3, 105),
             None,
             1,
@@ -2341,8 +2244,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            0,
-            240,
             test_principal_reservation("order-market-buy", "trader-3", SpotOrderSide::Buy, 2, 120),
             None,
             1,
@@ -2363,8 +2264,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            1,
-            0,
             test_principal_reservation(
                 format!("maker-{price}").as_str(),
                 "maker",
@@ -2434,8 +2333,6 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            0,
-            303,
             test_principal_reservation("order-round-up", "trader-4", SpotOrderSide::Buy, 3, 101),
             None,
             1,
@@ -2517,7 +2414,8 @@ mod tests {
 
     #[test]
     fn cancel_release_requirements_skip_zero_fee() {
-        let open = buy_order();
+        let mut open = buy_order();
+        open.fee_reservation.remaining_amount = 0;
 
         assert_eq!(
             open.cancel_release_requirements(0, 0),
@@ -2635,11 +2533,17 @@ mod tests {
     }
 
     #[test]
-    fn reserved_snapshots_still_validate_against_order_side() {
-        assert!(buy_order().has_consistent_reserved_base());
-        assert!(buy_order().has_consistent_reserved_quote());
-        assert!(sell_order().has_consistent_reserved_base());
-        assert!(sell_order().has_consistent_reserved_quote());
+    fn principal_reservation_matches_order_side_and_amount() {
+        assert!(buy_order().has_consistent_principal_reservation());
+        assert!(sell_order().has_consistent_principal_reservation());
+
+        let mut wrong_buy_kind = buy_order();
+        wrong_buy_kind.reservation.reservation_kind = ReservationKind::SpotSellBase;
+        assert!(!wrong_buy_kind.has_consistent_principal_reservation());
+
+        let mut wrong_sell_amount = sell_order();
+        wrong_sell_amount.reservation.original_amount = wrong_sell_amount.qty + 1;
+        assert!(!wrong_sell_amount.has_consistent_principal_reservation());
     }
 
     #[test]
