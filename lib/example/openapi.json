@@ -134,14 +134,14 @@
             "minimum": 0,
             "type": "integer"
           },
-          "reserved_quote": {
+          "principal_reservation_amount": {
             "minimum": 0,
             "type": "integer"
           }
         },
         "required": [
           "order_id",
-          "reserved_quote",
+          "principal_reservation_amount",
           "remaining_quote",
           "domain_event_count"
         ],
