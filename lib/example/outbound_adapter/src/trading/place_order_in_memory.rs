@@ -192,10 +192,6 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                     decode_status(event)?,
                     None,
-                    event_u64_field(event, "reserved_base")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    event_u64_field(event, "reserved_quote")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                     decode_embedded_order_reservation(event)?,
                     event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
                     event_u64_field(event, "version").unwrap_or(1),
@@ -524,12 +520,6 @@ fn apply_order_update_event(
     if let Some(filled_qty) = event_u64_field(event, "filled_qty") {
         order.filled_qty = filled_qty;
     }
-    if let Some(reserved_base) = event_u64_field(event, "reserved_base") {
-        order.reserved_base = reserved_base;
-    }
-    if let Some(reserved_quote) = event_u64_field(event, "reserved_quote") {
-        order.reserved_quote = reserved_quote;
-    }
     order.version = event.new_version;
     Ok(())
 }
@@ -551,8 +541,6 @@ fn decode_order_snapshot_from_event(
         event_u64_field(event, "filled_qty").unwrap_or(0),
         decode_status(event).unwrap_or(SpotOrderStatus::Open),
         None,
-        event_u64_field(event, "reserved_base").unwrap_or(0),
-        event_u64_field(event, "reserved_quote").unwrap_or(0),
         decode_embedded_order_reservation(event)?,
         event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
         event.new_version,

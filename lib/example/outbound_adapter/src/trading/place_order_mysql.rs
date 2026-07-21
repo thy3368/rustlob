@@ -163,16 +163,16 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
             conn.exec_drop(
                 format!(
                     "INSERT INTO {EVENT_TABLE} (
-                        entity_type, change_type, entity_id, old_version, new_version,
-                        order_id, account_id, asset, symbol, side, execution, time_in_force,
-                        qty, price, reserved_base, reserved_quote,
-                        available_base, frozen_base, available_quote, frozen_quote
-                     ) VALUES (
-                        :entity_type, :change_type, :entity_id, :old_version, :new_version,
-                        :order_id, :account_id, :asset, :symbol, :side, :execution, :time_in_force,
-                        :qty, :price, :reserved_base, :reserved_quote,
-                        :available_base, :frozen_base, :available_quote, :frozen_quote
-                     )"
+	                        entity_type, change_type, entity_id, old_version, new_version,
+	                        order_id, account_id, asset, symbol, side, execution, time_in_force,
+	                        qty, price,
+	                        available_base, frozen_base, available_quote, frozen_quote
+	                     ) VALUES (
+	                        :entity_type, :change_type, :entity_id, :old_version, :new_version,
+	                        :order_id, :account_id, :asset, :symbol, :side, :execution, :time_in_force,
+	                        :qty, :price,
+	                        :available_base, :frozen_base, :available_quote, :frozen_quote
+	                     )"
                 ),
                 params! {
                     "entity_type" => event.entity_type,
@@ -187,11 +187,9 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                     "side" => event_string_field_mysql(event, "side"),
                     "execution" => event_string_field_mysql(event, "execution"),
                     "time_in_force" => event_string_field_mysql(event, "time_in_force"),
-                    "qty" => event_u64_field_mysql(event, "qty"),
-                    "price" => event_u64_field_mysql(event, "price"),
-                    "reserved_base" => event_u64_field_mysql(event, "reserved_base"),
-                    "reserved_quote" => event_u64_field_mysql(event, "reserved_quote"),
-                    "available_base" => event_u64_field_mysql(event, "available"),
+                        "qty" => event_u64_field_mysql(event, "qty"),
+                        "price" => event_u64_field_mysql(event, "price"),
+                        "available_base" => event_u64_field_mysql(event, "available"),
                     "frozen_base" => event_u64_field_mysql(event, "frozen"),
                     "available_quote" => event_u64_field_mysql(event, "available"),
                     "frozen_quote" => event_u64_field_mysql(event, "frozen"),
@@ -210,25 +208,23 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
             if event.entity_type == ORDER_ENTITY_TYPE && event.is_created() {
                 conn.exec_drop(
                     format!(
-                        "INSERT INTO {ORDER_TABLE} (
-                            order_id, account_id, asset, symbol, side, execution, time_in_force,
-                            qty, price, reserved_base, reserved_quote, created_sequence
-                         ) VALUES (
-                            :order_id, :account_id, :asset, :symbol, :side, :execution, :time_in_force,
-                            :qty, :price, :reserved_base, :reserved_quote, :created_sequence
-                         )
+	                        "INSERT INTO {ORDER_TABLE} (
+	                            order_id, account_id, asset, symbol, side, execution, time_in_force,
+	                            qty, price, created_sequence
+	                         ) VALUES (
+	                            :order_id, :account_id, :asset, :symbol, :side, :execution, :time_in_force,
+	                            :qty, :price, :created_sequence
+	                         )
                          ON DUPLICATE KEY UPDATE
                             account_id = VALUES(account_id),
                             asset = VALUES(asset),
                             symbol = VALUES(symbol),
                             side = VALUES(side),
                             execution = VALUES(execution),
-                            time_in_force = VALUES(time_in_force),
-                            qty = VALUES(qty),
-                            price = VALUES(price),
-                            reserved_base = VALUES(reserved_base),
-                            reserved_quote = VALUES(reserved_quote),
-                            created_sequence = VALUES(created_sequence)"
+	                            time_in_force = VALUES(time_in_force),
+	                            qty = VALUES(qty),
+	                            price = VALUES(price),
+	                            created_sequence = VALUES(created_sequence)"
                     ),
                     params! {
                         "order_id" => event_string_field_mysql(event, "order_id")
@@ -247,13 +243,9 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                         "qty" => event_u64_field_mysql(event, "qty")
                             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "price" => event_u64_field_mysql(event, "price")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "reserved_base" => event_u64_field_mysql(event, "reserved_base")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "reserved_quote" => event_u64_field_mysql(event, "reserved_quote")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "created_sequence" => 0_u64,
+	                        "price" => event_u64_field_mysql(event, "price")
+	                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+	                        "created_sequence" => 0_u64,
                     },
                 )
                 .map_err(map_mysql_error)?;
