@@ -140,12 +140,13 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         let order_id = find_string_field(&events, "order_id")
             .unwrap_or_else(|| "missing-order-id".to_string());
-        let reserved_quote = find_u64_field(&events, "reserved_quote").unwrap_or(0);
+        let principal_reservation_amount =
+            find_u64_field(&events, "reservation_original_amount").unwrap_or(0);
         let remaining_quote = find_u64_field(&events, "available").unwrap_or(0);
 
         PlaceOrderCliResponse {
             summary: format!(
-                "accepted order_id={order_id} reserved_quote={reserved_quote} remaining_quote={remaining_quote}"
+                "accepted order_id={order_id} principal_reservation_amount={principal_reservation_amount} remaining_quote={remaining_quote}"
             ),
             order_id,
         }
@@ -192,7 +193,7 @@ mod tests {
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
         assert_eq!(
             response.summary,
-            "accepted order_id=trader-1-BTCUSDT-11 reserved_quote=200 remaining_quote=800"
+            "accepted order_id=trader-1-BTCUSDT-11 principal_reservation_amount=200 remaining_quote=800"
         );
         assert_eq!(counts, (3, 3));
 

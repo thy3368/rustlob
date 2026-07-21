@@ -288,10 +288,10 @@ fn http_schema_components() -> Map<String, Value> {
         &mut schemas,
         "PlaceOrderHttpResponse",
         object_schema(
-            &["order_id", "reserved_quote", "remaining_quote", "domain_event_count"],
+            &["order_id", "principal_reservation_amount", "remaining_quote", "domain_event_count"],
             vec![
                 ("order_id", string_schema()),
-                ("reserved_quote", u64_schema()),
+                ("principal_reservation_amount", u64_schema()),
                 ("remaining_quote", u64_schema()),
                 ("domain_event_count", u64_schema()),
             ],
@@ -548,7 +548,7 @@ mod tests {
         assert_eq!(
             serialized_object_keys(&PlaceOrderHttpResponse {
                 order_id: "order-1".to_string(),
-                reserved_quote: 200,
+                principal_reservation_amount: 200,
                 remaining_quote: 800,
                 domain_event_count: 2,
             }),

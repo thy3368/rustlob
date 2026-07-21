@@ -90,7 +90,7 @@ impl crate::common::ExampleBusinessErrorMapping for SpotOrderV2UseCaseFamilyV3Er
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceOrderHttpResponse {
     pub order_id: String,
-    pub reserved_quote: u64,
+    pub principal_reservation_amount: u64,
     pub remaining_quote: u64,
     pub domain_event_count: usize,
 }
@@ -105,7 +105,8 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
         PlaceOrderHttpResponse {
             order_id: find_string_field(&events, "order_id")
                 .unwrap_or_else(|| "missing-order-id".to_string()),
-            reserved_quote: find_u64_field(&events, "reserved_quote").unwrap_or(0),
+            principal_reservation_amount: find_u64_field(&events, "reservation_original_amount")
+                .unwrap_or(0),
             remaining_quote: find_u64_field(&events, "available").unwrap_or(0),
             domain_event_count: events.len(),
         }
@@ -252,7 +253,7 @@ mod tests {
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
-        assert_eq!(response.reserved_quote, 300);
+        assert_eq!(response.principal_reservation_amount, 300);
         assert_eq!(response.remaining_quote, 700);
         assert_eq!(response.domain_event_count, 3);
         assert_eq!(counts, (3, 3));
@@ -286,7 +287,7 @@ mod tests {
         let body: Value = actix_test::read_body_json(response).await;
 
         assert_eq!(body["order_id"], "trader-1-BTCUSDT-11");
-        assert_eq!(body["reserved_quote"], 300);
+        assert_eq!(body["principal_reservation_amount"], 300);
         assert_eq!(body["remaining_quote"], 700);
         assert_eq!(body["domain_event_count"], 3);
     }
