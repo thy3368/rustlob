@@ -62,8 +62,6 @@ impl MySqlStore {
                 time_in_force VARCHAR(16) NOT NULL DEFAULT 'gtc',
                 qty BIGINT UNSIGNED NOT NULL,
                 price BIGINT UNSIGNED NOT NULL,
-                reserved_base BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                reserved_quote BIGINT UNSIGNED NOT NULL,
                 created_sequence BIGINT UNSIGNED NOT NULL
             )"
         ))
@@ -192,10 +190,10 @@ impl MySqlStore {
             );
         }
 
-        type OrderRow = (String, String, u32, String, String, String, String, u64, u64, u64, u64);
+        type OrderRow = (String, String, u32, String, String, String, String, u64, u64);
         let order_rows: Vec<OrderRow> = conn
             .query(format!(
-                "SELECT order_id, account_id, asset, symbol, side, execution, time_in_force, qty, price, reserved_base, reserved_quote FROM {ORDER_TABLE}"
+                "SELECT order_id, account_id, asset, symbol, side, execution, time_in_force, qty, price FROM {ORDER_TABLE}"
             ))
             .map_err(map_mysql_error)?;
         let orders = order_rows
@@ -211,8 +209,6 @@ impl MySqlStore {
                     time_in_force,
                     qty,
                     price,
-                    reserved_base,
-                    reserved_quote,
                 )| {
                     let side = decode_side_mysql(side.as_str())?;
                     let execution = decode_execution_mysql(execution.as_str(), price)?;
@@ -240,8 +236,6 @@ impl MySqlStore {
                         0,
                         SpotOrderStatus::Open,
                         None,
-                        reserved_base,
-                        reserved_quote,
                         reservation,
                         None,
                         1,
