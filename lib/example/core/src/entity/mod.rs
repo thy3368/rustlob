@@ -46,14 +46,18 @@ pub use perp::hyperliquid_perp_liquidation_fill::HyperliquidPerpLiquidationFill;
 pub use perp::hyperliquid_perp_shortfall::{
     HyperliquidPerpShortfall, HyperliquidPerpShortfallStatus,
 };
-pub use perp::trade::hyperliquid_perp_leverage_setting::HyperliquidPerpLeverageSetting;
+pub use perp::trade::hyperliquid_perp_leverage_setting::{
+    HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError,
+};
 pub use perp::trade::hyperliquid_perp_order::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
     HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
 };
 pub use perp::trade::hyperliquid_perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, required_position_margin,
+    HyperliquidPerpPositionError, HyperliquidPerpPositionLeverageOutcome,
+    HyperliquidPerpPositionSide, HyperliquidPerpPositionStatus,
+    HyperliquidPerpPositionTradeOutcome, required_position_margin,
 };
 pub use perp::trade::hyperliquid_perp_trade::HyperliquidPerpTrade;
 pub use reservation::{

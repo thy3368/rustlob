@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionSide, HyperliquidPerpTrade,
-    SettlementTransferVoucher, required_position_margin,
+    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpPositionSide,
+    HyperliquidPerpTrade, SettlementTransferVoucher,
 };
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
@@ -244,15 +244,6 @@ struct SettlementOutcome {
     balance_deltas: BTreeMap<String, BalanceDelta>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct PositionAfter {
-    side: HyperliquidPerpPositionSide,
-    qty: u64,
-    entry_price: u64,
-    margin: u64,
-    realized_pnl_delta: i64,
-}
-
 fn validate_trade_ids_match(
     cmd: &SettleHyperliquidPerpTradeCmd,
     state: &SettleHyperliquidPerpTradeState,
@@ -312,50 +303,29 @@ fn derive_settlement_outcome(
             };
             validate_position_for_trade(&position, account_id, trade)?;
 
-            let after = apply_trade_to_position(&position, role.side, trade.qty, trade.price)?;
             let mut next_position = position.clone();
-            let next_realized_pnl = position
-                .realized_pnl
-                .checked_add(after.realized_pnl_delta)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let next_version = if position.version == 0 {
-                1
-            } else {
-                position
-                    .version
-                    .checked_add(1)
-                    .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?
-            };
-            next_position.apply_after(
-                after.side,
-                after.qty,
-                after.entry_price,
-                after.margin,
-                None,
-                0,
-                next_realized_pnl,
-                next_version,
-            );
+            let position_outcome = next_position
+                .settle_trade(role.side, trade.qty, trade.price)
+                .map_err(map_position_error)?;
 
-            let margin_delta = i128::from(after.margin) - i128::from(position.margin);
             add_margin_delta(
                 &mut balance_deltas,
                 account_id,
                 state.margin_asset_id.as_str(),
-                margin_delta,
+                position_outcome.margin_delta,
             )?;
             let fee = if role.is_taker { taker_fee } else { maker_fee };
             add_available_delta(
                 &mut balance_deltas,
                 account_id,
                 state.margin_asset_id.as_str(),
-                i128::from(after.realized_pnl_delta) - i128::from(fee),
+                i128::from(position_outcome.realized_pnl_delta) - i128::from(fee),
             )?;
 
             if role.is_taker {
-                taker_realized_pnl = after.realized_pnl_delta;
+                taker_realized_pnl = position_outcome.realized_pnl_delta;
             } else {
-                maker_realized_pnl = after.realized_pnl_delta;
+                maker_realized_pnl = position_outcome.realized_pnl_delta;
             }
 
             positions.insert(position_key, next_position);
@@ -402,6 +372,23 @@ fn validate_position_for_trade(
     Ok(())
 }
 
+fn map_position_error(error: HyperliquidPerpPositionError) -> SettleHyperliquidPerpTradeError {
+    match error {
+        HyperliquidPerpPositionError::InvalidTradeQty
+        | HyperliquidPerpPositionError::InvalidTradePrice
+        | HyperliquidPerpPositionError::InconsistentState
+        | HyperliquidPerpPositionError::MarginModeMismatch => {
+            SettleHyperliquidPerpTradeError::InconsistentPositionState
+        }
+        HyperliquidPerpPositionError::InvalidLeverage => {
+            SettleHyperliquidPerpTradeError::InvalidLeverage
+        }
+        HyperliquidPerpPositionError::ArithmeticOverflow => {
+            SettleHyperliquidPerpTradeError::ArithmeticOverflow
+        }
+    }
+}
+
 fn validate_balances_can_apply(
     state: &SettleHyperliquidPerpTradeState,
     deltas: &BTreeMap<String, BalanceDelta>,
@@ -421,56 +408,6 @@ fn validate_balances_can_apply(
         }
     }
     Ok(())
-}
-
-fn apply_trade_to_position(
-    position: &HyperliquidPerpPosition,
-    incoming_side: HyperliquidPerpPositionSide,
-    trade_qty: u64,
-    trade_price: u64,
-) -> Result<PositionAfter, SettleHyperliquidPerpTradeError> {
-    let (side, qty, entry_price, realized_pnl_delta) =
-        if position.is_flat() || position.side == incoming_side {
-            let next_qty = position
-                .qty
-                .checked_add(trade_qty)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let old_notional = position
-                .qty
-                .checked_mul(position.entry_price)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let add_notional = trade_qty
-                .checked_mul(trade_price)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let total_notional = old_notional
-                .checked_add(add_notional)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            (incoming_side, next_qty, total_notional / next_qty, 0_i64)
-        } else {
-            let close_qty = position.qty.min(trade_qty);
-            let pnl_per_unit = match position.side {
-                HyperliquidPerpPositionSide::Long => {
-                    i128::from(trade_price) - i128::from(position.entry_price)
-                }
-                HyperliquidPerpPositionSide::Short => {
-                    i128::from(position.entry_price) - i128::from(trade_price)
-                }
-                HyperliquidPerpPositionSide::Flat => 0,
-            };
-            let realized = checked_i128_to_i64(pnl_per_unit * i128::from(close_qty))?;
-
-            if trade_qty < position.qty {
-                (position.side, position.qty - trade_qty, position.entry_price, realized)
-            } else if trade_qty == position.qty {
-                (HyperliquidPerpPositionSide::Flat, 0, 0, realized)
-            } else {
-                (incoming_side, trade_qty - position.qty, trade_price, realized)
-            }
-        };
-
-    let margin = required_position_margin(qty, entry_price, position.leverage)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    Ok(PositionAfter { side, qty, entry_price, margin, realized_pnl_delta })
 }
 
 fn fee_from_bps(notional: u64, fee_bps: u64) -> Result<u64, SettleHyperliquidPerpTradeError> {
@@ -520,10 +457,6 @@ fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidP
         return Err(SettleHyperliquidPerpTradeError::ArithmeticOverflow);
     }
     Ok(next as u64)
-}
-
-fn checked_i128_to_i64(value: i128) -> Result<i64, SettleHyperliquidPerpTradeError> {
-    i64::try_from(value).map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)
 }
 
 fn taker_position_side(trade: &HyperliquidPerpTrade) -> HyperliquidPerpPositionSide {
