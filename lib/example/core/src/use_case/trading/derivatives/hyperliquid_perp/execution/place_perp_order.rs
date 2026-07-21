@@ -263,7 +263,7 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             return Err(PlaceHyperliquidPerpOrderError::InvalidLeverage);
         }
         if !state.position.is_flat()
-            && state.position.required_margin() != Some(state.position.margin)
+            && state.position.required_margin() != Some(state.position.required_margin)
         {
             return Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState);
         }
@@ -272,8 +272,8 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             return Ok(());
         }
 
-        let margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
-        if !state.margin_balance.can_reserve(margin) {
+        let required_margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
+        if !state.margin_balance.can_reserve(required_margin) {
             return Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance);
         }
 
@@ -310,8 +310,8 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             });
         }
 
-        let margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
-        if margin == 0 {
+        let required_margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
+        if required_margin == 0 {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
                 created_reservation: None,
@@ -327,13 +327,13 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
                 ReservationMarketKind::Perp,
                 reservation_kind,
                 state.margin_asset_id.clone(),
-                margin,
+                required_margin,
             )
             .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?,
         );
         let previous_balance = state.margin_balance.clone();
         let mut next_balance = previous_balance.clone();
-        next_balance.reserve(margin).map_err(map_margin_reserve_balance_error)?;
+        next_balance.reserve(required_margin).map_err(map_margin_reserve_balance_error)?;
 
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,
@@ -760,7 +760,7 @@ mod tests {
     fn validate_rejects_non_flat_position_whose_stored_margin_does_not_match_required_margin() {
         let cmd = limit_cmd();
         let mut invalid_position = non_flat_position(HyperliquidPerpPositionSide::Long, 5);
-        invalid_position.margin -= 1;
+        invalid_position.required_margin -= 1;
         let invalid_state =
             PlaceHyperliquidPerpOrderState { position: invalid_position, ..state() };
 
@@ -777,9 +777,9 @@ mod tests {
             price in 1_u64..1_000_000,
             leverage in 1_u64..125,
         ) {
-            let margin = required_position_margin(size, price, leverage).unwrap();
+            let required_margin = required_position_margin(size, price, leverage).unwrap();
             let notional = size * price;
-            prop_assert_eq!(margin, notional.div_ceil(leverage));
+            prop_assert_eq!(required_margin, notional.div_ceil(leverage));
         }
 
         #[test]
@@ -789,7 +789,7 @@ mod tests {
             leverage in 1_u64..125,
             existing_frozen in 0_u64..1_000_000,
         ) {
-            let margin = required_position_margin(size, price, leverage).unwrap();
+            let required_margin = required_position_margin(size, price, leverage).unwrap();
             let cmd = PlaceHyperliquidPerpOrderCmd {
                 size,
                 execution: PlaceHyperliquidPerpOrderExecution::Limit {
@@ -802,7 +802,7 @@ mod tests {
                 margin_balance: Balance::new(
                     "trader-1".to_string(),
                     "USDC".to_string(),
-                    margin,
+                    required_margin,
                     existing_frozen,
                     1,
                 ),
@@ -822,8 +822,8 @@ mod tests {
             let next_frozen = event_field_u64(&events[2], "frozen").unwrap();
 
             prop_assert_eq!(next_available, 0);
-            prop_assert_eq!(next_frozen, existing_frozen + margin);
-            prop_assert_eq!(next_available + next_frozen, existing_frozen + margin);
+            prop_assert_eq!(next_frozen, existing_frozen + required_margin);
+            prop_assert_eq!(next_available + next_frozen, existing_frozen + required_margin);
         }
 
         #[test]
@@ -834,7 +834,7 @@ mod tests {
             is_buy in any::<bool>(),
             asset in 0_u32..10_000,
         ) {
-            let margin = required_position_margin(size, price, leverage).unwrap();
+            let required_margin = required_position_margin(size, price, leverage).unwrap();
             let cmd = PlaceHyperliquidPerpOrderCmd {
                 asset,
                 is_buy,
@@ -850,7 +850,7 @@ mod tests {
                 margin_balance: Balance::new(
                     "trader-1".to_string(),
                     "USDC".to_string(),
-                    margin,
+                    required_margin,
                     0,
                     1,
                 ),

@@ -307,8 +307,9 @@ mod tests {
                 50,
                 1,
             )],
-            MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(250)),
-            MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(250)),
+            MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(19_750)),
+            MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(17_750)),
+            Some(dec(1_500)),
             dec(5_000),
             RiskState::Normal,
         )

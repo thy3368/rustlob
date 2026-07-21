@@ -235,7 +235,7 @@ mod tests {
     }
 
     fn open_position(margin_mode: HyperliquidPerpMarginMode) -> HyperliquidPerpPosition {
-        let margin = required_position_margin(3, 100, 5).unwrap();
+        let required_margin = required_position_margin(3, 100, 5).unwrap();
         HyperliquidPerpPosition::new(
             "trader-1:BTC-PERP".to_string(),
             "trader-1".to_string(),
@@ -246,7 +246,7 @@ mod tests {
             100,
             5,
             margin_mode,
-            margin,
+            required_margin,
             None,
             0,
             0,
@@ -307,9 +307,9 @@ mod tests {
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
 
-        assert_eq!(position.before.margin, 60);
+        assert_eq!(position.before.required_margin, 60);
         assert_eq!(position.after.leverage, 10);
-        assert_eq!(position.after.margin, 30);
+        assert_eq!(position.after.required_margin, 30);
         assert_eq!(position.after.version, 3);
         assert_eq!(position.after.status, HyperliquidPerpPositionStatus::Open);
         assert_eq!(events.len(), 2);
@@ -330,7 +330,7 @@ mod tests {
             changes.changed_leverage_setting.after.margin_mode,
             HyperliquidPerpMarginMode::Isolated
         );
-        assert_eq!(changes.changed_position.as_ref().unwrap().after.margin, 30);
+        assert_eq!(changes.changed_position.as_ref().unwrap().after.required_margin, 30);
     }
 
     #[test]

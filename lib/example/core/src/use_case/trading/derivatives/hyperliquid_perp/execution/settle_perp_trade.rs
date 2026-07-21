@@ -312,7 +312,7 @@ fn derive_settlement_outcome(
                 &mut balance_deltas,
                 account_id,
                 state.margin_asset_id.as_str(),
-                position_outcome.margin_delta,
+                position_outcome.required_margin_delta,
             )?;
             let fee = if role.is_taker { taker_fee } else { maker_fee };
             add_available_delta(
@@ -366,7 +366,9 @@ fn validate_position_for_trade(
     if position.leverage == 0 {
         return Err(SettleHyperliquidPerpTradeError::InvalidLeverage);
     }
-    if !position.has_consistent_state() || position.required_margin() != Some(position.margin) {
+    if !position.has_consistent_state()
+        || position.required_margin() != Some(position.required_margin)
+    {
         return Err(SettleHyperliquidPerpTradeError::InconsistentPositionState);
     }
     Ok(())
@@ -421,16 +423,16 @@ fn add_margin_delta(
     deltas: &mut BTreeMap<String, BalanceDelta>,
     account_id: &str,
     asset_id: &str,
-    margin_delta: i128,
+    required_margin_delta: i128,
 ) -> Result<(), SettleHyperliquidPerpTradeError> {
     let delta = deltas.entry(balance_key(account_id, asset_id)).or_default();
     delta.available_delta = delta
         .available_delta
-        .checked_sub(margin_delta)
+        .checked_sub(required_margin_delta)
         .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
     delta.frozen_delta = delta
         .frozen_delta
-        .checked_add(margin_delta)
+        .checked_add(required_margin_delta)
         .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
     Ok(())
 }
@@ -561,7 +563,7 @@ mod tests {
         leverage: u64,
         realized_pnl: i64,
     ) -> HyperliquidPerpPosition {
-        let margin = required_position_margin(qty, entry_price, leverage).unwrap_or(0);
+        let required_margin = required_position_margin(qty, entry_price, leverage).unwrap_or(0);
         HyperliquidPerpPosition::new(
             format!("{account_id}:BTC-PERP"),
             account_id.to_string(),
@@ -572,7 +574,7 @@ mod tests {
             entry_price,
             leverage,
             crate::entity::HyperliquidPerpMarginMode::Cross,
-            margin,
+            required_margin,
             None,
             0,
             realized_pnl,
@@ -746,7 +748,7 @@ mod tests {
         assert_eq!(changes.changed_positions.len(), 2);
         assert_eq!(changes.changed_margin_balances.len(), 2);
         assert_eq!(changes.changed_positions[0].before.version, 0);
-        assert_eq!(changes.changed_positions[0].after.margin, 20);
+        assert_eq!(changes.changed_positions[0].after.required_margin, 20);
         assert_eq!(changes.changed_margin_balances[0].before.available, 1_000);
         assert_eq!(changes.changed_margin_balances[0].after.frozen, 20);
         assert_eq!(voucher.voucher_id(), "perp-voucher:settle-1:trade-1");
@@ -779,10 +781,10 @@ mod tests {
 
         assert_eq!(event_field(&events[1], "account_id"), Some("buyer"));
         assert_eq!(event_field(&events[1], "side"), Some("long"));
-        assert_eq!(field_as_u64(&events[1], "margin"), Some(20));
+        assert_eq!(field_as_u64(&events[1], "required_margin"), Some(20));
         assert_eq!(event_field(&events[2], "account_id"), Some("seller"));
         assert_eq!(event_field(&events[2], "side"), Some("short"));
-        assert_eq!(field_as_u64(&events[2], "margin"), Some(20));
+        assert_eq!(field_as_u64(&events[2], "required_margin"), Some(20));
 
         assert_eq!(
             event_field(updated_event(&events, "buyer", "frozen").unwrap(), "frozen"),
@@ -825,7 +827,7 @@ mod tests {
         );
         assert_eq!(event_field(buyer_position, "qty"), Some("4"));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("110"));
-        assert_eq!(event_field(buyer_position, "margin"), Some("44"));
+        assert_eq!(event_field(buyer_position, "required_margin"), Some("44"));
 
         Ok(())
     }
@@ -858,7 +860,7 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(event_field(buyer_position, "qty"), Some("2"));
-        assert_eq!(event_field(buyer_position, "margin"), Some("20"));
+        assert_eq!(event_field(buyer_position, "required_margin"), Some("20"));
         assert_eq!(event_field_i64(buyer_position, "realized_pnl"), Some(30));
         assert_eq!(
             event_field(updated_event(&events, "buyer", "available").unwrap(), "available"),
@@ -971,7 +973,7 @@ mod tests {
         assert_eq!(event_field(buyer_position, "side"), Some("short"));
         assert_eq!(event_field(buyer_position, "qty"), Some("1"));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("90"));
-        assert_eq!(event_field(buyer_position, "margin"), Some("9"));
+        assert_eq!(event_field(buyer_position, "required_margin"), Some("9"));
 
         Ok(())
     }
@@ -1037,12 +1039,12 @@ mod tests {
             let notional = price * qty;
             let expected_leg_count = u64::from(notional * 5 / FEE_BPS_DENOMINATOR > 0)
                 + u64::from(notional * 2 / FEE_BPS_DENOMINATOR > 0);
-            let margin = required_position_margin(qty, price, leverage).unwrap();
+            let required_margin = required_position_margin(qty, price, leverage).unwrap();
 
             prop_assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
             prop_assert_eq!(field_as_u64(&events[0], "leg_count"), Some(expected_leg_count));
-            prop_assert_eq!(field_as_u64(&events[1], "margin"), Some(margin));
-            prop_assert_eq!(field_as_u64(&events[2], "margin"), Some(margin));
+            prop_assert_eq!(field_as_u64(&events[1], "required_margin"), Some(required_margin));
+            prop_assert_eq!(field_as_u64(&events[2], "required_margin"), Some(required_margin));
             prop_assert_eq!(event_field(&events[1], "side"), Some("long"));
             prop_assert_eq!(event_field(&events[2], "side"), Some("short"));
         }

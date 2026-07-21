@@ -16,28 +16,28 @@ pub enum RiskState {
 
 /// perp 账户的保证金汇总快照。
 ///
-/// 该值对象只表达核心风险结论所需的汇总事实，不绑定外部接口字段名。
+/// 该值对象对齐 Hyperliquid `marginSummary` / `crossMarginSummary` 中的账户级汇总字段。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarginSummary {
     /// 账户权益，即账户总价值。
     account_value: Decimal,
-    /// 当前已占用保证金。
-    margin_used: Decimal,
-    /// 当前持仓名义价值总额。
-    position_notional: Decimal,
-    /// 当前未实现盈亏。
-    unrealized_pnl: Decimal,
+    /// 当前账户级总保证金占用。
+    total_margin_used: Decimal,
+    /// 当前账户级总持仓名义价值。
+    total_position_notional: Decimal,
+    /// 当前账户级原始 USD 余额。
+    total_raw_usd: Decimal,
 }
 
 impl MarginSummary {
     /// 从已校验事实装配保证金汇总。
     pub fn new(
         account_value: Decimal,
-        margin_used: Decimal,
-        position_notional: Decimal,
-        unrealized_pnl: Decimal,
+        total_margin_used: Decimal,
+        total_position_notional: Decimal,
+        total_raw_usd: Decimal,
     ) -> Self {
-        Self { account_value, margin_used, position_notional, unrealized_pnl }
+        Self { account_value, total_margin_used, total_position_notional, total_raw_usd }
     }
 
     /// 返回账户权益。
@@ -45,19 +45,19 @@ impl MarginSummary {
         self.account_value
     }
 
-    /// 返回保证金占用。
-    pub fn margin_used(&self) -> Decimal {
-        self.margin_used
+    /// 返回账户级总保证金占用。
+    pub fn total_margin_used(&self) -> Decimal {
+        self.total_margin_used
     }
 
-    /// 返回当前持仓名义价值。
-    pub fn position_notional(&self) -> Decimal {
-        self.position_notional
+    /// 返回账户级总持仓名义价值。
+    pub fn total_position_notional(&self) -> Decimal {
+        self.total_position_notional
     }
 
-    /// 返回未实现盈亏。
-    pub fn unrealized_pnl(&self) -> Decimal {
-        self.unrealized_pnl
+    /// 返回账户级原始 USD 余额。
+    pub fn total_raw_usd(&self) -> Decimal {
+        self.total_raw_usd
     }
 }
 
@@ -74,6 +74,8 @@ pub struct PerpClearinghouseState {
     margin_summary: MarginSummary,
     /// 仅 cross 保证金池相关的汇总视图。
     cross_margin_summary: MarginSummary,
+    /// cross 维持保证金占用；官方未返回该字段时为 `None`。
+    cross_maintenance_margin_used: Option<Decimal>,
     /// 当前可提资金。
     withdrawable: Decimal,
     /// 当前风险状态结论。
@@ -87,6 +89,7 @@ impl PerpClearinghouseState {
         positions: Vec<HyperliquidPerpPosition>,
         margin_summary: MarginSummary,
         cross_margin_summary: MarginSummary,
+        cross_maintenance_margin_used: Option<Decimal>,
         withdrawable: Decimal,
         risk_state: RiskState,
     ) -> Self {
@@ -95,6 +98,7 @@ impl PerpClearinghouseState {
             positions,
             margin_summary,
             cross_margin_summary,
+            cross_maintenance_margin_used,
             withdrawable,
             risk_state,
         }
@@ -118,6 +122,11 @@ impl PerpClearinghouseState {
     /// 返回 cross 保证金汇总。
     pub fn cross_margin_summary(&self) -> &MarginSummary {
         &self.cross_margin_summary
+    }
+
+    /// 返回 cross 维持保证金占用；官方未返回该字段时为 `None`。
+    pub fn cross_maintenance_margin_used(&self) -> Option<Decimal> {
+        self.cross_maintenance_margin_used
     }
 
     /// 返回当前可提资金。
@@ -159,7 +168,7 @@ mod tests {
             HyperliquidPerpPositionSide::Long
         };
         let entry_price = if quantity == 0 { 0 } else { 100_000 };
-        let margin = if quantity == 0 { 0 } else { 10_000 };
+        let required_margin = if quantity == 0 { 0 } else { 10_000 };
 
         HyperliquidPerpPosition::new(
             format!("sub-1-{symbol}"),
@@ -171,7 +180,7 @@ mod tests {
             entry_price,
             5,
             HyperliquidPerpMarginMode::Cross,
-            margin,
+            required_margin,
             (quantity > 0).then_some(90_000),
             200,
             50,
@@ -184,8 +193,9 @@ mod tests {
         let state = PerpClearinghouseState::new(
             AccountId::from("sub-1"),
             vec![sample_position(0, "BTC-PERP", 0), sample_position(1, "ETH-PERP", 3)],
-            MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(300)),
-            MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(300)),
+            MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(19_700)),
+            MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(17_700)),
+            Some(dec(1_500)),
             dec(5_000),
             RiskState::Normal,
         );
@@ -193,6 +203,16 @@ mod tests {
         assert!(state.has_open_positions());
         assert!(state.position_of("ETH-PERP").is_some());
         assert!(state.position_of("SOL-PERP").is_none());
+        assert_eq!(state.margin_summary().account_value(), dec(20_000));
+        assert_eq!(state.margin_summary().total_margin_used(), dec(8_000));
+        assert_eq!(state.margin_summary().total_position_notional(), dec(100_000));
+        assert_eq!(state.margin_summary().total_raw_usd(), dec(19_700));
+        assert_eq!(state.cross_margin_summary().account_value(), dec(18_000));
+        assert_eq!(state.cross_margin_summary().total_margin_used(), dec(7_000));
+        assert_eq!(state.cross_margin_summary().total_position_notional(), dec(100_000));
+        assert_eq!(state.cross_margin_summary().total_raw_usd(), dec(17_700));
+        assert_eq!(state.cross_maintenance_margin_used(), Some(dec(1_500)));
+        assert_eq!(state.withdrawable(), dec(5_000));
     }
 
     #[test]
@@ -202,6 +222,7 @@ mod tests {
             vec![sample_position(0, "BTC-PERP", 0)],
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
+            None,
             dec(20_000),
             RiskState::Normal,
         );
