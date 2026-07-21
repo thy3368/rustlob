@@ -362,8 +362,6 @@ mod tests {
                 0,
                 SpotOrderStatus::Open,
                 None,
-                0,
-                200,
                 principal_reservation,
                 fee_reservation,
                 None,
