@@ -100,15 +100,15 @@ pub enum HyperliquidPerpPositionError {
 pub struct HyperliquidPerpPositionTradeOutcome {
     /// 本次成交新增的已实现 PnL。
     pub realized_pnl_delta: i64,
-    /// 本次成交导致的保证金占用变化；正数表示追加占用，负数表示释放占用。
-    pub margin_delta: i128,
+    /// 本次成交导致的本地仓位保证金要求变化；正数表示追加占用，负数表示释放占用。
+    pub required_margin_delta: i128,
 }
 
 /// 一次仓位应用杠杆配置后的业务结果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HyperliquidPerpPositionLeverageOutcome {
-    /// 杠杆调整导致的保证金占用变化；正数表示追加占用，负数表示释放占用。
-    pub margin_delta: i128,
+    /// 杠杆调整导致的本地仓位保证金要求变化；正数表示追加占用，负数表示释放占用。
+    pub required_margin_delta: i128,
 }
 
 /// Hyperliquid perp 账户在单个合约上的单向净仓位快照。
@@ -135,8 +135,10 @@ pub struct HyperliquidPerpPosition {
     pub leverage: u64,
     /// 当前仓位保证金模式事实。
     pub margin_mode: HyperliquidPerpMarginMode,
-    /// 当前仓位占用保证金。
-    pub margin: u64,
+    /// 当前本地仓位保证金要求。
+    ///
+    /// 这是 `ceil(qty * entry_price / leverage)`，不是 Hyperliquid 官方仓位级 `marginUsed`。
+    pub required_margin: u64,
     /// 当前仓位强平价；未知或上游未提供时为 `None`。
     ///
     /// 这是上游或 adapter 提供的风险快照事实，不是主动平仓成交价。
@@ -166,7 +168,7 @@ impl HyperliquidPerpPosition {
         entry_price: u64,
         leverage: u64,
         margin_mode: HyperliquidPerpMarginMode,
-        margin: u64,
+        required_margin: u64,
         liquidation_price: Option<u64>,
         unrealized_pnl: i64,
         realized_pnl: i64,
@@ -183,7 +185,7 @@ impl HyperliquidPerpPosition {
             entry_price,
             leverage,
             margin_mode,
-            margin,
+            required_margin,
             liquidation_price,
             unrealized_pnl,
             realized_pnl,
@@ -238,13 +240,13 @@ impl HyperliquidPerpPosition {
         self.side == HyperliquidPerpPositionSide::Flat && self.qty == 0
     }
 
-    /// 返回仓位状态是否和数量、均价、保证金一致。
+    /// 返回仓位状态是否和数量、均价、本地保证金要求一致。
     pub fn has_consistent_state(&self) -> bool {
         match self.side {
             HyperliquidPerpPositionSide::Flat => {
                 self.qty == 0
                     && self.entry_price == 0
-                    && self.margin == 0
+                    && self.required_margin == 0
                     && matches!(
                         self.status,
                         HyperliquidPerpPositionStatus::EmptySlot
@@ -343,7 +345,7 @@ impl HyperliquidPerpPosition {
 
     /// 可 BDD 规格化的聚合根行为：应用一笔成交到当前单向净仓位。
     ///
-    /// 该行为会重算均价、保证金占用、已实现 PnL 增量和生命周期状态；强平价和未实现 PnL
+    /// 该行为会重算均价、本地保证金要求、已实现 PnL 增量和生命周期状态；强平价和未实现 PnL
     /// 在成交后清空为等待下一次风险快照刷新。
     pub fn settle_trade(
         &mut self,
@@ -363,14 +365,14 @@ impl HyperliquidPerpPosition {
         if self.leverage == 0 {
             return Err(HyperliquidPerpPositionError::InvalidLeverage);
         }
-        if self.required_margin() != Some(self.margin) {
+        if self.required_margin() != Some(self.required_margin) {
             return Err(HyperliquidPerpPositionError::InconsistentState);
         }
 
-        let before_margin = self.margin;
+        let before_margin = self.required_margin;
         let (side, qty, entry_price, realized_pnl_delta) =
             self.position_after_trade(incoming_side, trade_qty, trade_price)?;
-        let margin = required_position_margin(qty, entry_price, self.leverage)
+        let required_margin = required_position_margin(qty, entry_price, self.leverage)
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let realized_pnl = self
             .realized_pnl
@@ -381,7 +383,7 @@ impl HyperliquidPerpPosition {
         self.side = side;
         self.qty = qty;
         self.entry_price = entry_price;
-        self.margin = margin;
+        self.required_margin = required_margin;
         self.liquidation_price = None;
         self.unrealized_pnl = 0;
         self.realized_pnl = realized_pnl;
@@ -390,7 +392,7 @@ impl HyperliquidPerpPosition {
 
         Ok(HyperliquidPerpPositionTradeOutcome {
             realized_pnl_delta,
-            margin_delta: i128::from(self.margin) - i128::from(before_margin),
+            required_margin_delta: i128::from(self.required_margin) - i128::from(before_margin),
         })
     }
 
@@ -417,9 +419,9 @@ impl HyperliquidPerpPosition {
             return Err(HyperliquidPerpPositionError::InconsistentState);
         }
 
-        let before_margin = self.margin;
+        let before_margin = self.required_margin;
         self.leverage = leverage;
-        self.margin = match self.status {
+        self.required_margin = match self.status {
             HyperliquidPerpPositionStatus::Open => {
                 required_position_margin(self.qty, self.entry_price, self.leverage)
                     .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?
@@ -429,7 +431,7 @@ impl HyperliquidPerpPosition {
         self.version = next_entity_version(self.version)?;
 
         Ok(HyperliquidPerpPositionLeverageOutcome {
-            margin_delta: i128::from(self.margin) - i128::from(before_margin),
+            required_margin_delta: i128::from(self.required_margin) - i128::from(before_margin),
         })
     }
 
@@ -491,7 +493,7 @@ impl FieldDiff for HyperliquidPerpPosition {
             EntityFieldChange::new("entry_price", "", self.entry_price.to_string()),
             EntityFieldChange::new("leverage", "", self.leverage.to_string()),
             EntityFieldChange::new("margin_mode", "", self.margin_mode.as_str()),
-            EntityFieldChange::new("margin", "", self.margin.to_string()),
+            EntityFieldChange::new("required_margin", "", self.required_margin.to_string()),
             EntityFieldChange::new(
                 "liquidation_price",
                 "",
@@ -529,7 +531,12 @@ impl FieldDiff for HyperliquidPerpPosition {
             self.margin_mode.as_str(),
             other.margin_mode.as_str(),
         );
-        push_change(&mut changes, "margin", self.margin.to_string(), other.margin.to_string());
+        push_change(
+            &mut changes,
+            "required_margin",
+            self.required_margin.to_string(),
+            other.required_margin.to_string(),
+        );
         push_change(
             &mut changes,
             "liquidation_price",
@@ -571,8 +578,8 @@ impl Entity for HyperliquidPerpPosition {
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "position_id" | "account_id" | "symbol" | "side" | "margin_mode" | "status" => 0,
-            "asset" | "qty" | "entry_price" | "leverage" | "margin" | "liquidation_price"
-            | "unrealized_pnl" | "realized_pnl" => 1,
+            "asset" | "qty" | "entry_price" | "leverage" | "required_margin"
+            | "liquidation_price" | "unrealized_pnl" | "realized_pnl" => 1,
             _ => 0,
         }
     }
@@ -671,7 +678,7 @@ mod tests {
         assert!(!position.is_funding_eligible());
         assert_eq!(position.required_margin(), Some(0));
         assert_eq!(position.margin_mode, HyperliquidPerpMarginMode::Cross);
-        assert_eq!(position.margin, 0);
+        assert_eq!(position.required_margin, 0);
         assert_eq!(position.liquidation_price(), None);
         assert_eq!(position.unrealized_pnl, 0);
         assert_eq!(position.realized_pnl, 0);
@@ -684,7 +691,7 @@ mod tests {
         entry_price: u64,
         leverage: u64,
     ) -> HyperliquidPerpPosition {
-        let margin = required_position_margin(qty, entry_price, leverage).unwrap();
+        let required_margin = required_position_margin(qty, entry_price, leverage).unwrap();
         HyperliquidPerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
@@ -695,7 +702,7 @@ mod tests {
             entry_price,
             leverage,
             HyperliquidPerpMarginMode::Cross,
-            margin,
+            required_margin,
             Some(45_000),
             123,
             0,
@@ -816,11 +823,11 @@ mod tests {
         assert_eq!(position.side, HyperliquidPerpPositionSide::Long);
         assert_eq!(position.qty, 3);
         assert_eq!(position.entry_price, 100);
-        assert_eq!(position.margin, 30);
+        assert_eq!(position.required_margin, 30);
         assert_eq!(position.status, HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.version, 1);
         assert_eq!(outcome.realized_pnl_delta, 0);
-        assert_eq!(outcome.margin_delta, 30);
+        assert_eq!(outcome.required_margin_delta, 30);
     }
 
     #[test]
@@ -831,12 +838,12 @@ mod tests {
 
         assert_eq!(position.qty, 4);
         assert_eq!(position.entry_price, 110);
-        assert_eq!(position.margin, 44);
+        assert_eq!(position.required_margin, 44);
         assert_eq!(position.liquidation_price(), None);
         assert_eq!(position.unrealized_pnl, 0);
         assert_eq!(position.version, 3);
         assert_eq!(outcome.realized_pnl_delta, 0);
-        assert_eq!(outcome.margin_delta, 24);
+        assert_eq!(outcome.required_margin_delta, 24);
     }
 
     #[test]
@@ -846,30 +853,30 @@ mod tests {
         assert_eq!(reduced.side, HyperliquidPerpPositionSide::Long);
         assert_eq!(reduced.qty, 2);
         assert_eq!(reduced.entry_price, 100);
-        assert_eq!(reduced.margin, 20);
+        assert_eq!(reduced.required_margin, 20);
         assert_eq!(reduced.realized_pnl, 30);
         assert_eq!(reduce.realized_pnl_delta, 30);
-        assert_eq!(reduce.margin_delta, -10);
+        assert_eq!(reduce.required_margin_delta, -10);
 
         let mut closed = open_position(HyperliquidPerpPositionSide::Long, 2, 100, 10);
         let close = closed.settle_trade(HyperliquidPerpPositionSide::Short, 2, 90).unwrap();
         assert_eq!(closed.side, HyperliquidPerpPositionSide::Flat);
         assert_eq!(closed.qty, 0);
         assert_eq!(closed.entry_price, 0);
-        assert_eq!(closed.margin, 0);
+        assert_eq!(closed.required_margin, 0);
         assert_eq!(closed.status, HyperliquidPerpPositionStatus::Closed);
         assert_eq!(closed.realized_pnl, -20);
-        assert_eq!(close.margin_delta, -20);
+        assert_eq!(close.required_margin_delta, -20);
 
         let mut flipped = open_position(HyperliquidPerpPositionSide::Long, 2, 100, 10);
         let flip = flipped.settle_trade(HyperliquidPerpPositionSide::Short, 3, 90).unwrap();
         assert_eq!(flipped.side, HyperliquidPerpPositionSide::Short);
         assert_eq!(flipped.qty, 1);
         assert_eq!(flipped.entry_price, 90);
-        assert_eq!(flipped.margin, 9);
+        assert_eq!(flipped.required_margin, 9);
         assert_eq!(flipped.status, HyperliquidPerpPositionStatus::Open);
         assert_eq!(flipped.realized_pnl, -20);
-        assert_eq!(flip.margin_delta, -11);
+        assert_eq!(flip.required_margin_delta, -11);
     }
 
     #[test]
@@ -881,10 +888,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(position.leverage, 10);
-        assert_eq!(position.margin, 30);
+        assert_eq!(position.required_margin, 30);
         assert_eq!(position.status, HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.version, 3);
-        assert_eq!(outcome.margin_delta, -30);
+        assert_eq!(outcome.required_margin_delta, -30);
     }
 
     #[test]
@@ -924,8 +931,8 @@ mod tests {
             .apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)
             .unwrap();
         assert_eq!(empty.status, HyperliquidPerpPositionStatus::EmptySlot);
-        assert_eq!(empty.margin, 0);
-        assert_eq!(empty_outcome.margin_delta, 0);
+        assert_eq!(empty.required_margin, 0);
+        assert_eq!(empty_outcome.required_margin_delta, 0);
 
         let mut closed = HyperliquidPerpPosition::new(
             "position-1".to_string(),
@@ -947,8 +954,8 @@ mod tests {
             .apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)
             .unwrap();
         assert_eq!(closed.status, HyperliquidPerpPositionStatus::Closed);
-        assert_eq!(closed.margin, 0);
-        assert_eq!(closed_outcome.margin_delta, 0);
+        assert_eq!(closed.required_margin, 0);
+        assert_eq!(closed_outcome.required_margin_delta, 0);
     }
 
     #[test]
@@ -989,7 +996,7 @@ mod tests {
         after.side = HyperliquidPerpPositionSide::Flat;
         after.qty = 0;
         after.entry_price = 0;
-        after.margin = 0;
+        after.required_margin = 0;
         after.liquidation_price = None;
         after.status = HyperliquidPerpPositionStatus::Closed;
 
