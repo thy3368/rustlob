@@ -1,8 +1,20 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use thiserror::Error;
 
 use crate::entity::HyperliquidPerpMarginMode;
 
 const HYPERLIQUID_PERP_LEVERAGE_SETTING_ENTITY_TYPE: u8 = 15;
+
+/// Hyperliquid perp 杠杆配置实体行为可能产生的业务拒绝原因。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum HyperliquidPerpLeverageSettingError {
+    /// 杠杆必须大于等于 1。
+    #[error("leverage must be greater than or equal to 1")]
+    InvalidLeverage,
+    /// 推进配置版本时发生整数溢出。
+    #[error("arithmetic overflow while updating leverage setting")]
+    ArithmeticOverflow,
+}
 
 /// Hyperliquid perp 账户在单个 asset + 保证金模式下的杠杆配置快照。
 ///
@@ -67,10 +79,29 @@ impl HyperliquidPerpLeverageSetting {
         self.margin_mode == margin_mode
     }
 
-    /// 应用新的杠杆值和下一个版本。
-    pub fn apply_new_leverage(&mut self, new_leverage: u64, next_version: u64) {
-        self.leverage = new_leverage;
-        self.version = next_version;
+    /// 可 BDD 规格化的聚合根行为：更新杠杆配置。
+    ///
+    /// 拒绝 0 杠杆；成功时只推进杠杆值和单步版本，其他配置归属事实保持不变。
+    pub fn update_leverage(
+        &self,
+        leverage: u64,
+    ) -> Result<Self, HyperliquidPerpLeverageSettingError> {
+        if leverage == 0 {
+            return Err(HyperliquidPerpLeverageSettingError::InvalidLeverage);
+        }
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(HyperliquidPerpLeverageSettingError::ArithmeticOverflow)?;
+
+        Ok(Self {
+            setting_id: self.setting_id.clone(),
+            account_id: self.account_id.clone(),
+            asset: self.asset,
+            margin_mode: self.margin_mode,
+            leverage,
+            version,
+        })
     }
 }
 
@@ -182,10 +213,10 @@ mod tests {
     }
 
     #[test]
-    fn apply_new_leverage_updates_value_and_version() {
-        let mut setting = cross_setting();
+    fn update_leverage_updates_value_and_version() {
+        let setting = cross_setting();
 
-        setting.apply_new_leverage(10, 4);
+        let setting = setting.update_leverage(10).unwrap();
 
         assert_eq!(setting.leverage, 10);
         assert_eq!(setting.version, 4);
@@ -194,8 +225,7 @@ mod tests {
     #[test]
     fn diff_projects_leverage_change() {
         let before = cross_setting();
-        let mut after = before.clone();
-        after.apply_new_leverage(8, 4);
+        let after = before.update_leverage(8).unwrap();
 
         let changes = before.diff(&after);
 
