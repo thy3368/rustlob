@@ -102,7 +102,6 @@ fn given_trigger_pending_order_when_triggered_then_active_order_state_is_created
         order.active_reservation().map(|reservation| reservation.remaining_amount),
         Some(200)
     );
-    assert_eq!(order.reserved_quote, 200);
     assert_eq!(order.version, 2);
     Ok(())
 }
@@ -120,8 +119,6 @@ fn given_trigger_pending_order_when_canceled_then_only_trigger_rule_is_canceled(
     assert_eq!(order.status(), SpotOrderStatus::Canceled);
     assert_eq!(order.status_reason(), Some(SpotOrderStatusReason::CanceledByUser));
     assert_eq!(outcome.unfreeze_ledger_entry, None);
-    assert_eq!(order.reserved_base, 0);
-    assert_eq!(order.reserved_quote, 0);
     Ok(())
 }
 

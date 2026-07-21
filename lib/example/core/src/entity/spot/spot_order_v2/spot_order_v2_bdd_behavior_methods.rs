@@ -15,8 +15,6 @@ fn buy_order() -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        0,
-        200,
         test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
         Some("cloid-1".to_string()),
         1,
@@ -37,8 +35,6 @@ fn maker_sell_qty(order_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        qty,
-        0,
         test_principal_reservation(
             order_id,
             format!("account-{order_id}").as_str(),
@@ -78,9 +74,8 @@ fn place_buy_freezes_quote_and_creates_open_order() -> Result<(), SpotOrderV2Beh
     assert_eq!(outcome.order.status, SpotOrderStatus::Open);
     assert_eq!(outcome.order.filled_qty, 0);
     assert_eq!(outcome.order.version, 1);
-    assert_eq!(outcome.order.reserved_base, 0);
-    assert_eq!(outcome.order.reserved_quote, 200);
     assert_eq!(outcome.order.reservation.reservation_kind, ReservationKind::SpotBuyQuote);
+    assert_eq!(outcome.order.reservation.original_amount, 200);
     assert_eq!(outcome.order.reservation.remaining_amount, 200);
     assert_eq!(outcome.freeze_ledger_entry.operation, BalanceLedgerOperation::Freeze);
     assert_eq!(outcome.freeze_ledger_entry.asset_id, "USDT");
@@ -98,9 +93,8 @@ fn place_sell_freezes_base_and_creates_open_order() -> Result<(), SpotOrderV2Beh
     let outcome = SpotOrderV2::place(place_input(SpotOrderSide::Sell))?;
 
     assert_eq!(outcome.order.status, SpotOrderStatus::Open);
-    assert_eq!(outcome.order.reserved_base, 2);
-    assert_eq!(outcome.order.reserved_quote, 0);
     assert_eq!(outcome.order.reservation.reservation_kind, ReservationKind::SpotSellBase);
+    assert_eq!(outcome.order.reservation.original_amount, 2);
     assert_eq!(outcome.order.reservation.remaining_amount, 2);
     assert_eq!(outcome.freeze_ledger_entry.operation, BalanceLedgerOperation::Freeze);
     assert_eq!(outcome.freeze_ledger_entry.asset_id, "BTC");
@@ -127,7 +121,7 @@ fn place_rejects_invalid_quantity_price_and_overflow() {
 
 #[test]
 fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2BehaviorError> {
-    let mut taker = SpotOrderV2 { qty: 3, reserved_quote: 300, ..buy_order() };
+    let mut taker = SpotOrderV2 { qty: 3, ..buy_order() };
     taker.reservation =
         test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100);
     let mut makers = vec![maker_sell_qty("maker-1", 1, 90), maker_sell_qty("maker-2", 3, 95)];
@@ -162,7 +156,7 @@ fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2Beha
 
 #[test]
 fn match_with_makers_stops_at_first_non_crossing_maker() -> Result<(), SpotOrderV2BehaviorError> {
-    let mut taker = SpotOrderV2 { qty: 3, reserved_quote: 300, ..buy_order() };
+    let mut taker = SpotOrderV2 { qty: 3, ..buy_order() };
     taker.reservation =
         test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100);
     let mut makers = vec![maker_sell_qty("maker-1", 1, 90), maker_sell_qty("maker-2", 1, 110)];

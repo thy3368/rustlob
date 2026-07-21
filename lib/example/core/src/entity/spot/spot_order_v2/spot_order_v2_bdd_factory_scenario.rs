@@ -176,7 +176,13 @@ fn given_factory_child_when_triggered_then_it_becomes_active_spot_order_v2()
         take_profit.active_fee_reservation().map(|reservation| reservation.remaining_amount),
         Some(1)
     );
-    assert_eq!(take_profit.reserved_base, 1);
-    assert_eq!(take_profit.reserved_quote, 0);
+    assert_eq!(
+        take_profit.active_reservation().map(|reservation| reservation.reservation_kind),
+        Some(ReservationKind::SpotSellBase)
+    );
+    assert_eq!(
+        take_profit.active_reservation().map(|reservation| reservation.original_amount),
+        Some(1)
+    );
     Ok(())
 }
