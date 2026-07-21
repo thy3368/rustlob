@@ -162,7 +162,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
                     "symbol": order.symbol,
                     "qty": order.qty,
                     "price": order.order_price(),
-                    "reserved_quote": order.reserved_quote
+                    "principal_reservation_amount": order.reservation.original_amount
                 }),
             )
         })
