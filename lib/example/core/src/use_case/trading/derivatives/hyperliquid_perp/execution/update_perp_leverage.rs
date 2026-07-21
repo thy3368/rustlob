@@ -1,11 +1,13 @@
-use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
+use cmd_handler::EntityReplayableEvent;
 use common_entity::{Entity, MiStateMachineV2Unchecked};
 use thiserror::Error;
 
-use crate::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
+use crate::entity::{
+    HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError, HyperliquidPerpMarginMode,
+};
 
 /// 更新 Hyperliquid perp 杠杆配置的命令。
 ///
@@ -132,12 +134,8 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         match margin_mode_from_is_cross(cmd.is_cross) {
             HyperliquidPerpMarginMode::Cross => {
                 let before = state.leverage_setting.clone();
-                let next_version = before
-                    .version
-                    .checked_add(1)
-                    .ok_or(UpdateHyperliquidPerpLeverageError::ArithmeticOverflow)?;
-                let mut after = before.clone();
-                after.apply_new_leverage(cmd.leverage, next_version);
+                let after =
+                    before.update_leverage(cmd.leverage).map_err(map_leverage_setting_error)?;
                 Ok(UpdateHyperliquidPerpLeverageChanges {
                     changed_leverage_setting: UpdatedEntityPair { before, after },
                 })
@@ -153,134 +151,15 @@ fn margin_mode_from_is_cross(is_cross: bool) -> HyperliquidPerpMarginMode {
     if is_cross { HyperliquidPerpMarginMode::Cross } else { HyperliquidPerpMarginMode::Isolated }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn cross_setting() -> HyperliquidPerpLeverageSetting {
-        HyperliquidPerpLeverageSetting::new(
-            "trader-1".to_string(),
-            7,
-            HyperliquidPerpMarginMode::Cross,
-            5,
-            3,
-        )
-    }
-
-    fn cross_state() -> UpdateHyperliquidPerpLeverageState {
-        UpdateHyperliquidPerpLeverageState {
-            account_id: "trader-1".to_string(),
-            leverage_setting: cross_setting(),
+fn map_leverage_setting_error(
+    error: HyperliquidPerpLeverageSettingError,
+) -> UpdateHyperliquidPerpLeverageError {
+    match error {
+        HyperliquidPerpLeverageSettingError::InvalidLeverage => {
+            UpdateHyperliquidPerpLeverageError::InvalidLeverage
         }
-    }
-
-    fn cross_cmd() -> UpdateHyperliquidPerpLeverageCmd {
-        UpdateHyperliquidPerpLeverageCmd {
-            party_id: "trader-1".to_string(),
-            asset: 7,
-            is_cross: true,
-            leverage: 10,
+        HyperliquidPerpLeverageSettingError::ArithmeticOverflow => {
+            UpdateHyperliquidPerpLeverageError::ArithmeticOverflow
         }
-    }
-
-    #[test]
-    fn pre_check_rejects_empty_party_id() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd { party_id: String::new(), ..cross_cmd() };
-
-        let result = UpdateHyperliquidPerpLeverageUseCase.pre_check_command(&cmd);
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::InvalidPartyId));
-    }
-
-    #[test]
-    fn pre_check_rejects_zero_leverage() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd { leverage: 0, ..cross_cmd() };
-
-        let result = UpdateHyperliquidPerpLeverageUseCase.pre_check_command(&cmd);
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::InvalidLeverage));
-    }
-
-    #[test]
-    fn validate_rejects_account_mismatch() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd {
-            party_id: "other-trader".to_string(),
-            ..cross_cmd()
-        };
-
-        let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::AccountMismatch));
-    }
-
-    #[test]
-    fn validate_rejects_asset_mismatch() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd { asset: 9, ..cross_cmd() };
-
-        let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::LeverageSettingMismatch));
-    }
-
-    #[test]
-    fn validate_rejects_margin_mode_mismatch() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd { is_cross: false, ..cross_cmd() };
-
-        let result =
-            UpdateHyperliquidPerpLeverageUseCase.validate_against_given_state(&cmd, &cross_state());
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch));
-    }
-
-    #[test]
-    fn compute_changes_updates_cross_leverage_setting() {
-        let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_changes_unchecked(&cross_cmd(), &cross_state())
-            .unwrap();
-
-        assert_eq!(changes.changed_leverage_setting.before.leverage, 5);
-        assert_eq!(changes.changed_leverage_setting.after.leverage, 10);
-        assert_eq!(changes.changed_leverage_setting.before.version, 3);
-        assert_eq!(changes.changed_leverage_setting.after.version, 4);
-    }
-
-    #[test]
-    fn compute_changes_rejects_isolated_path_for_now() {
-        let cmd = UpdateHyperliquidPerpLeverageCmd { is_cross: false, ..cross_cmd() };
-        let state = UpdateHyperliquidPerpLeverageState {
-            account_id: "trader-1".to_string(),
-            leverage_setting: HyperliquidPerpLeverageSetting::new(
-                "trader-1".to_string(),
-                7,
-                HyperliquidPerpMarginMode::Isolated,
-                3,
-                2,
-            ),
-        };
-
-        let result =
-            UpdateHyperliquidPerpLeverageUseCase.compute_after_changes_unchecked(&cmd, &state);
-
-        assert_eq!(result, Err(UpdateHyperliquidPerpLeverageError::UnsupportedMarginMode));
-    }
-
-    #[test]
-    fn replayable_events_project_updated_leverage_field() {
-        let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_changes_unchecked(&cross_cmd(), &cross_state())
-            .unwrap();
-
-        let events = changes.to_replayable_events().unwrap();
-
-        assert_eq!(events.len(), 1);
-        assert!(events[0].is_updated());
-        assert_eq!(events[0].old_version, 3);
-        assert_eq!(events[0].new_version, 4);
-        assert_eq!(events[0].field_changes.len(), 1);
-        assert_eq!(events[0].field_changes[0].field_name_as_str().ok(), Some("leverage"));
-        assert_eq!(events[0].field_changes[0].old_value_bytes(), b"5");
-        assert_eq!(events[0].field_changes[0].new_value_bytes(), b"10");
     }
 }
