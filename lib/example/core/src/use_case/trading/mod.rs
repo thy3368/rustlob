@@ -51,10 +51,6 @@ pub use derivatives::{
     UpdateHyperliquidPerpLeverageError, UpdateHyperliquidPerpLeverageState,
     UpdateHyperliquidPerpLeverageUseCase,
 };
-pub use spot::place_order::{
-    PlaceOrderError, PlaceOrderExecution, PlaceOrderSide, PlaceOrderTimeInForce,
-    PlaceOrderTriggerRole,
-};
 pub use spot::{
     CancelSpotOrderV2AfterChangesV3, CancelSpotOrderV2ChangesV3, CancelSpotOrderV2CmdV3,
     CancelSpotOrderV2LookupV3, PlaceSpotOrderV2AfterChangesV3, PlaceSpotOrderV2ChangesV3,

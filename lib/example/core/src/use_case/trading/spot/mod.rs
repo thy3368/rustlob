@@ -1,4 +1,3 @@
-pub mod place_order;
 pub mod spot_order_v2_use_case_family_v3;
 
 pub use spot_order_v2_use_case_family_v3::{
