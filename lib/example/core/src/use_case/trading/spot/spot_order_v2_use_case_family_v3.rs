@@ -608,9 +608,11 @@ impl SpotOrderV2UseCaseFamilyV3 {
                 &context.order.reservation,
             )?,
         })?;
-        let unfreeze_ledger_entry =
-            apply_behavior_ledger_entry(cancel_outcome.unfreeze_ledger_entry, &mut balance_book)?;
-        created_balance_ledger_entries.push(unfreeze_ledger_entry);
+        if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
+            let unfreeze_ledger_entry =
+                apply_behavior_ledger_entry(unfreeze_ledger_entry, &mut balance_book)?;
+            created_balance_ledger_entries.push(unfreeze_ledger_entry);
+        }
 
         release_remaining_for_cancel(
             &mut order_after,

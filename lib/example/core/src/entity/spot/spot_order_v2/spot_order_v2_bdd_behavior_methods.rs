@@ -237,6 +237,8 @@ fn cancel_releases_remaining_reservation_and_derives_unfreeze_ledger()
         balance_entity_id: "balance:trader-1:USDT".to_string(),
     })?;
 
+    let unfreeze_ledger_entry =
+        outcome.unfreeze_ledger_entry.ok_or(SpotOrderV2BehaviorError::OrderNotCancelable)?;
     assert_eq!(order.status, SpotOrderStatus::Canceled);
     assert_eq!(order.status_reason, Some(SpotOrderStatusReason::CanceledByUser));
     assert_eq!(order.version, 2);
@@ -244,12 +246,12 @@ fn cancel_releases_remaining_reservation_and_derives_unfreeze_ledger()
     assert_eq!(order.reservation.released_amount, 200);
     assert_eq!(order.reservation.status, ReservationStatus::ClosedByRelease);
     assert_eq!(order.reservation.close_reason, Some(ReservationCloseReason::Canceled));
-    assert_eq!(outcome.unfreeze_ledger_entry.operation, BalanceLedgerOperation::Unfreeze);
-    assert_eq!(outcome.unfreeze_ledger_entry.amount, 200);
-    assert_eq!(outcome.unfreeze_ledger_entry.asset_id, "USDT");
-    assert_eq!(outcome.unfreeze_ledger_entry.balance_entity_id, "balance:trader-1:USDT");
+    assert_eq!(unfreeze_ledger_entry.operation, BalanceLedgerOperation::Unfreeze);
+    assert_eq!(unfreeze_ledger_entry.amount, 200);
+    assert_eq!(unfreeze_ledger_entry.asset_id, "USDT");
+    assert_eq!(unfreeze_ledger_entry.balance_entity_id, "balance:trader-1:USDT");
     assert_eq!(
-        outcome.unfreeze_ledger_entry.reason,
+        unfreeze_ledger_entry.reason,
         BalanceLedgerReason::UnfreezeForCancel { order_id: "order-buy".to_string() }
     );
     Ok(())

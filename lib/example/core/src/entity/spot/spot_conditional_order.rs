@@ -11,7 +11,7 @@ use crate::entity::ReservationError;
 const SPOT_CONDITIONAL_ORDER_ENTITY_TYPE: u8 = 4;
 
 /// 条件单触发角色。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SpotOrderTriggerRole {
     /// 止盈触发单。
     TakeProfit,

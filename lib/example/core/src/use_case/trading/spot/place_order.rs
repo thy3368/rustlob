@@ -6,11 +6,11 @@ pub use conditional_order::{
 };
 use thiserror::Error;
 
-use crate::MarketRules;
 pub use crate::entity::{
     SpotOrderSide as PlaceOrderSide, SpotOrderTimeInForce as PlaceOrderTimeInForce,
     SpotOrderTriggerRole as PlaceOrderTriggerRole,
 };
+use crate::MarketRules;
 
 /// 触发后或立即进入执行流程的现货执行意图。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +48,18 @@ pub enum PlaceOrderError {
     /// Returned when `trigger_price == 0`.
     #[error("trigger_price must be greater than zero")]
     InvalidTriggerPrice,
+    /// Returned when `normalTpsl` does not contain both TP and SL child orders.
+    #[error("normalTpsl requires both take-profit and stop-loss child orders")]
+    MissingTpslChild,
+    /// Returned when a `normalTpsl` child has the same direction as its entry parent order.
+    #[error("normalTpsl child order must exit in the opposite direction")]
+    TpslChildSameSideAsParent,
+    /// Returned when a `normalTpsl` child quantity exceeds the entry parent quantity.
+    #[error("normalTpsl child quantity exceeds parent quantity")]
+    TpslChildSizeExceedsParent,
+    /// Returned when the parent order reservation cannot be derived from checked order facts.
+    #[error("parent order reservation is inconsistent")]
+    InvalidParentReservation,
     /// Returned when the quantity is below current market minimum rules.
     #[error("qty is below market minimum")]
     QtyBelowMin,

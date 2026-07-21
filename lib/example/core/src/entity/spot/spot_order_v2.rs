@@ -5,6 +5,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::spot_conditional_order::SpotOrderTriggerRole;
 use super::spot_order_primitives::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
     SpotOrderTimeInForce, option_status_reason_value, option_u64_value, push_change,
@@ -20,7 +21,11 @@ use crate::entity::{
 #[cfg(test)]
 mod spot_order_v2_bdd_behavior_methods;
 #[cfg(test)]
+mod spot_order_v2_bdd_factory_scenario;
+#[cfg(test)]
 mod spot_order_v2_bdd_happy_path;
+#[cfg(test)]
+mod spot_order_v2_bdd_lifecycle;
 
 const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
 
@@ -265,8 +270,8 @@ pub struct CancelSpotOrderV2Input {
 /// 撤单行为结果。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Outcome {
-    /// 本次撤单直接派生的解冻流水。
-    pub unfreeze_ledger_entry: BalanceLedgerEntryV2,
+    /// 本次撤单直接派生的解冻流水；未触发条件单撤销时没有冻结可释放。
+    pub unfreeze_ledger_entry: Option<BalanceLedgerEntryV2>,
 }
 
 /// `SpotOrderV2` 三个聚合行为入口的业务错误。
@@ -349,6 +354,107 @@ struct PlacePrincipalHoldPlan {
     amount: u64,
 }
 
+/// `SpotOrderV2` 的稳定身份事实。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotOrderIdentity {
+    /// 本系统生成的稳定订单 ID。
+    pub order_id: String,
+    /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
+    pub asset: u32,
+    /// Hyperliquid 返回的 numeric `oid`；订单尚未被交易所确认时可以为空。
+    pub exchange_oid: Option<u64>,
+    /// 拥有该订单的交易账户 ID。
+    pub account_id: String,
+    /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
+    pub symbol: String,
+    /// Hyperliquid `cloid`，客户端自定义订单 ID。
+    pub client_order_id: Option<String>,
+}
+
+/// `SpotOrderV2` 跨生命周期共享的业务事实。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotOrderCommonFacts {
+    /// 买卖方向。
+    pub side: SpotOrderSide,
+    /// 以 base asset 计价的下单数量。
+    pub qty: u64,
+}
+
+/// 未触发条件单状态，只保存触发规则和触发后的执行意图。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotTriggerPendingState {
+    /// 触发价格，使用 core fixed-point 整数价格。
+    pub trigger_price: u64,
+    /// 触发单业务角色。
+    pub trigger_role: SpotOrderTriggerRole,
+    /// 触发后的执行意图。
+    pub trigger_execution: SpotOrderExecution,
+    /// 触发后 active 订单使用的 TIF。
+    pub triggered_time_in_force: SpotOrderTimeInForce,
+}
+
+/// 已进入撮合生命周期的订单状态。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotActiveOrderState {
+    /// 执行意图。
+    pub execution: SpotOrderExecution,
+    /// 订单有效方式。
+    pub time_in_force: SpotOrderTimeInForce,
+    /// 已成交数量。
+    pub filled_qty: u64,
+    /// 订单建立时记录的 base 冻结快照，主要用于卖单。
+    pub reserved_base: u64,
+    /// 订单建立时记录的 quote 冻结快照，主要用于买单。
+    pub reserved_quote: u64,
+    /// 订单 principal 冻结凭证。
+    pub reservation: Reservation,
+    /// 订单 fee 冻结凭证。
+    pub fee_reservation: Reservation,
+}
+
+/// 订单终态状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotTerminalOrderState {
+    /// 本地生命周期终态。
+    pub status: SpotOrderStatus,
+    /// Hyperliquid 细分状态原因。
+    pub status_reason: Option<SpotOrderStatusReason>,
+    /// 终态时已经成交的数量。
+    pub filled_qty: u64,
+}
+
+/// `SpotOrderV2` 的统一生命周期。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotOrderLifecycle {
+    /// 条件单已接受，等待触发；不冻结、不撮合。
+    TriggerPending(SpotTriggerPendingState),
+    /// 普通订单已进入执行流程，尚未成交。
+    Active(SpotActiveOrderState),
+    /// 普通订单已部分成交，剩余数量仍在业务上可撤。
+    PartiallyFilled(SpotActiveOrderState),
+    /// 订单已完全成交。
+    Filled(SpotTerminalOrderState),
+    /// 订单已取消。
+    Canceled(SpotTerminalOrderState),
+    /// 订单提交或触发时被拒绝。
+    Rejected(SpotTerminalOrderState),
+    /// 条件单或订单已过期。
+    Expired(SpotTerminalOrderState),
+}
+
+/// 条件单触发输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerSpotOrderV2Input {
+    /// base 资产 ID。
+    pub base_asset_id: String,
+    /// quote 资产 ID。
+    pub quote_asset_id: String,
+    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub maker_fee_bps: u64,
+    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub taker_fee_bps: u64,
+}
+
 /// `SpotOrderV2 v2` 的目标态订单聚合。
 ///
 /// 这是一个 `MomentInterval + AggregateRoot`，只表达订单自身的业务真相：
@@ -363,6 +469,15 @@ struct PlacePrincipalHoldPlan {
 /// - `SpotTrade` 负责成交已经成立后的事实与清结算角色映射
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderV2 {
+    /// 订单身份事实。
+    #[serde(skip, default = "SpotOrderV2::serde_default_identity")]
+    pub identity: SpotOrderIdentity,
+    /// 跨条件单/普通单共享的业务事实。
+    #[serde(skip, default = "SpotOrderV2::serde_default_common")]
+    pub common: SpotOrderCommonFacts,
+    /// 订单生命周期权威状态。
+    #[serde(skip, default = "SpotOrderV2::serde_default_lifecycle")]
+    pub lifecycle: SpotOrderLifecycle,
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
@@ -414,6 +529,45 @@ pub struct SpotOrderV2 {
 }
 
 impl SpotOrderV2 {
+    fn serde_default_identity() -> SpotOrderIdentity {
+        SpotOrderIdentity {
+            order_id: String::new(),
+            asset: 0,
+            exchange_oid: None,
+            account_id: String::new(),
+            symbol: String::new(),
+            client_order_id: None,
+        }
+    }
+
+    fn serde_default_common() -> SpotOrderCommonFacts {
+        SpotOrderCommonFacts { side: SpotOrderSide::Buy, qty: 0 }
+    }
+
+    fn serde_default_lifecycle() -> SpotOrderLifecycle {
+        let reservation = Self::empty_trigger_reservation(
+            "serde-default",
+            "",
+            ReservationKind::SpotBuyQuote,
+            "UNRESERVED",
+        );
+        let fee_reservation = Self::empty_trigger_reservation(
+            "serde-default:fee",
+            "",
+            ReservationKind::SpotBuyFeeQuote,
+            "UNRESERVED",
+        );
+        SpotOrderLifecycle::Active(SpotActiveOrderState {
+            execution: SpotOrderExecution::Limit { price: 0 },
+            time_in_force: SpotOrderTimeInForce::Gtc,
+            filled_qty: 0,
+            reserved_base: 0,
+            reserved_quote: 0,
+            reservation,
+            fee_reservation,
+        })
+    }
+
     /// 从已校验业务事实或回放事件构造订单快照。
     ///
     /// 构造器只负责装配订单事实，不承担完整业务校验；一致性由查询方法暴露，
@@ -493,7 +647,36 @@ impl SpotOrderV2 {
         client_order_id: Option<String>,
         version: u64,
     ) -> Self {
+        let identity = SpotOrderIdentity {
+            order_id: order_id.clone(),
+            asset,
+            exchange_oid,
+            account_id: account_id.clone(),
+            symbol: symbol.clone(),
+            client_order_id: client_order_id.clone(),
+        };
+        let common = SpotOrderCommonFacts { side, qty };
+        let active = SpotActiveOrderState {
+            execution,
+            time_in_force,
+            filled_qty,
+            reserved_base,
+            reserved_quote,
+            reservation: reservation.clone(),
+            fee_reservation: fee_reservation.clone(),
+        };
+        let terminal = SpotTerminalOrderState { status, status_reason, filled_qty };
+        let lifecycle = match status {
+            SpotOrderStatus::Open => SpotOrderLifecycle::Active(active),
+            SpotOrderStatus::PartiallyFilled => SpotOrderLifecycle::PartiallyFilled(active),
+            SpotOrderStatus::Filled => SpotOrderLifecycle::Filled(terminal),
+            SpotOrderStatus::Canceled => SpotOrderLifecycle::Canceled(terminal),
+            SpotOrderStatus::Rejected => SpotOrderLifecycle::Rejected(terminal),
+        };
         Self {
+            identity,
+            common,
+            lifecycle,
             order_id,
             asset,
             exchange_oid,
@@ -508,6 +691,141 @@ impl SpotOrderV2 {
             status_reason,
             reserved_base,
             reserved_quote,
+            reservation,
+            fee_reservation,
+            client_order_id,
+            version,
+        }
+    }
+
+    /// 从已校验业务事实创建普通 active order，并生成 principal / fee reservation。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_active(
+        order_id: String,
+        asset: u32,
+        exchange_oid: Option<u64>,
+        account_id: String,
+        symbol: String,
+        side: SpotOrderSide,
+        execution: SpotOrderExecution,
+        time_in_force: SpotOrderTimeInForce,
+        qty: u64,
+        base_asset_id: &str,
+        quote_asset_id: &str,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+        client_order_id: Option<String>,
+    ) -> Result<Self, SpotOrderV2BehaviorError> {
+        let order_price = execution.order_price();
+        let reservation = Self::principal_reservation(
+            order_id.as_str(),
+            account_id.as_str(),
+            side,
+            qty,
+            order_price,
+            base_asset_id,
+            quote_asset_id,
+        )?;
+        let fee_reservation = Self::fee_reservation(
+            order_id.as_str(),
+            account_id.as_str(),
+            side,
+            qty,
+            order_price,
+            quote_asset_id,
+            maker_fee_bps,
+            taker_fee_bps,
+        )?;
+        let reserved_base = if side == SpotOrderSide::Sell { qty } else { 0 };
+        let reserved_quote = if side == SpotOrderSide::Buy {
+            quote_notional(qty, order_price).ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?
+        } else {
+            0
+        };
+        Ok(Self::new_with_fee_reservation(
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            execution,
+            time_in_force,
+            qty,
+            0,
+            SpotOrderStatus::Open,
+            None,
+            reserved_base,
+            reserved_quote,
+            reservation,
+            fee_reservation,
+            client_order_id,
+            1,
+        ))
+    }
+
+    /// 创建未触发条件单；该状态不生成 principal / fee reservation。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_trigger_pending(
+        order_id: String,
+        asset: u32,
+        exchange_oid: Option<u64>,
+        account_id: String,
+        symbol: String,
+        side: SpotOrderSide,
+        qty: u64,
+        trigger_price: u64,
+        trigger_role: SpotOrderTriggerRole,
+        trigger_execution: SpotOrderExecution,
+        triggered_time_in_force: SpotOrderTimeInForce,
+        client_order_id: Option<String>,
+        version: u64,
+    ) -> Self {
+        let identity = SpotOrderIdentity {
+            order_id: order_id.clone(),
+            asset,
+            exchange_oid,
+            account_id: account_id.clone(),
+            symbol: symbol.clone(),
+            client_order_id: client_order_id.clone(),
+        };
+        let common = SpotOrderCommonFacts { side, qty };
+        let lifecycle = SpotOrderLifecycle::TriggerPending(SpotTriggerPendingState {
+            trigger_price,
+            trigger_role,
+            trigger_execution,
+            triggered_time_in_force,
+        });
+        let reservation = Self::empty_trigger_reservation(
+            order_id.as_str(),
+            account_id.as_str(),
+            ReservationKind::SpotBuyQuote,
+            "UNRESERVED",
+        );
+        let fee_reservation = Self::empty_trigger_reservation(
+            format!("{order_id}:fee").as_str(),
+            account_id.as_str(),
+            ReservationKind::SpotBuyFeeQuote,
+            "UNRESERVED",
+        );
+        Self {
+            identity,
+            common,
+            lifecycle,
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            execution: trigger_execution,
+            time_in_force: triggered_time_in_force,
+            qty,
+            filled_qty: 0,
+            status: SpotOrderStatus::Open,
+            status_reason: None,
+            reserved_base: 0,
+            reserved_quote: 0,
             reservation,
             fee_reservation,
             client_order_id,
@@ -584,6 +902,60 @@ impl SpotOrderV2 {
         );
 
         Ok(PlaceSpotOrderV2Outcome { order, freeze_ledger_entry })
+    }
+
+    /// 可 BDD 规格化的聚合根行为：未触发条件单进入 active 订单生命周期。
+    ///
+    /// 触发前不冻结、不撮合；触发时才生成 principal / fee reservation。
+    pub fn trigger(
+        &mut self,
+        input: TriggerSpotOrderV2Input,
+    ) -> Result<(), SpotOrderV2BehaviorError> {
+        let pending = match &self.lifecycle {
+            SpotOrderLifecycle::TriggerPending(pending) => *pending,
+            _ => return Err(SpotOrderV2BehaviorError::OrderNotMatchable),
+        };
+        let order_price = pending.trigger_execution.order_price();
+        let reservation = Self::principal_reservation(
+            self.order_id.as_str(),
+            self.account_id.as_str(),
+            self.side,
+            self.qty,
+            order_price,
+            input.base_asset_id.as_str(),
+            input.quote_asset_id.as_str(),
+        )?;
+        let fee_reservation = Self::fee_reservation(
+            self.order_id.as_str(),
+            self.account_id.as_str(),
+            self.side,
+            self.qty,
+            order_price,
+            input.quote_asset_id.as_str(),
+            input.maker_fee_bps,
+            input.taker_fee_bps,
+        )?;
+        let reserved_base = if self.side == SpotOrderSide::Sell { self.qty } else { 0 };
+        let reserved_quote = if self.side == SpotOrderSide::Buy {
+            quote_notional(self.qty, order_price)
+                .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?
+        } else {
+            0
+        };
+        let next_version = self.next_version()?;
+
+        self.execution = pending.trigger_execution;
+        self.time_in_force = pending.triggered_time_in_force;
+        self.filled_qty = 0;
+        self.status = SpotOrderStatus::Open;
+        self.status_reason = Some(SpotOrderStatusReason::Triggered);
+        self.reserved_base = reserved_base;
+        self.reserved_quote = reserved_quote;
+        self.reservation = reservation;
+        self.fee_reservation = fee_reservation;
+        self.version = next_version;
+        self.lifecycle = SpotOrderLifecycle::Active(self.active_state_from_legacy());
+        Ok(())
     }
 
     /// 为 spot 订单构造 principal reservation。
@@ -691,6 +1063,29 @@ impl SpotOrderV2 {
         }
     }
 
+    fn empty_trigger_reservation(
+        order_id: &str,
+        account_id: &str,
+        reservation_kind: ReservationKind,
+        asset_id: &str,
+    ) -> Reservation {
+        Reservation {
+            reservation_id: format!("reservation:{order_id}:trigger-pending"),
+            owner_account_id: account_id.to_string(),
+            caused_by_order_id: order_id.to_string(),
+            market_kind: ReservationMarketKind::Spot,
+            reservation_kind,
+            asset_id: asset_id.to_string(),
+            original_amount: 0,
+            consumed_amount: 0,
+            released_amount: 0,
+            remaining_amount: 0,
+            status: ReservationStatus::ClosedByRelease,
+            close_reason: None,
+            version: 1,
+        }
+    }
+
     fn place_principal_hold_plan(
         input: &PlaceSpotOrderV2Input,
         quote_notional: u64,
@@ -738,6 +1133,11 @@ impl SpotOrderV2 {
         self.side
     }
 
+    /// 返回以 base asset 计价的下单数量。
+    pub fn qty(&self) -> u64 {
+        self.qty
+    }
+
     /// 返回本地生命周期状态。
     pub fn status(&self) -> SpotOrderStatus {
         self.status
@@ -748,9 +1148,39 @@ impl SpotOrderV2 {
         self.status_reason
     }
 
+    /// 返回订单当前已经成交的数量。
+    pub fn filled_qty(&self) -> u64 {
+        self.filled_qty
+    }
+
     /// 返回交易所确认后的 numeric `oid`。
     pub fn exchange_oid(&self) -> Option<u64> {
         self.exchange_oid
+    }
+
+    /// 返回订单是否仍是未触发条件单。
+    pub fn is_trigger_pending(&self) -> bool {
+        matches!(self.lifecycle, SpotOrderLifecycle::TriggerPending(_))
+    }
+
+    /// 返回 active lifecycle 的 principal reservation；未触发条件单返回 `None`。
+    pub fn active_reservation(&self) -> Option<&Reservation> {
+        match &self.lifecycle {
+            SpotOrderLifecycle::Active(state) | SpotOrderLifecycle::PartiallyFilled(state) => {
+                Some(&state.reservation)
+            }
+            _ => None,
+        }
+    }
+
+    /// 返回 active lifecycle 的 fee reservation；未触发条件单返回 `None`。
+    pub fn active_fee_reservation(&self) -> Option<&Reservation> {
+        match &self.lifecycle {
+            SpotOrderLifecycle::Active(state) | SpotOrderLifecycle::PartiallyFilled(state) => {
+                Some(&state.fee_reservation)
+            }
+            _ => None,
+        }
     }
 
     /// 返回订单是否属于指定账户。
@@ -1076,6 +1506,12 @@ impl SpotOrderV2 {
 
     /// 校验订单当前是否仍然允许进入撮合。
     pub(crate) fn ensure_matchable(&self) -> Result<(), SpotOrderV2MatchError> {
+        if !matches!(
+            self.lifecycle,
+            SpotOrderLifecycle::Active(_) | SpotOrderLifecycle::PartiallyFilled(_)
+        ) {
+            return Err(SpotOrderV2MatchError::OrderNotMatchable);
+        }
         if !self.has_consistent_execution_state() {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
@@ -1150,6 +1586,34 @@ impl SpotOrderV2 {
         }
     }
 
+    fn active_state_from_legacy(&self) -> SpotActiveOrderState {
+        SpotActiveOrderState {
+            execution: self.execution,
+            time_in_force: self.time_in_force,
+            filled_qty: self.filled_qty,
+            reserved_base: self.reserved_base,
+            reserved_quote: self.reserved_quote,
+            reservation: self.reservation.clone(),
+            fee_reservation: self.fee_reservation.clone(),
+        }
+    }
+
+    fn sync_lifecycle_from_legacy(&mut self) {
+        let active = self.active_state_from_legacy();
+        let terminal = SpotTerminalOrderState {
+            status: self.status,
+            status_reason: self.status_reason,
+            filled_qty: self.filled_qty,
+        };
+        self.lifecycle = match self.status {
+            SpotOrderStatus::Open => SpotOrderLifecycle::Active(active),
+            SpotOrderStatus::PartiallyFilled => SpotOrderLifecycle::PartiallyFilled(active),
+            SpotOrderStatus::Filled => SpotOrderLifecycle::Filled(terminal),
+            SpotOrderStatus::Canceled => SpotOrderLifecycle::Canceled(terminal),
+            SpotOrderStatus::Rejected => SpotOrderLifecycle::Rejected(terminal),
+        };
+    }
+
     fn transition_to(
         &mut self,
         next_version: u64,
@@ -1159,6 +1623,7 @@ impl SpotOrderV2 {
         self.version = next_version;
         self.status = status;
         self.status_reason = status_reason;
+        self.sync_lifecycle_from_legacy();
     }
 
     fn next_version(&self) -> Result<u64, SpotOrderV2MatchError> {
@@ -1258,6 +1723,26 @@ impl SpotOrderV2 {
         &mut self,
         input: CancelSpotOrderV2Input,
     ) -> Result<CancelSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
+        if matches!(self.lifecycle, SpotOrderLifecycle::TriggerPending(_)) {
+            let next_version = self.next_version()?;
+            self.version = next_version;
+            self.status = SpotOrderStatus::Canceled;
+            self.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
+            self.lifecycle = SpotOrderLifecycle::Canceled(SpotTerminalOrderState {
+                status: SpotOrderStatus::Canceled,
+                status_reason: Some(SpotOrderStatusReason::CanceledByUser),
+                filled_qty: 0,
+            });
+            return Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: None });
+        }
+
+        if !matches!(
+            self.lifecycle,
+            SpotOrderLifecycle::Active(_) | SpotOrderLifecycle::PartiallyFilled(_)
+        ) {
+            return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
+        }
+
         if !self.can_be_cancelled() {
             return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
         }
@@ -1286,7 +1771,7 @@ impl SpotOrderV2 {
             Some(SpotOrderStatusReason::CanceledByUser),
         );
 
-        Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry })
+        Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: Some(unfreeze_ledger_entry) })
     }
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
