@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::entity::{
     HyperliquidPerpOrder, HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus,
-    HyperliquidPerpTrade,
+    HyperliquidPerpTrade, Reservation, ReservationKind, ReservationMarketKind,
 };
 
 /// 撮合 Hyperliquid perp taker 订单时需要的已加载业务状态。
@@ -362,6 +362,16 @@ mod tests {
             qty,
             false,
             None,
+            Reservation::new(
+                format!("reservation:{order_id}"),
+                account_id.to_string(),
+                order_id.to_string(),
+                ReservationMarketKind::Perp,
+                ReservationKind::PerpOpenMargin,
+                "USDC".to_string(),
+                1,
+            )
+            .unwrap(),
         )
     }
 

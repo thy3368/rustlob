@@ -9,8 +9,8 @@ use crate::MarketRules;
 use crate::entity::{
     Balance, BalanceError, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, MarginReservation, ReservationKind, ReservationMarketKind,
-    required_position_margin,
+    HyperliquidPerpPositionSide, MarginReservation, Reservation, ReservationKind,
+    ReservationMarketKind, ReservationStatus, required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -288,8 +288,25 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
+        let required_margin = if cmd.reduce_only {
+            0
+        } else {
+            required_new_order_margin(cmd.side(), size, price, &state.position)?
+        };
+        let reservation_kind = if required_margin == 0 {
+            ReservationKind::PerpOpenMargin
+        } else {
+            required_reservation_kind(cmd.side(), size, &state.position)
+        };
+        let order_reservation = order_margin_reservation(
+            order_id.clone(),
+            state.account_id.clone(),
+            reservation_kind,
+            state.margin_asset_id.clone(),
+            required_margin,
+        )?;
         let created_order = HyperliquidPerpOrder::new(
-            order_id,
+            order_id.clone(),
             None,
             cmd.asset,
             state.account_id.clone(),
@@ -300,6 +317,7 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             size,
             cmd.reduce_only,
             cmd.cloid.clone(),
+            order_reservation,
         );
 
         if cmd.reduce_only {
@@ -310,7 +328,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             });
         }
 
-        let required_margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
         if required_margin == 0 {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
@@ -318,7 +335,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
                 updated_margin_balances: Vec::new(),
             });
         }
-        let reservation_kind = required_reservation_kind(cmd.side(), size, &state.position);
         let created_reservation = Some(
             MarginReservation::new(
                 format!("reservation:{}", created_order.order_id),
@@ -399,6 +415,44 @@ fn required_reservation_kind(
             }
         }
     }
+}
+
+fn order_margin_reservation(
+    order_id: String,
+    account_id: String,
+    reservation_kind: ReservationKind,
+    asset_id: String,
+    amount: u64,
+) -> Result<Reservation, PlaceHyperliquidPerpOrderError> {
+    let reservation_id = format!("reservation:{order_id}");
+    if amount > 0 {
+        return Reservation::new(
+            reservation_id,
+            account_id,
+            order_id,
+            ReservationMarketKind::Perp,
+            reservation_kind,
+            asset_id,
+            amount,
+        )
+        .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow);
+    }
+
+    Ok(Reservation {
+        reservation_id,
+        owner_account_id: account_id,
+        caused_by_order_id: order_id,
+        market_kind: ReservationMarketKind::Perp,
+        reservation_kind,
+        asset_id,
+        original_amount: 0,
+        consumed_amount: 0,
+        released_amount: 0,
+        remaining_amount: 0,
+        status: ReservationStatus::Active,
+        close_reason: None,
+        version: 1,
+    })
 }
 
 fn validate_reduce_only(
