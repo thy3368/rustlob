@@ -8,7 +8,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{
     SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotOrderV2MatchingDecision,
-    spot_order_v2_matching_decision,
+    TriggerSpotOrderV2Input, spot_order_v2_matching_decision,
 };
 use thiserror::Error;
 
@@ -23,7 +23,7 @@ use crate::entity::{
 };
 use crate::{
     CancelSpotOrderV2Input, MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution,
-    SpotOrderTimeInForce, SpotTrade,
+    SpotOrderTimeInForce, SpotOrderTriggerRole, SpotTrade,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -49,6 +49,25 @@ pub struct PlaceSpotOrderV2TakerTemplateContextV3<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct PlaceTriggerPendingSpotOrderV2CmdV3 {
+    pub party_id: String,
+    pub asset: u32,
+    pub is_buy: bool,
+    pub trigger_price: String,
+    pub price: String,
+    pub size: String,
+    pub tif: String,
+    pub trigger_role: String,
+    pub cloid: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceTriggerPendingSpotOrderV2TemplateContextV3 {
+    pub order_id: String,
+    pub symbol: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2CmdV3 {
     pub party_id: String,
     pub asset: u32,
@@ -66,13 +85,35 @@ pub enum CancelSpotOrderV2LookupV3 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderV2CommandV3 {
     Place(PlaceSpotOrderV2CmdV3),
+    PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2CmdV3),
+    Trigger(TriggerSpotOrderV2CmdV3),
     Cancel(CancelSpotOrderV2CmdV3),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct TriggerSpotOrderV2CmdV3 {
+    pub party_id: String,
+    pub asset: u32,
+    pub order_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2GivenStateV3 {
     Place {
         taker_order: SpotOrderV2,
+        maker_orders: Vec<SpotOrderV2>,
+        settlement_balances: Vec<Balance>,
+        base_asset_id: String,
+        quote_asset_id: String,
+        fee_account_id: String,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+    },
+    PlaceTriggerPending {
+        order_template: SpotOrderV2,
+    },
+    Trigger {
+        order: SpotOrderV2,
         maker_orders: Vec<SpotOrderV2>,
         settlement_balances: Vec<Balance>,
         base_asset_id: String,
@@ -102,6 +143,22 @@ pub struct PlaceSpotOrderV2AfterChangesV3 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceTriggerPendingSpotOrderV2AfterChangesV3 {
+    pub created_order: SpotOrderV2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TriggerSpotOrderV2AfterChangesV3 {
+    pub triggered_order: SpotOrderV2,
+    pub order_after: SpotOrderV2,
+    pub maker_orders_after: Vec<SpotOrderV2>,
+    pub balances_after: Vec<Balance>,
+    pub created_trades: Vec<SpotTrade>,
+    pub created_vouchers: Vec<SettlementTransferVoucher>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2AfterChangesV3 {
     pub order_after: SpotOrderV2,
     pub balances_after: Vec<Balance>,
@@ -111,12 +168,30 @@ pub struct CancelSpotOrderV2AfterChangesV3 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2AfterChangesV3 {
     Place(PlaceSpotOrderV2AfterChangesV3),
+    PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2AfterChangesV3),
+    Trigger(TriggerSpotOrderV2AfterChangesV3),
     Cancel(CancelSpotOrderV2AfterChangesV3),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderV2ChangesV3 {
     pub updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
+    pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
+    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
+    pub created_trades: Vec<SpotTrade>,
+    pub created_vouchers: Vec<SettlementTransferVoucher>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceTriggerPendingSpotOrderV2ChangesV3 {
+    pub created_order: SpotOrderV2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TriggerSpotOrderV2ChangesV3 {
+    pub triggered_order: SpotOrderV2,
+    pub updated_order: UpdatedEntityPair<SpotOrderV2>,
     pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_trades: Vec<SpotTrade>,
@@ -134,6 +209,8 @@ pub struct CancelSpotOrderV2ChangesV3 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2CaseChangesV3 {
     Place(PlaceSpotOrderV2ChangesV3),
+    PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2ChangesV3),
+    Trigger(TriggerSpotOrderV2ChangesV3),
     Cancel(CancelSpotOrderV2ChangesV3),
 }
 
@@ -147,6 +224,14 @@ pub enum SpotOrderV2UseCaseFamilyV3Error {
     InvalidSize,
     #[error("time in force must be gtc, ioc, or alo")]
     InvalidTimeInForce,
+    #[error("trigger price must be a positive integer string")]
+    InvalidTriggerPrice,
+    #[error("trigger role must be take_profit or stop_loss")]
+    InvalidTriggerRole,
+    #[error("trigger command order identity does not match loaded order")]
+    TriggerOrderMismatch,
+    #[error("order is not trigger pending")]
+    OrderNotTriggerPending,
     #[error("order template does not match command-derived order")]
     OrderTemplateMismatch,
     #[error("match id must not be empty")]
@@ -214,6 +299,43 @@ impl ReplayableChanges for PlaceSpotOrderV2ChangesV3 {
     }
 }
 
+impl ReplayableChanges for PlaceTriggerPendingSpotOrderV2ChangesV3 {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        Ok(vec![self.created_order.track_create_event()?])
+    }
+}
+
+impl ReplayableChanges for TriggerSpotOrderV2ChangesV3 {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        let mut events = Vec::new();
+        for trade in &self.created_trades {
+            events.push(trade.track_create_event()?);
+        }
+        for maker in &self.updated_maker_orders {
+            events.push(maker.after.track_update_event_from(&maker.before)?);
+        }
+        events.push(self.triggered_order.track_update_event_from(&self.updated_order.before)?);
+        if self.updated_order.after != self.triggered_order {
+            events.push(self.updated_order.after.track_update_event_from(&self.triggered_order)?);
+        }
+        for voucher in &self.created_vouchers {
+            events.push(voucher.track_create_event()?);
+        }
+        events.extend(balance_replay_events_from_ledger_entries(
+            &self.updated_balances,
+            &self.created_balance_ledger_entries,
+        )?);
+        for entry in &self.created_balance_ledger_entries {
+            events.push(entry.track_create_event()?);
+        }
+        Ok(events)
+    }
+}
+
 impl ReplayableChanges for CancelSpotOrderV2ChangesV3 {
     fn to_replayable_events(
         &self,
@@ -237,6 +359,8 @@ impl ReplayableChanges for SpotOrderV2CaseChangesV3 {
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
         match self {
             Self::Place(changes) => changes.to_replayable_events(),
+            Self::PlaceTriggerPending(changes) => changes.to_replayable_events(),
+            Self::Trigger(changes) => changes.to_replayable_events(),
             Self::Cancel(changes) => changes.to_replayable_events(),
         }
     }
@@ -256,6 +380,18 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 parse_tif(&cmd.tif)?;
                 Ok(())
             }
+            SpotOrderV2CommandV3::PlaceTriggerPending(cmd) => {
+                parse_positive_u64(
+                    &cmd.trigger_price,
+                    SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerPrice,
+                )?;
+                parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?;
+                parse_positive_u64(&cmd.size, SpotOrderV2UseCaseFamilyV3Error::InvalidSize)?;
+                parse_tif(&cmd.tif)?;
+                parse_trigger_role(&cmd.trigger_role)?;
+                Ok(())
+            }
+            SpotOrderV2CommandV3::Trigger(_) => Ok(()),
             SpotOrderV2CommandV3::Cancel(_) => Ok(()),
         }
     }
@@ -301,6 +437,50 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                     validate_all_reservations_for_order(maker, base_asset_id, quote_asset_id)?;
                 }
                 taker_order.ensure_matchable()?;
+                Ok(())
+            }
+            (
+                SpotOrderV2CommandV3::PlaceTriggerPending(cmd),
+                SpotOrderV2GivenStateV3::PlaceTriggerPending { order_template },
+            ) => {
+                let created = trigger_pending_order_from_cmd(cmd, order_template)?;
+                if &created != order_template {
+                    return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
+                }
+                Ok(())
+            }
+            (
+                SpotOrderV2CommandV3::Trigger(cmd),
+                SpotOrderV2GivenStateV3::Trigger {
+                    order,
+                    maker_orders,
+                    base_asset_id,
+                    quote_asset_id,
+                    fee_account_id,
+                    maker_fee_bps,
+                    taker_fee_bps,
+                    ..
+                },
+            ) => {
+                validate_trigger_command_matches_order(cmd, order)?;
+                if fee_account_id.is_empty() {
+                    return Err(SpotOrderV2UseCaseFamilyV3Error::InvalidFeeAccountId);
+                }
+                if !order.is_trigger_pending() {
+                    return Err(SpotOrderV2UseCaseFamilyV3Error::OrderNotTriggerPending);
+                }
+                let mut triggered = order.clone();
+                triggered.trigger(TriggerSpotOrderV2Input {
+                    base_asset_id: base_asset_id.clone(),
+                    quote_asset_id: quote_asset_id.clone(),
+                    maker_fee_bps: *maker_fee_bps,
+                    taker_fee_bps: *taker_fee_bps,
+                })?;
+                validate_all_reservations_for_order(&triggered, base_asset_id, quote_asset_id)?;
+                triggered.ensure_matchable()?;
+                for maker in maker_orders {
+                    validate_all_reservations_for_order(maker, base_asset_id, quote_asset_id)?;
+                }
                 Ok(())
             }
             (
@@ -357,6 +537,33 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 taker_fee_bps: *taker_fee_bps,
             }),
             (
+                SpotOrderV2CommandV3::PlaceTriggerPending(place_cmd),
+                SpotOrderV2GivenStateV3::PlaceTriggerPending { order_template },
+            ) => self.compute_place_trigger_pending_after(place_cmd, order_template),
+            (
+                SpotOrderV2CommandV3::Trigger(trigger_cmd),
+                SpotOrderV2GivenStateV3::Trigger {
+                    order,
+                    maker_orders,
+                    settlement_balances,
+                    base_asset_id,
+                    quote_asset_id,
+                    fee_account_id,
+                    maker_fee_bps,
+                    taker_fee_bps,
+                },
+            ) => self.compute_trigger_after(TriggerAfterContext {
+                cmd: trigger_cmd,
+                order,
+                maker_orders,
+                settlement_balances,
+                base_asset_id,
+                quote_asset_id,
+                fee_account_id,
+                maker_fee_bps: *maker_fee_bps,
+                taker_fee_bps: *taker_fee_bps,
+            }),
+            (
                 SpotOrderV2CommandV3::Cancel(_),
                 SpotOrderV2GivenStateV3::Cancel {
                     order,
@@ -404,6 +611,26 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
             })),
             (
+                SpotOrderV2GivenStateV3::PlaceTriggerPending { .. },
+                SpotOrderV2AfterChangesV3::PlaceTriggerPending(after),
+            ) => Ok(SpotOrderV2CaseChangesV3::PlaceTriggerPending(
+                PlaceTriggerPendingSpotOrderV2ChangesV3 { created_order: after.created_order },
+            )),
+            (
+                SpotOrderV2GivenStateV3::Trigger {
+                    order, maker_orders, settlement_balances, ..
+                },
+                SpotOrderV2AfterChangesV3::Trigger(after),
+            ) => Ok(SpotOrderV2CaseChangesV3::Trigger(TriggerSpotOrderV2ChangesV3 {
+                triggered_order: after.triggered_order,
+                updated_order: UpdatedEntityPair { before: order, after: after.order_after },
+                updated_maker_orders: zip_pairs(maker_orders, after.maker_orders_after)?,
+                updated_balances: merge_balance_pairs(settlement_balances, after.balances_after)?,
+                created_trades: after.created_trades,
+                created_vouchers: after.created_vouchers,
+                created_balance_ledger_entries: after.created_balance_ledger_entries,
+            })),
+            (
                 SpotOrderV2GivenStateV3::Cancel { order, balances, .. },
                 SpotOrderV2AfterChangesV3::Cancel(after),
             ) => Ok(SpotOrderV2CaseChangesV3::Cancel(CancelSpotOrderV2ChangesV3 {
@@ -435,12 +662,45 @@ struct CancelAfterContext<'a> {
     taker_fee_bps: u64,
 }
 
+struct TriggerAfterContext<'a> {
+    cmd: &'a TriggerSpotOrderV2CmdV3,
+    order: &'a SpotOrderV2,
+    maker_orders: &'a [SpotOrderV2],
+    settlement_balances: &'a [Balance],
+    base_asset_id: &'a str,
+    quote_asset_id: &'a str,
+    fee_account_id: &'a str,
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
+}
+
+struct ActiveOrderAfterContext<'a> {
+    taker_after: SpotOrderV2,
+    maker_orders_after: Vec<SpotOrderV2>,
+    balance_book: BalanceMap,
+    created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    base_asset_id: &'a str,
+    quote_asset_id: &'a str,
+    fee_account_id: &'a str,
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
+}
+
+struct ActiveOrderAfter {
+    taker_order_after: SpotOrderV2,
+    maker_orders_after: Vec<SpotOrderV2>,
+    balances_after: Vec<Balance>,
+    created_trades: Vec<SpotTrade>,
+    created_vouchers: Vec<SettlementTransferVoucher>,
+    created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+}
+
 impl SpotOrderV2UseCaseFamilyV3 {
     fn compute_place_after(
         &self,
         context: PlaceAfterContext<'_>,
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
-        let mut maker_orders_after = context.maker_orders.to_vec();
+        let maker_orders_after = context.maker_orders.to_vec();
         let mut balance_book = BalanceMap::new(context.settlement_balances);
         let place_input = place_input_from_cmd(
             context.cmd,
@@ -455,142 +715,85 @@ impl SpotOrderV2UseCaseFamilyV3 {
         if place_outcome.order != *context.taker_order {
             return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
         }
-        let mut taker_after = place_outcome.order;
+        let taker_after = place_outcome.order;
         let mut created_balance_ledger_entries = Vec::new();
         let freeze_ledger_entry =
             apply_behavior_ledger_entry(place_outcome.freeze_ledger_entry, &mut balance_book)?;
         created_balance_ledger_entries.push(freeze_ledger_entry);
-        let mut created_trades = Vec::new();
-        let mut created_vouchers = Vec::new();
-
-        match spot_order_v2_matching_decision(context.taker_order, context.maker_orders.first())? {
-            SpotOrderV2MatchingDecision::Rest => {
-                return Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
-                    taker_order_after: taker_after,
-                    maker_orders_after,
-                    balances_after: balance_book.into_balances(),
-                    created_trades,
-                    created_vouchers,
-                    created_balance_ledger_entries,
-                }));
-            }
-            SpotOrderV2MatchingDecision::RejectAlo => {
-                taker_after.reject_as_bad_alo()?;
-                release_remaining_for_terminal(
-                    &mut taker_after,
-                    &mut balance_book,
-                    &mut created_balance_ledger_entries,
-                    context.maker_fee_bps,
-                    context.taker_fee_bps,
-                )?;
-                return Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
-                    taker_order_after: taker_after,
-                    maker_orders_after,
-                    balances_after: balance_book.into_balances(),
-                    created_trades,
-                    created_vouchers,
-                    created_balance_ledger_entries,
-                }));
-            }
-            SpotOrderV2MatchingDecision::Match => {}
-        }
-
-        let taker_before_match = taker_after.clone();
-        let match_outcome = taker_after.match_with_makers(
-            &mut maker_orders_after,
-            MatchSpotOrderV2Input {
-                match_id: format!("spot-match:{}", taker_after.order_id()),
-                maker_fee_bps: context.maker_fee_bps,
-                taker_fee_bps: context.taker_fee_bps,
-            },
-        )?;
-        let mut total_taker_fill = 0_u64;
-        for (index, trade) in match_outcome.trades.into_iter().enumerate() {
-            let trade_notional = trade
-                .notional_quote()
-                .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
-
-            total_taker_fill = total_taker_fill
-                .checked_add(trade.qty)
-                .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
-
-            let taker_principal_consume =
-                principal_consume_amount_for_taker(&taker_after, trade.qty, trade_notional);
-            consume_reservation(
-                &mut taker_after.reservation,
-                taker_principal_consume,
-                ReservationCloseReason::Filled,
-            )?;
-            let maker_principal_consume = principal_consume_amount_for_maker(
-                &maker_orders_after[index],
-                trade.qty,
-                trade_notional,
-            );
-            consume_reservation(
-                &mut maker_orders_after[index].reservation,
-                maker_principal_consume,
-                ReservationCloseReason::Filled,
-            )?;
-
-            consume_reservation(
-                &mut taker_after.fee_reservation,
-                trade.taker_fee,
-                ReservationCloseReason::Filled,
-            )?;
-            consume_reservation(
-                &mut maker_orders_after[index].fee_reservation,
-                trade.maker_fee,
-                ReservationCloseReason::Filled,
-            )?;
-
-            let settlement_id = format!("spot-settlement:{}", trade.trade_id);
-            let voucher = trade
-                .derive_spot_settlement_transfer_voucher_with_fees(
-                    format!("spot-voucher:{}", trade.trade_id),
-                    settlement_id.clone(),
-                    context.base_asset_id,
-                    context.quote_asset_id,
-                    context.fee_account_id.to_string(),
-                )
-                .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
-
-            apply_trade_balance_effects(
-                &trade,
-                TradeBalanceEffectsContext {
-                    settlement_id: &settlement_id,
-                    base_asset_id: context.base_asset_id,
-                    quote_asset_id: context.quote_asset_id,
-                    fee_account_id: context.fee_account_id,
-                    balance_book: &mut balance_book,
-                    ledger_entries: &mut created_balance_ledger_entries,
-                },
-            )?;
-
-            created_trades.push(trade);
-            created_vouchers.push(voucher);
-        }
-
-        let taker_reservation_after_match = taker_after.reservation.clone();
-        let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
-        taker_after = taker_before_match;
-        taker_after.reservation = taker_reservation_after_match;
-        taker_after.fee_reservation = taker_fee_reservation_after_match;
-        taker_after.finish_after_match(total_taker_fill)?;
-        release_remaining_for_terminal(
-            &mut taker_after,
-            &mut balance_book,
-            &mut created_balance_ledger_entries,
-            context.maker_fee_bps,
-            context.taker_fee_bps,
-        )?;
+        let after = compute_active_order_after(ActiveOrderAfterContext {
+            taker_after,
+            maker_orders_after,
+            balance_book,
+            created_balance_ledger_entries,
+            base_asset_id: context.base_asset_id,
+            quote_asset_id: context.quote_asset_id,
+            fee_account_id: context.fee_account_id,
+            maker_fee_bps: context.maker_fee_bps,
+            taker_fee_bps: context.taker_fee_bps,
+        })?;
 
         Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
-            taker_order_after: taker_after,
-            maker_orders_after,
-            balances_after: balance_book.into_balances(),
-            created_trades,
-            created_vouchers,
+            taker_order_after: after.taker_order_after,
+            maker_orders_after: after.maker_orders_after,
+            balances_after: after.balances_after,
+            created_trades: after.created_trades,
+            created_vouchers: after.created_vouchers,
+            created_balance_ledger_entries: after.created_balance_ledger_entries,
+        }))
+    }
+
+    fn compute_place_trigger_pending_after(
+        &self,
+        cmd: &PlaceTriggerPendingSpotOrderV2CmdV3,
+        order_template: &SpotOrderV2,
+    ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
+        let created_order = trigger_pending_order_from_cmd(cmd, order_template)?;
+        if created_order != *order_template {
+            return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
+        }
+        Ok(SpotOrderV2AfterChangesV3::PlaceTriggerPending(
+            PlaceTriggerPendingSpotOrderV2AfterChangesV3 { created_order },
+        ))
+    }
+
+    fn compute_trigger_after(
+        &self,
+        context: TriggerAfterContext<'_>,
+    ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
+        validate_trigger_command_matches_order(context.cmd, context.order)?;
+        let mut balance_book = BalanceMap::new(context.settlement_balances);
+        let mut order_after = context.order.clone();
+        order_after.trigger(TriggerSpotOrderV2Input {
+            base_asset_id: context.base_asset_id.to_string(),
+            quote_asset_id: context.quote_asset_id.to_string(),
+            maker_fee_bps: context.maker_fee_bps,
+            taker_fee_bps: context.taker_fee_bps,
+        })?;
+        let triggered_order = order_after.clone();
+        let freeze_ledger_entry = trigger_freeze_ledger_entry(&order_after, &balance_book)?;
+        let created_balance_ledger_entries =
+            vec![apply_behavior_ledger_entry(freeze_ledger_entry, &mut balance_book)?];
+
+        let after = compute_active_order_after(ActiveOrderAfterContext {
+            taker_after: order_after,
+            maker_orders_after: context.maker_orders.to_vec(),
+            balance_book,
             created_balance_ledger_entries,
+            base_asset_id: context.base_asset_id,
+            quote_asset_id: context.quote_asset_id,
+            fee_account_id: context.fee_account_id,
+            maker_fee_bps: context.maker_fee_bps,
+            taker_fee_bps: context.taker_fee_bps,
+        })?;
+
+        Ok(SpotOrderV2AfterChangesV3::Trigger(TriggerSpotOrderV2AfterChangesV3 {
+            triggered_order,
+            order_after: after.taker_order_after,
+            maker_orders_after: after.maker_orders_after,
+            balances_after: after.balances_after,
+            created_trades: after.created_trades,
+            created_vouchers: after.created_vouchers,
+            created_balance_ledger_entries: after.created_balance_ledger_entries,
         }))
     }
 
@@ -630,6 +833,153 @@ impl SpotOrderV2UseCaseFamilyV3 {
     }
 }
 
+fn compute_active_order_after(
+    context: ActiveOrderAfterContext<'_>,
+) -> Result<ActiveOrderAfter, SpotOrderV2UseCaseFamilyV3Error> {
+    let ActiveOrderAfterContext {
+        mut taker_after,
+        mut maker_orders_after,
+        mut balance_book,
+        mut created_balance_ledger_entries,
+        base_asset_id,
+        quote_asset_id,
+        fee_account_id,
+        maker_fee_bps,
+        taker_fee_bps,
+    } = context;
+    let mut created_trades = Vec::new();
+    let mut created_vouchers = Vec::new();
+
+    match spot_order_v2_matching_decision(&taker_after, maker_orders_after.first())? {
+        SpotOrderV2MatchingDecision::Rest => {
+            return Ok(ActiveOrderAfter {
+                taker_order_after: taker_after,
+                maker_orders_after,
+                balances_after: balance_book.into_balances(),
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            });
+        }
+        SpotOrderV2MatchingDecision::RejectAlo => {
+            taker_after.reject_as_bad_alo()?;
+            release_remaining_for_terminal(
+                &mut taker_after,
+                &mut balance_book,
+                &mut created_balance_ledger_entries,
+                maker_fee_bps,
+                taker_fee_bps,
+            )?;
+            return Ok(ActiveOrderAfter {
+                taker_order_after: taker_after,
+                maker_orders_after,
+                balances_after: balance_book.into_balances(),
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            });
+        }
+        SpotOrderV2MatchingDecision::Match => {}
+    }
+
+    let taker_before_match = taker_after.clone();
+    let match_outcome = taker_after.match_with_makers(
+        &mut maker_orders_after,
+        MatchSpotOrderV2Input {
+            match_id: format!("spot-match:{}", taker_after.order_id()),
+            maker_fee_bps,
+            taker_fee_bps,
+        },
+    )?;
+    let mut total_taker_fill = 0_u64;
+    for (index, trade) in match_outcome.trades.into_iter().enumerate() {
+        let trade_notional =
+            trade.notional_quote().ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
+
+        total_taker_fill = total_taker_fill
+            .checked_add(trade.qty)
+            .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
+
+        let taker_principal_consume =
+            principal_consume_amount_for_taker(&taker_after, trade.qty, trade_notional);
+        consume_reservation(
+            &mut taker_after.reservation,
+            taker_principal_consume,
+            ReservationCloseReason::Filled,
+        )?;
+        let maker_principal_consume = principal_consume_amount_for_maker(
+            &maker_orders_after[index],
+            trade.qty,
+            trade_notional,
+        );
+        consume_reservation(
+            &mut maker_orders_after[index].reservation,
+            maker_principal_consume,
+            ReservationCloseReason::Filled,
+        )?;
+
+        consume_reservation(
+            &mut taker_after.fee_reservation,
+            trade.taker_fee,
+            ReservationCloseReason::Filled,
+        )?;
+        consume_reservation(
+            &mut maker_orders_after[index].fee_reservation,
+            trade.maker_fee,
+            ReservationCloseReason::Filled,
+        )?;
+
+        let settlement_id = format!("spot-settlement:{}", trade.trade_id);
+        let voucher = trade
+            .derive_spot_settlement_transfer_voucher_with_fees(
+                format!("spot-voucher:{}", trade.trade_id),
+                settlement_id.clone(),
+                base_asset_id,
+                quote_asset_id,
+                fee_account_id.to_string(),
+            )
+            .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
+
+        apply_trade_balance_effects(
+            &trade,
+            TradeBalanceEffectsContext {
+                settlement_id: &settlement_id,
+                base_asset_id,
+                quote_asset_id,
+                fee_account_id,
+                balance_book: &mut balance_book,
+                ledger_entries: &mut created_balance_ledger_entries,
+            },
+        )?;
+
+        created_trades.push(trade);
+        created_vouchers.push(voucher);
+    }
+
+    let taker_reservation_after_match = taker_after.reservation.clone();
+    let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
+    taker_after = taker_before_match;
+    taker_after.reservation = taker_reservation_after_match;
+    taker_after.fee_reservation = taker_fee_reservation_after_match;
+    taker_after.finish_after_match(total_taker_fill)?;
+    release_remaining_for_terminal(
+        &mut taker_after,
+        &mut balance_book,
+        &mut created_balance_ledger_entries,
+        maker_fee_bps,
+        taker_fee_bps,
+    )?;
+
+    Ok(ActiveOrderAfter {
+        taker_order_after: taker_after,
+        maker_orders_after,
+        balances_after: balance_book.into_balances(),
+        created_trades,
+        created_vouchers,
+        created_balance_ledger_entries,
+    })
+}
+
 /// Build the authoritative taker order template required by
 /// [`SpotOrderV2GivenStateV3::Place`].
 ///
@@ -642,6 +992,46 @@ pub fn build_place_spot_order_v2_taker_template_v3(
 ) -> Result<SpotOrderV2, SpotOrderV2UseCaseFamilyV3Error> {
     let input = place_input_from_context(cmd, &context)?;
     Ok(SpotOrderV2::place(input)?.order)
+}
+
+pub fn build_place_trigger_pending_spot_order_v2_template_v3(
+    cmd: &PlaceTriggerPendingSpotOrderV2CmdV3,
+    context: PlaceTriggerPendingSpotOrderV2TemplateContextV3,
+) -> Result<SpotOrderV2, SpotOrderV2UseCaseFamilyV3Error> {
+    let side = if cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
+    Ok(SpotOrderV2::new_trigger_pending(
+        context.order_id,
+        cmd.asset,
+        None,
+        cmd.party_id.clone(),
+        context.symbol,
+        side,
+        parse_positive_u64(&cmd.size, SpotOrderV2UseCaseFamilyV3Error::InvalidSize)?,
+        parse_positive_u64(
+            &cmd.trigger_price,
+            SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerPrice,
+        )?,
+        parse_trigger_role(&cmd.trigger_role)?,
+        SpotOrderExecution::Limit {
+            price: parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?,
+        },
+        parse_tif(&cmd.tif)?,
+        cmd.cloid.clone(),
+        1,
+    ))
+}
+
+fn trigger_pending_order_from_cmd(
+    cmd: &PlaceTriggerPendingSpotOrderV2CmdV3,
+    template: &SpotOrderV2,
+) -> Result<SpotOrderV2, SpotOrderV2UseCaseFamilyV3Error> {
+    build_place_trigger_pending_spot_order_v2_template_v3(
+        cmd,
+        PlaceTriggerPendingSpotOrderV2TemplateContextV3 {
+            order_id: template.order_id().to_string(),
+            symbol: template.symbol().to_string(),
+        },
+    )
 }
 
 fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
@@ -676,6 +1066,43 @@ fn parse_tif(raw: &str) -> Result<SpotOrderTimeInForce, SpotOrderV2UseCaseFamily
         "alo" | "Alo" => Ok(SpotOrderTimeInForce::Alo),
         _ => Err(SpotOrderV2UseCaseFamilyV3Error::InvalidTimeInForce),
     }
+}
+
+fn parse_trigger_role(raw: &str) -> Result<SpotOrderTriggerRole, SpotOrderV2UseCaseFamilyV3Error> {
+    match raw {
+        "take_profit" | "TakeProfit" => Ok(SpotOrderTriggerRole::TakeProfit),
+        "stop_loss" | "StopLoss" => Ok(SpotOrderTriggerRole::StopLoss),
+        _ => Err(SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerRole),
+    }
+}
+
+fn validate_trigger_command_matches_order(
+    cmd: &TriggerSpotOrderV2CmdV3,
+    order: &SpotOrderV2,
+) -> Result<(), SpotOrderV2UseCaseFamilyV3Error> {
+    if cmd.order_id != order.order_id() || !order.belongs_to_account(&cmd.party_id) {
+        return Err(SpotOrderV2UseCaseFamilyV3Error::TriggerOrderMismatch);
+    }
+    if !order.trades_asset(cmd.asset) {
+        return Err(SpotOrderV2UseCaseFamilyV3Error::TriggerOrderMismatch);
+    }
+    Ok(())
+}
+
+fn trigger_freeze_ledger_entry(
+    order: &SpotOrderV2,
+    balance_book: &BalanceMap,
+) -> Result<BalanceLedgerEntryV2, SpotOrderV2UseCaseFamilyV3Error> {
+    BalanceLedgerEntryV2::freeze(
+        format!("balance-ledger:freeze:{}", order.order_id()),
+        order.account_id().to_string(),
+        order.reservation.asset_id.clone(),
+        balance_book
+            .entity_id_for_account_asset(order.account_id(), &order.reservation.asset_id)?,
+        order.reservation.original_amount,
+        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id().to_string() },
+    )
+    .map_err(SpotOrderV2UseCaseFamilyV3Error::from)
 }
 
 fn place_input_from_cmd(
@@ -1365,12 +1792,27 @@ impl BalanceMap {
         self.balances.get_mut(entity_id).ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }
 
+    fn entity_id_for_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<String, SpotOrderV2UseCaseFamilyV3Error> {
+        self.balances
+            .get(&format!("{account_id}:{asset_id}"))
+            .map(Entity::entity_id)
+            .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
+    }
+
     fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by(|lhs, rhs| lhs.entity_id().cmp(&rhs.entity_id()));
         balances
     }
 }
+
+#[cfg(test)]
+#[path = "spot_order_v2_use_case_family_v3_bdd_conditional.rs"]
+mod spot_order_v2_use_case_family_v3_bdd_conditional;
 
 #[cfg(test)]
 mod tests {

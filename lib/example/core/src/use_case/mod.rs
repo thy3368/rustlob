@@ -35,6 +35,8 @@ pub use trading::{
     PlaceHyperliquidPerpOrderUseCase, PlaceOrderError, PlaceOrderExecution, PlaceOrderSide,
     PlaceOrderTimeInForce, PlaceOrderTriggerRole, PlaceSpotOrderV2AfterChangesV3,
     PlaceSpotOrderV2ChangesV3, PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3,
+    PlaceTriggerPendingSpotOrderV2AfterChangesV3, PlaceTriggerPendingSpotOrderV2ChangesV3,
+    PlaceTriggerPendingSpotOrderV2CmdV3, PlaceTriggerPendingSpotOrderV2TemplateContextV3,
     QueryHyperliquidPerpLiquidatablePositionsAtPrice,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceError,
     QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel,
@@ -61,7 +63,9 @@ pub use trading::{
     StartHyperliquidPerpAdlExecutionUseCase, StartHyperliquidPerpLiquidationChanges,
     StartHyperliquidPerpLiquidationCmd, StartHyperliquidPerpLiquidationError,
     StartHyperliquidPerpLiquidationState, StartHyperliquidPerpLiquidationUseCase,
+    TriggerSpotOrderV2AfterChangesV3, TriggerSpotOrderV2ChangesV3, TriggerSpotOrderV2CmdV3,
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
     UpdateHyperliquidPerpLeverageError, UpdateHyperliquidPerpLeverageState,
     UpdateHyperliquidPerpLeverageUseCase, build_place_spot_order_v2_taker_template_v3,
+    build_place_trigger_pending_spot_order_v2_template_v3,
 };

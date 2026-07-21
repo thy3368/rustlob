@@ -71,5 +71,5 @@ pub use spot_entity::spot_order_v2::{
     MatchSpotOrderV2Outcome, PlaceSpotOrderV2Input, PlaceSpotOrderV2Outcome,
     SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
     SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
-    SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotTradeFeeRole,
+    SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
 };

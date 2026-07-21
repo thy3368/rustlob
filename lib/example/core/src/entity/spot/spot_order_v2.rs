@@ -20,6 +20,8 @@ use crate::entity::{
 #[cfg(test)]
 mod spot_order_v2_bdd_behavior_methods;
 #[cfg(test)]
+mod spot_order_v2_bdd_conditional_trigger_match_settlement;
+#[cfg(test)]
 mod spot_order_v2_bdd_factory_scenario;
 #[cfg(test)]
 mod spot_order_v2_bdd_happy_path;
