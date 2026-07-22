@@ -127,6 +127,7 @@ impl UpdateLeverageOutbound for DefaultUpdateLeverageOutbound {
                 before_leverage,
                 1,
             ),
+            position: None,
         })
     }
 
@@ -218,8 +219,6 @@ mod tests {
     use std::cell::RefCell;
     use std::fmt;
 
-    use actix_web::ResponseError;
-
     use super::*;
 
     #[test]
@@ -274,15 +273,18 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn isolated_update_leverage_returns_core_margin_mode_error() {
+    async fn isolated_update_leverage_reply_snapshot_is_stable() {
         let request =
             parse_json_request::<RequestWire, ExchangeHttpError>(isolated_update_leverage_json())
                 .expect("request should parse");
 
-        let error = execute(request).await.expect_err("isolated path should fail in core");
+        let response = execute(request).await.expect("response should build");
 
-        assert_eq!(error.status_code(), actix_web::http::StatusCode::BAD_REQUEST);
-        assert_eq!(error.to_string(), "margin mode is not supported yet");
+        let actual = serde_json::to_string_pretty(&response).expect("response serializes");
+        assert_eq!(
+            actual,
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"default\"\n  }\n}"
+        );
     }
 
     #[test]
@@ -434,6 +436,7 @@ mod tests {
                     self.before_leverage,
                     1,
                 ),
+                position: None,
             })
         }
 
