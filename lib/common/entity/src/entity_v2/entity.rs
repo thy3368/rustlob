@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::entity_field_change::{current_timestamp, next_sequence};
+use crate::entity_v2::entity_field_change::{current_timestamp, next_sequence};
 use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
 /// 四色建模中的实体原型分类。
@@ -511,7 +511,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity_field_change::ReplayFieldChange;
+    use crate::entity_v2::entity_field_change::ReplayFieldChange;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestEntity {

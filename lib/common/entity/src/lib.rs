@@ -1,16 +1,15 @@
 use std::sync::LazyLock;
 use std::sync::atomic::AtomicU64;
 
-mod entity;
-mod entity_field_change;
+mod entity_v2;
 
 mod use_case;
-pub use entity::{
+pub use entity_v2::entity::{
     AggregateRole, Entity, EntityMutationModel, EntityUseCaseApiPolicy, EntityUseCaseApiSurface,
     FieldDiff, FinancialClassification, FourColorArchetype, MiCausalRelation,
     MiCausalSourceMetadata,
 };
-pub use entity_field_change::{
+pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
 pub use use_case::mi_family_executor::{
