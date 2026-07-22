@@ -259,13 +259,8 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         if !state.position.has_consistent_state() {
             return Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState);
         }
-        if state.position.leverage == 0 {
+        if state.position.leverage_value == 0 {
             return Err(PlaceHyperliquidPerpOrderError::InvalidLeverage);
-        }
-        if !state.position.is_flat()
-            && state.position.required_margin() != Some(state.position.required_margin)
-        {
-            return Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState);
         }
         if cmd.reduce_only {
             validate_reduce_only(cmd, &state.position)?;
@@ -379,19 +374,19 @@ fn required_new_order_margin(
     price: u64,
     position: &HyperliquidPerpPosition,
 ) -> Result<u64, PlaceHyperliquidPerpOrderError> {
-    let net_new_qty = match (order_side, position.side) {
+    let net_new_qty = match (order_side, position.side()) {
         (_, HyperliquidPerpPositionSide::Flat) => size,
         (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => size,
         (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
-            size.saturating_sub(position.qty)
+            size.saturating_sub(position.qty())
         }
     };
     if net_new_qty == 0 {
         return Ok(0);
     }
-    required_position_margin(net_new_qty, price, position.leverage)
+    required_position_margin(net_new_qty, price, position.leverage_value)
         .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)
 }
 
@@ -400,7 +395,7 @@ fn required_reservation_kind(
     size: u64,
     position: &HyperliquidPerpPosition,
 ) -> ReservationKind {
-    match (order_side, position.side) {
+    match (order_side, position.side()) {
         (_, HyperliquidPerpPositionSide::Flat)
         | (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => {
@@ -408,7 +403,7 @@ fn required_reservation_kind(
         }
         (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
-            if size > position.qty {
+            if size > position.qty() {
                 ReservationKind::PerpFlipNetNewMargin
             } else {
                 ReservationKind::PerpOpenMargin
@@ -460,11 +455,11 @@ fn validate_reduce_only(
     position: &HyperliquidPerpPosition,
 ) -> Result<(), PlaceHyperliquidPerpOrderError> {
     let reduces_position = matches!(
-        (cmd.side(), position.side),
+        (cmd.side(), position.side()),
         (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
             | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long)
     );
-    if !reduces_position || cmd.size > position.qty {
+    if !reduces_position || cmd.size > position.qty() {
         return Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly);
     }
     Ok(())
@@ -754,7 +749,7 @@ mod tests {
         );
 
         let mut wrong_position = state();
-        wrong_position.position.asset = 1;
+        wrong_position.position.perp_asset_id = 1;
         assert_eq!(
             use_case().validate_against_state(&cmd, &wrong_position),
             Err(PlaceHyperliquidPerpOrderError::PositionMismatch)
@@ -768,7 +763,7 @@ mod tests {
         );
 
         let mut zero_leverage = state();
-        zero_leverage.position.leverage = 0;
+        zero_leverage.position.leverage_value = 0;
         assert_eq!(
             use_case().validate_against_state(&cmd, &zero_leverage),
             Err(PlaceHyperliquidPerpOrderError::InvalidLeverage)
@@ -811,10 +806,10 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_non_flat_position_whose_stored_margin_does_not_match_required_margin() {
+    fn validate_rejects_inconsistent_non_flat_position() {
         let cmd = limit_cmd();
         let mut invalid_position = non_flat_position(HyperliquidPerpPositionSide::Long, 5);
-        invalid_position.required_margin -= 1;
+        invalid_position.signed_size = 0;
         let invalid_state =
             PlaceHyperliquidPerpOrderState { position: invalid_position, ..state() };
 

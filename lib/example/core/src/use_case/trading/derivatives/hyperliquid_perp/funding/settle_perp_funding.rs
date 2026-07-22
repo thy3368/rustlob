@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingDirection,
-    HyperliquidPerpFundingSettlement, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
+    HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionError,
 };
 
 /// 批量结算 Hyperliquid perp 资金费的命令。
@@ -269,7 +269,7 @@ fn validate_common(
 
     let settled: HashSet<&str> = state.settled_position_ids.iter().map(String::as_str).collect();
     for (expected_position_id, position) in cmd.position_ids.iter().zip(&state.positions) {
-        if expected_position_id != &position.position_id {
+        if expected_position_id != &position.position_key {
             return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
         }
         if !position.trades_asset(cmd.asset) || !position.trades_symbol(cmd.symbol.as_str()) {
@@ -278,7 +278,7 @@ fn validate_common(
         if !position.is_funding_eligible() {
             return Err(SettleHyperliquidPerpFundingError::PositionNotFundingEligible);
         }
-        if settled.contains(position.position_id.as_str()) {
+        if settled.contains(position.position_key.as_str()) {
             return Err(SettleHyperliquidPerpFundingError::PositionAlreadySettled);
         }
     }
@@ -321,53 +321,49 @@ fn derive_cross_outcome(
     let mut outcome = FundingOutcome::default();
 
     for position in &state.positions {
-        let notional = position
-            .funding_notional(cmd.oracle_price)
-            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-        let funding_fee = position
-            .funding_fee(cmd.oracle_price, cmd.funding_rate_e8)
-            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-        let direction = position
-            .funding_direction(cmd.funding_rate_e8)
-            .unwrap_or(HyperliquidPerpFundingDirection::Receive);
-        let is_payment = matches!(direction, HyperliquidPerpFundingDirection::Pay);
+        let Some(settlement) = position
+            .derive_funding_settlement(
+                cmd.funding_batch_id.as_str(),
+                cmd.funding_time,
+                cmd.oracle_price,
+                cmd.funding_rate_e8,
+            )
+            .map_err(map_position_funding_error)?
+        else {
+            continue;
+        };
 
-        outcome.settlements.push(HyperliquidPerpFundingSettlement::new(
-            format!("{}-{}", cmd.funding_batch_id, position.position_id),
-            cmd.funding_batch_id.clone(),
-            position.account_id.clone(),
-            position.position_id.clone(),
-            position.asset,
-            position.symbol.clone(),
-            cmd.funding_time,
-            position.side,
-            position.qty,
-            cmd.oracle_price,
-            notional,
-            cmd.funding_rate_e8,
-            funding_fee,
-            is_payment,
-        ));
-
+        let signed_usdc_delta = settlement.signed_usdc_delta;
+        let account_id = settlement.account_id.clone();
+        outcome.settlements.push(settlement);
         let delta = outcome
             .balance_deltas
-            .entry(balance_key(position.account_id.as_str(), state.margin_asset_id.as_str()))
+            .entry(balance_key(account_id.as_str(), state.margin_asset_id.as_str()))
             .or_default();
-        let funding_fee = i128::from(funding_fee);
-        if is_payment {
-            delta.available_delta = delta
-                .available_delta
-                .checked_sub(funding_fee)
-                .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-        } else {
-            delta.available_delta = delta
-                .available_delta
-                .checked_add(funding_fee)
-                .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-        }
+        delta.available_delta = delta
+            .available_delta
+            .checked_add(signed_usdc_delta)
+            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
     }
 
     Ok(outcome)
+}
+
+fn map_position_funding_error(
+    error: HyperliquidPerpPositionError,
+) -> SettleHyperliquidPerpFundingError {
+    match error {
+        HyperliquidPerpPositionError::ArithmeticOverflow => {
+            SettleHyperliquidPerpFundingError::ArithmeticOverflow
+        }
+        HyperliquidPerpPositionError::InvalidTradeQty
+        | HyperliquidPerpPositionError::InvalidTradePrice
+        | HyperliquidPerpPositionError::InvalidLeverage
+        | HyperliquidPerpPositionError::InconsistentState
+        | HyperliquidPerpPositionError::MarginModeMismatch => {
+            SettleHyperliquidPerpFundingError::PositionNotFundingEligible
+        }
+    }
 }
 
 fn balance_map<'a>(
@@ -397,7 +393,7 @@ fn settlement_balance_ledger_reasons(
     }
 
     let positions_by_id: BTreeMap<&str, &HyperliquidPerpPosition> =
-        positions.iter().map(|position| (position.position_id.as_str(), position)).collect();
+        positions.iter().map(|position| (position.position_key.as_str(), position)).collect();
 
     let mut refs_by_balance: BTreeMap<String, FundingLedgerRefs> = BTreeMap::new();
     for settlement in settlements {
@@ -725,16 +721,18 @@ mod tests {
 
         assert!(result.created_settlements.iter().any(|settlement| {
             settlement.position_id == "position-long"
-                && settlement.side == HyperliquidPerpPositionSide::Long
-                && settlement.is_payment
-                && settlement.funding_fee == 10
+                && settlement.signed_size == 2
+                && settlement.is_payment()
+                && settlement.funding_fee_abs() == Some(10)
+                && settlement.signed_usdc_delta == -10
                 && settlement.funding_rate_e8 == 10_000
         }));
         assert!(result.created_settlements.iter().any(|settlement| {
             settlement.position_id == "position-short"
-                && settlement.side == HyperliquidPerpPositionSide::Short
-                && !settlement.is_payment
-                && settlement.funding_fee == 10
+                && settlement.signed_size == -2
+                && !settlement.is_payment()
+                && settlement.funding_fee_abs() == Some(10)
+                && settlement.signed_usdc_delta == 10
                 && settlement.funding_rate_e8 == 10_000
         }));
     }
@@ -747,16 +745,18 @@ mod tests {
 
         assert!(result.created_settlements.iter().any(|settlement| {
             settlement.position_id == "position-long"
-                && settlement.side == HyperliquidPerpPositionSide::Long
-                && !settlement.is_payment
-                && settlement.funding_fee == 10
+                && settlement.signed_size == 2
+                && !settlement.is_payment()
+                && settlement.funding_fee_abs() == Some(10)
+                && settlement.signed_usdc_delta == 10
                 && settlement.funding_rate_e8 == -10_000
         }));
         assert!(result.created_settlements.iter().any(|settlement| {
             settlement.position_id == "position-short"
-                && settlement.side == HyperliquidPerpPositionSide::Short
-                && settlement.is_payment
-                && settlement.funding_fee == 10
+                && settlement.signed_size == -2
+                && settlement.is_payment()
+                && settlement.funding_fee_abs() == Some(10)
+                && settlement.signed_usdc_delta == -10
                 && settlement.funding_rate_e8 == -10_000
         }));
         assert!(result.changed_margin_balances.iter().any(|pair| {

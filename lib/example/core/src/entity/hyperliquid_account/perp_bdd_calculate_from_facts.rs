@@ -122,13 +122,28 @@ fn given_cross_positions_when_calculated_then_margin_summaries_include_cross_ris
 
     assert_eq!(state.margin_summary().total_position_notional(), dec(400));
     assert_eq!(state.margin_summary().total_margin_used(), dec(60));
-    assert_eq!(state.margin_summary().account_value(), dec(1_020));
+    assert_eq!(state.margin_summary().account_value(), dec(1_200));
     assert_eq!(state.cross_margin_summary().total_position_notional(), dec(200));
     assert_eq!(state.cross_margin_summary().total_margin_used(), dec(20));
-    assert_eq!(state.cross_margin_summary().account_value(), dec(1_030));
+    assert_eq!(state.cross_margin_summary().account_value(), dec(1_000));
     assert_eq!(state.cross_maintenance_margin_used(), Some(dec(10)));
-    assert_eq!(state.withdrawable(), dec(960));
+    assert_eq!(state.withdrawable(), dec(1_140));
     assert_eq!(state.risk_state(), RiskState::Normal);
+
+    assert_eq!(state.position_risks().len(), 2);
+    let btc_risk = state.position_risk_of("BTC-PERP").expect("BTC risk snapshot must exist");
+    assert_eq!(btc_risk.position.position_key, "sub-1-BTC-PERP");
+    assert_eq!(btc_risk.mark_price, dec(100));
+    assert_eq!(btc_risk.position_value, dec(200));
+    assert_eq!(btc_risk.unrealized_pnl, dec(0));
+    assert_eq!(btc_risk.margin_used, dec(20));
+
+    let eth_risk = state.position_risk_of("ETH-PERP").expect("ETH risk snapshot must exist");
+    assert_eq!(eth_risk.position.side(), HyperliquidPerpPositionSide::Short);
+    assert_eq!(eth_risk.mark_price, dec(50));
+    assert_eq!(eth_risk.position_value, dec(200));
+    assert_eq!(eth_risk.unrealized_pnl, dec(200));
+    assert_eq!(eth_risk.margin_used, dec(40));
 }
 
 #[test]

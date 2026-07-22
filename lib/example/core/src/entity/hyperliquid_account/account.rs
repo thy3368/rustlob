@@ -263,7 +263,8 @@ mod tests {
 
     use super::*;
     use crate::entity::hyperliquid_account::{
-        MarginSummary, PerpClearinghouseState, RiskState, SpotClearinghouseState,
+        MarginSummary, PerpClearinghouseState, PerpPositionRiskSnapshot, RiskState,
+        SpotClearinghouseState,
     };
     use crate::entity::{
         Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
@@ -289,24 +290,33 @@ mod tests {
     }
 
     fn sample_perp(account_id: &str) -> PerpClearinghouseState {
+        let position = HyperliquidPerpPosition::new(
+            format!("{account_id}-BTC-PERP"),
+            account_id.to_owned(),
+            0,
+            "BTC-PERP".to_owned(),
+            HyperliquidPerpPositionSide::Long,
+            1,
+            100_000,
+            3,
+            HyperliquidPerpMarginMode::Cross,
+            10_000,
+            Some(90_000),
+            250,
+            50,
+            1,
+        );
         PerpClearinghouseState::new(
             AccountId::from(account_id),
-            vec![HyperliquidPerpPosition::new(
-                format!("{account_id}-BTC-PERP"),
-                account_id.to_owned(),
-                0,
-                "BTC-PERP".to_owned(),
-                HyperliquidPerpPositionSide::Long,
-                1,
-                100_000,
-                3,
-                HyperliquidPerpMarginMode::Cross,
-                10_000,
-                Some(90_000),
-                250,
-                50,
-                1,
-            )],
+            vec![PerpPositionRiskSnapshot {
+                position,
+                mark_price: dec(100_000),
+                position_value: dec(100_000),
+                unrealized_pnl: dec(250),
+                margin_used: dec(10_000),
+                liquidation_price: Some(dec(90_000)),
+                return_on_equity: dec(0),
+            }],
             MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(19_750)),
             MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(17_750)),
             Some(dec(1_500)),

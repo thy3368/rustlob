@@ -307,11 +307,11 @@ mod tests {
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
 
-        assert_eq!(position.before.required_margin, 60);
-        assert_eq!(position.after.leverage, 10);
-        assert_eq!(position.after.required_margin, 30);
+        assert_eq!(position.before.required_margin(), Some(60));
+        assert_eq!(position.after.leverage_value, 10);
+        assert_eq!(position.after.required_margin(), Some(30));
         assert_eq!(position.after.version, 3);
-        assert_eq!(position.after.status, HyperliquidPerpPositionStatus::Open);
+        assert_eq!(position.after.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(events.len(), 2);
     }
 
@@ -330,7 +330,7 @@ mod tests {
             changes.changed_leverage_setting.after.margin_mode,
             HyperliquidPerpMarginMode::Isolated
         );
-        assert_eq!(changes.changed_position.as_ref().unwrap().after.required_margin, 30);
+        assert_eq!(changes.changed_position.as_ref().unwrap().after.required_margin(), Some(30));
     }
 
     #[test]

@@ -9,24 +9,45 @@ use super::hyperliquid_perp_order::{
     PlaceHyperliquidPerpOrderInput,
 };
 use crate::entity::{
-    AccountId, Balance, BalanceLedgerReason, MarginSummary, PerpClearinghouseState, Reservation,
-    ReservationKind, ReservationMarketKind, ReservationStatus, RiskState,
+    AccountId, Balance, BalanceLedgerReason, MarginReservation, PerpAssetRiskRule,
+    PerpClearinghouseState, PerpClearinghouseStateCalcInput, PerpCollateralSnapshot,
+    PerpMarketMark, PerpRiskPolicy, Reservation, ReservationKind, ReservationMarketKind,
+    ReservationStatus,
 };
 
 fn dec(units: i64) -> Decimal {
     Decimal::from_raw(units * 100_000_000)
 }
 
-fn clearinghouse_state(withdrawable: i64) -> PerpClearinghouseState {
-    PerpClearinghouseState::new(
-        AccountId::from("trader-1"),
-        vec![],
-        MarginSummary::new(dec(1_000), dec(0), dec(0), dec(1_000)),
-        MarginSummary::new(dec(1_000), dec(0), dec(0), dec(1_000)),
-        None,
-        dec(withdrawable),
-        RiskState::Normal,
-    )
+fn rate_bps(bps: i64) -> Decimal {
+    Decimal::from_raw(bps * 10_000)
+}
+
+fn clearinghouse_state_from_facts(
+    collateral: i64,
+    reservations: Vec<MarginReservation>,
+) -> PerpClearinghouseState {
+    let calc_input = PerpClearinghouseStateCalcInput {
+        account_id: AccountId::from("trader-1"),
+        positions: vec![],
+        collateral: PerpCollateralSnapshot {
+            total_raw_usd: dec(collateral),
+            pending_settlement_delta: dec(0),
+        },
+        market_marks: vec![PerpMarketMark { asset: 0, mark_price: dec(100) }],
+        risk_rules: vec![PerpAssetRiskRule {
+            asset: 0,
+            initial_margin_rate: rate_bps(1_000),
+            maintenance_margin_rate: rate_bps(500),
+        }],
+        open_order_margin_reservations: reservations,
+        risk_policy: PerpRiskPolicy { reduce_only_withdrawable_threshold: dec(0) },
+    };
+
+    match PerpClearinghouseState::calculate_from_facts(calc_input) {
+        Ok(state) => state,
+        Err(error) => panic!("calculation must succeed: {error}"),
+    }
 }
 
 fn reservation(order_id: &str) -> Reservation {
@@ -118,7 +139,7 @@ fn place_derives_freeze_ledger_from_reservation() {
 // 未撮合永续订单只冻结保证金，使 clearinghouse withdrawable 下降，不产生仓位。
 #[test]
 fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdrawable_decreases() {
-    let clearinghouse_before = clearinghouse_state(1_000);
+    let clearinghouse_before = clearinghouse_state_from_facts(1_000, vec![]);
     let mut balance = Balance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 200, 1);
     let total_before = balance.total();
 
@@ -128,7 +149,8 @@ fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdra
     let reserved_amount = outcome.order.reservation.original_amount;
 
     outcome.freeze_ledger_entry.apply_to(&mut balance).unwrap();
-    let clearinghouse_after = clearinghouse_state(970);
+    let clearinghouse_after =
+        clearinghouse_state_from_facts(1_000, vec![outcome.order.reservation.clone()]);
 
     assert_eq!(clearinghouse_before.withdrawable(), dec(1_000));
     assert_eq!(clearinghouse_after.withdrawable(), dec(970));

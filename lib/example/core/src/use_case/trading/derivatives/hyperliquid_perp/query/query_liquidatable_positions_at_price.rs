@@ -157,7 +157,7 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
             };
 
             let liquidation_notional =
-                snapshot.position.qty.checked_mul(query.mark_price).ok_or(
+                snapshot.position.qty().checked_mul(query.mark_price).ok_or(
                     QueryHyperliquidPerpLiquidatablePositionsAtPriceError::ArithmeticOverflow,
                 )?;
             total_liquidation_notional = total_liquidation_notional
@@ -165,14 +165,14 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
                 .ok_or(QueryHyperliquidPerpLiquidatablePositionsAtPriceError::ArithmeticOverflow)?;
 
             positions.push(HyperliquidPerpLiquidatablePositionAtPriceView {
-                position_id: snapshot.position.position_id,
-                account_id: snapshot.position.account_id,
-                asset: snapshot.position.asset,
-                symbol: snapshot.position.symbol,
-                side: snapshot.position.side,
-                qty: snapshot.position.qty,
+                position_id: snapshot.position.position_key.clone(),
+                account_id: snapshot.position.account_id.clone(),
+                asset: snapshot.position.perp_asset_id,
+                symbol: snapshot.position.coin.clone(),
+                side: snapshot.position.side(),
+                qty: snapshot.position.qty(),
                 entry_price: snapshot.position.entry_price,
-                required_margin: snapshot.position.required_margin,
+                required_margin: snapshot.position.required_margin().unwrap_or(0),
                 margin_mode: snapshot.margin_mode,
                 mark_price: query.mark_price,
                 bankruptcy_price: snapshot.bankruptcy_price,

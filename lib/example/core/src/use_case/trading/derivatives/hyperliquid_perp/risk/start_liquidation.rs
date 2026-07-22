@@ -142,11 +142,11 @@ impl CommandUseCase4 for StartHyperliquidPerpLiquidationUseCase {
                 cmd.liquidation_batch_id.clone(),
                 cmd.party_id.clone(),
                 state.position.account_id.clone(),
-                state.position.position_id.clone(),
-                state.position.asset,
-                state.position.symbol.clone(),
-                state.position.side,
-                state.position.qty,
+                state.position.position_key.clone(),
+                state.position.perp_asset_id,
+                state.position.coin.clone(),
+                state.position.side(),
+                state.position.qty(),
                 state.margin_mode,
                 state.mark_price,
                 state.bankruptcy_price,
@@ -161,7 +161,7 @@ fn validate_state(
     cmd: &StartHyperliquidPerpLiquidationCmd,
     state: &StartHyperliquidPerpLiquidationState,
 ) -> Result<(), StartHyperliquidPerpLiquidationError> {
-    if state.position.position_id != cmd.position_id {
+    if state.position.position_key != cmd.position_id {
         return Err(StartHyperliquidPerpLiquidationError::PositionMismatch);
     }
     if !state.position.has_consistent_state() {

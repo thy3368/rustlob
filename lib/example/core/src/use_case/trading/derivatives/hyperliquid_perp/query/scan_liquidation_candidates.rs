@@ -140,10 +140,10 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidationCandidatesUseCase {
             };
 
             candidates.push(HyperliquidPerpLiquidationCandidate {
-                position_id: snapshot.position.position_id,
+                position_id: snapshot.position.position_key,
                 account_id: snapshot.position.account_id,
-                asset: snapshot.position.asset,
-                symbol: snapshot.position.symbol,
+                asset: snapshot.position.perp_asset_id,
+                symbol: snapshot.position.coin,
                 margin_mode: snapshot.margin_mode,
                 mark_price: snapshot.mark_price,
                 bankruptcy_price: snapshot.bankruptcy_price,

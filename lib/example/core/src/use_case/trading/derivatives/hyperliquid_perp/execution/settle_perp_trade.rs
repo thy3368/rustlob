@@ -183,8 +183,11 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
             .positions
             .iter()
             .filter_map(|position| {
-                let key =
-                    position_key(&position.account_id, position.asset, position.symbol.as_str());
+                let key = position_key(
+                    &position.account_id,
+                    position.perp_asset_id,
+                    position.coin.as_str(),
+                );
                 outcome
                     .positions
                     .get(&key)
@@ -363,12 +366,10 @@ fn validate_position_for_trade(
     {
         return Err(SettleHyperliquidPerpTradeError::PositionMismatch);
     }
-    if position.leverage == 0 {
+    if position.leverage_value == 0 {
         return Err(SettleHyperliquidPerpTradeError::InvalidLeverage);
     }
-    if !position.has_consistent_state()
-        || position.required_margin() != Some(position.required_margin)
-    {
+    if !position.has_consistent_state() {
         return Err(SettleHyperliquidPerpTradeError::InconsistentPositionState);
     }
     Ok(())
@@ -480,7 +481,10 @@ fn position_map(
 ) -> BTreeMap<String, HyperliquidPerpPosition> {
     positions
         .map(|position| {
-            (position_key(&position.account_id, position.asset, position.symbol.as_str()), position)
+            (
+                position_key(&position.account_id, position.perp_asset_id, position.coin.as_str()),
+                position,
+            )
         })
         .collect()
 }
@@ -748,7 +752,7 @@ mod tests {
         assert_eq!(changes.changed_positions.len(), 2);
         assert_eq!(changes.changed_margin_balances.len(), 2);
         assert_eq!(changes.changed_positions[0].before.version, 0);
-        assert_eq!(changes.changed_positions[0].after.required_margin, 20);
+        assert_eq!(changes.changed_positions[0].after.required_margin().unwrap_or(0), 20);
         assert_eq!(changes.changed_margin_balances[0].before.available, 1_000);
         assert_eq!(changes.changed_margin_balances[0].after.frozen, 20);
         assert_eq!(voucher.voucher_id(), "perp-voucher:settle-1:trade-1");
@@ -780,11 +784,9 @@ mod tests {
         assert_eq!(field_as_u64(&events[0], "maker_fee"), None);
 
         assert_eq!(event_field(&events[1], "account_id"), Some("buyer"));
-        assert_eq!(event_field(&events[1], "side"), Some("long"));
-        assert_eq!(field_as_u64(&events[1], "required_margin"), Some(20));
+        assert_eq!(event_field_i64(&events[1], "signed_size"), Some(2));
         assert_eq!(event_field(&events[2], "account_id"), Some("seller"));
-        assert_eq!(event_field(&events[2], "side"), Some("short"));
-        assert_eq!(field_as_u64(&events[2], "required_margin"), Some(20));
+        assert_eq!(event_field_i64(&events[2], "signed_size"), Some(-2));
 
         assert_eq!(
             event_field(updated_event(&events, "buyer", "frozen").unwrap(), "frozen"),
@@ -816,8 +818,8 @@ mod tests {
         let buyer_position = updated_event_with_field(&events, "entry_price").unwrap();
         let voucher = settlement_voucher(&changes);
 
-        assert_eq!(changes.changed_positions[0].before.qty, 2);
-        assert_eq!(changes.changed_positions[0].after.qty, 4);
+        assert_eq!(changes.changed_positions[0].before.qty(), 2);
+        assert_eq!(changes.changed_positions[0].after.qty(), 4);
         assert!(
             voucher
                 .transfers_for_purpose(
@@ -825,9 +827,8 @@ mod tests {
                 )
                 .is_empty()
         );
-        assert_eq!(event_field(buyer_position, "qty"), Some("4"));
+        assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(4));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("110"));
-        assert_eq!(event_field(buyer_position, "required_margin"), Some("44"));
 
         Ok(())
     }
@@ -847,11 +848,11 @@ mod tests {
         let changes =
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
-        let buyer_position = updated_event_with_field(&events, "realized_pnl").unwrap();
+        let buyer_position = updated_event_with_field(&events, "cumulative_realized_pnl").unwrap();
         let voucher = settlement_voucher(&changes);
 
-        assert_eq!(changes.changed_positions[0].before.qty, 3);
-        assert_eq!(changes.changed_positions[0].after.qty, 2);
+        assert_eq!(changes.changed_positions[0].before.qty(), 3);
+        assert_eq!(changes.changed_positions[0].after.qty(), 2);
         assert!(
             voucher
                 .transfers_for_purpose(
@@ -859,9 +860,8 @@ mod tests {
                 )
                 .is_empty()
         );
-        assert_eq!(event_field(buyer_position, "qty"), Some("2"));
-        assert_eq!(event_field(buyer_position, "required_margin"), Some("20"));
-        assert_eq!(event_field_i64(buyer_position, "realized_pnl"), Some(30));
+        assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(2));
+        assert_eq!(event_field_i64(buyer_position, "cumulative_realized_pnl"), Some(30));
         assert_eq!(
             event_field(updated_event(&events, "buyer", "available").unwrap(), "available"),
             Some("1040")
@@ -925,14 +925,13 @@ mod tests {
         let changes =
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
-        let buyer_position = updated_event_with_field(&events, "realized_pnl").unwrap();
+        let buyer_position = updated_event_with_field(&events, "cumulative_realized_pnl").unwrap();
         let voucher = settlement_voucher(&changes);
 
         assert!(changes.changed_positions.iter().all(|pair| pair.after.is_flat()));
-        assert_eq!(changes.changed_positions[0].after.side, HyperliquidPerpPositionSide::Flat);
-        assert_eq!(changes.changed_positions[1].after.side, HyperliquidPerpPositionSide::Flat);
-        assert_eq!(event_field(buyer_position, "side"), Some("flat"));
-        assert_eq!(event_field(buyer_position, "qty"), Some("0"));
+        assert_eq!(changes.changed_positions[0].after.side(), HyperliquidPerpPositionSide::Flat);
+        assert_eq!(changes.changed_positions[1].after.side(), HyperliquidPerpPositionSide::Flat);
+        assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(0));
         assert_eq!(
             voucher.transfers_for_purpose(
                 crate::entity::SettlementTransferPurpose::PerpRealizedPnlTransfer
@@ -958,11 +957,11 @@ mod tests {
         let changes =
             SettleHyperliquidPerpTradeUseCase.compute_changes(&cmd(vec!["trade-1"]), state)?;
         let events = changes.to_replayable_events().unwrap();
-        let buyer_position = updated_event_with_field(&events, "side").unwrap();
+        let buyer_position = updated_event_with_field(&events, "signed_size").unwrap();
         let voucher = settlement_voucher(&changes);
 
-        assert_eq!(changes.changed_positions[0].before.side, HyperliquidPerpPositionSide::Long);
-        assert_eq!(changes.changed_positions[0].after.side, HyperliquidPerpPositionSide::Short);
+        assert_eq!(changes.changed_positions[0].before.side(), HyperliquidPerpPositionSide::Long);
+        assert_eq!(changes.changed_positions[0].after.side(), HyperliquidPerpPositionSide::Short);
         assert!(
             voucher
                 .transfers_for_purpose(
@@ -970,10 +969,8 @@ mod tests {
                 )
                 .is_empty()
         );
-        assert_eq!(event_field(buyer_position, "side"), Some("short"));
-        assert_eq!(event_field(buyer_position, "qty"), Some("1"));
+        assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(-1));
         assert_eq!(event_field(buyer_position, "entry_price"), Some("90"));
-        assert_eq!(event_field(buyer_position, "required_margin"), Some("9"));
 
         Ok(())
     }
@@ -1039,14 +1036,10 @@ mod tests {
             let notional = price * qty;
             let expected_leg_count = u64::from(notional * 5 / FEE_BPS_DENOMINATOR > 0)
                 + u64::from(notional * 2 / FEE_BPS_DENOMINATOR > 0);
-            let required_margin = required_position_margin(qty, price, leverage).unwrap();
-
             prop_assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
             prop_assert_eq!(field_as_u64(&events[0], "leg_count"), Some(expected_leg_count));
-            prop_assert_eq!(field_as_u64(&events[1], "required_margin"), Some(required_margin));
-            prop_assert_eq!(field_as_u64(&events[2], "required_margin"), Some(required_margin));
-            prop_assert_eq!(event_field(&events[1], "side"), Some("long"));
-            prop_assert_eq!(event_field(&events[2], "side"), Some("short"));
+            prop_assert_eq!(event_field_i64(&events[1], "signed_size"), Some(qty as i64));
+            prop_assert_eq!(event_field_i64(&events[2], "signed_size"), Some(-(qty as i64)));
         }
     }
 }

@@ -7,7 +7,8 @@ use thiserror::Error;
 use crate::entity::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus, HyperliquidPerpOrder,
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce,
-    HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+    HyperliquidPerpPosition, HyperliquidPerpPositionSide, Reservation, ReservationKind,
+    ReservationMarketKind, ReservationStatus,
 };
 
 /// 发出单张 Hyperliquid perp 强平单的命令。
@@ -139,23 +140,39 @@ impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let order_qty = state
             .liquidation
-            .next_order_qty(state.position.qty)
+            .next_order_qty(state.position.qty())
             .ok_or(PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
         let order_id =
-            format!("{}-{}-{}", state.account_id, state.position.symbol, state.next_order_sequence);
-        let side = liquidation_order_side(state.position.side)?;
+            format!("{}-{}-{}", state.account_id, state.position.coin, state.next_order_sequence);
+        let side = liquidation_order_side(state.position.side())?;
+        let reservation = Reservation {
+            reservation_id: format!("reservation:{order_id}"),
+            owner_account_id: state.account_id.clone(),
+            caused_by_order_id: order_id.clone(),
+            market_kind: ReservationMarketKind::Perp,
+            reservation_kind: ReservationKind::PerpOpenMargin,
+            asset_id: "USDC".to_string(),
+            original_amount: 0,
+            consumed_amount: 0,
+            released_amount: 0,
+            remaining_amount: 0,
+            status: ReservationStatus::Active,
+            close_reason: None,
+            version: 1,
+        };
         let created_order = HyperliquidPerpOrder::new(
             order_id.clone(),
             None,
-            state.position.asset,
+            state.position.perp_asset_id,
             state.account_id.clone(),
-            state.position.symbol.clone(),
+            state.position.coin.clone(),
             side,
             HyperliquidPerpOrderExecution::Market { aggressive_price: cmd.price_cap },
             HyperliquidPerpOrderTimeInForce::Ioc,
             order_qty,
             true,
             cmd.cloid.clone(),
+            reservation,
         )
         .with_liquidation(cmd.liquidation_id.clone());
 
@@ -190,9 +207,9 @@ fn validate_state(
     {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::AccountMismatch);
     }
-    if state.position.position_id != state.liquidation.position_id
-        || state.position.asset != state.liquidation.asset
-        || state.position.symbol != state.liquidation.symbol
+    if state.position.position_key != state.liquidation.position_id
+        || state.position.perp_asset_id != state.liquidation.asset
+        || state.position.coin != state.liquidation.symbol
     {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::PositionMismatch);
     }
@@ -217,10 +234,10 @@ fn validate_state(
     if !state.existing_open_liquidation_order_ids.is_empty() {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::OpenLiquidationOrderExists);
     }
-    if state.position.qty < state.liquidation.remaining_qty {
+    if state.position.qty() < state.liquidation.remaining_qty {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::PositionQtyTooSmall);
     }
-    let _ = liquidation_order_side(state.position.side)?;
+    let _ = liquidation_order_side(state.position.side())?;
     Ok(())
 }
 

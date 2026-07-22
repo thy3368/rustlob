@@ -63,11 +63,11 @@ fn given_empty_slot_when_open_long_trade_settles_then_long_position_opens()
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Long, 3, 100)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Long);
-    assert_eq!(position.qty, 3);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Long);
+    assert_eq!(position.qty(), 3);
     assert_eq!(position.entry_price, 100);
-    assert_eq!(position.required_margin, 30);
-    assert_eq!(position.status, HyperliquidPerpPositionStatus::Open);
+    assert_eq!(position.required_margin().unwrap_or(0), 30);
+    assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
     assert_eq!(position.version, 1);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 30);
@@ -81,11 +81,11 @@ fn given_empty_slot_when_open_short_trade_settles_then_short_position_opens()
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Short, 4, 100)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Short);
-    assert_eq!(position.qty, 4);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Short);
+    assert_eq!(position.qty(), 4);
     assert_eq!(position.entry_price, 100);
-    assert_eq!(position.required_margin, 40);
-    assert_eq!(position.status, HyperliquidPerpPositionStatus::Open);
+    assert_eq!(position.required_margin().unwrap_or(0), 40);
+    assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
     assert_eq!(position.version, 1);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 40);
@@ -99,10 +99,10 @@ fn given_open_long_when_add_long_trade_settles_then_long_position_increases_with
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Long, 2, 130)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Long);
-    assert_eq!(position.qty, 5);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Long);
+    assert_eq!(position.qty(), 5);
     assert_eq!(position.entry_price, 112);
-    assert_eq!(position.required_margin, 56);
+    assert_eq!(position.required_margin().unwrap_or(0), 56);
     assert_eq!(position.version, 3);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 26);
@@ -116,10 +116,10 @@ fn given_open_short_when_add_short_trade_settles_then_short_position_increases_w
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Short, 2, 130)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Short);
-    assert_eq!(position.qty, 5);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Short);
+    assert_eq!(position.qty(), 5);
     assert_eq!(position.entry_price, 112);
-    assert_eq!(position.required_margin, 56);
+    assert_eq!(position.required_margin().unwrap_or(0), 56);
     assert_eq!(position.version, 3);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 26);
@@ -133,11 +133,11 @@ fn given_open_long_when_close_long_trade_partially_settles_then_long_position_re
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Short, 2, 130)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Long);
-    assert_eq!(position.qty, 3);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Long);
+    assert_eq!(position.qty(), 3);
     assert_eq!(position.entry_price, 100);
-    assert_eq!(position.required_margin, 30);
-    assert_eq!(position.realized_pnl, 67);
+    assert_eq!(position.required_margin().unwrap_or(0), 30);
+    assert_eq!(position.cumulative_realized_pnl, 67);
     assert_eq!(outcome.realized_pnl_delta, 60);
     assert_eq!(outcome.required_margin_delta, -20);
     Ok(())
@@ -150,11 +150,11 @@ fn given_open_short_when_close_short_trade_partially_settles_then_short_position
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Long, 2, 70)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Short);
-    assert_eq!(position.qty, 3);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Short);
+    assert_eq!(position.qty(), 3);
     assert_eq!(position.entry_price, 100);
-    assert_eq!(position.required_margin, 30);
-    assert_eq!(position.realized_pnl, 67);
+    assert_eq!(position.required_margin().unwrap_or(0), 30);
+    assert_eq!(position.cumulative_realized_pnl, 67);
     assert_eq!(outcome.realized_pnl_delta, 60);
     assert_eq!(outcome.required_margin_delta, -20);
     Ok(())
@@ -167,12 +167,12 @@ fn given_open_long_when_close_long_trade_fully_settles_then_position_closes_and_
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Short, 3, 80)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Flat);
-    assert_eq!(position.qty, 0);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Flat);
+    assert_eq!(position.qty(), 0);
     assert_eq!(position.entry_price, 0);
-    assert_eq!(position.required_margin, 0);
-    assert_eq!(position.status, HyperliquidPerpPositionStatus::Closed);
-    assert_eq!(position.realized_pnl, -53);
+    assert_eq!(position.required_margin().unwrap_or(0), 0);
+    assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
+    assert_eq!(position.cumulative_realized_pnl, -53);
     assert_eq!(outcome.realized_pnl_delta, -60);
     assert_eq!(outcome.required_margin_delta, -30);
     Ok(())
@@ -185,12 +185,12 @@ fn given_open_short_when_close_short_trade_fully_settles_then_position_closes_an
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Long, 3, 120)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Flat);
-    assert_eq!(position.qty, 0);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Flat);
+    assert_eq!(position.qty(), 0);
     assert_eq!(position.entry_price, 0);
-    assert_eq!(position.required_margin, 0);
-    assert_eq!(position.status, HyperliquidPerpPositionStatus::Closed);
-    assert_eq!(position.realized_pnl, -53);
+    assert_eq!(position.required_margin().unwrap_or(0), 0);
+    assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
+    assert_eq!(position.cumulative_realized_pnl, -53);
     assert_eq!(outcome.realized_pnl_delta, -60);
     assert_eq!(outcome.required_margin_delta, -30);
     Ok(())
@@ -203,11 +203,11 @@ fn given_open_long_when_short_trade_exceeds_position_then_position_flips_to_shor
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Short, 5, 90)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Short);
-    assert_eq!(position.qty, 3);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Short);
+    assert_eq!(position.qty(), 3);
     assert_eq!(position.entry_price, 90);
-    assert_eq!(position.required_margin, 27);
-    assert_eq!(position.realized_pnl, -13);
+    assert_eq!(position.required_margin().unwrap_or(0), 27);
+    assert_eq!(position.cumulative_realized_pnl, -13);
     assert_eq!(outcome.realized_pnl_delta, -20);
     assert_eq!(outcome.required_margin_delta, 7);
     Ok(())
@@ -220,28 +220,22 @@ fn given_open_short_when_long_trade_exceeds_position_then_position_flips_to_long
 
     let outcome = position.settle_trade(HyperliquidPerpPositionSide::Long, 5, 110)?;
 
-    assert_eq!(position.side, HyperliquidPerpPositionSide::Long);
-    assert_eq!(position.qty, 3);
+    assert_eq!(position.side(), HyperliquidPerpPositionSide::Long);
+    assert_eq!(position.qty(), 3);
     assert_eq!(position.entry_price, 110);
-    assert_eq!(position.required_margin, 33);
-    assert_eq!(position.realized_pnl, -13);
+    assert_eq!(position.required_margin().unwrap_or(0), 33);
+    assert_eq!(position.cumulative_realized_pnl, -13);
     assert_eq!(outcome.realized_pnl_delta, -20);
     assert_eq!(outcome.required_margin_delta, 13);
     Ok(())
 }
 
 #[test]
-fn given_position_with_risk_snapshot_when_trade_settles_then_risk_snapshot_fields_are_cleared()
--> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(HyperliquidPerpPositionSide::Long, 2, 100, 10);
-    assert_eq!(position.liquidation_price, Some(45_000));
-    assert_eq!(position.unrealized_pnl, 123);
+fn given_position_when_risk_queries_are_asked_then_derived_values_can_be_computed() {
+    let position = open_position(HyperliquidPerpPositionSide::Long, 2, 100, 10);
 
-    position.settle_trade(HyperliquidPerpPositionSide::Long, 1, 100)?;
-
-    assert_eq!(position.liquidation_price, None);
-    assert_eq!(position.unrealized_pnl, 0);
-    Ok(())
+    assert_eq!(position.notional_at(130), Some(260));
+    assert_eq!(position.unrealized_pnl_at(130), Some(60));
 }
 
 #[test]
@@ -273,7 +267,7 @@ fn given_invalid_trade_facts_when_trade_settles_then_entity_rejects_without_stat
 #[test]
 fn given_inconsistent_position_when_trade_settles_then_entity_rejects_without_state_change() {
     let mut position = open_position(HyperliquidPerpPositionSide::Long, 2, 100, 10);
-    position.required_margin = 19;
+    position.signed_size = 0;
     let before = position.clone();
 
     let result = position.settle_trade(HyperliquidPerpPositionSide::Long, 1, 100);
@@ -290,8 +284,8 @@ fn given_open_position_when_matching_leverage_facts_apply_then_margin_is_recompu
     let outcome =
         position.apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 10)?;
 
-    assert_eq!(position.leverage, 10);
-    assert_eq!(position.required_margin, 30);
+    assert_eq!(position.leverage_value, 10);
+    assert_eq!(position.required_margin().unwrap_or(0), 30);
     assert_eq!(position.version, 3);
     assert_eq!(outcome.required_margin_delta, -30);
     Ok(())
@@ -303,18 +297,18 @@ fn given_empty_or_closed_position_when_matching_leverage_facts_apply_then_margin
     let mut empty = empty_position();
     let empty_outcome =
         empty.apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)?;
-    assert_eq!(empty.status, HyperliquidPerpPositionStatus::EmptySlot);
-    assert_eq!(empty.leverage, 20);
-    assert_eq!(empty.required_margin, 0);
+    assert_eq!(empty.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
+    assert_eq!(empty.leverage_value, 20);
+    assert_eq!(empty.required_margin().unwrap_or(0), 0);
     assert_eq!(empty.version, 1);
     assert_eq!(empty_outcome.required_margin_delta, 0);
 
     let mut closed = closed_position(5);
     let closed_outcome =
         closed.apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)?;
-    assert_eq!(closed.status, HyperliquidPerpPositionStatus::Closed);
-    assert_eq!(closed.leverage, 20);
-    assert_eq!(closed.required_margin, 0);
+    assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
+    assert_eq!(closed.leverage_value, 20);
+    assert_eq!(closed.required_margin().unwrap_or(0), 0);
     assert_eq!(closed.version, 4);
     assert_eq!(closed_outcome.required_margin_delta, 0);
     Ok(())

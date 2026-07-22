@@ -10,7 +10,7 @@ pub use account::{
 };
 pub use perp::{
     MarginSummary, PerpAssetRiskRule, PerpClearinghouseState, PerpClearinghouseStateCalcError,
-    PerpClearinghouseStateCalcInput, PerpCollateralSnapshot, PerpMarketMark, PerpRiskPolicy,
-    RiskState,
+    PerpClearinghouseStateCalcInput, PerpCollateralSnapshot, PerpMarketMark,
+    PerpPositionRiskSnapshot, PerpRiskPolicy, RiskState,
 };
 pub use spot::SpotClearinghouseState;

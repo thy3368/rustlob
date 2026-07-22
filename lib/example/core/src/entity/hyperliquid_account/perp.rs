@@ -66,6 +66,25 @@ pub struct PerpRiskPolicy {
     pub reduce_only_withdrawable_threshold: Decimal,
 }
 
+/// 单个 perp 仓位在风险扫描时点的快照。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PerpPositionRiskSnapshot {
+    /// 仓位核心事实。
+    pub position: HyperliquidPerpPosition,
+    /// 当前 mark price。
+    pub mark_price: Decimal,
+    /// 当前仓位名义价值。
+    pub position_value: Decimal,
+    /// 当前仓位未实现 PnL。
+    pub unrealized_pnl: Decimal,
+    /// 当前仓位使用的保证金额度。
+    pub margin_used: Decimal,
+    /// 当前仓位的清算价；未推导时为 `None`。
+    pub liquidation_price: Option<Decimal>,
+    /// 当前仓位的权益回报率。
+    pub return_on_equity: Decimal,
+}
+
 /// 本地统计 perp 清算状态失败原因。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PerpClearinghouseStateCalcError {
@@ -151,8 +170,8 @@ impl MarginSummary {
 pub struct PerpClearinghouseState {
     /// 子账户标识。
     account_id: AccountId,
-    /// 当前 perp 仓位快照集合。
-    positions: Vec<HyperliquidPerpPosition>,
+    /// 当前 perp 仓位风险快照集合。
+    position_risks: Vec<PerpPositionRiskSnapshot>,
     /// 账户整体保证金汇总。
     margin_summary: MarginSummary,
     /// 仅 cross 保证金池相关的汇总视图。
@@ -169,7 +188,7 @@ impl PerpClearinghouseState {
     /// 从已校验事实装配子账户 perp 清算状态。
     pub fn new(
         account_id: AccountId,
-        positions: Vec<HyperliquidPerpPosition>,
+        position_risks: Vec<PerpPositionRiskSnapshot>,
         margin_summary: MarginSummary,
         cross_margin_summary: MarginSummary,
         cross_maintenance_margin_used: Option<Decimal>,
@@ -178,7 +197,7 @@ impl PerpClearinghouseState {
     ) -> Self {
         Self {
             account_id,
-            positions,
+            position_risks,
             margin_summary,
             cross_margin_summary,
             cross_maintenance_margin_used,
@@ -194,6 +213,8 @@ impl PerpClearinghouseState {
     pub fn calculate_from_facts(
         input: PerpClearinghouseStateCalcInput,
     ) -> Result<Self, PerpClearinghouseStateCalcError> {
+        // 本地估算只接受非负的 collateral、mark、保证金率和风险阈值；
+        // 负值表示上游装载到清算域的事实已经异常，不能继续生成风险快照。
         validate_non_negative(input.collateral.total_raw_usd, "collateral.total_raw_usd")?;
         validate_non_negative(
             input.risk_policy.reduce_only_withdrawable_threshold,
@@ -210,6 +231,7 @@ impl PerpClearinghouseState {
             )?;
         }
 
+        let mut position_risks = Vec::with_capacity(input.positions.len());
         let mut total_position_notional = zero();
         let mut total_initial_margin_used = zero();
         let mut total_unrealized_pnl = zero();
@@ -219,55 +241,92 @@ impl PerpClearinghouseState {
         let mut cross_maintenance_margin_used = zero();
 
         for position in &input.positions {
+            // 空仓不贡献名义价值、保证金占用或未实现盈亏；非空仓必须能按 asset 找到
+            // 对应的 mark price 与风险规则，否则本地快照缺少必要领域事实。
             if position.is_flat() {
                 continue;
             }
 
-            let mark = input.market_marks.iter().find(|mark| mark.asset == position.asset).ok_or(
-                PerpClearinghouseStateCalcError::MissingMarketMark { asset: position.asset },
-            )?;
+            let mark =
+                input.market_marks.iter().find(|mark| mark.asset == position.perp_asset_id).ok_or(
+                    PerpClearinghouseStateCalcError::MissingMarketMark {
+                        asset: position.perp_asset_id,
+                    },
+                )?;
             let risk_rule =
-                input.risk_rules.iter().find(|rule| rule.asset == position.asset).ok_or(
-                    PerpClearinghouseStateCalcError::MissingRiskRule { asset: position.asset },
+                input.risk_rules.iter().find(|rule| rule.asset == position.perp_asset_id).ok_or(
+                    PerpClearinghouseStateCalcError::MissingRiskRule {
+                        asset: position.perp_asset_id,
+                    },
                 )?;
 
-            let position_notional = checked_mul(decimal_from_u64(position.qty)?, mark.mark_price)?;
+            let position_notional =
+                checked_mul(decimal_from_u64(position.qty())?, mark.mark_price)?;
             let initial_margin_used =
                 checked_mul(position_notional, risk_rule.initial_margin_rate)?;
+            let position_qty = decimal_from_u64(position.qty())?;
+            let entry_price = decimal_from_u64(position.entry_price)?;
+            let price_delta = match position.side() {
+                HyperliquidPerpPositionSide::Long => checked_sub(mark.mark_price, entry_price)?,
+                HyperliquidPerpPositionSide::Short => checked_sub(entry_price, mark.mark_price)?,
+                HyperliquidPerpPositionSide::Flat => zero(),
+            };
+            let unrealized_pnl = checked_mul(position_qty, price_delta)?;
+            let return_on_equity = if initial_margin_used.is_zero() {
+                zero()
+            } else {
+                checked_div_decimal(unrealized_pnl, initial_margin_used)?
+            };
+            let risk_snapshot = PerpPositionRiskSnapshot {
+                position: position.clone(),
+                mark_price: mark.mark_price,
+                position_value: position_notional,
+                unrealized_pnl,
+                margin_used: initial_margin_used,
+                liquidation_price: None,
+                return_on_equity,
+            };
+            position_risks.push(risk_snapshot);
 
+            // 账户级汇总包含所有保证金模式的非空仓：名义价值、初始保证金和未实现盈亏
+            // 都以当前 mark 与仓位事实为准逐仓累加。
             total_position_notional = checked_add(total_position_notional, position_notional)?;
             total_initial_margin_used =
                 checked_add(total_initial_margin_used, initial_margin_used)?;
-            total_unrealized_pnl =
-                checked_add(total_unrealized_pnl, decimal_from_i64(position.unrealized_pnl)?)?;
+            total_unrealized_pnl = checked_add(total_unrealized_pnl, unrealized_pnl)?;
 
             if position.margin_mode == HyperliquidPerpMarginMode::Cross {
+                // cross 池只纳入 cross 仓位；除初始保证金外，额外累计维持保证金，
+                // 用于后续清算阈值判断。
                 let maintenance_margin_used =
                     checked_mul(position_notional, risk_rule.maintenance_margin_rate)?;
                 cross_position_notional = checked_add(cross_position_notional, position_notional)?;
                 cross_initial_margin_used =
                     checked_add(cross_initial_margin_used, initial_margin_used)?;
-                cross_unrealized_pnl =
-                    checked_add(cross_unrealized_pnl, decimal_from_i64(position.unrealized_pnl)?)?;
+                cross_unrealized_pnl = checked_add(cross_unrealized_pnl, unrealized_pnl)?;
                 cross_maintenance_margin_used =
                     checked_add(cross_maintenance_margin_used, maintenance_margin_used)?;
             }
         }
 
+        // active perp 挂单冻结会并入当前保证金占用，体现未成交订单对可提资金的占用。
         let active_open_order_reservation_remaining =
             active_open_order_reservation_remaining(&input.open_order_margin_reservations)?;
         let total_margin_used =
             checked_add(total_initial_margin_used, active_open_order_reservation_remaining)?;
+        // 账户权益以 collateral 事实加未实现盈亏估算；cross 视图只叠加 cross 仓位的盈亏。
         let total_raw_usd =
             checked_add(input.collateral.total_raw_usd, input.collateral.pending_settlement_delta)?;
         let account_value = checked_add(total_raw_usd, total_unrealized_pnl)?;
         let cross_account_value = checked_add(total_raw_usd, cross_unrealized_pnl)?;
         let withdrawable_before_floor = checked_sub(account_value, total_margin_used)?;
+        // 可提资金不向外暴露负数；保证金不足时 floor 到 0，由风险状态表达压力。
         let withdrawable = if withdrawable_before_floor.is_negative() {
             zero()
         } else {
             withdrawable_before_floor
         };
+        // 风险状态先判清算，再判 reduce-only，避免账户已触达维持保证金线时被较弱状态覆盖。
         let risk_state = if account_value <= cross_maintenance_margin_used {
             RiskState::Liquidation
         } else if withdrawable <= input.risk_policy.reduce_only_withdrawable_threshold {
@@ -278,7 +337,7 @@ impl PerpClearinghouseState {
 
         Ok(Self::new(
             input.account_id,
-            input.positions,
+            position_risks,
             MarginSummary::new(
                 account_value,
                 total_margin_used,
@@ -302,9 +361,9 @@ impl PerpClearinghouseState {
         &self.account_id
     }
 
-    /// 返回当前持仓集合。
-    pub fn positions(&self) -> &[HyperliquidPerpPosition] {
-        &self.positions
+    /// 返回当前仓位风险快照集合。
+    pub fn position_risks(&self) -> &[PerpPositionRiskSnapshot] {
+        &self.position_risks
     }
 
     /// 返回保证金汇总。
@@ -334,12 +393,20 @@ impl PerpClearinghouseState {
 
     /// 返回是否存在未平仓仓位。
     pub fn has_open_positions(&self) -> bool {
-        self.positions.iter().any(|position| !position.is_flat())
+        self.position_risks.iter().any(|risk| !risk.position.is_flat())
     }
 
     /// 按展示合约符号查找仓位。
     pub fn position_of(&self, symbol: &str) -> Option<&HyperliquidPerpPosition> {
-        self.positions.iter().find(|position| position.trades_symbol(symbol))
+        self.position_risks
+            .iter()
+            .find(|risk| risk.position.trades_symbol(symbol))
+            .map(|risk| &risk.position)
+    }
+
+    /// 按展示合约符号查找仓位风险快照。
+    pub fn position_risk_of(&self, symbol: &str) -> Option<&PerpPositionRiskSnapshot> {
+        self.position_risks.iter().find(|risk| risk.position.trades_symbol(symbol))
     }
 }
 
@@ -396,17 +463,28 @@ fn checked_mul(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseS
     lhs.checked_mul(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
+fn checked_div_decimal(
+    lhs: Decimal,
+    rhs: Decimal,
+) -> Result<Decimal, PerpClearinghouseStateCalcError> {
+    if rhs.is_zero() {
+        return Ok(zero());
+    }
+    let scaled = i128::from(lhs.raw())
+        .checked_mul(i128::from(DECIMAL_SCALE))
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?;
+    let quotient = scaled
+        .checked_div(i128::from(rhs.raw()))
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?;
+    i64::try_from(quotient)
+        .map(Decimal::from_raw)
+        .map_err(|_| PerpClearinghouseStateCalcError::ArithmeticOverflow)
+}
+
 fn decimal_from_u64(value: u64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
     i128::from(value)
         .checked_mul(DECIMAL_SCALE)
         .and_then(|raw| i64::try_from(raw).ok())
-        .map(Decimal::from_raw)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
-}
-
-fn decimal_from_i64(value: i64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    value
-        .checked_mul(100_000_000)
         .map(Decimal::from_raw)
         .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
@@ -449,11 +527,23 @@ mod tests {
         )
     }
 
+    fn sample_position_risk(asset: u32, symbol: &str, quantity: u64) -> PerpPositionRiskSnapshot {
+        PerpPositionRiskSnapshot {
+            position: sample_position(asset, symbol, quantity),
+            mark_price: dec(100_000),
+            position_value: if quantity == 0 { dec(0) } else { dec(100_000) },
+            unrealized_pnl: dec(200),
+            margin_used: if quantity == 0 { dec(0) } else { dec(10_000) },
+            liquidation_price: (quantity > 0).then_some(dec(90_000)),
+            return_on_equity: dec(0),
+        }
+    }
+
     #[test]
     fn perp_state_detects_open_positions_and_queries_by_symbol() {
         let state = PerpClearinghouseState::new(
             AccountId::from("sub-1"),
-            vec![sample_position(0, "BTC-PERP", 0), sample_position(1, "ETH-PERP", 3)],
+            vec![sample_position_risk(0, "BTC-PERP", 0), sample_position_risk(1, "ETH-PERP", 3)],
             MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(19_700)),
             MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(17_700)),
             Some(dec(1_500)),
@@ -480,7 +570,7 @@ mod tests {
     fn perp_state_without_open_positions_returns_false() {
         let state = PerpClearinghouseState::new(
             AccountId::from("sub-1"),
-            vec![sample_position(0, "BTC-PERP", 0)],
+            vec![sample_position_risk(0, "BTC-PERP", 0)],
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
             None,
