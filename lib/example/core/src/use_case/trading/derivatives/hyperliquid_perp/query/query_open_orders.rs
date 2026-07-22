@@ -4,8 +4,7 @@ use thiserror::Error;
 
 use crate::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
-    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce, Reservation, ReservationKind,
-    ReservationMarketKind,
+    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
 };
 
 /// 查询账户当前开放中的 Hyperliquid perp 委托单列表。
@@ -172,6 +171,7 @@ impl QueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Reservation, ReservationKind, ReservationMarketKind};
 
     fn open_order(order_id: &str, symbol: &str) -> HyperliquidPerpOrder {
         let mut order = HyperliquidPerpOrder::new(
@@ -186,16 +186,18 @@ mod tests {
             5,
             false,
             Some(format!("cloid-{order_id}")),
-            Reservation::new(
-                format!("reservation:{order_id}"),
-                "trader-1".to_string(),
-                order_id.to_string(),
-                ReservationMarketKind::Perp,
-                ReservationKind::PerpOpenMargin,
-                "USDC".to_string(),
-                1,
-            )
-            .unwrap(),
+            Some(
+                Reservation::new(
+                    format!("reservation:{order_id}"),
+                    "trader-1".to_string(),
+                    order_id.to_string(),
+                    ReservationMarketKind::Perp,
+                    ReservationKind::PerpOpenMargin,
+                    "USDC".to_string(),
+                    1,
+                )
+                .unwrap(),
+            ),
         );
         order.version = 3;
         order
@@ -214,16 +216,18 @@ mod tests {
             8,
             true,
             Some(format!("cloid-{order_id}")),
-            Reservation::new(
-                format!("reservation:{order_id}"),
-                "trader-1".to_string(),
-                order_id.to_string(),
-                ReservationMarketKind::Perp,
-                ReservationKind::PerpOpenMargin,
-                "USDC".to_string(),
-                1,
-            )
-            .unwrap(),
+            Some(
+                Reservation::new(
+                    format!("reservation:{order_id}"),
+                    "trader-1".to_string(),
+                    order_id.to_string(),
+                    ReservationMarketKind::Perp,
+                    ReservationKind::PerpOpenMargin,
+                    "USDC".to_string(),
+                    1,
+                )
+                .unwrap(),
+            ),
         )
         .with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 3);
         order.version = 5;

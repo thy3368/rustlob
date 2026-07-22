@@ -4,8 +4,7 @@ use thiserror::Error;
 
 use crate::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
-    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce, Reservation, ReservationKind,
-    ReservationMarketKind,
+    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
 };
 
 /// 查询单张 Hyperliquid perp 委托单详情的输入。
@@ -154,6 +153,7 @@ impl QueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Reservation, ReservationKind, ReservationMarketKind};
 
     fn sample_order() -> HyperliquidPerpOrder {
         let mut order = HyperliquidPerpOrder::new(
@@ -168,16 +168,18 @@ mod tests {
             5,
             true,
             Some("client-1".to_string()),
-            Reservation::new(
-                "reservation:order-1".to_string(),
-                "trader-1".to_string(),
-                "order-1".to_string(),
-                ReservationMarketKind::Perp,
-                ReservationKind::PerpOpenMargin,
-                "USDC".to_string(),
-                1,
-            )
-            .unwrap(),
+            Some(
+                Reservation::new(
+                    "reservation:order-1".to_string(),
+                    "trader-1".to_string(),
+                    "order-1".to_string(),
+                    ReservationMarketKind::Perp,
+                    ReservationKind::PerpOpenMargin,
+                    "USDC".to_string(),
+                    1,
+                )
+                .unwrap(),
+            ),
         )
         .with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 2);
         order.version = 3;

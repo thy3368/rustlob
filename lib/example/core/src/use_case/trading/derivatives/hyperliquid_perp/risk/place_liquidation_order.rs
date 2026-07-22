@@ -7,8 +7,7 @@ use thiserror::Error;
 use crate::entity::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus, HyperliquidPerpOrder,
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce,
-    HyperliquidPerpPosition, HyperliquidPerpPositionSide, Reservation, ReservationKind,
-    ReservationMarketKind, ReservationStatus,
+    HyperliquidPerpPosition, HyperliquidPerpPositionSide,
 };
 
 /// 发出单张 Hyperliquid perp 强平单的命令。
@@ -145,21 +144,6 @@ impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
         let order_id =
             format!("{}-{}-{}", state.account_id, state.position.coin, state.next_order_sequence);
         let side = liquidation_order_side(state.position.side())?;
-        let reservation = Reservation {
-            reservation_id: format!("reservation:{order_id}"),
-            owner_account_id: state.account_id.clone(),
-            caused_by_order_id: order_id.clone(),
-            market_kind: ReservationMarketKind::Perp,
-            reservation_kind: ReservationKind::PerpOpenMargin,
-            asset_id: "USDC".to_string(),
-            original_amount: 0,
-            consumed_amount: 0,
-            released_amount: 0,
-            remaining_amount: 0,
-            status: ReservationStatus::Active,
-            close_reason: None,
-            version: 1,
-        };
         let created_order = HyperliquidPerpOrder::new(
             order_id.clone(),
             None,
@@ -172,7 +156,7 @@ impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
             order_qty,
             true,
             cmd.cloid.clone(),
-            reservation,
+            None,
         )
         .with_liquidation(cmd.liquidation_id.clone());
 

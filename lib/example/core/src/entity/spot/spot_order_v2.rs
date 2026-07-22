@@ -1677,8 +1677,8 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2BehaviorError::Reservation(ReservationError::InvalidAmount));
         }
 
-        let released_reservation =
-            self.reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
+        let mut released_reservation = self.reservation.clone();
+        released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
         let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
             format!("balance-ledger:unfreeze:{}", self.order_id),
             self.account_id.clone(),

@@ -1,16 +1,16 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::Entity;
+use common_entity::{Entity, MiStateMachineV2Unchecked};
 use thiserror::Error;
 
 use crate::MarketRules;
 use crate::entity::{
-    Balance, BalanceError, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
+    Balance, BalanceLedgerEntryV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, MarginReservation, Reservation, ReservationKind,
-    ReservationMarketKind, ReservationStatus, required_position_margin,
+    HyperliquidPerpPositionSide, PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
+    required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -58,6 +58,9 @@ pub enum PlaceHyperliquidPerpOrderError {
     /// reduce-only 订单不能增加或反向超过当前净仓位。
     #[error("invalid reduce-only order")]
     InvalidReduceOnly,
+    /// 反手订单必须由上层拆成平仓订单和开仓订单。
+    #[error("flip order must be split into close and open orders")]
+    FlipOrderRequiresSplit,
     /// 推导订单或余额事件时发生算术溢出。
     #[error("arithmetic overflow while deriving business result")]
     ArithmeticOverflow,
@@ -180,8 +183,8 @@ pub struct PlaceHyperliquidPerpOrderUseCase;
 pub struct PlaceHyperliquidPerpOrderChanges {
     /// 本次新创建的订单事实。
     pub created_order: HyperliquidPerpOrder,
-    /// 本次新创建的保证金 reservation；无需新增保证金时为空。
-    pub created_reservation: Option<MarginReservation>,
+    /// 本次新创建并已补齐 before/after 快照的余额冻结流水；无需冻结保证金时为空。
+    pub created_balance_ledger_entry: Option<BalanceLedgerEntryV2>,
     /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
     pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
@@ -190,11 +193,11 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
             1 + self.updated_margin_balances.len()
-                + usize::from(self.created_reservation.is_some()),
+                + usize::from(self.created_balance_ledger_entry.is_some()),
         );
         events.push(self.created_order.track_create_event()?);
-        if let Some(reservation) = &self.created_reservation {
-            events.push(reservation.track_create_event()?);
+        if let Some(ledger_entry) = &self.created_balance_ledger_entry {
+            events.push(ledger_entry.track_create_event()?);
         }
         for balance in &self.updated_margin_balances {
             events.push(balance.after.track_update_event_from(&balance.before)?);
@@ -203,15 +206,11 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     }
 }
 
-impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
+impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     type Command = PlaceHyperliquidPerpOrderCmd;
     type GivenState = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;
-    type Changes = PlaceHyperliquidPerpOrderChanges;
-
-    fn role(&self) -> &'static str {
-        "Trader"
-    }
+    type AfterChanges = PlaceHyperliquidPerpOrderChanges;
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
@@ -225,7 +224,7 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -267,88 +266,80 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
             return Ok(());
         }
 
-        let required_margin = required_new_order_margin(cmd.side(), size, price, &state.position)?;
-        if !state.margin_balance.can_reserve(required_margin) {
-            return Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance);
+        match derive_place_intent(cmd.side(), size, &state.position)? {
+            DerivedPerpOrderIntent::Open => {
+                let required_margin =
+                    required_position_margin(size, price, state.position.leverage_value)
+                        .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
+                if !state.margin_balance.can_reserve(required_margin) {
+                    return Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance);
+                }
+            }
+            DerivedPerpOrderIntent::Close => {}
         }
 
         Ok(())
     }
 
-    fn compute_changes(
+    fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
+        state: &Self::GivenState,
+    ) -> Result<Self::AfterChanges, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
-        let required_margin = if cmd.reduce_only {
-            0
+        let intent = if cmd.reduce_only {
+            PlaceHyperliquidPerpOrderIntent::Close
         } else {
-            required_new_order_margin(cmd.side(), size, price, &state.position)?
+            match derive_place_intent(cmd.side(), size, &state.position)? {
+                DerivedPerpOrderIntent::Close => PlaceHyperliquidPerpOrderIntent::Close,
+                DerivedPerpOrderIntent::Open => {
+                    let required_margin =
+                        required_position_margin(size, price, state.position.leverage_value)
+                            .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
+                    PlaceHyperliquidPerpOrderIntent::Open {
+                        margin_asset_id: state.margin_asset_id.clone(),
+                        margin_balance_entity_id: state.margin_balance.entity_id(),
+                        margin_amount: required_margin,
+                    }
+                }
+            }
         };
-        let reservation_kind = if required_margin == 0 {
-            ReservationKind::PerpOpenMargin
-        } else {
-            required_reservation_kind(cmd.side(), size, &state.position)
-        };
-        let order_reservation = order_margin_reservation(
-            order_id.clone(),
-            state.account_id.clone(),
-            reservation_kind,
-            state.margin_asset_id.clone(),
-            required_margin,
-        )?;
-        let created_order = HyperliquidPerpOrder::new(
-            order_id.clone(),
-            None,
-            cmd.asset,
-            state.account_id.clone(),
-            cmd.symbol.clone(),
-            cmd.side(),
-            cmd.execution.stored_execution(),
-            cmd.execution.stored_time_in_force(),
-            size,
-            cmd.reduce_only,
-            cmd.cloid.clone(),
-            order_reservation,
-        );
 
-        if cmd.reduce_only {
+        let place_outcome = HyperliquidPerpOrder::place(PlaceHyperliquidPerpOrderInput {
+            order_id,
+            asset: cmd.asset,
+            account_id: state.account_id.clone(),
+            symbol: cmd.symbol.clone(),
+            side: cmd.side(),
+            execution: cmd.execution.stored_execution(),
+            time_in_force: cmd.execution.stored_time_in_force(),
+            qty: size,
+            client_order_id: cmd.cloid.clone(),
+            liquidation_id: None,
+            intent,
+        })
+        .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
+
+        let created_order = place_outcome.order;
+        if created_order.reservation.is_none() {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
-                created_reservation: None,
+                created_balance_ledger_entry: None,
                 updated_margin_balances: Vec::new(),
             });
         }
-
-        if required_margin == 0 {
-            return Ok(PlaceHyperliquidPerpOrderChanges {
-                created_order,
-                created_reservation: None,
-                updated_margin_balances: Vec::new(),
-            });
-        }
-        let created_reservation = Some(
-            MarginReservation::new(
-                format!("reservation:{}", created_order.order_id),
-                state.account_id.clone(),
-                created_order.order_id.clone(),
-                ReservationMarketKind::Perp,
-                reservation_kind,
-                state.margin_asset_id.clone(),
-                required_margin,
-            )
-            .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?,
-        );
         let previous_balance = state.margin_balance.clone();
         let mut next_balance = previous_balance.clone();
-        next_balance.reserve(required_margin).map_err(map_margin_reserve_balance_error)?;
+        let mut freeze_ledger_entry = place_outcome
+            .freeze_ledger_entry
+            .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
+        freeze_ledger_entry.apply_to(&mut next_balance).map_err(map_margin_ledger_error)?;
 
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,
-            created_reservation,
+            created_balance_ledger_entry: Some(freeze_ledger_entry),
             updated_margin_balances: vec![UpdatedEntityPair {
                 before: previous_balance,
                 after: next_balance,
@@ -357,97 +348,49 @@ impl CommandUseCase4 for PlaceHyperliquidPerpOrderUseCase {
     }
 }
 
-fn map_margin_reserve_balance_error(error: BalanceError) -> PlaceHyperliquidPerpOrderError {
+fn map_margin_ledger_error(
+    error: crate::entity::BalanceLedgerEntryV2Error,
+) -> PlaceHyperliquidPerpOrderError {
     match error {
-        BalanceError::InsufficientAvailableBalance => {
+        crate::entity::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
             PlaceHyperliquidPerpOrderError::InsufficientMarginBalance
         }
-        BalanceError::InvalidAmount
-        | BalanceError::InsufficientFrozenBalance
-        | BalanceError::ArithmeticOverflow => PlaceHyperliquidPerpOrderError::ArithmeticOverflow,
-    }
-}
-
-fn required_new_order_margin(
-    order_side: HyperliquidPerpOrderSide,
-    size: u64,
-    price: u64,
-    position: &HyperliquidPerpPosition,
-) -> Result<u64, PlaceHyperliquidPerpOrderError> {
-    let net_new_qty = match (order_side, position.side()) {
-        (_, HyperliquidPerpPositionSide::Flat) => size,
-        (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
-        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => size,
-        (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
-        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
-            size.saturating_sub(position.qty())
+        crate::entity::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::entity::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::BalanceLedgerEntryV2Error::AlreadyApplied => {
+            PlaceHyperliquidPerpOrderError::ArithmeticOverflow
         }
-    };
-    if net_new_qty == 0 {
-        return Ok(0);
     }
-    required_position_margin(net_new_qty, price, position.leverage_value)
-        .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)
 }
 
-fn required_reservation_kind(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DerivedPerpOrderIntent {
+    Open,
+    Close,
+}
+
+fn derive_place_intent(
     order_side: HyperliquidPerpOrderSide,
     size: u64,
     position: &HyperliquidPerpPosition,
-) -> ReservationKind {
+) -> Result<DerivedPerpOrderIntent, PlaceHyperliquidPerpOrderError> {
     match (order_side, position.side()) {
         (_, HyperliquidPerpPositionSide::Flat)
         | (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => {
-            ReservationKind::PerpOpenMargin
+            Ok(DerivedPerpOrderIntent::Open)
         }
         (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
         | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
             if size > position.qty() {
-                ReservationKind::PerpFlipNetNewMargin
+                Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
             } else {
-                ReservationKind::PerpOpenMargin
+                Ok(DerivedPerpOrderIntent::Close)
             }
         }
     }
-}
-
-fn order_margin_reservation(
-    order_id: String,
-    account_id: String,
-    reservation_kind: ReservationKind,
-    asset_id: String,
-    amount: u64,
-) -> Result<Reservation, PlaceHyperliquidPerpOrderError> {
-    let reservation_id = format!("reservation:{order_id}");
-    if amount > 0 {
-        return Reservation::new(
-            reservation_id,
-            account_id,
-            order_id,
-            ReservationMarketKind::Perp,
-            reservation_kind,
-            asset_id,
-            amount,
-        )
-        .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow);
-    }
-
-    Ok(Reservation {
-        reservation_id,
-        owner_account_id: account_id,
-        caused_by_order_id: order_id,
-        market_kind: ReservationMarketKind::Perp,
-        reservation_kind,
-        asset_id,
-        original_amount: 0,
-        consumed_amount: 0,
-        released_amount: 0,
-        remaining_amount: 0,
-        status: ReservationStatus::Active,
-        close_reason: None,
-        version: 1,
-    })
 }
 
 fn validate_reduce_only(
@@ -466,468 +409,4 @@ fn validate_reduce_only(
 }
 
 #[cfg(test)]
-fn use_case() -> PlaceHyperliquidPerpOrderUseCase {
-    PlaceHyperliquidPerpOrderUseCase
-}
-
-#[cfg(test)]
-fn limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    PlaceHyperliquidPerpOrderCmd {
-        party_id: "trader-1".to_string(),
-        asset: 0,
-        symbol: "BTC-PERP".to_string(),
-        is_buy: true,
-        size: 3,
-        reduce_only: false,
-        execution: PlaceHyperliquidPerpOrderExecution::Limit {
-            price: 101,
-            time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-        },
-        cloid: Some("client-1".to_string()),
-    }
-}
-
-#[cfg(test)]
-fn market_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    PlaceHyperliquidPerpOrderCmd {
-        execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
-        ..limit_cmd()
-    }
-}
-
-#[cfg(test)]
-fn position() -> HyperliquidPerpPosition {
-    HyperliquidPerpPosition::empty_slot(
-        "trader-1:0:BTC-PERP".to_string(),
-        "trader-1".to_string(),
-        0,
-        "BTC-PERP".to_string(),
-        5,
-    )
-}
-
-#[cfg(test)]
-fn state() -> PlaceHyperliquidPerpOrderState {
-    PlaceHyperliquidPerpOrderState {
-        trading_enabled: true,
-        next_order_sequence: 7,
-        account_id: "trader-1".to_string(),
-        margin_balance: Balance::new("trader-1".to_string(), "USDC".to_string(), 10_000, 500, 4),
-        margin_asset_id: "USDC".to_string(),
-        market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
-        position: position(),
-    }
-}
-
-#[cfg(test)]
-fn non_flat_position(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpPosition {
-    HyperliquidPerpPosition::new(
-        "trader-1:0:BTC-PERP".to_string(),
-        "trader-1".to_string(),
-        0,
-        "BTC-PERP".to_string(),
-        side,
-        qty,
-        100,
-        5,
-        crate::entity::HyperliquidPerpMarginMode::Cross,
-        required_position_margin(qty, 100, 5).unwrap(),
-        None,
-        0,
-        0,
-        2,
-    )
-}
-
-#[cfg(test)]
-fn sell_limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    let mut cmd = limit_cmd();
-    cmd.is_buy = false;
-    cmd
-}
-
-#[cfg(test)]
-fn sell_market_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    let mut cmd = market_cmd();
-    cmd.is_buy = false;
-    cmd
-}
-
-#[cfg(test)]
-fn event_field<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a str> {
-    event.field_changes.iter().find_map(|change| {
-        if change.field_name_as_str().ok() == Some(field_name) {
-            std::str::from_utf8(change.new_value_bytes()).ok()
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(test)]
-fn event_field_u64(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
-    event_field(event, field_name)?.parse().ok()
-}
-
-#[cfg(test)]
-fn assert_order_snapshot(
-    order: &HyperliquidPerpOrder,
-    expected_side: HyperliquidPerpOrderSide,
-    expected_execution: HyperliquidPerpOrderExecution,
-    expected_tif: HyperliquidPerpOrderTimeInForce,
-    expected_qty: u64,
-    expected_reduce_only: bool,
-) {
-    assert_eq!(order.order_id, "trader-1-BTC-PERP-7");
-    assert_eq!(order.asset, 0);
-    assert_eq!(order.account_id, "trader-1");
-    assert_eq!(order.symbol, "BTC-PERP");
-    assert_eq!(order.side, expected_side);
-    assert_eq!(order.execution, expected_execution);
-    assert_eq!(order.time_in_force, expected_tif);
-    assert_eq!(order.qty, expected_qty);
-    assert_eq!(order.filled_qty, 0);
-    assert_eq!(order.status.as_str(), "open");
-    assert_eq!(order.reduce_only, expected_reduce_only);
-    assert_eq!(order.client_order_id.as_deref(), Some("client-1"));
-    assert_eq!(order.version, 1);
-}
-
-#[cfg(test)]
-fn assert_balance_snapshot(balance: &Balance, available: u64, frozen: u64, version: u64) {
-    assert_eq!(balance.account_id, "trader-1");
-    assert_eq!(balance.asset_id, "USDC");
-    assert_eq!(balance.available, available);
-    assert_eq!(balance.frozen, frozen);
-    assert_eq!(balance.version, version);
-}
-
-#[cfg(test)]
-fn assert_order_created_event(
-    event: &EntityReplayableEvent,
-    expected_side: &str,
-    expected_execution: &str,
-    expected_tif: &str,
-    expected_qty: u64,
-    expected_price: u64,
-    expected_reduce_only: bool,
-) {
-    use common_entity::EntityChangeType;
-
-    assert_eq!(event.change_type, EntityChangeType::Created.as_tag());
-    assert_eq!(event_field(event, "order_id"), Some("trader-1-BTC-PERP-7"));
-    assert_eq!(event_field_u64(event, "asset"), Some(0));
-    assert_eq!(event_field(event, "account_id"), Some("trader-1"));
-    assert_eq!(event_field(event, "symbol"), Some("BTC-PERP"));
-    assert_eq!(event_field(event, "side"), Some(expected_side));
-    assert_eq!(event_field(event, "execution"), Some(expected_execution));
-    assert_eq!(event_field(event, "time_in_force"), Some(expected_tif));
-    assert_eq!(event_field_u64(event, "qty"), Some(expected_qty));
-    assert_eq!(event_field_u64(event, "price"), Some(expected_price));
-    assert_eq!(
-        event_field(event, "reduce_only"),
-        Some(if expected_reduce_only { "true" } else { "false" })
-    );
-    assert_eq!(event_field(event, "client_order_id"), Some("client-1"));
-}
-
-#[cfg(test)]
-fn assert_balance_updated_event(
-    event: &EntityReplayableEvent,
-    expected_available: u64,
-    expected_frozen: u64,
-) {
-    use common_entity::EntityChangeType;
-
-    assert_eq!(event.change_type, EntityChangeType::Updated.as_tag());
-    assert_eq!(event_field_u64(event, "available"), Some(expected_available));
-    assert_eq!(event_field_u64(event, "frozen"), Some(expected_frozen));
-    assert_eq!(event.old_version, 4);
-    assert_eq!(event.new_version, 5);
-}
-
-#[cfg(test)]
 mod compute_replayable_events_happy_path;
-
-#[cfg(test)]
-mod tests {
-    use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
-    use proptest::prelude::*;
-
-    use super::*;
-
-    #[test]
-    fn role_is_trader() {
-        assert_eq!(use_case().role(), "Trader");
-    }
-
-    #[test]
-    fn pre_check_rejects_malformed_command_fields() {
-        let mut cmd = limit_cmd();
-        cmd.party_id.clear();
-        assert_eq!(
-            use_case().pre_check_command(&cmd),
-            Err(PlaceHyperliquidPerpOrderError::InvalidPartyId)
-        );
-
-        let mut cmd = limit_cmd();
-        cmd.symbol.clear();
-        assert_eq!(
-            use_case().pre_check_command(&cmd),
-            Err(PlaceHyperliquidPerpOrderError::InvalidSymbol)
-        );
-
-        let mut cmd = limit_cmd();
-        cmd.size = 0;
-        assert_eq!(
-            use_case().pre_check_command(&cmd),
-            Err(PlaceHyperliquidPerpOrderError::InvalidSize)
-        );
-
-        let mut cmd = limit_cmd();
-        cmd.execution = PlaceHyperliquidPerpOrderExecution::Limit {
-            price: 0,
-            time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-        };
-        assert_eq!(
-            use_case().pre_check_command(&cmd),
-            Err(PlaceHyperliquidPerpOrderError::InvalidPrice)
-        );
-
-        let mut cmd = market_cmd();
-        cmd.execution = PlaceHyperliquidPerpOrderExecution::Market { aggressive_price: 0 };
-        assert_eq!(
-            use_case().pre_check_command(&cmd),
-            Err(PlaceHyperliquidPerpOrderError::InvalidPrice)
-        );
-    }
-
-    #[test]
-    fn validate_rejects_invalid_loaded_state() {
-        let cmd = limit_cmd();
-
-        let mut disabled = state();
-        disabled.trading_enabled = false;
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &disabled),
-            Err(PlaceHyperliquidPerpOrderError::TradingDisabled)
-        );
-
-        let mut wrong_account = state();
-        wrong_account.account_id = "trader-2".to_string();
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &wrong_account),
-            Err(PlaceHyperliquidPerpOrderError::AccountMismatch)
-        );
-
-        let mut wrong_symbol = state();
-        wrong_symbol.market_rules.symbol = "ETH-PERP".to_string();
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &wrong_symbol),
-            Err(PlaceHyperliquidPerpOrderError::SymbolNotTradable)
-        );
-
-        let mut below_min = state();
-        below_min.market_rules.min_qty = 4;
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &below_min),
-            Err(PlaceHyperliquidPerpOrderError::SizeBelowMin)
-        );
-
-        let mut wrong_margin_asset = state();
-        wrong_margin_asset.margin_balance.asset_id = "USDT".to_string();
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &wrong_margin_asset),
-            Err(PlaceHyperliquidPerpOrderError::InvalidMarginBalance)
-        );
-
-        let mut wrong_margin_account = state();
-        wrong_margin_account.margin_balance.account_id = "trader-2".to_string();
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &wrong_margin_account),
-            Err(PlaceHyperliquidPerpOrderError::InvalidMarginBalance)
-        );
-
-        let mut wrong_position = state();
-        wrong_position.position.perp_asset_id = 1;
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &wrong_position),
-            Err(PlaceHyperliquidPerpOrderError::PositionMismatch)
-        );
-
-        let mut inconsistent_position = state();
-        inconsistent_position.position = non_flat_position(HyperliquidPerpPositionSide::Long, 0);
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &inconsistent_position),
-            Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState)
-        );
-
-        let mut zero_leverage = state();
-        zero_leverage.position.leverage_value = 0;
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &zero_leverage),
-            Err(PlaceHyperliquidPerpOrderError::InvalidLeverage)
-        );
-
-        let mut insufficient = state();
-        insufficient.margin_balance.available = 60;
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &insufficient),
-            Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance)
-        );
-    }
-
-    #[test]
-    fn reduce_only_rejects_flat_same_direction_and_oversized_orders() {
-        let mut buy_reduce = limit_cmd();
-        buy_reduce.reduce_only = true;
-        assert_eq!(
-            use_case().validate_against_state(&buy_reduce, &state()),
-            Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly)
-        );
-
-        let long_state = PlaceHyperliquidPerpOrderState {
-            position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-            ..state()
-        };
-        assert_eq!(
-            use_case().validate_against_state(&buy_reduce, &long_state),
-            Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly)
-        );
-
-        let mut sell_reduce = limit_cmd();
-        sell_reduce.is_buy = false;
-        sell_reduce.size = 6;
-        sell_reduce.reduce_only = true;
-        assert_eq!(
-            use_case().validate_against_state(&sell_reduce, &long_state),
-            Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly)
-        );
-    }
-
-    #[test]
-    fn validate_rejects_inconsistent_non_flat_position() {
-        let cmd = limit_cmd();
-        let mut invalid_position = non_flat_position(HyperliquidPerpPositionSide::Long, 5);
-        invalid_position.signed_size = 0;
-        let invalid_state =
-            PlaceHyperliquidPerpOrderState { position: invalid_position, ..state() };
-
-        assert_eq!(
-            use_case().validate_against_state(&cmd, &invalid_state),
-            Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState)
-        );
-    }
-
-    proptest! {
-        #[test]
-        fn required_margin_is_ceiled_notional_divided_by_leverage(
-            size in 1_u64..1_000_000,
-            price in 1_u64..1_000_000,
-            leverage in 1_u64..125,
-        ) {
-            let required_margin = required_position_margin(size, price, leverage).unwrap();
-            let notional = size * price;
-            prop_assert_eq!(required_margin, notional.div_ceil(leverage));
-        }
-
-        #[test]
-        fn freezing_margin_preserves_total_cross_margin_balance(
-            size in 1_u64..100_000,
-            price in 1_u64..100_000,
-            leverage in 1_u64..125,
-            existing_frozen in 0_u64..1_000_000,
-        ) {
-            let required_margin = required_position_margin(size, price, leverage).unwrap();
-            let cmd = PlaceHyperliquidPerpOrderCmd {
-                size,
-                execution: PlaceHyperliquidPerpOrderExecution::Limit {
-                    price,
-                    time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-                },
-                ..limit_cmd()
-            };
-            let state = PlaceHyperliquidPerpOrderState {
-                margin_balance: Balance::new(
-                    "trader-1".to_string(),
-                    "USDC".to_string(),
-                    required_margin,
-                    existing_frozen,
-                    1,
-                ),
-                position: HyperliquidPerpPosition::empty_slot(
-                    "trader-1:0:BTC-PERP".to_string(),
-                    "trader-1".to_string(),
-                    0,
-                    "BTC-PERP".to_string(),
-                    leverage,
-                ),
-                ..state()
-            };
-
-            let changes = use_case().compute_changes(&cmd, state).unwrap();
-            let events = changes.to_replayable_events().unwrap();
-            let next_available = event_field_u64(&events[2], "available").unwrap();
-            let next_frozen = event_field_u64(&events[2], "frozen").unwrap();
-
-            prop_assert_eq!(next_available, 0);
-            prop_assert_eq!(next_frozen, existing_frozen + required_margin);
-            prop_assert_eq!(next_available + next_frozen, existing_frozen + required_margin);
-        }
-
-        #[test]
-        fn created_order_event_matches_command_and_state(
-            size in 1_u64..100_000,
-            price in 1_u64..100_000,
-            leverage in 1_u64..125,
-            is_buy in any::<bool>(),
-            asset in 0_u32..10_000,
-        ) {
-            let required_margin = required_position_margin(size, price, leverage).unwrap();
-            let cmd = PlaceHyperliquidPerpOrderCmd {
-                asset,
-                is_buy,
-                size,
-                execution: PlaceHyperliquidPerpOrderExecution::Limit {
-                    price,
-                    time_in_force: HyperliquidPerpOrderTimeInForce::Alo,
-                },
-                ..limit_cmd()
-            };
-            let state = PlaceHyperliquidPerpOrderState {
-                next_order_sequence: 99,
-                margin_balance: Balance::new(
-                    "trader-1".to_string(),
-                    "USDC".to_string(),
-                    required_margin,
-                    0,
-                    1,
-                ),
-                position: HyperliquidPerpPosition::empty_slot(
-                    format!("trader-1:{asset}:BTC-PERP"),
-                    "trader-1".to_string(),
-                    asset,
-                    "BTC-PERP".to_string(),
-                    leverage,
-                ),
-                ..state()
-            };
-
-            let changes = use_case().compute_changes(&cmd, state).unwrap();
-            let events = changes.to_replayable_events().unwrap();
-            let expected_side = if is_buy { "buy" } else { "sell" };
-
-            prop_assert_eq!(event_field(&events[0], "order_id"), Some("trader-1-BTC-PERP-99"));
-            prop_assert_eq!(event_field_u64(&events[0], "asset"), Some(u64::from(asset)));
-            prop_assert_eq!(event_field(&events[0], "account_id"), Some("trader-1"));
-            prop_assert_eq!(event_field(&events[0], "symbol"), Some("BTC-PERP"));
-            prop_assert_eq!(event_field(&events[0], "side"), Some(expected_side));
-            prop_assert_eq!(event_field(&events[0], "execution"), Some("limit"));
-            prop_assert_eq!(event_field(&events[0], "time_in_force"), Some("alo"));
-            prop_assert_eq!(event_field_u64(&events[0], "qty"), Some(size));
-            prop_assert_eq!(event_field_u64(&events[0], "price"), Some(price));
-            prop_assert_eq!(event_field(&events[0], "reduce_only"), Some("false"));
-            prop_assert_eq!(event_field(&events[0], "client_order_id"), Some("client-1"));
-        }
-    }
-}

@@ -136,18 +136,28 @@ pub struct PlaceHyperliquidPerpOrderInput {
     pub time_in_force: HyperliquidPerpOrderTimeInForce,
     /// 合约数量。
     pub qty: u64,
-    /// 是否只减仓。
-    pub reduce_only: bool,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
-    /// 保证金资产 ID。
-    pub margin_asset_id: String,
-    /// 保证金余额实体 ID。
-    pub margin_balance_entity_id: String,
-    /// 本次下单需要冻结的保证金金额。
-    pub margin_amount: u64,
-    /// 本次保证金冻结的业务语义。
-    pub reservation_kind: ReservationKind,
+    /// 若订单来源于强平流程，则携带强平会话 ID。
+    pub liquidation_id: Option<String>,
+    /// 本次普通下单的开平仓业务意图。
+    pub intent: PlaceHyperliquidPerpOrderIntent,
+}
+
+/// Hyperliquid perp 普通下单的开平仓语义。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlaceHyperliquidPerpOrderIntent {
+    /// 开仓或加仓订单，需要新增保证金冻结。
+    Open {
+        /// 保证金资产 ID。
+        margin_asset_id: String,
+        /// 保证金余额实体 ID。
+        margin_balance_entity_id: String,
+        /// 本次下单需要冻结的保证金金额。
+        margin_amount: u64,
+    },
+    /// 平仓订单，不创建新的保证金冻结。
+    Close,
 }
 
 /// Hyperliquid perp 下单创建的聚合结果。
@@ -156,7 +166,7 @@ pub struct PlaceHyperliquidPerpOrderOutcome {
     /// 已创建的订单聚合根。
     pub order: HyperliquidPerpOrder,
     /// 由订单创建直接派生的冻结余额流水。
-    pub freeze_ledger_entry: BalanceLedgerEntryV2,
+    pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
 }
 
 /// Hyperliquid perp 订单行为错误。
@@ -204,8 +214,8 @@ pub struct HyperliquidPerpOrder {
     pub time_in_force: HyperliquidPerpOrderTimeInForce,
     /// 合约数量。
     pub qty: u64,
-    /// 订单内保存的保证金冻结 MI 事实。
-    pub reservation: Reservation,
+    /// 订单内保存的保证金冻结 MI 事实；不新增净敞口的订单没有新冻结。
+    pub reservation: Option<Reservation>,
     /// 已成交数量。
     pub filled_qty: u64,
     /// 订单生命周期状态。
@@ -237,7 +247,7 @@ impl HyperliquidPerpOrder {
         qty: u64,
         reduce_only: bool,
         client_order_id: Option<String>,
-        reservation: Reservation,
+        reservation: Option<Reservation>,
     ) -> Self {
         Self {
             order_id,
@@ -260,10 +270,10 @@ impl HyperliquidPerpOrder {
         }
     }
 
-    /// 可 BDD 规格化的聚合根行为：创建 Hyperliquid perp 订单并派生保证金冻结流水。
+    /// 可 BDD 规格化的聚合根行为：按 Open / Close 意图创建 Hyperliquid perp 订单。
     ///
-    /// 该方法只创建订单聚合和直接下游余额流水单据，不执行余额落账，也不检查仓位 reduce-only
-    /// 或净新增保证金规则。
+    /// 该方法只创建订单聚合和 Open 意图直接派生的冻结余额流水单据，不执行余额落账，
+    /// 也不检查仓位开平仓资格。
     pub(crate) fn place(
         input: PlaceHyperliquidPerpOrderInput,
     ) -> Result<PlaceHyperliquidPerpOrderOutcome, HyperliquidPerpOrderBehaviorError> {
@@ -273,28 +283,38 @@ impl HyperliquidPerpOrder {
         if input.execution.order_price() == 0 {
             return Err(HyperliquidPerpOrderBehaviorError::InvalidPrice);
         }
-        if input.margin_amount == 0 {
-            return Err(HyperliquidPerpOrderBehaviorError::InvalidMarginAmount);
-        }
+        let (reduce_only, reservation, freeze_ledger_entry) = match input.intent {
+            PlaceHyperliquidPerpOrderIntent::Close => (true, None, None),
+            PlaceHyperliquidPerpOrderIntent::Open {
+                margin_asset_id,
+                margin_balance_entity_id,
+                margin_amount,
+            } => {
+                if margin_amount == 0 {
+                    return Err(HyperliquidPerpOrderBehaviorError::InvalidMarginAmount);
+                }
 
-        let reservation = Reservation::new(
-            format!("reservation:{}", input.order_id),
-            input.account_id.clone(),
-            input.order_id.clone(),
-            ReservationMarketKind::Perp,
-            input.reservation_kind,
-            input.margin_asset_id.clone(),
-            input.margin_amount,
-        )?;
+                let reservation = Reservation::new(
+                    format!("reservation:{}", input.order_id),
+                    input.account_id.clone(),
+                    input.order_id.clone(),
+                    ReservationMarketKind::Perp,
+                    ReservationKind::PerpOpenMargin,
+                    margin_asset_id,
+                    margin_amount,
+                )?;
 
-        let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-            format!("balance-ledger:freeze:{}", input.order_id),
-            input.account_id.clone(),
-            reservation.asset_id.clone(),
-            input.margin_balance_entity_id.clone(),
-            reservation.original_amount,
-            BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
-        )?;
+                let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
+                    format!("balance-ledger:freeze:{}", input.order_id),
+                    input.account_id.clone(),
+                    reservation.asset_id.clone(),
+                    margin_balance_entity_id,
+                    reservation.original_amount,
+                    BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
+                )?;
+                (false, Some(reservation), Some(freeze_ledger_entry))
+            }
+        };
 
         let order = Self::new(
             input.order_id,
@@ -306,10 +326,15 @@ impl HyperliquidPerpOrder {
             input.execution,
             input.time_in_force,
             input.qty,
-            input.reduce_only,
+            reduce_only,
             input.client_order_id,
             reservation,
         );
+        let order = if let Some(liquidation_id) = input.liquidation_id {
+            order.with_liquidation(liquidation_id)
+        } else {
+            order
+        };
 
         Ok(PlaceHyperliquidPerpOrderOutcome { order, freeze_ledger_entry })
     }
@@ -386,7 +411,7 @@ impl HyperliquidPerpOrder {
 
 impl FieldDiff for HyperliquidPerpOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![
+        let mut changes = vec![
             EntityFieldChange::new("order_id", "", self.order_id.clone()),
             EntityFieldChange::new("exchange_oid", "", option_u64_value(self.exchange_oid)),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
@@ -397,39 +422,6 @@ impl FieldDiff for HyperliquidPerpOrder {
             EntityFieldChange::new("time_in_force", "", self.time_in_force.as_str()),
             EntityFieldChange::new("price", "", self.order_price().to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
-            EntityFieldChange::new(
-                "reservation_owner_account_id",
-                "",
-                self.reservation.owner_account_id.clone(),
-            ),
-            EntityFieldChange::new(
-                "reservation_caused_by_order_id",
-                "",
-                self.reservation.caused_by_order_id.clone(),
-            ),
-            EntityFieldChange::new(
-                "reservation_market_kind",
-                "",
-                self.reservation.market_kind.as_str(),
-            ),
-            EntityFieldChange::new(
-                "reservation_kind",
-                "",
-                self.reservation.reservation_kind.as_str(),
-            ),
-            EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
-            EntityFieldChange::new(
-                "reservation_original_amount",
-                "",
-                self.reservation.original_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "reservation_remaining_amount",
-                "",
-                self.reservation.remaining_amount.to_string(),
-            ),
-            EntityFieldChange::new("reservation_status", "", self.reservation.status.as_str()),
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new("reduce_only", "", self.reduce_only.to_string()),
@@ -444,7 +436,45 @@ impl FieldDiff for HyperliquidPerpOrder {
                 "",
                 self.client_order_id.clone().unwrap_or_default(),
             ),
-        ]
+        ];
+        if let Some(reservation) = &self.reservation {
+            changes.extend([
+                EntityFieldChange::new("reservation_id", "", reservation.reservation_id.clone()),
+                EntityFieldChange::new(
+                    "reservation_owner_account_id",
+                    "",
+                    reservation.owner_account_id.clone(),
+                ),
+                EntityFieldChange::new(
+                    "reservation_caused_by_order_id",
+                    "",
+                    reservation.caused_by_order_id.clone(),
+                ),
+                EntityFieldChange::new(
+                    "reservation_market_kind",
+                    "",
+                    reservation.market_kind.as_str(),
+                ),
+                EntityFieldChange::new(
+                    "reservation_kind",
+                    "",
+                    reservation.reservation_kind.as_str(),
+                ),
+                EntityFieldChange::new("reservation_asset_id", "", reservation.asset_id.clone()),
+                EntityFieldChange::new(
+                    "reservation_original_amount",
+                    "",
+                    reservation.original_amount.to_string(),
+                ),
+                EntityFieldChange::new(
+                    "reservation_remaining_amount",
+                    "",
+                    reservation.remaining_amount.to_string(),
+                ),
+                EntityFieldChange::new("reservation_status", "", reservation.status.as_str()),
+            ]);
+        }
+        changes
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
@@ -477,56 +507,77 @@ impl FieldDiff for HyperliquidPerpOrder {
         push_change(
             &mut changes,
             "reservation_id",
-            &self.reservation.reservation_id,
-            &other.reservation.reservation_id,
+            reservation_string(&self.reservation, |reservation| &reservation.reservation_id),
+            reservation_string(&other.reservation, |reservation| &reservation.reservation_id),
         );
         push_change(
             &mut changes,
             "reservation_owner_account_id",
-            &self.reservation.owner_account_id,
-            &other.reservation.owner_account_id,
+            reservation_string(&self.reservation, |reservation| &reservation.owner_account_id),
+            reservation_string(&other.reservation, |reservation| &reservation.owner_account_id),
         );
         push_change(
             &mut changes,
             "reservation_caused_by_order_id",
-            &self.reservation.caused_by_order_id,
-            &other.reservation.caused_by_order_id,
+            reservation_string(&self.reservation, |reservation| &reservation.caused_by_order_id),
+            reservation_string(&other.reservation, |reservation| &reservation.caused_by_order_id),
         );
         push_change(
             &mut changes,
             "reservation_market_kind",
-            self.reservation.market_kind.as_str(),
-            other.reservation.market_kind.as_str(),
+            self.reservation
+                .as_ref()
+                .map(|reservation| reservation.market_kind.as_str())
+                .unwrap_or_default(),
+            other
+                .reservation
+                .as_ref()
+                .map(|reservation| reservation.market_kind.as_str())
+                .unwrap_or_default(),
         );
         push_change(
             &mut changes,
             "reservation_kind",
-            self.reservation.reservation_kind.as_str(),
-            other.reservation.reservation_kind.as_str(),
+            self.reservation
+                .as_ref()
+                .map(|reservation| reservation.reservation_kind.as_str())
+                .unwrap_or_default(),
+            other
+                .reservation
+                .as_ref()
+                .map(|reservation| reservation.reservation_kind.as_str())
+                .unwrap_or_default(),
         );
         push_change(
             &mut changes,
             "reservation_asset_id",
-            &self.reservation.asset_id,
-            &other.reservation.asset_id,
+            reservation_string(&self.reservation, |reservation| &reservation.asset_id),
+            reservation_string(&other.reservation, |reservation| &reservation.asset_id),
         );
         push_change(
             &mut changes,
             "reservation_original_amount",
-            self.reservation.original_amount.to_string(),
-            other.reservation.original_amount.to_string(),
+            reservation_amount(&self.reservation, |reservation| reservation.original_amount),
+            reservation_amount(&other.reservation, |reservation| reservation.original_amount),
         );
         push_change(
             &mut changes,
             "reservation_remaining_amount",
-            self.reservation.remaining_amount.to_string(),
-            other.reservation.remaining_amount.to_string(),
+            reservation_amount(&self.reservation, |reservation| reservation.remaining_amount),
+            reservation_amount(&other.reservation, |reservation| reservation.remaining_amount),
         );
         push_change(
             &mut changes,
             "reservation_status",
-            self.reservation.status.as_str(),
-            other.reservation.status.as_str(),
+            self.reservation
+                .as_ref()
+                .map(|reservation| reservation.status.as_str())
+                .unwrap_or_default(),
+            other
+                .reservation
+                .as_ref()
+                .map(|reservation| reservation.status.as_str())
+                .unwrap_or_default(),
         );
         push_change(
             &mut changes,
@@ -637,6 +688,20 @@ impl Entity for HyperliquidPerpOrder {
 
 fn option_u64_value(value: Option<u64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn reservation_string(
+    reservation: &Option<Reservation>,
+    field: impl FnOnce(&Reservation) -> &String,
+) -> String {
+    reservation.as_ref().map(field).cloned().unwrap_or_default()
+}
+
+fn reservation_amount(
+    reservation: &Option<Reservation>,
+    field: impl FnOnce(&Reservation) -> u64,
+) -> String {
+    reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
 
 fn stable_entity_id(value: &str) -> i64 {

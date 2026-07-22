@@ -35,8 +35,8 @@ fn constructor_sets_active_amounts() {
 
 #[test]
 fn partial_consume_keeps_reservation_active() {
-    let before = active_reservation();
-    let after = before.consume(80, None).unwrap();
+    let mut after = active_reservation();
+    after.consume(80, None).unwrap();
 
     assert_eq!(after.consumed_amount, 80);
     assert_eq!(after.released_amount, 0);
@@ -49,8 +49,8 @@ fn partial_consume_keeps_reservation_active() {
 
 #[test]
 fn full_consume_closes_as_exhausted() {
-    let before = active_reservation();
-    let after = before.consume(200, Some(ReservationCloseReason::Filled)).unwrap();
+    let mut after = active_reservation();
+    after.consume(200, Some(ReservationCloseReason::Filled)).unwrap();
 
     assert_eq!(after.consumed_amount, 200);
     assert_eq!(after.released_amount, 0);
@@ -63,8 +63,8 @@ fn full_consume_closes_as_exhausted() {
 
 #[test]
 fn release_tail_closes_reservation() {
-    let before = active_reservation();
-    let after = before.release(200, Some(ReservationCloseReason::Canceled)).unwrap();
+    let mut after = active_reservation();
+    after.release(200, Some(ReservationCloseReason::Canceled)).unwrap();
 
     assert_eq!(after.consumed_amount, 0);
     assert_eq!(after.released_amount, 200);
@@ -78,9 +78,10 @@ fn release_tail_closes_reservation() {
 #[test]
 fn mixed_lifecycle_versions_form_replayable_steps() {
     let initial = active_reservation();
-    let after_consume = initial.consume(80, None).unwrap();
-    let after_release =
-        after_consume.release(120, Some(ReservationCloseReason::IocRemainderCanceled)).unwrap();
+    let mut after_consume = initial.clone();
+    after_consume.consume(80, None).unwrap();
+    let mut after_release = after_consume.clone();
+    after_release.release(120, Some(ReservationCloseReason::IocRemainderCanceled)).unwrap();
 
     let consume_event = after_consume.track_update_event_from(&initial).unwrap();
     let release_event = after_release.track_update_event_from(&after_consume).unwrap();
@@ -94,13 +95,14 @@ fn mixed_lifecycle_versions_form_replayable_steps() {
 
 #[test]
 fn invalid_lifecycle_cases_are_reported_by_reservation_error() {
-    let active = active_reservation();
+    let mut active = active_reservation();
 
     assert_eq!(active.consume(0, None), Err(ReservationError::InvalidAmount));
     assert_eq!(active.consume(201, None), Err(ReservationError::AmountExceedsRemaining));
     assert_eq!(active.release(200, None), Err(ReservationError::MissingCloseReason));
 
-    let closed = active.consume(200, Some(ReservationCloseReason::Filled)).unwrap();
+    active.consume(200, Some(ReservationCloseReason::Filled)).unwrap();
+    let mut closed = active;
     assert_eq!(closed.consume(1, None), Err(ReservationError::AlreadyClosed));
     assert_eq!(
         closed.release(1, Some(ReservationCloseReason::Canceled)),

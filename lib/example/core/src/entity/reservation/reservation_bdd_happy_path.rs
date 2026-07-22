@@ -37,8 +37,8 @@ fn reservation_new_initializes_active_snapshot() {
 
 #[test]
 fn reservation_consume_updates_amounts_and_version() {
-    let before = reservation();
-    let after = before.consume(80, None).unwrap();
+    let mut after = reservation();
+    after.consume(80, None).unwrap();
 
     assert_eq!(after.consumed_amount, 80);
     assert_eq!(after.released_amount, 0);
@@ -51,8 +51,9 @@ fn reservation_consume_updates_amounts_and_version() {
 
 #[test]
 fn reservation_release_closes_remaining_amount() {
-    let before = reservation().consume(80, None).unwrap();
-    let after = before.release(120, Some(ReservationCloseReason::IocRemainderCanceled)).unwrap();
+    let mut after = reservation();
+    after.consume(80, None).unwrap();
+    after.release(120, Some(ReservationCloseReason::IocRemainderCanceled)).unwrap();
 
     assert_eq!(after.consumed_amount, 80);
     assert_eq!(after.released_amount, 120);

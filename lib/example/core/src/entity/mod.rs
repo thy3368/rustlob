@@ -53,7 +53,8 @@ pub use perp::trade::hyperliquid_perp_leverage_setting::{
 pub use perp::trade::hyperliquid_perp_order::{
     HyperliquidPerpOrder, HyperliquidPerpOrderBehaviorError, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
-    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderOutcome,
+    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
+    PlaceHyperliquidPerpOrderOutcome,
 };
 pub use perp::trade::hyperliquid_perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,

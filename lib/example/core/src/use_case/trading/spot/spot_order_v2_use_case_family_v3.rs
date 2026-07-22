@@ -1270,8 +1270,7 @@ fn consume_reservation(
     }
     let before = reservation.clone();
     let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
-    let after = before.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
-    *reservation = after;
+    reservation.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
     Ok(())
 }
 
@@ -1361,11 +1360,10 @@ fn release_order_reservation(
         if release_amount == 0 {
             return Ok(());
         }
-        let after = reservation
+        let asset_id = reservation.asset_id.clone();
+        reservation
             .release(release_amount, Some(close_reason))
             .map_err(map_reservation_error_to_family)?;
-        let asset_id = after.asset_id.clone();
-        *reservation = after;
         (asset_id, release_amount)
     };
     release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)

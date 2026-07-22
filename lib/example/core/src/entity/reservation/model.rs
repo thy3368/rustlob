@@ -211,10 +211,10 @@ impl Reservation {
 
     /// 可 BDD 规格化的聚合根行为：消耗冻结量。
     pub fn consume(
-        &self,
+        &mut self,
         amount: u64,
         close_reason: Option<ReservationCloseReason>,
-    ) -> Result<Self, ReservationError> {
+    ) -> Result<(), ReservationError> {
         if amount == 0 {
             return Err(ReservationError::InvalidAmount);
         }
@@ -225,26 +225,29 @@ impl Reservation {
             return Err(ReservationError::AmountExceedsRemaining);
         }
 
-        let mut after = self.clone();
-        after.consumed_amount = after
-            .consumed_amount
-            .checked_add(amount)
-            .ok_or(ReservationError::ArithmeticOverflow)?;
-        after.remaining_amount = after
+        let consumed_amount =
+            self.consumed_amount.checked_add(amount).ok_or(ReservationError::ArithmeticOverflow)?;
+        let remaining_amount = self
             .remaining_amount
             .checked_sub(amount)
             .ok_or(ReservationError::ArithmeticOverflow)?;
-        after.version = after.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
-        after.recompute_terminal_state(close_reason)?;
-        Ok(after)
+        if remaining_amount == 0 && close_reason.is_none() {
+            return Err(ReservationError::MissingCloseReason);
+        }
+        let version = self.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
+
+        self.consumed_amount = consumed_amount;
+        self.remaining_amount = remaining_amount;
+        self.version = version;
+        self.recompute_terminal_state(close_reason)
     }
 
     /// 可 BDD 规格化的聚合根行为：释放冻结量。
     pub fn release(
-        &self,
+        &mut self,
         amount: u64,
         close_reason: Option<ReservationCloseReason>,
-    ) -> Result<Self, ReservationError> {
+    ) -> Result<(), ReservationError> {
         if amount == 0 {
             return Err(ReservationError::InvalidAmount);
         }
@@ -255,18 +258,21 @@ impl Reservation {
             return Err(ReservationError::AmountExceedsRemaining);
         }
 
-        let mut after = self.clone();
-        after.released_amount = after
-            .released_amount
-            .checked_add(amount)
-            .ok_or(ReservationError::ArithmeticOverflow)?;
-        after.remaining_amount = after
+        let released_amount =
+            self.released_amount.checked_add(amount).ok_or(ReservationError::ArithmeticOverflow)?;
+        let remaining_amount = self
             .remaining_amount
             .checked_sub(amount)
             .ok_or(ReservationError::ArithmeticOverflow)?;
-        after.version = after.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
-        after.recompute_terminal_state(close_reason)?;
-        Ok(after)
+        if remaining_amount == 0 && close_reason.is_none() {
+            return Err(ReservationError::MissingCloseReason);
+        }
+        let version = self.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
+
+        self.released_amount = released_amount;
+        self.remaining_amount = remaining_amount;
+        self.version = version;
+        self.recompute_terminal_state(close_reason)
     }
 
     fn recompute_terminal_state(

@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::entity::{
     HyperliquidPerpOrder, HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus,
-    HyperliquidPerpTrade, Reservation, ReservationKind, ReservationMarketKind,
+    HyperliquidPerpTrade,
 };
 
 /// 撮合 Hyperliquid perp taker 订单时需要的已加载业务状态。
@@ -315,7 +315,10 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::entity::{HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce};
+    use crate::entity::{
+        HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce, Reservation,
+        ReservationKind, ReservationMarketKind,
+    };
     use crate::use_case::support::field_as_u64;
 
     // 规格矩阵:
@@ -362,16 +365,18 @@ mod tests {
             qty,
             false,
             None,
-            Reservation::new(
-                format!("reservation:{order_id}"),
-                account_id.to_string(),
-                order_id.to_string(),
-                ReservationMarketKind::Perp,
-                ReservationKind::PerpOpenMargin,
-                "USDC".to_string(),
-                1,
-            )
-            .unwrap(),
+            Some(
+                Reservation::new(
+                    format!("reservation:{order_id}"),
+                    account_id.to_string(),
+                    order_id.to_string(),
+                    ReservationMarketKind::Perp,
+                    ReservationKind::PerpOpenMargin,
+                    "USDC".to_string(),
+                    1,
+                )
+                .unwrap(),
+            ),
         )
     }
 
