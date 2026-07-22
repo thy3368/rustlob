@@ -1,4 +1,4 @@
 interface:
   display_name: "Write Use Case"
   short_description: "Help write RustLOB command use cases"
-  default_prompt: "Implement RustLOB command use cases with CommandUseCase4, keep business logic in the use case, model strong typed changes as the only business truth, use pair-first changes for update scenarios, avoid duplicate after snapshots, and project replayable events from those changes while keeping loading, persistence, replay, publish, and reply mapping outside the core."
+  default_prompt: "Use $write-use-case to implement RustLOB MiStateMachineV2 use cases with strong typed AfterChanges, pair-first update truth, replayable projections from those changes, and loading, persistence, replay, publish, and reply shaping outside the core."

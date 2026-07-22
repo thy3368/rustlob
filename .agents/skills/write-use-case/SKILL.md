@@ -1,94 +1,102 @@
 ---
 name: write-use-case
-description: Write RustLOB command-style use cases around `CommandUseCase4`. Use when Codex needs to add or refactor files such as `*/workflow/*.rs`, define command/state/changes/reply types, implement `pre_check_command` or `validate_against_state`, wire `UseCaseReplyMapper`, or keep persistence/load/publish logic out of the core use case.
+description: Write RustLOB command-style use cases around `MiStateMachineV2`. Use when Codex needs to add or refactor files such as `*/use_case/**/*.rs`, define error/command/given-state/after-changes types, implement `pre_check_command`, `validate_against_given_state`, `compute_after_changes_unchecked`, or keep loading, persistence, replay, publish, and reply shaping out of the core use case.
 ---
 
 # Write Use Case
 
 ## Overview
 
-Implement use cases the way this repository now expects: business rules live in `CommandUseCase4`, orchestration lives in `CommandUseCaseExecutor4`, and state loading, persistence, replay, publish, and reply mapping stay outside the core.
+Implement use cases around `MiStateMachineV2Unchecked` / `MiStateMachineV2`: business rules live in the state machine implementation, and state loading, persistence, replay, publish, and transport reply shaping stay outside the core.
 
-Treat the source code as the contract of truth. This skill summarizes the expected shape, but if the skill and the trait differ, follow the current code under `lib/common/cmd_handler/src/command_use_case_def2/`.
+Treat source code as the contract of truth. This skill summarizes the expected shape, but if the skill and the trait differ, follow the current code.
 
 Start from these source files:
-- Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
-- Executor: `lib/common/cmd_handler/src/command_use_case_def2/executor.rs`
-- Shared calibration examples: `lib/common/cmd_handler/src/use_case_examples/`
+- Contract: `lib/common/entity/src/use_case/state_machine_v2.rs`
+- Runtime executor contract: `lib/common/entity/src/use_case/mi_family_executor.rs`
+- Current calibration implementation: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order.rs`
+- Happy-path spec example: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
+- Adapter executor examples: `lib/example/inbound_adapter/src/trading/http.rs` and `lib/example/inbound_adapter/src/trading/cli.rs`
 - Shared canonical `use_case` / `entity` facts: `.agents/skills/shared/use_case_entity_constraints.md`
-- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
+- Shared changes pair-first rule: `.agents/skills/shared/changes_pair_first_rule.md`
 - Shared entity classification reference: `.agents/skills/shared/entity_four_color_classification.md`
 
-Read `lib/common/cmd_handler/src/use_case_examples/good.rs` and `lib/common/cmd_handler/src/use_case_examples/bad.rs` when you need good-vs-bad source examples before writing a new use case.
-Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case. It is the only shared canonical reference for `use case` / `entity` boundary facts, `aggregate role`, `MI chain root`, and `replay/version` semantics.
-If stronger architecture policy is needed, use a dedicated policy source instead of assuming it is encoded in the shared constraints file.
+Read `.agents/skills/shared/use_case_entity_constraints.md` before writing or refactoring a use case. It is the shared canonical reference for `use case` / `entity` boundary facts, `aggregate role`, MI chain root, and replay/version semantics.
+
+Read `.agents/skills/shared/changes_pair_first_rule.md` before shaping `AfterChanges` or a replayable before/after changes type. In the V2 model, bind that rule to the actual business truth returned by `compute_after_changes()` and to any optional `ReplayableChanges` projection.
+
 If the task requires deciding how a `changes/entity` object should be classified, or whether it should be an `entity`, `value object`, `role object`, or `description/policy`, read `.agents/skills/shared/entity_four_color_classification.md` before writing or refactoring.
-Read `.agents/skills/shared/changes_pair_first_rule.md` before shaping `Changes`.
+
 If the task is to critique or score a use case:
 - use `.agents/skills/shared/use_case_review_scorecard.md` as the canonical scoring rubric
 - use `clean-architecture` for layer and boundary judgment
 - use the checker in `.agents/skills/check-use-case-definition/` or `scripts/check_use_case_business_definition.py` when the task needs a scripted score
-优先参考现有 V4 真实现例：
-- `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
-- `lib/example/core/src/use_case/trading/spot/cancel_order.rs`
+
+Model core business use cases as an `MiStateMachineV2` family. When an adapter or runtime path needs orchestration around loading, persistence, replay, and publishing, use `MiStateMachineFamilyExecutor` with `MiFamilyExecutionSpec` and `MiFamilyOutbound`. `UseCaseReplyMapper` may shape adapter replies from execution results or events, but it is not part of the core use case contract.
 
 ## Workflow
 
 1. Define the types in this order:
 - `Error`
-- `Cmd`
+- `Command`
 - `GivenState`
-- `Changes`
-- optional `Reply`
-- optional `ReplyMapper`
-- `UseCase`
+- `AfterChanges`
+- optional replayable before/after changes type
+- `UseCase` or `Machine`
 
-2. Shape business output around the current contract.
-- `type Changes: ReplayableChanges` is the use case's only business truth.
-- `compute_changes()` returns `Result<Self::Changes, Self::Error>`.
-- replayable events are a projection of `changes`, not a sibling derivation path.
-- `Changes` must carry business semantics, not just wrap `Vec<EntityReplayableEvent>`.
-- update 场景按 shared 规范默认 pair-first，优先使用 `UpdatedEntityPair<T>` 表达业务变化。
-- 避免并列维护可由 pair `after` 直接投影出的重复 `*_after` 快照。
+2. Shape business output around `AfterChanges`.
+- `type AfterChanges` is the business truth returned by `compute_after_changes()`.
+- `compute_after_changes()` is the stable public entry supplied by `MiStateMachineV2`.
+- `compute_after_changes_unchecked()` is the implementation hook and should assume pre-check and state validation already passed.
+- `AfterChanges` must carry business semantics, not just wrap `Vec<EntityReplayableEvent>`.
+- If `AfterChanges` itself is sufficient for replay/persist/audit, implement `ReplayableChanges` directly on it. `PlaceHyperliquidPerpOrderChanges` is the calibration example.
+- For update scenarios, default to pair-first modeling with `UpdatedEntityPair<T>` or an equivalent before/after pair.
+- Avoid maintaining a duplicate `*_after` snapshot when it is directly projectable from a pair's `after`.
 
-3. Implement `CommandUseCase4`.
-- `role()` returns the business-game role, not a framework or module name.
+3. Implement `MiStateMachineV2Unchecked`.
 - `type Command` should implement `IssuedByParty` when a business party issues the command.
 - `pre_check_command()` only does cheap checks on the command itself.
-- `validate_against_state()` checks business invariants that need loaded state.
-- `compute_changes()` derives strong typed domain changes first.
-- `ReplayableChanges::to_replayable_events()` projects those changes into persist / replay / publish facts.
+- `validate_against_given_state()` checks business invariants that need loaded state.
+- Explicitly reject branch mismatch or state mismatch with a domain error.
+- `compute_after_changes_unchecked()` derives strong typed domain after truth by driving entity or aggregate business methods.
+- Never call `compute_after_changes_unchecked()` from tests or adapters as the normal public path; use `compute_after_changes()`.
 
-4. Keep these concerns out of the core use case.
-- Do not call DB, cache, broker, HTTP, filesystem, or VM registry lookup directly from the use case unless the state was already injected as part of `GivenState`.
+4. Add before/after replay truth only when needed.
+- If replay requires owned before state and after truth to be merged, implement `MiStateMachineOwnedV2BeforeAfter`.
+- `merge_before_and_after(given_state, after)` should extract authoritative before truth from owned `GivenState` and pair it with `AfterChanges`.
+- `compute_before_after_changes()` should be the replayable path when the use case needs stable before/after changes.
+- Keep one truth path: `compute_after_changes()` first, then optional merge/projection.
+
+5. Keep these concerns out of the core use case.
+- Do not call DB, cache, broker, HTTP, filesystem, VM registry lookup, or other adapter/infra APIs from the use case.
 - Do not persist, replay, or publish events inside the use case.
 - Do not map domain changes or events to HTTP or API replies inside the use case.
-- Do not measure latency inside the business logic. The executor does that.
-- Do not call another `use_case` from inside the current `use_case` unless the current use case is intentionally modeling a higher-level business pipeline in core and still returns one coherent `Changes`.
+- Do not measure latency inside the business logic.
+- Do not call another `use_case` from inside the current `use_case` unless the current use case is intentionally modeling a higher-level business pipeline in core and still returns one coherent `AfterChanges`.
 
-5. Put adapter concerns in the right places.
-- `CommandUseCaseOutbound<Command, State>` belongs to the execution side and loads state from ports or adapters.
-- The outbound implementation owns `load_state`, `persist`, `replay`, and `publish`.
-- `CommandUseCaseExecutor4::execute()` returns `UseCaseChanges<Self::Changes>`.
-- `UseCaseReplyMapper` maps replayable events to external reply DTOs.
-- `CommandEnvelope.meta` owns technical metadata such as `trace_id` and `command_id`.
-- `command_id` is the stable business command identity for idempotency and deduplication.
+6. For adapter or runtime execution paths, wire the MI family executor.
+- `MiFamilyExecutionSpec<F>` derives `F::Command` from the adapter-side request.
+- `MiFamilyOutbound<F>` owns outbound stages: `load_given_state`, `persist`, `replay`, and `publish`.
+- `MiStateMachineFamilyExecutor::execute()` fixes the runtime sequence: pre-check command -> load authoritative state -> validate against state -> compute unchecked after changes -> merge before/after -> project replayable events -> persist -> replay -> publish.
+- The executor returns `MiFamilyExecutionResult<F::BeforeAfterChanges>`, including merged changes and projected events.
+- Execution errors map to `MiFamilyExecutionError<BusinessError, OutboundError>`: business errors, event projection errors, and per-stage outbound errors stay distinguishable.
+- Keep request parsing, command mapping, outbound implementation, error-to-transport mapping, and optional reply shaping in adapter/runtime code.
 
 ## Project Rules
 
 - Prefer names that read as a business sentence:
-  - `ReceiveAndAdmitTransactionsCmd`
-  - `ReceiveAndAdmitTransactionsGivenState`
-  - `ReceiveAndAdmitTransactionsChanges`
-  - `ReceiveAndAdmitTransactionsReplyMapper`
-  - `ReceiveAndAdmitTransactionsUseCase`
+  - `PlaceHyperliquidPerpOrderError`
+  - `PlaceHyperliquidPerpOrderCmd`
+  - `PlaceHyperliquidPerpOrderState`
+  - `PlaceHyperliquidPerpOrderChanges`
+  - `PlaceHyperliquidPerpOrderUseCase`
 - `GivenState` should be a domain snapshot, not a repository handle.
-- `Changes` should represent pure business facts before projection, not transport responses and not a raw event bag.
-- update 型 `Changes` 默认先建模 authoritative pair，再考虑是否真的需要额外业务结果字段。
+- `AfterChanges` should represent pure business facts before projection, not transport responses and not a raw event bag.
+- update 型 `AfterChanges` 默认先建模 authoritative pair，再考虑是否真的需要额外业务结果字段。
 - Keep `Error` domain-specific. Avoid stringly typed `Result<_, String>` as the main API.
-- Keep `compute_changes()` deterministic for the same command and state.
+- Keep `compute_after_changes()` deterministic for the same command and state.
 - Keep `to_replayable_events()` deterministic for the same changes.
-- `party_id` belongs to the business command, not to `CommandMeta`.
+- `party_id` belongs to the business command, not to technical metadata.
 - `trace_id` is only for tracing. Do not use it as the idempotency key.
 - Treat `entity` as a reusable core collaborator, not a private struct owned by one use case.
 - If business logic is likely reusable across use cases, prefer a domain-semantic entity method over duplicating the rule in the use case.
@@ -103,32 +111,44 @@ If the task is to critique or score a use case:
 For a new use case, add the smallest useful test set inline in the same file unless the crate already has a stronger convention.
 
 Required tests:
-- `role()` returns the intended actor.
 - `pre_check_command()` rejects malformed command-only input.
-- `validate_against_state()` rejects invalid state transitions.
-- `compute_changes()` produces the expected strong typed changes.
-- `to_replayable_events()` projects the expected replayable events from those changes.
-- `UseCaseReplyMapper` maps replayable events to external reply correctly if a reply mapper exists.
-- `CommandUseCaseExecutor4::execute()` covers one happy path and one rejection path using stub `CommandUseCaseOutbound`.
+- `validate_against_given_state()` rejects invalid state transitions and branch mismatch.
+- `compute_after_changes()` produces the expected strong typed after truth through the public V2 chain.
+- `compute_after_changes_unchecked()` is covered indirectly through `compute_after_changes()`.
+- `to_replayable_events()` projects the expected replayable events from changes when `AfterChanges` or before/after changes implements `ReplayableChanges`.
+- `compute_before_after_changes()` covers merge order and before/after truth when `MiStateMachineOwnedV2BeforeAfter` exists.
 
 Testing split:
-- `compute_changes()` happy-path tests must use the sibling skill `use-case-happy-test-tdd` and stay as business specification tests.
-- Assert `changes` first, then assert `changes.to_replayable_events()` when the replayable-event contract matters.
-- Keep `pre_check_command()` and `validate_against_state()` tests separate from the happy-path spec file.
+- Happy-path tests should follow `place_perp_order/compute_replayable_events_happy_path.rs`: first assert changes, then assert replayable events and their order.
+- Keep `pre_check_command()` and `validate_against_given_state()` tests separate from the happy-path spec file.
 - Use `proptest` only to add invariant coverage; do not replace happy-path spec tests with it.
+
+Adapter/runtime path tests:
+- When implementing `MiFamilyExecutionSpec`, test adapter request to `F::Command` mapping, especially business identity fields and idempotency keys.
+- When implementing `MiFamilyOutbound`, test each outbound stage's error maps to the matching `MiFamilyExecutionError` variant.
+- Test replayable event projection order before adapter reply shaping.
+- Cover the `MiStateMachineFamilyExecutor` success path for runtime wiring when the adapter owns that wiring.
+- Keep `UseCaseReplyMapper` tests scoped to adapter reply shaping; do not make it part of core use case tests.
 
 ## Output Checklist
 
 Before finishing, verify:
 - The use case type only encodes business logic.
-- `Changes` is the pure business result, not an adapter or transport DTO.
-- replayable events are projected from the same `Changes`, not derived by a separate business path.
-- External state loading happens through `CommandUseCaseOutbound::load_state`.
-- Side effects happen through outbound `persist` / `replay` / `publish`.
-- Reply shaping happens through `UseCaseReplyMapper`.
-- The use case does not directly invoke outer technical workflow machinery.
+- `AfterChanges` is the pure business result, not an adapter or transport DTO.
+- replayable events are projected from the same changes, not derived by a separate business path.
+- `pre_check_command()` only checks command-local facts.
+- `validate_against_given_state()` owns loaded-state invariants and branch mismatch checks.
+- `compute_after_changes_unchecked()` is not used as the adapter/public entry.
+- Optional before/after replay truth is derived by `MiStateMachineOwnedV2BeforeAfter`, not by a second business path.
+- External state loading happens outside the use case.
+- Side effects happen outside the use case.
+- Reply shaping happens outside the core use case.
+- Adapter/runtime orchestration uses `MiStateMachineFamilyExecutor` when a full load/persist/replay/publish path is needed.
+- `MiFamilyExecutionSpec` maps adapter request data into a business command without moving business rules into the adapter.
+- `MiFamilyOutbound` owns technical side effects and preserves stage-specific error mapping.
+- The core use case does not directly invoke outer technical workflow machinery.
 - Any reusable business rule that belongs on an entity is not duplicated inline in the use case.
 - The use case is not repeating an existing `entity` / `aggregate behavior method` without reason.
 - The use case has not wrongly pushed cross-aggregate coordination into one `aggregate method`.
 - Any method reused from an entity or aggregate is truly a business evolution method, not a helper disguised with an action name.
-- Tests cover both direct method behavior and executor orchestration.
+- Tests cover direct V2 hook behavior and any replayable projection that matters.
