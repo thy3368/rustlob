@@ -373,50 +373,123 @@ impl HyperliquidPerpPosition {
         derive_position_status(self.signed_size, self.version)
     }
 
-    /// 可 BDD 规格化的聚合根行为：应用一笔成交到当前单向净仓位。
+    /// 可 BDD 规格化的聚合根行为：以一笔成交创建新的单向净仓位。
     ///
-    /// 该行为会重算均价、本地保证金要求、已实现 PnL 增量和生命周期状态；强平价和未实现 PnL
-    /// 在成交后清空为等待下一次风险快照刷新。
-    pub fn settle_trade(
-        &mut self,
-        incoming_signed_size: i64,
+    /// 该行为不修改传入的空仓位槽位事实；返回的新仓位版本固定为 1。
+    #[allow(clippy::too_many_arguments)]
+    pub fn open_position(
+        position_key: String,
+        account_id: String,
+        perp_asset_id: u32,
+        coin: String,
+        signed_size_delta: i64,
         trade_price: u64,
-    ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
-        if incoming_signed_size == 0 {
-            return Err(HyperliquidPerpPositionError::InvalidTradeQty);
-        }
-        if trade_price == 0 {
-            return Err(HyperliquidPerpPositionError::InvalidTradePrice);
-        }
-        if !self.has_consistent_state() {
-            return Err(HyperliquidPerpPositionError::InconsistentState);
-        }
-        if self.leverage_value == 0 {
+        leverage_value: u64,
+        margin_mode: HyperliquidPerpMarginMode,
+        cumulative_realized_pnl: i64,
+    ) -> Result<
+        (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
+        HyperliquidPerpPositionError,
+    > {
+        validate_trade_input(signed_size_delta, trade_price)?;
+        if leverage_value == 0 {
             return Err(HyperliquidPerpPositionError::InvalidLeverage);
         }
-        let before_margin = self
-            .local_initial_margin_required()
-            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-        let (signed_size, entry_price, realized_pnl_delta) =
-            self.position_after_trade(incoming_signed_size, trade_price)?;
+
         let required_margin =
-            required_position_margin(signed_size.unsigned_abs(), entry_price, self.leverage_value)
+            required_position_margin(signed_size_delta.unsigned_abs(), trade_price, leverage_value)
                 .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-        let cumulative_realized_pnl = self
-            .cumulative_realized_pnl
-            .checked_add(realized_pnl_delta)
+        let position = Self::new(
+            position_key,
+            account_id,
+            perp_asset_id,
+            coin,
+            signed_size_delta,
+            trade_price,
+            leverage_value,
+            margin_mode,
+            cumulative_realized_pnl,
+            1,
+        );
+
+        Ok((
+            position,
+            HyperliquidPerpPositionTradeOutcome {
+                realized_pnl_delta: 0,
+                required_margin_delta: i128::from(required_margin),
+            },
+        ))
+    }
+
+    /// 可 BDD 规格化的聚合根行为：同向加仓并重算加权均价。
+    pub fn increase_position(
+        &mut self,
+        signed_size_delta: i64,
+        trade_price: u64,
+    ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
+        validate_existing_trade_transition(self, signed_size_delta, trade_price)?;
+        if self.signed_size.signum() != signed_size_delta.signum() {
+            return Err(HyperliquidPerpPositionError::InconsistentState);
+        }
+
+        let before_margin = self.current_required_margin()?;
+        let trade_qty = signed_size_delta.unsigned_abs();
+        let next_qty = self
+            .qty()
+            .checked_add(trade_qty)
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-        let version = next_entity_version(self.version)?;
+        let old_notional = self
+            .qty()
+            .checked_mul(self.entry_price)
+            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let add_notional = trade_qty
+            .checked_mul(trade_price)
+            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let total_notional = old_notional
+            .checked_add(add_notional)
+            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let signed_size = signed_qty(next_qty, self.signed_size.signum())?;
+        self.apply_trade_state(signed_size, total_notional / next_qty, 0, before_margin)
+    }
 
-        self.signed_size = signed_size;
-        self.entry_price = entry_price;
-        self.cumulative_realized_pnl = cumulative_realized_pnl;
-        self.version = version;
+    /// 可 BDD 规格化的聚合根行为：反向部分减仓，成交数量必须小于当前仓位数量。
+    pub fn reduce_position(
+        &mut self,
+        signed_size_delta: i64,
+        trade_price: u64,
+    ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
+        validate_existing_trade_transition(self, signed_size_delta, trade_price)?;
+        if self.signed_size.signum() == signed_size_delta.signum()
+            || signed_size_delta.unsigned_abs() >= self.qty()
+        {
+            return Err(HyperliquidPerpPositionError::InconsistentState);
+        }
 
-        Ok(HyperliquidPerpPositionTradeOutcome {
-            realized_pnl_delta,
-            required_margin_delta: i128::from(required_margin) - i128::from(before_margin),
-        })
+        let before_margin = self.current_required_margin()?;
+        let realized_pnl_delta =
+            self.realized_pnl_for_close_qty(signed_size_delta.unsigned_abs(), trade_price)?;
+        let next_qty = self.qty() - signed_size_delta.unsigned_abs();
+        let signed_size = signed_qty(next_qty, self.signed_size.signum())?;
+        self.apply_trade_state(signed_size, self.entry_price, realized_pnl_delta, before_margin)
+    }
+
+    /// 可 BDD 规格化的聚合根行为：反向全平，成交数量必须刚好等于当前仓位数量。
+    pub fn close_position(
+        &mut self,
+        signed_size_delta: i64,
+        trade_price: u64,
+    ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
+        validate_existing_trade_transition(self, signed_size_delta, trade_price)?;
+        if self.signed_size.signum() == signed_size_delta.signum()
+            || signed_size_delta.unsigned_abs() != self.qty()
+        {
+            return Err(HyperliquidPerpPositionError::InconsistentState);
+        }
+
+        let before_margin = self.current_required_margin()?;
+        let realized_pnl_delta =
+            self.realized_pnl_for_close_qty(signed_size_delta.unsigned_abs(), trade_price)?;
+        self.apply_trade_state(0, 0, realized_pnl_delta, before_margin)
     }
 
     /// 可 BDD 规格化的聚合根行为：将权威杠杆配置应用到当前仓位快照。
@@ -457,36 +530,15 @@ impl HyperliquidPerpPosition {
         })
     }
 
-    fn position_after_trade(
+    fn current_required_margin(&self) -> Result<u64, HyperliquidPerpPositionError> {
+        self.local_initial_margin_required().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+    }
+
+    fn realized_pnl_for_close_qty(
         &self,
-        incoming_signed_size: i64,
+        close_qty: u64,
         trade_price: u64,
-    ) -> Result<(i64, u64, i64), HyperliquidPerpPositionError> {
-        let trade_qty = incoming_signed_size.unsigned_abs();
-        let incoming_sign = incoming_signed_size.signum();
-        let current_sign = self.signed_size.signum();
-
-        if self.is_flat() || current_sign == incoming_sign {
-            let next_qty = self
-                .qty()
-                .checked_add(trade_qty)
-                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-            let old_notional = self
-                .qty()
-                .checked_mul(self.entry_price)
-                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-            let add_notional = trade_qty
-                .checked_mul(trade_price)
-                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-            let total_notional = old_notional
-                .checked_add(add_notional)
-                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
-            let signed_size = signed_qty(next_qty, incoming_sign)?;
-            return Ok((signed_size, total_notional / next_qty, 0));
-        }
-
-        let current_qty = self.qty();
-        let close_qty = current_qty.min(trade_qty);
+    ) -> Result<i64, HyperliquidPerpPositionError> {
         let pnl_per_unit = if self.is_long() {
             i128::from(trade_price) - i128::from(self.entry_price)
         } else if self.is_short() {
@@ -494,19 +546,34 @@ impl HyperliquidPerpPosition {
         } else {
             0
         };
-        let realized_pnl_delta = checked_i128_to_i64(pnl_per_unit * i128::from(close_qty))?;
+        checked_i128_to_i64(pnl_per_unit * i128::from(close_qty))
+    }
 
-        if trade_qty < current_qty {
-            let next_qty = current_qty - trade_qty;
-            let signed_size = signed_qty(next_qty, current_sign)?;
-            Ok((signed_size, self.entry_price, realized_pnl_delta))
-        } else if trade_qty == current_qty {
-            Ok((0, 0, realized_pnl_delta))
-        } else {
-            let next_qty = trade_qty - current_qty;
-            let signed_size = signed_qty(next_qty, incoming_sign)?;
-            Ok((signed_size, trade_price, realized_pnl_delta))
-        }
+    fn apply_trade_state(
+        &mut self,
+        signed_size: i64,
+        entry_price: u64,
+        realized_pnl_delta: i64,
+        before_margin: u64,
+    ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
+        let required_margin =
+            required_position_margin(signed_size.unsigned_abs(), entry_price, self.leverage_value)
+                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let cumulative_realized_pnl = self
+            .cumulative_realized_pnl
+            .checked_add(realized_pnl_delta)
+            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let version = next_entity_version(self.version)?;
+
+        self.signed_size = signed_size;
+        self.entry_price = entry_price;
+        self.cumulative_realized_pnl = cumulative_realized_pnl;
+        self.version = version;
+
+        Ok(HyperliquidPerpPositionTradeOutcome {
+            realized_pnl_delta,
+            required_margin_delta: i128::from(required_margin) - i128::from(before_margin),
+        })
     }
 }
 
@@ -663,6 +730,37 @@ fn next_entity_version(version: u64) -> Result<u64, HyperliquidPerpPositionError
 
 fn checked_i128_to_i64(value: i128) -> Result<i64, HyperliquidPerpPositionError> {
     i64::try_from(value).map_err(|_| HyperliquidPerpPositionError::ArithmeticOverflow)
+}
+
+fn validate_trade_input(
+    signed_size_delta: i64,
+    trade_price: u64,
+) -> Result<(), HyperliquidPerpPositionError> {
+    if signed_size_delta == 0 {
+        return Err(HyperliquidPerpPositionError::InvalidTradeQty);
+    }
+    if trade_price == 0 {
+        return Err(HyperliquidPerpPositionError::InvalidTradePrice);
+    }
+    Ok(())
+}
+
+fn validate_existing_trade_transition(
+    position: &HyperliquidPerpPosition,
+    signed_size_delta: i64,
+    trade_price: u64,
+) -> Result<(), HyperliquidPerpPositionError> {
+    validate_trade_input(signed_size_delta, trade_price)?;
+    if position.lifecycle_status() != HyperliquidPerpPositionStatus::Open {
+        return Err(HyperliquidPerpPositionError::InconsistentState);
+    }
+    if !position.has_consistent_state() {
+        return Err(HyperliquidPerpPositionError::InconsistentState);
+    }
+    if position.leverage_value == 0 {
+        return Err(HyperliquidPerpPositionError::InvalidLeverage);
+    }
+    Ok(())
 }
 
 fn stable_entity_id(value: &str) -> i64 {
@@ -997,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn settle_trade_opens_empty_slot() {
-        let mut position = HyperliquidPerpPosition::empty_slot(
+    fn open_position_creates_position_without_mutating_empty_slot() {
+        let slot = HyperliquidPerpPosition::empty_slot(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,
@@ -1006,7 +1104,18 @@ mod tests {
             10,
         );
 
-        let outcome = position.settle_trade(3, 100).unwrap();
+        let (position, outcome) = HyperliquidPerpPosition::open_position(
+            slot.position_key.clone(),
+            slot.account_id.clone(),
+            slot.perp_asset_id,
+            slot.coin.clone(),
+            3,
+            100,
+            slot.leverage_value,
+            slot.margin_mode,
+            slot.cumulative_realized_pnl,
+        )
+        .unwrap();
 
         assert!(position.is_long());
         assert_eq!(position.qty(), 3);
@@ -1014,15 +1123,16 @@ mod tests {
         assert_eq!(position.required_margin(), Some(30));
         assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.version, 1);
+        assert_eq!(slot.lifecycle_status(), HyperliquidPerpPositionStatus::EmptySlot);
         assert_eq!(outcome.realized_pnl_delta, 0);
         assert_eq!(outcome.required_margin_delta, 30);
     }
 
     #[test]
-    fn settle_trade_increases_same_side_with_weighted_entry() {
+    fn increase_position_adds_same_side_with_weighted_entry() {
         let mut position = open_position(2, 100, 10);
 
-        let outcome = position.settle_trade(2, 120).unwrap();
+        let outcome = position.increase_position(2, 120).unwrap();
 
         assert_eq!(position.qty(), 4);
         assert_eq!(position.entry_price, 110);
@@ -1033,9 +1143,9 @@ mod tests {
     }
 
     #[test]
-    fn settle_trade_reduces_closes_and_flips_position() {
+    fn reduce_and_close_position_apply_reverse_trade() {
         let mut reduced = open_position(3, 100, 10);
-        let reduce = reduced.settle_trade(-1, 130).unwrap();
+        let reduce = reduced.reduce_position(-1, 130).unwrap();
         assert!(reduced.is_long());
         assert_eq!(reduced.qty(), 2);
         assert_eq!(reduced.entry_price, 100);
@@ -1045,7 +1155,7 @@ mod tests {
         assert_eq!(reduce.required_margin_delta, -10);
 
         let mut closed = open_position(2, 100, 10);
-        let close = closed.settle_trade(-2, 90).unwrap();
+        let close = closed.close_position(-2, 90).unwrap();
         assert!(closed.is_flat());
         assert_eq!(closed.qty(), 0);
         assert_eq!(closed.entry_price, 0);
@@ -1053,16 +1163,6 @@ mod tests {
         assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
         assert_eq!(closed.cumulative_realized_pnl, -20);
         assert_eq!(close.required_margin_delta, -20);
-
-        let mut flipped = open_position(2, 100, 10);
-        let flip = flipped.settle_trade(-3, 90).unwrap();
-        assert!(flipped.is_short());
-        assert_eq!(flipped.qty(), 1);
-        assert_eq!(flipped.entry_price, 90);
-        assert_eq!(flipped.required_margin(), Some(9));
-        assert_eq!(flipped.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
-        assert_eq!(flipped.cumulative_realized_pnl, -20);
-        assert_eq!(flip.required_margin_delta, -11);
     }
 
     #[test]
