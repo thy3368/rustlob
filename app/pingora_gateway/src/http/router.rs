@@ -57,32 +57,28 @@ impl UserRouter {
 
         let config = self.config.read().await;
 
-        //todo fix 语法错
-        (hash % config.num_partitions as u64) + 1
+        ((hash % config.num_partitions as u64) + 1) as usize
     }
 
     /// 根据用户ID选择后端服务器（轮询负载均衡）
     pub async fn select_backend(&self, user_id: &str) -> HttpPeer {
         let config = self.config.read().await;
 
-        if let partition = self.select_partition(user_id).await {
-            let backends = config.partition_ips.get(&partition).unwrap();
-            if backends.is_empty() {
-                return self.create_peer(&config.default_backend);
+        let partition = self.select_partition(user_id).await;
+
+        match config.partition_ips.get(&partition) {
+            Some(backends) if !backends.is_empty() => {
+                // 获取或初始化轮询索引
+                let mut indices = self.round_robin_index.write().await;
+                let index = indices.entry(user_id.to_string()).or_insert(0);
+
+                // 选择后端（轮询）
+                let backend = &backends[*index % backends.len()];
+                *index = (*index + 1) % backends.len();
+
+                self.create_peer(backend)
             }
-
-            // 获取或初始化轮询索引
-            let mut indices = self.round_robin_index.write().await;
-            let index = indices.entry(user_id.to_string()).or_insert(0);
-
-            // 选择后端（轮询）
-            let backend = &backends[*index % backends.len()];
-            *index = (*index + 1) % backends.len();
-
-            self.create_peer(backend)
-        } else {
-            // 用户未配置，使用默认后端
-            self.create_peer(&config.default_backend)
+            _ => self.create_peer(&config.default_backend),
         }
     }
 
@@ -172,52 +168,64 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_router_selection() {
-        let config = UserRouteConfig::default();
+        let mut partition_ips = HashMap::new();
+        partition_ips.insert(1, vec!["127.0.0.1:3001".to_string()]);
+        let config = UserRouteConfig {
+            partition_ips,
+            num_partitions: 1,
+            default_backend: "127.0.0.1:3999".to_string(),
+        };
         let router = UserRouter::new(config);
 
-        // 测试已配置用户
+        // num_partitions = 1 时，任意用户都会命中已配置分区 1。
         let peer1 = router.select_backend("alice").await;
         assert!(peer1.address().to_string().contains("3001"));
-
-        let peer2 = router.select_backend("bob").await;
-        assert!(peer2.address().to_string().contains("3002"));
-
-        // 测试未配置用户（使用默认后端）
-        let peer_default = router.select_backend("unknown_user").await;
-        assert!(peer_default.address().to_string().contains("3001"));
     }
 
-    async fn test_user_router_selection2() {
-        let config = UserRouteConfig::default();
+    #[tokio::test]
+    async fn test_user_router_falls_back_for_unconfigured_partition() {
+        let mut partition_ips = HashMap::new();
+        partition_ips.insert(1, vec!["127.0.0.1:3001".to_string()]);
+        let config = UserRouteConfig {
+            partition_ips,
+            num_partitions: 4,
+            default_backend: "127.0.0.1:3999".to_string(),
+        };
         let router = UserRouter::new(config);
 
-        // 测试已配置用户
-        let peer1 = router.select_backend("alice").await;
-        assert!(peer1.address().to_string().contains("3001"));
+        let mut user_id = None;
+        for i in 0..100 {
+            let candidate = format!("user_{i}");
+            if router.select_partition(&candidate).await != 1 {
+                user_id = Some(candidate);
+                break;
+            }
+        }
+        let user_id = user_id.expect("应能找到映射到未配置分区的用户ID");
 
-        let peer2 = router.select_backend("bob").await;
-        assert!(peer2.address().to_string().contains("3002"));
-
-        // 测试未配置用户（使用默认后端）
-        let peer_default = router.select_backend("unknown_user").await;
-        assert!(peer_default.address().to_string().contains("3001"));
+        let peer_default = router.select_backend(&user_id).await;
+        assert!(peer_default.address().to_string().contains("3999"));
     }
 
     #[tokio::test]
     async fn test_round_robin() {
-        let config = UserRouteConfig::default();
+        let mut partition_ips = HashMap::new();
+        partition_ips.insert(1, vec!["127.0.0.1:3001".to_string(), "127.0.0.1:3002".to_string()]);
+        let config = UserRouteConfig {
+            partition_ips,
+            num_partitions: 1,
+            default_backend: "127.0.0.1:3999".to_string(),
+        };
         let router = UserRouter::new(config);
 
-        // user_1 有两个后端，测试轮询
+        // num_partitions = 1 时，user_1 固定命中分区 1 的两个后端。
         let peer1 = router.select_backend("user_1").await;
         let peer2 = router.select_backend("user_1").await;
         let peer3 = router.select_backend("user_1").await;
 
-        // 应该轮询在 3001 和 3002 之间
-        assert!(
-            peer1.address().to_string().contains("3001")
-                || peer1.address().to_string().contains("3002")
-        );
+        assert!(peer1.address().to_string().contains("3001"));
+        assert!(peer2.address().to_string().contains("3002"));
+        assert!(peer3.address().to_string().contains("3001"));
     }
 
     #[test]
