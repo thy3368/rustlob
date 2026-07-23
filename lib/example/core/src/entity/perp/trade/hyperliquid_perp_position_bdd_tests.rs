@@ -13,6 +13,30 @@ fn empty_position() -> HyperliquidPerpPosition {
     )
 }
 
+fn open_from_empty_slot(
+    signed_size: i64,
+    entry_price: u64,
+) -> Result<
+    (
+        HyperliquidPerpPosition,
+        super::hyperliquid_perp_position::HyperliquidPerpPositionTradeOutcome,
+    ),
+    HyperliquidPerpPositionError,
+> {
+    let slot = empty_position();
+    HyperliquidPerpPosition::open_position(
+        slot.position_key.clone(),
+        slot.account_id.clone(),
+        slot.perp_asset_id,
+        slot.coin.clone(),
+        signed_size,
+        entry_price,
+        slot.leverage_value,
+        slot.margin_mode,
+        slot.cumulative_realized_pnl,
+    )
+}
+
 fn open_position(signed_size: i64, entry_price: u64, leverage: u64) -> HyperliquidPerpPosition {
     HyperliquidPerpPosition::new(
         "trader-1:7".to_string(),
@@ -46,9 +70,9 @@ fn closed_position(leverage: u64) -> HyperliquidPerpPosition {
 #[test]
 fn given_empty_slot_when_open_long_trade_settles_then_long_position_opens()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = empty_position();
+    let slot = empty_position();
 
-    let outcome = position.settle_trade(3 as i64, 100)?;
+    let (position, outcome) = open_from_empty_slot(3 as i64, 100)?;
 
     assert!(position.is_long());
     assert_eq!(position.qty(), 3);
@@ -56,6 +80,7 @@ fn given_empty_slot_when_open_long_trade_settles_then_long_position_opens()
     assert_eq!(position.required_margin().unwrap_or(0), 30);
     assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
     assert_eq!(position.version, 1);
+    assert_eq!(slot.lifecycle_status(), HyperliquidPerpPositionStatus::EmptySlot);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 30);
     Ok(())
@@ -64,9 +89,7 @@ fn given_empty_slot_when_open_long_trade_settles_then_long_position_opens()
 #[test]
 fn given_empty_slot_when_open_short_trade_settles_then_short_position_opens()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = empty_position();
-
-    let outcome = position.settle_trade(-(4 as i64), 100)?;
+    let (position, outcome) = open_from_empty_slot(-(4 as i64), 100)?;
 
     assert!(position.is_short());
     assert_eq!(position.qty(), 4);
@@ -84,7 +107,7 @@ fn given_open_long_when_add_long_trade_settles_then_long_position_increases_with
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(3 as i64, 100, 10);
 
-    let outcome = position.settle_trade(2 as i64, 130)?;
+    let outcome = position.increase_position(2 as i64, 130)?;
 
     assert!(position.is_long());
     assert_eq!(position.qty(), 5);
@@ -101,7 +124,7 @@ fn given_open_short_when_add_short_trade_settles_then_short_position_increases_w
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(-(3 as i64), 100, 10);
 
-    let outcome = position.settle_trade(-(2 as i64), 130)?;
+    let outcome = position.increase_position(-(2 as i64), 130)?;
 
     assert!(position.is_short());
     assert_eq!(position.qty(), 5);
@@ -118,7 +141,7 @@ fn given_open_long_when_close_long_trade_partially_settles_then_long_position_re
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(5 as i64, 100, 10);
 
-    let outcome = position.settle_trade(-(2 as i64), 130)?;
+    let outcome = position.reduce_position(-(2 as i64), 130)?;
 
     assert!(position.is_long());
     assert_eq!(position.qty(), 3);
@@ -135,7 +158,7 @@ fn given_open_short_when_close_short_trade_partially_settles_then_short_position
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(-(5 as i64), 100, 10);
 
-    let outcome = position.settle_trade(2 as i64, 70)?;
+    let outcome = position.reduce_position(2 as i64, 70)?;
 
     assert!(position.is_short());
     assert_eq!(position.qty(), 3);
@@ -152,7 +175,7 @@ fn given_open_long_when_close_long_trade_fully_settles_then_position_closes_and_
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(3 as i64, 100, 10);
 
-    let outcome = position.settle_trade(-(3 as i64), 80)?;
+    let outcome = position.close_position(-(3 as i64), 80)?;
 
     assert!(position.is_flat());
     assert_eq!(position.qty(), 0);
@@ -170,7 +193,7 @@ fn given_open_short_when_close_short_trade_fully_settles_then_position_closes_an
 -> Result<(), HyperliquidPerpPositionError> {
     let mut position = open_position(-(3 as i64), 100, 10);
 
-    let outcome = position.settle_trade(3 as i64, 120)?;
+    let outcome = position.close_position(3 as i64, 120)?;
 
     assert!(position.is_flat());
     assert_eq!(position.qty(), 0);
@@ -180,40 +203,6 @@ fn given_open_short_when_close_short_trade_fully_settles_then_position_closes_an
     assert_eq!(position.cumulative_realized_pnl, -53);
     assert_eq!(outcome.realized_pnl_delta, -60);
     assert_eq!(outcome.required_margin_delta, -30);
-    Ok(())
-}
-
-#[test]
-fn given_open_long_when_short_trade_exceeds_position_then_position_flips_to_short()
--> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(2 as i64, 100, 10);
-
-    let outcome = position.settle_trade(-(5 as i64), 90)?;
-
-    assert!(position.is_short());
-    assert_eq!(position.qty(), 3);
-    assert_eq!(position.entry_price, 90);
-    assert_eq!(position.required_margin().unwrap_or(0), 27);
-    assert_eq!(position.cumulative_realized_pnl, -13);
-    assert_eq!(outcome.realized_pnl_delta, -20);
-    assert_eq!(outcome.required_margin_delta, 7);
-    Ok(())
-}
-
-#[test]
-fn given_open_short_when_long_trade_exceeds_position_then_position_flips_to_long()
--> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(-(2 as i64), 100, 10);
-
-    let outcome = position.settle_trade(5 as i64, 110)?;
-
-    assert!(position.is_long());
-    assert_eq!(position.qty(), 3);
-    assert_eq!(position.entry_price, 110);
-    assert_eq!(position.required_margin().unwrap_or(0), 33);
-    assert_eq!(position.cumulative_realized_pnl, -13);
-    assert_eq!(outcome.realized_pnl_delta, -20);
-    assert_eq!(outcome.required_margin_delta, 13);
     Ok(())
 }
 
@@ -239,24 +228,65 @@ fn given_invalid_trade_facts_when_trade_settles_then_entity_rejects_without_stat
 
     let mut zero_qty = position.clone();
     assert_eq!(
-        zero_qty.settle_trade(0 as i64, 100),
+        zero_qty.increase_position(0 as i64, 100),
         Err(HyperliquidPerpPositionError::InvalidTradeQty)
     );
     assert_eq!(zero_qty, position);
 
     let mut zero_price = position.clone();
     assert_eq!(
-        zero_price.settle_trade(1 as i64, 0),
+        zero_price.increase_position(1 as i64, 0),
         Err(HyperliquidPerpPositionError::InvalidTradePrice)
     );
     assert_eq!(zero_price, position);
 
     let mut zero_signed_size = position.clone();
     assert_eq!(
-        zero_signed_size.settle_trade(0, 100),
+        zero_signed_size.reduce_position(0, 100),
         Err(HyperliquidPerpPositionError::InvalidTradeQty)
     );
     assert_eq!(zero_signed_size, position);
+}
+
+#[test]
+fn given_wrong_trade_direction_or_state_when_position_behavior_runs_then_entity_rejects_without_state_change()
+ {
+    let position = open_position(2 as i64, 100, 10);
+
+    let mut increase_with_reverse = position.clone();
+    assert_eq!(
+        increase_with_reverse.increase_position(-(1 as i64), 100),
+        Err(HyperliquidPerpPositionError::InconsistentState)
+    );
+    assert_eq!(increase_with_reverse, position);
+
+    let mut reduce_with_same_side = position.clone();
+    assert_eq!(
+        reduce_with_same_side.reduce_position(1 as i64, 100),
+        Err(HyperliquidPerpPositionError::InconsistentState)
+    );
+    assert_eq!(reduce_with_same_side, position);
+
+    let mut reduce_with_full_qty = position.clone();
+    assert_eq!(
+        reduce_with_full_qty.reduce_position(-(2 as i64), 100),
+        Err(HyperliquidPerpPositionError::InconsistentState)
+    );
+    assert_eq!(reduce_with_full_qty, position);
+
+    let mut close_with_partial_qty = position.clone();
+    assert_eq!(
+        close_with_partial_qty.close_position(-(1 as i64), 100),
+        Err(HyperliquidPerpPositionError::InconsistentState)
+    );
+    assert_eq!(close_with_partial_qty, position);
+
+    let mut empty = empty_position();
+    assert_eq!(
+        empty.increase_position(1 as i64, 100),
+        Err(HyperliquidPerpPositionError::InconsistentState)
+    );
+    assert_eq!(empty, empty_position());
 }
 
 #[test]
@@ -265,7 +295,7 @@ fn given_inconsistent_position_when_trade_settles_then_entity_rejects_without_st
     position.signed_size = 0;
     let before = position.clone();
 
-    let result = position.settle_trade(1 as i64, 100);
+    let result = position.increase_position(1 as i64, 100);
 
     assert_eq!(result, Err(HyperliquidPerpPositionError::InconsistentState));
     assert_eq!(position, before);
