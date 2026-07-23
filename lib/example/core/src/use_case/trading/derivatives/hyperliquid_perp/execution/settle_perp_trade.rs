@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpPositionSide,
-    HyperliquidPerpTrade, SettlementTransferVoucher,
+    Balance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
+    SettlementTransferVoucher,
 };
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
@@ -230,7 +230,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
 
 #[derive(Debug, Clone, Copy)]
 struct AccountRole {
-    side: HyperliquidPerpPositionSide,
+    signed_size_delta: i64,
     is_taker: bool,
 }
 
@@ -291,11 +291,11 @@ fn derive_settlement_outcome(
         let account_roles = [
             (
                 trade.taker_account_id.as_str(),
-                AccountRole { side: taker_position_side(trade), is_taker: true },
+                AccountRole { signed_size_delta: taker_signed_size_delta(trade)?, is_taker: true },
             ),
             (
                 trade.maker_account_id.as_str(),
-                AccountRole { side: maker_position_side(trade), is_taker: false },
+                AccountRole { signed_size_delta: maker_signed_size_delta(trade)?, is_taker: false },
             ),
         ];
 
@@ -308,7 +308,7 @@ fn derive_settlement_outcome(
 
             let mut next_position = position.clone();
             let position_outcome = next_position
-                .settle_trade(role.side, trade.qty, trade.price)
+                .settle_trade(role.signed_size_delta, trade.price)
                 .map_err(map_position_error)?;
 
             add_margin_delta(
@@ -462,17 +462,37 @@ fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidP
     Ok(next as u64)
 }
 
-fn taker_position_side(trade: &HyperliquidPerpTrade) -> HyperliquidPerpPositionSide {
-    match trade.taker_side {
-        crate::entity::HyperliquidPerpOrderSide::Buy => HyperliquidPerpPositionSide::Long,
-        crate::entity::HyperliquidPerpOrderSide::Sell => HyperliquidPerpPositionSide::Short,
-    }
+fn taker_signed_size_delta(
+    trade: &HyperliquidPerpTrade,
+) -> Result<i64, SettleHyperliquidPerpTradeError> {
+    signed_trade_qty(
+        trade.qty,
+        match trade.taker_side {
+            crate::entity::HyperliquidPerpOrderSide::Buy => 1,
+            crate::entity::HyperliquidPerpOrderSide::Sell => -1,
+        },
+    )
 }
 
-fn maker_position_side(trade: &HyperliquidPerpTrade) -> HyperliquidPerpPositionSide {
-    match trade.taker_side {
-        crate::entity::HyperliquidPerpOrderSide::Buy => HyperliquidPerpPositionSide::Short,
-        crate::entity::HyperliquidPerpOrderSide::Sell => HyperliquidPerpPositionSide::Long,
+fn maker_signed_size_delta(
+    trade: &HyperliquidPerpTrade,
+) -> Result<i64, SettleHyperliquidPerpTradeError> {
+    signed_trade_qty(
+        trade.qty,
+        match trade.taker_side {
+            crate::entity::HyperliquidPerpOrderSide::Buy => -1,
+            crate::entity::HyperliquidPerpOrderSide::Sell => 1,
+        },
+    )
+}
+
+fn signed_trade_qty(qty: u64, sign: i64) -> Result<i64, SettleHyperliquidPerpTradeError> {
+    let qty =
+        i64::try_from(qty).map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+    if sign.is_negative() {
+        qty.checked_neg().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)
+    } else {
+        Ok(qty)
     }
 }
 
@@ -514,7 +534,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::entity::{HyperliquidPerpOrderSide, required_position_margin};
+    use crate::entity::HyperliquidPerpOrderSide;
     use crate::use_case::support::field_as_u64;
 
     fn cmd(trade_ids: Vec<&str>) -> SettleHyperliquidPerpTradeCmd {
@@ -561,26 +581,20 @@ mod tests {
 
     fn position(
         account_id: &str,
-        side: HyperliquidPerpPositionSide,
-        qty: u64,
+        signed_size: i64,
         entry_price: u64,
         leverage: u64,
         realized_pnl: i64,
     ) -> HyperliquidPerpPosition {
-        let required_margin = required_position_margin(qty, entry_price, leverage).unwrap_or(0);
         HyperliquidPerpPosition::new(
             format!("{account_id}:BTC-PERP"),
             account_id.to_string(),
             0,
             "BTC-PERP".to_string(),
-            side,
-            qty,
+            signed_size,
             entry_price,
             leverage,
             crate::entity::HyperliquidPerpMarginMode::Cross,
-            required_margin,
-            None,
-            0,
             realized_pnl,
             3,
         )
@@ -805,10 +819,7 @@ mod tests {
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 120, 2)],
-            vec![
-                position("buyer", HyperliquidPerpPositionSide::Long, 2, 100, 10, 0),
-                empty_position("seller", 10),
-            ],
+            vec![position("buyer", 2 as i64, 100, 10, 0), empty_position("seller", 10)],
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
@@ -838,10 +849,7 @@ mod tests {
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
-            vec![
-                position("buyer", HyperliquidPerpPositionSide::Long, 3, 100, 10, 0),
-                empty_position("seller", 10),
-            ],
+            vec![position("buyer", 3 as i64, 100, 10, 0), empty_position("seller", 10)],
             vec![balance("buyer", 1_000, 30), balance("seller", 1_000, 0)],
         );
 
@@ -876,8 +884,8 @@ mod tests {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
             vec![
-                position("buyer", HyperliquidPerpPositionSide::Long, 3, 100, 10, 0),
-                position("seller", HyperliquidPerpPositionSide::Short, 2, 100, 10, 0),
+                position("buyer", 3 as i64, 100, 10, 0),
+                position("seller", -(2 as i64), 100, 10, 0),
             ],
             vec![balance("buyer", 1_000, 30), balance("seller", 1_000, 20)],
         );
@@ -916,8 +924,8 @@ mod tests {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 120, 1)],
             vec![
-                position("buyer", HyperliquidPerpPositionSide::Long, 1, 100, 10, 0),
-                position("seller", HyperliquidPerpPositionSide::Short, 1, 100, 10, 0),
+                position("buyer", 1 as i64, 100, 10, 0),
+                position("seller", -(1 as i64), 100, 10, 0),
             ],
             vec![balance("buyer", 1_000, 10), balance("seller", 1_000, 10)],
         );
@@ -929,8 +937,8 @@ mod tests {
         let voucher = settlement_voucher(&changes);
 
         assert!(changes.changed_positions.iter().all(|pair| pair.after.is_flat()));
-        assert_eq!(changes.changed_positions[0].after.side(), HyperliquidPerpPositionSide::Flat);
-        assert_eq!(changes.changed_positions[1].after.side(), HyperliquidPerpPositionSide::Flat);
+        assert!(changes.changed_positions[0].after.is_flat());
+        assert!(changes.changed_positions[1].after.is_flat());
         assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(0));
         assert_eq!(
             voucher.transfers_for_purpose(
@@ -947,10 +955,7 @@ mod tests {
     fn compute_flips_position_after_over_close() -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
             vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 90, 3)],
-            vec![
-                position("buyer", HyperliquidPerpPositionSide::Long, 2, 100, 10, 0),
-                empty_position("seller", 10),
-            ],
+            vec![position("buyer", 2 as i64, 100, 10, 0), empty_position("seller", 10)],
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
@@ -960,8 +965,8 @@ mod tests {
         let buyer_position = updated_event_with_field(&events, "signed_size").unwrap();
         let voucher = settlement_voucher(&changes);
 
-        assert_eq!(changes.changed_positions[0].before.side(), HyperliquidPerpPositionSide::Long);
-        assert_eq!(changes.changed_positions[0].after.side(), HyperliquidPerpPositionSide::Short);
+        assert!(changes.changed_positions[0].before.is_long());
+        assert!(changes.changed_positions[0].after.is_short());
         assert!(
             voucher
                 .transfers_for_purpose(

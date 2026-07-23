@@ -7,8 +7,8 @@ use super::perp::{
     RiskState,
 };
 use crate::entity::{
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
-    MarginReservation, Reservation, ReservationKind, ReservationMarketKind,
+    HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, Reservation,
+    ReservationKind, ReservationMarketKind,
 };
 
 fn dec(units: i64) -> Decimal {
@@ -52,24 +52,20 @@ fn risk_rule(asset: u32, initial_bps: i64, maintenance_bps: i64) -> PerpAssetRis
 fn position(
     asset: u32,
     symbol: &str,
-    qty: u64,
-    side: HyperliquidPerpPositionSide,
+    signed_size: i64,
     margin_mode: HyperliquidPerpMarginMode,
     unrealized_pnl: i64,
 ) -> HyperliquidPerpPosition {
+    let _snapshot_unrealized_pnl = unrealized_pnl;
     HyperliquidPerpPosition::new(
         format!("sub-1-{symbol}"),
         "sub-1".to_owned(),
         asset,
         symbol.to_owned(),
-        side,
-        qty,
+        signed_size,
         100,
         5,
         margin_mode,
-        20,
-        None,
-        unrealized_pnl,
         0,
         1,
     )
@@ -94,22 +90,8 @@ fn active_perp_reservation(amount: u64) -> MarginReservation {
 fn given_cross_positions_when_calculated_then_margin_summaries_include_cross_risk() {
     let mut calc_input = input(
         vec![
-            position(
-                0,
-                "BTC-PERP",
-                2,
-                HyperliquidPerpPositionSide::Long,
-                HyperliquidPerpMarginMode::Cross,
-                30,
-            ),
-            position(
-                1,
-                "ETH-PERP",
-                4,
-                HyperliquidPerpPositionSide::Short,
-                HyperliquidPerpMarginMode::Isolated,
-                -10,
-            ),
+            position(0, "BTC-PERP", 2, HyperliquidPerpMarginMode::Cross, 30),
+            position(1, "ETH-PERP", -4, HyperliquidPerpMarginMode::Isolated, -10),
         ],
         1_000,
     );
@@ -139,7 +121,7 @@ fn given_cross_positions_when_calculated_then_margin_summaries_include_cross_ris
     assert_eq!(btc_risk.margin_used, dec(20));
 
     let eth_risk = state.position_risk_of("ETH-PERP").expect("ETH risk snapshot must exist");
-    assert_eq!(eth_risk.position.side(), HyperliquidPerpPositionSide::Short);
+    assert!(eth_risk.position.is_short());
     assert_eq!(eth_risk.mark_price, dec(50));
     assert_eq!(eth_risk.position_value, dec(200));
     assert_eq!(eth_risk.unrealized_pnl, dec(200));
@@ -148,17 +130,8 @@ fn given_cross_positions_when_calculated_then_margin_summaries_include_cross_ris
 
 #[test]
 fn given_active_open_order_reservation_when_calculated_then_margin_used_increases() {
-    let mut calc_input = input(
-        vec![position(
-            0,
-            "BTC-PERP",
-            2,
-            HyperliquidPerpPositionSide::Long,
-            HyperliquidPerpMarginMode::Cross,
-            0,
-        )],
-        1_000,
-    );
+    let mut calc_input =
+        input(vec![position(0, "BTC-PERP", 2, HyperliquidPerpMarginMode::Cross, 0)], 1_000);
     calc_input.open_order_margin_reservations = vec![active_perp_reservation(300)];
 
     let state = match PerpClearinghouseState::calculate_from_facts(calc_input) {
@@ -172,17 +145,8 @@ fn given_active_open_order_reservation_when_calculated_then_margin_used_increase
 
 #[test]
 fn given_account_value_at_maintenance_when_calculated_then_state_is_liquidation() {
-    let calc_input = input(
-        vec![position(
-            0,
-            "BTC-PERP",
-            2,
-            HyperliquidPerpPositionSide::Long,
-            HyperliquidPerpMarginMode::Cross,
-            0,
-        )],
-        10,
-    );
+    let calc_input =
+        input(vec![position(0, "BTC-PERP", 2, HyperliquidPerpMarginMode::Cross, 0)], 10);
 
     let state = match PerpClearinghouseState::calculate_from_facts(calc_input) {
         Ok(state) => state,
@@ -195,17 +159,8 @@ fn given_account_value_at_maintenance_when_calculated_then_state_is_liquidation(
 
 #[test]
 fn given_withdrawable_at_threshold_when_calculated_then_state_is_reduce_only() {
-    let mut calc_input = input(
-        vec![position(
-            0,
-            "BTC-PERP",
-            2,
-            HyperliquidPerpPositionSide::Long,
-            HyperliquidPerpMarginMode::Cross,
-            0,
-        )],
-        120,
-    );
+    let mut calc_input =
+        input(vec![position(0, "BTC-PERP", 2, HyperliquidPerpMarginMode::Cross, 0)], 120);
     calc_input.risk_policy.reduce_only_withdrawable_threshold = dec(100);
 
     let state = match PerpClearinghouseState::calculate_from_facts(calc_input) {
@@ -219,17 +174,8 @@ fn given_withdrawable_at_threshold_when_calculated_then_state_is_reduce_only() {
 
 #[test]
 fn given_missing_mark_or_risk_rule_when_calculated_then_business_error_is_returned() {
-    let base_input = input(
-        vec![position(
-            0,
-            "BTC-PERP",
-            2,
-            HyperliquidPerpPositionSide::Long,
-            HyperliquidPerpMarginMode::Cross,
-            0,
-        )],
-        1_000,
-    );
+    let base_input =
+        input(vec![position(0, "BTC-PERP", 2, HyperliquidPerpMarginMode::Cross, 0)], 1_000);
 
     let mut missing_mark = base_input.clone();
     missing_mark.market_marks.clear();

@@ -1,6 +1,6 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
-use crate::entity::{HyperliquidPerpMarginMode, HyperliquidPerpPositionSide};
+use crate::entity::HyperliquidPerpMarginMode;
 
 const HYPERLIQUID_PERP_LIQUIDATION_ENTITY_TYPE: u8 = 14;
 
@@ -74,9 +74,9 @@ pub struct HyperliquidPerpLiquidation {
     pub asset: u32,
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
-    /// 被强平仓位方向。
-    pub side: HyperliquidPerpPositionSide,
-    /// 被强平仓位数量。
+    /// 被强平仓位带符号数量，正数表示多头，负数表示空头。
+    pub signed_size: i64,
+    /// 被强平仓位绝对数量。
     pub qty: u64,
     /// 强平时的保证金模式。
     pub margin_mode: HyperliquidPerpMarginMode,
@@ -111,7 +111,7 @@ impl HyperliquidPerpLiquidation {
         position_id: String,
         asset: u32,
         symbol: String,
-        side: HyperliquidPerpPositionSide,
+        signed_size: i64,
         qty: u64,
         margin_mode: HyperliquidPerpMarginMode,
         mark_price: u64,
@@ -127,7 +127,7 @@ impl HyperliquidPerpLiquidation {
             position_id,
             asset,
             symbol,
-            side,
+            signed_size,
             qty,
             margin_mode,
             mark_price,
@@ -296,7 +296,7 @@ impl FieldDiff for HyperliquidPerpLiquidation {
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("side", "", self.side.as_str()),
+            EntityFieldChange::new("signed_size", "", self.signed_size.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
             EntityFieldChange::new("margin_mode", "", self.margin_mode.as_str()),
             EntityFieldChange::new("mark_price", "", self.mark_price.to_string()),
@@ -367,13 +367,12 @@ impl Entity for HyperliquidPerpLiquidation {
             | "account_id"
             | "position_id"
             | "symbol"
-            | "side"
             | "margin_mode"
             | "trigger_reason"
             | "status"
             | "last_order_id" => 0,
-            "asset" | "qty" | "mark_price" | "bankruptcy_price" | "placed_order_count"
-            | "placed_qty_total" | "remaining_qty" => 1,
+            "asset" | "signed_size" | "qty" | "mark_price" | "bankruptcy_price"
+            | "placed_order_count" | "placed_qty_total" | "remaining_qty" => 1,
             _ => 0,
         }
     }
@@ -420,7 +419,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -456,7 +455,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            10,
             10,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -479,7 +478,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            10,
             10,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -508,7 +507,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -534,7 +533,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -558,7 +557,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -584,7 +583,7 @@ mod tests {
             "position-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,

@@ -188,7 +188,7 @@ mod tests {
     use super::*;
     use crate::entity::{
         HyperliquidPerpLiquidationFill, HyperliquidPerpLiquidationTriggerReason,
-        HyperliquidPerpMarginMode, HyperliquidPerpPositionSide,
+        HyperliquidPerpMarginMode,
     };
 
     fn liquidation() -> HyperliquidPerpLiquidation {
@@ -200,7 +200,7 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,
@@ -222,7 +222,7 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             48_000,
             50_000,

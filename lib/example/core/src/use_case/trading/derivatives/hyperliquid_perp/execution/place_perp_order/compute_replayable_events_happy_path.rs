@@ -131,20 +131,16 @@ fn state() -> PlaceHyperliquidPerpOrderState {
     }
 }
 
-fn non_flat_position(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpPosition {
+fn non_flat_position(signed_size: i64) -> HyperliquidPerpPosition {
     HyperliquidPerpPosition::new(
         "position-1".to_string(),
         "acct-1".to_string(),
         0,
         "BTC-PERP".to_string(),
-        side,
-        qty,
+        signed_size,
         100,
         5,
         crate::entity::HyperliquidPerpMarginMode::Cross,
-        qty * 20,
-        None,
-        0,
         0,
         4,
     )
@@ -416,10 +412,7 @@ fn long_position_buys_same_side_and_freezes_full_new_order_margin() {
 
     // arrange
     let cmd = limit_cmd();
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &long_state), Ok(()));
 
     // act
@@ -460,10 +453,7 @@ fn short_position_sells_same_side_and_freezes_full_new_order_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-        ..state()
-    };
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &short_state), Ok(()));
 
     // act
@@ -505,10 +495,7 @@ fn long_position_places_sell_reduce_only_order_without_freezing_margin() {
     // arrange
     let mut cmd = sell_limit_cmd();
     cmd.reduce_only = true;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &long_state), Ok(()));
 
     // act
@@ -547,10 +534,7 @@ fn short_position_places_buy_reduce_only_order_without_freezing_margin() {
     // arrange
     let mut cmd = limit_cmd();
     cmd.reduce_only = true;
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-        ..state()
-    };
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &short_state), Ok(()));
 
     // act
@@ -588,10 +572,7 @@ fn long_position_places_opposite_sell_that_closes_without_new_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &long_state), Ok(()));
 
     // act
@@ -631,10 +612,7 @@ fn long_position_places_opposite_sell_that_exactly_closes_without_new_margin() {
     let mut cmd = sell_limit_cmd();
     cmd.size = 5;
     cmd.reduce_only = false;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &long_state), Ok(()));
 
     // act
@@ -672,10 +650,7 @@ fn long_position_rejects_single_opposite_sell_flip_until_split_workflow_handles_
     // arrange
     let mut cmd = sell_limit_cmd();
     cmd.size = 8;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Long, 5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(
         use_case().validate_against_given_state(&cmd, &long_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
@@ -700,10 +675,7 @@ fn short_position_places_opposite_buy_that_closes_without_new_margin() {
 
     // arrange
     let cmd = limit_cmd();
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-        ..state()
-    };
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(use_case().validate_against_given_state(&cmd, &short_state), Ok(()));
 
     // act
@@ -741,10 +713,7 @@ fn short_position_rejects_single_opposite_buy_flip_until_split_workflow_handles_
     // arrange
     let mut cmd = limit_cmd();
     cmd.size = 8;
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(HyperliquidPerpPositionSide::Short, 5),
-        ..state()
-    };
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(
         use_case().validate_against_given_state(&cmd, &short_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)

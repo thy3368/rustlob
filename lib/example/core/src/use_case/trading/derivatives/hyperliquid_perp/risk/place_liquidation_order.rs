@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::entity::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus, HyperliquidPerpOrder,
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce,
-    HyperliquidPerpPosition, HyperliquidPerpPositionSide,
+    HyperliquidPerpPosition,
 };
 
 /// 发出单张 Hyperliquid perp 强平单的命令。
@@ -143,7 +143,7 @@ impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
             .ok_or(PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
         let order_id =
             format!("{}-{}-{}", state.account_id, state.position.coin, state.next_order_sequence);
-        let side = liquidation_order_side(state.position.side())?;
+        let side = liquidation_order_side(&state.position)?;
         let created_order = HyperliquidPerpOrder::new(
             order_id.clone(),
             None,
@@ -221,19 +221,19 @@ fn validate_state(
     if state.position.qty() < state.liquidation.remaining_qty {
         return Err(PlaceHyperliquidPerpLiquidationOrderError::PositionQtyTooSmall);
     }
-    let _ = liquidation_order_side(state.position.side())?;
+    let _ = liquidation_order_side(&state.position)?;
     Ok(())
 }
 
 fn liquidation_order_side(
-    position_side: HyperliquidPerpPositionSide,
+    position: &HyperliquidPerpPosition,
 ) -> Result<HyperliquidPerpOrderSide, PlaceHyperliquidPerpLiquidationOrderError> {
-    match position_side {
-        HyperliquidPerpPositionSide::Long => Ok(HyperliquidPerpOrderSide::Sell),
-        HyperliquidPerpPositionSide::Short => Ok(HyperliquidPerpOrderSide::Buy),
-        HyperliquidPerpPositionSide::Flat => {
-            Err(PlaceHyperliquidPerpLiquidationOrderError::FlatPosition)
-        }
+    if position.is_long() {
+        Ok(HyperliquidPerpOrderSide::Sell)
+    } else if position.is_short() {
+        Ok(HyperliquidPerpOrderSide::Buy)
+    } else {
+        Err(PlaceHyperliquidPerpLiquidationOrderError::FlatPosition)
     }
 }
 
@@ -244,26 +244,22 @@ mod tests {
     use super::*;
     use crate::entity::{HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode};
 
-    fn position(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpPosition {
+    fn position(signed_size: i64) -> HyperliquidPerpPosition {
         HyperliquidPerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            side,
-            qty,
+            signed_size,
             60_000,
             5,
             HyperliquidPerpMarginMode::Cross,
-            24_000,
-            None,
-            0,
             0,
             3,
         )
     }
 
-    fn liquidation(side: HyperliquidPerpPositionSide, qty: u64) -> HyperliquidPerpLiquidation {
+    fn liquidation(signed_size: i64) -> HyperliquidPerpLiquidation {
         HyperliquidPerpLiquidation::new(
             "liq-1".to_string(),
             "liq-batch-1".to_string(),
@@ -272,8 +268,8 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            side,
-            qty,
+            signed_size,
+            signed_size.unsigned_abs(),
             HyperliquidPerpMarginMode::Cross,
             49_000,
             50_000,
@@ -283,12 +279,11 @@ mod tests {
     }
 
     fn state(
-        side: HyperliquidPerpPositionSide,
-        qty: u64,
+        signed_size: i64,
     ) -> PlaceHyperliquidPerpLiquidationOrderState {
         PlaceHyperliquidPerpLiquidationOrderState {
-            liquidation: liquidation(side, qty),
-            position: position(side, qty),
+            liquidation: liquidation(signed_size),
+            position: position(signed_size),
             account_id: "trader-1".to_string(),
             next_order_sequence: 11,
             existing_open_liquidation_order_ids: Vec::new(),
@@ -322,7 +317,7 @@ mod tests {
 
     #[test]
     fn validate_rejects_when_open_liquidation_order_exists() {
-        let mut state = state(HyperliquidPerpPositionSide::Long, 10);
+        let mut state = state(10);
         state.existing_open_liquidation_order_ids.push("order-1".to_string());
 
         assert_eq!(
@@ -353,7 +348,7 @@ mod tests {
 
         // act
         let changes =
-            use_case.compute_changes(&cmd(), state(HyperliquidPerpPositionSide::Long, 10)).unwrap();
+            use_case.compute_changes(&cmd(), state(10)).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         // assert
@@ -416,7 +411,7 @@ mod tests {
 
         // act
         let changes =
-            use_case.compute_changes(&cmd(), state(HyperliquidPerpPositionSide::Short, 3)).unwrap();
+            use_case.compute_changes(&cmd(), state(-3)).unwrap();
         let events = changes.to_replayable_events().unwrap();
 
         // assert

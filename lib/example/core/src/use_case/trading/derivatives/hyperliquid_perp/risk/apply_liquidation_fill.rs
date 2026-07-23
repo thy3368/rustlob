@@ -163,7 +163,7 @@ impl CommandUseCase4 for ApplyHyperliquidPerpLiquidationFillUseCase {
             state.liquidation.position_id.clone(),
             state.liquidation.asset,
             state.liquidation.symbol.clone(),
-            state.liquidation.side,
+            state.liquidation.signed_size,
             state.trade.qty,
             state.trade.price,
             state.liquidation.bankruptcy_price,
@@ -193,10 +193,7 @@ mod tests {
 
     use super::*;
     use crate::HyperliquidPerpOrderSide;
-    use crate::entity::{
-        HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode,
-        HyperliquidPerpPositionSide,
-    };
+    use crate::entity::{HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode};
 
     fn liquidation() -> HyperliquidPerpLiquidation {
         HyperliquidPerpLiquidation::new(
@@ -207,7 +204,7 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            3,
             3,
             HyperliquidPerpMarginMode::Cross,
             49_000,

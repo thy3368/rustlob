@@ -145,7 +145,7 @@ impl CommandUseCase4 for StartHyperliquidPerpLiquidationUseCase {
                 state.position.position_key.clone(),
                 state.position.perp_asset_id,
                 state.position.coin.clone(),
-                state.position.side(),
+                state.position.signed_size,
                 state.position.qty(),
                 state.margin_mode,
                 state.mark_price,
@@ -213,22 +213,16 @@ mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
-    use crate::entity::HyperliquidPerpPositionSide;
-
     fn position() -> HyperliquidPerpPosition {
         HyperliquidPerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
             2,
             60_000,
             5,
             HyperliquidPerpMarginMode::Cross,
-            24_000,
-            None,
-            0,
             0,
             3,
         )

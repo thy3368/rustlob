@@ -1,7 +1,5 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
-use crate::entity::HyperliquidPerpPositionSide;
-
 const HYPERLIQUID_PERP_LIQUIDATION_FILL_ENTITY_TYPE: u8 = 15;
 
 /// 一次 Hyperliquid perp 强平执行成交形成的 append-only 事实。
@@ -15,7 +13,7 @@ pub struct HyperliquidPerpLiquidationFill {
     pub position_id: String,
     pub asset: u32,
     pub symbol: String,
-    pub side: HyperliquidPerpPositionSide,
+    pub signed_size: i64,
     pub fill_qty: u64,
     pub fill_price: u64,
     pub bankruptcy_price: u64,
@@ -33,7 +31,7 @@ impl HyperliquidPerpLiquidationFill {
         position_id: String,
         asset: u32,
         symbol: String,
-        side: HyperliquidPerpPositionSide,
+        signed_size: i64,
         fill_qty: u64,
         fill_price: u64,
         bankruptcy_price: u64,
@@ -48,7 +46,7 @@ impl HyperliquidPerpLiquidationFill {
             position_id,
             asset,
             symbol,
-            side,
+            signed_size,
             fill_qty,
             fill_price,
             bankruptcy_price,
@@ -68,7 +66,7 @@ impl FieldDiff for HyperliquidPerpLiquidationFill {
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("side", "", self.side.as_str()),
+            EntityFieldChange::new("signed_size", "", self.signed_size.to_string()),
             EntityFieldChange::new("fill_qty", "", self.fill_qty.to_string()),
             EntityFieldChange::new("fill_price", "", self.fill_price.to_string()),
             EntityFieldChange::new("bankruptcy_price", "", self.bankruptcy_price.to_string()),
@@ -103,9 +101,9 @@ impl Entity for HyperliquidPerpLiquidationFill {
             | "trade_id"
             | "account_id"
             | "position_id"
-            | "symbol"
-            | "side" => 0,
-            "asset" | "fill_qty" | "fill_price" | "bankruptcy_price" | "recovered_quote" => 1,
+            | "symbol" => 0,
+            "asset" | "signed_size" | "fill_qty" | "fill_price" | "bankruptcy_price"
+            | "recovered_quote" => 1,
             _ => 0,
         }
     }
@@ -140,7 +138,7 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             48_500,
             47_500,

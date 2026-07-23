@@ -51,7 +51,7 @@ pub struct HyperliquidPerpLiquidatablePositionAtPriceView {
     pub account_id: String,
     pub asset: u32,
     pub symbol: String,
-    pub side: crate::entity::HyperliquidPerpPositionSide,
+    pub signed_size: i64,
     pub qty: u64,
     pub entry_price: u64,
     pub required_margin: u64,
@@ -169,7 +169,7 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
                 account_id: snapshot.position.account_id.clone(),
                 asset: snapshot.position.perp_asset_id,
                 symbol: snapshot.position.coin.clone(),
-                side: snapshot.position.side(),
+                signed_size: snapshot.position.signed_size,
                 qty: snapshot.position.qty(),
                 entry_price: snapshot.position.entry_price,
                 required_margin: snapshot.position.required_margin().unwrap_or(0),
@@ -193,28 +193,22 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::HyperliquidPerpPositionSide;
-
     fn position(
         position_id: &str,
         account_id: &str,
-        side: HyperliquidPerpPositionSide,
-        qty: u64,
+        signed_size: i64,
         required_margin: u64,
     ) -> HyperliquidPerpPosition {
+        let _snapshot_required_margin = required_margin;
         HyperliquidPerpPosition::new(
             position_id.to_string(),
             account_id.to_string(),
             7,
             "BTC-PERP".to_string(),
-            side,
-            qty,
+            signed_size,
             60_000,
             5,
             HyperliquidPerpMarginMode::Cross,
-            required_margin,
-            None,
-            0,
             0,
             3,
         )
@@ -267,14 +261,10 @@ mod tests {
                     "trader-1".to_string(),
                     7,
                     "BTC-PERP".to_string(),
-                    HyperliquidPerpPositionSide::Long,
                     0,
                     60_000,
                     5,
                     HyperliquidPerpMarginMode::Cross,
-                    24_000,
-                    None,
-                    1_500,
                     0,
                     3,
                 ),
@@ -298,13 +288,7 @@ mod tests {
     fn validate_rejects_zero_bankruptcy_price() {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                position: position(
-                    "position-1",
-                    "trader-1",
-                    HyperliquidPerpPositionSide::Long,
-                    2,
-                    24_000,
-                ),
+                position: position("position-1", "trader-1", 2, 24_000),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
                 available_margin: 24_000,
                 bankruptcy_price: 0,
@@ -326,39 +310,21 @@ mod tests {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-1",
-                        "trader-1",
-                        HyperliquidPerpPositionSide::Long,
-                        2,
-                        24_000,
-                    ),
+                    position: position("position-1", "trader-1", 2, 24_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 24_000,
                     bankruptcy_price: 50_000,
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-2",
-                        "trader-2",
-                        HyperliquidPerpPositionSide::Long,
-                        3,
-                        36_000,
-                    ),
+                    position: position("position-2", "trader-2", 3, 36_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 36_000,
                     bankruptcy_price: 48_000,
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-3",
-                        "trader-3",
-                        HyperliquidPerpPositionSide::Short,
-                        4,
-                        0,
-                    ),
+                    position: position("position-3", "trader-3", -4, 0),
                     margin_mode: HyperliquidPerpMarginMode::Isolated,
                     available_margin: 0,
                     bankruptcy_price: 49_000,
@@ -389,13 +355,7 @@ mod tests {
     fn compute_skips_positions_already_in_liquidation() {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                position: position(
-                    "position-1",
-                    "trader-1",
-                    HyperliquidPerpPositionSide::Long,
-                    2,
-                    24_000,
-                ),
+                position: position("position-1", "trader-1", 2, 24_000),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
                 available_margin: 24_000,
                 bankruptcy_price: 50_000,
@@ -429,13 +389,7 @@ mod tests {
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-2",
-                        "trader-2",
-                        HyperliquidPerpPositionSide::Long,
-                        2,
-                        24_000,
-                    ),
+                    position: position("position-2", "trader-2", 2, 24_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 24_000,
                     bankruptcy_price: 48_000,
@@ -457,26 +411,14 @@ mod tests {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-1",
-                        "trader-1",
-                        HyperliquidPerpPositionSide::Long,
-                        2,
-                        24_000,
-                    ),
+                    position: position("position-1", "trader-1", 2, 24_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 24_000,
                     bankruptcy_price: 50_000,
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-2",
-                        "trader-2",
-                        HyperliquidPerpPositionSide::Short,
-                        3,
-                        12_000,
-                    ),
+                    position: position("position-2", "trader-2", -3, 12_000),
                     margin_mode: HyperliquidPerpMarginMode::Isolated,
                     available_margin: 0,
                     bankruptcy_price: 49_000,
@@ -499,13 +441,7 @@ mod tests {
     fn compute_returns_arithmetic_overflow_when_item_notional_overflows() {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                position: position(
-                    "position-1",
-                    "trader-1",
-                    HyperliquidPerpPositionSide::Long,
-                    u64::MAX,
-                    24_000,
-                ),
+                position: position("position-1", "trader-1", i64::MAX, 24_000),
                 margin_mode: HyperliquidPerpMarginMode::Cross,
                 available_margin: 0,
                 bankruptcy_price: u64::MAX,
@@ -514,7 +450,7 @@ mod tests {
         };
 
         let result = QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase
-            .compute_view(&query(2), read_model);
+            .compute_view(&query(3), read_model);
 
         assert_eq!(
             result,
@@ -527,26 +463,14 @@ mod tests {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-1",
-                        "trader-1",
-                        HyperliquidPerpPositionSide::Long,
-                        u64::MAX / 2 + 1,
-                        24_000,
-                    ),
+                    position: position("position-1", "trader-1", i64::MAX, 24_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 0,
                     bankruptcy_price: u64::MAX,
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: position(
-                        "position-2",
-                        "trader-2",
-                        HyperliquidPerpPositionSide::Short,
-                        u64::MAX / 2 + 1,
-                        24_000,
-                    ),
+                    position: position("position-2", "trader-2", -i64::MAX, 24_000),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 0,
                     bankruptcy_price: 1,
@@ -556,7 +480,7 @@ mod tests {
         };
 
         let result = QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase
-            .compute_view(&query(1), read_model);
+            .compute_view(&query(2), read_model);
 
         assert_eq!(
             result,
@@ -572,7 +496,7 @@ mod tests {
             QueryHyperliquidPerpLiquidationCandidatesUseCase,
         };
 
-        let position = position("position-1", "trader-1", HyperliquidPerpPositionSide::Short, 4, 0);
+        let position = position("position-1", "trader-1", -(4 as i64), 0);
         let available_margin = 0;
         let bankruptcy_price = 49_000;
         let mark_price = 49_000;

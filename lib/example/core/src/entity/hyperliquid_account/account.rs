@@ -266,9 +266,7 @@ mod tests {
         MarginSummary, PerpClearinghouseState, PerpPositionRiskSnapshot, RiskState,
         SpotClearinghouseState,
     };
-    use crate::entity::{
-        Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
-    };
+    use crate::entity::{Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition};
 
     fn dec(units: i64) -> Decimal {
         Decimal::from_raw(units * 100_000_000)
@@ -295,14 +293,10 @@ mod tests {
             account_id.to_owned(),
             0,
             "BTC-PERP".to_owned(),
-            HyperliquidPerpPositionSide::Long,
             1,
             100_000,
             3,
             HyperliquidPerpMarginMode::Cross,
-            10_000,
-            Some(90_000),
-            250,
             50,
             1,
         );

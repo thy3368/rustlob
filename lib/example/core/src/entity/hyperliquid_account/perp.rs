@@ -3,8 +3,8 @@ use thiserror::Error;
 
 use super::AccountId;
 use crate::entity::{
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionSide,
-    MarginReservation, ReservationKind, ReservationMarketKind,
+    HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, ReservationKind,
+    ReservationMarketKind,
 };
 
 const DECIMAL_SCALE: i128 = 100_000_000;
@@ -264,14 +264,12 @@ impl PerpClearinghouseState {
                 checked_mul(decimal_from_u64(position.qty())?, mark.mark_price)?;
             let initial_margin_used =
                 checked_mul(position_notional, risk_rule.initial_margin_rate)?;
-            let position_qty = decimal_from_u64(position.qty())?;
-            let entry_price = decimal_from_u64(position.entry_price)?;
-            let price_delta = match position.side() {
-                HyperliquidPerpPositionSide::Long => checked_sub(mark.mark_price, entry_price)?,
-                HyperliquidPerpPositionSide::Short => checked_sub(entry_price, mark.mark_price)?,
-                HyperliquidPerpPositionSide::Flat => zero(),
-            };
-            let unrealized_pnl = checked_mul(position_qty, price_delta)?;
+            let mark_price_i64 = decimal_to_units(mark.mark_price)?;
+            let unrealized_pnl = decimal_from_i64(
+                position
+                    .unrealized_pnl_at(mark_price_i64)
+                    .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?,
+            )?;
             let return_on_equity = if initial_margin_used.is_zero() {
                 zero()
             } else {
@@ -489,6 +487,23 @@ fn decimal_from_u64(value: u64) -> Result<Decimal, PerpClearinghouseStateCalcErr
         .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
+fn decimal_from_i64(value: i64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
+    i128::from(value)
+        .checked_mul(DECIMAL_SCALE)
+        .and_then(|raw| i64::try_from(raw).ok())
+        .map(Decimal::from_raw)
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+}
+
+fn decimal_to_units(value: Decimal) -> Result<u64, PerpClearinghouseStateCalcError> {
+    let raw = value.raw();
+    if raw < 0 || raw % DECIMAL_SCALE as i64 != 0 {
+        return Err(PerpClearinghouseStateCalcError::ArithmeticOverflow);
+    }
+    u64::try_from(raw / DECIMAL_SCALE as i64)
+        .map_err(|_| PerpClearinghouseStateCalcError::ArithmeticOverflow)
+}
+
 #[cfg(test)]
 mod tests {
     use decimal::Decimal;
@@ -501,27 +516,16 @@ mod tests {
     }
 
     fn sample_position(asset: u32, symbol: &str, quantity: u64) -> HyperliquidPerpPosition {
-        let side = if quantity == 0 {
-            HyperliquidPerpPositionSide::Flat
-        } else {
-            HyperliquidPerpPositionSide::Long
-        };
         let entry_price = if quantity == 0 { 0 } else { 100_000 };
-        let required_margin = if quantity == 0 { 0 } else { 10_000 };
-
         HyperliquidPerpPosition::new(
             format!("sub-1-{symbol}"),
             "sub-1".to_owned(),
             asset,
             symbol.to_owned(),
-            side,
-            quantity,
+            i64::try_from(quantity).unwrap_or(i64::MAX),
             entry_price,
             5,
             HyperliquidPerpMarginMode::Cross,
-            required_margin,
-            (quantity > 0).then_some(90_000),
-            200,
             50,
             1,
         )

@@ -59,8 +59,7 @@ pub use perp::trade::hyperliquid_perp_order::{
 pub use perp::trade::hyperliquid_perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
     HyperliquidPerpPositionError, HyperliquidPerpPositionLeverageOutcome,
-    HyperliquidPerpPositionSide, HyperliquidPerpPositionStatus,
-    HyperliquidPerpPositionTradeOutcome, required_position_margin,
+    HyperliquidPerpPositionStatus, HyperliquidPerpPositionTradeOutcome, required_position_margin,
 };
 pub use perp::trade::hyperliquid_perp_trade::HyperliquidPerpTrade;
 pub use reservation::{

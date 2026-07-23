@@ -9,8 +9,7 @@ use crate::MarketRules;
 use crate::entity::{
     Balance, BalanceLedgerEntryV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
-    HyperliquidPerpPositionSide, PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
-    required_position_margin,
+    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -376,19 +375,22 @@ fn derive_place_intent(
     size: u64,
     position: &HyperliquidPerpPosition,
 ) -> Result<DerivedPerpOrderIntent, PlaceHyperliquidPerpOrderError> {
-    match (order_side, position.side()) {
-        (_, HyperliquidPerpPositionSide::Flat)
-        | (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Long)
-        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Short) => {
-            Ok(DerivedPerpOrderIntent::Open)
-        }
-        (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
-        | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long) => {
+    if position.is_flat()
+        || (order_side == HyperliquidPerpOrderSide::Buy && position.is_long())
+        || (order_side == HyperliquidPerpOrderSide::Sell && position.is_short())
+    {
+        Ok(DerivedPerpOrderIntent::Open)
+    } else {
+        if (order_side == HyperliquidPerpOrderSide::Buy && position.is_short())
+            || (order_side == HyperliquidPerpOrderSide::Sell && position.is_long())
+        {
             if size > position.qty() {
                 Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
             } else {
                 Ok(DerivedPerpOrderIntent::Close)
             }
+        } else {
+            Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState)
         }
     }
 }
@@ -397,11 +399,8 @@ fn validate_reduce_only(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     position: &HyperliquidPerpPosition,
 ) -> Result<(), PlaceHyperliquidPerpOrderError> {
-    let reduces_position = matches!(
-        (cmd.side(), position.side()),
-        (HyperliquidPerpOrderSide::Buy, HyperliquidPerpPositionSide::Short)
-            | (HyperliquidPerpOrderSide::Sell, HyperliquidPerpPositionSide::Long)
-    );
+    let reduces_position = (cmd.side() == HyperliquidPerpOrderSide::Buy && position.is_short())
+        || (cmd.side() == HyperliquidPerpOrderSide::Sell && position.is_long());
     if !reduces_position || cmd.size > position.qty() {
         return Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly);
     }

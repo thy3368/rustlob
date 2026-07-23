@@ -161,10 +161,7 @@ mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
-    use crate::entity::{
-        HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode,
-        HyperliquidPerpPositionSide,
-    };
+    use crate::entity::{HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode};
 
     fn liquidation() -> HyperliquidPerpLiquidation {
         let mut liquidation = HyperliquidPerpLiquidation::new(
@@ -175,7 +172,7 @@ mod tests {
             "position-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
+            2,
             2,
             HyperliquidPerpMarginMode::Cross,
             49_000,

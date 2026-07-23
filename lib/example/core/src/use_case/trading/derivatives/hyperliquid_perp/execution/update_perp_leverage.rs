@@ -217,9 +217,7 @@ mod tests {
     use common_entity::MiStateMachineV2Unchecked;
 
     use super::*;
-    use crate::entity::{
-        HyperliquidPerpPositionSide, HyperliquidPerpPositionStatus, required_position_margin,
-    };
+    use crate::entity::HyperliquidPerpPositionStatus;
 
     fn cmd(leverage: u64, is_cross: bool) -> UpdateHyperliquidPerpLeverageCmd {
         UpdateHyperliquidPerpLeverageCmd {
@@ -235,20 +233,15 @@ mod tests {
     }
 
     fn open_position(margin_mode: HyperliquidPerpMarginMode) -> HyperliquidPerpPosition {
-        let required_margin = required_position_margin(3, 100, 5).unwrap();
         HyperliquidPerpPosition::new(
             "trader-1:BTC-PERP".to_string(),
             "trader-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            HyperliquidPerpPositionSide::Long,
             3,
             100,
             5,
             margin_mode,
-            required_margin,
-            None,
-            0,
             0,
             2,
         )

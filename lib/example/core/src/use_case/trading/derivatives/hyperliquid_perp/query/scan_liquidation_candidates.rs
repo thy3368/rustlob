@@ -158,26 +158,16 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidationCandidatesUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::HyperliquidPerpPositionSide;
-
-    fn position(
-        position_id: &str,
-        account_id: &str,
-        side: HyperliquidPerpPositionSide,
-    ) -> HyperliquidPerpPosition {
+    fn position(position_id: &str, account_id: &str, signed_size: i64) -> HyperliquidPerpPosition {
         HyperliquidPerpPosition::new(
             position_id.to_string(),
             account_id.to_string(),
             7,
             "BTC-PERP".to_string(),
-            side,
-            2,
+            signed_size,
             60_000,
             5,
             HyperliquidPerpMarginMode::Cross,
-            24_000,
-            None,
-            0,
             0,
             3,
         )
@@ -209,7 +199,7 @@ mod tests {
         let read_model = QueryHyperliquidPerpLiquidationCandidatesReadModel {
             snapshots: vec![
                 HyperliquidPerpRiskSnapshot {
-                    position: position("position-1", "trader-1", HyperliquidPerpPositionSide::Long),
+                    position: position("position-1", "trader-1", 2),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 100,
                     bankruptcy_price: 50_000,
@@ -217,7 +207,7 @@ mod tests {
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpRiskSnapshot {
-                    position: position("position-2", "trader-2", HyperliquidPerpPositionSide::Long),
+                    position: position("position-2", "trader-2", 2),
                     margin_mode: HyperliquidPerpMarginMode::Cross,
                     available_margin: 100,
                     bankruptcy_price: 50_000,
@@ -225,11 +215,7 @@ mod tests {
                     has_active_liquidation: false,
                 },
                 HyperliquidPerpRiskSnapshot {
-                    position: position(
-                        "position-3",
-                        "trader-3",
-                        HyperliquidPerpPositionSide::Short,
-                    ),
+                    position: position("position-3", "trader-3", -2),
                     margin_mode: HyperliquidPerpMarginMode::Isolated,
                     available_margin: 0,
                     bankruptcy_price: 50_000,

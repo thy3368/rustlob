@@ -450,43 +450,31 @@ mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
-    use crate::entity::HyperliquidPerpPositionSide;
+    fn position(
+        position_key: &str,
+        account_id: &str,
+        signed_size: i64,
+        version: u64,
+    ) -> HyperliquidPerpPosition {
+        HyperliquidPerpPosition::new(
+            position_key.to_string(),
+            account_id.to_string(),
+            0,
+            "BTC-PERP".to_string(),
+            signed_size,
+            50_000,
+            10,
+            HyperliquidPerpMarginMode::Cross,
+            0,
+            version,
+        )
+    }
 
     fn cross_state() -> SettleHyperliquidPerpFundingState {
         SettleHyperliquidPerpFundingState {
             positions: vec![
-                HyperliquidPerpPosition::new(
-                    "position-long".to_string(),
-                    "trader-1".to_string(),
-                    0,
-                    "BTC-PERP".to_string(),
-                    HyperliquidPerpPositionSide::Long,
-                    2,
-                    50_000,
-                    10,
-                    HyperliquidPerpMarginMode::Cross,
-                    10_000,
-                    None,
-                    0,
-                    0,
-                    3,
-                ),
-                HyperliquidPerpPosition::new(
-                    "position-short".to_string(),
-                    "trader-2".to_string(),
-                    0,
-                    "BTC-PERP".to_string(),
-                    HyperliquidPerpPositionSide::Short,
-                    2,
-                    50_000,
-                    10,
-                    HyperliquidPerpMarginMode::Cross,
-                    10_000,
-                    None,
-                    0,
-                    0,
-                    5,
-                ),
+                position("position-long", "trader-1", 2, 3),
+                position("position-short", "trader-2", -2, 5),
             ],
             margin_balances: vec![
                 Balance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7),
@@ -518,38 +506,8 @@ mod tests {
     fn same_account_cross_state() -> SettleHyperliquidPerpFundingState {
         SettleHyperliquidPerpFundingState {
             positions: vec![
-                HyperliquidPerpPosition::new(
-                    "position-long-1".to_string(),
-                    "trader-1".to_string(),
-                    0,
-                    "BTC-PERP".to_string(),
-                    HyperliquidPerpPositionSide::Long,
-                    2,
-                    50_000,
-                    10,
-                    HyperliquidPerpMarginMode::Cross,
-                    10_000,
-                    None,
-                    0,
-                    0,
-                    3,
-                ),
-                HyperliquidPerpPosition::new(
-                    "position-long-2".to_string(),
-                    "trader-1".to_string(),
-                    0,
-                    "BTC-PERP".to_string(),
-                    HyperliquidPerpPositionSide::Long,
-                    1,
-                    50_000,
-                    10,
-                    HyperliquidPerpMarginMode::Cross,
-                    10_000,
-                    None,
-                    0,
-                    0,
-                    4,
-                ),
+                position("position-long-1", "trader-1", 2, 3),
+                position("position-long-2", "trader-1", 1, 4),
             ],
             margin_balances: vec![Balance::new(
                 "trader-1".to_string(),
