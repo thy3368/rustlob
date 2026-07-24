@@ -33,7 +33,6 @@ fn open_from_empty_slot(
         entry_price,
         slot.leverage_value,
         slot.margin_mode,
-        slot.cumulative_realized_pnl,
     )
 }
 

@@ -169,7 +169,6 @@ impl HyperliquidPerpTrade {
                 self.price,
                 position.leverage_value,
                 position.margin_mode,
-                position.cumulative_realized_pnl,
             );
         }
 
@@ -215,7 +214,6 @@ impl HyperliquidPerpTrade {
             self.price,
             next_position.leverage_value,
             next_position.margin_mode,
-            next_position.cumulative_realized_pnl,
         )?;
 
         next_position.signed_size = opened_position.signed_size;
@@ -616,22 +614,24 @@ mod tests {
         let mut trade = sell_trade();
         trade.qty = 5;
         trade.price = 90;
+        let mut taker_position = position("winner", 2, 100);
+        taker_position.cumulative_realized_pnl = 25;
+        let mut maker_position = position("loser", -2, 80);
+        maker_position.cumulative_realized_pnl = 25;
 
-        let settlement = trade
-            .settle_into_positions(&position("winner", 2, 100), &position("loser", -2, 80))
-            .unwrap();
+        let settlement = trade.settle_into_positions(&taker_position, &maker_position).unwrap();
 
         assert!(settlement.taker_position_after.is_short());
         assert_eq!(settlement.taker_position_after.qty(), 3);
         assert_eq!(settlement.taker_position_after.entry_price, 90);
         assert_eq!(settlement.taker_position_after.version, 4);
-        assert_eq!(settlement.taker_position_after.cumulative_realized_pnl, -20);
+        assert_eq!(settlement.taker_position_after.cumulative_realized_pnl, 0);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, -20);
         assert_eq!(settlement.taker_outcome.required_margin_delta, 7);
         assert!(settlement.maker_position_after.is_long());
         assert_eq!(settlement.maker_position_after.qty(), 3);
         assert_eq!(settlement.maker_position_after.entry_price, 90);
-        assert_eq!(settlement.maker_position_after.cumulative_realized_pnl, -20);
+        assert_eq!(settlement.maker_position_after.cumulative_realized_pnl, 0);
         assert_eq!(settlement.maker_outcome.realized_pnl_delta, -20);
         assert_eq!(settlement.maker_outcome.required_margin_delta, 11);
     }

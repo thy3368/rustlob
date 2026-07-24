@@ -113,7 +113,7 @@ pub struct HyperliquidPerpPosition {
     pub leverage_value: u64,
     /// 当前仓位保证金模式事实。
     pub margin_mode: HyperliquidPerpMarginMode,
-    /// 累计已实现 PnL，允许为负。
+    /// 当前仓位生命周期内累计已实现 PnL，允许为负；手续费和资金费不进入该字段。
     pub cumulative_realized_pnl: i64,
     /// 当前仓位实体版本。
     pub version: u64,
@@ -386,7 +386,6 @@ impl HyperliquidPerpPosition {
         trade_price: u64,
         leverage_value: u64,
         margin_mode: HyperliquidPerpMarginMode,
-        cumulative_realized_pnl: i64,
     ) -> Result<
         (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
         HyperliquidPerpPositionError,
@@ -408,7 +407,7 @@ impl HyperliquidPerpPosition {
             trade_price,
             leverage_value,
             margin_mode,
-            cumulative_realized_pnl,
+            0,
             1,
         );
 
@@ -1113,7 +1112,6 @@ mod tests {
             100,
             slot.leverage_value,
             slot.margin_mode,
-            slot.cumulative_realized_pnl,
         )
         .unwrap();
 
@@ -1122,6 +1120,7 @@ mod tests {
         assert_eq!(position.entry_price, 100);
         assert_eq!(position.required_margin(), Some(30));
         assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
+        assert_eq!(position.cumulative_realized_pnl, 0);
         assert_eq!(position.version, 1);
         assert_eq!(slot.lifecycle_status(), HyperliquidPerpPositionStatus::EmptySlot);
         assert_eq!(outcome.realized_pnl_delta, 0);
