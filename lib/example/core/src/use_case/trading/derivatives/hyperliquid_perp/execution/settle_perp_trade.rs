@@ -228,12 +228,6 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct AccountRole {
-    signed_size_delta: i64,
-    is_taker: bool,
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 struct BalanceDelta {
     available_delta: i128,
@@ -285,54 +279,52 @@ fn derive_settlement_outcome(
         let taker_fee = fee_from_bps(notional, state.taker_fee_bps)?;
         let maker_fee = fee_from_bps(notional, state.maker_fee_bps)?;
 
-        let mut taker_realized_pnl = 0_i64;
-        let mut maker_realized_pnl = 0_i64;
+        let taker_position_key =
+            position_key(&trade.taker_account_id, trade.asset, trade.symbol.as_str());
+        let maker_position_key =
+            position_key(&trade.maker_account_id, trade.asset, trade.symbol.as_str());
+        let Some(taker_position) = positions.get(&taker_position_key).cloned() else {
+            return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
+        };
+        let Some(maker_position) = positions.get(&maker_position_key).cloned() else {
+            return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
+        };
+        validate_position_for_trade(&taker_position, trade.taker_account_id.as_str(), trade)?;
+        validate_position_for_trade(&maker_position, trade.maker_account_id.as_str(), trade)?;
 
-        let account_roles = [
-            (
-                trade.taker_account_id.as_str(),
-                AccountRole { signed_size_delta: taker_signed_size_delta(trade)?, is_taker: true },
-            ),
-            (
-                trade.maker_account_id.as_str(),
-                AccountRole { signed_size_delta: maker_signed_size_delta(trade)?, is_taker: false },
-            ),
-        ];
+        let settlement = trade
+            .settle_into_positions(&taker_position, &maker_position)
+            .map_err(map_position_error)?;
 
-        for (account_id, role) in account_roles {
-            let position_key = position_key(account_id, trade.asset, trade.symbol.as_str());
-            let Some(position) = positions.get(&position_key).cloned() else {
-                return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
-            };
-            validate_position_for_trade(&position, account_id, trade)?;
+        add_margin_delta(
+            &mut balance_deltas,
+            trade.taker_account_id.as_str(),
+            state.margin_asset_id.as_str(),
+            settlement.taker_outcome.required_margin_delta,
+        )?;
+        add_available_delta(
+            &mut balance_deltas,
+            trade.taker_account_id.as_str(),
+            state.margin_asset_id.as_str(),
+            i128::from(settlement.taker_outcome.realized_pnl_delta) - i128::from(taker_fee),
+        )?;
+        add_margin_delta(
+            &mut balance_deltas,
+            trade.maker_account_id.as_str(),
+            state.margin_asset_id.as_str(),
+            settlement.maker_outcome.required_margin_delta,
+        )?;
+        add_available_delta(
+            &mut balance_deltas,
+            trade.maker_account_id.as_str(),
+            state.margin_asset_id.as_str(),
+            i128::from(settlement.maker_outcome.realized_pnl_delta) - i128::from(maker_fee),
+        )?;
 
-            let mut next_position = position.clone();
-            let position_outcome = next_position
-                .settle_trade(role.signed_size_delta, trade.price)
-                .map_err(map_position_error)?;
-
-            add_margin_delta(
-                &mut balance_deltas,
-                account_id,
-                state.margin_asset_id.as_str(),
-                position_outcome.required_margin_delta,
-            )?;
-            let fee = if role.is_taker { taker_fee } else { maker_fee };
-            add_available_delta(
-                &mut balance_deltas,
-                account_id,
-                state.margin_asset_id.as_str(),
-                i128::from(position_outcome.realized_pnl_delta) - i128::from(fee),
-            )?;
-
-            if role.is_taker {
-                taker_realized_pnl = position_outcome.realized_pnl_delta;
-            } else {
-                maker_realized_pnl = position_outcome.realized_pnl_delta;
-            }
-
-            positions.insert(position_key, next_position);
-        }
+        let taker_realized_pnl = settlement.taker_outcome.realized_pnl_delta;
+        let maker_realized_pnl = settlement.maker_outcome.realized_pnl_delta;
+        positions.insert(taker_position_key, settlement.taker_position_after);
+        positions.insert(maker_position_key, settlement.maker_position_after);
 
         let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), index + 1);
         let voucher_id =
@@ -460,40 +452,6 @@ fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidP
         return Err(SettleHyperliquidPerpTradeError::ArithmeticOverflow);
     }
     Ok(next as u64)
-}
-
-fn taker_signed_size_delta(
-    trade: &HyperliquidPerpTrade,
-) -> Result<i64, SettleHyperliquidPerpTradeError> {
-    signed_trade_qty(
-        trade.qty,
-        match trade.taker_side {
-            crate::entity::HyperliquidPerpOrderSide::Buy => 1,
-            crate::entity::HyperliquidPerpOrderSide::Sell => -1,
-        },
-    )
-}
-
-fn maker_signed_size_delta(
-    trade: &HyperliquidPerpTrade,
-) -> Result<i64, SettleHyperliquidPerpTradeError> {
-    signed_trade_qty(
-        trade.qty,
-        match trade.taker_side {
-            crate::entity::HyperliquidPerpOrderSide::Buy => -1,
-            crate::entity::HyperliquidPerpOrderSide::Sell => 1,
-        },
-    )
-}
-
-fn signed_trade_qty(qty: u64, sign: i64) -> Result<i64, SettleHyperliquidPerpTradeError> {
-    let qty =
-        i64::try_from(qty).map_err(|_| SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    if sign.is_negative() {
-        qty.checked_neg().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)
-    } else {
-        Ok(qty)
-    }
 }
 
 fn position_map(
