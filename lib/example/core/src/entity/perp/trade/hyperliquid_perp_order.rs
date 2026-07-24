@@ -140,15 +140,15 @@ pub struct PlaceHyperliquidPerpOrderInput {
     pub client_order_id: Option<String>,
     /// 若订单来源于强平流程，则携带强平会话 ID。
     pub liquidation_id: Option<String>,
-    /// 本次普通下单的开平仓业务意图。
+    /// 本次普通下单的仓位业务意图。
     pub intent: PlaceHyperliquidPerpOrderIntent,
 }
 
-/// Hyperliquid perp 普通下单的开平仓语义。
+/// Hyperliquid perp 普通下单的仓位业务意图。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceHyperliquidPerpOrderIntent {
-    /// 开仓或加仓订单，需要新增保证金冻结。
-    Open {
+    /// 当前无仓位，本次建立新仓位，需要新增保证金冻结。
+    OpenPosition {
         /// 保证金资产 ID。
         margin_asset_id: String,
         /// 保证金余额实体 ID。
@@ -156,8 +156,19 @@ pub enum PlaceHyperliquidPerpOrderIntent {
         /// 本次下单需要冻结的保证金金额。
         margin_amount: u64,
     },
-    /// 平仓订单，不创建新的保证金冻结。
-    Close,
+    /// 已有同方向仓位，本次加仓，需要新增保证金冻结。
+    IncreasePosition {
+        /// 保证金资产 ID。
+        margin_asset_id: String,
+        /// 保证金余额实体 ID。
+        margin_balance_entity_id: String,
+        /// 本次下单需要冻结的保证金金额。
+        margin_amount: u64,
+    },
+    /// 反方向订单减少仓位，不创建新的保证金冻结。
+    ReducePosition,
+    /// 反方向订单刚好完全平仓，不创建新的保证金冻结。
+    ClosePosition,
 }
 
 /// Hyperliquid perp 下单创建的聚合结果。
@@ -270,10 +281,10 @@ impl HyperliquidPerpOrder {
         }
     }
 
-    /// 可 BDD 规格化的聚合根行为：按 Open / Close 意图创建 Hyperliquid perp 订单。
+    /// 可 BDD 规格化的聚合根行为：按四态仓位意图创建 Hyperliquid perp 订单。
     ///
-    /// 该方法只创建订单聚合和 Open 意图直接派生的冻结余额流水单据，不执行余额落账，
-    /// 也不检查仓位开平仓资格。
+    /// 该方法只创建订单聚合和开仓 / 加仓意图直接派生的冻结余额流水单据，
+    /// 不执行余额落账，也不检查仓位开平仓资格。
     pub(crate) fn place(
         input: PlaceHyperliquidPerpOrderInput,
     ) -> Result<PlaceHyperliquidPerpOrderOutcome, HyperliquidPerpOrderBehaviorError> {
@@ -284,8 +295,14 @@ impl HyperliquidPerpOrder {
             return Err(HyperliquidPerpOrderBehaviorError::InvalidPrice);
         }
         let (reduce_only, reservation, freeze_ledger_entry) = match input.intent {
-            PlaceHyperliquidPerpOrderIntent::Close => (true, None, None),
-            PlaceHyperliquidPerpOrderIntent::Open {
+            PlaceHyperliquidPerpOrderIntent::ReducePosition
+            | PlaceHyperliquidPerpOrderIntent::ClosePosition => (true, None, None),
+            PlaceHyperliquidPerpOrderIntent::OpenPosition {
+                margin_asset_id,
+                margin_balance_entity_id,
+                margin_amount,
+            }
+            | PlaceHyperliquidPerpOrderIntent::IncreasePosition {
                 margin_asset_id,
                 margin_balance_entity_id,
                 margin_amount,

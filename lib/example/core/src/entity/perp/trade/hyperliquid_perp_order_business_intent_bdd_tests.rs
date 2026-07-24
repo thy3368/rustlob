@@ -90,7 +90,7 @@ fn place_input() -> PlaceHyperliquidPerpOrderInput {
         qty: 3,
         client_order_id: Some("client-1".to_string()),
         liquidation_id: None,
-        intent: PlaceHyperliquidPerpOrderIntent::Open {
+        intent: PlaceHyperliquidPerpOrderIntent::OpenPosition {
             margin_asset_id: "USDC".to_string(),
             margin_balance_entity_id: "balance-1".to_string(),
             margin_amount: 30,
@@ -98,11 +98,11 @@ fn place_input() -> PlaceHyperliquidPerpOrderInput {
     }
 }
 
-// ===== 开仓：订单创建、保证金冻结、reservation 事实 =====
+// ===== 开仓 / 加仓：订单创建、保证金冻结、reservation 事实 =====
 
-// 下单会创建 Open 订单，并同时创建内部保证金 reservation。
+// OpenPosition 意图会创建非 reduce-only 订单，并同时创建内部保证金 reservation。
 #[test]
-fn place_creates_order_with_internal_reservation() {
+fn place_open_position_creates_order_with_internal_reservation() {
     let outcome = HyperliquidPerpOrder::place(place_input()).unwrap();
 
     assert_eq!(outcome.order.order_id, "place-1");
@@ -120,6 +120,25 @@ fn place_creates_order_with_internal_reservation() {
     assert_eq!(reservation.original_amount, 30);
     assert_eq!(reservation.remaining_amount, 30);
     assert_eq!(reservation.status, ReservationStatus::Active);
+}
+
+// IncreasePosition 意图同样需要冻结本次新增保证金。
+#[test]
+fn place_increase_position_creates_non_reduce_only_order_with_internal_reservation() {
+    let mut input = place_input();
+    input.intent = PlaceHyperliquidPerpOrderIntent::IncreasePosition {
+        margin_asset_id: "USDC".to_string(),
+        margin_balance_entity_id: "balance-1".to_string(),
+        margin_amount: 40,
+    };
+
+    let outcome = HyperliquidPerpOrder::place(input).unwrap();
+
+    assert!(!outcome.order.reduce_only);
+    let reservation = outcome.order.reservation.as_ref().unwrap();
+    assert_eq!(reservation.reservation_kind, ReservationKind::PerpOpenMargin);
+    assert_eq!(reservation.original_amount, 40);
+    assert_eq!(outcome.freeze_ledger_entry.as_ref().unwrap().amount, 40);
 }
 
 // 订单 reservation 会派生冻结余额流水。
@@ -148,7 +167,7 @@ fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdra
     let total_before = balance.total();
 
     let mut input = place_input();
-    input.intent = PlaceHyperliquidPerpOrderIntent::Open {
+    input.intent = PlaceHyperliquidPerpOrderIntent::OpenPosition {
         margin_asset_id: "USDC".to_string(),
         margin_balance_entity_id: balance.entity_id(),
         margin_amount: 30,
@@ -218,7 +237,7 @@ fn place_rejects_zero_quantity_price_and_margin() {
     );
 
     let mut zero_margin = place_input();
-    zero_margin.intent = PlaceHyperliquidPerpOrderIntent::Open {
+    zero_margin.intent = PlaceHyperliquidPerpOrderIntent::OpenPosition {
         margin_asset_id: "USDC".to_string(),
         margin_balance_entity_id: "balance-1".to_string(),
         margin_amount: 0,
@@ -229,13 +248,13 @@ fn place_rejects_zero_quantity_price_and_margin() {
     );
 }
 
-// ===== 平仓：Close 意图与剩余量一致性 =====
+// ===== 减仓 / 平仓：reduce-only 意图与剩余量一致性 =====
 
-// Close 意图会创建 reduce-only 订单，且不会创建保证金 reservation 或冻结流水。
+// ClosePosition 意图会创建 reduce-only 订单，且不会创建保证金 reservation 或冻结流水。
 #[test]
-fn place_close_creates_reduce_only_order_without_reservation_or_freeze_ledger() {
+fn place_close_position_creates_reduce_only_order_without_reservation_or_freeze_ledger() {
     let mut input = place_input();
-    input.intent = PlaceHyperliquidPerpOrderIntent::Close;
+    input.intent = PlaceHyperliquidPerpOrderIntent::ClosePosition;
 
     let outcome = HyperliquidPerpOrder::place(input).unwrap();
 
@@ -246,11 +265,11 @@ fn place_close_creates_reduce_only_order_without_reservation_or_freeze_ledger() 
     assert_eq!(outcome.freeze_ledger_entry, None);
 }
 
-// reduce-only 部分成交订单的剩余量与生命周期状态必须一致。
+// ReducePosition 意图会创建 reduce-only 订单，且部分成交后的剩余量与生命周期状态必须一致。
 #[test]
-fn reduce_only_partially_filled_order_keeps_remaining_qty_and_execution_state_consistent() {
+fn place_reduce_position_keeps_remaining_qty_and_execution_state_consistent_after_partial_fill() {
     let mut input = place_input();
-    input.intent = PlaceHyperliquidPerpOrderIntent::Close;
+    input.intent = PlaceHyperliquidPerpOrderIntent::ReducePosition;
     let order = HyperliquidPerpOrder::place(input)
         .unwrap()
         .order
