@@ -37,7 +37,7 @@ fn open_from_empty_slot(
 }
 
 fn open_position(signed_size: i64, entry_price: u64, leverage: u64) -> HyperliquidPerpPosition {
-    HyperliquidPerpPosition::new(
+    let (position, _) = HyperliquidPerpPosition::open_position(
         "trader-1:7".to_string(),
         "trader-1".to_string(),
         7,
@@ -46,24 +46,30 @@ fn open_position(signed_size: i64, entry_price: u64, leverage: u64) -> Hyperliqu
         entry_price,
         leverage,
         HyperliquidPerpMarginMode::Cross,
-        7,
-        2,
     )
+    .expect("valid open position fixture");
+    position
 }
 
 fn closed_position(leverage: u64) -> HyperliquidPerpPosition {
-    HyperliquidPerpPosition::new(
-        "trader-1:7".to_string(),
-        "trader-1".to_string(),
-        7,
-        "BTC-PERP".to_string(),
-        0,
-        0,
-        leverage,
-        HyperliquidPerpMarginMode::Cross,
-        11,
-        3,
-    )
+    let mut position = open_position(1, 100, leverage);
+    position.close_position(-1, 111).expect("valid closed position fixture");
+    position
+}
+
+fn open_position_with_prior_realized_pnl(
+    signed_size: i64,
+    entry_price: u64,
+    leverage: u64,
+) -> HyperliquidPerpPosition {
+    let sign = signed_size.signum();
+    let open_size =
+        signed_size.checked_add(sign).expect("fixture signed size must allow one extra lot");
+    let mut position = open_position(open_size, entry_price, leverage);
+    let reduce_price = if sign.is_positive() { entry_price + 7 } else { entry_price - 7 };
+
+    position.reduce_position(-sign, reduce_price).expect("valid realized pnl fixture");
+    position
 }
 
 #[test]
@@ -112,7 +118,7 @@ fn given_open_long_when_add_long_trade_settles_then_long_position_increases_with
     assert_eq!(position.qty(), 5);
     assert_eq!(position.entry_price, 112);
     assert_eq!(position.required_margin().unwrap_or(0), 56);
-    assert_eq!(position.version, 3);
+    assert_eq!(position.version, 2);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 26);
     Ok(())
@@ -129,7 +135,7 @@ fn given_open_short_when_add_short_trade_settles_then_short_position_increases_w
     assert_eq!(position.qty(), 5);
     assert_eq!(position.entry_price, 112);
     assert_eq!(position.required_margin().unwrap_or(0), 56);
-    assert_eq!(position.version, 3);
+    assert_eq!(position.version, 2);
     assert_eq!(outcome.realized_pnl_delta, 0);
     assert_eq!(outcome.required_margin_delta, 26);
     Ok(())
@@ -138,7 +144,7 @@ fn given_open_short_when_add_short_trade_settles_then_short_position_increases_w
 #[test]
 fn given_open_long_when_close_long_trade_partially_settles_then_long_position_reduces_and_realizes_pnl()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(5 as i64, 100, 10);
+    let mut position = open_position_with_prior_realized_pnl(5 as i64, 100, 10);
 
     let outcome = position.reduce_position(-(2 as i64), 130)?;
 
@@ -155,7 +161,7 @@ fn given_open_long_when_close_long_trade_partially_settles_then_long_position_re
 #[test]
 fn given_open_short_when_close_short_trade_partially_settles_then_short_position_reduces_and_realizes_pnl()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(-(5 as i64), 100, 10);
+    let mut position = open_position_with_prior_realized_pnl(-(5 as i64), 100, 10);
 
     let outcome = position.reduce_position(2 as i64, 70)?;
 
@@ -172,7 +178,7 @@ fn given_open_short_when_close_short_trade_partially_settles_then_short_position
 #[test]
 fn given_open_long_when_close_long_trade_fully_settles_then_position_closes_and_margin_is_released()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(3 as i64, 100, 10);
+    let mut position = open_position_with_prior_realized_pnl(3 as i64, 100, 10);
 
     let outcome = position.close_position(-(3 as i64), 80)?;
 
@@ -190,7 +196,7 @@ fn given_open_long_when_close_long_trade_fully_settles_then_position_closes_and_
 #[test]
 fn given_open_short_when_close_short_trade_fully_settles_then_position_closes_and_margin_is_released()
 -> Result<(), HyperliquidPerpPositionError> {
-    let mut position = open_position(-(3 as i64), 100, 10);
+    let mut position = open_position_with_prior_realized_pnl(-(3 as i64), 100, 10);
 
     let outcome = position.close_position(3 as i64, 120)?;
 
@@ -210,7 +216,7 @@ fn given_position_when_mark_moves_then_unrealized_pnl_is_signed() {
     let long = open_position(2 as i64, 100, 10);
     let short = open_position(-(2 as i64), 100, 10);
     let flat = closed_position(10);
-    let max_sized_long = open_position(i64::MAX, 0, 10);
+    let max_sized_long = open_position(i64::MAX, 1, 10);
 
     assert_eq!(long.notional_at(130), Some(260));
     assert_eq!(long.unrealized_pnl_at(130), Some(60));
@@ -218,7 +224,7 @@ fn given_position_when_mark_moves_then_unrealized_pnl_is_signed() {
     assert_eq!(short.unrealized_pnl_at(70), Some(60));
     assert_eq!(short.unrealized_pnl_at(130), Some(-60));
     assert_eq!(flat.unrealized_pnl_at(130), Some(0));
-    assert_eq!(max_sized_long.unrealized_pnl_at(2), None);
+    assert_eq!(max_sized_long.unrealized_pnl_at(3), None);
 }
 
 #[test]
@@ -310,7 +316,7 @@ fn given_open_position_when_matching_leverage_facts_apply_then_margin_is_recompu
 
     assert_eq!(position.leverage_value, 10);
     assert_eq!(position.required_margin().unwrap_or(0), 30);
-    assert_eq!(position.version, 3);
+    assert_eq!(position.version, 2);
     assert_eq!(outcome.required_margin_delta, -30);
     Ok(())
 }
@@ -333,7 +339,7 @@ fn given_empty_or_closed_position_when_matching_leverage_facts_apply_then_margin
     assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
     assert_eq!(closed.leverage_value, 20);
     assert_eq!(closed.required_margin().unwrap_or(0), 0);
-    assert_eq!(closed.version, 4);
+    assert_eq!(closed.version, 3);
     assert_eq!(closed_outcome.required_margin_delta, 0);
     Ok(())
 }

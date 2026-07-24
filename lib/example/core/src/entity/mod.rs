@@ -61,7 +61,9 @@ pub use perp::trade::hyperliquid_perp_position::{
     HyperliquidPerpPositionError, HyperliquidPerpPositionLeverageOutcome,
     HyperliquidPerpPositionStatus, HyperliquidPerpPositionTradeOutcome, required_position_margin,
 };
-pub use perp::trade::hyperliquid_perp_trade::HyperliquidPerpTrade;
+pub use perp::trade::hyperliquid_perp_trade::{
+    HyperliquidPerpTrade, HyperliquidPerpTradePositionSettlement,
+};
 pub use reservation::{
     AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationError,
     ReservationKind, ReservationMarketKind, ReservationStatus,

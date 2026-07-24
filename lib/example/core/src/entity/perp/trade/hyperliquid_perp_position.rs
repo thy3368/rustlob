@@ -124,7 +124,7 @@ impl HyperliquidPerpPosition {
     ///
     /// 该构造器只装配已知事实，不校验仓位自洽性，不接收或持久化风险快照派生字段。
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         position_key: String,
         account_id: String,
         perp_asset_id: u32,
