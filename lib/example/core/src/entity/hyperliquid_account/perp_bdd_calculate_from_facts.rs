@@ -104,9 +104,13 @@ fn given_cross_positions_when_calculated_then_margin_summaries_include_cross_ris
 
     assert_eq!(state.margin_summary().total_position_notional(), dec(400));
     assert_eq!(state.margin_summary().total_margin_used(), dec(60));
+    assert_eq!(state.margin_summary().position_initial_margin_used(), dec(60));
+    assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(0));
     assert_eq!(state.margin_summary().account_value(), dec(1_200));
     assert_eq!(state.cross_margin_summary().total_position_notional(), dec(200));
     assert_eq!(state.cross_margin_summary().total_margin_used(), dec(20));
+    assert_eq!(state.cross_margin_summary().position_initial_margin_used(), dec(20));
+    assert_eq!(state.cross_margin_summary().open_order_initial_margin_used(), dec(0));
     assert_eq!(state.cross_margin_summary().account_value(), dec(1_000));
     assert_eq!(state.cross_maintenance_margin_used(), Some(dec(10)));
     assert_eq!(state.withdrawable(), dec(1_140));
@@ -140,7 +144,34 @@ fn given_active_open_order_reservation_when_calculated_then_margin_used_increase
     };
 
     assert_eq!(state.margin_summary().total_margin_used(), dec(320));
+    assert_eq!(state.margin_summary().position_initial_margin_used(), dec(20));
+    assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(300));
+    assert_eq!(
+        state.margin_summary().total_margin_used(),
+        state.margin_summary().position_initial_margin_used()
+            + state.margin_summary().open_order_initial_margin_used()
+    );
+    assert_eq!(state.cross_margin_summary().total_margin_used(), dec(20));
+    assert_eq!(state.cross_margin_summary().open_order_initial_margin_used(), dec(0));
     assert_eq!(state.withdrawable(), dec(680));
+}
+
+#[test]
+fn given_open_order_without_position_when_calculated_then_only_open_order_margin_is_used() {
+    let mut calc_input = input(vec![], 1_000);
+    calc_input.open_order_margin_reservations = vec![active_perp_reservation(300)];
+
+    let state = match PerpClearinghouseState::calculate_from_facts(calc_input) {
+        Ok(state) => state,
+        Err(error) => panic!("calculation must succeed: {error}"),
+    };
+
+    assert_eq!(state.margin_summary().total_position_notional(), dec(0));
+    assert_eq!(state.margin_summary().position_initial_margin_used(), dec(0));
+    assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(300));
+    assert_eq!(state.margin_summary().total_margin_used(), dec(300));
+    assert_eq!(state.withdrawable(), dec(700));
+    assert!(!state.has_open_positions());
 }
 
 #[test]
@@ -212,6 +243,8 @@ fn given_no_positions_and_collateral_when_calculated_then_withdrawable_is_collat
 
     assert_eq!(state.margin_summary().total_position_notional(), dec(0));
     assert_eq!(state.margin_summary().total_margin_used(), dec(0));
+    assert_eq!(state.margin_summary().position_initial_margin_used(), dec(0));
+    assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(0));
     assert_eq!(state.margin_summary().account_value(), dec(750));
     assert_eq!(state.withdrawable(), dec(750));
     assert_eq!(state.risk_state(), RiskState::Normal);

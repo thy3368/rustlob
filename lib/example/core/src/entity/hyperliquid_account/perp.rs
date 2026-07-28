@@ -1,3 +1,4 @@
+use common_entity::{DomainReadModel, DomainReadSnapshot};
 use decimal::Decimal;
 use thiserror::Error;
 
@@ -121,13 +122,17 @@ pub enum RiskState {
 /// 该值对象对齐 Hyperliquid `marginSummary` / `crossMarginSummary` 中的账户级汇总字段。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarginSummary {
-    /// 账户权益，即账户总价值。
+    /// 账户权益，约等于原始抵押物余额加当前未实现盈亏。
     account_value: Decimal,
-    /// 当前账户级总保证金占用。
+    /// 当前账户级总保证金占用，等于仓位初始保证金占用加挂单初始保证金占用。
     total_margin_used: Decimal,
-    /// 当前账户级总持仓名义价值。
+    /// 已成交仓位占用的初始保证金。
+    position_initial_margin_used: Decimal,
+    /// 未成交开仓或加仓挂单占用的初始保证金。
+    open_order_initial_margin_used: Decimal,
+    /// 当前所有非空合约仓位的名义价值总和。
     total_position_notional: Decimal,
-    /// 当前账户级原始 USD 余额。
+    /// 原始 USD 抵押物余额，不直接包含未实现盈亏。
     total_raw_usd: Decimal,
 }
 
@@ -136,10 +141,19 @@ impl MarginSummary {
     pub fn new(
         account_value: Decimal,
         total_margin_used: Decimal,
+        position_initial_margin_used: Decimal,
+        open_order_initial_margin_used: Decimal,
         total_position_notional: Decimal,
         total_raw_usd: Decimal,
     ) -> Self {
-        Self { account_value, total_margin_used, total_position_notional, total_raw_usd }
+        Self {
+            account_value,
+            total_margin_used,
+            position_initial_margin_used,
+            open_order_initial_margin_used,
+            total_position_notional,
+            total_raw_usd,
+        }
     }
 
     /// 返回账户权益。
@@ -150,6 +164,16 @@ impl MarginSummary {
     /// 返回账户级总保证金占用。
     pub fn total_margin_used(&self) -> Decimal {
         self.total_margin_used
+    }
+
+    /// 返回已成交仓位占用的初始保证金。
+    pub fn position_initial_margin_used(&self) -> Decimal {
+        self.position_initial_margin_used
+    }
+
+    /// 返回未成交开仓或加仓挂单占用的初始保证金。
+    pub fn open_order_initial_margin_used(&self) -> Decimal {
+        self.open_order_initial_margin_used
     }
 
     /// 返回账户级总持仓名义价值。
@@ -163,9 +187,10 @@ impl MarginSummary {
     }
 }
 
-/// 子账户在 perp 清算域上的风险与仓位状态快照。
+/// 子账户在 perp 清算域上的领域读快照。
 ///
-/// 该对象属于 `Snapshot` 语义，主要支持查询持仓、余额与风险状态。
+/// 该类型是领域读模型，不是写侧 aggregate；命令侧不得依赖它执行状态迁移。
+/// 它表达某一时点已装配的清算域事实与派生风险值，用于查询持仓、余额与风险状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpClearinghouseState {
     /// 子账户标识。
@@ -183,6 +208,9 @@ pub struct PerpClearinghouseState {
     /// 当前风险状态结论。
     risk_state: RiskState,
 }
+
+impl DomainReadModel for PerpClearinghouseState {}
+impl DomainReadSnapshot for PerpClearinghouseState {}
 
 impl PerpClearinghouseState {
     /// 从已校验事实装配子账户 perp 清算状态。
@@ -233,7 +261,7 @@ impl PerpClearinghouseState {
 
         let mut position_risks = Vec::with_capacity(input.positions.len());
         let mut total_position_notional = zero();
-        let mut total_initial_margin_used = zero();
+        let mut position_initial_margin_used = zero();
         let mut total_unrealized_pnl = zero();
         let mut cross_position_notional = zero();
         let mut cross_initial_margin_used = zero();
@@ -289,8 +317,8 @@ impl PerpClearinghouseState {
             // 账户级汇总包含所有保证金模式的非空仓：名义价值、初始保证金和未实现盈亏
             // 都以当前 mark 与仓位事实为准逐仓累加。
             total_position_notional = checked_add(total_position_notional, position_notional)?;
-            total_initial_margin_used =
-                checked_add(total_initial_margin_used, initial_margin_used)?;
+            position_initial_margin_used =
+                checked_add(position_initial_margin_used, initial_margin_used)?;
             total_unrealized_pnl = checked_add(total_unrealized_pnl, unrealized_pnl)?;
 
             if position.margin_mode == HyperliquidPerpMarginMode::Cross {
@@ -308,10 +336,10 @@ impl PerpClearinghouseState {
         }
 
         // active perp 挂单冻结会并入当前保证金占用，体现未成交订单对可提资金的占用。
-        let active_open_order_reservation_remaining =
+        let open_order_initial_margin_used =
             active_open_order_reservation_remaining(&input.open_order_margin_reservations)?;
         let total_margin_used =
-            checked_add(total_initial_margin_used, active_open_order_reservation_remaining)?;
+            checked_add(position_initial_margin_used, open_order_initial_margin_used)?;
         // 账户权益以 collateral 事实加未实现盈亏估算；cross 视图只叠加 cross 仓位的盈亏。
         let total_raw_usd =
             checked_add(input.collateral.total_raw_usd, input.collateral.pending_settlement_delta)?;
@@ -339,12 +367,16 @@ impl PerpClearinghouseState {
             MarginSummary::new(
                 account_value,
                 total_margin_used,
+                position_initial_margin_used,
+                open_order_initial_margin_used,
                 total_position_notional,
                 total_raw_usd,
             ),
             MarginSummary::new(
                 cross_account_value,
                 cross_initial_margin_used,
+                cross_initial_margin_used,
+                zero(),
                 cross_position_notional,
                 total_raw_usd,
             ),
@@ -543,13 +575,36 @@ mod tests {
         }
     }
 
+    fn assert_domain_read_model<T: DomainReadModel>() {}
+    fn assert_domain_read_snapshot<T: DomainReadSnapshot>() {}
+
+    #[test]
+    fn perp_clearinghouse_state_is_marked_as_domain_read_model() {
+        assert_domain_read_model::<PerpClearinghouseState>();
+        assert_domain_read_snapshot::<PerpClearinghouseState>();
+    }
+
     #[test]
     fn perp_state_detects_open_positions_and_queries_by_symbol() {
         let state = PerpClearinghouseState::new(
             AccountId::from("sub-1"),
             vec![sample_position_risk(0, "BTC-PERP", 0), sample_position_risk(1, "ETH-PERP", 3)],
-            MarginSummary::new(dec(20_000), dec(8_000), dec(100_000), dec(19_700)),
-            MarginSummary::new(dec(18_000), dec(7_000), dec(100_000), dec(17_700)),
+            MarginSummary::new(
+                dec(20_000),
+                dec(8_000),
+                dec(8_000),
+                dec(0),
+                dec(100_000),
+                dec(19_700),
+            ),
+            MarginSummary::new(
+                dec(18_000),
+                dec(7_000),
+                dec(7_000),
+                dec(0),
+                dec(100_000),
+                dec(17_700),
+            ),
             Some(dec(1_500)),
             dec(5_000),
             RiskState::Normal,
@@ -560,10 +615,14 @@ mod tests {
         assert!(state.position_of("SOL-PERP").is_none());
         assert_eq!(state.margin_summary().account_value(), dec(20_000));
         assert_eq!(state.margin_summary().total_margin_used(), dec(8_000));
+        assert_eq!(state.margin_summary().position_initial_margin_used(), dec(8_000));
+        assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(0));
         assert_eq!(state.margin_summary().total_position_notional(), dec(100_000));
         assert_eq!(state.margin_summary().total_raw_usd(), dec(19_700));
         assert_eq!(state.cross_margin_summary().account_value(), dec(18_000));
         assert_eq!(state.cross_margin_summary().total_margin_used(), dec(7_000));
+        assert_eq!(state.cross_margin_summary().position_initial_margin_used(), dec(7_000));
+        assert_eq!(state.cross_margin_summary().open_order_initial_margin_used(), dec(0));
         assert_eq!(state.cross_margin_summary().total_position_notional(), dec(100_000));
         assert_eq!(state.cross_margin_summary().total_raw_usd(), dec(17_700));
         assert_eq!(state.cross_maintenance_margin_used(), Some(dec(1_500)));
@@ -575,8 +634,8 @@ mod tests {
         let state = PerpClearinghouseState::new(
             AccountId::from("sub-1"),
             vec![sample_position_risk(0, "BTC-PERP", 0)],
-            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
-            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0)),
+            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),
+            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),
             None,
             dec(20_000),
             RiskState::Normal,
