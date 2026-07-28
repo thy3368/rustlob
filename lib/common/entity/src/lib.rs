@@ -12,6 +12,7 @@ pub use entity_v2::entity::{
 pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
+pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use use_case::mi_family_executor::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
