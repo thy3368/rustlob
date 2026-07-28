@@ -1,4 +1,5 @@
 mod market_rules;
+pub mod option;
 mod reservation;
 
 pub mod hyperliquid_account;
@@ -26,6 +27,13 @@ pub use hyperliquid_account::{
     SpotClearinghouseState, SubAccountProfile, SubAccountSnapshot, SubAccountSnapshotError,
 };
 pub use market_rules::MarketRules;
+pub use option::cex::cex_option::{
+    CexOptionFeeHoldRequirement, CexOptionInstrument, CexOptionInstrumentStatus, CexOptionOrder,
+    CexOptionOrderBehaviorError, CexOptionOrderExecution, CexOptionOrderSide, CexOptionOrderStatus,
+    CexOptionOrderTimeInForce, CexOptionPremiumHoldRequirement,
+    CexOptionShortMarginHoldRequirement, CexOptionType, PlaceCexOptionOrderInput,
+    PlaceCexOptionOrderIntent, PlaceCexOptionOrderOutcome,
+};
 pub use perp::fund::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
 pub use perp::hyperliquid_perp_adl_batch::{
     HyperliquidPerpAdlBatch, HyperliquidPerpAdlBatchStatus,
