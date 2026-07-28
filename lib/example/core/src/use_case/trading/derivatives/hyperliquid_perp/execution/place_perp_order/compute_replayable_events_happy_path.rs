@@ -26,6 +26,7 @@ use super::*;
 // - long sell opposite partial close
 // - long sell opposite exact close
 // - short buy opposite partial close
+// - short buy opposite exact close
 
 fn compute_after_changes_and_events(
     cmd: &PlaceHyperliquidPerpOrderCmd,
@@ -557,7 +558,7 @@ fn short_position_places_buy_reduce_only_order_without_freezing_margin() {
 #[test]
 fn long_position_places_opposite_sell_that_closes_without_new_margin() {
     // Rule:
-    // - 非 reduce-only 命令的 opposite-side sell，只要仍在 long 净仓内，就派生为 Close 订单。
+    // - 非 reduce-only 命令的 opposite-side sell，只要小于 long 净仓，就派生为 ReducePosition 订单。
     //
     // Given:
     // - 当前已有 5 手 long position。
@@ -595,7 +596,7 @@ fn long_position_places_opposite_sell_that_closes_without_new_margin() {
 #[test]
 fn long_position_places_opposite_sell_that_exactly_closes_without_new_margin() {
     // Rule:
-    // - 非 reduce-only 命令的 opposite-side sell 在数量刚好等于当前 long 净仓时，应派生为 Close 订单。
+    // - 非 reduce-only 命令的 opposite-side sell 在数量刚好等于当前 long 净仓时，应派生为 ClosePosition 订单。
     //
     // Given:
     // - 当前已有 5 手 long position。
@@ -660,7 +661,7 @@ fn long_position_rejects_single_opposite_sell_flip_until_split_workflow_handles_
 #[test]
 fn short_position_places_opposite_buy_that_closes_without_new_margin() {
     // Rule:
-    // - 非 reduce-only 命令的 opposite-side buy，只要仍在 short 净仓内，就派生为 Close 订单。
+    // - 非 reduce-only 命令的 opposite-side buy，只要小于 short 净仓，就派生为 ReducePosition 订单。
     //
     // Given:
     // - 当前已有 5 手 short position。
@@ -696,6 +697,46 @@ fn short_position_places_opposite_buy_that_closes_without_new_margin() {
 }
 
 #[test]
+fn short_position_places_opposite_buy_that_exactly_closes_without_new_margin() {
+    // Rule:
+    // - 非 reduce-only 命令的 opposite-side buy 在数量刚好等于当前 short 净仓时，应派生为 ClosePosition 订单。
+    //
+    // Given:
+    // - 当前已有 5 手 short position。
+    // - 命令是 5 手 buy limit，刚好等于当前净仓。
+    //
+    // When:
+    // - 调用 `compute_after_changes()`，再投影 replayable events。
+    //
+    // Then:
+    // - `Changes` 只有 reduce-only created order，没有 balance pair。
+    // - 只产生一条 order create event。
+
+    // arrange
+    let mut cmd = limit_cmd();
+    cmd.size = 5;
+    cmd.reduce_only = false;
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
+    assert_eq!(use_case().validate_against_given_state(&cmd, &short_state), Ok(()));
+
+    // act
+    let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
+
+    // assert
+    assert_order_snapshot(
+        &changes.created_order,
+        HyperliquidPerpOrderSide::Buy,
+        HyperliquidPerpOrderExecution::Limit { price: 101 },
+        HyperliquidPerpOrderTimeInForce::Gtc,
+        5,
+        true,
+    );
+    assert_no_margin_ledger_or_balance_pair(&changes);
+    assert_eq!(events.len(), 1);
+    assert_order_created_event(&events[0], "buy", "limit", "gtc", 5, 101, true);
+}
+
+#[test]
 fn short_position_rejects_single_opposite_buy_flip_until_split_workflow_handles_it() {
     // Rule:
     // - opposite-side buy 超过当前 short 净仓时，不能作为单笔普通订单表达反手。
@@ -716,6 +757,69 @@ fn short_position_rejects_single_opposite_buy_flip_until_split_workflow_handles_
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(
         use_case().validate_against_given_state(&cmd, &short_state),
+        Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
+    );
+}
+
+#[test]
+fn current_position_snapshot_derives_four_position_order_intents_and_rejects_flips() {
+    // Rule:
+    // - 下单 use case 必须基于当前仓位快照，把订单推导为开仓、加仓、减仓或全平。
+    //
+    // Given:
+    // - 当前仓位分别为空仓、long、short。
+    // - 订单方向分别同向、反向部分减少、反向刚好全平、反向超过净仓。
+    //
+    // When:
+    // - 推导本次订单的仓位意图。
+    //
+    // Then:
+    // - 四态 intent 明确区分业务动作，反手订单仍要求上层拆单。
+
+    // arrange
+    let flat_position = state().position;
+    let long_position = non_flat_position(5);
+    let short_position = non_flat_position(-5);
+
+    // act + assert
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &flat_position),
+        Ok(DerivedPerpOrderIntent::OpenPosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &flat_position),
+        Ok(DerivedPerpOrderIntent::OpenPosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &long_position),
+        Ok(DerivedPerpOrderIntent::IncreasePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &short_position),
+        Ok(DerivedPerpOrderIntent::IncreasePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &long_position),
+        Ok(DerivedPerpOrderIntent::ReducePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &short_position),
+        Ok(DerivedPerpOrderIntent::ReducePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Sell, 5, &long_position),
+        Ok(DerivedPerpOrderIntent::ClosePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Buy, 5, &short_position),
+        Ok(DerivedPerpOrderIntent::ClosePosition)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Sell, 8, &long_position),
+        Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
+    );
+    assert_eq!(
+        derive_place_intent(HyperliquidPerpOrderSide::Buy, 8, &short_position),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
     );
 }

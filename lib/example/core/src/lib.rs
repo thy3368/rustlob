@@ -1,6 +1,7 @@
 pub mod entity;
 pub mod use_case;
 
+pub use common_entity::{DomainReadModel, DomainReadSnapshot};
 pub use entity::{
     Account, AccountId, AccountStatus, AssetId, Balance, BalanceError, BalanceLedgerEntry,
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerReason,

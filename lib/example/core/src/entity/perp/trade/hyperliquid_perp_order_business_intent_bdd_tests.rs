@@ -175,6 +175,7 @@ fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdra
     let mut outcome = HyperliquidPerpOrder::place(input).unwrap();
     let reservation = outcome.order.reservation.clone().unwrap();
     let reserved_amount = reservation.original_amount;
+    let reservation_remaining_amount = reservation.remaining_amount;
 
     outcome.freeze_ledger_entry.as_mut().unwrap().apply_to(&mut balance).unwrap();
     let clearinghouse_after = clearinghouse_state_from_facts(1_000, vec![reservation]);
@@ -198,6 +199,11 @@ fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdra
     assert!(!clearinghouse_after.has_open_positions());
     assert_eq!(clearinghouse_before.margin_summary().total_position_notional(), dec(0));
     assert_eq!(clearinghouse_after.margin_summary().total_position_notional(), dec(0));
+    assert_eq!(clearinghouse_after.margin_summary().position_initial_margin_used(), dec(0));
+    assert_eq!(
+        clearinghouse_after.margin_summary().open_order_initial_margin_used(),
+        dec(reservation_remaining_amount as i64)
+    );
 }
 
 // 市价意图和限价意图只要价格为正都可以创建订单。
