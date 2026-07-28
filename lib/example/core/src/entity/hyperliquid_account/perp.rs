@@ -191,6 +191,7 @@ impl MarginSummary {
 ///
 /// 该类型是领域读模型，不是写侧 aggregate；命令侧不得依赖它执行状态迁移。
 /// 它表达某一时点已装配的清算域事实与派生风险值，用于查询持仓、余额与风险状态。
+/// 它不要求具备独立持久化身份、版本递增、diff 或 replay 语义。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpClearinghouseState {
     /// 子账户标识。
