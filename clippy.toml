@@ -15,3 +15,9 @@ disallowed-macros = [
     "std::panic",
     "core::panic",
 ]
+
+# 测试代码允许使用调试性写法，生产代码仍按上面的硬禁项执行
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-print-in-tests = true

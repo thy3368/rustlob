@@ -1161,6 +1161,7 @@ dependencies = [
  "chrono",
  "db_repo",
  "derivatives_behavior",
+ "diff",
  "futures",
  "futures-util",
  "id_generator",
@@ -3081,6 +3082,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "cmd_handler",
+ "entity",
  "example_core",
  "futures-util",
  "serde",
