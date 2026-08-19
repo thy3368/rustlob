@@ -86,10 +86,15 @@ pub fn single_thread(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let match_fields = match &input.fields {
         Fields::Named(named) => {
             let fields = &named.named;
-            let field_names = fields.iter().map(|field| {
-                let ident = field.ident.as_ref().unwrap();
-                quote! { #ident: Default::default(), }
-            });
+            let mut field_names = Vec::with_capacity(fields.len());
+            for field in fields.iter() {
+                let Some(ident) = field.ident.as_ref() else {
+                    return syn::Error::new_spanned(field, "#[single_thread] 只支持具名字段")
+                        .to_compile_error()
+                        .into();
+                };
+                field_names.push(quote! { #ident: Default::default(), });
+            }
 
             quote! {
                 #name {

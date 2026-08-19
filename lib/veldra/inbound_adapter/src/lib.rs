@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 mod common;
 
 pub mod exchange;

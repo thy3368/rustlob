@@ -102,7 +102,7 @@ fn main() {
     println!("  含义：每轮买入 = β × (真实价值 - 当前价格)\n");
 
     // 模拟噪音交易（随机买卖）
-    let noise_orders = vec![50.0, -30.0, 40.0, -20.0, 30.0];
+    let noise_orders = [50.0, -30.0, 40.0, -20.0, 30.0];
     let true_value = 115.0;
 
     println!("【执行过程】");

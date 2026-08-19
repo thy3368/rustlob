@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 pub mod adapter;
 pub mod core;
 

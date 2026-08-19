@@ -116,7 +116,7 @@ impl std::ops::Div for DecimalWrapper {
         if rhs.0 == 0 {
             Self(0)
         } else {
-            let result = self.0 as i128 * 100_000_000 as i128;
+            let result = self.0 as i128 * 100_000_000_i128;
             let normalized = result / rhs.0 as i128;
             Self(normalized as i64)
         }
@@ -131,7 +131,7 @@ impl PartialEq for DecimalWrapper {
 
 impl PartialOrd for DecimalWrapper {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 

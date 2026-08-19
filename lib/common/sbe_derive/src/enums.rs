@@ -16,6 +16,10 @@ pub fn generate_enum_impl(input: &DeriveInput) -> Result<TokenStream> {
     // Generate From<u8> and Into<u8> implementations
     let mut from_arms = Vec::new();
     let mut into_arms = Vec::new();
+    let first_variant = variants
+        .first()
+        .map(|variant| &variant.ident)
+        .ok_or_else(|| syn::Error::new_spanned(input, "Expected non-empty enum"))?;
 
     for (idx, variant) in variants.iter().enumerate() {
         let variant_name = &variant.ident;
@@ -31,11 +35,22 @@ pub fn generate_enum_impl(input: &DeriveInput) -> Result<TokenStream> {
     }
 
     let output = quote! {
-        impl From<u8> for #name {
-            fn from(value: u8) -> Self {
+        impl std::convert::TryFrom<u8> for #name {
+            type Error = u8;
+
+            fn try_from(value: u8) -> Result<Self, Self::Error> {
                 match value {
                     #(#from_arms)*
-                    _ => panic!("Invalid enum value: {}", value),
+                    _ => Err(value),
+                }
+            }
+        }
+
+        impl From<u8> for #name {
+            fn from(value: u8) -> Self {
+                match <#name as std::convert::TryFrom<u8>>::try_from(value) {
+                    Ok(value) => value,
+                    Err(_) => #name::#first_variant,
                 }
             }
         }

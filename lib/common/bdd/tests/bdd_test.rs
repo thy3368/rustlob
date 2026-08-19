@@ -9,9 +9,7 @@ use bdd::bdd_test;
     tags(cart, add_item),
     priority = "5"
 )]
-fn test_add_item_to_empty_cart() {
-    assert!(true);
-}
+fn test_add_item_to_empty_cart() {}
 
 #[bdd_test(
     feature = "购物车管理",
@@ -22,6 +20,4 @@ fn test_add_item_to_empty_cart() {
     tags(cart, duplicate),
     priority = "3"
 )]
-fn test_add_duplicate_item() {
-    assert!(true);
-}
+fn test_add_duplicate_item() {}

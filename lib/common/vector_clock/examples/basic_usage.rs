@@ -242,7 +242,7 @@ fn example_4_concurrent_events() {
     println!("  N2现在看到了整个系统的操作历史");
 
     println!("\n【对比：事件排序能力】");
-    let events = vec![
+    let events = [
         ("事件1 by N1", vec![("N1", 1), ("N2", 0), ("N3", 0)]),
         ("事件2 by N2", vec![("N1", 1), ("N2", 1), ("N3", 0)]),
         ("事件3 by N3", vec![("N1", 1), ("N2", 0), ("N3", 1)]),

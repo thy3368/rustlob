@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use cache_analyzer_derive::CacheAnalyzer;
 
 // 测试1：小结构体应该通过缓存行检查

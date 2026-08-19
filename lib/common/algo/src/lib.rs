@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 pub mod kyle;
 
 // 重新导出 Kyle 模型

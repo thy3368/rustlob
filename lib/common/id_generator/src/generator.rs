@@ -8,7 +8,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// - 41位: 时间戳(毫秒)
 /// - 5位: 节点ID (支持32个节点)
 /// - 12位: 序列号 (每毫秒4096个ID)
-
 pub struct IdGenerator {
     /// 组合的时间戳和序列号 (高48位时间戳 + 低16位序列号)
     ts_and_seq: AtomicU64,
@@ -124,7 +123,10 @@ impl IdGenerator {
     /// 获取当前时间戳(毫秒)
     #[inline]
     fn current_millis(&self) -> i64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration.as_millis() as i64,
+            Err(_) => 0,
+        }
     }
 }
 
@@ -171,7 +173,10 @@ mod tests {
         let generator = IdGenerator::new(0);
         let id = generator.next_id();
         let timestamp = generator.extract_timestamp(id);
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
+        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration.as_millis() as i64,
+            Err(_) => 0,
+        };
         assert!((timestamp - now).abs() < 1000);
     }
 
@@ -196,7 +201,10 @@ mod tests {
 
         let mut all_ids = Vec::new();
         for h in handles {
-            all_ids.extend(h.join().unwrap());
+            match h.join() {
+                Ok(ids) => all_ids.extend(ids),
+                Err(_) => panic!("thread panicked while generating ids"),
+            }
         }
 
         let original_len = all_ids.len();

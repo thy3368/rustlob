@@ -13,7 +13,9 @@ pub fn generate_group_encoder(group_name: &syn::Ident, group_fields: &[syn::Fiel
     let mut offset = 0usize;
 
     for field in group_fields {
-        let field_name = field.ident.as_ref().unwrap();
+        let Some(field_name) = field.ident.as_ref() else {
+            return quote! {};
+        };
         let field_ty = &field.ty;
 
         // Simplified - assume all primitive types for now

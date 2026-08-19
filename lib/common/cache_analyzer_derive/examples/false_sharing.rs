@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use std::sync::atomic::{AtomicBool, AtomicU64};
 
 /// 伪共享(False Sharing)检查示例

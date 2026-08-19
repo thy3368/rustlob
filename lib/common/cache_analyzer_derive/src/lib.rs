@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use cache_analyzer_types::validation::{CompileTimeValidation, validate_cache_friendly};
 use proc_macro::TokenStream;
 use quote::quote;

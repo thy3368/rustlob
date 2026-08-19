@@ -24,7 +24,3 @@ tests = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
-
-[[bench]]
-name = "use_case_qps"
-harness = false

@@ -568,7 +568,7 @@ fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
                     let type_str = quote!(#ty).to_string();
 
                     // 获取默认值（如果指定了）
-                    let default_value = extract_default_value(&field)
+                    let default_value = extract_default_value(field)
                         .unwrap_or_else(|| get_type_default(&type_str).to_string());
 
                     schemas.push(quote! {

@@ -98,6 +98,7 @@ impl UnifiedLookupTable {
 
     /// 获取两个值（tick_size和inverse），利用空间局部性
     #[inline(always)]
+    #[allow(dead_code)]
     fn get_pair(&self, tick_power: i8) -> (f64, f64) {
         let index = ((tick_power - MIN_TICK_POWER) as usize) * 2;
         unsafe {
@@ -116,13 +117,19 @@ static LOOKUP_TABLE: UnifiedLookupTable = UnifiedLookupTable::new();
 
 /// 用于快速除以10^n的魔数
 /// 算法: x / 10 ≈ (x * 0xCCCCCCCD) >> 35
+#[allow(dead_code)]
 const DIV10_MAGIC: u64 = 0xCCCCCCCCCCCCCCCD;
+#[allow(dead_code)]
 const DIV10_SHIFT: u32 = 35;
 
+#[allow(dead_code)]
 const DIV100_MAGIC: u64 = 0xA3D70A3D70A3D70B;
+#[allow(dead_code)]
 const DIV100_SHIFT: u32 = 38;
 
+#[allow(dead_code)]
 const DIV1000_MAGIC: u64 = 0x83126E978D4FDF3C;
+#[allow(dead_code)]
 const DIV1000_SHIFT: u32 = 41;
 
 // ============================================================================
@@ -188,7 +195,7 @@ impl FixedPoint {
     #[inline]
     pub fn from_f64(price: f64, tick_power: i8) -> Result<Self, FixedPointError> {
         // 快速边界检查
-        if tick_power < MIN_TICK_POWER || tick_power > MAX_TICK_POWER {
+        if !(MIN_TICK_POWER..=MAX_TICK_POWER).contains(&tick_power) {
             return Err(FixedPointError::InvalidTickPower);
         }
 
@@ -234,7 +241,7 @@ impl FixedPoint {
         if value > MAX_VALUE {
             return Err(FixedPointError::ValueOverflow);
         }
-        if tick_power < MIN_TICK_POWER || tick_power > MAX_TICK_POWER {
+        if !(MIN_TICK_POWER..=MAX_TICK_POWER).contains(&tick_power) {
             return Err(FixedPointError::InvalidTickPower);
         }
         Ok(Self::from_raw_parts_unchecked(value, tick_power))

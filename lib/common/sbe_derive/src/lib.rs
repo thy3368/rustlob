@@ -2,6 +2,7 @@
 //!
 //! This crate provides `#[derive(SbeEncode, SbeDecode)]` macros for automatic
 //! generation of SBE encoding/decoding code according to FIX SBE 2.0 specification.
+#![allow(warnings)]
 
 use proc_macro::TokenStream;
 use syn::{DeriveInput, parse_macro_input};

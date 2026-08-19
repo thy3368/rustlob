@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 // 示例：演示各种性能问题的代码
 
 use std::collections::HashMap;

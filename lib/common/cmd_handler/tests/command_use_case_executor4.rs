@@ -7,7 +7,7 @@ use cmd_handler::command_use_case_def2::{
     CommandUseCaseExecutor4, CommandUseCaseOutbound, CommandUseCaseOutboundPhase,
     EventProjectError, IssuedByParty, ObserveHandlerLatency, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, EntityFieldChange, EntityReplayableEvent};
+use common_entity::{Entity, EntityFieldChange, EntityReplayableEvent, FieldDiff};
 
 const TEST_ENTITY_TYPE: u8 = 7;
 
@@ -69,6 +69,20 @@ struct TestEntity {
     version: u64,
 }
 
+impl FieldDiff for TestEntity {
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let mut changes = Vec::new();
+        if self.value != other.value {
+            changes.push(EntityFieldChange::new("value", &self.value, &other.value));
+        }
+        changes
+    }
+
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![EntityFieldChange::new("value", "", &self.value)]
+    }
+}
+
 impl Entity for TestEntity {
     type Id = i64;
 
@@ -83,19 +97,6 @@ impl Entity for TestEntity {
     fn entity_version(&self) -> u64 {
         self.version
     }
-
-    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
-        if self.value != other.value {
-            changes.push(EntityFieldChange::new("value", &self.value, &other.value));
-        }
-        changes
-    }
-
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        vec![EntityFieldChange::new("value", "", &self.value)]
-    }
-
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
             "value" => 1,

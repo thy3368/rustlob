@@ -57,7 +57,9 @@ pub fn generate_xml_schema(input: &DeriveInput) -> Result<String> {
 
     // Generate field definitions
     for field in fields {
-        let field_name = field.ident.as_ref().unwrap();
+        let Some(field_name) = field.ident.as_ref() else {
+            return Err(syn::Error::new_spanned(field, "XML generation requires named fields"));
+        };
         let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs)?;
 

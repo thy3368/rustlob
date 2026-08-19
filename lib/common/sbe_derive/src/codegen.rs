@@ -15,7 +15,10 @@ fn to_snake_case(s: &str) -> String {
             if i > 0 {
                 result.push('_');
             }
-            result.push(ch.to_lowercase().next().unwrap());
+            match ch.to_lowercase().next() {
+                Some(lower) => result.push(lower),
+                None => result.push(ch),
+            }
         } else {
             result.push(ch);
         }
@@ -54,7 +57,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
 
     // Process fixed-size fields
     for field in fields {
-        let field_name = field.ident.as_ref().unwrap();
+        let Some(field_name) = field.ident.as_ref() else {
+            return Err(syn::Error::new_spanned(field, "SbeEncode only supports named fields"));
+        };
         let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs)?;
 
@@ -79,7 +84,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
                     syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
                 })?;
-            let exponent_val = field_attrs.exponent.unwrap();
+            let exponent_val = field_attrs
+                .exponent
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Missing exponent attribute"))?;
 
             let doc_comment = format!(
                 "decimal field '{}'\n - mantissa offset: {}\n - exponent offset: {} (constant: {})\n - encodedLength: 9",
@@ -127,7 +134,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
                     syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
                 })?;
-            let exponent_val = field_attrs.exponent.unwrap();
+            let exponent_val = field_attrs
+                .exponent
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Missing exponent attribute"))?;
 
             // Generate offset expressions including composite fields
             let offset_expr = if composite_fields.is_empty() {
@@ -205,7 +214,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
             let write_method = quote::format_ident!("{}", write_method);
             let null_value = TypeMapper::null_value(inner_ty)
                 .ok_or_else(|| syn::Error::new_spanned(inner_ty, "No null value for type"))?;
-            let null_value: proc_macro2::TokenStream = null_value.parse().unwrap();
+            let null_value: proc_macro2::TokenStream = null_value.parse().map_err(|err| {
+                syn::Error::new_spanned(field_ty, format!("Invalid null value: {err}"))
+            })?;
 
             quote! {
                 #[doc = #doc_comment]
@@ -254,14 +265,18 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 let mut checks = Vec::new();
 
                 if let Some(min) = &field_attrs.min_value {
-                    let min_val: proc_macro2::TokenStream = min.parse().unwrap();
+                    let min_val: proc_macro2::TokenStream = min.parse().map_err(|err| {
+                        syn::Error::new_spanned(field_ty, format!("Invalid min value: {err}"))
+                    })?;
                     checks.push(quote! {
                         assert!(value >= #min_val, "Value {} is below minimum {}", value, #min_val);
                     });
                 }
 
                 if let Some(max) = &field_attrs.max_value {
-                    let max_val: proc_macro2::TokenStream = max.parse().unwrap();
+                    let max_val: proc_macro2::TokenStream = max.parse().map_err(|err| {
+                        syn::Error::new_spanned(field_ty, format!("Invalid max value: {err}"))
+                    })?;
                     checks.push(quote! {
                         assert!(value <= #max_val, "Value {} is above maximum {}", value, #max_val);
                     });
@@ -337,9 +352,10 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
                 let mut entry_offset = offset + 4;
                 for entry in value {
                     let mut entry_buf = [0u8; 1024];
-                    let encoded_len = entry.encode_into(&mut entry_buf).unwrap();
-                    self.get_buf_mut().put_slice_at(entry_offset, &entry_buf[..encoded_len]);
-                    entry_offset += encoded_len;
+                    if let Ok(encoded_len) = entry.encode_into(&mut entry_buf) {
+                        self.get_buf_mut().put_slice_at(entry_offset, &entry_buf[..encoded_len]);
+                        entry_offset += encoded_len;
+                    }
                 }
 
                 // Update limit
@@ -370,7 +386,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let field_encodings = fields
         .iter()
         .filter_map(|field| {
-            let field_name = field.ident.as_ref().unwrap();
+            let Some(field_name) = field.ident.as_ref() else {
+                return None;
+            };
             let field_ty = &field.ty;
             let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
@@ -414,7 +432,9 @@ pub fn generate_encoder(input: &DeriveInput) -> Result<TokenStream> {
     let field_decodings = fields
         .iter()
         .filter_map(|field| {
-            let field_name = field.ident.as_ref().unwrap();
+            let Some(field_name) = field.ident.as_ref() else {
+                return None;
+            };
             let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs).ok()?;
 
             // Skip composite fields - they must be decoded manually using nested decoders
@@ -599,7 +619,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
     // Process fixed-size fields
     for field in fields {
-        let field_name = field.ident.as_ref().unwrap();
+        let Some(field_name) = field.ident.as_ref() else {
+            return Err(syn::Error::new_spanned(field, "SbeDecode only supports named fields"));
+        };
         let field_ty = &field.ty;
         let field_attrs = SbeFieldAttrs::from_attributes(&field.attrs)?;
 
@@ -664,7 +686,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                 offset_calc.next_offset(&syn::parse_quote!(i8)).ok_or_else(|| {
                     syn::Error::new_spanned(field_ty, "Cannot calculate exponent offset")
                 })?;
-            let exponent_val = field_attrs.exponent.unwrap();
+            let exponent_val = field_attrs
+                .exponent
+                .ok_or_else(|| syn::Error::new_spanned(field_ty, "Missing exponent attribute"))?;
 
             // Generate offset expressions including composite fields
             let offset_expr = if composite_fields.is_empty() {
@@ -725,7 +749,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
         // Handle constant fields - return constant value
         if is_constant {
             if let Some(const_value) = &field_attrs.constant {
-                let const_value: proc_macro2::TokenStream = const_value.parse().unwrap();
+                let const_value: proc_macro2::TokenStream = const_value.parse().map_err(|err| {
+                    syn::Error::new_spanned(field_ty, format!("Invalid constant value: {err}"))
+                })?;
                 let doc_comment = format!("constant field - always returns {}", const_value);
                 let method = quote! {
                     #[doc = #doc_comment]
@@ -760,7 +786,9 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
             let read_method = quote::format_ident!("{}", read_method);
             let null_value = TypeMapper::null_value(inner_ty)
                 .ok_or_else(|| syn::Error::new_spanned(inner_ty, "No null value for type"))?;
-            let null_value: proc_macro2::TokenStream = null_value.parse().unwrap();
+            let null_value: proc_macro2::TokenStream = null_value.parse().map_err(|err| {
+                syn::Error::new_spanned(field_ty, format!("Invalid null value: {err}"))
+            })?;
 
             quote! {
                 #[doc = #doc_comment]
@@ -894,9 +922,12 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
 
                 for _ in 0..num_in_group {
                     let entry_buf = self.get_buf().get_slice_at(entry_offset, block_length);
-                    let entry = #inner_ty::decode_from(entry_buf).unwrap();
-                    entry_offset += block_length;
-                    entries.push(entry);
+                    if let Ok(entry) = #inner_ty::decode_from(entry_buf) {
+                        entry_offset += block_length;
+                        entries.push(entry);
+                    } else {
+                        break;
+                    }
                 }
 
                 entries
@@ -1003,7 +1034,11 @@ pub fn generate_decoder(input: &DeriveInput) -> Result<TokenStream> {
                     let acting_version = header.version();
 
                     self.wrap(
-                        header.parent().unwrap(),
+                        if let Some(parent) = header.parent() {
+                            parent
+                        } else {
+                            return self;
+                        },
                         offset + sbe::message_header_codec::ENCODED_LENGTH,
                         acting_block_length,
                         acting_version,

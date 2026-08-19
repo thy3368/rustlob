@@ -24,7 +24,9 @@ pub fn generate_view(input: &DeriveInput) -> Result<TokenStream> {
     let mut field_methods = Vec::new();
 
     for field in fields {
-        let field_name = field.ident.as_ref().unwrap();
+        let Some(field_name) = field.ident.as_ref() else {
+            return Err(syn::Error::new_spanned(field, "SbeView requires named fields"));
+        };
         let field_ty = &field.ty;
 
         if TypeMapper::is_repeating_group(field_ty) {

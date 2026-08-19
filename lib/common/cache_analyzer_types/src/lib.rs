@@ -3,7 +3,6 @@ pub mod validation;
 /// 缓存分析公共类型定义
 ///
 /// 这些类型被所有使用 `CacheAnalyzer` derive 的结构体共享
-
 /// 字段分析信息
 #[derive(Debug, Clone)]
 pub struct FieldAnalysis {

@@ -336,7 +336,7 @@ impl OffsetCalculator {
 
     pub fn next_offset_with_size(
         &mut self,
-        size_tokens: &proc_macro2::TokenStream,
+        _size_tokens: &proc_macro2::TokenStream,
     ) -> Result<proc_macro2::TokenStream, syn::Error> {
         let offset = self.current_offset;
         // For composite types, we can't know the size at compile time

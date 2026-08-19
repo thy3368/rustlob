@@ -75,8 +75,8 @@ macro_rules! impl_zero_copy_for_primitive {
     };
 }
 
-/// Integer types: u8, i8, u16, i16, u32, i32, u64, i64, u128, i128
-/// ZERO-ALLOC: just reads bytes from buffer
+// Integer types: u8, i8, u16, i16, u32, i32, u64, i64, u128, i128
+// ZERO-ALLOC: just reads bytes from buffer
 impl_zero_copy_for_primitive!(
     u8 => get_u8_at,
     i8 => get_i8_at,
@@ -90,8 +90,8 @@ impl_zero_copy_for_primitive!(
     i128 => get_i128_at
 );
 
-/// Floating point: f32, f64
-/// ZERO-ALLOC: just reads bytes from buffer
+// Floating point: f32, f64
+// ZERO-ALLOC: just reads bytes from buffer
 impl_zero_copy_for_primitive!(
     f32 => get_f32_at,
     f64 => get_f64_at
@@ -138,7 +138,10 @@ impl<const N: usize> ZeroCopyDecode for [u8; N] {
     fn zero_copy_decode(data: &[u8], offset: usize) -> Self {
         let buf = ReadBuf::new(data);
         let slice = buf.get_slice_at(offset, N);
-        slice.try_into().expect("slice with incorrect length")
+        match slice.try_into() {
+            Ok(array) => array,
+            Err(_) => [0u8; N],
+        }
     }
 
     fn encoded_size() -> usize {

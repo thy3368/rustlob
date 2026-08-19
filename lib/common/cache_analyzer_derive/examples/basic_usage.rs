@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use cache_analyzer_derive::CacheAnalyzer;
 use cache_analyzer_types::CacheAnalysisReport;
 

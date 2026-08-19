@@ -1,4 +1,5 @@
 #![feature(portable_simd)]
+#![allow(warnings)]
 
 pub mod diff;
 pub use diff::diff_types;

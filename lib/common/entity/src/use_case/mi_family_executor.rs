@@ -14,6 +14,9 @@ pub struct MiFamilyExecutionResult<C> {
     pub events: Vec<EntityReplayableEvent>,
 }
 
+pub type MiFamilyExecutionOutcome<C, BE, OE> =
+    Result<MiFamilyExecutionResult<C>, MiFamilyExecutionError<BE, OE>>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MiFamilyExecutionError<BE, OE> {
     Business(BE),
@@ -66,10 +69,7 @@ impl MiStateMachineFamilyExecutor {
         family: &F,
         request: &S::Request,
         outbound: &OB,
-    ) -> Result<
-        MiFamilyExecutionResult<F::BeforeAfterChanges>,
-        MiFamilyExecutionError<F::Error, OB::Error>,
-    >
+    ) -> MiFamilyExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2BeforeAfter,
         S: MiFamilyExecutionSpec<F>,

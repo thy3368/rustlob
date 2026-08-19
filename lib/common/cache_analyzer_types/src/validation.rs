@@ -99,7 +99,7 @@ pub fn validate_cache_friendly(
         }
 
         // 计算需要的缓存行数
-        let cache_lines_needed = (size + 63) / 64;
+        let cache_lines_needed = size.div_ceil(64);
         if cache_lines_needed > config.max_cache_lines {
             return Err(format!(
                 "结构体 {} 需要 {} 个缓存行（估算大小 {} 字节），超过限制 {} 个缓存行\n\
@@ -186,7 +186,7 @@ fn check_cache_line_alignment(
 
     // 3. 检查结构体大小是否跨越多个缓存行
     if let Some(size) = struct_size {
-        let cache_lines_needed = (size + cache_line_size - 1) / cache_line_size;
+        let cache_lines_needed = size.div_ceil(cache_line_size);
 
         // 3.1 检查是否有缓存行分割风险
         if cache_lines_needed > 1 && effective_alignment < cache_line_size {
@@ -352,7 +352,10 @@ fn extract_fields(ast: &DeriveInput) -> Result<Vec<FieldInfo>, String> {
     if let Data::Struct(data_struct) = &ast.data {
         if let Fields::Named(fields_named) = &data_struct.fields {
             for field in fields_named.named.iter() {
-                let field_name = field.ident.as_ref().unwrap().to_string();
+                let Some(field_name) = field.ident.as_ref() else {
+                    continue;
+                };
+                let field_name = field_name.to_string();
                 let field_type = field.ty.clone();
 
                 // 检查是否有 #[hot] 或 #[thread_local] 属性
@@ -500,7 +503,7 @@ fn estimate_type_size(ty: &Type) -> Option<usize> {
                 return None;
             }
 
-            let last_segment = segments.last().unwrap();
+            let last_segment = segments.last()?;
             let type_name = last_segment.ident.to_string();
 
             match type_name.as_str() {
@@ -553,7 +556,7 @@ fn estimate_type_alignment(ty: &Type) -> Option<usize> {
                 return None;
             }
 
-            let last_segment = segments.last().unwrap();
+            let last_segment = segments.last()?;
             let type_name = last_segment.ident.to_string();
 
             match type_name.as_str() {
@@ -684,7 +687,9 @@ fn is_atomic_or_sync_type(ty: &Type) -> bool {
             return false;
         }
 
-        let last_segment = segments.last().unwrap();
+        let Some(last_segment) = segments.last() else {
+            return false;
+        };
         let type_name = last_segment.ident.to_string();
 
         matches!(

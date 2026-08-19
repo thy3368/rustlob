@@ -51,7 +51,10 @@ fn append_and_read_back_block_data_and_snapshots() {
     );
     assert_eq!(stored_events, body.replayable_events);
     assert_eq!(stored_order.order_id, "trader-1-BTCUSDT-7");
-    assert_eq!((stored_order.reserved_quote, stored_order.status.as_str()), (200, "open"));
+    assert_eq!(
+        (stored_order.reservation.remaining_amount, stored_order.status.as_str()),
+        (200, "open")
+    );
     assert_eq!(
         (stored_balance.available, stored_balance.frozen, stored_balance.version),
         (1_500, 0, 2)

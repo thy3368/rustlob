@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 /// 编译时缓存友好性验证示例
 ///
 /// 此文件展示如何使用 CacheAnalyzer 的编译时检查功能

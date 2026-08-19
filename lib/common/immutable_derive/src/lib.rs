@@ -44,9 +44,17 @@ pub fn immutable(_args: TokenStream, input: TokenStream) -> TokenStream {
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => &fields.named,
-            _ => panic!("#[immutable] 只支持具名字段的结构体"),
+            _ => {
+                return syn::Error::new_spanned(&input, "#[immutable] 只支持具名字段的结构体")
+                    .to_compile_error()
+                    .into();
+            }
         },
-        _ => panic!("#[immutable] 只支持结构体"),
+        _ => {
+            return syn::Error::new_spanned(&input, "#[immutable] 只支持结构体")
+                .to_compile_error()
+                .into();
+        }
     };
 
     // 检查所有字段是否为私有
@@ -54,27 +62,33 @@ pub fn immutable(_args: TokenStream, input: TokenStream) -> TokenStream {
         //todo 检查类型为非堆分配
 
         if matches!(field.vis, syn::Visibility::Public(_)) {
-            let field_name = field.ident.as_ref().unwrap();
-            panic!(
-                "#[immutable] 错误: 字段 '{}' 不能使用 'pub' 修饰符。\n\
-                不可变结构体的所有字段必须是私有的，只能通过自动生成的 getter 方法访问。\n\
-                请移除 'pub' 关键字: {} -> {}",
-                field_name,
-                quote!(pub #field_name),
-                quote!(#field_name)
+            let message = field.ident.as_ref().map_or_else(
+                || "#[immutable] 错误: 具名字段不能使用 `pub` 修饰符".to_string(),
+                |field_name| {
+                    format!(
+                        "#[immutable] 错误: 字段 '{}' 不能使用 'pub' 修饰符。\n\
+                        不可变结构体的所有字段必须是私有的，只能通过自动生成的 getter 方法访问。\n\
+                        请移除 'pub' 关键字: {} -> {}",
+                        field_name,
+                        quote!(pub #field_name),
+                        quote!(#field_name)
+                    )
+                },
             );
+            return syn::Error::new_spanned(field, message).to_compile_error().into();
         }
     }
 
     // 生成字段名和类型列表
-    let field_info: Vec<_> = fields
-        .iter()
-        .map(|f| {
-            let field_name = f.ident.as_ref().unwrap();
-            let field_type = &f.ty;
-            (field_name, field_type)
-        })
-        .collect();
+    let mut field_info: Vec<(&syn::Ident, &syn::Type)> = Vec::with_capacity(fields.len());
+    for field in fields.iter() {
+        let Some(field_name) = field.ident.as_ref() else {
+            return syn::Error::new_spanned(field, "#[immutable] 只支持具名字段")
+                .to_compile_error()
+                .into();
+        };
+        field_info.push((field_name, &field.ty));
+    }
 
     // 生成 const getter 方法
     let getters = field_info.iter().map(|(field_name, field_type)| {
