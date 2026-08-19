@@ -4,7 +4,6 @@ use base_types::exchange::spot::spot_types::{
     OrderSide, OrderType, SpotOrder, TimeInForce, TradingPair,
 };
 use base_types::{Price, Quantity};
-use cmd_handler::pipe_line_handler::CmdPipeLineHandler;
 use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use db_repo::adapter::v2::memdb_repo::MemdbRepo;
 use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;

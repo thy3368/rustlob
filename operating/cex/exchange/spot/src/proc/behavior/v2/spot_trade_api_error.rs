@@ -32,7 +32,7 @@ impl std::fmt::Display for InternalError {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TraderError {
     #[error("余额不足: 需要 {required}, 可用 {available}. {action}")]
     InsufficientBalance { required: String, available: String, action: &'static str },
@@ -69,7 +69,7 @@ impl TraderError {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ApiError {
     #[error("Invalid field '{field}': {reason} (code:{code}, see {doc})")]
     InvalidField { field: &'static str, reason: &'static str, code: i32, doc: &'static str },
@@ -116,7 +116,7 @@ impl ApiError {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum SpotErrorAny {
     #[error("{0}")]
     Trader(TraderError),

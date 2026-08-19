@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use base_types::Timestamp;
 use base_types::account::balance::Balance;
+use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use base_types::handler::handler::CmdHandler;
+use base_types::handler::handler::{CmdHandler, Handler};
 use db_repo::MySqlDbRepo;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
@@ -53,5 +55,19 @@ impl CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny> for SpotT
             },
             SpotTradeCmdOrQuery::Query(_query) => todo!(),
         }
+    }
+}
+
+impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny> for SpotTradeBehaviorV4Impl {
+    async fn handle(
+        &self,
+        cmd: SpotTradeCmdOrQuery,
+    ) -> Result<CmdResp<SpotTradeResAny>, SpotApiErrorAny> {
+        let result =
+            <Self as CmdHandler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny>>::cmd_handle(
+                self, cmd,
+            )?;
+
+        Ok(CmdResp::new(ResMetadata::new(0, false, Timestamp(0)), result))
     }
 }
