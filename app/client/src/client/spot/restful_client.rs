@@ -1,10 +1,10 @@
 use base_types::cqrs::cqrs_types::CmdResp;
 use base_types::handler::handler::Handler;
 use reqwest::Client;
-use spot_behavior::proc::behavior::v2::{
-    spot_trade_behavior::{SpotTradeCmdOrQuery, SpotTradeResAny},
-    spot_trade_error::{CommonError, SpotApiErrorAny},
+use spot_behavior::proc::behavior::v2::spot_trade_behavior::{
+    SpotTradeCmdOrQuery, SpotTradeResAny,
 };
+use spot_behavior::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 
 /// RESTful HTTP 客户端 - 调用远程订单处理服务
 ///

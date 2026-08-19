@@ -1,7 +1,10 @@
+#![allow(warnings)]
+
+use std::time::{Duration, UNIX_EPOCH};
+
 use clap::Parser;
 use colored::*;
 use hyperliquid_analyzer::HyperliquidClient;
-use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 #[command(name = "hl_user")]
@@ -55,7 +58,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let side = if p.side == "A" { "做多".green() } else { "做空".red() };
                     println!(
                         "    {} {} @ ${} {} 杠杆: {}x",
-                        p.sz, p.coin.cyan(), p.entry_px, side, p.leverage.value
+                        p.sz,
+                        p.coin.cyan(),
+                        p.entry_px,
+                        side,
+                        p.leverage.value
                     );
                     if let Some(pnl) = &p.unrealized_pnl {
                         let pnl_val: f64 = pnl.parse().unwrap_or(0.0);
@@ -109,7 +116,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let side = if o.side == "A" { "买入".green() } else { "卖出".red() };
                     println!(
                         "  {} {} @ ${} {} ID: {}",
-                        o.sz, o.coin.cyan(), o.limit_px, side, o.oid
+                        o.sz,
+                        o.coin.cyan(),
+                        o.limit_px,
+                        side,
+                        o.oid
                     );
                 }
             }
@@ -134,7 +145,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let time_str = format!("{:?}", datetime);
                     println!(
                         "  {} {} @ ${} {} 手续费: {} - {}",
-                        fill.sz, fill.coin.cyan(), fill.px, side, fill.fee, time_str
+                        fill.sz,
+                        fill.coin.cyan(),
+                        fill.px,
+                        side,
+                        fill.fee,
+                        time_str
                     );
                 }
             }

@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use futures_util::{SinkExt, StreamExt};
 use sockudo_ws::{Config, Message, WebSocketStream};

@@ -39,6 +39,8 @@ chrono = "0.4"
 # 错误处理
 anyhow = "1"
 thiserror = "1"
+rust_decimal = { version = "1", features = ["serde"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
+rust_decimal_macros = "1"

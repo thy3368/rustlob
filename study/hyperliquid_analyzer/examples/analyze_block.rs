@@ -1,4 +1,6 @@
-use hyperliquid_analyzer::{analyze_block, format_block_report, HyperliquidClient};
+#![allow(warnings)]
+
+use hyperliquid_analyzer::{HyperliquidClient, analyze_block, format_block_report};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

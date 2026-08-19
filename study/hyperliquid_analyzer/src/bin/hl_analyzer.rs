@@ -1,5 +1,7 @@
+#![allow(warnings)]
+
 use clap::Parser;
-use hyperliquid_analyzer::{analyze_block, format_block_report, HyperliquidClient};
+use hyperliquid_analyzer::{HyperliquidClient, analyze_block, format_block_report};
 
 #[derive(Parser, Debug)]
 #[command(name = "hl_analyzer")]
@@ -34,11 +36,7 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let height = if cli.height == "latest" {
-        None
-    } else {
-        Some(cli.height.parse::<u64>()?)
-    };
+    let height = if cli.height == "latest" { None } else { Some(cli.height.parse::<u64>()?) };
 
     let client = HyperliquidClient::new()?;
 

@@ -51,13 +51,11 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/ws_gateway/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/ws_gateway/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_axum/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/app/websocket_sockudo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/sequencer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/vector_clock/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/rest_actix/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_axum/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/app/websocket_sockudo/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/websocket_tungstenite/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/xdp-aya-ebpf/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/xdp_aya/src" isTestSource="false" />
@@ -73,8 +71,6 @@
       <sourceFolder url="file://$MODULE_DIR$/app/client/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/client/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/app/axum_server/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/app/axum_server/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/pingora_gateway/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/cache_analyzer_derive/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/cache_analyzer_derive/src" isTestSource="false" />
@@ -84,7 +80,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/immutable_derive/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/single_thread_derive/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/rust_queue/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_thread_overhead/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/promptline-rust/src" isTestSource="false" />
@@ -110,20 +105,57 @@
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_analyzer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/mdbx/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/mdbx/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/derivatives/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/prep_derive/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/spot_market_data/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/exchange/wallet/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/push/push/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/cex/push/push/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/dex/dex/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/proc/operating/dex/dex/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd_core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/cmd_handler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/prep_derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/spot/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/spot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/spot_market_data/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/spot_market_data/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/spot_market_data/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/wallet/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/push/push/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/cex/push/push/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/dex/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/dex/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/inbound_adapter/axum_server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/inbound_adapter/axum_server/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/inbound_adapter/websocket_sockudo/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/inbound_adapter/websocket_sockudo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1_adapter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1_e2e/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/dex2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/l2_prod/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/l2_prod/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/operating/l2_prod2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1_e2e/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/cmd_handler/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support_macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/app/composition_root/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/outbound_adapter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/entity/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/veldra/core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/veldra/outbound_adapter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/veldra/starter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/veldra/inbound_adapter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/other/hyperliquid-python-sdk" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/entity/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/veldra_inbound_adapter/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
@@ -131,10 +163,10 @@
       <excludeFolder url="file://$MODULE_DIR$/lib/lob/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/core/exchange/lob/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/common/rust_analyzer/target" />
-      <excludeFolder url="file://$MODULE_DIR$/app/websocket_sockudo/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/client/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/promptline-rust/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/common/hotstuff_rs/target" />
+      <excludeFolder url="file://$MODULE_DIR$/inbound_adapter/websocket_sockudo/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

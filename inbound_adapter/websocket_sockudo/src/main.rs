@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use websocket_sockudo::start_server;
 
 #[tokio::main]

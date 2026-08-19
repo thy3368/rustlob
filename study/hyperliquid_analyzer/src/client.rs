@@ -1,9 +1,12 @@
-use crate::types::{
-    Block, BlockResponse, ClearinghouseState, OpenOrdersResponse, SpotClearinghouseState, UserDetails, UserFills,
-};
-use reqwest::Client;
 use std::time::Duration;
+
+use reqwest::Client;
 use thiserror::Error;
+
+use crate::types::{
+    Block, BlockResponse, ClearinghouseState, OpenOrdersResponse, SpotClearinghouseState,
+    UserDetails, UserFills,
+};
 
 #[derive(Debug, Error)]
 pub enum ClientError {
@@ -34,9 +37,7 @@ pub struct HyperliquidClient {
 
 impl HyperliquidClient {
     pub fn new() -> Result<Self, ClientError> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         Ok(Self {
             client,
@@ -76,7 +77,8 @@ impl HyperliquidClient {
         let status = response.status();
         let raw_text = response.text().await?;
 
-        let filename = format!("block_{}_{}.json", height, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+        let filename =
+            format!("block_{}_{}.json", height, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
         std::fs::write(&filename, &raw_text)?;
         eprintln!("[DEBUG] Saved to {}", filename);
         if !status.is_success() {
@@ -110,11 +112,17 @@ impl HyperliquidClient {
         let result: serde_json::Value = response.json().await?;
         let block_num_hex = match result["result"].as_str() {
             Some(s) => s,
-            None => return Err(ClientError::InvalidResponse("missing result in eth_blockNumber response".to_string())),
+            None => {
+                return Err(ClientError::InvalidResponse(
+                    "missing result in eth_blockNumber response".to_string(),
+                ));
+            }
         };
 
-        let block_num = u64::from_str_radix(block_num_hex.trim_start_matches("0x"), 16)
-            .map_err(|_| ClientError::InvalidResponse(format!("invalid hex value: {}", block_num_hex)))?;
+        let block_num =
+            u64::from_str_radix(block_num_hex.trim_start_matches("0x"), 16).map_err(|_| {
+                ClientError::InvalidResponse(format!("invalid hex value: {}", block_num_hex))
+            })?;
 
         self.fetch_block(block_num).await
     }
@@ -123,7 +131,10 @@ impl HyperliquidClient {
         format!("{}/evm", self.explorer_url.replace("/explorer", ""))
     }
 
-    pub async fn fetch_clearinghouse_state(&self, user: &str) -> Result<ClearinghouseState, ClientError> {
+    pub async fn fetch_clearinghouse_state(
+        &self,
+        user: &str,
+    ) -> Result<ClearinghouseState, ClientError> {
         let response = self
             .client
             .post(&self.info_url)
@@ -142,7 +153,10 @@ impl HyperliquidClient {
         Ok(state)
     }
 
-    pub async fn fetch_spot_state(&self, user: &str) -> Result<SpotClearinghouseState, ClientError> {
+    pub async fn fetch_spot_state(
+        &self,
+        user: &str,
+    ) -> Result<SpotClearinghouseState, ClientError> {
         let response = self
             .client
             .post(&self.info_url)
@@ -180,7 +194,10 @@ impl HyperliquidClient {
         Ok(details)
     }
 
-    pub async fn fetch_open_orders(&self, user: &str) -> Result<Vec<OpenOrdersResponse>, ClientError> {
+    pub async fn fetch_open_orders(
+        &self,
+        user: &str,
+    ) -> Result<Vec<OpenOrdersResponse>, ClientError> {
         let response = self
             .client
             .post(&self.info_url)

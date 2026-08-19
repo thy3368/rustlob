@@ -14,7 +14,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SCORECARD_PATH = ROOT / ".agents/skills/review-use-case/references/scorecard.md"
+SCORECARD_PATH = ROOT / ".agents/skills/shared/use_case_review_scorecard.md"
 DIRECTORY_CANDIDATE_PARENTS = {"workflow", "execute_flow_l4"}
 REQUIRED_METHODS = (
     "pre_check_command",

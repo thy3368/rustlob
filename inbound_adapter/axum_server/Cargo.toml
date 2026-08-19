@@ -35,6 +35,7 @@ rust_queue = { path = "../../lib/common/rust_queue" }
 db_repo = { path = "../../lib/common/db_repo" }
 lob_repo = { path = "../../lib/common/lob_repo" }
 id_generator = { path = "../../lib/common/id_generator" }
+diff = { path = "../../lib/common/diff" }
 
 # 数据库驱动
 mysql = "27.0.0"
