@@ -275,9 +275,8 @@ impl MptSnapshot {
     pub fn new(root_hash: [u8; 32], entries: Vec<(Vec<u8>, Vec<u8>)>) -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos());
+        let timestamp =
+            SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| duration.as_nanos());
 
         Self { root_hash, entries, timestamp }
     }

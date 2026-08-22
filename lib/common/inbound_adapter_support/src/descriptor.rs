@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use serde::Serialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Number, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HttpErrorCodeDescriptor {
@@ -72,18 +72,19 @@ pub fn build_http_openapi(
         paths
     });
 
-    json!({
-        "openapi": "3.1.0",
-        "info": {
-            "title": title,
-            "version": version,
-            "summary": summary
-        },
-        "paths": paths,
-        "components": {
-            "schemas": schema_components
-        }
-    })
+    object([
+        ("openapi", string_value("3.1.0")),
+        (
+            "info",
+            object([
+                ("title", string_value(title)),
+                ("version", string_value(version)),
+                ("summary", string_value(summary)),
+            ]),
+        ),
+        ("paths", Value::Object(paths)),
+        ("components", object([("schemas", Value::Object(schema_components))])),
+    ])
 }
 
 pub fn build_cli_schema(
@@ -95,15 +96,13 @@ pub fn build_cli_schema(
 ) -> Value {
     let commands = descriptors.iter().map(cli_command_schema_entry).collect::<Vec<_>>();
 
-    json!({
-        "schema_version": schema_version,
-        "service": service,
-        "summary": summary,
-        "commands": commands,
-        "components": {
-            "schemas": schema_components
-        }
-    })
+    object([
+        ("schema_version", string_value(schema_version)),
+        ("service", string_value(service)),
+        ("summary", string_value(summary)),
+        ("commands", Value::Array(commands)),
+        ("components", object([("schemas", Value::Object(schema_components))])),
+    ])
 }
 
 pub fn build_api_manifest(
@@ -117,30 +116,30 @@ pub fn build_api_manifest(
     let covered_interfaces = covered_interfaces
         .iter()
         .map(|descriptor| match descriptor {
-            InboundApiDescriptor::Http(http) => json!({
-                "kind": "http",
-                "name": http.name,
-                "summary": http.summary,
-                "method": http.method,
-                "path": http.path,
-            }),
-            InboundApiDescriptor::Cli(cli) => json!({
-                "kind": "cli",
-                "name": cli.name,
-                "summary": cli.summary,
-                "bin": cli.bin,
-            }),
+            InboundApiDescriptor::Http(http) => object([
+                ("kind", string_value("http")),
+                ("name", string_value(http.name)),
+                ("summary", string_value(http.summary)),
+                ("method", string_value(http.method)),
+                ("path", string_value(http.path)),
+            ]),
+            InboundApiDescriptor::Cli(cli) => object([
+                ("kind", string_value("cli")),
+                ("name", string_value(cli.name)),
+                ("summary", string_value(cli.summary)),
+                ("bin", string_value(cli.bin)),
+            ]),
         })
         .collect::<Vec<_>>();
 
-    json!({
-        "service": service,
-        "summary": summary,
-        "schema_version": schema_version,
-        "http_spec_path": http_spec_path,
-        "cli_spec_path": cli_spec_path,
-        "covered_interfaces": covered_interfaces,
-    })
+    object([
+        ("service", string_value(service)),
+        ("summary", string_value(summary)),
+        ("schema_version", string_value(schema_version)),
+        ("http_spec_path", string_value(http_spec_path)),
+        ("cli_spec_path", string_value(cli_spec_path)),
+        ("covered_interfaces", Value::Array(covered_interfaces)),
+    ])
 }
 
 pub fn http_error(status_code: u16, code: &'static str) -> HttpErrorCodeDescriptor {
@@ -163,7 +162,7 @@ pub fn cli_error(category: &'static str, code: &'static str) -> CliErrorCodeDesc
 }
 
 pub fn schema_ref(schema_name: &str) -> Value {
-    json!({ "$ref": format!("#/components/schemas/{schema_name}") })
+    object([("$ref", string_value(format!("#/components/schemas/{schema_name}")))])
 }
 
 pub fn object_schema(required: &[&str], properties: Vec<(&str, Value)>) -> Value {
@@ -172,24 +171,24 @@ pub fn object_schema(required: &[&str], properties: Vec<(&str, Value)>) -> Value
         property_map.insert(name.to_string(), schema);
     }
 
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": required,
-        "properties": property_map,
-    })
+    object([
+        ("type", string_value("object")),
+        ("additionalProperties", Value::Bool(false)),
+        ("required", string_array(required.iter().copied())),
+        ("properties", Value::Object(property_map)),
+    ])
 }
 
 pub fn string_schema() -> Value {
-    json!({ "type": "string" })
+    object([("type", string_value("string"))])
 }
 
 pub fn optional_string_schema() -> Value {
-    json!({ "type": ["string", "null"] })
+    object([("type", string_array(["string", "null"]))])
 }
 
 pub fn u64_schema() -> Value {
-    json!({ "type": "integer", "minimum": 0 })
+    object([("type", string_value("integer")), ("minimum", u64_value(0))])
 }
 
 pub fn insert_schema(target: &mut Map<String, Value>, name: &str, schema: Value) {
@@ -200,14 +199,7 @@ fn http_operation(descriptor: &HttpApiDescriptor) -> Value {
     let mut responses = Map::new();
     responses.insert(
         "200".to_string(),
-        json!({
-            "description": "Successful use case response.",
-            "content": {
-                "application/json": {
-                    "schema": schema_ref(descriptor.success_response_schema_name)
-                }
-            }
-        }),
+        response_schema("Successful use case response.", descriptor.success_response_schema_name),
     );
 
     for status_code in
@@ -215,51 +207,128 @@ fn http_operation(descriptor: &HttpApiDescriptor) -> Value {
     {
         responses.insert(
             status_code.to_string(),
-            json!({
-                "description": format!("Error responses for {}.", descriptor.name),
-                "content": {
-                    "application/json": {
-                        "schema": schema_ref(descriptor.error_response_schema_name)
-                    }
-                }
-            }),
+            response_schema(
+                format!("Error responses for {}.", descriptor.name),
+                descriptor.error_response_schema_name,
+            ),
         );
     }
 
-    json!({
-        "operationId": descriptor.name,
-        "summary": descriptor.summary,
-        "requestBody": {
-            "required": true,
-            "content": {
-                "application/json": {
-                    "schema": schema_ref(descriptor.request_schema_name)
-                }
-            }
-        },
-        "responses": responses,
-        "x-error-codes": descriptor.error_codes,
-    })
+    object([
+        ("operationId", string_value(descriptor.name)),
+        ("summary", string_value(descriptor.summary)),
+        (
+            "requestBody",
+            object([
+                ("required", Value::Bool(true)),
+                ("content", json_content_schema(descriptor.request_schema_name)),
+            ]),
+        ),
+        ("responses", Value::Object(responses)),
+        ("x-error-codes", http_error_codes(&descriptor.error_codes)),
+    ])
 }
 
 fn cli_command_schema_entry(descriptor: &CliApiDescriptor) -> Value {
-    json!({
-        "name": descriptor.name,
-        "bin": descriptor.bin,
-        "usage": descriptor.usage,
-        "summary": descriptor.summary,
-        "args": descriptor.args,
-        "command_schema_name": descriptor.command_schema_name,
-        "command_schema": schema_ref(descriptor.command_schema_name),
-        "stdout_schema_name": descriptor.stdout_schema_name,
-        "stdout_schema": schema_ref(descriptor.stdout_schema_name),
-        "error_codes": descriptor.error_codes,
-        "defaults": descriptor.defaults,
-    })
+    object([
+        ("name", string_value(descriptor.name)),
+        ("bin", string_value(descriptor.bin)),
+        ("usage", string_value(descriptor.usage)),
+        ("summary", string_value(descriptor.summary)),
+        ("args", cli_args(&descriptor.args)),
+        ("command_schema_name", string_value(descriptor.command_schema_name)),
+        ("command_schema", schema_ref(descriptor.command_schema_name)),
+        ("stdout_schema_name", string_value(descriptor.stdout_schema_name)),
+        ("stdout_schema", schema_ref(descriptor.stdout_schema_name)),
+        ("error_codes", cli_error_codes(&descriptor.error_codes)),
+        ("defaults", descriptor.defaults.clone()),
+    ])
+}
+
+fn object<const N: usize>(entries: [(&str, Value); N]) -> Value {
+    let mut map = Map::new();
+    for (name, value) in entries {
+        map.insert(name.to_string(), value);
+    }
+    Value::Object(map)
+}
+
+fn string_value(value: impl Into<String>) -> Value {
+    Value::String(value.into())
+}
+
+fn u64_value(value: u64) -> Value {
+    Value::Number(Number::from(value))
+}
+
+fn string_array<'a>(values: impl IntoIterator<Item = &'a str>) -> Value {
+    Value::Array(values.into_iter().map(string_value).collect())
+}
+
+fn json_content_schema(schema_name: &str) -> Value {
+    object([("application/json", object([("schema", schema_ref(schema_name))]))])
+}
+
+fn response_schema(description: impl Into<String>, schema_name: &str) -> Value {
+    object([
+        ("description", string_value(description)),
+        ("content", json_content_schema(schema_name)),
+    ])
+}
+
+fn http_error_codes(error_codes: &[HttpErrorCodeDescriptor]) -> Value {
+    Value::Array(
+        error_codes
+            .iter()
+            .map(|error| {
+                object([
+                    ("status_code", u64_value(u64::from(error.status_code))),
+                    ("code", string_value(error.code)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+fn cli_args(args: &[CliArgDescriptor]) -> Value {
+    Value::Array(
+        args.iter()
+            .map(|arg| {
+                let mut value = match object([
+                    ("name", string_value(arg.name)),
+                    ("position", u64_value(arg.position as u64)),
+                    ("value_type", string_value(arg.value_type)),
+                    ("required", Value::Bool(arg.required)),
+                    ("summary", string_value(arg.summary)),
+                ]) {
+                    Value::Object(map) => map,
+                    _ => Map::new(),
+                };
+                value.insert("default".to_string(), arg.default.clone().unwrap_or(Value::Null));
+                Value::Object(value)
+            })
+            .collect(),
+    )
+}
+
+fn cli_error_codes(error_codes: &[CliErrorCodeDescriptor]) -> Value {
+    Value::Array(
+        error_codes
+            .iter()
+            .map(|error| {
+                object([
+                    ("category", string_value(error.category)),
+                    ("code", string_value(error.code)),
+                ])
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]

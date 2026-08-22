@@ -295,41 +295,27 @@ pub fn run_ethereum_state_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   金额: {} wei", amount);
 
     // 更新发送方
-    let from_state = state_trie
-        .get(from_addr.as_bytes())?
-        .ok_or("sender state should exist before transfer")?;
+    let from_state =
+        state_trie.get(from_addr.as_bytes())?.ok_or("sender state should exist before transfer")?;
     let from_state_str = String::from_utf8_lossy(&from_state);
     let from_parts: Vec<&str> = from_state_str.split(',').collect();
-    let from_balance: u64 = from_parts[0]
-        .split(':')
-        .nth(1)
-        .ok_or("sender balance field missing")?
-        .parse()?;
-    let from_nonce: u64 = from_parts[1]
-        .split(':')
-        .nth(1)
-        .ok_or("sender nonce field missing")?
-        .parse()?;
+    let from_balance: u64 =
+        from_parts[0].split(':').nth(1).ok_or("sender balance field missing")?.parse()?;
+    let from_nonce: u64 =
+        from_parts[1].split(':').nth(1).ok_or("sender nonce field missing")?.parse()?;
 
     let new_from_state = format!("balance:{},nonce:{}", from_balance - amount, from_nonce + 1);
     state_trie.insert(from_addr.as_bytes(), new_from_state.as_bytes())?;
 
     // 更新接收方
-    let to_state = state_trie
-        .get(to_addr.as_bytes())?
-        .ok_or("receiver state should exist before transfer")?;
+    let to_state =
+        state_trie.get(to_addr.as_bytes())?.ok_or("receiver state should exist before transfer")?;
     let to_state_str = String::from_utf8_lossy(&to_state);
     let to_parts: Vec<&str> = to_state_str.split(',').collect();
-    let to_balance: u64 = to_parts[0]
-        .split(':')
-        .nth(1)
-        .ok_or("receiver balance field missing")?
-        .parse()?;
-    let to_nonce: u64 = to_parts[1]
-        .split(':')
-        .nth(1)
-        .ok_or("receiver nonce field missing")?
-        .parse()?;
+    let to_balance: u64 =
+        to_parts[0].split(':').nth(1).ok_or("receiver balance field missing")?.parse()?;
+    let to_nonce: u64 =
+        to_parts[1].split(':').nth(1).ok_or("receiver nonce field missing")?.parse()?;
 
     let new_to_state = format!("balance:{},nonce:{}", to_balance + amount, to_nonce);
     state_trie.insert(to_addr.as_bytes(), new_to_state.as_bytes())?;

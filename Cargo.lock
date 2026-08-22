@@ -1240,14 +1240,12 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "chrono",
- "decimal",
  "diff",
  "entity_derive",
  "minstant",
  "rust_decimal",
  "sealed",
  "serde",
- "zerocopy",
 ]
 
 [[package]]
@@ -1961,6 +1959,7 @@ dependencies = [
  "diff",
  "entity",
  "minstant",
+ "parking_lot 0.12.5",
  "proptest",
  "serde_json",
  "thiserror 1.0.69",
@@ -2481,16 +2480,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "decimal"
-version = "0.1.0"
-dependencies = [
- "num-traits",
- "rust_decimal",
- "rust_decimal_macros",
- "serde",
-]
-
-[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2858,6 +2847,7 @@ dependencies = [
 name = "entity"
 version = "0.1.0"
 dependencies = [
+ "entity_derive",
  "minstant",
  "serde",
  "serde-big-array",
@@ -2977,9 +2967,9 @@ name = "example_core"
 version = "0.1.0"
 dependencies = [
  "cmd_handler",
- "decimal",
  "entity",
  "proptest",
+ "rust_decimal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -5349,6 +5339,7 @@ dependencies = [
  "entity_derive",
  "parking_lot 0.12.5",
  "rand 0.8.5",
+ "rust_decimal",
  "serde",
 ]
 
@@ -8897,6 +8888,7 @@ dependencies = [
  "rand 0.9.2",
  "rdkafka",
  "rocksdb",
+ "rust_decimal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
