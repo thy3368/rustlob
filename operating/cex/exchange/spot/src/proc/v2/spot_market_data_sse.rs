@@ -1,4 +1,4 @@
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::proc::behavior::v2::spot_market_data_sse_behavior::{
     MarketDataSubscriptionCmdAny, SpotMarketDataSubscriptionBehavior, SubscriptionResponse,

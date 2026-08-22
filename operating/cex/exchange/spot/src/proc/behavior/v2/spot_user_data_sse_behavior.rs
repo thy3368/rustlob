@@ -4,7 +4,7 @@
 use base_types::OrderSide;
 use base_types::exchange::spot::spot_types::TimeInForce;
 use base_types::handler::handler::Handler;
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotApiErrorAny};
 // ==================== User Data Stream 事件枚举 ====================

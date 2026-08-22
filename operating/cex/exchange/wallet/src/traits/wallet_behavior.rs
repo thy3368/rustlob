@@ -1,7 +1,7 @@
 // 参考 ## wallet Endpoints  /Users/hongyaotang/src/rustlob/design/other/binance_wallet_docs 定义所有 wallet 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 // ============================================================================

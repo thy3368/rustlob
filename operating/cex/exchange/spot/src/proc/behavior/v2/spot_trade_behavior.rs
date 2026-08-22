@@ -5,7 +5,7 @@
 use base_types::exchange::spot::spot_types::{OrderStatus, OrderType, TimeInForce};
 use base_types::handler::handler::Handler;
 use base_types::{AssetId, OrderSide, Price, Quantity, Timestamp, TradingPair};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::proc::behavior::v2::spot_trade_error::{CMetadata, SpotApiErrorAny};
 

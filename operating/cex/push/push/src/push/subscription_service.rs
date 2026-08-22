@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
 // use serde_json::json;

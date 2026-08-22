@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use axum::extract::ws::Message;
 use chrono;
-use immutable_derive::immutable;
+use entity_derive::immutable;
 use tokio::sync::mpsc;
 
 /// 连接信息结构体

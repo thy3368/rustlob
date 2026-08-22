@@ -3,7 +3,7 @@
 // 定义所有 market data 接口
 
 use base_types::handler::handler::Handler;
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::proc::behavior::v2::spot_behavior::{SpotCmdAny, SpotResAny};
 use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotApiErrorAny};

@@ -1,17 +1,14 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use diff::ChangeLog;
-use immutable_derive::immutable;
-use rust_queue::queue::queue::Queue;
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
-use serde::de::DeserializeOwned;
+use entity_derive::immutable;
+use crate::queue::queue::Queue;
+use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 use serde_json::json;
 
-use crate::push::connection_types::{ConnectionInfo, ConnectionRepo};
+use crate::push::connection_types::ConnectionRepo;
 
 /// 推送服务 - 无状态设计，可安全地在多线程间共享
 ///

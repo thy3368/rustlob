@@ -89,7 +89,6 @@ mod tests {
     use base_types::cqrs::cqrs_types::CMetadata;
     use base_types::exchange::spot::spot_types::{OrderSide, OrderType, TimeInForce, TradingPair};
     use base_types::{AssetId, Price, Quantity, Timestamp};
-    use bdd::bdd_test;
     use db_repo::adapter::v2::memdb_repo::MemdbRepo;
     use db_repo::core::db_repo2::QueryRepo2;
     use diff::Entity;
@@ -191,15 +190,6 @@ mod tests {
     }
 
     #[test]
-    #[bdd_test(
-        feature = "订单管道",
-        scenario = "返回成交和余额",
-        given(订单成交),
-        when = "执行管道",
-        then(返回成交记录, 返回余额变更),
-        tags(pipeline, trade),
-        priority = "4"
-    )]
     fn test_pipeline_reply_can_carry_trades_and_balances() {
         let order = SpotOrder::create_order(
             11,

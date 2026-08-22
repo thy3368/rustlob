@@ -3,8 +3,8 @@ use std::sync::Arc;
 use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use diff::ChangeLog;
-use rust_queue::queue::queue::{Queue, ToBytes};
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
+use crate::queue::queue::{Queue, ToBytes};
+use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 use crate::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
 use crate::k_line::k_line_types::{KLineAggMut, KLineUpdateEvent};
@@ -22,11 +22,17 @@ impl KLineBehaviorV2Imp {
         // 订阅聚合器的K线更新事件，将事件发送到队列
         let queue_clone = queue.clone();
         aggregator.subscribe(move |event: KLineUpdateEvent| {
-            // 将K线更新事件发送到队列，供push服务推送
-            if let Err(e) =
-                queue_clone.send(SpotTopic::KLineChangeLog.name(), event.to_bytes().unwrap(), None)
-            {
-                tracing::error!("Failed to publish KLineUpdateEvent: {:?}", e);
+            match event.to_bytes() {
+                Ok(bytes) => {
+                    if let Err(e) =
+                        queue_clone.send(SpotTopic::KLineChangeLog.name(), bytes, None)
+                    {
+                        tracing::error!("Failed to publish KLineUpdateEvent: {:?}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to serialize KLineUpdateEvent: {:?}", e);
+                }
             }
         });
 
@@ -36,10 +42,16 @@ impl KLineBehaviorV2Imp {
     /// 处理单个交易变更日志
     pub fn handle_event(&self, change_log: ChangeLog) {
         if let Some((timestamp, price, volume)) = Self::extract_trade_data(&change_log) {
-            let mut agg = self.aggregator.lock().unwrap();
-            if let Err(e) = agg.process_trade(timestamp, price, volume) {
-                tracing::error!("Failed to process trade: {:?}", e);
+        match self.aggregator.lock() {
+            Ok(mut agg) => {
+                if let Err(e) = agg.process_trade(timestamp, price, volume) {
+                    tracing::error!("Failed to process trade: {:?}", e);
+                }
             }
+            Err(e) => {
+                tracing::error!("Failed to lock k-line aggregator: {:?}", e);
+            }
+        }
         }
     }
 
@@ -52,11 +64,17 @@ impl KLineBehaviorV2Imp {
             return;
         }
 
-        let mut agg = self.aggregator.lock().unwrap();
-        if let Err(e) = agg.process_trades_batch(&trades) {
-            tracing::error!("Failed to process {} trades batch: {:?}", trades.len(), e);
-        } else {
-            tracing::debug!("Successfully processed {} trades in batch", trades.len());
+        match self.aggregator.lock() {
+            Ok(mut agg) => {
+                if let Err(e) = agg.process_trades_batch(&trades) {
+                    tracing::error!("Failed to process {} trades batch: {:?}", trades.len(), e);
+                } else {
+                    tracing::debug!("Successfully processed {} trades in batch", trades.len());
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to lock k-line aggregator: {:?}", e);
+            }
         }
     }
 
