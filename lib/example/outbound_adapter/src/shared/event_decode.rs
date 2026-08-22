@@ -23,7 +23,8 @@ pub(crate) fn event_u64_field(event: &EntityReplayableEvent, field_name: &str) -
     })
 }
 
-pub(crate) fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
+#[cfg(test)]
+fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
     event_u64_field(event, "order_sequence").or_else(|| {
         let order_id = event_string_field(event, "order_id")?;
         order_id.rsplit('-').next()?.parse::<u64>().ok()

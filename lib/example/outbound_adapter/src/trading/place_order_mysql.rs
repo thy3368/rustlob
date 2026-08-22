@@ -5,14 +5,13 @@ use example_core::{
     SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
     build_place_spot_order_v2_taker_template_v3,
 };
-use mysql::params;
 use mysql::prelude::Queryable;
 
 use super::place_order_in_memory::{base_asset_id_for, quote_asset_id_for, symbol_for_asset};
 use crate::shared::{
     ACCOUNT_TABLE, EVENT_TABLE, MARKET_RULES_TABLE, MySqlStore, ORDER_TABLE,
     PlaceOrderOutboundError, StoreSnapshot, event_string_field_mysql, event_u64_field_mysql,
-    map_mysql_error,
+    map_mysql_error, named_params, optional_string_param, optional_u64_param,
 };
 
 #[derive(Debug, Clone)]
@@ -85,7 +84,7 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                      FROM {ACCOUNT_TABLE}
                      WHERE account_id = :account_id"
                 ),
-                params! { "account_id" => cmd.party_id.as_str() },
+                named_params([("account_id", mysql::Value::from(cmd.party_id.as_str()))]),
             )
             .map_err(map_mysql_error)?;
         let (account_id, available_base, frozen_base, available_quote, frozen_quote, version) =
@@ -98,11 +97,10 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                      FROM {MARKET_RULES_TABLE}
                      WHERE symbol = :symbol"
                 ),
-                params! { "symbol" => requested_symbol },
+                named_params([("symbol", mysql::Value::from(requested_symbol))]),
             )
             .map_err(map_mysql_error)?;
-        let (symbol, min_qty) =
-            market_rules_row.ok_or(PlaceOrderOutboundError::MarketRulesNotFound)?;
+        let (symbol, _) = market_rules_row.ok_or(PlaceOrderOutboundError::MarketRulesNotFound)?;
 
         let next_order_sequence = conn
             .query_first::<u64, _>(format!(
@@ -174,26 +172,44 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
 	                        :available_base, :frozen_base, :available_quote, :frozen_quote
 	                     )"
                 ),
-                params! {
-                    "entity_type" => event.entity_type,
-                    "change_type" => event.change_type,
-                    "entity_id" => event.entity_id,
-                    "old_version" => event.old_version,
-                    "new_version" => event.new_version,
-                    "order_id" => event_string_field_mysql(event, "order_id"),
-                    "account_id" => event_string_field_mysql(event, "account_id"),
-                    "asset" => event_u64_field_mysql(event, "asset"),
-                    "symbol" => event_string_field_mysql(event, "symbol"),
-                    "side" => event_string_field_mysql(event, "side"),
-                    "execution" => event_string_field_mysql(event, "execution"),
-                    "time_in_force" => event_string_field_mysql(event, "time_in_force"),
-                        "qty" => event_u64_field_mysql(event, "qty"),
-                        "price" => event_u64_field_mysql(event, "price"),
-                        "available_base" => event_u64_field_mysql(event, "available"),
-                    "frozen_base" => event_u64_field_mysql(event, "frozen"),
-                    "available_quote" => event_u64_field_mysql(event, "available"),
-                    "frozen_quote" => event_u64_field_mysql(event, "frozen"),
-                },
+                named_params([
+                    ("entity_type", mysql::Value::from(event.entity_type)),
+                    ("change_type", mysql::Value::from(event.change_type)),
+                    ("entity_id", mysql::Value::from(event.entity_id)),
+                    ("old_version", mysql::Value::from(event.old_version)),
+                    ("new_version", mysql::Value::from(event.new_version)),
+                    (
+                        "order_id",
+                        optional_string_param(event_string_field_mysql(event, "order_id")),
+                    ),
+                    (
+                        "account_id",
+                        optional_string_param(event_string_field_mysql(event, "account_id")),
+                    ),
+                    ("asset", optional_u64_param(event_u64_field_mysql(event, "asset"))),
+                    ("symbol", optional_string_param(event_string_field_mysql(event, "symbol"))),
+                    ("side", optional_string_param(event_string_field_mysql(event, "side"))),
+                    (
+                        "execution",
+                        optional_string_param(event_string_field_mysql(event, "execution")),
+                    ),
+                    (
+                        "time_in_force",
+                        optional_string_param(event_string_field_mysql(event, "time_in_force")),
+                    ),
+                    ("qty", optional_u64_param(event_u64_field_mysql(event, "qty"))),
+                    ("price", optional_u64_param(event_u64_field_mysql(event, "price"))),
+                    (
+                        "available_base",
+                        optional_u64_param(event_u64_field_mysql(event, "available")),
+                    ),
+                    ("frozen_base", optional_u64_param(event_u64_field_mysql(event, "frozen"))),
+                    (
+                        "available_quote",
+                        optional_u64_param(event_u64_field_mysql(event, "available")),
+                    ),
+                    ("frozen_quote", optional_u64_param(event_u64_field_mysql(event, "frozen"))),
+                ]),
             )
             .map_err(map_mysql_error)?;
         }
@@ -226,27 +242,72 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
 	                            price = VALUES(price),
 	                            created_sequence = VALUES(created_sequence)"
                     ),
-                    params! {
-                        "order_id" => event_string_field_mysql(event, "order_id")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "account_id" => event_string_field_mysql(event, "account_id")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "asset" => event_u64_field_mysql(event, "asset")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "symbol" => event_string_field_mysql(event, "symbol")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "side" => event_string_field_mysql(event, "side")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "execution" => event_string_field_mysql(event, "execution")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "time_in_force" => event_string_field_mysql(event, "time_in_force")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "qty" => event_u64_field_mysql(event, "qty")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-	                        "price" => event_u64_field_mysql(event, "price")
-	                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-	                        "created_sequence" => 0_u64,
-                    },
+                    named_params([
+                        (
+                            "order_id",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "order_id")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "account_id",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "account_id")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "asset",
+                            mysql::Value::from(
+                                event_u64_field_mysql(event, "asset")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "symbol",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "symbol")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "side",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "side")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "execution",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "execution")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "time_in_force",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "time_in_force")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "qty",
+                            mysql::Value::from(
+                                event_u64_field_mysql(event, "qty")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "price",
+                            mysql::Value::from(
+                                event_u64_field_mysql(event, "price")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        ("created_sequence", mysql::Value::from(0_u64)),
+                    ]),
                 )
                 .map_err(map_mysql_error)?;
                 continue;
@@ -268,13 +329,24 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                              version = :version
                          WHERE account_id = :account_id"
                     ),
-                    params! {
-                        "account_id" => event_string_field_mysql(event, "account_id")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                        "available_value" => event_u64_field_mysql(event, "available"),
-                        "frozen_value" => event_u64_field_mysql(event, "frozen"),
-                        "version" => event.new_version,
-                    },
+                    named_params([
+                        (
+                            "account_id",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "account_id")
+                                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "available_value",
+                            optional_u64_param(event_u64_field_mysql(event, "available")),
+                        ),
+                        (
+                            "frozen_value",
+                            optional_u64_param(event_u64_field_mysql(event, "frozen")),
+                        ),
+                        ("version", mysql::Value::from(event.new_version)),
+                    ]),
                 )
                 .map_err(map_mysql_error)?;
             }

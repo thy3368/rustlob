@@ -103,8 +103,8 @@ pub enum InfoQueryReply {
 }
 
 impl InfoQueryReply {
-    pub fn into_json_value(self) -> JsonValue {
-        match self {
+    pub fn into_json_value(self) -> Result<JsonValue, serde_json::Error> {
+        let value = match self {
             Self::AllMids(value) => to_value(value),
             Self::OpenOrders(value) => to_value(value),
             Self::FrontendOpenOrders(value) => to_value(value),
@@ -135,8 +135,8 @@ impl InfoQueryReply {
             Self::BorrowLendReserveState(value) => to_value(value),
             Self::AllBorrowLendReserveStates(value) => to_value(value),
             Self::ApprovedBuilders(value) => to_value(value),
-        }
-        .expect("info stub response serializes")
+        }?;
+        Ok(value)
     }
 }
 

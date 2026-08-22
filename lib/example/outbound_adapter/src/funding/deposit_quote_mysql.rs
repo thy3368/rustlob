@@ -1,12 +1,12 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use example_core::{Balance, DepositQuoteCmd, DepositQuoteState};
-use mysql::params;
 use mysql::prelude::Queryable;
 
 use crate::shared::{
     ACCOUNT_TABLE, DepositQuoteOutboundError, EVENT_TABLE, MySqlStore, event_string_field_mysql,
-    event_u64_field_mysql, map_mysql_error,
+    event_u64_field_mysql, map_mysql_error, named_params, optional_string_param,
+    optional_u64_param,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
                      FROM {ACCOUNT_TABLE}
                      WHERE account_id = :account_id"
                 ),
-                params! { "account_id" => cmd.party_id.as_str() },
+                named_params([("account_id", mysql::Value::from(cmd.party_id.as_str()))]),
             )
             .map_err(map_mysql_error)?;
         let (account_id, available_quote, version) =
@@ -68,21 +68,39 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
                         :order_id, :account_id, :symbol, :qty, :price, :reserved_quote, :available_quote, :frozen_quote
                      )"
                 ),
-                params! {
-                    "entity_type" => event.entity_type,
-                    "change_type" => event.change_type,
-                    "entity_id" => event.entity_id,
-                    "old_version" => event.old_version,
-                    "new_version" => event.new_version,
-                    "order_id" => event_string_field_mysql(event, "order_id"),
-                    "account_id" => event_string_field_mysql(event, "account_id"),
-                    "symbol" => event_string_field_mysql(event, "symbol"),
-                    "qty" => event_u64_field_mysql(event, "qty"),
-                    "price" => event_u64_field_mysql(event, "price"),
-                    "reserved_quote" => event_u64_field_mysql(event, "reserved_quote"),
-                    "available_quote" => event_u64_field_mysql(event, "available_quote"),
-                    "frozen_quote" => event_u64_field_mysql(event, "frozen_quote"),
-                },
+                named_params([
+                    ("entity_type", mysql::Value::from(event.entity_type)),
+                    ("change_type", mysql::Value::from(event.change_type)),
+                    ("entity_id", mysql::Value::from(event.entity_id)),
+                    ("old_version", mysql::Value::from(event.old_version)),
+                    ("new_version", mysql::Value::from(event.new_version)),
+                    (
+                        "order_id",
+                        optional_string_param(event_string_field_mysql(event, "order_id")),
+                    ),
+                    (
+                        "account_id",
+                        optional_string_param(event_string_field_mysql(event, "account_id")),
+                    ),
+                    (
+                        "symbol",
+                        optional_string_param(event_string_field_mysql(event, "symbol")),
+                    ),
+                    ("qty", optional_u64_param(event_u64_field_mysql(event, "qty"))),
+                    ("price", optional_u64_param(event_u64_field_mysql(event, "price"))),
+                    (
+                        "reserved_quote",
+                        optional_u64_param(event_u64_field_mysql(event, "reserved_quote")),
+                    ),
+                    (
+                        "available_quote",
+                        optional_u64_param(event_u64_field_mysql(event, "available_quote")),
+                    ),
+                    (
+                        "frozen_quote",
+                        optional_u64_param(event_u64_field_mysql(event, "frozen_quote")),
+                    ),
+                ]),
             )
             .map_err(map_mysql_error)?;
         }
@@ -103,13 +121,24 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
                              version = :version
                          WHERE account_id = :account_id"
                     ),
-                    params! {
-                        "account_id" => event_string_field_mysql(event, "account_id")
-                            .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?,
-                        "available_quote" => event_u64_field_mysql(event, "available"),
-                        "frozen_quote" => event_u64_field_mysql(event, "frozen"),
-                        "version" => event.new_version,
-                    },
+                    named_params([
+                        (
+                            "account_id",
+                            mysql::Value::from(
+                                event_string_field_mysql(event, "account_id")
+                                    .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?,
+                            ),
+                        ),
+                        (
+                            "available_quote",
+                            optional_u64_param(event_u64_field_mysql(event, "available")),
+                        ),
+                        (
+                            "frozen_quote",
+                            optional_u64_param(event_u64_field_mysql(event, "frozen")),
+                        ),
+                        ("version", mysql::Value::from(event.new_version)),
+                    ]),
                 )
                 .map_err(map_mysql_error)?;
             }

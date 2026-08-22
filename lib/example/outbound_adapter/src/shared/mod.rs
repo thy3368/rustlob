@@ -2,6 +2,7 @@ mod broker;
 mod errors;
 mod event_decode;
 mod in_memory_store;
+mod mysql_params;
 mod mysql_store;
 mod store_snapshot;
 
@@ -10,12 +11,12 @@ pub use broker::{
     SpotPipelineBrokerError, SpotPipelineMessage, SpotTradeMatchedMessage,
 };
 pub use errors::{
-    DepositQuoteOutboundError, MatchSpotOrderOutboundError, PlaceOrderOutboundError,
-    SettleSpotTradeOutboundError, StoreError, WithdrawQuoteOutboundError,
+    DepositQuoteOutboundError, PlaceOrderOutboundError, StoreError, WithdrawQuoteOutboundError,
 };
 pub(crate) use event_decode::{event_string_field, event_u64_field};
 pub use in_memory_store::InMemoryStore;
 pub(crate) use in_memory_store::balance_key;
+pub(crate) use mysql_params::{named_params, optional_string_param, optional_u64_param};
 pub use mysql_store::MySqlStore;
 pub(crate) use mysql_store::{
     ACCOUNT_TABLE, EVENT_TABLE, MARKET_RULES_TABLE, ORDER_TABLE, event_string_field_mysql,

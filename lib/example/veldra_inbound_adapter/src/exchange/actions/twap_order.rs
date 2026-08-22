@@ -28,8 +28,13 @@ pub mod reply {
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
     #[serde(untagged)]
     pub enum TwapOrderStatusWire {
-        Running { running: TwapRunningStatusWire },
-        Error { error: String },
+        Running {
+            running: TwapRunningStatusWire,
+        },
+        #[allow(dead_code, reason = "reserved Hyperliquid TWAP error wire shape")]
+        Error {
+            error: String,
+        },
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

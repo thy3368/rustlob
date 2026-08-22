@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{Map, Number, Value};
 
 use crate::info::common::validate::{ensure_type, validate_hex_address_field};
 use crate::info::error::InfoHttpError;
@@ -26,5 +26,47 @@ pub async fn handle(
 }
 
 pub(crate) fn stub_response() -> reply::ResponseWire {
-    json!([{"fill":{"closedPnl":"0.0","coin":"AVAX","crossed":true,"dir":"Open Long","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","oid":90542681u64,"px":"18.435","side":"B","startPosition":"26.86","sz":"93.53","time":1681222254710u64,"fee":"0.01","feeToken":"USDC","tid":118906512037719u64},"twapId":3156u64}])
+    Value::Array(vec![object([
+        (
+            "fill",
+            object([
+                ("closedPnl", string_value("0.0")),
+                ("coin", string_value("AVAX")),
+                ("crossed", Value::Bool(true)),
+                ("dir", string_value("Open Long")),
+                (
+                    "hash",
+                    string_value(
+                        "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    ),
+                ),
+                ("oid", u64_value(90_542_681)),
+                ("px", string_value("18.435")),
+                ("side", string_value("B")),
+                ("startPosition", string_value("26.86")),
+                ("sz", string_value("93.53")),
+                ("time", u64_value(1_681_222_254_710)),
+                ("fee", string_value("0.01")),
+                ("feeToken", string_value("USDC")),
+                ("tid", u64_value(118_906_512_037_719)),
+            ]),
+        ),
+        ("twapId", u64_value(3_156)),
+    ])])
+}
+
+fn object<const N: usize>(entries: [(&str, Value); N]) -> Value {
+    let mut object = Map::new();
+    for (name, value) in entries {
+        object.insert(name.to_string(), value);
+    }
+    Value::Object(object)
+}
+
+fn string_value(value: impl Into<String>) -> Value {
+    Value::String(value.into())
+}
+
+fn u64_value(value: u64) -> Value {
+    Value::Number(Number::from(value))
 }

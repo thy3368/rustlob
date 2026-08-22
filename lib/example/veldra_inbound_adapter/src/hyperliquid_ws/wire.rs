@@ -18,7 +18,7 @@ pub enum WsClientMessageWire {
     #[serde(rename = "unsubscribe")]
     Unsubscribe { subscription: SubscriptionWire },
     #[serde(rename = "post")]
-    Post { id: u64, request: WsPostRequestWire },
+    Post { id: u64, request: Box<WsPostRequestWire> },
     #[serde(rename = "ping")]
     Ping(PingWire),
 }
@@ -100,7 +100,7 @@ pub enum WsPostRequestWire {
     #[serde(rename = "info")]
     Info(JsonValue),
     #[serde(rename = "action")]
-    Action(ExchangeActionRequestWire),
+    Action(Box<ExchangeActionRequestWire>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,7 +112,7 @@ pub enum WsPostRequestTypeWire {
 #[derive(Debug, Clone, PartialEq)]
 pub enum WsServerMessageWire {
     SubscriptionResponse(SubscriptionResponseWire),
-    Channel(WsChannelMessageWire),
+    Channel(Box<WsChannelMessageWire>),
     Post(WsPostResponseWire),
     Pong,
     Unknown { raw: JsonValue },
@@ -522,83 +522,79 @@ impl HyperliquidWsMessageParser {
             }
             "pong" => Ok(WsServerMessageWire::Pong),
             "post" => Ok(WsServerMessageWire::Post(parse_post_response(object)?)),
-            "allMids" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::AllMids(
-                from_data(object, "data")?,
-            ))),
-            "notification" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::Notification(
-                from_data(object, "data")?,
-            ))),
-            "webData2" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::WebData2(
-                from_data(object, "data")?,
-            ))),
-            "candle" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::Candle(from_data(
-                object, "data",
-            )?))),
-            "l2Book" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::L2Book(from_data(
-                object, "data",
-            )?))),
-            "trades" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::Trades(from_data(
-                object, "data",
-            )?))),
-            "orderUpdates" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::OrderUpdates(
-                from_data(object, "data")?,
-            ))),
-            "userEvents" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::UserEvents(
-                from_data(object, "data")?,
-            ))),
-            "userFills" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::UserFills(
-                from_data(object, "data")?,
-            ))),
-            "userFundings" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::UserFundings(
-                from_data(object, "data")?,
-            ))),
-            "userNonFundingLedgerUpdates" => Ok(WsServerMessageWire::Channel(
+            "allMids" => {
+                Ok(boxed_channel(WsChannelMessageWire::AllMids(from_data(object, "data")?)))
+            }
+            "notification" => {
+                Ok(boxed_channel(WsChannelMessageWire::Notification(from_data(object, "data")?)))
+            }
+            "webData2" => {
+                Ok(boxed_channel(WsChannelMessageWire::WebData2(from_data(object, "data")?)))
+            }
+            "candle" => Ok(boxed_channel(WsChannelMessageWire::Candle(from_data(object, "data")?))),
+            "l2Book" => Ok(boxed_channel(WsChannelMessageWire::L2Book(from_data(object, "data")?))),
+            "trades" => Ok(boxed_channel(WsChannelMessageWire::Trades(from_data(object, "data")?))),
+            "orderUpdates" => {
+                Ok(boxed_channel(WsChannelMessageWire::OrderUpdates(from_data(object, "data")?)))
+            }
+            "userEvents" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserEvents(from_data(object, "data")?)))
+            }
+            "userFills" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserFills(from_data(object, "data")?)))
+            }
+            "userFundings" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserFundings(from_data(object, "data")?)))
+            }
+            "userNonFundingLedgerUpdates" => Ok(boxed_channel(
                 WsChannelMessageWire::UserNonFundingLedgerUpdates(from_data(object, "data")?),
             )),
-            "activeAssetCtx" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::ActiveAssetCtx(from_data(object, "data")?),
-            )),
-            "activeAssetData" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::ActiveAssetData(from_data(object, "data")?),
-            )),
-            "userTwapSliceFills" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::UserTwapSliceFills(from_data(object, "data")?),
-            )),
-            "userTwapHistory" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::UserTwapHistory(from_data(object, "data")?),
-            )),
-            "bbo" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::Bbo(from_data(
-                object, "data",
-            )?))),
-            "userToaster" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::UserToaster(
+            "activeAssetCtx" => {
+                Ok(boxed_channel(WsChannelMessageWire::ActiveAssetCtx(from_data(object, "data")?)))
+            }
+            "activeAssetData" => {
+                Ok(boxed_channel(WsChannelMessageWire::ActiveAssetData(from_data(object, "data")?)))
+            }
+            "userTwapSliceFills" => Ok(boxed_channel(WsChannelMessageWire::UserTwapSliceFills(
                 from_data(object, "data")?,
             ))),
-            "userRequest" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::UserRequest(
+            "userTwapHistory" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserTwapHistory(from_data(object, "data")?)))
+            }
+            "bbo" => Ok(boxed_channel(WsChannelMessageWire::Bbo(from_data(object, "data")?))),
+            "userToaster" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserToaster(from_data(object, "data")?)))
+            }
+            "userRequest" => Ok(boxed_channel(WsChannelMessageWire::UserRequest(
                 object.get("data").cloned().ok_or_else(|| {
                     HyperliquidWsError::Protocol(
                         "channel `userRequest` is missing `data`".to_string(),
                     )
                 })?,
             ))),
-            "ledgerUpdates" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::LedgerUpdates(from_data(object, "data")?),
-            )),
-            "twapStates" => Ok(WsServerMessageWire::Channel(WsChannelMessageWire::TwapStates(
+            "ledgerUpdates" => {
+                Ok(boxed_channel(WsChannelMessageWire::LedgerUpdates(from_data(object, "data")?)))
+            }
+            "twapStates" => Ok(boxed_channel(WsChannelMessageWire::TwapStates(
                 object.get("data").cloned().ok_or_else(|| {
                     HyperliquidWsError::Protocol(
                         "channel `twapStates` is missing `data`".to_string(),
                     )
                 })?,
             ))),
-            "allDexsClearinghouseState" => Ok(WsServerMessageWire::Channel(
+            "allDexsClearinghouseState" => Ok(boxed_channel(
                 WsChannelMessageWire::AllDexsClearinghouseState(from_data(object, "data")?),
             )),
-            "allDexsAssetCtxs" => Ok(WsServerMessageWire::Channel(
-                WsChannelMessageWire::AllDexsAssetCtxs(from_data(object, "data")?),
-            )),
+            "allDexsAssetCtxs" => Ok(boxed_channel(WsChannelMessageWire::AllDexsAssetCtxs(
+                from_data(object, "data")?,
+            ))),
             _ => Ok(WsServerMessageWire::Unknown { raw: value }),
         }
     }
+}
+
+fn boxed_channel(message: WsChannelMessageWire) -> WsServerMessageWire {
+    WsServerMessageWire::Channel(Box::new(message))
 }
 
 fn from_data<T>(
@@ -739,7 +735,7 @@ mod tests {
 
         let action = serde_json::to_value(WsClientMessageWire::Post {
             id: 9,
-            request: WsPostRequestWire::Action(ExchangeActionRequestWire {
+            request: Box::new(WsPostRequestWire::Action(Box::new(ExchangeActionRequestWire {
                 action: crate::exchange::ExchangeActionWire::Noop,
                 common: crate::exchange::CommonExchangeFields {
                     nonce: 1710000000000,
@@ -753,7 +749,7 @@ mod tests {
                     vault_address: None,
                     expires_after: None,
                 },
-            }),
+            }))),
         })
         .expect("action post serializes");
         assert_eq!(
@@ -986,7 +982,10 @@ mod tests {
         .expect("user fills with extra fields should parse");
 
         match message {
-            WsServerMessageWire::Channel(WsChannelMessageWire::UserFills(payload)) => {
+            WsServerMessageWire::Channel(payload) => {
+                let WsChannelMessageWire::UserFills(payload) = *payload else {
+                    panic!("unexpected channel payload");
+                };
                 assert_eq!(payload.extra.get("brandNewWrapperField"), Some(&json!(7)));
                 assert_eq!(payload.fills[0].extra.get("newField"), Some(&json!("kept")));
             }

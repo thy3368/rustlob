@@ -132,7 +132,7 @@ pub enum OrderLookupStatusWire {
 #[serde(untagged)]
 pub enum OrderStatusResponseWire {
     /// 成功查到订单。
-    KnownOrder { status: OrderLookupStatusWire, order: OrderStatusEnvelopeWire },
+    KnownOrder { status: OrderLookupStatusWire, order: Box<OrderStatusEnvelopeWire> },
     /// 查不到订单。
     UnknownOid { status: OrderLookupStatusWire },
 }

@@ -17,6 +17,8 @@ pub enum InfoHttpError {
     UnsupportedQueryType(String),
     #[error("{0}")]
     Validation(String),
+    #[error("Failed to serialize info response: {0}")]
+    SerializeReply(#[source] serde_json::Error),
 }
 
 impl InfoHttpError {
@@ -41,7 +43,13 @@ impl JsonRequestError for InfoHttpError {
 
 impl ResponseError for InfoHttpError {
     fn status_code(&self) -> StatusCode {
-        StatusCode::BAD_REQUEST
+        match self {
+            Self::SerializeReply(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::MalformedJson
+            | Self::InvalidJsonShape(_)
+            | Self::UnsupportedQueryType(_)
+            | Self::Validation(_) => StatusCode::BAD_REQUEST,
+        }
     }
 
     fn error_response(&self) -> HttpResponse {

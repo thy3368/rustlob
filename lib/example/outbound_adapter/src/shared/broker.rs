@@ -40,6 +40,7 @@ pub trait SpotPipelineBroker: Send + Sync {
     fn publish(&self, message: SpotPipelineMessage) -> Result<(), SpotPipelineBrokerError>;
     fn pop(&self) -> Result<Option<SpotPipelineMessage>, SpotPipelineBrokerError>;
     fn len(&self) -> Result<usize, SpotPipelineBrokerError>;
+    fn is_empty(&self) -> Result<bool, SpotPipelineBrokerError>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,5 +63,10 @@ impl SpotPipelineBroker for InMemorySpotPipelineBroker {
     fn len(&self) -> Result<usize, SpotPipelineBrokerError> {
         let queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
         Ok(queue.len())
+    }
+
+    fn is_empty(&self) -> Result<bool, SpotPipelineBrokerError> {
+        let queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
+        Ok(queue.is_empty())
     }
 }

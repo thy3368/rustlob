@@ -5,9 +5,9 @@ use tokio_tungstenite::tungstenite;
 #[derive(Debug, thiserror::Error)]
 pub enum HyperliquidWsError {
     #[error("WebSocket connect failed: {0}")]
-    Connect(#[source] tungstenite::Error),
+    Connect(#[source] Box<tungstenite::Error>),
     #[error("WebSocket frame send/receive failed: {0}")]
-    Frame(#[source] tungstenite::Error),
+    Frame(#[source] Box<tungstenite::Error>),
     #[error("WebSocket connection closed.")]
     ConnectionClosed,
     #[error("WebSocket binary frame was not valid UTF-8: {0}")]

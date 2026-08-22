@@ -6,7 +6,7 @@ use inbound_adapter_support::{
     build_api_manifest, build_cli_schema, build_http_openapi, cli_arg, cli_error, insert_schema,
     object_schema, optional_string_schema, string_schema, u64_schema,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use crate::funding::{
     DEPOSIT_QUOTE_CLI_BIN, DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT, DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID,
@@ -49,7 +49,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     0,
                     "string",
                     false,
-                    Some(json!(PLACE_ORDER_CLI_DEFAULT_TRADER_ID)),
+                    Some(Value::from(PLACE_ORDER_CLI_DEFAULT_TRADER_ID)),
                     "Trader account identifier.",
                 ),
                 cli_arg(
@@ -57,7 +57,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     1,
                     "string",
                     false,
-                    Some(json!(PLACE_ORDER_CLI_DEFAULT_SYMBOL)),
+                    Some(Value::from(PLACE_ORDER_CLI_DEFAULT_SYMBOL)),
                     "Trading symbol.",
                 ),
                 cli_arg(
@@ -65,7 +65,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     2,
                     "u64",
                     false,
-                    Some(json!(PLACE_ORDER_CLI_DEFAULT_QTY)),
+                    Some(Value::from(PLACE_ORDER_CLI_DEFAULT_QTY)),
                     "Requested order quantity.",
                 ),
                 cli_arg(
@@ -73,7 +73,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     3,
                     "u64",
                     false,
-                    Some(json!(PLACE_ORDER_CLI_DEFAULT_PRICE)),
+                    Some(Value::from(PLACE_ORDER_CLI_DEFAULT_PRICE)),
                     "Requested order limit price.",
                 ),
             ],
@@ -95,12 +95,12 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                 cli_error("outbound", "outbound_replay_failed"),
                 cli_error("outbound", "outbound_publish_failed"),
             ],
-            defaults: json!({
-                "trader_id": PLACE_ORDER_CLI_DEFAULT_TRADER_ID,
-                "symbol": PLACE_ORDER_CLI_DEFAULT_SYMBOL,
-                "qty": PLACE_ORDER_CLI_DEFAULT_QTY,
-                "price": PLACE_ORDER_CLI_DEFAULT_PRICE,
-            }),
+            defaults: json_object([
+                ("trader_id", Value::from(PLACE_ORDER_CLI_DEFAULT_TRADER_ID)),
+                ("symbol", Value::from(PLACE_ORDER_CLI_DEFAULT_SYMBOL)),
+                ("qty", Value::from(PLACE_ORDER_CLI_DEFAULT_QTY)),
+                ("price", Value::from(PLACE_ORDER_CLI_DEFAULT_PRICE)),
+            ]),
         }),
         InboundApiDescriptor::Cli(CliApiDescriptor {
             name: "deposit_quote_cli",
@@ -113,7 +113,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     0,
                     "string",
                     false,
-                    Some(json!(DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID)),
+                    Some(Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID)),
                     "Trader account identifier.",
                 ),
                 cli_arg(
@@ -121,7 +121,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     1,
                     "u64",
                     false,
-                    Some(json!(DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT)),
+                    Some(Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT)),
                     "Deposit amount.",
                 ),
             ],
@@ -137,10 +137,10 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                 cli_error("outbound", "outbound_replay_failed"),
                 cli_error("outbound", "outbound_publish_failed"),
             ],
-            defaults: json!({
-                "trader_id": DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID,
-                "amount": DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT,
-            }),
+            defaults: json_object([
+                ("trader_id", Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID)),
+                ("amount", Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT)),
+            ]),
         }),
         InboundApiDescriptor::Cli(CliApiDescriptor {
             name: "withdraw_quote_cli",
@@ -153,7 +153,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     0,
                     "string",
                     false,
-                    Some(json!(WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID)),
+                    Some(Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID)),
                     "Trader account identifier.",
                 ),
                 cli_arg(
@@ -161,7 +161,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                     1,
                     "u64",
                     false,
-                    Some(json!(WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT)),
+                    Some(Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT)),
                     "Withdraw amount.",
                 ),
             ],
@@ -178,12 +178,20 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                 cli_error("outbound", "outbound_replay_failed"),
                 cli_error("outbound", "outbound_publish_failed"),
             ],
-            defaults: json!({
-                "trader_id": WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID,
-                "amount": WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT,
-            }),
+            defaults: json_object([
+                ("trader_id", Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID)),
+                ("amount", Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT)),
+            ]),
         }),
     ]
+}
+
+fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
+    let mut object = Map::new();
+    for (name, value) in entries {
+        object.insert(name.to_string(), value);
+    }
+    Value::Object(object)
 }
 
 pub fn example_http_openapi() -> Value {
@@ -429,6 +437,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use serde::Serialize;
+    use serde_json::json;
 
     use super::*;
     use crate::common::ExampleHttpErrorResponse;

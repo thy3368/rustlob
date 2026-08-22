@@ -14,17 +14,18 @@ async fn post_info(body: web::Bytes) -> Result<HttpResponse, InfoHttpError> {
 
 async fn dispatch_info_query_from_body(body: &[u8]) -> Result<HttpResponse, InfoHttpError> {
     let probe = parse_query_type_probe(body)?;
-    let deps = InfoQueryDeps::default();
+    let deps = InfoQueryDeps;
     let reply = dispatch_info_query(&probe.type_, body, &deps).await?;
-    Ok(reply_to_http(reply))
+    reply_to_http(reply)
 }
 
 fn parse_query_type_probe(body: &[u8]) -> Result<InfoRequestTypeProbe, InfoHttpError> {
     crate::common::parse::parse_json_request(body)
 }
 
-fn reply_to_http(reply: InfoQueryReply) -> HttpResponse {
-    HttpResponse::Ok().json(reply.into_json_value())
+fn reply_to_http(reply: InfoQueryReply) -> Result<HttpResponse, InfoHttpError> {
+    let value = reply.into_json_value().map_err(InfoHttpError::SerializeReply)?;
+    Ok(HttpResponse::Ok().json(value))
 }
 
 #[cfg(test)]

@@ -17,13 +17,18 @@ pub struct HyperliquidWsClient {
 
 impl HyperliquidWsClient {
     pub async fn connect(url: &str) -> Result<Self, HyperliquidWsError> {
-        let (stream, _) = connect_async(url).await.map_err(HyperliquidWsError::Connect)?;
+        let (stream, _) = connect_async(url)
+            .await
+            .map_err(|error| HyperliquidWsError::Connect(Box::new(error)))?;
         Ok(Self { stream })
     }
 
     pub async fn send(&mut self, message: &WsClientMessageWire) -> Result<(), HyperliquidWsError> {
         let text = serde_json::to_string(message).map_err(HyperliquidWsError::Json)?;
-        self.stream.send(Message::Text(text.into())).await.map_err(HyperliquidWsError::Frame)
+        self.stream
+            .send(Message::Text(text))
+            .await
+            .map_err(|error| HyperliquidWsError::Frame(Box::new(error)))
     }
 
     pub async fn send_ping(&mut self) -> Result<(), HyperliquidWsError> {
@@ -33,7 +38,7 @@ impl HyperliquidWsClient {
     pub async fn recv(&mut self) -> Result<WsServerMessageWire, HyperliquidWsError> {
         loop {
             let next = self.stream.next().await.ok_or(HyperliquidWsError::ConnectionClosed)?;
-            match next.map_err(HyperliquidWsError::Frame)? {
+            match next.map_err(|error| HyperliquidWsError::Frame(Box::new(error)))? {
                 Message::Text(text) => {
                     return HyperliquidWsMessageParser::parse_text(text.as_str());
                 }
@@ -46,7 +51,7 @@ impl HyperliquidWsClient {
                     self.stream
                         .send(Message::Pong(payload))
                         .await
-                        .map_err(HyperliquidWsError::Frame)?;
+                        .map_err(|error| HyperliquidWsError::Frame(Box::new(error)))?;
                 }
                 Message::Pong(_) => {}
                 Message::Close(_) => return Err(HyperliquidWsError::ConnectionClosed),

@@ -27,7 +27,10 @@ pub mod reply {
     #[serde(untagged)]
     pub enum TwapCancelStatusWire {
         Success(&'static str),
-        Error { error: String },
+        #[allow(dead_code, reason = "reserved Hyperliquid TWAP error wire shape")]
+        Error {
+            error: String,
+        },
     }
 }
 

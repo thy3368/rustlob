@@ -4,11 +4,10 @@ use example_core::{
     Balance, MarketRules, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
     SpotOrderV2,
 };
-use mysql::params;
 use mysql::prelude::Queryable;
 
 use super::StoreSnapshot;
-use crate::shared::StoreError;
+use crate::shared::{StoreError, named_params};
 
 pub(crate) const ACCOUNT_TABLE: &str = "example_place_order_accounts";
 pub(crate) const MARKET_RULES_TABLE: &str = "example_place_order_market_rules";
@@ -124,14 +123,14 @@ impl MySqlStore {
                    frozen_quote = VALUES(frozen_quote),
                    version = VALUES(version)"
             ),
-            params! {
-                "account_id" => account_id,
-                "available_base" => available_base,
-                "frozen_base" => frozen_base,
-                "available_quote" => available_quote,
-                "frozen_quote" => frozen_quote,
-                "version" => version,
-            },
+            named_params([
+                ("account_id", mysql::Value::from(account_id)),
+                ("available_base", mysql::Value::from(available_base)),
+                ("frozen_base", mysql::Value::from(frozen_base)),
+                ("available_quote", mysql::Value::from(available_quote)),
+                ("frozen_quote", mysql::Value::from(frozen_quote)),
+                ("version", mysql::Value::from(version)),
+            ]),
         )
         .map_err(map_mysql_error)?;
 
@@ -146,10 +145,10 @@ impl MySqlStore {
                  VALUES (:symbol, :min_qty)
                  ON DUPLICATE KEY UPDATE min_qty = VALUES(min_qty)"
             ),
-            params! {
-                "symbol" => market_rules.symbol,
-                "min_qty" => market_rules.min_qty,
-            },
+            named_params([
+                ("symbol", mysql::Value::from(market_rules.symbol)),
+                ("min_qty", mysql::Value::from(market_rules.min_qty)),
+            ]),
         )
         .map_err(map_mysql_error)?;
 

@@ -32,7 +32,7 @@ pub async fn handle(
 pub(crate) fn stub_response() -> reply::ResponseWire {
     OrderStatusResponseWire::KnownOrder {
         status: OrderLookupStatusWire::Order,
-        order: OrderStatusEnvelopeWire {
+        order: Box::new(OrderStatusEnvelopeWire {
             order: FrontendOrderWire {
                 coin: "ETH".to_string(),
                 side: "A".to_string(),
@@ -53,7 +53,7 @@ pub(crate) fn stub_response() -> reply::ResponseWire {
             },
             status: "filled".to_string(),
             status_timestamp: 1724361546645,
-        },
+        }),
     }
 }
 
