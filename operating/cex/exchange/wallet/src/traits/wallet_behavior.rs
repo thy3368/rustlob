@@ -1,8 +1,6 @@
 // 参考 ## wallet Endpoints  /Users/hongyaotang/src/rustlob/design/other/binance_wallet_docs 定义所有 wallet 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
-use entity_derive::immutable;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 // ============================================================================
 // CAPITAL ENDPOINTS - 钱包 (充提币)
@@ -13,7 +11,6 @@ use serde_json::Value;
 /// Weight: 10
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetAllCoinsCmd {
     metadata: CMetadata,
     recv_window: Option<u64>,
@@ -24,7 +21,6 @@ pub struct GetAllCoinsCmd {
 /// Weight: 900 (UID)
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct WithdrawCmd {
     metadata: CMetadata,
     coin: String,
@@ -43,7 +39,6 @@ pub struct WithdrawCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetWithdrawHistoryCmd {
     metadata: CMetadata,
     coin: Option<String>,
@@ -60,7 +55,6 @@ pub struct GetWithdrawHistoryCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetDepositHistoryCmd {
     metadata: CMetadata,
     coin: Option<String>,
@@ -78,7 +72,6 @@ pub struct GetDepositHistoryCmd {
 /// Weight: 10
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetDepositAddressCmd {
     metadata: CMetadata,
     coin: String,
@@ -95,7 +88,6 @@ pub struct GetDepositAddressCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetAssetDetailCmd {
     metadata: CMetadata,
     asset: Option<String>,
@@ -106,7 +98,6 @@ pub struct GetAssetDetailCmd {
 /// Weight: 5
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetUserAssetsCmd {
     metadata: CMetadata,
     asset: Option<String>,
@@ -118,7 +109,6 @@ pub struct GetUserAssetsCmd {
 /// Weight: 900 (UID)
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct UniversalTransferCmd {
     metadata: CMetadata,
     transfer_type: String,
@@ -133,7 +123,6 @@ pub struct UniversalTransferCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetUniversalTransferHistoryCmd {
     metadata: CMetadata,
     transfer_type: String,
@@ -150,7 +139,6 @@ pub struct GetUniversalTransferHistoryCmd {
 /// Weight: 10
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct DustTransferCmd {
     metadata: CMetadata,
     asset: Vec<String>,
@@ -163,7 +151,6 @@ pub struct DustTransferCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetTradeFeeCmd {
     metadata: CMetadata,
     symbol: Option<String>,
@@ -174,7 +161,6 @@ pub struct GetTradeFeeCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetFundingAssetCmd {
     metadata: CMetadata,
     asset: Option<String>,
@@ -190,7 +176,6 @@ pub struct GetFundingAssetCmd {
 /// Weight: 1
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetAccountInfoCmd {
     metadata: CMetadata,
 }
@@ -200,7 +185,6 @@ pub struct GetAccountInfoCmd {
 /// Weight: 2400
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct GetAccountSnapshotCmd {
     metadata: CMetadata,
     snapshot_type: String, // "SPOT", "MARGIN", "FUTURES"
@@ -244,7 +228,6 @@ pub enum WalletCmdAny {
 /// 币种信息
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct CoinInfo {
     coin: String,
     deposit_all_enable: bool,
@@ -265,7 +248,6 @@ pub struct CoinInfo {
 /// 网络信息
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct NetworkInfo {
     network: String,
     coin: String,
@@ -300,7 +282,6 @@ pub struct NetworkInfo {
 /// 提币响应
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct WithdrawResponse {
     id: String,
 }
@@ -308,7 +289,6 @@ pub struct WithdrawResponse {
 /// 提币历史记录
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct WithdrawRecord {
     id: String,
     amount: String,
@@ -330,7 +310,6 @@ pub struct WithdrawRecord {
 /// 充值历史记录
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct DepositRecord {
     id: String,
     amount: String,
@@ -353,7 +332,6 @@ pub struct DepositRecord {
 /// 充值地址响应
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct DepositAddressResponse {
     address: String,
     coin: String,
@@ -364,7 +342,6 @@ pub struct DepositAddressResponse {
 /// 资产详情
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct AssetDetail {
     min_withdraw_amount: String,
     deposit_status: bool,
@@ -376,7 +353,6 @@ pub struct AssetDetail {
 /// 用户资产
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct UserAsset {
     asset: String,
     free: String,
@@ -390,7 +366,6 @@ pub struct UserAsset {
 /// 万向划转响应
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct UniversalTransferResponse {
     tran_id: u64,
 }
@@ -398,7 +373,6 @@ pub struct UniversalTransferResponse {
 /// 万向划转历史记录
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct UniversalTransferRecord {
     tran_id: u64,
     from_account_type: String,
@@ -412,7 +386,6 @@ pub struct UniversalTransferRecord {
 /// 小额资产转换响应
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct DustTransferResponse {
     total_service_charge: String,
     total_transfered: String,
@@ -422,7 +395,6 @@ pub struct DustTransferResponse {
 /// 小额资产转换结果
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct DustTransferResult {
     amount: String,
     from_asset: String,
@@ -435,7 +407,6 @@ pub struct DustTransferResult {
 /// 交易手续费
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct TradeFee {
     symbol: String,
     maker_commission: String,
@@ -445,7 +416,6 @@ pub struct TradeFee {
 /// 资金账户资产
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct FundingAsset {
     asset: String,
     free: String,
@@ -458,7 +428,6 @@ pub struct FundingAsset {
 /// 账户信息
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct AccountInfo {
     vip_level: u32,
     is_margin_enabled: bool,
@@ -470,7 +439,6 @@ pub struct AccountInfo {
 /// 账户快照
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct AccountSnapshot {
     code: u32,
     msg: String,
@@ -480,7 +448,6 @@ pub struct AccountSnapshot {
 /// 快照数据
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[immutable]
 pub struct SnapshotVo {
     data: Value,
     snapshot_type: String,

@@ -12,10 +12,9 @@
 // 幂等性包装 (Idempotent Command)
 // ============================================================================
 
-use base_types::base_types::TraderId;
 pub use base_types::cqrs::cqrs_types::{CMetadata, Cmd, CmdResp};
-use base_types::exchange::spot::spot_types::{OrderStatus, SpotTrade, TimeInForce};
-use base_types::{AccountId, OrderId, OrderSide, Price, Quantity, TradingPair};
+use base_types::exchange::spot::spot_types::OrderStatus;
+use base_types::{OrderId, Price, Quantity};
 // ============================================================================
 // 错误类型定义 (混合方案)
 // ============================================================================
@@ -45,25 +44,25 @@ pub enum CommonError {
 }
 
 impl CommonError {
-    pub fn Runtime(p0: String) -> CommonError {
+    pub fn Runtime(_p0: String) -> CommonError {
         todo!()
     }
 }
 
 impl CommonError {
-    pub fn NotImplemented(p0: String) -> CommonError {
+    pub fn NotImplemented(_p0: String) -> CommonError {
         todo!()
     }
 }
 
 impl CommonError {
-    pub fn Serialization(p0: String) -> CommonError {
+    pub fn Serialization(_p0: String) -> CommonError {
         todo!()
     }
 }
 
 impl CommonError {
-    pub fn Network(p0: String) -> CommonError {
+    pub fn Network(_p0: String) -> CommonError {
         todo!()
     }
 }

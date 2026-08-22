@@ -1,8 +1,6 @@
 // 参考 /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/
 // web-socket-streams.md 定义所有 market data 接口
 
-use entity_derive::Entity;
-
 use crate::proc::behavior::v2::spot_trade_error::{CMetadata, CmdResp, SpotApiErrorAny};
 
 /// Market Data Stream 消息枚举
