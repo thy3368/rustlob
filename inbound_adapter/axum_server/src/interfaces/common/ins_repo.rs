@@ -19,7 +19,7 @@ use push::k_line::{
 use push::push::connection_types::ConnectionRepo;
 use push::push::push_service::PushBehaviorV2Imp;
 use push::push::subscription_service::SubscriptionService;
-use push::queue::queue::Queue;
+use push::queue::queue_contract::Queue;
 use push::queue::queue_impl::kafka_queue::KafkaConfig;
 use push::queue::queue_impl::mpmc_queue::MPMCQueue;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior::SpotTradeCmdOrQuery;

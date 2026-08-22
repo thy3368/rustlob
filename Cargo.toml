@@ -3,32 +3,18 @@ cargo-features = ["profile-rustflags"]
 [workspace]
 members = [
     # lib/common
-    "lib/common/algo",
     "lib/common/base_types",
-    "lib/common/cache_analyzer_derive",
-    "lib/common/cache_analyzer_types",
     "lib/common/cmd_handler",
     "lib/common/db_repo",
     "lib/common/decimal",
     "lib/common/diff",
     "lib/common/entity",
     "lib/common/entity_derive",
-    "lib/common/fixed_order_cmd",
-    "lib/common/fixed_point",
     "lib/common/hotstuff_rs",
     "lib/common/id_generator",
     "lib/common/inbound_adapter_support",
     "lib/common/inbound_adapter_support_macros",
-    "lib/common/immutable_derive",
     "lib/common/lob_repo",
-    "lib/common/repo_def",
-    "lib/common/rust_analyzer",
-    "lib/common/rust_queue",
-    "lib/common/sbe",
-    "lib/common/sbe_derive",
-    "lib/common/sequencer",
-    "lib/common/single_thread_derive",
-    "lib/common/vector_clock",
     # lib/core
     "lib/core/exchange/prep",
     "lib/core/l1",
@@ -51,38 +37,27 @@ members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer", "lib/common/bdd", "lib/veldra/core", "lib/veldra/outbound_adapter", "lib/veldra/inbound_adapter",
+    "study/hyperliquid_analyzer",
+    "lib/veldra/core",
+    "lib/veldra/outbound_adapter",
+    "lib/veldra/inbound_adapter",
 ]
 
 # XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
 default-members = [
     # lib/common
-    "lib/common/algo",
     "lib/common/base_types",
-    "lib/common/cache_analyzer_derive",
-    "lib/common/cache_analyzer_types",
     "lib/common/cmd_handler",
     "lib/common/db_repo",
     "lib/common/decimal",
     "lib/common/diff",
     "lib/common/entity",
     "lib/common/entity_derive",
-    "lib/common/fixed_order_cmd",
-    "lib/common/fixed_point",
     "lib/common/hotstuff_rs",
     "lib/common/id_generator",
     "lib/common/inbound_adapter_support",
     "lib/common/inbound_adapter_support_macros",
-    "lib/common/immutable_derive",
     "lib/common/lob_repo",
-    "lib/common/repo_def",
-    "lib/common/rust_analyzer",
-    "lib/common/rust_queue",
-    "lib/common/sbe",
-    "lib/common/sbe_derive",
-    "lib/common/sequencer",
-    "lib/common/single_thread_derive",
-    "lib/common/vector_clock",
     # lib/core
     "lib/core/exchange/prep",
     "lib/core/l1",
@@ -105,7 +80,6 @@ default-members = [
     # study
     "study/web3",
     "study/hyperliquid_analyzer",
-    "lib/common/bdd",
 ]
 
 resolver = "2"
