@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use diff::{Entity, FromCreatedEvent};
 use entity_derive::Entity;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +29,20 @@ pub struct OHLC {
     pub count: u32,     // 成交笔数
 }
 
+pub type KLineEventHandler = Box<dyn Fn(KLineUpdateEvent) + Send + Sync>;
+pub type LocalKLineEventHandler = Box<dyn Fn(KLineUpdateEvent)>;
+
+#[derive(Debug, Clone, Copy)]
+pub struct WindowStatsUpdate {
+    pub window_idx: usize,
+    pub window_start: u64,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+    pub volume: f64,
+}
+
 impl OHLC {
     pub fn new(timestamp: u64, price: f64, volume: f64) -> Self {
         Self { open: price, high: price, low: price, close: price, volume, timestamp, count: 1 }
@@ -41,14 +54,6 @@ impl OHLC {
         self.close = price;
         self.volume += volume;
         self.count += 1;
-    }
-
-    fn merge(&mut self, other: &OHLC) {
-        self.high = self.high.max(other.high);
-        self.low = self.low.min(other.low);
-        self.close = other.close;
-        self.volume += other.volume;
-        self.count += other.count;
     }
 }
 

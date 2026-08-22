@@ -6,15 +6,17 @@ use rayon::ThreadPool;
 use rayon::prelude::*;
 
 use crate::k_line::aggregator::m100_simd_k_single_line_aggregator::M100SimdKSingleLineAggregator;
-use crate::k_line::k_line_types::{KLineAgg, KLineAggMut, KLineUpdateEvent, OHLC, TimeWindow};
+use crate::k_line::k_line_types::{KLineAggMut, KLineUpdateEvent, OHLC, TimeWindow};
+
+type SharedKLineEventHandler = Arc<dyn Fn(KLineUpdateEvent) + Send + Sync>;
 
 // 创建固定大小的线程池（4个线程，对应4个时间窗口）
-static AGGREGATOR_THREAD_POOL: Lazy<ThreadPool> = Lazy::new(|| {
+static AGGREGATOR_THREAD_POOL: Lazy<Result<ThreadPool, String>> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
         .num_threads(4)
         .thread_name(|i| format!("kline-agg-{}", i))
         .build()
-        .expect("Failed to create KLine aggregator thread pool")
+        .map_err(|err| format!("failed to create KLine aggregator thread pool: {err}"))
 });
 
 // 为 M100SimdKSingleLineAggregator 实现无锁内部可变性
@@ -52,7 +54,7 @@ pub struct M100PSimdKLineAggregator {
     total_volume: u64,
 
     // 事件处理器列表 - 使用Arc确保线程安全
-    event_handlers: Arc<[Option<Arc<dyn Fn(KLineUpdateEvent) + Send + Sync>>; 8]>,
+    event_handlers: Arc<[Option<SharedKLineEventHandler>; 8]>,
     event_handler_count: usize,
 }
 
@@ -72,20 +74,6 @@ impl M100PSimdKLineAggregator {
             event_handler_count: 0,
         }
     }
-
-    #[inline(always)]
-    fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent { window, ohlc, is_new_window };
-
-        let handler_count = self.event_handler_count;
-        let handlers = &self.event_handlers;
-
-        for i in 0..handler_count {
-            if let Some(handler) = &handlers[i] {
-                handler(event.clone());
-            }
-        }
-    }
 }
 
 impl KLineAggMut for M100PSimdKLineAggregator {
@@ -99,7 +87,7 @@ impl KLineAggMut for M100PSimdKLineAggregator {
     where
         F: Fn(KLineUpdateEvent) + 'static + Send + Sync,
     {
-        let handler_arc = Arc::new(handler);
+        let handler_arc: SharedKLineEventHandler = Arc::new(handler);
 
         // 需要内部可变性来修改事件处理器列表
         let mut handlers = self.event_handlers.as_ref().clone();
@@ -112,15 +100,16 @@ impl KLineAggMut for M100PSimdKLineAggregator {
 
             // 同时将事件处理器添加到每个窗口聚合器
             for (window_idx, aggregator) in self.window_aggregators.iter_mut().enumerate() {
-                let window = match window_idx {
-                    0 => TimeWindow::Second,
-                    1 => TimeWindow::Minute,
-                    2 => TimeWindow::FifteenMin,
-                    3 => TimeWindow::Hour,
-                    _ => unreachable!(),
-                };
+                let window = [
+                    TimeWindow::Second,
+                    TimeWindow::Minute,
+                    TimeWindow::FifteenMin,
+                    TimeWindow::Hour,
+                ][window_idx];
 
-                let handler_clone = self.event_handlers[handler_count - 1].clone().unwrap();
+                let Some(handler_clone) = self.event_handlers[handler_count].clone() else {
+                    continue;
+                };
                 let aggregator = unsafe { aggregator.get_mut() };
                 aggregator.subscribe(move |event| {
                     if event.window == window {
@@ -141,7 +130,7 @@ impl KLineAggMut for M100PSimdKLineAggregator {
         // 单线程处理所有窗口
         for window_idx in 0..4 {
             let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
-            aggregator.process_trade(timestamp, price, volume).expect("Failed to process trade");
+            aggregator.process_trade(timestamp, price, volume)?;
         }
 
         Ok(())
@@ -172,19 +161,18 @@ impl KLineAggMut for M100PSimdKLineAggregator {
             // 小任务量，单线程处理
             for window_idx in 0..4 {
                 let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
-                aggregator.process_trades_batch(trades).expect("Failed to process trades batch");
+                aggregator.process_trades_batch(trades)?;
             }
         } else {
             // 大任务量，并行处理
-            AGGREGATOR_THREAD_POOL.install(|| {
-                (0..4).into_par_iter().for_each(|window_idx| {
+            let pool = AGGREGATOR_THREAD_POOL.as_ref().map_err(Clone::clone)?;
+            pool.install(|| {
+                (0..4).into_par_iter().try_for_each(|window_idx| {
                     let aggregator = unsafe { self.window_aggregators[window_idx].get_mut() };
                     // 每个线程处理整个批次的交易，但可以考虑块级别的优化
-                    aggregator
-                        .process_trades_batch(trades)
-                        .expect("Failed to process trades batch");
-                });
-            });
+                    aggregator.process_trades_batch(trades)
+                })
+            })?;
         }
 
         Ok(())

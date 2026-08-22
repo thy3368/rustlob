@@ -1,8 +1,9 @@
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use parking_lot::RwLock;
+
 use crate::k_line::k_line_types::{
-    KLineAgg, KLineUpdateEvent, LockFreeRingBuffer, OHLC, TimeWindow,
+    KLineAgg, KLineEventHandler, KLineUpdateEvent, LockFreeRingBuffer, OHLC, TimeWindow,
 };
 
 pub struct KLineAggregator {
@@ -33,7 +34,7 @@ pub struct KLineAggregator {
     sliding_capacities: [usize; 4],
 
     // 事件处理器列表
-    event_handlers: RwLock<Vec<Box<dyn Fn(KLineUpdateEvent) + Send + Sync>>>,
+    event_handlers: RwLock<Vec<KLineEventHandler>>,
 }
 
 impl KLineAggregator {
@@ -41,7 +42,7 @@ impl KLineAggregator {
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
         let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
-        let handlers = self.event_handlers.read().unwrap();
+        let handlers = self.event_handlers.read();
         for handler in handlers.iter() {
             handler(event.clone());
         }
@@ -65,7 +66,7 @@ impl KLineAggregator {
             _ => return Err("Invalid window index".to_string()),
         };
 
-        let mut current_lock = self.current_windows[window_idx].write().unwrap();
+        let mut current_lock = self.current_windows[window_idx].write();
 
         match &mut *current_lock {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
@@ -78,7 +79,7 @@ impl KLineAggregator {
             _ => {
                 // 保存旧窗口到历史
                 if let Some(old) = current_lock.take() {
-                    self.save_to_history(window_idx, old.clone());
+                    self.save_to_history(window_idx, old);
                     // 触发窗口切换事件 - 推送已完成的旧窗口数据
                     self.send_event(window, old, true);
                 }
@@ -179,7 +180,7 @@ impl KLineAgg for KLineAggregator {
     where
         F: Fn(KLineUpdateEvent) + Send + Sync + 'static,
     {
-        let mut handlers = self.event_handlers.write().unwrap();
+        let mut handlers = self.event_handlers.write();
         handlers.push(Box::new(handler));
     }
     // O(1) 复杂度处理单笔成交
@@ -210,7 +211,7 @@ impl KLineAgg for KLineAggregator {
     // 获取当前K线
     fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
         let idx = window.index();
-        self.current_windows[idx].read().unwrap().clone()
+        *self.current_windows[idx].read()
     }
     // 获取历史K线
     fn get_history_ohlc(&self, window: TimeWindow, limit: usize) -> Vec<OHLC> {
@@ -222,7 +223,7 @@ impl KLineAgg for KLineAggregator {
         };
 
         let len = history.len();
-        let start = if len > limit { len - limit } else { 0 };
+        let start = len.saturating_sub(limit);
 
         history.iter().skip(start).collect()
     }
@@ -253,8 +254,12 @@ impl KLineAgg for KLineAggregator {
             }
         }
 
-        let first = sliding.get(sliding.len() - len).unwrap();
-        let last = sliding.get(sliding.len() - 1).unwrap();
+        let Some(first) = sliding.get(sliding.len() - len) else {
+            return (0.0, 0.0, 0.0, 0.0, 0.0);
+        };
+        let Some(last) = sliding.get(sliding.len() - 1) else {
+            return (0.0, 0.0, 0.0, 0.0, 0.0);
+        };
 
         (first.open, high, low, last.close, total_volume)
     }

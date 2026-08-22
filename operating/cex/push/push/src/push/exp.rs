@@ -1,9 +1,3 @@
-use std::sync::atomic::Ordering;
-use std::thread;
-
-use actix_rt::{Arbiter, ArbiterHandle, System};
-use tokio::sync::mpsc;
-
 #[cfg(all(target_os = "linux", feature = "io-uring"))]
 #[allow(clippy::new_without_default)]
 pub fn new() -> Arbiter {

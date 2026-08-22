@@ -1,12 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
-use std::time::Duration;
 
 use actix::prelude::*;
 use core_affinity::{CoreId, get_core_ids, set_for_current};
 use num_cpus;
+use parking_lot::RwLock;
 
 // 线程绑定错误类型
 #[derive(Debug, thiserror::Error)]
@@ -99,7 +98,7 @@ impl ThreadAffinity {
         self.preferred_threads[0]
     }
 
-    fn is_thread_available(&self, thread_id: usize) -> bool {
+    fn is_thread_available(&self, _thread_id: usize) -> bool {
         // 简单的可用性检查，实际项目中应该检查线程状态
         true
     }
@@ -107,16 +106,12 @@ impl ThreadAffinity {
 
 // 默认策略
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum DefaultPolicy {
+    #[default]
     RoundRobin,
     Random,
     LoadBalanced,
-}
-
-impl Default for DefaultPolicy {
-    fn default() -> Self {
-        Self::RoundRobin
-    }
 }
 
 // 线程绑定策略
@@ -191,7 +186,7 @@ impl ThreadBindingPolicy {
                 }
                 DefaultPolicy::Random => {
                     use rand::Rng;
-                    Some(rand::thread_rng().gen_range(0..num_cpus::get()))
+                    Some(rand::rng().random_range(0..num_cpus::get()))
                 }
                 DefaultPolicy::LoadBalanced => Some(self.load_based_bindings.select_thread()),
             }
@@ -199,18 +194,19 @@ impl ThreadBindingPolicy {
     }
 
     fn get_available_thread(&self, excluded: &[usize]) -> Option<usize> {
-        for i in 0..num_cpus::get() {
-            if !excluded.contains(&i) {
-                return Some(i);
-            }
-        }
-        None
+        (0..num_cpus::get()).find(|&i| !excluded.contains(&i))
     }
 
     fn select_in_range(&self, range: std::ops::Range<usize>) -> usize {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
         range.start + (counter % (range.end - range.start))
+    }
+}
+
+impl Default for ThreadBindingPolicy {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -252,6 +248,12 @@ impl LoadBasedBinding {
     }
 }
 
+impl Default for LoadBasedBinding {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // 线程绑定管理器
 pub struct ThreadBindingManager {
     // 线程池
@@ -279,7 +281,7 @@ impl ThreadBindingManager {
         A: Actor<Context = Context<A>> + 'static + Send,
     {
         // 获取绑定的线程
-        let policy = self.binding_policy.read().unwrap();
+        let policy = self.binding_policy.read();
         let thread_id = policy.get_thread_for_actor::<A>();
 
         drop(policy);
@@ -319,7 +321,7 @@ impl ThreadPool {
             let core_id = if core_ids.len() > i { Some(core_ids[i]) } else { None };
 
             // 在新创建的线程上设置 CPU 亲和性
-            let core_id_clone = core_id.clone();
+            let core_id_clone = core_id;
             arbiter.spawn(async move {
                 if let Some(core_id) = core_id_clone {
                     let _ = set_for_current(core_id);
@@ -348,10 +350,13 @@ impl ThreadPool {
 
             arbiter.spawn(async move {
                 let addr = actor.start();
-                tx.send(addr).unwrap();
+                if tx.send(addr).is_err() {
+                    tracing::error!("线程绑定 Actor 地址接收端已关闭");
+                }
             });
 
-            let addr = rx.recv().unwrap();
+            let addr =
+                rx.recv().map_err(|err| ThreadBindingError::BindingFailed(err.to_string()))?;
             Ok(addr)
         } else {
             Err(ThreadBindingError::InvalidThreadIndex(thread_id))
@@ -363,36 +368,15 @@ impl ThreadPool {
     }
 }
 
-// 线程监控
-struct ThreadMonitor {
-    thread_count: usize,
-    thread_loads: Arc<Mutex<Vec<f32>>>,
-    monitor_handle: Option<thread::JoinHandle<()>>,
-    stop_flag: Arc<std::sync::atomic::AtomicBool>,
-}
-
-impl ThreadMonitor {
-    pub fn new(thread_count: usize) -> Self {
-        let thread_loads = Arc::new(Mutex::new(vec![0.0; thread_count]));
-        let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-        Self { thread_count, thread_loads, monitor_handle: None, stop_flag }
-    }
-}
-
 // 绑定验证器
 struct BindingValidator {
     validation_rules: Vec<ValidationRule>,
-    validation_results: Arc<Mutex<Vec<ValidationResult>>>,
-    validator_state: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl BindingValidator {
     pub fn new() -> Self {
         Self {
             validation_rules: vec![ValidationRule::ThreadConsistency, ValidationRule::CpuAffinity],
-            validation_results: Arc::new(Mutex::new(Vec::new())),
-            validator_state: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 
@@ -431,14 +415,14 @@ impl BindingValidator {
 
     fn check_thread_consistency(
         &self,
-        addr: &Addr<impl Actor>,
-        expected_thread: usize,
+        _addr: &Addr<impl Actor>,
+        _expected_thread: usize,
     ) -> Result<(), ThreadBindingError> {
         // 简单实现，实际项目中应该向 Actor 发送消息查询其所在线程
         Ok(())
     }
 
-    fn check_cpu_affinity(&self, addr: &Addr<impl Actor>) -> Result<(), ThreadBindingError> {
+    fn check_cpu_affinity(&self, _addr: &Addr<impl Actor>) -> Result<(), ThreadBindingError> {
         // 简单实现，实际项目中应该验证 CPU 亲和性
         Ok(())
     }
@@ -449,15 +433,6 @@ impl BindingValidator {
 enum ValidationRule {
     ThreadConsistency,
     CpuAffinity,
-}
-
-// 验证结果
-#[derive(Debug, Clone)]
-struct ValidationResult {
-    actor_type: String,
-    thread_id: usize,
-    cpu_affinity: Option<usize>,
-    timestamp: std::time::Instant,
 }
 
 // 线程绑定的 Actor 系统
@@ -481,6 +456,11 @@ impl ThreadBoundActorSystem {
     // 启动系统
     pub async fn start(&self) -> Result<(), ThreadBindingError> {
         tracing::info!("🚀 启动线程绑定的 Actor 系统");
+        tracing::info!(
+            "线程数: {}, CPU 亲和性槽位: {}",
+            self.config.thread_count,
+            self.binding_manager.thread_pool.cpu_affinity().len()
+        );
 
         Ok(())
     }
@@ -533,6 +513,12 @@ impl BindingRules {
     }
 }
 
+impl Default for BindingRules {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // CPU 亲和性 Actor 基类
 pub struct CpuAffinityActor {
     core_id: Option<CoreId>,
@@ -546,7 +532,7 @@ impl CpuAffinityActor {
 
     // 设置 CPU 亲和性
     fn set_cpu_affinity(&self) -> Result<(), ThreadBindingError> {
-        if let Some(core_id) = self.core_id {
+        if let Some(_core_id) = self.core_id {
             #[cfg(target_os = "linux")]
             {
                 if set_for_current(core_id) {
@@ -572,7 +558,7 @@ impl CpuAffinityActor {
 impl Actor for CpuAffinityActor {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         // 设置 CPU 亲和性
         if let Err(e) = self.set_cpu_affinity() {
             tracing::error!("设置 CPU 亲和性失败: {:?}", e);

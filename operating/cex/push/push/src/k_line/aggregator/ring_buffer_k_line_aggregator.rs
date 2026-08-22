@@ -1,7 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-
-use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
-use parking_lot::RwLock;
+use std::sync::atomic::AtomicU64;
 
 use crate::k_line::k_line_types::{
     CacheAligned, KLineAgg, KLineUpdateEvent, LockFreeRingBuffer, OHLC, TimeWindow,
@@ -56,36 +53,42 @@ impl HighPerformanceKLineAggregator {
     }
 }
 
+impl Default for HighPerformanceKLineAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 //todo 完全重新实现
 impl KLineAgg for HighPerformanceKLineAggregator {
     fn new() -> Self {
         todo!()
     }
 
-    fn subscribe<F>(&self, handler: F)
+    fn subscribe<F>(&self, _handler: F)
     where
         F: Fn(KLineUpdateEvent) + Send + Sync + 'static,
     {
         todo!()
     }
 
-    fn process_trade(&self, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
+    fn process_trade(&self, _timestamp: u64, _price: f64, _volume: f64) -> Result<(), String> {
         todo!()
     }
 
-    fn process_trades_batch(&self, trades: &[(u64, f64, f64)]) -> Result<(), String> {
+    fn process_trades_batch(&self, _trades: &[(u64, f64, f64)]) -> Result<(), String> {
         todo!()
     }
 
-    fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
+    fn get_current_ohlc(&self, _window: TimeWindow) -> Option<OHLC> {
         todo!()
     }
 
-    fn get_history_ohlc(&self, window: TimeWindow, limit: usize) -> Vec<OHLC> {
+    fn get_history_ohlc(&self, _window: TimeWindow, _limit: usize) -> Vec<OHLC> {
         todo!()
     }
 
-    fn get_sliding_stats(&self, window: TimeWindow, period: usize) -> (f64, f64, f64, f64, f64) {
+    fn get_sliding_stats(&self, _window: TimeWindow, _period: usize) -> (f64, f64, f64, f64, f64) {
         todo!()
     }
 

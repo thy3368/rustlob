@@ -2,15 +2,15 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rand::Rng;
 
-use crate::k_line::aggregator::k_line_aggregator::KLineAggregator;
-use crate::k_line::k_line_types::{KLineAgg, TimeWindow};
+use super::aggregator::k_line_aggregator::KLineAggregator;
+use super::k_line_types::{KLineAgg, TimeWindow};
 
 #[test]
-fn main2() {
+fn main2() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== 高性能 K 线聚合器演示 ===\n");
 
     // 创建聚合器
-    let aggregator = KLineAggregator::new();
+    let aggregator = <KLineAggregator as KLineAgg>::new();
 
     // 订阅 K 线更新事件
     aggregator.subscribe(|event| {
@@ -31,10 +31,10 @@ fn main2() {
     });
 
     // 模拟实时交易流
-    let mut timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let mut timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
     let mut price = 100.0;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     println!("开始处理模拟交易...");
 
@@ -44,16 +44,16 @@ fn main2() {
     // 模拟 100 万笔交易
     for _ in 0..1_000_000 {
         // 生成随机交易
-        let change = rng.gen_range(-0.5..0.5);
+        let change = rng.random_range(-0.5..0.5);
         let new_price = price + change;
         price = if new_price > 1.0 { new_price } else { 1.0 };
-        let volume = rng.gen_range(1.0..100.0);
+        let volume = rng.random_range(1.0..100.0);
 
         // 处理交易
-        aggregator.process_trade(timestamp, price, volume).unwrap();
+        aggregator.process_trade(timestamp, price, volume)?;
 
         trade_count += 1;
-        timestamp += rng.gen_range(0..2);
+        timestamp += rng.random_range(0..2);
 
         // 每 10 万笔显示进度
         if trade_count % 100_000 == 0 {
@@ -118,4 +118,5 @@ fn main2() {
         println!("  收盘: {:.4}", close);
         println!("  总成交量: {:.2}", volume);
     }
+    Ok(())
 }

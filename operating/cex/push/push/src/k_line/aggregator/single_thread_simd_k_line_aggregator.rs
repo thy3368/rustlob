@@ -3,7 +3,10 @@ use std::collections::VecDeque;
 use std::simd::f64x8;
 use std::simd::num::SimdFloat;
 
-use crate::k_line::k_line_types::{KLineAgg, KLineUpdateEvent, OHLC, TimeWindow, TradeDataSoA};
+use crate::k_line::k_line_types::{
+    KLineAgg, KLineUpdateEvent, LocalKLineEventHandler, OHLC, TimeWindow, TradeDataSoA,
+    WindowStatsUpdate,
+};
 
 //todo 优化目标： 100万笔/1毫秒
 // 单线程 SIMD 优化的 K 线聚合器
@@ -44,15 +47,11 @@ pub struct SingleThreadSimdKLineAggregator {
     sliding_capacities: [usize; 4],
 
     // 事件处理器列表
-    event_handlers: RefCell<Vec<Box<dyn Fn(KLineUpdateEvent)>>>,
-
-    // 批处理缓冲区
-    batch_buffer: RefCell<Vec<(u64, f64, f64)>>,
-    batch_size: usize,
+    event_handlers: RefCell<Vec<LocalKLineEventHandler>>,
 }
 
 impl SingleThreadSimdKLineAggregator {
-    pub fn new_with_batch_size(batch_size: usize) -> Self {
+    pub fn new_with_batch_size(_batch_size: usize) -> Self {
         Self {
             current_windows: RefCell::new([None, None, None, None]),
             history_1s: RefCell::new(VecDeque::with_capacity(3600)),
@@ -69,8 +68,6 @@ impl SingleThreadSimdKLineAggregator {
             history_capacities: [3600, 1440, 672, 720],
             sliding_capacities: [60, 60, 96, 168],
             event_handlers: RefCell::new(Vec::new()),
-            batch_buffer: RefCell::new(Vec::with_capacity(batch_size)),
-            batch_size,
         }
     }
 
@@ -103,30 +100,27 @@ impl SingleThreadSimdKLineAggregator {
         };
 
         let mut current_windows = self.current_windows.borrow_mut();
-        let need_update_sliding = match &mut current_windows[window_idx] {
+        let updated_ohlc = match &mut current_windows[window_idx] {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
                 // 更新当前窗口
                 current_ohlc.update(price, volume);
-                true
+                *current_ohlc
             }
             _ => {
                 // 保存旧窗口到历史
                 if let Some(old) = current_windows[window_idx].take() {
-                    self.save_to_history(window_idx, old.clone());
+                    self.save_to_history(window_idx, old);
                     self.send_event(window, old, true);
                 }
 
                 // 创建新的当前窗口
                 let new_ohlc = OHLC::new(window_start, price, volume);
                 current_windows[window_idx] = Some(new_ohlc);
-                true
+                new_ohlc
             }
         };
 
-        if need_update_sliding {
-            let current_ohlc = current_windows[window_idx].unwrap();
-            self.update_sliding_window(window_idx, current_ohlc);
-        }
+        self.update_sliding_window(window_idx, updated_ohlc);
 
         Ok(())
     }
@@ -215,7 +209,7 @@ impl SingleThreadSimdKLineAggregator {
     }
 
     #[inline(always)]
-    unsafe fn prefetch<T>(ptr: *const T, hint: i32) {
+    unsafe fn prefetch<T>(_ptr: *const T, _hint: i32) {
         #[cfg(target_arch = "x86_64")]
         std::arch::x86_64::_mm_prefetch(ptr as *const i8, hint);
     }
@@ -274,15 +268,15 @@ impl SingleThreadSimdKLineAggregator {
 
                 if first_window == last_window {
                     // 整个块在同一窗口中，进行优化更新
-                    self.update_window_with_stats(
+                    self.update_window_with_stats(WindowStatsUpdate {
                         window_idx,
-                        first_window,
-                        first_price,
-                        max_price,
-                        min_price,
-                        last_price,
-                        chunk_volume,
-                    )?;
+                        window_start: first_window,
+                        open: first_price,
+                        high: max_price,
+                        low: min_price,
+                        close: last_price,
+                        volume: chunk_volume,
+                    })?;
                 } else {
                     // 块跨越窗口边界，逐个处理
                     for j in start..end {
@@ -347,16 +341,8 @@ impl SingleThreadSimdKLineAggregator {
     }
 
     #[inline(always)]
-    fn update_window_with_stats(
-        &self,
-        window_idx: usize,
-        window_start: u64,
-        open: f64,
-        high: f64,
-        low: f64,
-        close: f64,
-        volume: f64,
-    ) -> Result<(), String> {
+    fn update_window_with_stats(&self, update: WindowStatsUpdate) -> Result<(), String> {
+        let WindowStatsUpdate { window_idx, window_start, open, high, low, close, volume } = update;
         let window = match window_idx {
             0 => TimeWindow::Second,
             1 => TimeWindow::Minute,
@@ -366,7 +352,7 @@ impl SingleThreadSimdKLineAggregator {
         };
 
         let mut current_windows = self.current_windows.borrow_mut();
-        let need_update_sliding = match &mut current_windows[window_idx] {
+        let updated_ohlc = match &mut current_windows[window_idx] {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
                 // 更新当前窗口的统计信息（使用 SIMD 计算的结果）
                 current_ohlc.high = current_ohlc.high.max(high);
@@ -374,12 +360,12 @@ impl SingleThreadSimdKLineAggregator {
                 current_ohlc.close = close;
                 current_ohlc.volume += volume;
                 current_ohlc.count += 8; // 处理了8个交易
-                true
+                *current_ohlc
             }
             _ => {
                 // 保存旧窗口到历史
                 if let Some(old) = current_windows[window_idx].take() {
-                    self.save_to_history(window_idx, old.clone());
+                    self.save_to_history(window_idx, old);
                     self.send_event(window, old, true);
                 }
 
@@ -390,14 +376,11 @@ impl SingleThreadSimdKLineAggregator {
                 new_ohlc.close = close;
                 new_ohlc.count = 8; // 处理了8个交易
                 current_windows[window_idx] = Some(new_ohlc);
-                true
+                new_ohlc
             }
         };
 
-        if need_update_sliding {
-            let current_ohlc = current_windows[window_idx].unwrap();
-            self.update_sliding_window(window_idx, current_ohlc);
-        }
+        self.update_sliding_window(window_idx, updated_ohlc);
 
         Ok(())
     }
@@ -437,7 +420,7 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
 
     fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
         let idx = window.index();
-        self.current_windows.borrow()[idx].clone()
+        self.current_windows.borrow()[idx]
     }
 
     fn get_history_ohlc(&self, window: TimeWindow, limit: usize) -> Vec<OHLC> {
@@ -450,7 +433,7 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
 
         let history = history.borrow();
         let len = history.len();
-        let start = if len > limit { len - limit } else { 0 };
+        let start = len.saturating_sub(limit);
 
         history.iter().skip(start).cloned().collect()
     }
@@ -476,7 +459,9 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
         let mut volumes = Vec::with_capacity(len);
 
         // 第一个元素是最近的K线（用于开盘价）
-        let first = sliding.back().unwrap();
+        let Some(first) = sliding.back() else {
+            return (0.0, 0.0, 0.0, 0.0, 0.0);
+        };
         let open = first.open;
 
         highs.push(first.high);
@@ -497,7 +482,9 @@ impl KLineAgg for SingleThreadSimdKLineAggregator {
             self.calculate_sliding_stats_with_simd(&highs, &lows, &volumes);
 
         // 最后一个元素是最远的K线（用于收盘价）
-        let close = sliding.get(sliding.len() - len).unwrap().close;
+        let Some(close) = sliding.get(sliding.len() - len).map(|ohlc| ohlc.close) else {
+            return (0.0, 0.0, 0.0, 0.0, 0.0);
+        };
 
         (open, high, low, close, total_volume)
     }

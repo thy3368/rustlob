@@ -6,7 +6,7 @@ use diff::ChangeLog;
 
 use crate::k_line::aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator;
 use crate::k_line::k_line_types::{KLineAggMut, KLineUpdateEvent};
-use crate::queue::queue::{Queue, ToBytes};
+use crate::queue::queue_contract::{Queue, ToBytes};
 use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 pub struct KLineBehaviorV2Imp {
@@ -54,7 +54,7 @@ impl KLineBehaviorV2Imp {
     /// 批量处理交易变更日志（性能优化）
     pub fn handle_events(&self, change_logs: &[ChangeLog]) {
         let trades: Vec<(u64, f64, f64)> =
-            change_logs.iter().filter_map(|log| Self::extract_trade_data(log)).collect();
+            change_logs.iter().filter_map(Self::extract_trade_data).collect();
 
         if trades.is_empty() {
             return;

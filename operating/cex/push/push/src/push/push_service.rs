@@ -4,10 +4,10 @@ use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use diff::ChangeLog;
 use entity_derive::immutable;
-use serde_json::json;
+use serde::Serialize;
 
 use crate::push::connection_types::ConnectionRepo;
-use crate::queue::queue::Queue;
+use crate::queue::queue_contract::Queue;
 use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 /// 推送服务 - 无状态设计，可安全地在多线程间共享
@@ -25,39 +25,40 @@ pub struct PushBehaviorV2Imp {
 impl PushBehaviorV2Imp {
     /// 后台运行事件监听循环
     /// 订阅并处理: OrderChangeLog + KLineChangeLog + BalanceChangeLog + TradeChangeLog
-    async fn run(&self) {
+    async fn run(self: Arc<Self>) {
         // 订阅所有变更日志Topic
-        let mut order_receiver =
-            self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
-        let mut kline_receiver =
-            self.change_log_repo.subscribe(SpotTopic::KLineChangeLog.name(), None);
-        let mut balance_receiver =
+        let order_receiver = self.change_log_repo.subscribe(SpotTopic::OrderChangeLog.name(), None);
+        let kline_receiver = self.change_log_repo.subscribe(SpotTopic::KLineChangeLog.name(), None);
+        let balance_receiver =
             self.change_log_repo.subscribe(SpotTopic::BalanceChangeLog.name(), None);
-        let mut trade_receiver =
-            self.change_log_repo.subscribe(SpotTopic::TradeChangeLog.name(), None);
+        let trade_receiver = self.change_log_repo.subscribe(SpotTopic::TradeChangeLog.name(), None);
 
         tracing::info!("PushService 已订阅所有变更日志Topic");
 
-        loop {
-            tokio::select! {
-                // 处理 OrderChangeLog
-                Ok(event) = order_receiver.recv() => {
-                    self.process_change_log_event(event).await;
-                }
-                // 处理 KLineChangeLog
-                Ok(event) = kline_receiver.recv() => {
-                    self.process_change_log_event(event).await;
-                }
-                // 处理 BalanceChangeLog
-                Ok(event) = balance_receiver.recv() => {
-                    self.process_change_log_event(event).await;
-                }
-                // 处理 TradeChangeLog
-                Ok(event) = trade_receiver.recv() => {
-                    self.process_change_log_event(event).await;
+        self.spawn_change_log_listener(order_receiver);
+        self.spawn_change_log_listener(kline_receiver);
+        self.spawn_change_log_listener(balance_receiver);
+        self.spawn_change_log_listener(trade_receiver);
+
+        std::future::pending::<()>().await;
+    }
+
+    fn spawn_change_log_listener(
+        self: &Arc<Self>,
+        mut receiver: tokio::sync::broadcast::Receiver<bytes::Bytes>,
+    ) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                match receiver.recv().await {
+                    Ok(event) => service.process_change_log_event(event).await,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!("PushService 订阅滞后，跳过 {} 条消息", skipped);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
-        }
+        });
     }
 
     /// 处理变更日志事件字节流
@@ -135,16 +136,31 @@ impl PushBehaviorV2Imp {
 
     /// 序列化单个事件为 JSON
     fn serialize_event(&self, entity_change_log: &ChangeLog) -> Result<String, serde_json::Error> {
-        serde_json::to_string(&json!({
-            "stream_type": "user_data",
-            "data": {
-                "entity_id": entity_change_log.entity_id(),
-                "entity_type": entity_change_log.entity_type(),
-                "change_type": format!("{:?}", entity_change_log.change_type()),
-                "timestamp": entity_change_log.timestamp(),
-                "sequence": entity_change_log.sequence()
-            }
-        }))
+        #[derive(Serialize)]
+        struct PushEventEnvelope {
+            stream_type: &'static str,
+            data: PushEventData,
+        }
+
+        #[derive(Serialize)]
+        struct PushEventData {
+            entity_id: String,
+            entity_type: String,
+            change_type: String,
+            timestamp: u64,
+            sequence: u64,
+        }
+
+        serde_json::to_string(&PushEventEnvelope {
+            stream_type: "user_data",
+            data: PushEventData {
+                entity_id: entity_change_log.entity_id().to_string(),
+                entity_type: entity_change_log.entity_type().to_string(),
+                change_type: format!("{:?}", entity_change_log.change_type()),
+                timestamp: *entity_change_log.timestamp(),
+                sequence: *entity_change_log.sequence(),
+            },
+        })
     }
 
     /// 保留 try_send 方法以保持向后兼容（空实现）

@@ -8,16 +8,19 @@ use rand::Rng;
 
 // 生成真实高频交易场景的测试数据
 fn generate_high_freq_test_data(count: usize) -> Vec<(u64, f64, f64)> {
-    let mut rng = rand::thread_rng();
-    let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let mut rng = rand::rng();
+    let timestamp = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
     let mut price = 100.0;
     let mut data = Vec::with_capacity(count);
 
     for _ in 0..count {
-        let change = rng.gen_range(-0.5..0.5);
+        let change = rng.random_range(-0.5..0.5);
         let new_price = price + change;
         price = if new_price > 1.0 { new_price } else { 1.0 };
-        let volume = rng.gen_range(1.0..100.0);
+        let volume = rng.random_range(1.0..100.0);
 
         data.push((timestamp, price, volume)); // 所有交易在同一秒内
         // 避免使用可变时间戳
@@ -33,7 +36,9 @@ fn benchmark_kline_aggregator_high_freq(c: &mut Criterion) {
     c.bench_function("KLineAggregator::process_trades_batch_high_freq", |b| {
         b.iter(|| {
             let aggregator = KLineAggregator::new();
-            aggregator.process_trades_batch(black_box(&test_data)).unwrap();
+            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                black_box(error);
+            }
         });
     });
 }
@@ -44,7 +49,9 @@ fn benchmark_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     c.bench_function("SimdKLineAggregator::process_trades_batch_high_freq", |b| {
         b.iter(|| {
             let aggregator = SimdKLineAggregator::new();
-            aggregator.process_trades_batch(black_box(&test_data)).unwrap();
+            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                black_box(error);
+            }
         });
     });
 }
