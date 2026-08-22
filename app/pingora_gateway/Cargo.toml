@@ -35,3 +35,6 @@ id_generator = { path = "../../lib/common/id_generator" }
 mysql = "27.0.0"
 chrono = "0.4.43"
 futures = "0.3.31"
+
+[lints]
+workspace = true

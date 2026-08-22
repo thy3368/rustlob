@@ -1,4 +1,4 @@
-# 严禁 unwrap / expect
+# 严禁生产路径出现逃逸式控制流与调试输出
 disallowed-methods = [
     "std::option::Option::unwrap",
     "std::result::Result::unwrap",
@@ -10,10 +10,17 @@ disallowed-types = [
     "core::panic::PanicInfo",
 ]
 
-# `PanicInfo` 不能拦住 `panic!`，这里直接禁用 panic 宏
+# `PanicInfo` 不能拦住 `panic!`，这里直接禁用相关宏
 disallowed-macros = [
+    "std::dbg",
+    "std::eprintln",
     "std::panic",
+    "std::println",
+    "std::todo",
+    "std::unimplemented",
     "core::panic",
+    "core::todo",
+    "core::unimplemented",
 ]
 
 # 测试代码允许使用调试性写法，生产代码仍按上面的硬禁项执行

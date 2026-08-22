@@ -27,3 +27,6 @@ target-cpu = "native"
 [[bench]]
 name = "websocket_benchmark"
 harness = false
+
+[lints]
+workspace = true

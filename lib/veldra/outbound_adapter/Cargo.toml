@@ -13,3 +13,6 @@ libmdbx = "0.6"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
 veldra_core = { package = "core", path = "../core" }
+
+[lints]
+workspace = true

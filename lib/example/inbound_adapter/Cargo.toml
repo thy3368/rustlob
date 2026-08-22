@@ -17,3 +17,6 @@ serde_json = "1"
 [dev-dependencies]
 example_outbound_adapter = { path = "../outbound_adapter" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }
+
+[lints]
+workspace = true

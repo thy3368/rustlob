@@ -13,3 +13,6 @@ proc-macro2 = "1.0"
 
 [dev-dependencies]
 diff = { path = "../diff" }
+
+[lints]
+workspace = true
