@@ -21,6 +21,12 @@ impl Counter {
     }
 }
 
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Message to increment the counter
 pub struct Increment;
 

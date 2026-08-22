@@ -31,7 +31,7 @@ impl Message<ProcessImage> for ImageProcessor {
 
         // 模拟随机故障：每处理5个任务就有1个失败
         self.failure_count += 1;
-        if self.failure_count % 5 == 0 {
+        if self.failure_count.is_multiple_of(5) {
             // 模拟故障，返回错误信息
             return format!("错误: Worker {} 处理图片时发生内部错误", self.worker_id);
         }

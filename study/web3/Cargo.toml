@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[features]
+default = []
+manual-demos = []
+
 [[bin]]
 name = "chat"
 path = "src/libp2p/chat.rs"

@@ -118,7 +118,7 @@ impl Memory {
     pub fn write(&mut self, offset: usize, data: &[u8]) -> Result<(), ExecError> {
         let required_size = offset + data.len();
         if required_size > self.data.len() {
-            let new_size = ((required_size + 31) / 32) * 32;
+            let new_size = required_size.div_ceil(32) * 32;
             self.data.resize(new_size, 0);
         }
         self.data[offset..offset + data.len()].copy_from_slice(data);

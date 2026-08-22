@@ -59,10 +59,8 @@ impl<S: Storage> MerklePatriciaTrie<S> {
             }
             Node::Branch { children, value } => {
                 hasher.update(b"branch");
-                for child in children.iter() {
-                    if let Some(hash) = child {
-                        hasher.update(hash);
-                    }
+                for hash in children.iter().flatten() {
+                    hasher.update(hash);
                 }
                 if let Some(v) = value {
                     hasher.update(v);
@@ -104,7 +102,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                     let remaining_path = path.slice(common_len, path.len());
                     let mut children = [None; 16];
 
-                    if remaining_path.len() > 0 {
+                    if !remaining_path.is_empty() {
                         let idx = remaining_path.at(0).unwrap() as usize;
                         let child_path = remaining_path.slice(1, remaining_path.len());
                         let child_node = Node::leaf(child_path.nibbles().to_vec(), value);

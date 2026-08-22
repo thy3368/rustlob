@@ -101,13 +101,13 @@ async fn create_swarm() -> Result<libp2p::Swarm<ChatBehaviour>, Box<dyn Error>> 
                 .validation_mode(gossipsub::ValidationMode::Strict)
                 .message_id_fn(message_id_fn)
                 .build()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                .map_err(std::io::Error::other)?;
 
             let gossipsub = gossipsub::Behaviour::new(
                 gossipsub::MessageAuthenticity::Signed(key.clone()),
                 gossipsub_config,
             )
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
             info!("✅ Gossipsub 协议配置完成");
 
@@ -190,10 +190,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut line = String::new();
             if stdin.read_line(&mut line).is_ok() {
                 let trimmed = line.trim().to_string();
-                if !trimmed.is_empty() {
-                    if tx.send(trimmed).is_err() {
-                        break;
-                    }
+                if !trimmed.is_empty() && tx.send(trimmed).is_err() {
+                    break;
                 }
             }
         }

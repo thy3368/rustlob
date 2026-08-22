@@ -4,7 +4,7 @@ use std::collections::HashMap;
 ///
 /// 提供存储抽象，遵循依赖倒置原则
 /// 核心逻辑依赖抽象接口，具体实现可替换
-use crate::entities::{MptError, MptResult, Node};
+use crate::entities::{MptResult, Node};
 
 /// 存储接口 trait
 ///

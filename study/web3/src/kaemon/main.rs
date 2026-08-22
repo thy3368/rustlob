@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn handle_command(swarm: &mut libp2p::Swarm<kad::Behaviour<kad::store::MemoryStore>>, line: &str) {
-    let parts: Vec<&str> = line.trim().split_whitespace().collect();
+    let parts: Vec<&str> = line.split_whitespace().collect();
 
     match parts.first().map(|s| s.to_uppercase()).as_deref() {
         Some("PUT") if parts.len() == 3 => {

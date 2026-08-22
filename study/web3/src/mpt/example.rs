@@ -338,36 +338,6 @@ pub fn run_ethereum_state_example() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basic_example() {
-        assert!(run_basic_example().is_ok());
-    }
-
-    #[test]
-    fn test_advanced_example() {
-        assert!(run_advanced_example().is_ok());
-    }
-
-    #[test]
-    fn test_ethereum_state_example() {
-        assert!(run_ethereum_state_example().is_ok());
-    }
-
-    #[test]
-    fn test_ethereum_transaction_example() {
-        assert!(run_ethereum_transaction_example().is_ok());
-    }
-
-    #[test]
-    fn test_light_client_example() {
-        assert!(run_light_client_example().is_ok());
-    }
-}
-
 /// 运行以太坊交易树和收据树高频场景示例
 ///
 /// 模拟以太坊区块中的交易树和收据树，展示高性能插入和查询
@@ -1048,7 +1018,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     // 计算完整数据大小
     let mut full_data_size = 0usize;
     for tx in &transactions {
-        full_data_size += tx.serialize().as_bytes().len();
+        full_data_size += tx.serialize().len();
     }
 
     // 计算证明数据大小
@@ -1118,4 +1088,34 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_example() {
+        assert!(run_basic_example().is_ok());
+    }
+
+    #[test]
+    fn test_advanced_example() {
+        assert!(run_advanced_example().is_ok());
+    }
+
+    #[test]
+    fn test_ethereum_state_example() {
+        assert!(run_ethereum_state_example().is_ok());
+    }
+
+    #[test]
+    fn test_ethereum_transaction_example() {
+        assert!(run_ethereum_transaction_example().is_ok());
+    }
+
+    #[test]
+    fn test_light_client_example() {
+        assert!(run_light_client_example().is_ok());
+    }
 }
