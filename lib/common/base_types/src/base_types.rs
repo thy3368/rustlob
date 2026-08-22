@@ -6,7 +6,7 @@
 
 use std::{default, fmt};
 
-use decimal::Decimal;
+pub use rust_decimal::Decimal;
 
 // ============================================================================
 // 类型别名：为了语义清晰，保留 Price 和 Quantity 作为类型别名

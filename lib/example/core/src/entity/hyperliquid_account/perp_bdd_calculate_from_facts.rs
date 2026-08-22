@@ -1,4 +1,4 @@
-use decimal::Decimal;
+use rust_decimal::Decimal;
 
 use super::AccountId;
 use super::perp::{
@@ -12,11 +12,11 @@ use crate::entity::{
 };
 
 fn dec(units: i64) -> Decimal {
-    Decimal::from_raw(units * 100_000_000)
+    Decimal::from(units)
 }
 
 fn rate_bps(bps: i64) -> Decimal {
-    Decimal::from_raw(bps * 10_000)
+    Decimal::new(bps, 4)
 }
 
 fn input(

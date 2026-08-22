@@ -82,21 +82,20 @@ mod tests {
     }
 
     #[test]
-    fn registry_dispatches_registered_runtime() {
+    fn registry_dispatches_registered_runtime() -> Result<(), Box<dyn std::error::Error>> {
         let mut registry = VmRegistry::new();
         registry.register_runtime(VmKind::RustVm, Arc::new(StubRuntime));
 
-        let output = registry
-            .execute(VmExecutionInput {
-                vm_kind: VmKind::RustVm,
-                capability: VmCapability::new("dex.prep.place_order"),
-                transaction: "payload".to_string(),
-            })
-            .unwrap();
+        let output = registry.execute(VmExecutionInput {
+            vm_kind: VmKind::RustVm,
+            capability: VmCapability::new("dex.prep.place_order"),
+            transaction: "payload".to_string(),
+        })?;
 
         assert_eq!(output.gas_used, 7);
         assert_eq!(output.product_events.len(), 1);
         assert_eq!(output.product_events[0].event_type, "dex.prep.place_order");
+        Ok(())
     }
 
     #[test]

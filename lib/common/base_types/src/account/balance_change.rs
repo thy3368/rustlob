@@ -349,6 +349,11 @@ impl Default for BalanceChangeLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Decimal;
+
+    fn e8(raw: i128) -> Decimal {
+        Decimal::from_i128_with_scale(raw, 8)
+    }
 
     #[test]
     fn test_balance_change_deposit() {
@@ -356,14 +361,14 @@ mod tests {
             1,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(1000_00000000),
-            Quantity::from_raw(500_00000000),
+            e8(1000_00000000),
+            e8(500_00000000),
             Timestamp::now(),
             1,
         );
 
         assert_eq!(change.change_type, BalanceChangeType::Deposit);
-        assert_eq!(change.available_after.raw(), 1500_00000000);
+        assert_eq!(change.available_after, e8(1500_00000000));
         assert!(change.validate());
     }
 
@@ -373,17 +378,17 @@ mod tests {
             2,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(100_00000000),
-            Quantity::from_raw(500_00000000),
-            Quantity::from_raw(0),
+            e8(100_00000000),
+            e8(500_00000000),
+            Decimal::ZERO,
             1, // OrderId is u64
             Timestamp::now(),
             2,
         );
 
         assert_eq!(change.change_type, BalanceChangeType::Freeze);
-        assert_eq!(change.available_after.raw(), 400_00000000);
-        assert_eq!(change.frozen_after.raw(), 100_00000000);
+        assert_eq!(change.available_after, e8(400_00000000));
+        assert_eq!(change.frozen_after, e8(100_00000000));
         assert!(change.validate());
     }
 
@@ -395,8 +400,8 @@ mod tests {
             1,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(1000_00000000),
-            Quantity::from_raw(0),
+            e8(1000_00000000),
+            Decimal::ZERO,
             Timestamp::now(),
             1,
         );
@@ -405,9 +410,9 @@ mod tests {
             2,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(100_00000000),
-            Quantity::from_raw(1000_00000000),
-            Quantity::from_raw(0),
+            e8(100_00000000),
+            e8(1000_00000000),
+            Decimal::ZERO,
             1, // OrderId is u64
             Timestamp::now(),
             2,
@@ -427,39 +432,39 @@ mod tests {
             1,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(1000_00000000),
-            Quantity::from_raw(500_00000000),
+            e8(1000_00000000),
+            e8(500_00000000),
             Timestamp::now(),
             1,
         );
-        assert_eq!(deposit.total_balance_delta().raw(), 1000_00000000);
+        assert_eq!(deposit.total_balance_delta(), e8(1000_00000000));
 
         // 冻结：总余额不变
         let freeze = BalanceChange::freeze(
             2,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(100_00000000),
-            Quantity::from_raw(500_00000000),
-            Quantity::from_raw(0),
+            e8(100_00000000),
+            e8(500_00000000),
+            Decimal::ZERO,
             1, // OrderId is u64
             Timestamp::now(),
             2,
         );
-        assert_eq!(freeze.total_balance_delta().raw(), 0);
+        assert_eq!(freeze.total_balance_delta(), Decimal::ZERO);
 
         // 成交：总余额减少
         let trade = BalanceChange::trade(
             3,
             AccountId(100),
             AssetId::default(),
-            Quantity::from_raw(100_00000000),
-            Quantity::from_raw(400_00000000),
-            Quantity::from_raw(100_00000000),
+            e8(100_00000000),
+            e8(400_00000000),
+            e8(100_00000000),
             1, // OrderId is u64
             Timestamp::now(),
             3,
         );
-        assert_eq!(trade.total_balance_delta().raw(), -100_00000000);
+        assert_eq!(trade.total_balance_delta(), e8(-100_00000000));
     }
 }

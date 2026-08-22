@@ -91,14 +91,7 @@ impl SpotOrderBase {
     /// 检查订单是否已完全成交
     #[inline]
     pub const fn is_filled(&self) -> bool {
-        // 买单和卖单都检查 base_qty 是否完全成交
-
-        match self.order_side {
-            OrderSide::Buy => {
-                return self.total_quote_qty == self.cumulative_quote_qty;
-            }
-            OrderSide::Sell => return self.total_base_qty == self.filled_base_qty,
-        }
+        self.total_base_qty == self.filled_base_qty
     }
 
     /// 检查订单是否有未成交数量

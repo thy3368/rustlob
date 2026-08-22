@@ -247,10 +247,7 @@ fn execute_rejects_in_pre_check_before_loading_state() {
 
     let result = executor.execute(&use_case, sample_envelope("", 2), &outbound, &observer);
 
-    assert_eq!(
-        result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck))
-    );
+    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck)));
     assert!(outbound.calls().is_empty());
     assert_eq!(observer.observed_count(), 0);
 }
@@ -268,10 +265,7 @@ fn execute_stops_after_validate_failure() {
 
     let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
 
-    assert_eq!(
-        result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::Validate))
-    );
+    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::Validate)));
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);
 }
@@ -289,10 +283,7 @@ fn execute_stops_after_compute_failure() {
 
     let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
 
-    assert_eq!(
-        result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::Compute))
-    );
+    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::Compute)));
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);
 }

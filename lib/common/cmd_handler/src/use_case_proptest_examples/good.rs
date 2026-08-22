@@ -186,8 +186,8 @@ fn deposit_case_strategy() -> impl Strategy<Value = (DepositCmd, DepositState)> 
 }
 
 #[test]
-fn property_executor_respects_business_invariants(
-) -> Result<(), proptest::test_runner::TestError<(DepositCmd, DepositState)>> {
+fn property_executor_respects_business_invariants()
+-> Result<(), proptest::test_runner::TestError<(DepositCmd, DepositState)>> {
     proptest::test_runner::TestRunner::default().run(&deposit_case_strategy(), |(cmd, state)| {
         let executor = CommandUseCaseExecutor3;
         let use_case = DepositUseCase;
@@ -200,26 +200,32 @@ fn property_executor_respects_business_invariants(
 
         let result = executor.execute(
             &use_case,
-            CommandEnvelope {
-                meta: CommandMeta::default(),
-                command: cmd.clone(),
-            },
+            CommandEnvelope { meta: CommandMeta::default(), command: cmd.clone() },
             &outbound,
             &(),
         );
 
         if cmd.amount == 0 {
-            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::ZeroAmount)));
+            prop_assert_eq!(
+                result,
+                Err(CommandUseCaseExecutionError::Business(DepositError::ZeroAmount))
+            );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if !state.account_open {
-            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::AccountFrozen)));
+            prop_assert_eq!(
+                result,
+                Err(CommandUseCaseExecutionError::Business(DepositError::AccountFrozen))
+            );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else if cmd.amount > state.max_amount {
-            prop_assert_eq!(result, Err(CommandUseCaseExecutionError::Business(DepositError::LimitExceeded)));
+            prop_assert_eq!(
+                result,
+                Err(CommandUseCaseExecutionError::Business(DepositError::LimitExceeded))
+            );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
@@ -237,8 +243,14 @@ fn property_executor_respects_business_invariants(
             prop_assert_eq!(output_party_id.as_str(), cmd.party_id.as_str());
             prop_assert_eq!(result.output.accepted_amount, cmd.amount);
             prop_assert_eq!(result.events.len(), 1);
-            prop_assert_eq!(event_field(&result.events[0], "party_id"), Some(output_party_id.as_str()));
-            prop_assert_eq!(event_field(&result.events[0], "amount"), Some(expected_amount.as_str()));
+            prop_assert_eq!(
+                event_field(&result.events[0], "party_id"),
+                Some(output_party_id.as_str())
+            );
+            prop_assert_eq!(
+                event_field(&result.events[0], "amount"),
+                Some(expected_amount.as_str())
+            );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 1);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 1);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 1);

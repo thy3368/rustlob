@@ -1,5 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FourColorArchetype,
+    ObjectType, function,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,7 @@ impl AccountStatus {
 /// 交易账户主档。
 ///
 /// `Account` 属于 `Party/Place/Thing`，表达用户与账户生命周期，不承载某个币种的余额。
+#[ObjectType(four_color = "party_place_thing", aggregate_role = "aggregate_root")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
     /// 账户 ID。
@@ -53,21 +55,25 @@ impl Account {
     }
 
     /// 返回账户当前是否处于可交易、可资金操作的激活状态。
+    #[function(kind = "business_query")]
     pub fn is_active(&self) -> bool {
         self.status == AccountStatus::Active
     }
 
     /// 返回账户当前是否处于风控冻结状态。
+    #[function(kind = "business_query")]
     pub fn is_frozen(&self) -> bool {
         self.status == AccountStatus::Frozen
     }
 
     /// 返回账户当前是否已经关闭。
+    #[function(kind = "business_query")]
     pub fn is_closed(&self) -> bool {
         self.status == AccountStatus::Closed
     }
 
     /// 返回账户当前是否允许交易和资金操作。
+    #[function(kind = "business_query")]
     pub fn allows_trading_and_funding(&self) -> bool {
         self.is_active()
     }
@@ -75,6 +81,7 @@ impl Account {
     /// 对激活账户执行风控冻结。
     ///
     /// 仅 `Active` 账户允许转为 `Frozen`；成功后返回版本 `+1` 的新状态。
+    #[function(kind = "behavior")]
     pub fn freeze_for_risk(&self) -> Option<Self> {
         if !self.is_active() {
             return None;
@@ -91,6 +98,7 @@ impl Account {
     /// 将已冻结账户从风控冻结中解冻。
     ///
     /// 仅 `Frozen` 账户允许恢复为 `Active`；成功后返回版本 `+1` 的新状态。
+    #[function(kind = "behavior")]
     pub fn unfreeze_from_risk(&self) -> Option<Self> {
         if !self.is_frozen() {
             return None;

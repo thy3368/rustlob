@@ -1,6 +1,7 @@
 use std::fmt;
 
 use entity_derive::Entity;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::account::balance::Balance;
 use crate::base_types::TraderId;
@@ -907,8 +908,8 @@ impl SpotOrder {
             fee_type,
             &base_asset,
             &quote_asset,
-            filled.to_f64(),
-            price.to_f64(),
+            filled.to_f64().unwrap_or(0.0),
+            price.to_f64().unwrap_or(0.0),
             user_tier.map(|t| t as f64), // 30天交易量（用户分层）
             user_vip_level,
             is_market_maker,
@@ -916,7 +917,9 @@ impl SpotOrder {
             Ok(result) => {
                 // 计算手续费数量 = 成交金额 * 费率
                 let trade_value = filled * price;
-                let commission_qty = trade_value * Quantity::from_f64(result.final_rate);
+                let commission_qty = trade_value
+                    * Quantity::from_str_exact(&result.final_rate.to_string())
+                        .unwrap_or(Quantity::ZERO);
 
                 // 将费率转换为基点 (bp)
                 let fee_rate_bp = (result.final_rate * 10000.0) as i32;
@@ -925,12 +928,12 @@ impl SpotOrder {
             Err(_) => {
                 // 如果计算出错，使用默认费率
                 let (fee_rate_bp, fee_rate_decimal) = if is_taker {
-                    (10, 0.001) // Taker 0.1% = 10 bp
+                    (10, Quantity::new(1, 3)) // Taker 0.1% = 10 bp
                 } else {
-                    (5, 0.0005) // Maker 0.05% = 5 bp
+                    (5, Quantity::new(5, 4)) // Maker 0.05% = 5 bp
                 };
                 let trade_value = filled * price;
-                let commission_qty = trade_value * Quantity::from_f64(fee_rate_decimal);
+                let commission_qty = trade_value * fee_rate_decimal;
                 (fee_rate_bp, commission_qty)
             }
         }
@@ -1103,8 +1106,8 @@ impl SpotOrder {
     /// 获取已成交百分比（0.0 - 1.0）
     #[inline]
     pub fn fill_ratio(&self) -> f64 {
-        let total = self.total_base_qty.to_f64();
-        let unfilled = self.unfilled_qty().to_f64();
+        let total = self.total_base_qty.to_f64().unwrap_or(0.0);
+        let unfilled = self.unfilled_qty().to_f64().unwrap_or(0.0);
         if total == 0.0 { 0.0 } else { unfilled / total }
     }
 
@@ -1298,15 +1301,15 @@ mod tests {
             TraderId::default(),
             TradingPair::BtcUsdt,
             OrderSide::Buy,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             TimeInForce::GTC,
             None,
             Quantity::default(),
         );
 
         let frozen_buy = buy_order.frozen_qty();
-        assert_eq!(frozen_buy.to_f64(), 50000.0, "Buy order should freeze 1.0 * 50000.0");
+        assert_eq!(frozen_buy, Price::from(50000), "Buy order should freeze 1.0 * 50000.0");
 
         // 测试卖单的frozen_qty计算
         let sell_order = SpotOrder::create_order(
@@ -1314,15 +1317,15 @@ mod tests {
             TraderId::default(),
             TradingPair::BtcUsdt,
             OrderSide::Sell,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             TimeInForce::GTC,
             None,
             Quantity::default(),
         );
 
         let frozen_sell = sell_order.frozen_qty();
-        assert_eq!(frozen_sell.to_f64(), 1.0, "Sell order should freeze 1.0 BTC");
+        assert_eq!(frozen_sell, Quantity::ONE, "Sell order should freeze 1.0 BTC");
 
         // 测试部分成交后的frozen_qty
         let mut partial_order = SpotOrder::create_order(
@@ -1330,19 +1333,19 @@ mod tests {
             TraderId::default(),
             TradingPair::BtcUsdt,
             OrderSide::Buy,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             TimeInForce::GTC,
             None,
             Quantity::default(),
         );
 
         // 模拟成交0.3
-        partial_order.state.filled_base_qty = Quantity::from_f64(0.3);
+        partial_order.state.filled_base_qty = Quantity::new(3, 1);
         let frozen_partial = partial_order.frozen_qty();
         assert_eq!(
-            frozen_partial.to_f64(),
-            35000.0,
+            frozen_partial,
+            Price::from(35000),
             "Partial filled order should freeze 0.7 * 50000.0"
         );
     }

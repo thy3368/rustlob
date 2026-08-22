@@ -29,6 +29,7 @@
 //!
 //! `MiStateMachineOwnedV2` 适合共享 `GivenState` 与 truth 模型的多聚合
 //! `use-case family`，并为同一业务主题下的多个动作分支提供统一编排骨架。
+
 //!
 //! # Examples
 //!
@@ -37,7 +38,7 @@
 //! 业务主题、`GivenState` 语义与 truth 模型的动作。
 //!
 //! ```rust
-//! use entity::{
+//! use Entity::{
 //!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent, FieldDiff,
 //!     MiStateMachineV2, MiStateMachineOwnedV2BeforeAfter,
 //!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
@@ -435,7 +436,7 @@
 
 use std::fmt::Debug;
 
-use crate::ReplayableChanges;
+use crate::{ReplayableChanges, action_type};
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
@@ -457,6 +458,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type AfterChanges;
 
     /// 对命令本身做不依赖 `GivenState` 的快速校验。
+    #[action_type(kind = "pre_check_command")]
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -465,6 +467,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     ///
     /// `GivenState` 可以由多个聚合和上下文字段组成。实现者应在这里显式拒绝
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
+    #[action_type(kind = "validate_against_given_state")]
     fn validate_against_given_state(
         &self,
         _cmd: &Self::Command,
@@ -478,6 +481,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// 该方法不是对外稳定入口。外部应始终走
     /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
     /// 的统一链路。
+    #[action_type(kind = "compute_after_changes_unchecked")]
     fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,

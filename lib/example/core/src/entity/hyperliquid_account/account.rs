@@ -259,7 +259,7 @@ pub enum SubAccountSnapshotError {
 
 #[cfg(test)]
 mod tests {
-    use decimal::Decimal;
+    use rust_decimal::Decimal;
 
     use super::*;
     use crate::entity::hyperliquid_account::{
@@ -269,7 +269,7 @@ mod tests {
     use crate::entity::{Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition};
 
     fn dec(units: i64) -> Decimal {
-        Decimal::from_raw(units * 100_000_000)
+        Decimal::from(units)
     }
 
     fn sample_spot(account_id: &str) -> SpotClearinghouseState {

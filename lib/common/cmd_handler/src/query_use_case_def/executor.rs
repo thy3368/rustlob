@@ -103,35 +103,32 @@ impl QueryUseCaseExecutor {
         }
 
         let execution = (|| -> QueryExecution<U::View, U::Error, OB::Error> {
-            let ((), pre_check_ns) = trace_phase(
-                "pre_check",
-                "workflow.pre_check_query(&query)",
-                || use_case.pre_check_query(&query),
-            )
-            .map_err(QueryUseCaseExecutionError::Business)?;
-            let (read_model, load_read_model_ns) = trace_phase(
-                "load_read_model",
-                "outbound.load_read_model(&query)",
-                || outbound.load_read_model(&query),
-            )
-            .map_err(|error| {
-                QueryUseCaseExecutionError::outbound(
-                    QueryUseCaseOutboundPhase::LoadReadModel,
-                    error,
-                )
-            })?;
+            let ((), pre_check_ns) =
+                trace_phase("pre_check", "workflow.pre_check_query(&query)", || {
+                    use_case.pre_check_query(&query)
+                })
+                .map_err(QueryUseCaseExecutionError::Business)?;
+            let (read_model, load_read_model_ns) =
+                trace_phase("load_read_model", "outbound.load_read_model(&query)", || {
+                    outbound.load_read_model(&query)
+                })
+                .map_err(|error| {
+                    QueryUseCaseExecutionError::outbound(
+                        QueryUseCaseOutboundPhase::LoadReadModel,
+                        error,
+                    )
+                })?;
             let ((), validate_against_read_model_ns) = trace_phase(
                 "validate_against_read_model",
                 "workflow.validate_against_read_model(&query, &read_model)",
                 || use_case.validate_against_read_model(&query, &read_model),
             )
             .map_err(QueryUseCaseExecutionError::Business)?;
-            let (view, compute_view_ns) = trace_phase(
-                "compute_view",
-                "workflow.compute_view(&query, read_model)",
-                || use_case.compute_view(&query, read_model),
-            )
-            .map_err(QueryUseCaseExecutionError::Business)?;
+            let (view, compute_view_ns) =
+                trace_phase("compute_view", "workflow.compute_view(&query, read_model)", || {
+                    use_case.compute_view(&query, read_model)
+                })
+                .map_err(QueryUseCaseExecutionError::Business)?;
 
             let metrics = QueryUseCaseLatencyMetrics {
                 total_ns: total_start.elapsed().as_nanos(),

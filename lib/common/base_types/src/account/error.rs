@@ -1,15 +1,15 @@
 //! 错误类型定义
 
-use crate::{AccountId, AssetId};
+use crate::{AccountId, AssetId, Quantity};
 
 /// 余额错误
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceError {
     /// 可用余额不足
-    InsufficientAvailable { required: i64, available: i64 },
+    InsufficientAvailable { required: Quantity, available: Quantity },
     /// 冻结余额不足
-    InsufficientFrozen { required: i64, frozen: i64 },
-    /// 余额溢出（price * quantity 超出 i64）
+    InsufficientFrozen { required: Quantity, frozen: Quantity },
+    /// 余额溢出
     Overflow,
     /// 账户不存在
     AccountNotFound { account_id: AccountId },

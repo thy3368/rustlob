@@ -36,9 +36,9 @@ fn scenario_update_single_field_after_creation() -> Result<(), Box<dyn std::erro
         id: 1,
         symbol: TradingPair::from_symbol_str("BTCUSDT")
             .ok_or("BTCUSDT trading pair should be valid")?,
-        price: Price::from_raw(50000),
-        quantity: Quantity::from_raw(100),
-        filled_quantity: Quantity::from_raw(0),
+        price: Price::from(50000),
+        quantity: Quantity::from(100),
+        filled_quantity: Quantity::from(0),
         side: OrderSide::Buy,
     };
 
@@ -47,7 +47,7 @@ fn scenario_update_single_field_after_creation() -> Result<(), Box<dyn std::erro
     // ========== When（当）==========
     // 当 price 被更新为 51000 时
     let updated_event = entity.track_update(|e| {
-        e.price = Price::from_raw(51000);
+        e.price = Price::from(51000);
     })?;
 
     let _result = repo.replay_event(&updated_event);

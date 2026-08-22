@@ -2,8 +2,8 @@ use crate::account::balance::Balance;
 use crate::exchange::spot::spot_types::OrderType;
 use crate::lob::lob::LobOrder;
 use crate::{
-    AccountId, AssetId, OrderId, OrderSide, PositionSide, PrepPosition, PrepTrade, Price, Quantity,
-    Timestamp, TradeId, TradingPair,
+    AccountId, AssetId, Decimal, OrderId, OrderSide, PositionSide, PrepPosition, PrepTrade, Price,
+    Quantity, Timestamp, TradeId, TradingPair,
 };
 
 /// 订单有效期
@@ -158,7 +158,7 @@ impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
         assert!(self.status == FutureOrderStatus::Pending, "Pending状态才能冻结");
 
-        let estimate_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
+        let estimate_price = self.price.unwrap_or_else(|| Decimal::from(50000));
         // 直接使用 Price，无需转换
         self.frozen_margin =
             Self::calculate_required_margin(estimate_price, self.quantity, self.leverage);
@@ -185,13 +185,13 @@ impl PrepOrder {
             order_type,
             quantity,
             price,
-            filled_quantity: Quantity::from_raw(0),
+            filled_quantity: Quantity::ZERO,
             status: FutureOrderStatus::Pending,
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
-            frozen_margin: Price::from_raw(0),
+            frozen_margin: Price::ZERO,
             leverage,
             client_order_id: None,
             position_side: PositionSide::Long,
@@ -208,14 +208,12 @@ impl PrepOrder {
     }
 
     pub fn calculate_required_margin(price: Price, quantity: Quantity, leverage: u8) -> Price {
-        let notional = price.to_f64() * quantity.to_f64();
-        let margin = notional / leverage as f64;
-        Price::from_f64(margin)
+        let notional = price * quantity;
+        notional / Decimal::from(leverage)
     }
 
-    pub fn remaining_qty(&self) -> i64 {
-        let remaining_qty = self.quantity.raw() - self.filled_quantity.raw();
-        remaining_qty
+    pub fn remaining_qty(&self) -> Quantity {
+        self.quantity - self.filled_quantity
     }
 
     pub fn change2submit(&mut self) {
@@ -234,7 +232,7 @@ impl PrepOrder {
         self.status = FutureOrderStatus::Rejected;
 
         let _ = balance.un_frozen(self.frozen_margin, now);
-        self.frozen_margin = Price::from_raw(0);
+        self.frozen_margin = Price::ZERO;
     }
 
     pub fn frozen2pay(&mut self, balance: &mut Balance, now: Timestamp) {
@@ -247,32 +245,32 @@ impl PrepOrder {
         &mut self,
         balance: &mut Balance,
         match_p: &mut PrepPosition,
-        qty: i64,
+        qty: Quantity,
         now: Timestamp,
-    ) -> f64 {
+    ) -> Quantity {
         match self.side {
             OrderSide::Buy => {}
             OrderSide::Sell => {}
         }
 
-        self.filled_quantity = Quantity::from_raw(self.filled_quantity.raw() + qty);
+        self.filled_quantity += qty;
 
         // 真实资金操作
         self.frozen2pay(balance, now);
 
         // 处理 position - 更新被匹配方的持仓
-        let fill_qty = Quantity::from_raw(qty);
-        let fill_price = self.price.unwrap_or_else(|| Price::from_f64(50000.0));
+        let fill_qty = qty;
+        let fill_price = self.price.unwrap_or_else(|| Decimal::from(50000));
 
         // 直接调用 position.update() 更新持仓
         match_p.add(fill_qty, fill_price, self.leverage, self.side, crate::PositionSide::Long);
 
-        if self.remaining_qty() == 0 {
+        if self.remaining_qty().is_zero() {
             self.status = FutureOrderStatus::Filled
         } else {
             self.status = FutureOrderStatus::PartiallyFilled
         }
-        self.filled_quantity.to_f64()
+        self.filled_quantity
     }
 
     // todo 每个order会有两个balance, 根据买卖来决定资产流转
@@ -285,17 +283,17 @@ impl PrepOrder {
         my_p: &mut PrepPosition,
         now: Timestamp,
     ) -> PrepTrade {
-        let filled = self.remaining_qty().min(matched_order.quantity.raw());
+        let filled = self.remaining_qty().min(matched_order.remaining_qty());
 
         self.filled_qty(my_b, my_p, filled, now);
         matched_order.filled_qty(matched_b, matched_p, filled, now);
 
-        let _ = matched_b.frozen2pay(Price::from_raw(0), now);
+        let _ = matched_b.frozen2pay(Price::ZERO, now);
 
         // 计算成交金额和手续费（限价单为 Maker，费率 0.02%）
-        let price = matched_order.price.unwrap_or_else(|| Price::from_raw(0));
-        let notional = price.to_f64() * (filled as f64);
-        let fee = Price::from_f64(notional * 0.0002);
+        let price = matched_order.price.unwrap_or_else(|| Price::ZERO);
+        let notional = price * filled;
+        let fee = notional * Decimal::new(2, 4);
 
         // 创建成交记录
         let trade = PrepTrade::new(
@@ -305,7 +303,7 @@ impl PrepOrder {
             self.trading_pair,
             self.side,
             price,
-            Quantity::from_raw(filled),
+            filled,
             fee,
             AssetId::Usdt,
             true, // Maker
@@ -329,7 +327,7 @@ impl LobOrder for PrepOrder {
     }
 
     fn price(&self) -> Price {
-        self.price.unwrap_or_else(|| Price::from_raw(0))
+        self.price.unwrap_or_else(|| Price::ZERO)
     }
 
     fn base_qty(&self) -> Quantity {

@@ -1,5 +1,6 @@
 use common_entity::{DomainReadModel, DomainReadSnapshot};
-use decimal::Decimal;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use thiserror::Error;
 
 use super::AccountId;
@@ -7,8 +8,6 @@ use crate::entity::{
     HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, ReservationKind,
     ReservationMarketKind,
 };
-
-const DECIMAL_SCALE: i128 = 100_000_000;
 
 /// 本地统计 perp 清算状态所需的已加载领域事实。
 ///
@@ -348,7 +347,7 @@ impl PerpClearinghouseState {
         let cross_account_value = checked_add(total_raw_usd, cross_unrealized_pnl)?;
         let withdrawable_before_floor = checked_sub(account_value, total_margin_used)?;
         // 可提资金不向外暴露负数；保证金不足时 floor 到 0，由风险状态表达压力。
-        let withdrawable = if withdrawable_before_floor.is_negative() {
+        let withdrawable = if withdrawable_before_floor.is_sign_negative() {
             zero()
         } else {
             withdrawable_before_floor
@@ -463,31 +462,25 @@ fn active_open_order_reservation_remaining(
 }
 
 fn zero() -> Decimal {
-    Decimal::from_raw(0)
+    Decimal::ZERO
 }
 
 fn validate_non_negative(
     value: Decimal,
     field: &'static str,
 ) -> Result<(), PerpClearinghouseStateCalcError> {
-    if value.is_negative() {
+    if value.is_sign_negative() {
         return Err(PerpClearinghouseStateCalcError::NegativeInput { field });
     }
     Ok(())
 }
 
 fn checked_add(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    lhs.raw()
-        .checked_add(rhs.raw())
-        .map(Decimal::from_raw)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_add(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn checked_sub(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    lhs.raw()
-        .checked_sub(rhs.raw())
-        .map(Decimal::from_raw)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_sub(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn checked_mul(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
@@ -501,51 +494,33 @@ fn checked_div_decimal(
     if rhs.is_zero() {
         return Ok(zero());
     }
-    let scaled = i128::from(lhs.raw())
-        .checked_mul(DECIMAL_SCALE)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?;
-    let quotient = scaled
-        .checked_div(i128::from(rhs.raw()))
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?;
-    i64::try_from(quotient)
-        .map(Decimal::from_raw)
-        .map_err(|_| PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_div(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn decimal_from_u64(value: u64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    i128::from(value)
-        .checked_mul(DECIMAL_SCALE)
-        .and_then(|raw| i64::try_from(raw).ok())
-        .map(Decimal::from_raw)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    Ok(Decimal::from(value))
 }
 
 fn decimal_from_i64(value: i64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    i128::from(value)
-        .checked_mul(DECIMAL_SCALE)
-        .and_then(|raw| i64::try_from(raw).ok())
-        .map(Decimal::from_raw)
-        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    Ok(Decimal::from(value))
 }
 
 fn decimal_to_units(value: Decimal) -> Result<u64, PerpClearinghouseStateCalcError> {
-    let raw = value.raw();
-    if raw < 0 || raw % DECIMAL_SCALE as i64 != 0 {
+    if value.is_sign_negative() || !value.fract().is_zero() {
         return Err(PerpClearinghouseStateCalcError::ArithmeticOverflow);
     }
-    u64::try_from(raw / DECIMAL_SCALE as i64)
-        .map_err(|_| PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    value.to_u64().ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 #[cfg(test)]
 mod tests {
-    use decimal::Decimal;
+    use rust_decimal::Decimal;
 
     use super::*;
     use crate::entity::{HyperliquidPerpMarginMode, HyperliquidPerpPosition};
 
     fn dec(units: i64) -> Decimal {
-        Decimal::from_raw(units * 100_000_000)
+        Decimal::from(units)
     }
 
     fn sample_position(asset: u32, symbol: &str, quantity: u64) -> HyperliquidPerpPosition {

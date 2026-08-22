@@ -5,8 +5,8 @@
 use std::fmt;
 
 use crate::base_types::{
-    AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId, TradingPair,
-    UserId,
+    AssetId, Decimal, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
+    TradingPair, UserId,
 };
 
 // ============================================================================
@@ -136,26 +136,26 @@ impl PrepPosition {
             position_id: PositionId::generate(),
             trading_pair,
             position_side,
-            quantity: Quantity::from_raw(0),
-            entry_price: Price::from_raw(0),
-            break_even_price: Price::from_raw(0),
-            mark_price: Price::from_raw(0),
-            unrealized_pnl: Price::from_raw(0),
-            realized_pnl: Price::from_raw(0),
+            quantity: Quantity::ZERO,
+            entry_price: Price::ZERO,
+            break_even_price: Price::ZERO,
+            mark_price: Price::ZERO,
+            unrealized_pnl: Price::ZERO,
+            realized_pnl: Price::ZERO,
             leverage: 1,
             margin_asset: AssetId::from_str("USDT").unwrap(),
-            margin: Price::from_raw(0),
-            initial_margin: Price::from_raw(0),
-            maint_margin: Price::from_raw(0),
-            position_initial_margin: Price::from_raw(0),
-            open_order_initial_margin: Price::from_raw(0),
-            isolated_margin: Price::from_raw(0),
-            isolated_wallet: Price::from_raw(0),
-            notional: Price::from_raw(0),
+            margin: Price::ZERO,
+            initial_margin: Price::ZERO,
+            maint_margin: Price::ZERO,
+            position_initial_margin: Price::ZERO,
+            open_order_initial_margin: Price::ZERO,
+            isolated_margin: Price::ZERO,
+            isolated_wallet: Price::ZERO,
+            notional: Price::ZERO,
             liquidation_price: None,
             adl: 0,
-            bid_notional: Price::from_raw(0),
-            ask_notional: Price::from_raw(0),
+            bid_notional: Price::ZERO,
+            ask_notional: Price::ZERO,
             updated_at: Timestamp::now_as_nanos(),
         }
     }
@@ -178,15 +178,12 @@ impl PrepPosition {
     /// 计算下次资金费用
     pub fn calculate_next_funding_fee(&self, funding_rate: Price) -> Price {
         if !self.has_position() {
-            return Price::from_raw(0);
+            return Price::ZERO;
         }
 
-        let notional = self.mark_price.to_f64() * self.quantity.to_f64();
-        let base_fee = notional * funding_rate.to_f64();
+        let base_fee = self.mark_price * self.quantity * funding_rate;
 
-        let fee = if self.position_side == PositionSide::Long { -base_fee } else { base_fee };
-
-        Price::from_f64(fee)
+        if self.position_side == PositionSide::Long { -base_fee } else { base_fee }
     }
 
     #[allow(dead_code)]
@@ -195,48 +192,44 @@ impl PrepPosition {
             return None;
         }
 
-        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
-        let entry = position.entry_price.to_f64();
-        let leverage = position.leverage as f64;
+        let maintenance_margin_rate = Decimal::new(4, 3); // 0.4% 维持保证金率
+        let entry = position.entry_price;
+        let leverage = Decimal::from(position.leverage);
 
         let liq_price = match position.position_side {
             PositionSide::Long => {
                 // 多仓：价格下跌到此价格时强平
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE - Decimal::ONE / leverage + maintenance_margin_rate)
             }
             PositionSide::Short => {
                 // 空仓：价格上涨到此价格时强平
-                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE + Decimal::ONE / leverage - maintenance_margin_rate)
             }
             PositionSide::Both => {
                 // 单向模式，暂时按多仓处理
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE - Decimal::ONE / leverage + maintenance_margin_rate)
             }
         };
 
-        Some(Price::from_f64(liq_price.max(0.0)))
+        Some(if liq_price.is_sign_negative() { Price::ZERO } else { liq_price })
     }
 
     #[allow(dead_code)]
     fn calculate_unrealized_pnl(&self, position: &PrepPosition) -> Price {
         if !position.has_position() {
-            return Price::from_raw(0);
+            return Price::ZERO;
         }
 
-        let entry = position.entry_price.to_f64();
-        let mark = position.mark_price.to_f64();
-        let qty = position.quantity.to_f64();
-
         let pnl = match position.position_side {
-            PositionSide::Long => (mark - entry) * qty,
-            PositionSide::Short => (entry - mark) * qty,
+            PositionSide::Long => (position.mark_price - position.entry_price) * position.quantity,
+            PositionSide::Short => (position.entry_price - position.mark_price) * position.quantity,
             PositionSide::Both => {
                 // 单向持仓模式，根据数量符号判断
-                (mark - entry) * qty
+                (position.mark_price - position.entry_price) * position.quantity
             }
         };
 
-        Price::from_f64(pnl)
+        pnl
     }
 
     /// 更新持仓数量、均价、杠杆和相关计算字段
@@ -256,21 +249,13 @@ impl PrepPosition {
         _position_side: crate::PositionSide,
     ) {
         // 计算新的持仓数量和均价（加权平均）
-        let old_qty = self.quantity.to_f64();
-        let old_price = self.entry_price.to_f64();
-        let new_qty_val = new_quantity.to_f64();
-        let new_price_val = new_price.to_f64();
-
-        let total_cost = old_qty * old_price + new_qty_val * new_price_val;
-        let total_qty = old_qty + new_qty_val;
+        let total_cost = self.quantity * self.entry_price + new_quantity * new_price;
+        let total_qty = self.quantity + new_quantity;
 
         // 更新持仓数量和均价
-        self.quantity = Quantity::from_f64(total_qty);
-        self.entry_price = if total_qty > 0.0 {
-            Price::from_f64(total_cost / total_qty)
-        } else {
-            Price::from_raw(0)
-        };
+        self.quantity = total_qty;
+        self.entry_price =
+            if total_qty > Quantity::ZERO { total_cost / total_qty } else { Price::ZERO };
 
         // 更新标记价格
         self.mark_price = new_price;
@@ -282,23 +267,23 @@ impl PrepPosition {
         self.leverage = leverage;
 
         // 计算名义价值 = 持仓数量 * 标记价格
-        self.notional = Price::from_f64(self.mark_price.to_f64() * self.quantity.to_f64());
+        self.notional = self.mark_price * self.quantity;
 
         // 计算保证金 = 名义价值 / 杠杆倍数
-        self.margin = Price::from_f64(self.notional.to_f64() / leverage as f64);
+        self.margin = self.notional / Decimal::from(leverage);
 
         // 计算初始保证金 = 名义价值 / 杠杆倍数
         self.initial_margin = self.margin;
 
         // 计算维持保证金 = 名义价值 * 维持保证金率 (0.5%)
-        const MAINTENANCE_MARGIN_RATE: f64 = 0.005;
-        self.maint_margin = Price::from_f64(self.notional.to_f64() * MAINTENANCE_MARGIN_RATE);
+        let maintenance_margin_rate = Decimal::new(5, 3);
+        self.maint_margin = self.notional * maintenance_margin_rate;
 
         // 持仓初始保证金 = 初始保证金
         self.position_initial_margin = self.initial_margin;
 
         // 挂单初始保证金（暂无挂单）
-        self.open_order_initial_margin = Price::from_raw(0);
+        self.open_order_initial_margin = Price::ZERO;
 
         // 计算未实现盈亏
         self.unrealized_pnl = self.calculate_unrealized_pnl_value();
@@ -313,23 +298,19 @@ impl PrepPosition {
     /// 计算未实现盈亏值
     fn calculate_unrealized_pnl_value(&self) -> Price {
         if !self.has_position() {
-            return Price::from_raw(0);
+            return Price::ZERO;
         }
 
-        let entry = self.entry_price.to_f64();
-        let mark = self.mark_price.to_f64();
-        let qty = self.quantity.to_f64();
-
         let pnl = match self.position_side {
-            PositionSide::Long => (mark - entry) * qty,
-            PositionSide::Short => (entry - mark) * qty,
+            PositionSide::Long => (self.mark_price - self.entry_price) * self.quantity,
+            PositionSide::Short => (self.entry_price - self.mark_price) * self.quantity,
             PositionSide::Both => {
                 // 单向持仓模式，根据数量符号判断
-                (mark - entry) * qty
+                (self.mark_price - self.entry_price) * self.quantity
             }
         };
 
-        Price::from_f64(pnl)
+        pnl
     }
 
     /// 计算强平价格值
@@ -338,26 +319,26 @@ impl PrepPosition {
             return None;
         }
 
-        const MAINTENANCE_MARGIN_RATE: f64 = 0.004; // 0.4% 维持保证金率
-        let entry = self.entry_price.to_f64();
-        let leverage = self.leverage as f64;
+        let maintenance_margin_rate = Decimal::new(4, 3); // 0.4% 维持保证金率
+        let entry = self.entry_price;
+        let leverage = Decimal::from(self.leverage);
 
         let liq_price = match self.position_side {
             PositionSide::Long => {
                 // 多仓：价格下跌到此价格时强平
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE - Decimal::ONE / leverage + maintenance_margin_rate)
             }
             PositionSide::Short => {
                 // 空仓：价格上涨到此价格时强平
-                entry * (1.0 + 1.0 / leverage - MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE + Decimal::ONE / leverage - maintenance_margin_rate)
             }
             PositionSide::Both => {
                 // 单向模式，暂时按多仓处理
-                entry * (1.0 - 1.0 / leverage + MAINTENANCE_MARGIN_RATE)
+                entry * (Decimal::ONE - Decimal::ONE / leverage + maintenance_margin_rate)
             }
         };
 
-        Some(Price::from_f64(liq_price.max(0.0)))
+        Some(if liq_price.is_sign_negative() { Price::ZERO } else { liq_price })
     }
 
     /// 更新已实现盈亏
@@ -432,8 +413,6 @@ impl PrepTrade {
 
     /// 计算成交金额（价格 * 数量）
     pub fn notional(&self) -> Price {
-        // 简化计算：使用浮点数计算后转回定点数
-        let value = self.price.to_f64() * self.quantity.to_f64();
-        Price::from_f64(value)
+        self.price * self.quantity
     }
 }

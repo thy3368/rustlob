@@ -1,5 +1,5 @@
 use common_entity::Entity;
-use decimal::Decimal;
+use rust_decimal::Decimal;
 
 use super::hyperliquid_perp_order::{
     HyperliquidPerpOrder, HyperliquidPerpOrderBehaviorError, HyperliquidPerpOrderExecution,
@@ -14,11 +14,11 @@ use crate::entity::{
 };
 
 fn dec(units: i64) -> Decimal {
-    Decimal::from_raw(units * 100_000_000)
+    Decimal::from(units)
 }
 
 fn rate_bps(bps: i64) -> Decimal {
-    Decimal::from_raw(bps * 10_000)
+    Decimal::new(bps, 4)
 }
 
 fn clearinghouse_state_from_facts(

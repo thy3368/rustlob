@@ -90,7 +90,7 @@ impl Level1 {
         };
 
         let mid_price = match (best_ask, best_bid) {
-            (Some(ask), Some(bid)) => Some((ask + bid) / Decimal::from_raw(200000000)),
+            (Some(ask), Some(bid)) => Some((ask + bid) / Decimal::from(2)),
             _ => None,
         };
 
@@ -448,20 +448,20 @@ mod tests {
     #[test]
     fn test_level1_creation() {
         let level1 = Level1::new(
-            1,                            // symbol_id
-            1000,                         // timestamp
-            1,                            // sequence
-            Some(Price::from_raw(50000)), // best_bid
-            Quantity::from_raw(100),      // best_bid_quantity
-            Some(Price::from_raw(50100)), // best_ask
-            Quantity::from_raw(200),      // best_ask_quantity
+            1,                          // symbol_id
+            1000,                       // timestamp
+            1,                          // sequence
+            Some(Decimal::from(50000)), // best_bid
+            Decimal::from(100),         // best_bid_quantity
+            Some(Decimal::from(50100)), // best_ask
+            Decimal::from(200),         // best_ask_quantity
         );
 
         assert_eq!(level1.symbol_id, 1);
-        assert_eq!(level1.best_bid, Some(Price::from_raw(50000)));
-        assert_eq!(level1.best_ask, Some(Price::from_raw(50100)));
-        assert_eq!(level1.spread, Some(Price::from_raw(100)));
-        assert_eq!(level1.mid_price, Some(Price::from_raw(50050)));
+        assert_eq!(level1.best_bid, Some(Decimal::from(50000)));
+        assert_eq!(level1.best_ask, Some(Decimal::from(50100)));
+        assert_eq!(level1.spread, Some(Decimal::from(100)));
+        assert_eq!(level1.mid_price, Some(Decimal::from(50050)));
         assert!(level1.has_valid_market());
     }
 }

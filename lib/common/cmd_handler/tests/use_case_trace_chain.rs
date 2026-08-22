@@ -278,8 +278,8 @@ fn u64_value(object: &Map<String, Value>, key: &str) -> Option<u64> {
 }
 
 #[test]
-fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
+-> Result<(), Box<dyn std::error::Error>> {
     let test_name = "use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs";
     let minimal_path = minimal_log_path(test_name)?;
     let full_path = full_log_path(test_name)?;
@@ -290,25 +290,25 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
 
     let execution: Result<(), Box<dyn std::error::Error>> =
         tracing::subscriber::with_default(subscriber, || {
-        let executor = CommandUseCaseExecutor2;
-        let use_case = StubUseCase;
-        let outbound = TracingStubOutbound;
-        let command = CommandEnvelope {
-            meta: CommandMeta {
-                trace_id: Some("trace-chain-001".to_string()),
-                command_id: Some("cmd-chain-001".to_string()),
-            },
-            command: StubCommand {
-                account_id: "acct-007".to_string(),
-                symbol: "BTCUSDT".to_string(),
-                quantity: 2,
-            },
-        };
+            let executor = CommandUseCaseExecutor2;
+            let use_case = StubUseCase;
+            let outbound = TracingStubOutbound;
+            let command = CommandEnvelope {
+                meta: CommandMeta {
+                    trace_id: Some("trace-chain-001".to_string()),
+                    command_id: Some("cmd-chain-001".to_string()),
+                },
+                command: StubCommand {
+                    account_id: "acct-007".to_string(),
+                    symbol: "BTCUSDT".to_string(),
+                    quantity: 2,
+                },
+            };
 
-        let events = executor.execute(&use_case, command, &outbound, &())?;
-        assert_eq!(events.len(), 2);
-        Ok(())
-    });
+            let events = executor.execute(&use_case, command, &outbound, &())?;
+            assert_eq!(events.len(), 2);
+            Ok(())
+        });
     execution?;
 
     let minimal_events = read_minimal_trace(&minimal_path)?;
@@ -319,7 +319,9 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
                 && event.component.as_deref() == Some("command_use_case_execute")
                 && event.operation.as_deref() == Some("execute")
         })
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "use case trace event should be present"))?;
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "use case trace event should be present")
+        })?;
 
     assert_eq!(use_case_event.trace_id.as_deref(), Some("trace-chain-001"));
     assert_eq!(use_case_event.status.as_deref(), Some("ok"));
@@ -351,7 +353,9 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
     let load_state_event = outbound_events
         .iter()
         .find(|event| event.operation.as_deref() == Some("load_state"))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "load_state trace event should be present"))?;
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "load_state trace event should be present")
+        })?;
     assert_eq!(string_value(&load_state_event.request, "symbol"), Some("BTCUSDT"));
     assert_eq!(u64_value(&load_state_event.request, "quantity"), Some(2));
     assert_eq!(u64_value(&load_state_event.response, "state"), Some(2));
@@ -360,7 +364,12 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
         let event = outbound_events
             .iter()
             .find(|event| event.operation.as_deref() == Some(operation))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{operation} trace event should be present")))?;
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{operation} trace event should be present"),
+                )
+            })?;
         assert_eq!(u64_value(&event.request, "event_count"), Some(2));
     }
 

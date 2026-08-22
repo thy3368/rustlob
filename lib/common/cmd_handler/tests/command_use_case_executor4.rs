@@ -327,8 +327,8 @@ fn field_value(event: &EntityReplayableEvent, field_name: &str) -> Option<String
 }
 
 #[test]
-fn execute_returns_created_only_changes_and_events_on_happy_path(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn execute_returns_created_only_changes_and_events_on_happy_path()
+-> Result<(), Box<dyn std::error::Error>> {
     let executor = CommandUseCaseExecutor4;
     let use_case = StubCreatedOnlyUseCase;
     let outbound =
@@ -353,8 +353,8 @@ fn execute_returns_created_only_changes_and_events_on_happy_path(
 }
 
 #[test]
-fn execute_projects_create_and_update_events_in_stable_order(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn execute_projects_create_and_update_events_in_stable_order()
+-> Result<(), Box<dyn std::error::Error>> {
     let executor = CommandUseCaseExecutor4;
     let use_case = StubCreateAndUpdateUseCase;
     let outbound =
@@ -394,10 +394,7 @@ fn execute_rejects_in_pre_check_before_loading_state() {
 
     let result = executor.execute(&use_case, sample_envelope(""), &outbound, &observer);
 
-    assert_eq!(
-        result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck))
-    );
+    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck)));
     assert!(outbound.calls().is_empty());
     assert_eq!(observer.observed_count(), 0);
 }

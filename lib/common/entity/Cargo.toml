@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+entity_derive = { path = "../entity_derive" }
 minstant = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde-big-array = "0.5"

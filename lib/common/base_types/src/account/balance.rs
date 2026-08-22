@@ -37,7 +37,7 @@ impl Default for BalanceId {
 
 /// 资产余额（统一资产模型，支持8位小数精度）
 ///
-/// 使用 Price (i64) 存储，确保与持仓、PnL 等计算精度一致
+/// 使用 Decimal 存储，确保与持仓、PnL 等计算精度一致
 ///
 /// 示例：
 /// - Balance(account, USDT, 100.00000000) = 100 USDT
@@ -62,10 +62,10 @@ pub struct Balance {
     /// 资产ID
     pub asset_id: AssetId,
     /// 可用余额（可用于下单、提现）
-    /// 使用 Price 类型保证 8 位小数精度
+    /// 使用 Decimal 类型保证业务精度
     pub available: Quantity,
     /// 冻结余额（已锁定用于挂单、保证金）
-    /// 使用 Price 类型保证 8 位小数精度
+    /// 使用 Decimal 类型保证业务精度
     pub frozen: Quantity,
     /// 乐观锁版本号（每次修改 +1）
     pub version: u64,
@@ -91,14 +91,14 @@ impl Balance {
     pub fn with_available(
         account_id: AccountId,
         asset_id: AssetId,
-        available: i64,
+        available: Quantity,
         now: Timestamp,
     ) -> Self {
         Self {
             id: BalanceId::new(account_id, asset_id),
             account_id,
             asset_id,
-            available: Quantity::from_raw(available),
+            available,
             frozen: Quantity::default(),
             version: 0,
             updated_at: now,
@@ -148,13 +148,10 @@ impl Balance {
     /// # 错误
     /// 当可用余额不足时返回 `BalanceError::InsufficientAvailable`
     pub fn frozen(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
-        let available_raw = self.available.raw();
-        let amount_raw = amount.raw();
-
-        if available_raw < amount_raw {
+        if self.available < amount {
             return Err(BalanceError::InsufficientAvailable {
-                required: amount_raw,
-                available: available_raw,
+                required: amount,
+                available: self.available,
             });
         }
 
@@ -177,13 +174,10 @@ impl Balance {
         let available_before = self.available;
         let frozen_before = self.frozen;
 
-        let available_raw = self.available.raw();
-        let amount_raw = amount.raw();
-
-        if available_raw < amount_raw {
+        if self.available < amount {
             return Err(BalanceError::InsufficientAvailable {
-                required: amount_raw,
-                available: available_raw,
+                required: amount,
+                available: self.available,
             });
         }
 
@@ -211,14 +205,8 @@ impl Balance {
     /// # 错误
     /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
     pub fn frozen2pay(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
-        let frozen_raw = self.frozen.raw();
-        let amount_raw = amount.raw();
-
-        if frozen_raw < amount_raw {
-            return Err(BalanceError::InsufficientFrozen {
-                required: amount_raw,
-                frozen: frozen_raw,
-            });
+        if self.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
         }
 
         self.frozen = self.frozen - amount;
@@ -239,14 +227,8 @@ impl Balance {
         let available_before = self.available;
         let frozen_before = self.frozen;
 
-        let frozen_raw = self.frozen.raw();
-        let amount_raw = amount.raw();
-
-        if frozen_raw < amount_raw {
-            return Err(BalanceError::InsufficientFrozen {
-                required: amount_raw,
-                frozen: frozen_raw,
-            });
+        if self.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
         }
 
         self.frozen = self.frozen - amount;
@@ -272,14 +254,8 @@ impl Balance {
     /// # 错误
     /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
     pub fn un_frozen(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
-        let frozen_raw = self.frozen.raw();
-        let amount_raw = amount.raw();
-
-        if frozen_raw < amount_raw {
-            return Err(BalanceError::InsufficientFrozen {
-                required: amount_raw,
-                frozen: frozen_raw,
-            });
+        if self.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
         }
 
         self.available = self.available + amount;
@@ -301,14 +277,8 @@ impl Balance {
         let available_before = self.available;
         let frozen_before = self.frozen;
 
-        let frozen_raw = self.frozen.raw();
-        let amount_raw = amount.raw();
-
-        if frozen_raw < amount_raw {
-            return Err(BalanceError::InsufficientFrozen {
-                required: amount_raw,
-                frozen: frozen_raw,
-            });
+        if self.frozen < amount {
+            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
         }
 
         self.available = self.available + amount;

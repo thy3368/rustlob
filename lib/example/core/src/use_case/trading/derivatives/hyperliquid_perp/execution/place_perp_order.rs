@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, MiStateMachineV2Unchecked};
+use common_entity::{Entity, MiStateMachineV2Unchecked, action_type};
 use thiserror::Error;
 
 use crate::MarketRules;
@@ -211,6 +211,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     type Error = PlaceHyperliquidPerpOrderError;
     type AfterChanges = PlaceHyperliquidPerpOrderChanges;
 
+    #[action_type(kind = "pre_check_command")]
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(PlaceHyperliquidPerpOrderError::InvalidPartyId);
@@ -223,6 +224,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
+    #[action_type(kind = "validate_against_given_state")]
     fn validate_against_given_state(
         &self,
         cmd: &Self::Command,
@@ -280,6 +282,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
+    #[action_type(kind = "compute_after_changes_unchecked")]
     fn compute_after_changes_unchecked(
         &self,
         cmd: &Self::Command,

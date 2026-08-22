@@ -111,8 +111,8 @@ fn bad_case_strategy() -> impl Strategy<Value = (SubmitCmd, SubmitState)> {
 }
 
 #[test]
-fn property_only_repeats_precomputed_state_answers(
-) -> Result<(), proptest::test_runner::TestError<(SubmitCmd, SubmitState)>> {
+fn property_only_repeats_precomputed_state_answers()
+-> Result<(), proptest::test_runner::TestError<(SubmitCmd, SubmitState)>> {
     proptest::test_runner::TestRunner::default().run(&bad_case_strategy(), |(cmd, state)| {
         let use_case = OrderCheckingEngineUseCase;
 
@@ -128,7 +128,10 @@ fn property_only_repeats_precomputed_state_answers(
             prop_assert_eq!(result.output.accepted, state.accepted);
             prop_assert_eq!(event_accepted(&result.events), Some(state.accepted));
         } else {
-            prop_assert_eq!(use_case.validate_against_state(&cmd, &state), Err(SubmitError::Rejected));
+            prop_assert_eq!(
+                use_case.validate_against_state(&cmd, &state),
+                Err(SubmitError::Rejected)
+            );
         }
         Ok(())
     })

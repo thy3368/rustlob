@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::parse::Parser;
 use syn::punctuated::Punctuated;
-use syn::{Data, DeriveInput, Fields, Ident, Meta, Token, Type, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, Ident, LitStr, Meta, Token, Type, parse_macro_input};
 
 /// Entity derive macro - 自动实现 Entity trait 和 FromCreatedEvent trait
 ///
@@ -88,6 +89,176 @@ pub fn immutable(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// 标识实体上的业务函数，不改变函数签名或运行时行为。
+///
+/// 允许的 kind:
+/// - `business_query`: 不改变实体状态的业务查询
+/// - `behavior`: 表达实体生命周期或业务状态变化的行为
+#[proc_macro_attribute]
+pub fn function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    if let Err(error) = validate_single_kind(
+        attr,
+        "function",
+        &["business_query", "behavior"],
+        "function only supports `kind = \"business_query\"` or `kind = \"behavior\"`",
+        "function kind must be `business_query` or `behavior`",
+        "function requires `kind = \"business_query\"` or `kind = \"behavior\"`",
+    ) {
+        return error;
+    }
+
+    item
+}
+
+/// 标识实体的业务对象类型，不改变结构体或运行时行为。
+#[allow(non_snake_case)]
+#[proc_macro_attribute]
+pub fn ObjectType(attr: TokenStream, item: TokenStream) -> TokenStream {
+    if let Err(error) = validate_object_type(attr) {
+        return error;
+    }
+
+    item
+}
+
+/// 标识 use case hook 的业务动作阶段，不改变方法签名或运行时行为。
+///
+/// 允许的 kind:
+/// - `pre_check_command`: 只检查 command-local 事实
+/// - `validate_against_given_state`: 校验已加载状态上的业务不变量
+/// - `compute_after_changes_unchecked`: 计算 use case 的 after truth
+#[proc_macro_attribute]
+pub fn action_type(attr: TokenStream, item: TokenStream) -> TokenStream {
+    expand_action_type("action_type", attr, item)
+}
+
+/// `action_type` 的兼容别名，用于需要字面 `#[ActionType(...)]` 的标注场景。
+#[allow(non_snake_case)]
+#[proc_macro_attribute]
+pub fn ActionType(attr: TokenStream, item: TokenStream) -> TokenStream {
+    expand_action_type("ActionType", attr, item)
+}
+
+fn expand_action_type(
+    macro_name: &'static str,
+    attr: TokenStream,
+    item: TokenStream,
+) -> TokenStream {
+    if let Err(error) = validate_single_kind(
+        attr,
+        macro_name,
+        &["pre_check_command", "validate_against_given_state", "compute_after_changes_unchecked"],
+        "action_type only supports use case V2 hook kinds",
+        "action_type kind must be `pre_check_command`, `validate_against_given_state`, or `compute_after_changes_unchecked`",
+        "action_type requires `kind = \"pre_check_command\"`, `kind = \"validate_against_given_state\"`, or `kind = \"compute_after_changes_unchecked\"`",
+    ) {
+        return error;
+    }
+
+    item
+}
+
+fn validate_object_type(attr: TokenStream) -> Result<(), TokenStream> {
+    let mut seen_four_color = false;
+    let mut seen_aggregate_role = false;
+
+    let parser = syn::meta::parser(|meta| {
+        if meta.path.is_ident("four_color") {
+            if seen_four_color {
+                return Err(meta.error("ObjectType four_color can only be specified once"));
+            }
+            seen_four_color = true;
+
+            let value = meta.value()?;
+            let four_color: LitStr = value.parse()?;
+            if four_color.value() == "party_place_thing" {
+                Ok(())
+            } else {
+                Err(meta.error("ObjectType four_color must be `party_place_thing`"))
+            }
+        } else if meta.path.is_ident("aggregate_role") {
+            if seen_aggregate_role {
+                return Err(meta.error("ObjectType aggregate_role can only be specified once"));
+            }
+            seen_aggregate_role = true;
+
+            let value = meta.value()?;
+            let aggregate_role: LitStr = value.parse()?;
+            if aggregate_role.value() == "aggregate_root" {
+                Ok(())
+            } else {
+                Err(meta.error("ObjectType aggregate_role must be `aggregate_root`"))
+            }
+        } else {
+            Err(meta.error(
+                "ObjectType only supports `four_color = \"party_place_thing\"` and `aggregate_role = \"aggregate_root\"`",
+            ))
+        }
+    });
+
+    if let Err(error) = parser.parse(attr) {
+        return Err(error.to_compile_error().into());
+    }
+    if !seen_four_color {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "ObjectType requires `four_color = \"party_place_thing\"`",
+        )
+        .to_compile_error()
+        .into());
+    }
+    if !seen_aggregate_role {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "ObjectType requires `aggregate_role = \"aggregate_root\"`",
+        )
+        .to_compile_error()
+        .into());
+    }
+
+    Ok(())
+}
+
+fn validate_single_kind(
+    attr: TokenStream,
+    macro_name: &'static str,
+    allowed_kinds: &'static [&'static str],
+    unsupported_key_message: &'static str,
+    unsupported_kind_message: &'static str,
+    missing_kind_message: &'static str,
+) -> Result<(), TokenStream> {
+    let mut seen_kind = false;
+    let parser = syn::meta::parser(|meta| {
+        if !meta.path.is_ident("kind") {
+            return Err(meta.error(unsupported_key_message));
+        }
+
+        if seen_kind {
+            return Err(meta.error(format!("{macro_name} kind can only be specified once")));
+        }
+        seen_kind = true;
+
+        let value = meta.value()?;
+        let kind: LitStr = value.parse()?;
+        if allowed_kinds.contains(&kind.value().as_str()) {
+            Ok(())
+        } else {
+            Err(meta.error(unsupported_kind_message))
+        }
+    });
+
+    if let Err(error) = parser.parse(attr) {
+        return Err(error.to_compile_error().into());
+    }
+    if !seen_kind {
+        return Err(syn::Error::new(proc_macro2::Span::call_site(), missing_kind_message)
+            .to_compile_error()
+            .into());
+    }
+
+    Ok(())
 }
 
 #[proc_macro_derive(Entity, attributes(entity, diff, replay, created))]

@@ -6,7 +6,6 @@
 //! 遵循 Clean Architecture 原则，将共享的基础类型提取到独立模块
 
 extern crate core;
-extern crate decimal;
 
 pub mod account;
 pub mod base_types;
@@ -32,7 +31,7 @@ pub use base_types::{
     AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
     TradingPair, UserId,
 };
-pub use decimal::Decimal;
 pub use exchange::prep::perp_types::{PositionSide, PrepPosition, PrepTrade};
 pub use exchange::prep::prep_order::{FutureOrderStatus, TimeInForce};
 pub use instrument::instrument_types::InstrumentType;
+pub use rust_decimal::Decimal;

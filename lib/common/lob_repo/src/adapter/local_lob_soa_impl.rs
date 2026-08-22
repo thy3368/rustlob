@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use base_types::lob::lob::LobOrder;
 use base_types::{OrderId, OrderSide, Price, Quantity, TradingPair};
 use diff::{ChangeLog, FromCreatedEvent};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::LobError;
 use crate::core::repo_snapshot_support::{EventReplay, RepoSnapshot};
@@ -176,7 +178,7 @@ impl<O: LobOrder> LocalLob<O> {
     /// - max_ticks: 30,000,000 (支持价格到 300,000.00 USDT)
     /// - max_orders: 10,000 个订单
     pub fn new(symbol: TradingPair) -> Self {
-        Self::new_with_tick(symbol, Price::from_f64(0.01))
+        Self::new_with_tick(symbol, Decimal::new(1, 2))
     }
 
     /// 创建指定 tick size 的本地 LOB
@@ -188,13 +190,13 @@ impl<O: LobOrder> LocalLob<O> {
     /// # 示例
     /// ```ignore
     /// // BTC/ETH 等高价币：tick_size = 0.01
-    /// let btc_lob = LocalLob::new_with_tick(Symbol::new("BTCUSDT"), Price::from_f64(0.01));
+    /// let btc_lob = LocalLob::new_with_tick(Symbol::new("BTCUSDT"), Decimal::new(1, 2));
     ///
     /// // DOGE 等中价币：tick_size = 0.0001
-    /// let doge_lob = LocalLob::new_with_tick(Symbol::new("DOGEUSDT"), Price::from_f64(0.0001));
+    /// let doge_lob = LocalLob::new_with_tick(Symbol::new("DOGEUSDT"), Decimal::new(1, 4));
     ///
     /// // SHIB/PEPE 等低价币：tick_size = 0.00000001
-    /// let shib_lob = LocalLob::new_with_tick(Symbol::new("SHIBUSDT"), Price::from_f64(0.00000001));
+    /// let shib_lob = LocalLob::new_with_tick(Symbol::new("SHIBUSDT"), Decimal::new(1, 8));
     /// ```
     pub fn new_with_tick(symbol: TradingPair, tick_size: Price) -> Self {
         Self::with_capacity(symbol, tick_size, 30_000_000, 10_000)
@@ -228,11 +230,10 @@ impl<O: LobOrder> LocalLob<O> {
     /// 将价格转换为 tick 索引
     #[inline]
     fn price_to_tick_idx(&self, price: Price) -> Option<usize> {
-        if self.tick_size.raw() == 0 {
+        if self.tick_size.is_zero() {
             return None;
         }
-        let tick_idx = price.raw() / self.tick_size.raw();
-        if tick_idx < 0 { None } else { Some(tick_idx as usize) }
+        (price / self.tick_size).trunc().to_usize()
     }
 
     /// 获取价格点的可变引用
@@ -341,8 +342,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                         }
 
                         // 将 tick 转回价格
-                        let current_price =
-                            Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        let current_price = Decimal::from(current_tick) * self.tick_size;
                         if let Some(first_idx) =
                             self.get_first_order_at_price(current_price, opposite_side)
                         {
@@ -353,14 +353,13 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
                                     let order_qty = node.order.base_qty();
-                                    if order_qty > Quantity::from_raw(0) {
+                                    if order_qty > Decimal::ZERO {
                                         let fill_qty = if remaining < order_qty {
                                             remaining
                                         } else {
                                             order_qty
                                         };
-                                        remaining =
-                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        remaining = remaining - fill_qty;
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
@@ -395,8 +394,7 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
                         }
 
                         // 将 tick 转回价格
-                        let current_price =
-                            Price::from_raw(current_tick as i64 * self.tick_size.raw());
+                        let current_price = Decimal::from(current_tick) * self.tick_size;
                         if let Some(first_idx) =
                             self.get_first_order_at_price(current_price, opposite_side)
                         {
@@ -407,14 +405,13 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
 
                                 if let Some(Some(node)) = self.orders.get(idx) {
                                     let order_qty = node.order.base_qty();
-                                    if order_qty > Quantity::from_raw(0) {
+                                    if order_qty > Decimal::ZERO {
                                         let fill_qty = if remaining < order_qty {
                                             remaining
                                         } else {
                                             order_qty
                                         };
-                                        remaining =
-                                            Quantity::from_raw(remaining.raw() - fill_qty.raw());
+                                        remaining = remaining - fill_qty;
                                         matched_orders.push(&node.order);
                                     }
                                     current_idx = node.next_idx;
