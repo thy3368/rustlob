@@ -18,18 +18,18 @@ pub struct SpotTradeBehaviorV4Impl {}
 
 impl SpotTradeBehaviorV4Impl {
     pub fn new(
-        balance_repo: Arc<MySqlDbRepo<Balance>>,
-        trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
-        order_repo: Arc<MySqlDbRepo<SpotOrder>>,
-        lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
-        event_publisher: Arc<dyn EventPublisher>,
+        _balance_repo: Arc<MySqlDbRepo<Balance>>,
+        _trade_repo: Arc<MySqlDbRepo<SpotTrade>>,
+        _order_repo: Arc<MySqlDbRepo<SpotOrder>>,
+        _lob_repo: Arc<dyn MultiSymbolLobRepo<Order = SpotOrder>>,
+        _event_publisher: Arc<dyn EventPublisher>,
     ) -> Self {
         Self {}
     }
 }
 
 impl CmdHandler<NewOrderCmd, NewOrderAck, SpotApiErrorAny> for SpotTradeBehaviorV4Impl {
-    fn cmd_handle(&self, cmd: NewOrderCmd) -> Result<NewOrderAck, SpotApiErrorAny> {
+    fn cmd_handle(&self, _cmd: NewOrderCmd) -> Result<NewOrderAck, SpotApiErrorAny> {
         todo!()
     }
 }

@@ -3,9 +3,7 @@
 //! 将命令对象转换为领域实体，支持多种订单类型
 
 use base_types::base_types::TraderId;
-use base_types::exchange::spot::spot_types::{
-    ConditionalType, ExecutionMethod, OrderType, SpotOrder, TimeInForce,
-};
+use base_types::exchange::spot::spot_types::{OrderType, SpotOrder, TimeInForce};
 use base_types::{Price, Quantity};
 
 use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
@@ -14,10 +12,10 @@ use crate::proc::v2::id_repo::order_next_id;
 impl From<NewOrderCmd> for SpotOrder {
     #[inline(always)]
     fn from(cmd: NewOrderCmd) -> Self {
-        let order_id = order_next_id as u64;
+        let order_id = order_next_id as *const () as u64;
 
         let trader_id = TraderId::default(); // TODO: 从 metadata 中获取真实的 trader_id
-        let trading_pair = cmd.symbol().clone();
+        let trading_pair = *cmd.symbol();
 
         // todo 可以simd优化吗
         let order_type = *cmd.order_type();
@@ -28,12 +26,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order
@@ -44,12 +42,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     Price::from_f64(0.0), // 市价单价格为0
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC, // 市价单默认IOC
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 // OrderType::Market => execution_method = Market
@@ -61,12 +59,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     Price::from_f64(0.0), // 市价止损
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order
@@ -77,12 +75,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order
@@ -93,12 +91,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     Price::from_f64(0.0), // 市价止盈
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::IOC,
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order
@@ -109,12 +107,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     cmd.time_in_force().unwrap_or(TimeInForce::GTC),
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order
@@ -125,12 +123,12 @@ impl From<NewOrderCmd> for SpotOrder {
                     order_id,
                     trader_id,
                     trading_pair,
-                    cmd.side().clone(),
+                    *cmd.side(),
                     cmd.price().unwrap_or(Price::from_f64(0.0)),
                     cmd.quantity().unwrap_or(Quantity::from_f64(0.0)),
                     TimeInForce::GTX,
                     cmd.new_client_order_id().clone(),
-                    cmd.quote_order_qty().unwrap_or_default().clone(),
+                    cmd.quote_order_qty().unwrap_or_default(),
                 );
 
                 order

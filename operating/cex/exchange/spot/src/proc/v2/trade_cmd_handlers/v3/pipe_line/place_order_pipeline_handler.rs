@@ -65,7 +65,7 @@ impl<
             } else {
                 self.sett_order_handler.cmd_handle(
                     SettlementCmd {
-                        trades: trade_events.iter().map(|trade| trade.object().clone()).collect(),
+                        trades: trade_events.iter().map(|trade| *trade.object()).collect(),
                     },
                     self.sett_order_handler.repo.clone(),
                     self.sett_order_handler.publisher.clone(),

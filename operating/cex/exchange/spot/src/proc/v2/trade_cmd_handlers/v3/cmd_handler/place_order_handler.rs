@@ -56,11 +56,11 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         cmd: &Self::Command,
         state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenTraceableEventSet, Self::Error> {
-        let symbol = cmd.symbol().clone();
+        let symbol = *cmd.symbol();
         let side = *cmd.side();
-        let quantity = cmd.quantity().clone().unwrap_or_default();
-        let price = cmd.price().clone().unwrap_or_default();
-        let time_in_force = cmd.time_in_force().clone().unwrap_or(TimeInForce::GTC);
+        let quantity = (*cmd.quantity()).unwrap_or_default();
+        let price = (*cmd.price()).unwrap_or_default();
+        let time_in_force = (*cmd.time_in_force()).unwrap_or(TimeInForce::GTC);
 
         let actor_bytes =
             cmd.metadata().actor().as_ref().map(|s| s.as_bytes().to_owned()).unwrap_or_default();
@@ -69,7 +69,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         trader_id_bytes[..len].copy_from_slice(&actor_bytes[..len]);
 
         let order = SpotOrder::create_order(
-            state_set.order_id.into(),
+            state_set.order_id,
             TraderId::new(trader_id_bytes),
             symbol,
             side,

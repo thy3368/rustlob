@@ -1,5 +1,4 @@
 use base_types::exchange::spot::spot_types::SpotOrder;
-use base_types::lob::lob::LobOrder;
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;

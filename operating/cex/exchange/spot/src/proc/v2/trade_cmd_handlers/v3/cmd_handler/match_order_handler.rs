@@ -1,8 +1,7 @@
 use std::sync::Mutex;
 
-use base_types::base_types::TraderId;
-use base_types::exchange::spot::spot_types::{OrderSide, SpotOrder, SpotTrade, TimeInForce};
-use base_types::{Price, Quantity};
+use base_types::Quantity;
+use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
 use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
@@ -237,7 +236,9 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
 
 #[cfg(test)]
 mod tests {
-    use base_types::exchange::spot::spot_types::TradingPair;
+    use base_types::base_types::TraderId;
+    use base_types::exchange::spot::spot_types::{TimeInForce, TradingPair};
+    use base_types::{OrderSide, Price};
     use db_repo::adapter::v2::memdb_repo::MemdbRepo;
     use db_repo::core::db_repo2::QueryRepo2;
     use diff::diff_types::DomainEvent;

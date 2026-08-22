@@ -89,12 +89,12 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
         cmd: &Self::Command,
         state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenStateSet, Self::Error> {
-        let symbol = cmd.symbol().clone();
+        let symbol = *cmd.symbol();
         let side = *cmd.side();
-        let quantity = cmd.quantity().clone().unwrap_or_default();
-        let price = cmd.price().clone().unwrap_or_default();
+        let quantity = (*cmd.quantity()).unwrap_or_default();
+        let price = (*cmd.price()).unwrap_or_default();
         let order_type = *cmd.order_type();
-        let time_in_force = cmd.time_in_force().clone().unwrap_or(TimeInForce::GTC);
+        let time_in_force = (*cmd.time_in_force()).unwrap_or(TimeInForce::GTC);
 
         let actor_bytes =
             cmd.metadata().actor().as_ref().map(|s| s.as_bytes().to_owned()).unwrap_or_default();
@@ -103,7 +103,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
         trader_id_bytes[..len].copy_from_slice(&actor_bytes[..len]);
 
         let order = SpotOrder::create_order(
-            state_set.place_order_state_set.order_id.into(),
+            state_set.place_order_state_set.order_id,
             TraderId::new(trader_id_bytes),
             symbol,
             side,
@@ -184,13 +184,13 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
         NewOrderFull::new(base, fills)
     }
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn load_state_set_for_update(
         &self,
-        cmd: &Self::Command,
+        _cmd: &Self::Command,
     ) -> Result<Self::GivenStateSet, Self::Error> {
         // self.repo.find_by_id();
         //从lob加载makers
@@ -206,7 +206,7 @@ impl<R: CmdRepo2> CmdHandlerInternal for PlaceOrderCmdHandler<R> {
 
     fn validate_command_in_lock(
         &self,
-        cmd: &Self::Command,
+        _cmd: &Self::Command,
         _state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         Ok(())

@@ -5,11 +5,11 @@ use diff::diff_types::DomainEvent;
 pub struct NatsProducer {}
 
 impl EventPublisher2 for NatsProducer {
-    fn publish<E>(&self, event: &DomainEvent<E>) -> Result<(), PublishError> {
+    fn publish<E>(&self, _event: &DomainEvent<E>) -> Result<(), PublishError> {
         todo!()
     }
 
-    fn publish_batch<E>(&self, events: &[DomainEvent<E>]) -> Result<(), PublishError> {
+    fn publish_batch<E>(&self, _events: &[DomainEvent<E>]) -> Result<(), PublishError> {
         todo!()
     }
 }

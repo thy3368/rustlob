@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use diff::ChangeLog;
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::Serialize;
@@ -188,7 +188,7 @@ pub trait PublisherConfigExt {
 }
 
 impl PublisherConfigExt for PublisherConfig {
-    fn backend(mut self, _: PublisherBackend) -> Self {
+    fn backend(self, _: PublisherBackend) -> Self {
         self
     }
 

@@ -1,5 +1,5 @@
 use db_repo::core::event_publish::{EventPublisher2, PublishError};
-use diff::diff_types::{ChangeLog, ChangeType, DomainEvent};
+use diff::diff_types::DomainEvent;
 use futures::executor::block_on;
 use rdkafka::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -48,6 +48,8 @@ impl EventPublisher2 for KafkaProducer {
 
 #[cfg(test)]
 mod tests {
+    use diff::{ChangeLog, ChangeType};
+
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

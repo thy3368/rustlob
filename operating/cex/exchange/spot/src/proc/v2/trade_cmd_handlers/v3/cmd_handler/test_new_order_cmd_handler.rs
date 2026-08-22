@@ -44,6 +44,12 @@ impl TestNewOrderCmdHandler {
     }
 }
 
+impl Default for TestNewOrderCmdHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CmdHandlerInternal for TestNewOrderCmdHandler {
     type Command = TestNewOrderCmd;
     type Reply = CommissionRates;
@@ -53,46 +59,52 @@ impl CmdHandlerInternal for TestNewOrderCmdHandler {
 
     fn apply_command_and_collect_changes(
         &self,
-        cmd: &Self::Command,
-        state_set: Self::GivenStateSet,
+        _cmd: &Self::Command,
+        _state_set: Self::GivenStateSet,
     ) -> Result<Self::ThenStateSet, Self::Error> {
         todo!()
     }
 
-    fn state_changed_set_to_reply(&self, state_changed_set: Self::ThenStateSet) -> Self::Reply {
+    fn state_changed_set_to_reply(&self, _state_changed_set: Self::ThenStateSet) -> Self::Reply {
         todo!()
     }
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn load_state_set_for_update(
         &self,
-        cmd: &Self::Command,
+        _cmd: &Self::Command,
     ) -> Result<Self::GivenStateSet, Self::Error> {
         todo!()
     }
 
     fn validate_command_in_lock(
         &self,
-        cmd: &Self::Command,
-        state_set: &Self::GivenStateSet,
+        _cmd: &Self::Command,
+        _state_set: &Self::GivenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn persist_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn persist_domain_events(
+        &self,
+        _domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn replay_domain_events_to_state(
         &self,
-        domain_events: &Self::ThenStateSet,
+        _domain_events: &Self::ThenStateSet,
     ) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn publish_domain_events(&self, domain_events: &Self::ThenStateSet) -> Result<(), Self::Error> {
+    fn publish_domain_events(
+        &self,
+        _domain_events: &Self::ThenStateSet,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 }
