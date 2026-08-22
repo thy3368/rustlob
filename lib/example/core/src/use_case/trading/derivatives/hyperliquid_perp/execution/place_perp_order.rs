@@ -268,7 +268,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
         }
 
         match derive_place_intent(cmd.side(), size, &state.position)? {
-            DerivedPerpOrderIntent::OpenPosition | DerivedPerpOrderIntent::IncreasePosition => {
+            DerivedPerpOrderIntent::Open | DerivedPerpOrderIntent::Increase => {
                 let required_margin =
                     required_position_margin(size, price, state.position.leverage_value)
                         .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
@@ -276,7 +276,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
                     return Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance);
                 }
             }
-            DerivedPerpOrderIntent::ReducePosition | DerivedPerpOrderIntent::ClosePosition => {}
+            DerivedPerpOrderIntent::Reduce | DerivedPerpOrderIntent::Close => {}
         }
 
         Ok(())
@@ -293,25 +293,17 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
         let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
         let intent = if cmd.reduce_only {
             match derive_place_intent(cmd.side(), size, &state.position)? {
-                DerivedPerpOrderIntent::ClosePosition => {
-                    PlaceHyperliquidPerpOrderIntent::ClosePosition
-                }
-                DerivedPerpOrderIntent::ReducePosition => {
-                    PlaceHyperliquidPerpOrderIntent::ReducePosition
-                }
-                DerivedPerpOrderIntent::OpenPosition | DerivedPerpOrderIntent::IncreasePosition => {
+                DerivedPerpOrderIntent::Close => PlaceHyperliquidPerpOrderIntent::ClosePosition,
+                DerivedPerpOrderIntent::Reduce => PlaceHyperliquidPerpOrderIntent::ReducePosition,
+                DerivedPerpOrderIntent::Open | DerivedPerpOrderIntent::Increase => {
                     return Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly);
                 }
             }
         } else {
             match derive_place_intent(cmd.side(), size, &state.position)? {
-                DerivedPerpOrderIntent::ClosePosition => {
-                    PlaceHyperliquidPerpOrderIntent::ClosePosition
-                }
-                DerivedPerpOrderIntent::ReducePosition => {
-                    PlaceHyperliquidPerpOrderIntent::ReducePosition
-                }
-                DerivedPerpOrderIntent::OpenPosition => {
+                DerivedPerpOrderIntent::Close => PlaceHyperliquidPerpOrderIntent::ClosePosition,
+                DerivedPerpOrderIntent::Reduce => PlaceHyperliquidPerpOrderIntent::ReducePosition,
+                DerivedPerpOrderIntent::Open => {
                     let required_margin =
                         required_position_margin(size, price, state.position.leverage_value)
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
@@ -321,7 +313,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
                         margin_amount: required_margin,
                     }
                 }
-                DerivedPerpOrderIntent::IncreasePosition => {
+                DerivedPerpOrderIntent::Increase => {
                     let required_margin =
                         required_position_margin(size, price, state.position.leverage_value)
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
@@ -394,10 +386,10 @@ fn map_margin_ledger_error(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DerivedPerpOrderIntent {
-    OpenPosition,
-    IncreasePosition,
-    ReducePosition,
-    ClosePosition,
+    Open,
+    Increase,
+    Reduce,
+    Close,
 }
 
 fn derive_place_intent(
@@ -406,19 +398,19 @@ fn derive_place_intent(
     position: &HyperliquidPerpPosition,
 ) -> Result<DerivedPerpOrderIntent, PlaceHyperliquidPerpOrderError> {
     if position.is_flat() {
-        return Ok(DerivedPerpOrderIntent::OpenPosition);
+        return Ok(DerivedPerpOrderIntent::Open);
     }
     if (order_side == HyperliquidPerpOrderSide::Buy && position.is_long())
         || (order_side == HyperliquidPerpOrderSide::Sell && position.is_short())
     {
-        return Ok(DerivedPerpOrderIntent::IncreasePosition);
+        return Ok(DerivedPerpOrderIntent::Increase);
     }
     if (order_side == HyperliquidPerpOrderSide::Buy && position.is_short())
         || (order_side == HyperliquidPerpOrderSide::Sell && position.is_long())
     {
         return match size.cmp(&position.qty()) {
-            std::cmp::Ordering::Less => Ok(DerivedPerpOrderIntent::ReducePosition),
-            std::cmp::Ordering::Equal => Ok(DerivedPerpOrderIntent::ClosePosition),
+            std::cmp::Ordering::Less => Ok(DerivedPerpOrderIntent::Reduce),
+            std::cmp::Ordering::Equal => Ok(DerivedPerpOrderIntent::Close),
             std::cmp::Ordering::Greater => {
                 Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
             }

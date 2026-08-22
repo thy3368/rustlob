@@ -784,35 +784,35 @@ fn current_position_snapshot_derives_four_position_order_intents_and_rejects_fli
     // act + assert
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &flat_position),
-        Ok(DerivedPerpOrderIntent::OpenPosition)
+        Ok(DerivedPerpOrderIntent::Open)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &flat_position),
-        Ok(DerivedPerpOrderIntent::OpenPosition)
+        Ok(DerivedPerpOrderIntent::Open)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &long_position),
-        Ok(DerivedPerpOrderIntent::IncreasePosition)
+        Ok(DerivedPerpOrderIntent::Increase)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &short_position),
-        Ok(DerivedPerpOrderIntent::IncreasePosition)
+        Ok(DerivedPerpOrderIntent::Increase)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Sell, 3, &long_position),
-        Ok(DerivedPerpOrderIntent::ReducePosition)
+        Ok(DerivedPerpOrderIntent::Reduce)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Buy, 3, &short_position),
-        Ok(DerivedPerpOrderIntent::ReducePosition)
+        Ok(DerivedPerpOrderIntent::Reduce)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Sell, 5, &long_position),
-        Ok(DerivedPerpOrderIntent::ClosePosition)
+        Ok(DerivedPerpOrderIntent::Close)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Buy, 5, &short_position),
-        Ok(DerivedPerpOrderIntent::ClosePosition)
+        Ok(DerivedPerpOrderIntent::Close)
     );
     assert_eq!(
         derive_place_intent(HyperliquidPerpOrderSide::Sell, 8, &long_position),

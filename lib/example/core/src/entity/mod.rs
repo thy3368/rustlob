@@ -9,7 +9,6 @@ pub mod spot;
 
 pub mod account;
 
-pub use account::account::{Account, AccountStatus};
 pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
@@ -20,6 +19,7 @@ pub use account::settlement_transfer_voucher::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferSummary,
     SettlementTransferVoucher,
 };
+pub use account::{Account, AccountStatus};
 pub use hyperliquid_account::{
     AccountId, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpAssetRiskRule,
     PerpClearinghouseState, PerpClearinghouseStateCalcError, PerpClearinghouseStateCalcInput,

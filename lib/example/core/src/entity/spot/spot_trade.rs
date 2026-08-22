@@ -53,6 +53,7 @@ pub struct SpotTrade {
 
 impl SpotTrade {
     /// 从已经校验过的撮合事实构造成交实体。
+    #[expect(clippy::too_many_arguments, reason = "完整成交事实构造器需要显式保留所有业务字段")]
     pub fn new(
         trade_id: String,
         match_id: String,

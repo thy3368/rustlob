@@ -169,7 +169,7 @@ pub struct CancelSpotOrderV2AfterChangesV3 {
 pub enum SpotOrderV2AfterChangesV3 {
     Place(PlaceSpotOrderV2AfterChangesV3),
     PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2AfterChangesV3),
-    Trigger(TriggerSpotOrderV2AfterChangesV3),
+    Trigger(Box<TriggerSpotOrderV2AfterChangesV3>),
     Cancel(CancelSpotOrderV2AfterChangesV3),
 }
 
@@ -210,7 +210,7 @@ pub struct CancelSpotOrderV2ChangesV3 {
 pub enum SpotOrderV2CaseChangesV3 {
     Place(PlaceSpotOrderV2ChangesV3),
     PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2ChangesV3),
-    Trigger(TriggerSpotOrderV2ChangesV3),
+    Trigger(Box<TriggerSpotOrderV2ChangesV3>),
     Cancel(CancelSpotOrderV2ChangesV3),
 }
 
@@ -621,7 +621,7 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                     order, maker_orders, settlement_balances, ..
                 },
                 SpotOrderV2AfterChangesV3::Trigger(after),
-            ) => Ok(SpotOrderV2CaseChangesV3::Trigger(TriggerSpotOrderV2ChangesV3 {
+            ) => Ok(SpotOrderV2CaseChangesV3::Trigger(Box::new(TriggerSpotOrderV2ChangesV3 {
                 triggered_order: after.triggered_order,
                 updated_order: UpdatedEntityPair { before: order, after: after.order_after },
                 updated_maker_orders: zip_pairs(maker_orders, after.maker_orders_after)?,
@@ -629,7 +629,7 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                 created_trades: after.created_trades,
                 created_vouchers: after.created_vouchers,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
-            })),
+            }))),
             (
                 SpotOrderV2GivenStateV3::Cancel { order, balances, .. },
                 SpotOrderV2AfterChangesV3::Cancel(after),
@@ -786,7 +786,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
             taker_fee_bps: context.taker_fee_bps,
         })?;
 
-        Ok(SpotOrderV2AfterChangesV3::Trigger(TriggerSpotOrderV2AfterChangesV3 {
+        Ok(SpotOrderV2AfterChangesV3::Trigger(Box::new(TriggerSpotOrderV2AfterChangesV3 {
             triggered_order,
             order_after: after.taker_order_after,
             maker_orders_after: after.maker_orders_after,
@@ -794,7 +794,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
             created_trades: after.created_trades,
             created_vouchers: after.created_vouchers,
             created_balance_ledger_entries: after.created_balance_ledger_entries,
-        }))
+        })))
     }
 
     fn compute_cancel_after(
