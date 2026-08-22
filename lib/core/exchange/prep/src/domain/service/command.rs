@@ -475,12 +475,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_open_long() {
+    fn test_open_long() -> Result<(), String> {
         // 开多 = Buy + Long + reduce_only=false
         let cmd = Command::LimitOrder {
             trader: 1,
             side: Side::Buy,
-            price: 50000_00,
+            price: 5_000_000,
             quantity: 100,
             position_side: PositionSide::Long,
             reduce_only: false,
@@ -493,17 +493,18 @@ mod tests {
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(!reduce_only);
             }
-            _ => panic!("Expected LimitOrder"),
+            _ => return Err("Expected LimitOrder".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_close_long() {
+    fn test_close_long() -> Result<(), String> {
         // 平多 = Sell + Long + reduce_only=true
         let cmd = Command::LimitOrder {
             trader: 1,
             side: Side::Sell,
-            price: 51000_00,
+            price: 5_100_000,
             quantity: 100,
             position_side: PositionSide::Long,
             reduce_only: true,
@@ -516,12 +517,13 @@ mod tests {
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(reduce_only);
             }
-            _ => panic!("Expected LimitOrder"),
+            _ => return Err("Expected LimitOrder".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_open_short() {
+    fn test_open_short() -> Result<(), String> {
         // 开空 = Sell + Short + reduce_only=false
         let cmd = Command::MarketOrder {
             trader: 1,
@@ -537,17 +539,18 @@ mod tests {
                 assert_eq!(position_side, PositionSide::Short);
                 assert!(!reduce_only);
             }
-            _ => panic!("Expected MarketOrder"),
+            _ => return Err("Expected MarketOrder".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_one_way_mode() {
+    fn test_one_way_mode() -> Result<(), String> {
         // 单向持仓用 Both
         let cmd = Command::LimitOrder {
             trader: 1,
             side: Side::Buy,
-            price: 50000_00,
+            price: 5_000_000,
             quantity: 100,
             position_side: PositionSide::Both,
             reduce_only: false,
@@ -558,8 +561,9 @@ mod tests {
             Command::LimitOrder { position_side, .. } => {
                 assert_eq!(position_side, PositionSide::Both);
             }
-            _ => panic!("Expected LimitOrder"),
+            _ => return Err("Expected LimitOrder".to_string()),
         }
+        Ok(())
     }
 
     #[test]

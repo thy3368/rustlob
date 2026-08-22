@@ -150,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_limit_order_no_match() {
+    fn test_limit_order_no_match() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -172,12 +172,13 @@ mod tests {
                 assert_eq!(remaining_quantity, 100);
                 assert_eq!(status, OrderStatus::New);
             }
-            _ => panic!("Expected LimitOrder result"),
+            _ => return Err("Expected LimitOrder result".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_limit_order_full_match() {
+    fn test_limit_order_full_match() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -213,12 +214,13 @@ mod tests {
                 assert_eq!(remaining_quantity, 0);
                 assert_eq!(status, OrderStatus::Filled);
             }
-            _ => panic!("Expected LimitOrder result"),
+            _ => return Err("Expected LimitOrder result".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_limit_order_partial_match() {
+    fn test_limit_order_partial_match() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -253,12 +255,13 @@ mod tests {
                 assert_eq!(remaining_quantity, 50);
                 assert_eq!(status, OrderStatus::PartiallyFilled);
             }
-            _ => panic!("Expected LimitOrder result"),
+            _ => return Err("Expected LimitOrder result".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_fok_order_cancelled() {
+    fn test_fok_order_cancelled() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -292,12 +295,13 @@ mod tests {
                 assert_eq!(remaining_quantity, 100);
                 assert_eq!(status, OrderStatus::Cancelled);
             }
-            _ => panic!("Expected LimitOrder result"),
+            _ => return Err("Expected LimitOrder result".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_ioc_order() {
+    fn test_ioc_order() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -332,12 +336,13 @@ mod tests {
                 assert_eq!(remaining_quantity, 50);
                 assert_eq!(status, OrderStatus::PartiallyFilled);
             }
-            _ => panic!("Expected LimitOrder result"),
+            _ => return Err("Expected LimitOrder result".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_cancel_order() {
+    fn test_cancel_order() -> Result<(), String> {
         let mut service = create_service();
         service.set_timestamp(1000);
 
@@ -354,7 +359,7 @@ mod tests {
 
         let order_id = match result {
             CommandResult::LimitOrder { order_id, .. } => order_id,
-            _ => panic!("Expected order_id"),
+            _ => return Err("Expected order_id".to_string()),
         };
 
         // 取消
@@ -365,7 +370,8 @@ mod tests {
                 assert!(success);
                 assert_eq!(cancelled_quantity, 100);
             }
-            _ => panic!("Expected CancelOrder result"),
+            _ => return Err("Expected CancelOrder result".to_string()),
         }
+        Ok(())
     }
 }

@@ -35,33 +35,46 @@ pub struct Order {
     pub updated_at: Timestamp,
 }
 
+/// 新订单创建参数
+#[derive(Debug, Clone, Copy)]
+pub struct NewOrder {
+    /// 订单ID
+    pub id: OrderId,
+    /// 交易者ID
+    pub trader: TraderId,
+    /// 方向
+    pub side: Side,
+    /// 价格
+    pub price: Price,
+    /// 数量
+    pub quantity: Quantity,
+    /// 持仓方向
+    pub position_side: PositionSide,
+    /// 只减仓
+    pub reduce_only: bool,
+    /// 有效期
+    pub time_in_force: TimeInForce,
+    /// 创建时间
+    pub timestamp: Timestamp,
+}
+
 impl Order {
     /// 创建新订单
-    pub fn new(
-        id: OrderId,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-        position_side: PositionSide,
-        reduce_only: bool,
-        time_in_force: TimeInForce,
-        timestamp: Timestamp,
-    ) -> Self {
+    pub fn new(args: NewOrder) -> Self {
         Self {
-            id,
-            trader,
-            side,
-            price,
-            original_quantity: quantity,
-            remaining_quantity: quantity,
+            id: args.id,
+            trader: args.trader,
+            side: args.side,
+            price: args.price,
+            original_quantity: args.quantity,
+            remaining_quantity: args.quantity,
             filled_quantity: 0,
-            position_side,
-            reduce_only,
-            time_in_force,
+            position_side: args.position_side,
+            reduce_only: args.reduce_only,
+            time_in_force: args.time_in_force,
             status: OrderStatus::New,
-            created_at: timestamp,
-            updated_at: timestamp,
+            created_at: args.timestamp,
+            updated_at: args.timestamp,
         }
     }
 

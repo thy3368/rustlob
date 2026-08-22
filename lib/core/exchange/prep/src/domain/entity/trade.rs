@@ -155,7 +155,7 @@ mod tests {
         let trade = Trade::new(
             1,                  // id
             100,                // order_id
-            50000_00,           // price
+            5_000_000,          // price
             10,                 // quantity
             Side::Buy,          // side
             PositionSide::Long, // position_side
@@ -167,7 +167,7 @@ mod tests {
 
         assert_eq!(trade.id(), 1);
         assert_eq!(trade.order_id(), 100);
-        assert_eq!(trade.price(), 50000_00);
+        assert_eq!(trade.price(), 5_000_000);
         assert_eq!(trade.quantity(), 10);
         assert!(trade.is_maker());
     }

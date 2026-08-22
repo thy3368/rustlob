@@ -30,6 +30,48 @@ where
     default_margin_mode: MarginMode,
 }
 
+/// 限价单请求参数
+#[derive(Debug, Clone, Copy)]
+pub struct LimitOrderRequest {
+    /// 交易者ID
+    pub trader: TraderId,
+    /// 方向
+    pub side: Side,
+    /// 价格
+    pub price: Price,
+    /// 数量
+    pub quantity: Quantity,
+    /// 持仓方向
+    pub position_side: PositionSide,
+    /// 只减仓
+    pub reduce_only: bool,
+    /// 有效期
+    pub time_in_force: TimeInForce,
+}
+
+/// 一次撮合引发的双方仓位更新
+#[derive(Debug, Clone, Copy)]
+struct PositionUpdate {
+    /// Taker 交易者ID
+    taker_trader: TraderId,
+    /// Maker 交易者ID
+    maker_trader: TraderId,
+    /// Taker 方向
+    taker_side: Side,
+    /// Taker 持仓方向
+    taker_position_side: PositionSide,
+    /// Maker 持仓方向
+    maker_position_side: PositionSide,
+    /// 成交数量
+    quantity: Quantity,
+    /// 成交价格
+    price: Price,
+    /// Taker 是否只减仓
+    taker_reduce_only: bool,
+    /// Maker 是否只减仓
+    maker_reduce_only: bool,
+}
+
 impl<O, P> MatchingService<O, P>
 where
     O: OrderRepository,
@@ -59,16 +101,17 @@ where
     }
 
     /// 处理限价单
-    pub fn handle_limit_order(
-        &mut self,
-        trader: TraderId,
-        side: Side,
-        price: Price,
-        quantity: Quantity,
-        position_side: PositionSide,
-        reduce_only: bool,
-        time_in_force: TimeInForce,
-    ) -> CommandResult {
+    pub fn handle_limit_order(&mut self, request: LimitOrderRequest) -> CommandResult {
+        let LimitOrderRequest {
+            trader,
+            side,
+            price,
+            quantity,
+            position_side,
+            reduce_only,
+            time_in_force,
+        } = request;
+
         // 验证参数
         if quantity == 0 {
             return CommandResult::Error {
@@ -105,8 +148,8 @@ where
 
         // 创建订单
         let order_id = self.order_repo.next_order_id();
-        let order = Order::new(
-            order_id,
+        let order = Order::new(crate::domain::entity::NewOrder {
+            id: order_id,
             trader,
             side,
             price,
@@ -114,8 +157,8 @@ where
             position_side,
             reduce_only,
             time_in_force,
-            self.current_timestamp,
-        );
+            timestamp: self.current_timestamp,
+        });
 
         // 撮合
         let (trades, remaining) = self.match_order(order);
@@ -169,17 +212,17 @@ where
                 TimeInForce::GTC | TimeInForce::GTD { .. } | TimeInForce::PostOnly
             )
         {
-            let remaining_order = Order::new(
-                order_id,
+            let remaining_order = Order::new(crate::domain::entity::NewOrder {
+                id: order_id,
                 trader,
                 side,
                 price,
-                remaining,
+                quantity: remaining,
                 position_side,
                 reduce_only,
                 time_in_force,
-                self.current_timestamp,
-            );
+                timestamp: self.current_timestamp,
+            });
             let _ = self.order_repo.save_order(remaining_order);
         }
 
@@ -255,17 +298,17 @@ where
             );
 
             // 更新仓位
-            self.update_positions(
-                order.trader,
-                opposite_trader,
-                order.side,
-                order.position_side,
-                opposite_pos_side,
-                match_qty,
-                match_price,
-                order.reduce_only,
-                opposite_reduce_only,
-            );
+            self.update_positions(PositionUpdate {
+                taker_trader: order.trader,
+                maker_trader: opposite_trader,
+                taker_side: order.side,
+                taker_position_side: order.position_side,
+                maker_position_side: opposite_pos_side,
+                quantity: match_qty,
+                price: match_price,
+                taker_reduce_only: order.reduce_only,
+                maker_reduce_only: opposite_reduce_only,
+            });
 
             trades.push(trade);
             remaining -= match_qty;
@@ -280,40 +323,29 @@ where
     }
 
     /// 更新仓位
-    fn update_positions(
-        &mut self,
-        taker_trader: TraderId,
-        maker_trader: TraderId,
-        taker_side: Side,
-        taker_position_side: PositionSide,
-        maker_position_side: PositionSide,
-        quantity: Quantity,
-        price: Price,
-        taker_reduce_only: bool,
-        maker_reduce_only: bool,
-    ) {
+    fn update_positions(&mut self, update: PositionUpdate) {
         // 更新 Taker 仓位
         self.update_single_position(
-            taker_trader,
-            taker_side,
-            taker_position_side,
-            quantity,
-            price,
-            taker_reduce_only,
+            update.taker_trader,
+            update.taker_side,
+            update.taker_position_side,
+            update.quantity,
+            update.price,
+            update.taker_reduce_only,
         );
 
         // 更新 Maker 仓位
-        let maker_side = match taker_side {
+        let maker_side = match update.taker_side {
             Side::Buy => Side::Sell,
             Side::Sell => Side::Buy,
         };
         self.update_single_position(
-            maker_trader,
+            update.maker_trader,
             maker_side,
-            maker_position_side,
-            quantity,
-            price,
-            maker_reduce_only,
+            update.maker_position_side,
+            update.quantity,
+            update.price,
+            update.maker_reduce_only,
         );
     }
 
@@ -353,17 +385,17 @@ where
             // 创建新仓位
             let position_id = self.position_repo.next_position_id();
             let margin = self.calc_margin(quantity, price, self.default_leverage);
-            let position = Position::new(
-                position_id,
+            let position = Position::new(crate::domain::entity::NewPosition {
+                id: position_id,
                 trader,
                 position_side,
                 quantity,
-                price,
-                self.default_margin_mode,
-                self.default_leverage,
+                entry_price: price,
+                margin_mode: self.default_margin_mode,
+                leverage: self.default_leverage,
                 margin,
-                self.current_timestamp,
-            );
+                timestamp: self.current_timestamp,
+            });
             let _ = self.position_repo.save_position(position);
         }
     }
@@ -395,7 +427,7 @@ where
                 position_side,
                 reduce_only,
                 time_in_force,
-            } => self.handle_limit_order(
+            } => self.handle_limit_order(LimitOrderRequest {
                 trader,
                 side,
                 price,
@@ -403,7 +435,7 @@ where
                 position_side,
                 reduce_only,
                 time_in_force,
-            ),
+            }),
 
             Command::CancelOrder { order_id } => {
                 if let Some(order) = self.order_repo.get_order_mut(order_id) {

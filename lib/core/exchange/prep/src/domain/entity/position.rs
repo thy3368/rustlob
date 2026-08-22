@@ -35,36 +35,53 @@ pub struct Position {
     pub updated_at: Timestamp,
 }
 
+/// 新仓位创建参数
+#[derive(Debug, Clone, Copy)]
+pub struct NewPosition {
+    /// 仓位ID
+    pub id: PositionId,
+    /// 交易者ID
+    pub trader: TraderId,
+    /// 持仓方向
+    pub position_side: PositionSide,
+    /// 持仓数量
+    pub quantity: Quantity,
+    /// 开仓均价
+    pub entry_price: Price,
+    /// 保证金模式
+    pub margin_mode: MarginMode,
+    /// 杠杆倍数
+    pub leverage: Leverage,
+    /// 保证金
+    pub margin: Margin,
+    /// 创建时间
+    pub timestamp: Timestamp,
+}
+
 impl Position {
     /// 创建新仓位
-    pub fn new(
-        id: PositionId,
-        trader: TraderId,
-        position_side: PositionSide,
-        quantity: Quantity,
-        entry_price: Price,
-        margin_mode: MarginMode,
-        leverage: Leverage,
-        margin: Margin,
-        timestamp: Timestamp,
-    ) -> Self {
-        let liquidation_price =
-            Self::calc_liquidation_price(entry_price, position_side, leverage, margin_mode);
+    pub fn new(args: NewPosition) -> Self {
+        let liquidation_price = Self::calc_liquidation_price(
+            args.entry_price,
+            args.position_side,
+            args.leverage,
+            args.margin_mode,
+        );
 
         Self {
-            id,
-            trader,
-            position_side,
-            quantity,
-            entry_price,
-            margin_mode,
-            leverage,
-            margin,
+            id: args.id,
+            trader: args.trader,
+            position_side: args.position_side,
+            quantity: args.quantity,
+            entry_price: args.entry_price,
+            margin_mode: args.margin_mode,
+            leverage: args.leverage,
+            margin: args.margin,
             unrealized_pnl: 0,
             realized_pnl: 0,
             liquidation_price,
-            created_at: timestamp,
-            updated_at: timestamp,
+            created_at: args.timestamp,
+            updated_at: args.timestamp,
         }
     }
 

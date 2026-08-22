@@ -1384,7 +1384,7 @@ fn release_to_balance(
             order_id: order.order_id().to_string(),
         },
     };
-    let balance = balance_book.get_mut(&order.account_id(), asset_id)?;
+    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
         format!("balance-ledger:{}:release:{}", order.order_id(), ledger_entries.len() + 1),
@@ -1803,7 +1803,7 @@ impl BalanceMap {
 
     fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
-        balances.sort_by(|lhs, rhs| lhs.entity_id().cmp(&rhs.entity_id()));
+        balances.sort_by_key(|lhs| lhs.entity_id());
         balances
     }
 }

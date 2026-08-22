@@ -502,7 +502,7 @@ fn checked_div_decimal(
         return Ok(zero());
     }
     let scaled = i128::from(lhs.raw())
-        .checked_mul(i128::from(DECIMAL_SCALE))
+        .checked_mul(DECIMAL_SCALE)
         .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)?;
     let quotient = scaled
         .checked_div(i128::from(rhs.raw()))

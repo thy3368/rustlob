@@ -74,8 +74,10 @@ pub enum PositionMode {
 
 /// 订单有效期
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum TimeInForce {
     /// 成交为止
+    #[default]
     GTC,
     /// 立即成交或取消
     IOC,
@@ -85,12 +87,6 @@ pub enum TimeInForce {
     GTD { expire_time: Timestamp },
     /// 只做Maker
     PostOnly,
-}
-
-impl Default for TimeInForce {
-    fn default() -> Self {
-        Self::GTC
-    }
 }
 
 /// 订单状态

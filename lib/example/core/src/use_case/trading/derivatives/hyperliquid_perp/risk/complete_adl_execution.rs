@@ -198,10 +198,8 @@ impl CommandUseCase4 for CompleteHyperliquidPerpAdlExecutionUseCase {
         let mut execution_after = state.adl_execution.clone();
         let mut batch_after = state.adl_batch.clone();
         let mut shortfall_after = state.shortfall.clone();
-        let created_record;
-        let close_as;
 
-        if cmd.no_more_progress {
+        let (created_record, close_as) = if cmd.no_more_progress {
             let execution_version = execution_after
                 .version
                 .checked_add(1)
@@ -226,8 +224,7 @@ impl CommandUseCase4 for CompleteHyperliquidPerpAdlExecutionUseCase {
                 .apply_exhausted(shortfall_version)
                 .ok_or(CompleteHyperliquidPerpAdlExecutionError::ArithmeticOverflow)?;
 
-            created_record = None;
-            close_as = Some(HyperliquidPerpLiquidationCloseAs::Exhausted);
+            (None, Some(HyperliquidPerpLiquidationCloseAs::Exhausted))
         } else {
             let execution_version = execution_after
                 .version
@@ -253,26 +250,28 @@ impl CommandUseCase4 for CompleteHyperliquidPerpAdlExecutionUseCase {
                 .apply_adl_coverage(cmd.covered_quote, shortfall_version)
                 .ok_or(CompleteHyperliquidPerpAdlExecutionError::ArithmeticOverflow)?;
 
-            created_record = Some(HyperliquidPerpAdlDeleveragingRecord::new(
-                cmd.adl_deleveraging_record_id.clone(),
-                cmd.adl_execution_id.clone(),
-                cmd.adl_batch_id.clone(),
-                cmd.liquidation_id.clone(),
-                cmd.shortfall_id.clone(),
-                execution_after.deleveraged_account_id.clone(),
-                execution_after.deleveraged_position_id.clone(),
-                execution_after.asset,
-                execution_after.symbol.clone(),
-                cmd.qty,
-                cmd.execution_price,
-                cmd.covered_quote,
-            ));
-            close_as = if shortfall_after.remaining_quote == 0 {
-                Some(HyperliquidPerpLiquidationCloseAs::Closed)
-            } else {
-                None
-            };
-        }
+            (
+                Some(HyperliquidPerpAdlDeleveragingRecord::new(
+                    cmd.adl_deleveraging_record_id.clone(),
+                    cmd.adl_execution_id.clone(),
+                    cmd.adl_batch_id.clone(),
+                    cmd.liquidation_id.clone(),
+                    cmd.shortfall_id.clone(),
+                    execution_after.deleveraged_account_id.clone(),
+                    execution_after.deleveraged_position_id.clone(),
+                    execution_after.asset,
+                    execution_after.symbol.clone(),
+                    cmd.qty,
+                    cmd.execution_price,
+                    cmd.covered_quote,
+                )),
+                if shortfall_after.remaining_quote == 0 {
+                    Some(HyperliquidPerpLiquidationCloseAs::Closed)
+                } else {
+                    None
+                },
+            )
+        };
 
         Ok(CompleteHyperliquidPerpAdlExecutionChanges {
             changed_execution: UpdatedEntityPair {
