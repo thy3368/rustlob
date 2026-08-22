@@ -29,6 +29,7 @@ impl<T> UnsafeCellWrapper<T> {
     }
 
     #[inline(always)]
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut(&self) -> &mut T {
         &mut *self.inner.get()
     }

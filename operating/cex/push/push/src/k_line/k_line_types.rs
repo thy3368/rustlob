@@ -117,10 +117,7 @@ pub struct LockFreeRingBuffer<T: Copy> {
 impl<T: Copy + Default> LockFreeRingBuffer<T> {
     pub fn new(capacity: usize) -> Self {
         let cap = capacity.next_power_of_two();
-        let mut buffer = Vec::with_capacity(cap);
-        unsafe {
-            buffer.set_len(cap);
-        }
+        let buffer = vec![T::default(); cap];
 
         Self {
             buffer,
