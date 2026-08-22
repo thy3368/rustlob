@@ -187,8 +187,8 @@ mod tests {
             taker_order_id,
             maker_order_id,
             Timestamp::default(),
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             base_types::exchange::spot::spot_types::OrderSide::Buy,
             Quantity::default(),
             Quantity::default(),
@@ -280,10 +280,10 @@ mod tests {
             .expect("second maker usdt balance should exist");
 
         assert_eq!(taker_btc.asset_id, AssetId::Btc);
-        assert_eq!(taker_btc.available, Quantity::from_f64(2.0));
+        assert_eq!(taker_btc.available, Quantity::from(2));
         assert_eq!(maker_one_usdt.asset_id, AssetId::Usdt);
-        assert_eq!(maker_one_usdt.available, Quantity::from_f64(50000.0));
+        assert_eq!(maker_one_usdt.available, Quantity::from(50000));
         assert_eq!(maker_two_usdt.asset_id, AssetId::Usdt);
-        assert_eq!(maker_two_usdt.available, Quantity::from_f64(50000.0));
+        assert_eq!(maker_two_usdt.available, Quantity::from(50000));
     }
 }

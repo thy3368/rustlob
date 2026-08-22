@@ -1072,7 +1072,7 @@ pub trait MarketDataQueryProc {
 
 #[cfg(test)]
 mod tests {
-    use base_types::Price;
+    use base_types::Decimal;
     use base_types::base_types::TraderId;
     use base_types::mark_data::spot::level_types::OrderChangeType;
 
@@ -1109,8 +1109,8 @@ mod tests {
             change_type: OrderChangeType::Add,
             order_id: 12345,
             side: OrderSide::Buy,
-            price: Price::from_raw(50000),
-            quantity: Quantity::from_raw(100),
+            price: Decimal::from(50000),
+            quantity: Decimal::from(100),
             trader_id: Some(TraderId::default()),
         };
 

@@ -107,9 +107,9 @@ mod tests {
             OrderSide::Buy,
             OrderType::Limit,
             Some(TimeInForce::GTC),
-            Some(Quantity::from_f64(quantity)),
+            Some(Quantity::from_str_exact(&quantity.to_string()).unwrap_or(Quantity::ZERO)),
             None,
-            Some(Price::from_f64(50000.0)),
+            Some(Price::from(50000)),
             Some(client_order_id.to_string()),
             None,
             None,
@@ -142,8 +142,8 @@ mod tests {
             TraderId::new([1u8; 8]),
             TradingPair::BtcUsdt,
             OrderSide::Sell,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(quantity),
+            Price::from(50000),
+            Quantity::from_str_exact(&quantity.to_string()).unwrap_or(Quantity::ZERO),
             TimeInForce::GTC,
             Some(client_order_id.to_string()),
             Quantity::default(),
@@ -178,8 +178,8 @@ mod tests {
 
         assert_eq!(reply.order.object().trading_pair, TradingPair::BtcUsdt);
         assert_eq!(reply.order.object().side, OrderSide::Buy);
-        assert_eq!(reply.order.object().price, Some(Price::from_f64(50000.0)));
-        assert_eq!(reply.order.object().total_base_qty, Quantity::from_f64(1.0));
+        assert_eq!(reply.order.object().price, Some(Price::from(50000)));
+        assert_eq!(reply.order.object().total_base_qty, Quantity::ONE);
         let stored_order = repo
             .find_by_id::<SpotOrder>(&reply.order.object().entity_id().to_string())
             .expect("repo query should succeed")
@@ -196,8 +196,8 @@ mod tests {
             TraderId::new([0u8; 8]),
             TradingPair::BtcUsdt,
             OrderSide::Buy,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             TimeInForce::GTC,
             Some("pipeline_trade_path".to_string()),
             Quantity::default(),
@@ -208,8 +208,8 @@ mod tests {
             order.order_id,
             22,
             Timestamp::default(),
-            Price::from_f64(50000.0),
-            Quantity::from_f64(1.0),
+            Price::from(50000),
+            Quantity::ONE,
             OrderSide::Buy,
             Quantity::default(),
             Quantity::default(),
@@ -291,8 +291,8 @@ mod tests {
         assert_eq!(trade.trading_pair, TradingPair::BtcUsdt);
         assert_eq!(trade.maker_order_id, maker_order.order_id);
         assert_eq!(trade.taker_order_id, reply.order.object().order_id);
-        assert_eq!(trade.price, Price::from_f64(50000.0));
-        assert_eq!(trade.base_qty, Quantity::from_f64(1.0));
+        assert_eq!(trade.price, Price::from(50000));
+        assert_eq!(trade.base_qty, Quantity::ONE);
         assert_eq!(trade.taker_side, OrderSide::Buy);
         let stored_order = repo
             .find_by_id::<SpotOrder>(&reply.order.object().entity_id().to_string())
@@ -347,12 +347,12 @@ mod tests {
         assert!(maker_order_ids.contains(&maker_order_two.order_id));
         for trade in &trades {
             assert_eq!(trade.object().taker_order_id, reply.order.object().order_id);
-            assert_eq!(trade.object().price, Price::from_f64(50000.0));
-            assert_eq!(trade.object().base_qty, Quantity::from_f64(1.0));
+            assert_eq!(trade.object().price, Price::from(50000));
+            assert_eq!(trade.object().base_qty, Quantity::ONE);
         }
         let total_base_qty =
             trades.iter().fold(Quantity::default(), |acc, trade| acc + trade.object().base_qty);
-        assert_eq!(total_base_qty, Quantity::from_f64(2.0));
+        assert_eq!(total_base_qty, Quantity::from(2));
 
         let stored_first_trade = repo
             .find_by_id::<SpotTrade>(&trades[0].object().entity_id().to_string())
@@ -390,8 +390,8 @@ mod tests {
             ))
             .expect("maker two usdt query should succeed")
             .expect("maker two usdt balance should exist");
-        assert_eq!(taker_btc.available, Quantity::from_f64(2.0));
-        assert_eq!(maker_one_usdt.available, Quantity::from_f64(50000.0));
-        assert_eq!(maker_two_usdt.available, Quantity::from_f64(50000.0));
+        assert_eq!(taker_btc.available, Quantity::from(2));
+        assert_eq!(maker_one_usdt.available, Quantity::from(50000));
+        assert_eq!(maker_two_usdt.available, Quantity::from(50000));
     }
 }

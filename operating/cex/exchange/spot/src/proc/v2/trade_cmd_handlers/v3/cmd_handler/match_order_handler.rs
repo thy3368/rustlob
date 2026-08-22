@@ -253,8 +253,8 @@ mod tests {
             TraderId::new([0u8; 8]),
             TradingPair::BtcUsdt,
             side,
-            Price::from_f64(50000.0),
-            Quantity::from_f64(quantity),
+            Price::from(50000),
+            Quantity::from_str_exact(&quantity.to_string()).unwrap_or(Quantity::ZERO),
             TimeInForce::GTC,
             Some(format!("test_order_{order_id}")),
             Quantity::default(),
@@ -321,8 +321,8 @@ mod tests {
         assert_eq!(trades[1].object().maker_order_id, 12);
         assert_eq!(trades[0].object().taker_order_id, 21);
         assert_eq!(trades[1].object().taker_order_id, 21);
-        assert_eq!(trades[0].object().base_qty, Quantity::from_f64(1.0));
-        assert_eq!(trades[1].object().base_qty, Quantity::from_f64(1.0));
+        assert_eq!(trades[0].object().base_qty, Quantity::ONE);
+        assert_eq!(trades[1].object().base_qty, Quantity::ONE);
 
         let stored_first = repo
             .find_by_id::<SpotTrade>(&trades[0].object().entity_id().to_string())
