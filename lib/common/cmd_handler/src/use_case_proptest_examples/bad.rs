@@ -110,19 +110,26 @@ fn bad_case_strategy() -> impl Strategy<Value = (SubmitCmd, SubmitState)> {
     })
 }
 
-proptest! {
-    #[test]
-    fn property_only_repeats_precomputed_state_answers(
-        (cmd, state) in bad_case_strategy(),
-    ) {
+#[test]
+fn property_only_repeats_precomputed_state_answers(
+) -> Result<(), proptest::test_runner::TestError<(SubmitCmd, SubmitState)>> {
+    proptest::test_runner::TestRunner::default().run(&bad_case_strategy(), |(cmd, state)| {
         let use_case = OrderCheckingEngineUseCase;
 
         if state.accepted {
-            let result = use_case.compute_output_and_events(&cmd, state.clone()).unwrap();
+            let result = match use_case.compute_output_and_events(&cmd, state.clone()) {
+                Ok(result) => result,
+                Err(error) => {
+                    return Err(proptest::test_runner::TestCaseError::fail(format!(
+                        "unexpected submit execution error: {error:?}"
+                    )));
+                }
+            };
             prop_assert_eq!(result.output.accepted, state.accepted);
             prop_assert_eq!(event_accepted(&result.events), Some(state.accepted));
         } else {
             prop_assert_eq!(use_case.validate_against_state(&cmd, &state), Err(SubmitError::Rejected));
         }
-    }
+        Ok(())
+    })
 }

@@ -1,5 +1,4 @@
 use std::fmt;
-use std::sync::Mutex;
 
 use cmd_handler::command_use_case_def2::IssuedByParty;
 use cmd_handler::query_use_case_def::{
@@ -7,6 +6,7 @@ use cmd_handler::query_use_case_def::{
     QueryUseCaseExecutor, QueryUseCaseLatencyMetrics, QueryUseCaseOutbound,
     QueryUseCaseOutboundPhase,
 };
+use parking_lot::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StubQuery {
@@ -133,13 +133,13 @@ struct StubObserver {
 
 impl StubObserver {
     fn observed_count(&self) -> usize {
-        self.observed.lock().unwrap().len()
+        self.observed.lock().len()
     }
 }
 
 impl ObserveQueryUseCaseLatency for StubObserver {
     fn observe_latency(&self, metrics: &QueryUseCaseLatencyMetrics) {
-        self.observed.lock().unwrap().push(*metrics);
+        self.observed.lock().push(*metrics);
     }
 }
 

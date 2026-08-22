@@ -13,6 +13,13 @@ use super::{
 };
 use crate::HandlerLatencyMetrics;
 
+type CommandExecution<T, BusinessError, OutboundError> = Result<
+    (T, HandlerLatencyMetrics),
+    CommandUseCaseExecutionError<BusinessError, OutboundError>,
+>;
+type CommandResult<T, BusinessError, OutboundError> =
+    Result<T, CommandUseCaseExecutionError<BusinessError, OutboundError>>;
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum CommandUseCaseExecutionError<BusinessError, OutboundError>
 where
@@ -99,7 +106,7 @@ impl CommandUseCaseExecutor2 {
         envelope: CommandEnvelope<U::Command>,
         outbound: &OB,
         latency_observer: &O,
-    ) -> Result<Vec<EntityReplayableEvent>, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    ) -> CommandResult<Vec<EntityReplayableEvent>, U::Error, OB::Error>
     where
         U: CommandUseCase2,
         OB: ?Sized
@@ -121,10 +128,7 @@ impl CommandUseCaseExecutor2 {
             trace_command_use_case_started!();
         }
 
-        let execution = (|| -> Result<
-            (Vec<EntityReplayableEvent>, HandlerLatencyMetrics),
-            CommandUseCaseExecutionError<U::Error, OB::Error>,
-        > {
+        let execution = (|| -> CommandExecution<Vec<EntityReplayableEvent>, U::Error, OB::Error> {
                 let ((), pre_check_ns) = trace_phase(
                     "pre_check",
                     "workflow.pre_check_command(&command)",
@@ -243,7 +247,7 @@ impl CommandUseCaseExecutor2 {
         outbound: &OB,
         latency_observer: &O,
         mapper: &M,
-    ) -> Result<M::Reply, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    ) -> CommandResult<M::Reply, U::Error, OB::Error>
     where
         U: CommandUseCase2,
         OB: ?Sized
@@ -309,7 +313,7 @@ impl CommandUseCaseExecutor3 {
         envelope: CommandEnvelope<U::Command>,
         outbound: &OB,
         latency_observer: &O,
-    ) -> Result<UseCaseOutput<U::Output>, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    ) -> CommandResult<UseCaseOutput<U::Output>, U::Error, OB::Error>
     where
         U: CommandUseCase3,
         OB: ?Sized
@@ -331,10 +335,7 @@ impl CommandUseCaseExecutor3 {
             trace_command_use_case_started!();
         }
 
-        let execution = (|| -> Result<
-            (UseCaseOutput<U::Output>, HandlerLatencyMetrics),
-            CommandUseCaseExecutionError<U::Error, OB::Error>,
-        > {
+        let execution = (|| -> CommandExecution<UseCaseOutput<U::Output>, U::Error, OB::Error> {
             let ((), pre_check_ns) = trace_phase(
                 "pre_check",
                 "workflow.pre_check_command(&command)",
@@ -449,7 +450,7 @@ impl CommandUseCaseExecutor3 {
         outbound: &OB,
         latency_observer: &O,
         mapper: &M,
-    ) -> Result<M::Reply, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    ) -> CommandResult<M::Reply, U::Error, OB::Error>
     where
         U: CommandUseCase3,
         OB: ?Sized
@@ -514,7 +515,7 @@ impl CommandUseCaseExecutor4 {
         envelope: CommandEnvelope<U::Command>,
         outbound: &OB,
         latency_observer: &O,
-    ) -> Result<UseCaseChanges<U::Changes>, CommandUseCaseExecutionError<U::Error, OB::Error>>
+    ) -> CommandResult<UseCaseChanges<U::Changes>, U::Error, OB::Error>
     where
         U: CommandUseCase4,
         OB: ?Sized
@@ -536,10 +537,7 @@ impl CommandUseCaseExecutor4 {
             trace_command_use_case_started!();
         }
 
-        let execution = (|| -> Result<
-            (UseCaseChanges<U::Changes>, HandlerLatencyMetrics),
-            CommandUseCaseExecutionError<U::Error, OB::Error>,
-        > {
+        let execution = (|| -> CommandExecution<UseCaseChanges<U::Changes>, U::Error, OB::Error> {
             let ((), pre_check_ns) = trace_phase(
                 "pre_check",
                 "workflow.pre_check_command(&command)",

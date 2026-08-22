@@ -1,5 +1,4 @@
 use std::fmt;
-use std::sync::Mutex;
 
 use cmd_handler::HandlerLatencyMetrics;
 use cmd_handler::command_use_case_def2::{
@@ -8,6 +7,7 @@ use cmd_handler::command_use_case_def2::{
     ObserveHandlerLatency, UseCaseOutput, UseCaseReplyMapper3,
 };
 use common_entity::EntityReplayableEvent;
+use parking_lot::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StubCommand {
@@ -28,17 +28,17 @@ struct StubOutput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StubBusinessError {
-    RejectedInPreCheck,
-    RejectedInValidate,
-    RejectedInCompute,
+    PreCheck,
+    Validate,
+    Compute,
 }
 
 impl fmt::Display for StubBusinessError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RejectedInPreCheck => f.write_str("rejected in pre_check"),
-            Self::RejectedInValidate => f.write_str("rejected in validate"),
-            Self::RejectedInCompute => f.write_str("rejected in compute"),
+            Self::PreCheck => f.write_str("rejected in pre_check"),
+            Self::Validate => f.write_str("rejected in validate"),
+            Self::Compute => f.write_str("rejected in compute"),
         }
     }
 }
@@ -86,7 +86,7 @@ impl CommandUseCase3 for StubUseCase3 {
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
-            return Err(StubBusinessError::RejectedInPreCheck);
+            return Err(StubBusinessError::PreCheck);
         }
         Ok(())
     }
@@ -97,7 +97,7 @@ impl CommandUseCase3 for StubUseCase3 {
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
         if state.reject_in_validate {
-            return Err(StubBusinessError::RejectedInValidate);
+            return Err(StubBusinessError::Validate);
         }
         Ok(())
     }
@@ -108,7 +108,7 @@ impl CommandUseCase3 for StubUseCase3 {
         state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         if state.reject_in_compute {
-            return Err(StubBusinessError::RejectedInCompute);
+            return Err(StubBusinessError::Compute);
         }
         let output = StubOutput { event_count: state.loaded_event_count };
         let events = (0..output.event_count).map(stub_event).collect();
@@ -132,11 +132,11 @@ impl StubOutbound {
     }
 
     fn calls(&self) -> Vec<&'static str> {
-        self.calls.lock().unwrap().clone()
+        self.calls.lock().clone()
     }
 
     fn record(&self, phase: &'static str) {
-        self.calls.lock().unwrap().push(phase);
+        self.calls.lock().push(phase);
     }
 }
 
@@ -147,7 +147,7 @@ impl CommandUseCaseOutbound for StubOutbound {
 
     fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         self.record("load_state");
-        self.state.lock().unwrap().clone()
+        self.state.lock().clone()
     }
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -173,17 +173,17 @@ struct StubObserver {
 
 impl StubObserver {
     fn observed_count(&self) -> usize {
-        self.observed.lock().unwrap().len()
+        self.observed.lock().len()
     }
 
     fn last(&self) -> Option<HandlerLatencyMetrics> {
-        self.observed.lock().unwrap().last().copied()
+        self.observed.lock().last().copied()
     }
 }
 
 impl ObserveHandlerLatency for StubObserver {
     fn observe_latency(&self, metrics: &HandlerLatencyMetrics) {
-        self.observed.lock().unwrap().push(*metrics);
+        self.observed.lock().push(*metrics);
     }
 }
 
@@ -249,7 +249,7 @@ fn execute_rejects_in_pre_check_before_loading_state() {
 
     assert_eq!(
         result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::RejectedInPreCheck))
+        Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck))
     );
     assert!(outbound.calls().is_empty());
     assert_eq!(observer.observed_count(), 0);
@@ -270,7 +270,7 @@ fn execute_stops_after_validate_failure() {
 
     assert_eq!(
         result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::RejectedInValidate))
+        Err(CommandUseCaseExecutionError::Business(StubBusinessError::Validate))
     );
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);
@@ -291,7 +291,7 @@ fn execute_stops_after_compute_failure() {
 
     assert_eq!(
         result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::RejectedInCompute))
+        Err(CommandUseCaseExecutionError::Business(StubBusinessError::Compute))
     );
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);

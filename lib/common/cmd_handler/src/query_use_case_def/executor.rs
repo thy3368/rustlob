@@ -8,6 +8,11 @@ use super::{
 };
 use crate::command_use_case_def2::IssuedByParty;
 
+type QueryExecution<T, BusinessError, OutboundError> = Result<
+    (T, QueryUseCaseLatencyMetrics),
+    QueryUseCaseExecutionError<BusinessError, OutboundError>,
+>;
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum QueryUseCaseExecutionError<BusinessError, OutboundError>
 where
@@ -97,10 +102,7 @@ impl QueryUseCaseExecutor {
             trace_query_use_case_started!();
         }
 
-        let execution = (|| -> Result<
-            (U::View, QueryUseCaseLatencyMetrics),
-            QueryUseCaseExecutionError<U::Error, OB::Error>,
-        > {
+        let execution = (|| -> QueryExecution<U::View, U::Error, OB::Error> {
             let ((), pre_check_ns) = trace_phase(
                 "pre_check",
                 "workflow.pre_check_query(&query)",

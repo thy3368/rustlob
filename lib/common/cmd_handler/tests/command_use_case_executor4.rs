@@ -1,5 +1,4 @@
 use std::fmt;
-use std::sync::Mutex;
 
 use cmd_handler::HandlerLatencyMetrics;
 use cmd_handler::command_use_case_def2::{
@@ -8,6 +7,7 @@ use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ObserveHandlerLatency, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::{Entity, EntityFieldChange, EntityReplayableEvent, FieldDiff};
+use parking_lot::Mutex;
 
 const TEST_ENTITY_TYPE: u8 = 7;
 
@@ -24,17 +24,17 @@ impl IssuedByParty for StubCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StubBusinessError {
-    RejectedInPreCheck,
-    RejectedInValidate,
-    RejectedInCompute,
+    PreCheck,
+    Validate,
+    Compute,
 }
 
 impl fmt::Display for StubBusinessError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RejectedInPreCheck => f.write_str("rejected in pre_check"),
-            Self::RejectedInValidate => f.write_str("rejected in validate"),
-            Self::RejectedInCompute => f.write_str("rejected in compute"),
+            Self::PreCheck => f.write_str("rejected in pre_check"),
+            Self::Validate => f.write_str("rejected in validate"),
+            Self::Compute => f.write_str("rejected in compute"),
         }
     }
 }
@@ -150,7 +150,7 @@ impl CommandUseCase4 for StubCreatedOnlyUseCase {
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
-            return Err(StubBusinessError::RejectedInPreCheck);
+            return Err(StubBusinessError::PreCheck);
         }
         Ok(())
     }
@@ -161,7 +161,7 @@ impl CommandUseCase4 for StubCreatedOnlyUseCase {
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
         if state.reject_in_validate {
-            return Err(StubBusinessError::RejectedInValidate);
+            return Err(StubBusinessError::Validate);
         }
         Ok(())
     }
@@ -172,7 +172,7 @@ impl CommandUseCase4 for StubCreatedOnlyUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         if state.reject_in_compute {
-            return Err(StubBusinessError::RejectedInCompute);
+            return Err(StubBusinessError::Compute);
         }
         Ok(CreatedOnlyChanges {
             created_orders: vec![TestEntity { id: 11, value: "created".to_string(), version: 1 }],
@@ -195,7 +195,7 @@ impl CommandUseCase4 for StubCreateAndUpdateUseCase {
 
     fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
-            return Err(StubBusinessError::RejectedInPreCheck);
+            return Err(StubBusinessError::PreCheck);
         }
         Ok(())
     }
@@ -206,7 +206,7 @@ impl CommandUseCase4 for StubCreateAndUpdateUseCase {
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
         if state.reject_in_validate {
-            return Err(StubBusinessError::RejectedInValidate);
+            return Err(StubBusinessError::Validate);
         }
         Ok(())
     }
@@ -217,7 +217,7 @@ impl CommandUseCase4 for StubCreateAndUpdateUseCase {
         state: Self::GivenState,
     ) -> Result<Self::Changes, Self::Error> {
         if state.reject_in_compute {
-            return Err(StubBusinessError::RejectedInCompute);
+            return Err(StubBusinessError::Compute);
         }
 
         Ok(CreateAndUpdateChanges {
@@ -252,11 +252,11 @@ impl StubOutbound {
     }
 
     fn calls(&self) -> Vec<&'static str> {
-        self.calls.lock().unwrap().clone()
+        self.calls.lock().clone()
     }
 
     fn record(&self, phase: &'static str) {
-        self.calls.lock().unwrap().push(phase);
+        self.calls.lock().push(phase);
     }
 }
 
@@ -267,7 +267,7 @@ impl CommandUseCaseOutbound for StubOutbound {
 
     fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
         self.record("load_state");
-        self.state.lock().unwrap().clone()
+        self.state.lock().clone()
     }
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -293,17 +293,17 @@ struct StubObserver {
 
 impl StubObserver {
     fn observed_count(&self) -> usize {
-        self.observed.lock().unwrap().len()
+        self.observed.lock().len()
     }
 
     fn last(&self) -> Option<HandlerLatencyMetrics> {
-        self.observed.lock().unwrap().last().copied()
+        self.observed.lock().last().copied()
     }
 }
 
 impl ObserveHandlerLatency for StubObserver {
     fn observe_latency(&self, metrics: &HandlerLatencyMetrics) {
-        self.observed.lock().unwrap().push(*metrics);
+        self.observed.lock().push(*metrics);
     }
 }
 
@@ -327,15 +327,15 @@ fn field_value(event: &EntityReplayableEvent, field_name: &str) -> Option<String
 }
 
 #[test]
-fn execute_returns_created_only_changes_and_events_on_happy_path() {
+fn execute_returns_created_only_changes_and_events_on_happy_path(
+) -> Result<(), Box<dyn std::error::Error>> {
     let executor = CommandUseCaseExecutor4;
     let use_case = StubCreatedOnlyUseCase;
     let outbound =
         StubOutbound::with_state(StubState { reject_in_validate: false, reject_in_compute: false });
     let observer = StubObserver::default();
 
-    let result =
-        executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer).unwrap();
+    let result = executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer)?;
 
     assert_eq!(
         result.changes,
@@ -349,18 +349,19 @@ fn execute_returns_created_only_changes_and_events_on_happy_path() {
     assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
     assert_eq!(observer.observed_count(), 1);
     assert_eq!(observer.last().map(|metrics| metrics.domain_event_count), Some(1));
+    Ok(())
 }
 
 #[test]
-fn execute_projects_create_and_update_events_in_stable_order() {
+fn execute_projects_create_and_update_events_in_stable_order(
+) -> Result<(), Box<dyn std::error::Error>> {
     let executor = CommandUseCaseExecutor4;
     let use_case = StubCreateAndUpdateUseCase;
     let outbound =
         StubOutbound::with_state(StubState { reject_in_validate: false, reject_in_compute: false });
     let observer = StubObserver::default();
 
-    let result =
-        executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer).unwrap();
+    let result = executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer)?;
 
     assert_eq!(result.changes.created_orders.len(), 1);
     assert_eq!(result.changes.updated_orders.len(), 2);
@@ -380,6 +381,7 @@ fn execute_projects_create_and_update_events_in_stable_order() {
     assert_eq!(result.events[2].old_version, 4);
     assert_eq!(result.events[2].new_version, 5);
     assert_eq!(field_value(&result.events[2], "value").as_deref(), Some("taker-after"));
+    Ok(())
 }
 
 #[test]
@@ -394,7 +396,7 @@ fn execute_rejects_in_pre_check_before_loading_state() {
 
     assert_eq!(
         result,
-        Err(CommandUseCaseExecutionError::Business(StubBusinessError::RejectedInPreCheck))
+        Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck))
     );
     assert!(outbound.calls().is_empty());
     assert_eq!(observer.observed_count(), 0);
@@ -421,16 +423,17 @@ fn execute_wraps_outbound_load_failure() {
 }
 
 #[test]
-fn updated_entity_pair_projects_before_after_diff() {
+fn updated_entity_pair_projects_before_after_diff() -> Result<(), Box<dyn std::error::Error>> {
     let pair = UpdatedEntityPair {
         before: TestEntity { id: 91, value: "before".to_string(), version: 9 },
         after: TestEntity { id: 91, value: "after".to_string(), version: 10 },
     };
 
-    let event = pair.after.track_update_event_from(&pair.before).unwrap();
+    let event = pair.after.track_update_event_from(&pair.before)?;
 
     assert!(event.is_updated());
     assert_eq!(event.old_version, 9);
     assert_eq!(event.new_version, 10);
     assert_eq!(field_value(&event, "value").as_deref(), Some("after"));
+    Ok(())
 }

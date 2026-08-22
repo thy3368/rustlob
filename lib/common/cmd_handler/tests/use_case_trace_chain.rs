@@ -3,13 +3,14 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
     IssuedByParty,
 };
 use cmd_handler::{EntityReplayableEvent, build_dual_trace_subscriber};
+use parking_lot::{Mutex, MutexGuard};
 use serde_json::{Map, Value};
 use tracing_subscriber::fmt::MakeWriter;
 
@@ -186,7 +187,7 @@ impl<'a> MakeWriter<'a> for SharedFileWriter {
     type Writer = SharedFileGuard<'a>;
 
     fn make_writer(&'a self) -> Self::Writer {
-        SharedFileGuard(self.output.lock().unwrap())
+        SharedFileGuard(self.output.lock())
     }
 }
 
@@ -204,25 +205,21 @@ struct MinimalTraceEvent {
 }
 
 fn workspace_target_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("cmd_handler should live under the workspace root")
-        .join("target")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").join("target")
 }
 
-fn test_log_dir() -> PathBuf {
+fn test_log_dir() -> io::Result<PathBuf> {
     let dir = workspace_target_dir().join("test-logs").join("cmd_handler");
-    fs::create_dir_all(&dir).unwrap();
-    dir
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
 }
 
-fn minimal_log_path(test_name: &str) -> PathBuf {
-    test_log_dir().join(format!("{test_name}.minimal.jsonl"))
+fn minimal_log_path(test_name: &str) -> io::Result<PathBuf> {
+    Ok(test_log_dir()?.join(format!("{test_name}.minimal.jsonl")))
 }
 
-fn full_log_path(test_name: &str) -> PathBuf {
-    test_log_dir().join(format!("{test_name}.full.log"))
+fn full_log_path(test_name: &str) -> io::Result<PathBuf> {
+    Ok(test_log_dir()?.join(format!("{test_name}.full.log")))
 }
 
 fn json_string(value: Option<&Value>) -> Option<String> {
@@ -239,11 +236,13 @@ fn json_object(value: Option<&Value>) -> Map<String, Value> {
     }
 }
 
-fn parse_minimal_trace_event(line: &str) -> MinimalTraceEvent {
-    let value: Value = serde_json::from_str(line).expect("minimal trace line should be valid json");
-    let object = value.as_object().expect("minimal trace line should be a json object");
+fn parse_minimal_trace_event(line: &str) -> Result<MinimalTraceEvent, Box<dyn std::error::Error>> {
+    let value: Value = serde_json::from_str(line)?;
+    let object = value.as_object().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "minimal trace line should be a json object")
+    })?;
 
-    MinimalTraceEvent {
+    Ok(MinimalTraceEvent {
         trace_id: json_string(object.get("trace_id")),
         span_id: json_string(object.get("span_id")).unwrap_or_else(|| "-".to_string()),
         parent_span_id: json_string(object.get("parent_span_id"))
@@ -254,20 +253,20 @@ fn parse_minimal_trace_event(line: &str) -> MinimalTraceEvent {
         status: json_string(object.get("status")),
         request: json_object(object.get("request")),
         response: json_object(object.get("response")),
-    }
+    })
 }
 
-fn read_minimal_trace(path: &Path) -> Vec<MinimalTraceEvent> {
+fn read_minimal_trace(path: &Path) -> Result<Vec<MinimalTraceEvent>, Box<dyn std::error::Error>> {
     fs::read_to_string(path)
-        .unwrap()
+        .map_err(Box::<dyn std::error::Error>::from)?
         .lines()
         .filter(|line| !line.trim().is_empty())
         .map(parse_minimal_trace_event)
         .collect()
 }
 
-fn read_full_trace(path: &Path) -> String {
-    fs::read_to_string(path).unwrap()
+fn read_full_trace(path: &Path) -> io::Result<String> {
+    fs::read_to_string(path)
 }
 
 fn string_value<'a>(object: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
@@ -279,16 +278,18 @@ fn u64_value(object: &Map<String, Value>, key: &str) -> Option<u64> {
 }
 
 #[test]
-fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
+fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs(
+) -> Result<(), Box<dyn std::error::Error>> {
     let test_name = "use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs";
-    let minimal_path = minimal_log_path(test_name);
-    let full_path = full_log_path(test_name);
+    let minimal_path = minimal_log_path(test_name)?;
+    let full_path = full_log_path(test_name)?;
     let subscriber = build_dual_trace_subscriber(
-        SharedFileWriter::new(&minimal_path).unwrap(),
-        SharedFileWriter::new(&full_path).unwrap(),
+        SharedFileWriter::new(&minimal_path)?,
+        SharedFileWriter::new(&full_path)?,
     );
 
-    tracing::subscriber::with_default(subscriber, || {
+    let execution: Result<(), Box<dyn std::error::Error>> =
+        tracing::subscriber::with_default(subscriber, || {
         let executor = CommandUseCaseExecutor2;
         let use_case = StubUseCase;
         let outbound = TracingStubOutbound;
@@ -304,11 +305,13 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
             },
         };
 
-        let events = executor.execute(&use_case, command, &outbound, &()).unwrap();
+        let events = executor.execute(&use_case, command, &outbound, &())?;
         assert_eq!(events.len(), 2);
+        Ok(())
     });
+    execution?;
 
-    let minimal_events = read_minimal_trace(&minimal_path);
+    let minimal_events = read_minimal_trace(&minimal_path)?;
     let use_case_event = minimal_events
         .iter()
         .find(|event| {
@@ -316,7 +319,7 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
                 && event.component.as_deref() == Some("command_use_case_execute")
                 && event.operation.as_deref() == Some("execute")
         })
-        .expect("use case trace event should be present");
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "use case trace event should be present"))?;
 
     assert_eq!(use_case_event.trace_id.as_deref(), Some("trace-chain-001"));
     assert_eq!(use_case_event.status.as_deref(), Some("ok"));
@@ -348,7 +351,7 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
     let load_state_event = outbound_events
         .iter()
         .find(|event| event.operation.as_deref() == Some("load_state"))
-        .unwrap();
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "load_state trace event should be present"))?;
     assert_eq!(string_value(&load_state_event.request, "symbol"), Some("BTCUSDT"));
     assert_eq!(u64_value(&load_state_event.request, "quantity"), Some(2));
     assert_eq!(u64_value(&load_state_event.response, "state"), Some(2));
@@ -357,11 +360,11 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
         let event = outbound_events
             .iter()
             .find(|event| event.operation.as_deref() == Some(operation))
-            .unwrap();
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{operation} trace event should be present")))?;
         assert_eq!(u64_value(&event.request, "event_count"), Some(2));
     }
 
-    let full_trace = read_full_trace(&full_path);
+    let full_trace = read_full_trace(&full_path)?;
     for expected in [
         "command_use_case_execute",
         "TracingStubOutbound",
@@ -375,4 +378,5 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs() {
     ] {
         assert!(full_trace.contains(expected), "expected full trace to contain `{expected}`");
     }
+    Ok(())
 }

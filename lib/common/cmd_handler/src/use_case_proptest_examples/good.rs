@@ -185,11 +185,10 @@ fn deposit_case_strategy() -> impl Strategy<Value = (DepositCmd, DepositState)> 
     )
 }
 
-proptest! {
-    #[test]
-    fn property_executor_respects_business_invariants(
-        (cmd, state) in deposit_case_strategy(),
-    ) {
+#[test]
+fn property_executor_respects_business_invariants(
+) -> Result<(), proptest::test_runner::TestError<(DepositCmd, DepositState)>> {
+    proptest::test_runner::TestRunner::default().run(&deposit_case_strategy(), |(cmd, state)| {
         let executor = CommandUseCaseExecutor3;
         let use_case = DepositUseCase;
         let outbound = CountingOutbound {
@@ -225,7 +224,14 @@ proptest! {
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 0);
         } else {
-            let result = result.unwrap();
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    return Err(proptest::test_runner::TestCaseError::fail(format!(
+                        "unexpected deposit execution error: {error:?}"
+                    )));
+                }
+            };
             let expected_amount = cmd.amount.to_string();
             let output_party_id = result.output.party_id.clone();
             prop_assert_eq!(output_party_id.as_str(), cmd.party_id.as_str());
@@ -237,5 +243,6 @@ proptest! {
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 1);
             prop_assert_eq!(outbound.publish_calls.load(Ordering::Relaxed), 1);
         }
-    }
+        Ok(())
+    })
 }
