@@ -4,11 +4,11 @@ use base_types::actor_x::ActorX;
 use base_types::spot_topic::SpotTopic;
 use diff::ChangeLog;
 use entity_derive::immutable;
-use crate::queue::queue::Queue;
-use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 use serde_json::json;
 
 use crate::push::connection_types::ConnectionRepo;
+use crate::queue::queue::Queue;
+use crate::queue::queue_impl::mpmc_queue::MPMCQueue;
 
 /// 推送服务 - 无状态设计，可安全地在多线程间共享
 ///
