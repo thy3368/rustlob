@@ -6,6 +6,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-immutable_derive = { path = "../immutable_derive" }
+entity_derive = { path = "../entity_derive" }
 serde = { version = "1.0.203", features = ["derive"] }
 zerocopy = { version = "0.8.42", features = ["derive"] }

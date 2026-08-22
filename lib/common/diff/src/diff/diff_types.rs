@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use immutable_derive::immutable;
+use entity_derive::immutable;
 // ============================================================================
 // 错误类型
 // ============================================================================

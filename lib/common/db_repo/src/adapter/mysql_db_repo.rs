@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use diff::{ChangeLog, ChangeType, Entity, FromCreatedEvent};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 use mysql::prelude::*;
 
 use crate::core::db_repo::{CmdRepo, PageRequest, PageResult, QueryRepo, RepoError};

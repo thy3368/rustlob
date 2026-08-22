@@ -10,7 +10,6 @@ base_types = { path = "../base_types" }
 bytecheck = "0.8"
 diff = { path = "../diff" }
 entity_derive = { path = "../entity_derive" }
-immutable_derive = { path = "../immutable_derive" }
 mysql = "24.0"
 rancor = "0.1"
 rdkafka = { version = "0.36", features = ["cmake-build"] }

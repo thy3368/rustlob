@@ -1,5 +1,5 @@
 use diff::{ChangeLog, Entity};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::{CmdRepo, PageRequest, PageResult, QueryRepo, RepoError};
 

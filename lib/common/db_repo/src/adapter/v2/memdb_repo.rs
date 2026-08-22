@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use diff::Entity;
 use diff::diff_types::{ChangeType, DomainEvent};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
 

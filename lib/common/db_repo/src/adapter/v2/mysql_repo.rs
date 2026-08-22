@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use diff::Entity;
 use diff::diff_types::{ChangeType, DomainEvent};
-use immutable_derive::immutable;
+use entity_derive::immutable;
 use sqlx::MySql;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};

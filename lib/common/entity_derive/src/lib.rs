@@ -30,6 +30,66 @@ use syn::{Data, DeriveInput, Fields, Ident, Meta, Token, Type, parse_macro_input
 /// // 自动生成 FromCreatedEvent 的实现，可直接使用：
 /// // let order = Order::from_created_event(&event)?;
 /// ```
+#[proc_macro_attribute]
+pub fn immutable(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => {
+                return syn::Error::new_spanned(name, "只支持具名字段的结构体")
+                    .to_compile_error()
+                    .into();
+            }
+        },
+        _ => return syn::Error::new_spanned(name, "只支持结构体").to_compile_error().into(),
+    };
+
+    let field_defs = fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field.ident.as_ref()?;
+            let field_ty = &field.ty;
+            Some((field_name, field_ty))
+        })
+        .collect::<Vec<_>>();
+
+    let constructor_args = field_defs.iter().map(|(field_name, field_ty)| {
+        quote! { #field_name: #field_ty }
+    });
+
+    let constructor_fields = field_defs.iter().map(|(field_name, _)| {
+        quote! { #field_name }
+    });
+
+    let getters = field_defs.iter().map(|(field_name, field_ty)| {
+        quote! {
+            #[inline]
+            pub const fn #field_name(&self) -> &#field_ty {
+                &self.#field_name
+            }
+        }
+    });
+
+    let expanded = quote! {
+        #input
+
+        impl #impl_generics #name #ty_generics #where_clause {
+            #[inline]
+            pub fn new(#(#constructor_args),*) -> Self {
+                Self { #(#constructor_fields),* }
+            }
+
+            #(#getters)*
+        }
+    };
+
+    expanded.into()
+}
+
 #[proc_macro_derive(Entity, attributes(entity, diff, replay, created))]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

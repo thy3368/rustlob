@@ -1,4 +1,4 @@
-use immutable_derive::immutable;
+use entity_derive::immutable;
 
 use crate::{Timestamp, UserId};
 

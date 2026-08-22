@@ -133,8 +133,3 @@ fn main() {
 ## 许可证
 
 MIT License
-
-## 参考
-
-- [SINGLE_THREAD.md](../cache_analyzer_derive/SINGLE_THREAD.md) - 详细使用文档
-- [thread.md](../cache_analyzer_derive/thread.md) - 实现参考
