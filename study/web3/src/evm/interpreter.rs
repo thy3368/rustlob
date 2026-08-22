@@ -421,7 +421,7 @@ impl Interpreter {
 
             opcode if opcode.is_push() => {
                 let Some(push_bytes) = opcode.push_bytes() else {
-                    return Err(ExecError::InvalidOpcode(opcode as u8));
+                    return Err(ExecError::InvalidOpcode);
                 };
                 let push_bytes = push_bytes as usize;
                 let mut value = [0u8; 32];
