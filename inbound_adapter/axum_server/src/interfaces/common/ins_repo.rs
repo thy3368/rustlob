@@ -16,12 +16,12 @@ use push::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
     k_line_service::KLineBehaviorV2Imp,
 };
-use push::queue::queue::Queue;
-use push::queue::queue_impl::kafka_queue::KafkaConfig;
-use push::queue::queue_impl::mpmc_queue::MPMCQueue;
 use push::push::connection_types::ConnectionRepo;
 use push::push::push_service::PushBehaviorV2Imp;
 use push::push::subscription_service::SubscriptionService;
+use push::queue::queue::Queue;
+use push::queue::queue_impl::kafka_queue::KafkaConfig;
+use push::queue::queue_impl::mpmc_queue::MPMCQueue;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior::SpotTradeCmdOrQuery;
 use spot_behavior::proc::v2::processor::kafka::event_publisher::{EventPublisher, PublishError};
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
