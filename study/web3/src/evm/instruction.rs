@@ -440,9 +440,9 @@ impl OpCode {
             0x5a => Some(OpCode::GAS),
             0x5b => Some(OpCode::JUMPDEST),
 
-            0x60..=0x7f => Some(unsafe { std::mem::transmute(byte) }),
-            0x80..=0x8f => Some(unsafe { std::mem::transmute(byte) }),
-            0x90..=0x9f => Some(unsafe { std::mem::transmute(byte) }),
+            0x60..=0x7f => Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) }),
+            0x80..=0x8f => Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) }),
+            0x90..=0x9f => Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) }),
 
             0xa0 => Some(OpCode::LOG0),
             0xa1 => Some(OpCode::LOG1),

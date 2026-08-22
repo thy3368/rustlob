@@ -359,13 +359,13 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
         let tx = db.read_transaction(index)?;
         let receipt = db.read_receipt(index)?;
 
-        if tx.is_some() && receipt.is_some() {
+        if let (Some(tx), Some(receipt)) = (tx, receipt) {
             read_count += 1;
             println!(
                 "      ✓ 索引 {}: 交易 {} bytes, 收据 {} bytes",
                 index,
-                tx.unwrap().len(),
-                receipt.unwrap().len()
+                tx.len(),
+                receipt.len()
             );
         }
     }
@@ -514,9 +514,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_block_database() {
-        let temp_dir = tempdir().unwrap();
-        let mut db = BlockDatabase::new(temp_dir.path()).unwrap();
+    fn test_block_database() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
+        let mut db = BlockDatabase::new(temp_dir.path())?;
 
         // 创建测试区块
         let header = BlockHeader::new(1, [0u8; 32]);
@@ -535,16 +535,17 @@ mod tests {
         block.add_transaction(tx, receipt);
 
         // 写入区块
-        let result = db.write_block(&block).unwrap();
+        let result = db.write_block(&block)?;
         assert_eq!(result.block_number, 1);
         assert_eq!(result.tx_count, 1);
 
         // 读取交易
-        let tx_data = db.read_transaction(0).unwrap();
+        let tx_data = db.read_transaction(0)?;
         assert!(tx_data.is_some());
 
         // 读取收据
-        let receipt_data = db.read_receipt(0).unwrap();
+        let receipt_data = db.read_receipt(0)?;
         assert!(receipt_data.is_some());
+        Ok(())
     }
 }

@@ -37,8 +37,11 @@ impl Message<Transcode> for VideoProcessor {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tokio::runtime::Runtime::new()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建一组Actor
     let worker_count = 4;
     let mut workers = Vec::with_capacity(worker_count);

@@ -6,12 +6,13 @@ pub const SETTLEMENT_ESCROW_BYTECODE: &str = "6080604052348015600f57600080fd5b50
 
 pub const SETTLEMENT_ESCROW_SOLIDITY_SOURCE: &str = include_str!("contracts/SettlementEscrow.sol");
 
-pub fn get_counter_bytecode() -> Vec<u8> {
-    hex::decode(COUNTER_BYTECODE).expect("invalid counter bytecode")
+pub fn get_counter_bytecode() -> Result<Vec<u8>, String> {
+    hex::decode(COUNTER_BYTECODE).map_err(|err| format!("invalid counter bytecode: {err}"))
 }
 
-pub fn get_settlement_escrow_bytecode() -> Vec<u8> {
-    hex::decode(SETTLEMENT_ESCROW_BYTECODE).expect("invalid settlement escrow bytecode")
+pub fn get_settlement_escrow_bytecode() -> Result<Vec<u8>, String> {
+    hex::decode(SETTLEMENT_ESCROW_BYTECODE)
+        .map_err(|err| format!("invalid settlement escrow bytecode: {err}"))
 }
 
 pub mod selectors {
@@ -69,38 +70,34 @@ fn encode_u256_word(value: u64) -> [u8; 32] {
     word
 }
 
-pub fn encode_create_settlement(settlement_id: &str, beneficiary: Address, amount: u64) -> Vec<u8> {
+pub fn encode_create_settlement(
+    settlement_id: &str,
+    beneficiary: Address,
+    amount: u64,
+) -> Result<Vec<u8>, String> {
     let mut calldata = selectors::CREATE_SETTLEMENT.to_vec();
-    calldata.extend_from_slice(
-        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
-    );
+    calldata.extend_from_slice(settlement_id_word(settlement_id)?.as_slice());
     calldata.extend_from_slice(&encode_address_word(beneficiary));
     calldata.extend_from_slice(&encode_u256_word(amount));
-    calldata
+    Ok(calldata)
 }
 
-pub fn encode_get_amount(settlement_id: &str) -> Vec<u8> {
+pub fn encode_get_amount(settlement_id: &str) -> Result<Vec<u8>, String> {
     let mut calldata = selectors::GET_AMOUNT.to_vec();
-    calldata.extend_from_slice(
-        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
-    );
-    calldata
+    calldata.extend_from_slice(settlement_id_word(settlement_id)?.as_slice());
+    Ok(calldata)
 }
 
-pub fn encode_release_settlement(settlement_id: &str) -> Vec<u8> {
+pub fn encode_release_settlement(settlement_id: &str) -> Result<Vec<u8>, String> {
     let mut calldata = selectors::RELEASE_SETTLEMENT.to_vec();
-    calldata.extend_from_slice(
-        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
-    );
-    calldata
+    calldata.extend_from_slice(settlement_id_word(settlement_id)?.as_slice());
+    Ok(calldata)
 }
 
-pub fn encode_is_released(settlement_id: &str) -> Vec<u8> {
+pub fn encode_is_released(settlement_id: &str) -> Result<Vec<u8>, String> {
     let mut calldata = selectors::IS_RELEASED.to_vec();
-    calldata.extend_from_slice(
-        settlement_id_word(settlement_id).expect("invalid settlement id").as_slice(),
-    );
-    calldata
+    calldata.extend_from_slice(settlement_id_word(settlement_id)?.as_slice());
+    Ok(calldata)
 }
 
 pub fn decode_u64_word(bytes: &[u8]) -> Result<u64, String> {
@@ -127,9 +124,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn settlement_bytecode_decodes() {
-        let bytecode = get_settlement_escrow_bytecode();
+    fn settlement_bytecode_decodes() -> Result<(), String> {
+        let bytecode = get_settlement_escrow_bytecode()?;
         assert!(!bytecode.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -149,13 +147,14 @@ mod tests {
     }
 
     #[test]
-    fn create_settlement_calldata_has_selector_and_args() {
+    fn create_settlement_calldata_has_selector_and_args() -> Result<(), String> {
         let calldata = encode_create_settlement(
             &settlement_id_from_seed("req-1"),
             Address::repeat_byte(0x11),
             7,
-        );
+        )?;
         assert_eq!(&calldata[..4], selectors::CREATE_SETTLEMENT.as_slice());
         assert_eq!(calldata.len(), 4 + 32 + 32 + 32);
+        Ok(())
     }
 }

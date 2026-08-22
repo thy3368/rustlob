@@ -103,7 +103,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                     let mut children = [None; 16];
 
                     if !remaining_path.is_empty() {
-                        let idx = remaining_path.at(0).unwrap() as usize;
+                        let idx = remaining_path.at(0).ok_or(MptError::InvalidPath)? as usize;
                         let child_path = remaining_path.slice(1, remaining_path.len());
                         let child_node = Node::leaf(child_path.nibbles().to_vec(), value);
                         let child_hash = Self::hash_node(&child_node);
@@ -128,7 +128,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
 
                     // 添加新叶子节点
                     if common_len < path.len() {
-                        let idx = path.at(common_len).unwrap() as usize;
+                        let idx = path.at(common_len).ok_or(MptError::InvalidPath)? as usize;
                         let remaining_path = path.slice(common_len + 1, path.len());
                         let new_leaf = Node::leaf(remaining_path.nibbles().to_vec(), value);
                         let new_leaf_hash = Self::hash_node(&new_leaf);
@@ -181,7 +181,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
 
                     // 新值
                     if common_len < path.len() {
-                        let idx = path.at(common_len).unwrap() as usize;
+                        let idx = path.at(common_len).ok_or(MptError::InvalidPath)? as usize;
                         let remaining_path = path.slice(common_len + 1, path.len());
                         let new_leaf = Node::leaf(remaining_path.nibbles().to_vec(), value);
                         let new_leaf_hash = Self::hash_node(&new_leaf);
@@ -205,10 +205,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
             Node::Branch { mut children, value: branch_value } => {
                 if path.is_empty() {
                     // 路径结束 -> 更新分支节点的值
-                    Node::branch(children, Some(value))
+                    Node::branch(*children, Some(value))
                 } else {
                     // 递归到对应的子节点
-                    let idx = path.at(0).unwrap() as usize;
+                    let idx = path.at(0).ok_or(MptError::InvalidPath)? as usize;
                     let remaining_path = path.slice(1, path.len());
 
                     let child_hash = children[idx].unwrap_or([0u8; 32]);
@@ -216,7 +216,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                         self.insert_recursive(child_hash, &remaining_path, value)?;
                     children[idx] = Some(new_child_hash);
 
-                    Node::branch(children, branch_value)
+                    Node::branch(*children, branch_value)
                 }
             }
         };
@@ -259,7 +259,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 if path.is_empty() {
                     Ok(value)
                 } else {
-                    let idx = path.at(0).unwrap() as usize;
+                    let idx = path.at(0).ok_or(MptError::InvalidPath)? as usize;
                     if let Some(child_hash) = children[idx] {
                         let remaining = path.slice(1, path.len());
                         self.get_recursive(child_hash, &remaining)
@@ -342,7 +342,7 @@ impl<S: Storage> MerklePatriciaTrie<S> {
             }
             Node::Branch { children, .. } => {
                 if !path.is_empty() {
-                    let idx = path.at(0).unwrap() as usize;
+                    let idx = path.at(0).ok_or(MptError::InvalidPath)? as usize;
                     if let Some(child_hash) = children[idx] {
                         let remaining = path.slice(1, path.len());
                         let child_nodes = self.collect_proof_nodes(child_hash, &remaining)?;
@@ -413,9 +413,9 @@ impl<S: Storage> MptUseCases for MerklePatriciaTrie<S> {
     }
 }
 
-impl MerklePatriciaTrie<InMemoryStorage> {
+impl Default for MerklePatriciaTrie<InMemoryStorage> {
     /// 创建默认的内存 MPT
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self::new(InMemoryStorage::new())
     }
 }
@@ -425,48 +425,51 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mpt_insert_and_get() {
+    fn test_mpt_insert_and_get() -> Result<(), Box<dyn std::error::Error>> {
         let mut trie = MerklePatriciaTrie::default();
 
         // 插入数据
-        trie.insert(b"key1", b"value1").unwrap();
-        trie.insert(b"key2", b"value2").unwrap();
+        trie.insert(b"key1", b"value1")?;
+        trie.insert(b"key2", b"value2")?;
 
         // 查询数据
-        assert_eq!(trie.get(b"key1").unwrap(), Some(b"value1".to_vec()));
-        assert_eq!(trie.get(b"key2").unwrap(), Some(b"value2".to_vec()));
-        assert_eq!(trie.get(b"key3").unwrap(), None);
+        assert_eq!(trie.get(b"key1")?, Some(b"value1".to_vec()));
+        assert_eq!(trie.get(b"key2")?, Some(b"value2".to_vec()));
+        assert_eq!(trie.get(b"key3")?, None);
 
         // 检查根哈希不为空
         assert_ne!(trie.root_hash(), [0u8; 32]);
+        Ok(())
     }
 
     #[test]
-    fn test_mpt_update() {
+    fn test_mpt_update() -> Result<(), Box<dyn std::error::Error>> {
         let mut trie = MerklePatriciaTrie::default();
 
-        trie.insert(b"key", b"value1").unwrap();
-        assert_eq!(trie.get(b"key").unwrap(), Some(b"value1".to_vec()));
+        trie.insert(b"key", b"value1")?;
+        assert_eq!(trie.get(b"key")?, Some(b"value1".to_vec()));
 
-        trie.insert(b"key", b"value2").unwrap();
-        assert_eq!(trie.get(b"key").unwrap(), Some(b"value2".to_vec()));
+        trie.insert(b"key", b"value2")?;
+        assert_eq!(trie.get(b"key")?, Some(b"value2".to_vec()));
+        Ok(())
     }
 
     #[test]
-    fn test_mpt_snapshot() {
+    fn test_mpt_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let mut trie = MerklePatriciaTrie::default();
 
-        trie.insert(b"key1", b"value1").unwrap();
-        trie.insert(b"key2", b"value2").unwrap();
+        trie.insert(b"key1", b"value1")?;
+        trie.insert(b"key2", b"value2")?;
 
-        let snapshot = trie.snapshot().unwrap();
+        let snapshot = trie.snapshot()?;
         assert_eq!(snapshot.len(), 2);
 
-        trie.clear().unwrap();
+        trie.clear()?;
         assert_eq!(trie.len(), 0);
 
-        trie.restore(&snapshot).unwrap();
+        trie.restore(&snapshot)?;
         assert_eq!(trie.len(), 2);
-        assert_eq!(trie.get(b"key1").unwrap(), Some(b"value1".to_vec()));
+        assert_eq!(trie.get(b"key1")?, Some(b"value1".to_vec()));
+        Ok(())
     }
 }

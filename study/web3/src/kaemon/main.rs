@@ -7,8 +7,11 @@ use libp2p::{Multiaddr, SwarmBuilder, noise, tcp, yamux};
 use tokio::io::{self, AsyncBufReadExt};
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
+    tokio::runtime::Runtime::new()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn Error>> {
     // 初始化日志
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("kaemon=info".parse()?))
@@ -45,15 +48,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
     loop {
-        tokio::select! {
-            line = stdin.next_line() => {
-                if let Some(line) = line? {
-                    handle_command(&mut swarm, &line);
-                }
+        if let Ok(line) = tokio::time::timeout(Duration::from_millis(50), stdin.next_line()).await {
+            if let Some(line) = line? {
+                handle_command(&mut swarm, &line);
             }
-            event = swarm.select_next_some() => {
-                handle_event(event);
-            }
+        }
+
+        if let Ok(event) =
+            tokio::time::timeout(Duration::from_millis(50), swarm.select_next_some()).await
+        {
+            handle_event(event);
         }
     }
 }

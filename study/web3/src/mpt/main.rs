@@ -1,11 +1,11 @@
-mod block_data;
-mod block_persistence_example;
-mod entities;
-mod example;
-mod persistent_storage;
-mod storage;
-mod trie;
-mod usecases;
+pub mod block_data;
+pub mod block_persistence_example;
+pub mod entities;
+pub mod example;
+pub mod persistent_storage;
+pub mod storage;
+pub mod trie;
+pub mod usecases;
 
 use block_persistence_example::run_block_persistence_example;
 use example::{

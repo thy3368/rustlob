@@ -420,7 +420,10 @@ impl Interpreter {
             OpCode::JUMPDEST => Ok(ExecutionResult::Continue),
 
             opcode if opcode.is_push() => {
-                let push_bytes = opcode.push_bytes().unwrap() as usize;
+                let Some(push_bytes) = opcode.push_bytes() else {
+                    return Err(ExecError::InvalidOpcode(opcode as u8));
+                };
+                let push_bytes = push_bytes as usize;
                 let mut value = [0u8; 32];
 
                 let start = self.context.pc + 1;
@@ -592,7 +595,7 @@ fn word_div(a: &Word, b: &Word) -> Word {
     let a_val = word_to_usize(a) as u64;
     let b_val = word_to_usize(b) as u64;
 
-    if b_val == 0 { [0u8; 32] } else { word_from_u64(a_val / b_val) }
+    a_val.checked_div(b_val).map_or([0u8; 32], word_from_u64)
 }
 
 fn word_lt(a: &Word, b: &Word) -> bool {
@@ -612,32 +615,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stack_operations() {
+    fn test_stack_operations() -> Result<(), ExecError> {
         let mut stack = Stack::new();
 
         let value = word_from_u64(42);
-        stack.push(value).unwrap();
+        stack.push(value)?;
         assert_eq!(stack.depth(), 1);
 
-        let popped = stack.pop().unwrap();
+        let popped = stack.pop()?;
         assert_eq!(popped, value);
         assert_eq!(stack.depth(), 0);
 
         assert_eq!(stack.pop(), Err(ExecError::StackUnderflow));
+        Ok(())
     }
 
     #[test]
-    fn test_memory_operations() {
+    fn test_memory_operations() -> Result<(), ExecError> {
         let mut memory = Memory::new();
 
         let data = vec![1, 2, 3, 4, 5];
-        memory.write(0, &data).unwrap();
+        memory.write(0, &data)?;
 
-        let read_data = memory.read(0, 5).unwrap();
+        let read_data = memory.read(0, 5)?;
         assert_eq!(read_data, data);
 
-        memory.write(100, &data).unwrap();
+        memory.write(100, &data)?;
         assert!(memory.size() >= 105);
+        Ok(())
     }
 
     #[test]
@@ -658,26 +663,28 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_add() {
+    fn test_simple_add() -> Result<(), ExecError> {
         // PUSH1 5, PUSH1 3, ADD, STOP
         let code = vec![0x60, 0x05, 0x60, 0x03, 0x01, 0x00];
         let mut interpreter = Interpreter::new(code, 1000);
 
-        let _ = interpreter.execute();
+        assert_eq!(interpreter.execute(), Err(ExecError::Stop));
 
-        let result = interpreter.stack.pop().unwrap();
+        let result = interpreter.stack.pop()?;
         assert_eq!(result, word_from_u64(8));
+        Ok(())
     }
 
     #[test]
-    fn test_jump() {
+    fn test_jump() -> Result<(), ExecError> {
         // PUSH1 6, JUMP, INVALID, JUMPDEST, PUSH1 42, STOP
         let code = vec![0x60, 0x06, 0x56, 0xfe, 0xfe, 0xfe, 0x5b, 0x60, 0x2a, 0x00];
         let mut interpreter = Interpreter::new(code, 1000);
 
-        let _ = interpreter.execute();
+        assert_eq!(interpreter.execute(), Err(ExecError::Stop));
 
-        let result = interpreter.stack.pop().unwrap();
+        let result = interpreter.stack.pop()?;
         assert_eq!(result, word_from_u64(42));
+        Ok(())
     }
 }

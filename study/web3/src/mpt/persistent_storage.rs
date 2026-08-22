@@ -177,12 +177,12 @@ impl PersistentStorage {
                 // Branch
                 let mut children = [None; 16];
 
-                for i in 0..16 {
+                for child in &mut children {
                     if data[offset] == 1 {
                         offset += 1;
                         let mut hash = [0u8; 32];
                         hash.copy_from_slice(&data[offset..offset + 32]);
-                        children[i] = Some(hash);
+                        *child = Some(hash);
                         offset += 32;
                     } else {
                         offset += 1;
@@ -204,7 +204,7 @@ impl PersistentStorage {
                     None
                 };
 
-                Ok(Node::Branch { children, value })
+                Ok(Node::branch(children, value))
             }
             _ => Err(MptError::DecodingError(format!("Unknown node type: {}", node_type))),
         }
@@ -402,58 +402,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_persistent_storage_basic() {
-        let temp_dir = tempdir().unwrap();
-        let mut storage = PersistentStorage::new(temp_dir.path(), 100).unwrap();
+    fn test_persistent_storage_basic() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
+        let mut storage = PersistentStorage::new(temp_dir.path(), 100)?;
 
         // 创建测试节点
         let node = Node::leaf(vec![1, 2, 3], vec![4, 5, 6]);
         let hash = [1u8; 32];
 
         // 存储节点
-        storage.put(&hash, &node).unwrap();
+        storage.put(&hash, &node)?;
 
         // 读取节点
-        let retrieved = storage.get(&hash).unwrap();
+        let retrieved = storage.get(&hash)?;
         assert_eq!(retrieved, Some(node));
+        Ok(())
     }
 
     #[test]
-    fn test_persistent_storage_persistence() {
-        let temp_dir = tempdir().unwrap();
+    fn test_persistent_storage_persistence() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
 
         let hash = [2u8; 32];
         let node = Node::leaf(vec![7, 8, 9], vec![10, 11, 12]);
 
         // 第一个存储实例
         {
-            let mut storage = PersistentStorage::new(temp_dir.path(), 100).unwrap();
-            storage.put(&hash, &node).unwrap();
+            let mut storage = PersistentStorage::new(temp_dir.path(), 100)?;
+            storage.put(&hash, &node)?;
         }
 
         // 第二个存储实例（应该能读取到数据）
         {
-            let storage = PersistentStorage::new(temp_dir.path(), 100).unwrap();
-            let retrieved = storage.get(&hash).unwrap();
+            let storage = PersistentStorage::new(temp_dir.path(), 100)?;
+            let retrieved = storage.get(&hash)?;
             assert_eq!(retrieved, Some(node));
         }
+        Ok(())
     }
 
     #[test]
-    fn test_storage_stats() {
-        let temp_dir = tempdir().unwrap();
-        let mut storage = PersistentStorage::new(temp_dir.path(), 100).unwrap();
+    fn test_storage_stats() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
+        let mut storage = PersistentStorage::new(temp_dir.path(), 100)?;
 
         // 插入一些节点
         for i in 0..10 {
             let mut hash = [0u8; 32];
             hash[0] = i;
             let node = Node::leaf(vec![i], vec![i, i + 1]);
-            storage.put(&hash, &node).unwrap();
+            storage.put(&hash, &node)?;
         }
 
         let stats = storage.stats();
         assert_eq!(stats.total_nodes, 10);
         assert!(stats.disk_usage_bytes > 0);
+        Ok(())
     }
 }

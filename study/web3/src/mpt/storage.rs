@@ -262,30 +262,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_in_memory_storage() {
+    fn test_in_memory_storage() -> Result<(), Box<dyn std::error::Error>> {
         let mut storage = InMemoryStorage::new();
 
         let hash = [1u8; 32];
         let node = Node::leaf(vec![1, 2, 3], vec![4, 5, 6]);
 
         // 测试存储
-        storage.put(&hash, &node).unwrap();
+        storage.put(&hash, &node)?;
         assert_eq!(storage.len(), 1);
         assert!(!storage.is_empty());
 
         // 测试获取
-        let retrieved = storage.get(&hash).unwrap();
+        let retrieved = storage.get(&hash)?;
         assert_eq!(retrieved, Some(node.clone()));
 
         // 测试删除
-        let deleted = storage.delete(&hash).unwrap();
+        let deleted = storage.delete(&hash)?;
         assert!(deleted);
         assert_eq!(storage.len(), 0);
         assert!(storage.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_cached_storage() {
+    fn test_cached_storage() -> Result<(), Box<dyn std::error::Error>> {
         let backend = InMemoryStorage::new();
         let mut storage = CachedStorage::new(backend, 10);
 
@@ -293,10 +294,10 @@ mod tests {
         let node = Node::leaf(vec![1, 2], vec![3, 4]);
 
         // 测试缓存写入
-        storage.put(&hash, &node).unwrap();
+        storage.put(&hash, &node)?;
 
         // 测试缓存读取
-        let retrieved = storage.get(&hash).unwrap();
+        let retrieved = storage.get(&hash)?;
         assert_eq!(retrieved, Some(node));
 
         // 检查缓存统计
@@ -304,5 +305,6 @@ mod tests {
         assert_eq!(stats.size, 1);
         assert_eq!(stats.capacity, 10);
         assert!(stats.usage_ratio() > 0.0 && stats.usage_ratio() < 1.0);
+        Ok(())
     }
 }

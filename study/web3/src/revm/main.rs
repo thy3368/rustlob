@@ -1,6 +1,6 @@
-mod contracts;
-mod example;
-mod executor;
+pub mod contracts;
+pub mod example;
+pub mod executor;
 
 use example::run_counter_example;
 

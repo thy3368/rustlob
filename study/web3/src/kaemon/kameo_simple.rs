@@ -71,8 +71,11 @@ impl Message<Reset> for Counter {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tokio::runtime::Runtime::new()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Kameo Counter Example ===\n");
 
     // Spawn the counter actor

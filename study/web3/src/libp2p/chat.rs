@@ -145,8 +145,11 @@ async fn create_swarm() -> Result<libp2p::Swarm<ChatBehaviour>, Box<dyn Error>> 
 }
 
 /// # 第三步：主函数 - 启动聊天程序
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
+    tokio::runtime::Runtime::new()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn Error>> {
     // 3.1 初始化日志系统
     // 过滤掉 mDNS 的 ERROR 级别日志，减少虚拟接口的噪音
     tracing_subscriber::fmt()
@@ -207,119 +210,67 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //
     // 这是程序的核心：处理网络事件和用户输入
     loop {
-        tokio::select! {
-            // 处理 Swarm 网络事件
-            event = swarm.select_next_some() => {
-                match event {
-                    // 处理 Gossipsub 消息事件
-                    SwarmEvent::Behaviour(ChatBehaviourEvent::Gossipsub(
-                        gossipsub::Event::Message {
-                            propagation_source: peer_id,
-                            message_id: _,
-                            message,
-                        },
-                    )) => {
-                        // 收到聊天消息
-                        let msg_str = String::from_utf8_lossy(&message.data);
-                        let sender = format!("{:.8}", peer_id.to_string());
+        if let Ok(event) =
+            tokio::time::timeout(Duration::from_millis(50), swarm.select_next_some()).await
+        {
+            match event {
+                SwarmEvent::Behaviour(ChatBehaviourEvent::Gossipsub(
+                    gossipsub::Event::Message {
+                        propagation_source: peer_id,
+                        message_id: _,
+                        message,
+                    },
+                )) => {
+                    let msg_str = String::from_utf8_lossy(&message.data);
+                    let sender = format!("{:.8}", peer_id.to_string());
 
-                        println!("\n💬 [{}] {}", sender, msg_str);
-                        println!("════════════════════════════════════════");
-                    }
-
-                    // 处理 mDNS 发现事件
-                    SwarmEvent::Behaviour(ChatBehaviourEvent::Mdns(
-                        mdns::Event::Discovered(list),
-                    )) => {
-                        // 发现新节点
-                        for (peer_id, multiaddr) in list {
-                            info!("🔍 发现新节点: {} at {}", peer_id, multiaddr);
-
-                            // 将发现的节点添加到 Gossipsub 的已知节点列表
-                            swarm
-                                .behaviour_mut()
-                                .gossipsub
-                                .add_explicit_peer(&peer_id);
-
-                            println!("✅ 新成员加入聊天室: {:.8}", peer_id.to_string());
-                        }
-                    }
-
-                    // 处理 mDNS 过期事件
-                    SwarmEvent::Behaviour(ChatBehaviourEvent::Mdns(
-                        mdns::Event::Expired(list),
-                    )) => {
-                        // 节点离线
-                        for (peer_id, _multiaddr) in list {
-                            info!("👋 节点离线: {}", peer_id);
-
-                            swarm
-                                .behaviour_mut()
-                                .gossipsub
-                                .remove_explicit_peer(&peer_id);
-
-                            println!("❌ 成员离开聊天室: {:.8}", peer_id.to_string());
-                        }
-                    }
-
-                    // 处理 Identify 事件
-                    SwarmEvent::Behaviour(ChatBehaviourEvent::Identify(
-                        identify::Event::Received { peer_id, info, .. },
-                    )) => {
-                        info!(
-                            "📋 收到节点信息: {} (协议版本: {})",
-                            peer_id, info.protocol_version
-                        );
-                    }
-
-                    // 新的监听地址
-                    SwarmEvent::NewListenAddr { address, .. } => {
-                        info!("🎧 监听地址: {}", address);
-                        println!("🌐 节点地址: {}/p2p/{}", address, swarm.local_peer_id());
-                    }
-
-                    // 建立连接
-                    SwarmEvent::ConnectionEstablished {
-                        peer_id,
-                        endpoint,
-                        ..
-                    } => {
-                        info!(
-                            "🔗 建立连接: {} ({})",
-                            peer_id,
-                            endpoint.get_remote_address()
-                        );
-                    }
-
-                    // 连接关闭
-                    SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                        warn!("🔌 连接关闭: {} (原因: {:?})", peer_id, cause);
-                    }
-
-                    // 其他事件
-                    _ => {}
+                    println!("\n💬 [{}] {}", sender, msg_str);
+                    println!("════════════════════════════════════════");
                 }
+                SwarmEvent::Behaviour(ChatBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
+                    for (peer_id, multiaddr) in list {
+                        info!("🔍 发现新节点: {} at {}", peer_id, multiaddr);
+                        swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                        println!("✅ 新成员加入聊天室: {:.8}", peer_id.to_string());
+                    }
+                }
+                SwarmEvent::Behaviour(ChatBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
+                    for (peer_id, _multiaddr) in list {
+                        info!("👋 节点离线: {}", peer_id);
+                        swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
+                        println!("❌ 成员离开聊天室: {:.8}", peer_id.to_string());
+                    }
+                }
+                SwarmEvent::Behaviour(ChatBehaviourEvent::Identify(
+                    identify::Event::Received { peer_id, info, .. },
+                )) => {
+                    info!("📋 收到节点信息: {} (协议版本: {})", peer_id, info.protocol_version);
+                }
+                SwarmEvent::NewListenAddr { address, .. } => {
+                    info!("🎧 监听地址: {}", address);
+                    println!("🌐 节点地址: {}/p2p/{}", address, swarm.local_peer_id());
+                }
+                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                    info!("🔗 建立连接: {} ({})", peer_id, endpoint.get_remote_address());
+                }
+                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    warn!("🔌 连接关闭: {} (原因: {:?})", peer_id, cause);
+                }
+                _ => {}
+            }
+        }
+
+        if let Ok(Some(line)) = tokio::time::timeout(Duration::from_millis(50), rx.recv()).await {
+            if line.starts_with("/quit") {
+                info!("👋 退出程序");
+                break;
             }
 
-            // 处理用户输入
-            Some(line) = rx.recv() => {
-                // 检查退出命令
-                if line.starts_with("/quit") {
-                    info!("👋 退出程序");
-                    break;
-                }
-
-                // 发布消息到聊天室
-                if let Err(e) = swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .publish(topic.clone(), line.as_bytes())
-                {
-                    error!("❌ 发送消息失败: {:?}", e);
-                } else {
-                    // 显示自己发送的消息
-                    println!("📤 [我] {}", line);
-                }
+            if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic.clone(), line.as_bytes())
+            {
+                error!("❌ 发送消息失败: {:?}", e);
+            } else {
+                println!("📤 [我] {}", line);
             }
         }
     }

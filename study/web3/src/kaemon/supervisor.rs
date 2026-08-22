@@ -137,8 +137,11 @@ impl ImageProcessingSupervisor {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tokio::runtime::Runtime::new()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建 Supervisor
     let mut supervisor = ImageProcessingSupervisor::new(3);
     supervisor.initialize_pool();

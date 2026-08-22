@@ -24,7 +24,7 @@ pub fn run_counter_example() -> Result<(), String> {
 
     // 2. 部署 Counter 合约
     println!("📝 步骤 2: 部署 Counter 合约");
-    let bytecode = contracts::get_counter_bytecode();
+    let bytecode = contracts::get_counter_bytecode()?;
     println!("   字节码长度: {} bytes", bytecode.len());
 
     let contract_address = executor.deploy_contract("Counter", bytecode)?;

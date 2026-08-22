@@ -23,7 +23,7 @@ pub enum Node {
     Extension { partial_path: Vec<u8>, next_node_hash: [u8; 32] },
 
     /// 分支节点 (16 children hashes, optional value)
-    Branch { children: [Option<[u8; 32]>; 16], value: Option<Vec<u8>> },
+    Branch { children: Box<[Option<[u8; 32]>; 16]>, value: Option<Vec<u8>> },
 }
 
 impl Node {
@@ -44,7 +44,7 @@ impl Node {
 
     /// 创建分支节点
     pub fn branch(children: [Option<[u8; 32]>; 16], value: Option<Vec<u8>>) -> Self {
-        Node::Branch { children, value }
+        Node::Branch { children: Box::new(children), value }
     }
 
     /// 检查节点是否为空
