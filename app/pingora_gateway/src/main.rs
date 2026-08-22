@@ -1,3 +1,4 @@
+#![allow(warnings)]
 mod http;
 mod websocket;
 
