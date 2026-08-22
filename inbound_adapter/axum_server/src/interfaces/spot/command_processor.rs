@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::routing::{get, post};
 use base_types::actor_x::ActorX;
-use immutable_derive::immutable;
+use entity_derive::immutable;
 use spot_behavior::proc::behavior::v2::spot_market_data_behavior::{
     SpotMarketDataCmdAny, SpotMarketDataResAny,
 };

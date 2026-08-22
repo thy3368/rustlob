@@ -16,12 +16,12 @@ use push::k_line::{
     aggregator::m100_simd_k_line_aggregator::M100SimdKLineAggregator,
     k_line_service::KLineBehaviorV2Imp,
 };
+use push::queue::queue::Queue;
+use push::queue::queue_impl::kafka_queue::KafkaConfig;
+use push::queue::queue_impl::mpmc_queue::MPMCQueue;
 use push::push::connection_types::ConnectionRepo;
 use push::push::push_service::PushBehaviorV2Imp;
 use push::push::subscription_service::SubscriptionService;
-use rust_queue::queue::queue::Queue;
-use rust_queue::queue::queue_impl::kafka_queue::KafkaQueue;
-use rust_queue::queue::queue_impl::mpmc_queue::MPMCQueue;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior::SpotTradeCmdOrQuery;
 use spot_behavior::proc::v2::processor::kafka::event_publisher::{EventPublisher, PublishError};
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
@@ -82,12 +82,10 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
     Arc::new(queue)
 });
 
-use rust_queue::queue::queue_impl::kafka_queue::KafkaConfig;
-
 // Kafka 队列配置：10分区 3副本
-static KAFKA_QUEUE: Lazy<Arc<KafkaQueue>> = Lazy::new(|| {
+static KAFKA_QUEUE: Lazy<Arc<push::queue::queue_impl::kafka_queue::KafkaQueue>> = Lazy::new(|| {
     let config = KafkaConfig::default().with_num_partitions(10).with_replication_factor(3);
-    let queue = KafkaQueue::new_with_config(config);
+    let queue = push::queue::queue_impl::kafka_queue::KafkaQueue::from_config(config);
 
     // 为每个 topic 创建 channel，使用全局配置（10分区 3副本）
     queue.get_or_create_channel(SpotTopic::KLineChangeLog.name(), None);
@@ -227,7 +225,7 @@ pub fn get_mpmc_queue() -> Arc<MPMCQueue> {
     MPMC_QUEUE.clone()
 }
 
-pub fn get_kafka_queue() -> Arc<KafkaQueue> {
+pub fn get_kafka_queue() -> Arc<push::queue::queue_impl::kafka_queue::KafkaQueue> {
     KAFKA_QUEUE.clone()
 }
 
