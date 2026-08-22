@@ -168,11 +168,11 @@ pub trait MultiSymbolLobRepo2: Send + Sync {
 
     fn find_order<O: LobOrder>(&self, p0: TradingPair, p1: OrderId) -> Option<&O>;
 
-    fn find_order_mut<O: LobOrder>(&self, p0: TradingPair, order_id: OrderId) -> Option<&mut O>;
+    fn find_order_mut<O: LobOrder>(&mut self, p0: TradingPair, order_id: OrderId) -> Option<&mut O>;
 
     /// 获取指定交易对的最后一笔成交价
     fn last_price(&self, symbol: TradingPair) -> Option<Price>;
 
     /// 更新指定交易对的最后一笔成交价
-    fn update_last_price(&self, symbol: TradingPair, price: Price);
+    fn update_last_price(&mut self, symbol: TradingPair, price: Price);
 }
