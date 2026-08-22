@@ -958,24 +958,25 @@ mod tests {
     }
 
     #[test]
-    fn create_event_uses_initial_version_transition() {
+    fn create_event_uses_initial_version_transition() -> Result<(), Box<dyn std::error::Error>> {
         let entity = TestEntity { id: 42, value: "new".to_string(), version: 1 };
 
-        let event = entity.track_create_event().unwrap();
+        let event = entity.track_create_event()?;
 
         assert!(event.is_created());
         assert_eq!(event.old_version, 0);
         assert_eq!(event.new_version, 1);
         assert_eq!(event.entity_id, 42);
         assert_eq!(event.entity_type, 7);
+        Ok(())
     }
 
     #[test]
-    fn update_event_contains_diff_field_changes() {
+    fn update_event_contains_diff_field_changes() -> Result<(), Box<dyn std::error::Error>> {
         let old = TestEntity { id: 1, value: "old".to_string(), version: 3 };
         let new = TestEntity { id: 1, value: "new".to_string(), version: 4 };
 
-        let event = new.track_update_event_from(&old).unwrap();
+        let event = new.track_update_event_from(&old)?;
 
         assert!(event.is_updated());
         assert_eq!(event.old_version, 3);
@@ -983,10 +984,11 @@ mod tests {
         assert_eq!(event.field_change_count(), 1);
 
         let change = &event.field_changes[0];
-        assert_eq!(change.field_name_as_str().unwrap(), "value");
+        assert_eq!(change.field_name_as_str()?, "value");
         assert_eq!(change.old_value_bytes(), b"old");
         assert_eq!(change.new_value_bytes(), b"new");
         assert_eq!(change.field_type, 1);
+        Ok(())
     }
 
     #[test]
@@ -996,7 +998,7 @@ mod tests {
 
         let result = new.track_update_event_from(&old);
 
-        assert_eq!(result.unwrap_err(), EntityError::NoChangesDetected);
+        assert_eq!(result, Err(EntityError::NoChangesDetected));
     }
 
     #[test]
@@ -1007,8 +1009,8 @@ mod tests {
         let result = new.track_update_event_from(&old);
 
         assert_eq!(
-            result.unwrap_err(),
-            EntityError::EntityVersionMismatch { expected_next: 4, actual_next: 5 }
+            result,
+            Err(EntityError::EntityVersionMismatch { expected_next: 4, actual_next: 5 })
         );
     }
 
@@ -1020,38 +1022,41 @@ mod tests {
         let result = new.track_update_event_from(&old);
 
         assert_eq!(
-            result.unwrap_err(),
-            EntityError::EntityIdMismatch { expected: "1".to_string(), actual: "2".to_string() }
+            result,
+            Err(EntityError::EntityIdMismatch {
+                expected: "1".to_string(),
+                actual: "2".to_string()
+            })
         );
     }
 
     #[test]
-    fn update_event_from_closure_tracks_after_mutation() {
+    fn update_event_from_closure_tracks_after_mutation() -> Result<(), Box<dyn std::error::Error>> {
         let mut entity = TestEntity { id: 1, value: "old".to_string(), version: 3 };
 
-        let event = entity
-            .track_update_event(|entity| {
-                entity.value = "new".to_string();
-                entity.version += 1;
-            })
-            .unwrap();
+        let event = entity.track_update_event(|entity| {
+            entity.value = "new".to_string();
+            entity.version += 1;
+        })?;
 
         assert_eq!(entity.value, "new");
         assert_eq!(event.old_version, 3);
         assert_eq!(event.new_version, 4);
         assert_eq!(event.field_change_count(), 1);
+        Ok(())
     }
 
     #[test]
-    fn delete_event_uses_current_to_next_version() {
+    fn delete_event_uses_current_to_next_version() -> Result<(), Box<dyn std::error::Error>> {
         let entity = TestEntity { id: 42, value: "old".to_string(), version: 8 };
 
-        let event = entity.track_delete_event().unwrap();
+        let event = entity.track_delete_event()?;
 
         assert!(event.is_deleted());
         assert_eq!(event.old_version, 8);
         assert_eq!(event.new_version, 9);
         assert_eq!(event.entity_id, 42);
+        Ok(())
     }
 
     #[test]
@@ -1064,7 +1069,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_field_change_truncates_fixed_width_data() {
+    fn replay_field_change_truncates_fixed_width_data() -> Result<(), Box<dyn std::error::Error>> {
         let long_field_name = "abcdefghijklmnopqrstuvwxyz0123456789";
         let long_old = vec![b'o'; 80];
         let long_new = vec![b'n'; 96];
@@ -1076,9 +1081,10 @@ mod tests {
             2,
         );
 
-        assert_eq!(change.field_name_as_str().unwrap().len(), 32);
+        assert_eq!(change.field_name_as_str()?.len(), 32);
         assert_eq!(change.old_value_bytes().len(), 64);
         assert_eq!(change.new_value_bytes().len(), 64);
         assert_eq!(change.field_type, 2);
+        Ok(())
     }
 }

@@ -29,33 +29,33 @@ struct TestEntity {
 // ============================================================================
 
 #[test]
-fn scenario_update_single_field_after_creation() {
+fn scenario_update_single_field_after_creation() -> Result<(), Box<dyn std::error::Error>> {
     // ========== Given（给定）==========
     // 初始状态：有一个新创建的 TestEntity，直接用 mock repo
     let mut entity = TestEntity {
         id: 1,
-        symbol: TradingPair::from_symbol_str("BTCUSDT").unwrap(),
+        symbol: TradingPair::from_symbol_str("BTCUSDT")
+            .ok_or("BTCUSDT trading pair should be valid")?,
         price: Price::from_raw(50000),
         quantity: Quantity::from_raw(100),
         filled_quantity: Quantity::from_raw(0),
         side: OrderSide::Buy,
     };
 
-    let mut repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
+    let repo: MySqlDbRepo<TestEntity> = MySqlDbRepo::new_mock();
 
     // ========== When（当）==========
     // 当 price 被更新为 51000 时
-    let updated_event = entity
-        .track_update(|e| {
-            e.price = Price::from_raw(51000);
-        })
-        .expect("更新事件生成应该成功");
+    let updated_event = entity.track_update(|e| {
+        e.price = Price::from_raw(51000);
+    })?;
 
-    let result = repo.replay_event(&updated_event);
+    let _result = repo.replay_event(&updated_event);
 
     // ========== Then（那么）==========
     // 则更新事件应该被成功处理（在 mock repo 中应该失败，因为实体不存在）
     // 但我们主要验证事件生成是否正确
     assert_eq!(updated_event.entity_id(), "1", "事件应该包含正确的实体 ID");
     println!("✓ 单个字段更新事件生成成功");
+    Ok(())
 }

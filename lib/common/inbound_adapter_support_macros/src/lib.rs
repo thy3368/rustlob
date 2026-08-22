@@ -215,7 +215,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_http_endpoint_args() {
+    fn parses_http_endpoint_args() -> syn::Result<()> {
         let args: HttpEndpointArgs = parse_str(
             r#"
             name = "place_order_http",
@@ -228,8 +228,7 @@ mod tests {
                 (500, "outbound_load_state_failed")
             ]
             "#,
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(args.name.value(), "place_order_http");
         assert_eq!(args.method.value(), "POST");
@@ -237,12 +236,13 @@ mod tests {
         assert_eq!(args.summary.value(), "Submit a spot order request.");
         assert_eq!(args.error_response_schema.value(), "ExampleHttpErrorResponse");
         assert_eq!(args.error_codes.len(), 2);
-        assert_eq!(args.error_codes[0].0.base10_parse::<u16>().unwrap(), 400);
+        assert_eq!(args.error_codes[0].0.base10_parse::<u16>()?, 400);
         assert_eq!(args.error_codes[0].1.value(), "invalid_qty");
+        Ok(())
     }
 
     #[test]
-    fn extracts_request_and_response_types_from_handler_signature() {
+    fn extracts_request_and_response_types_from_handler_signature() -> syn::Result<()> {
         let input_fn: ItemFn = parse_quote! {
             async fn create_order<S>(
                 State(state): State<Arc<S>>,
@@ -255,15 +255,16 @@ mod tests {
             }
         };
 
-        let request = extract_request_type(&input_fn).unwrap();
-        let response = extract_response_type(&input_fn).unwrap();
+        let request = extract_request_type(&input_fn)?;
+        let response = extract_response_type(&input_fn)?;
 
         assert_eq!(quote!(#request).to_string(), "PlaceOrderHttpRequest");
         assert_eq!(quote!(#response).to_string(), "PlaceOrderHttpResponse");
+        Ok(())
     }
 
     #[test]
-    fn expands_descriptor_function_with_signature_derived_schema_names() {
+    fn expands_descriptor_function_with_signature_derived_schema_names() -> syn::Result<()> {
         let args: HttpEndpointArgs = parse_str(
             r#"
             name = "place_order_http",
@@ -276,8 +277,7 @@ mod tests {
                 (500, "outbound_load_state_failed")
             ]
             "#,
-        )
-        .unwrap();
+        )?;
         let input_fn: ItemFn = parse_quote! {
             async fn create_order<S>(
                 State(state): State<Arc<S>>,
@@ -290,7 +290,7 @@ mod tests {
             }
         };
 
-        let expanded = expand_collect_http_endpoint(args, input_fn).unwrap().to_string();
+        let expanded = expand_collect_http_endpoint(args, input_fn)?.to_string();
 
         assert!(expanded.contains("create_order_http_api_descriptor"));
         assert!(expanded.contains("request_schema_name : stringify ! (PlaceOrderHttpRequest)"));
@@ -302,5 +302,6 @@ mod tests {
         assert!(
             expanded.contains(":: inbound_adapter_support :: http_error (400 , \"invalid_qty\")")
         );
+        Ok(())
     }
 }

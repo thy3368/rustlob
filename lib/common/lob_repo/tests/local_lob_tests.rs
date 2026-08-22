@@ -46,10 +46,12 @@ impl LobOrder for MockOrder {
 }
 
 #[test]
-fn test_last_price_initially_none() {
-    let symbol = TradingPair::from_symbol_str("BTCUSDT").unwrap();
+fn test_last_price_initially_none() -> Result<(), Box<dyn std::error::Error>> {
+    let symbol =
+        TradingPair::from_symbol_str("BTCUSDT").ok_or("BTCUSDT trading pair should be valid")?;
     let lob: LocalLob<MockOrder> = LocalLob::new(symbol);
 
     // 初始状态，最后成交价应为 None
     assert_eq!(lob.last_price(), None);
+    Ok(())
 }

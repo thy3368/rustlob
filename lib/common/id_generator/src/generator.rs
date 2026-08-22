@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn test_concurrent() {
+    fn test_concurrent() -> Result<(), String> {
         use std::sync::Arc;
         use std::thread;
 
@@ -203,7 +203,7 @@ mod tests {
         for h in handles {
             match h.join() {
                 Ok(ids) => all_ids.extend(ids),
-                Err(_) => panic!("thread panicked while generating ids"),
+                Err(_) => return Err("thread panicked while generating ids".to_string()),
             }
         }
 
@@ -212,6 +212,7 @@ mod tests {
         all_ids.dedup();
         assert_eq!(all_ids.len(), original_len);
         println!("✅ {} unique IDs", original_len);
+        Ok(())
     }
 
     #[test]

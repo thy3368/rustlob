@@ -574,7 +574,9 @@ mod tests {
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
         ) -> Result<(), Self::Error> {
-            given_state.lock().unwrap().push("validate");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("validate");
+            }
             Ok(())
         }
 
@@ -583,7 +585,9 @@ mod tests {
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
         ) -> Result<Self::AfterChanges, Self::Error> {
-            given_state.lock().unwrap().push("unchecked");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("unchecked");
+            }
             Ok(())
         }
     }
@@ -604,23 +608,30 @@ mod tests {
             given_state: Arc<Mutex<Vec<&'static str>>>,
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
-            given_state.lock().unwrap().push("merge");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("merge");
+            }
             Ok(ReplayableLog)
         }
     }
 
     #[test]
-    fn v2_after_path_reuses_validate_then_unchecked_chain() {
+    fn v2_after_path_reuses_validate_then_unchecked_chain() -> Result<(), String> {
         let log = Arc::new(Mutex::new(Vec::new()));
         let machine = HookMachine;
 
-        machine.compute_after_changes(&HookCommand { reject_in_pre_check: false }, &log).unwrap();
+        machine
+            .compute_after_changes(&HookCommand { reject_in_pre_check: false }, &log)
+            .map_err(|err| format!("compute_after_changes failed: {err:?}"))?;
+        let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 
-        assert_eq!(*log.lock().unwrap(), vec!["validate", "unchecked"]);
+        assert_eq!(*actual, vec!["validate", "unchecked"]);
+        Ok(())
     }
 
     #[test]
-    fn v2_before_after_path_reuses_after_pipeline_then_merges_with_given_state() {
+    fn v2_before_after_path_reuses_after_pipeline_then_merges_with_given_state()
+    -> Result<(), String> {
         let log = Arc::new(Mutex::new(Vec::new()));
         let machine = HookMachine;
 
@@ -629,13 +640,15 @@ mod tests {
                 &HookCommand { reject_in_pre_check: false },
                 Arc::clone(&log),
             )
-            .unwrap();
+            .map_err(|err| format!("compute_before_after_changes failed: {err:?}"))?;
+        let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 
-        assert_eq!(*log.lock().unwrap(), vec!["validate", "unchecked", "merge"]);
+        assert_eq!(*actual, vec!["validate", "unchecked", "merge"]);
+        Ok(())
     }
 
     #[test]
-    fn v2_pre_check_stops_validate_and_unchecked() {
+    fn v2_pre_check_stops_validate_and_unchecked() -> Result<(), String> {
         let log = Arc::new(Mutex::new(Vec::new()));
         let machine = HookMachine;
 
@@ -643,6 +656,7 @@ mod tests {
             machine.compute_after_changes(&HookCommand { reject_in_pre_check: true }, &log,),
             Err(HookError::PreCheckRejected)
         );
-        assert!(log.lock().unwrap().is_empty());
+        assert!(log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?.is_empty());
+        Ok(())
     }
 }

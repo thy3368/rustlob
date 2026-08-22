@@ -134,7 +134,9 @@ mod tests {
 
     impl ReplayableChanges for StubChanges {
         fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
-            self.log.lock().unwrap().push("project");
+            if let Ok(mut log) = self.log.lock() {
+                log.push("project");
+            }
             Ok(Vec::new())
         }
     }
@@ -163,7 +165,9 @@ mod tests {
         type AfterChanges = StubAfter;
 
         fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-            cmd.log.lock().unwrap().push("pre_check");
+            if let Ok(mut log) = cmd.log.lock() {
+                log.push("pre_check");
+            }
             Ok(())
         }
 
@@ -172,7 +176,9 @@ mod tests {
             _cmd: &Self::Command,
             given_state: &Self::GivenState,
         ) -> Result<(), Self::Error> {
-            given_state.lock().unwrap().push("validate");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("validate");
+            }
             Ok(())
         }
 
@@ -181,7 +187,9 @@ mod tests {
             _cmd: &Self::Command,
             given_state: &Self::GivenState,
         ) -> Result<Self::AfterChanges, Self::Error> {
-            given_state.lock().unwrap().push("compute");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("compute");
+            }
             Ok(StubAfter)
         }
     }
@@ -193,7 +201,9 @@ mod tests {
             given_state: Self::GivenState,
             _after: Self::AfterChanges,
         ) -> Result<Self::BeforeAfterChanges, Self::Error> {
-            given_state.lock().unwrap().push("merge");
+            if let Ok(mut log) = given_state.lock() {
+                log.push("merge");
+            }
             Ok(StubChanges { log: Arc::clone(&given_state) })
         }
     }
@@ -220,40 +230,51 @@ mod tests {
             &self,
             cmd: &<StubFamily as MiStateMachineV2Unchecked>::Command,
         ) -> Result<<StubFamily as MiStateMachineV2Unchecked>::GivenState, Self::Error> {
-            cmd.log.lock().unwrap().push("load_state");
+            if let Ok(mut log) = cmd.log.lock() {
+                log.push("load_state");
+            }
             Ok(Arc::clone(&cmd.log))
         }
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             assert!(events.is_empty());
-            self.log.lock().unwrap().push("persist");
+            if let Ok(mut log) = self.log.lock() {
+                log.push("persist");
+            }
             Ok(())
         }
 
         fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             assert!(events.is_empty());
-            self.log.lock().unwrap().push("replay");
+            if let Ok(mut log) = self.log.lock() {
+                log.push("replay");
+            }
             Ok(())
         }
 
         fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             assert!(events.is_empty());
-            self.log.lock().unwrap().push("publish");
+            if let Ok(mut log) = self.log.lock() {
+                log.push("publish");
+            }
             Ok(())
         }
     }
 
     #[test]
-    fn mi_family_executor_runs_fixed_runtime_sequence() {
+    fn mi_family_executor_runs_fixed_runtime_sequence() -> Result<(), String> {
         let log = Arc::new(Mutex::new(Vec::new()));
         let request = StubRequest { log: Arc::clone(&log) };
         let executor = MiStateMachineFamilyExecutor;
         let outbound = StubOutbound { log: Arc::clone(&log) };
 
-        executor.execute::<StubFamily, StubSpec, _>(&StubFamily, &request, &outbound).unwrap();
+        executor
+            .execute::<StubFamily, StubSpec, _>(&StubFamily, &request, &outbound)
+            .map_err(|err| format!("executor failed: {err:?}"))?;
+        let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 
         assert_eq!(
-            *log.lock().unwrap(),
+            *actual,
             vec![
                 "pre_check",
                 "load_state",
@@ -266,5 +287,6 @@ mod tests {
                 "publish"
             ]
         );
+        Ok(())
     }
 }
