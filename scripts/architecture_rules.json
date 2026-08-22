@@ -26,9 +26,7 @@
       "spot_behavior",
       "derivatives_behavior",
       "wallet_behavior",
-      "spot_md_behavior",
-      "bdd",
-      "bdd-core"
+      "spot_md_behavior"
     ],
     "infra": [
       "mdbx",

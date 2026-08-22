@@ -92,21 +92,21 @@ impl BlockHeader {
     pub fn hash(&self) -> [u8; 32] {
         let mut hasher = Keccak256::new();
 
-        hasher.update(&self.parent_hash);
-        hasher.update(&self.uncle_hash);
-        hasher.update(&self.coinbase);
-        hasher.update(&self.state_root);
-        hasher.update(&self.transactions_root);
-        hasher.update(&self.receipts_root);
-        hasher.update(&self.logs_bloom);
-        hasher.update(&self.difficulty.to_be_bytes());
-        hasher.update(&self.number.to_be_bytes());
-        hasher.update(&self.gas_limit.to_be_bytes());
-        hasher.update(&self.gas_used.to_be_bytes());
-        hasher.update(&self.timestamp.to_be_bytes());
+        hasher.update(self.parent_hash);
+        hasher.update(self.uncle_hash);
+        hasher.update(self.coinbase);
+        hasher.update(self.state_root);
+        hasher.update(self.transactions_root);
+        hasher.update(self.receipts_root);
+        hasher.update(self.logs_bloom);
+        hasher.update(self.difficulty.to_be_bytes());
+        hasher.update(self.number.to_be_bytes());
+        hasher.update(self.gas_limit.to_be_bytes());
+        hasher.update(self.gas_used.to_be_bytes());
+        hasher.update(self.timestamp.to_be_bytes());
         hasher.update(&self.extra_data);
-        hasher.update(&self.mix_hash);
-        hasher.update(&self.nonce.to_be_bytes());
+        hasher.update(self.mix_hash);
+        hasher.update(self.nonce.to_be_bytes());
 
         hasher.finalize().into()
     }
@@ -245,23 +245,23 @@ impl Transaction {
     pub fn hash(&self) -> [u8; 32] {
         let mut hasher = Keccak256::new();
 
-        hasher.update(&[self.tx_type]);
-        hasher.update(&self.nonce.to_be_bytes());
-        hasher.update(&self.gas_price.to_be_bytes());
-        hasher.update(&self.gas_limit.to_be_bytes());
+        hasher.update([self.tx_type]);
+        hasher.update(self.nonce.to_be_bytes());
+        hasher.update(self.gas_price.to_be_bytes());
+        hasher.update(self.gas_limit.to_be_bytes());
 
         if let Some(to) = &self.to {
-            hasher.update(&[1u8]);
+            hasher.update([1u8]);
             hasher.update(to);
         } else {
-            hasher.update(&[0u8]);
+            hasher.update([0u8]);
         }
 
-        hasher.update(&self.value.to_be_bytes());
+        hasher.update(self.value.to_be_bytes());
         hasher.update(&self.data);
-        hasher.update(&self.v.to_be_bytes());
-        hasher.update(&self.r);
-        hasher.update(&self.s);
+        hasher.update(self.v.to_be_bytes());
+        hasher.update(self.r);
+        hasher.update(self.s);
 
         hasher.finalize().into()
     }
