@@ -136,6 +136,6 @@ macro_rules! trace_query_use_case_failed {
     };
 }
 
-pub(super) use {
-    trace_query_use_case_completed, trace_query_use_case_failed, trace_query_use_case_started,
-};
+pub(super) use trace_query_use_case_completed;
+pub(super) use trace_query_use_case_failed;
+pub(super) use trace_query_use_case_started;

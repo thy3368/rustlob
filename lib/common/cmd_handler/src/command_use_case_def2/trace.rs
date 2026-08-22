@@ -138,6 +138,6 @@ macro_rules! trace_command_use_case_failed {
     };
 }
 
-pub(super) use {
-    trace_command_use_case_completed, trace_command_use_case_failed, trace_command_use_case_started,
-};
+pub(super) use trace_command_use_case_completed;
+pub(super) use trace_command_use_case_failed;
+pub(super) use trace_command_use_case_started;
