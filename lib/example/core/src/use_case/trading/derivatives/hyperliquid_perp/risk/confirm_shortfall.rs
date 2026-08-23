@@ -67,7 +67,7 @@ impl ReplayableChanges for ConfirmHyperliquidPerpShortfallChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(0);
         if let Some(shortfall) = &self.created_shortfall {
             events.push(shortfall.track_create_event()?);
         }

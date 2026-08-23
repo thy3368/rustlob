@@ -16,6 +16,7 @@ use crate::entity::{
     ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationStatus,
 };
+use crate::support::{concat2, concat3, concat4};
 
 #[cfg(test)]
 mod spot_order_v2_bdd_behavior_methods;
@@ -513,11 +514,11 @@ pub struct SpotOrderV2 {
 impl SpotOrderV2 {
     fn serde_default_identity() -> SpotOrderIdentity {
         SpotOrderIdentity {
-            order_id: String::new(),
+            order_id: String::with_capacity(0),
             asset: 0,
             exchange_oid: None,
-            account_id: String::new(),
-            symbol: String::new(),
+            account_id: String::with_capacity(0),
+            symbol: String::with_capacity(0),
             client_order_id: None,
         }
     }
@@ -765,7 +766,7 @@ impl SpotOrderV2 {
             "UNRESERVED",
         );
         let fee_reservation = Self::empty_trigger_reservation(
-            format!("{order_id}:fee").as_str(),
+            concat2(order_id.as_str(), ":fee").as_str(),
             account_id.as_str(),
             ReservationKind::SpotBuyFeeQuote,
             "UNRESERVED",
@@ -832,7 +833,7 @@ impl SpotOrderV2 {
             input.taker_fee_bps,
         )?;
         let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-            format!("balance-ledger:freeze:{}", input.order_id),
+            concat2("balance-ledger:freeze:", input.order_id.as_str()),
             input.account_id.clone(),
             principal_hold.freeze_asset_id,
             principal_hold.freeze_balance_entity_id,
@@ -927,7 +928,7 @@ impl SpotOrderV2 {
             SpotOrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
         };
         Reservation::new(
-            format!("reservation:{order_id}"),
+            concat2("reservation:", order_id),
             account_id.to_string(),
             order_id.to_string(),
             ReservationMarketKind::Spot,
@@ -962,7 +963,7 @@ impl SpotOrderV2 {
             SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
         };
         Reservation::new(
-            format!("reservation:{order_id}:fee"),
+            concat3("reservation:", order_id, ":fee"),
             account_id.to_string(),
             order_id.to_string(),
             ReservationMarketKind::Spot,
@@ -992,7 +993,7 @@ impl SpotOrderV2 {
         ) {
             Ok(reservation) => reservation,
             Err(_) => Reservation {
-                reservation_id: format!("reservation:{order_id}:fee:fallback"),
+                reservation_id: concat4("reservation:", order_id, ":fee:", "fallback"),
                 owner_account_id: account_id.to_string(),
                 caused_by_order_id: order_id.to_string(),
                 market_kind: ReservationMarketKind::Spot,
@@ -1019,7 +1020,7 @@ impl SpotOrderV2 {
         asset_id: &str,
     ) -> Reservation {
         Reservation {
-            reservation_id: format!("reservation:{order_id}:trigger-pending"),
+            reservation_id: concat3("reservation:", order_id, ":trigger-pending"),
             owner_account_id: account_id.to_string(),
             caused_by_order_id: order_id.to_string(),
             market_kind: ReservationMarketKind::Spot,
@@ -1588,11 +1589,13 @@ impl SpotOrderV2 {
     ) -> Result<MatchSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
         self.ensure_matchable()?;
 
-        let mut trades = Vec::new();
+        let mut trades = Vec::with_capacity(0);
         for maker in makers.iter_mut() {
             let Some(terms) = spot_order_v2_next_trade_terms(self, maker)? else {
                 break;
             };
+            let trade_suffix =
+                trades.len().checked_add(1).ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
 
             let taker_fee = self
                 .fee_consume_requirement_for_trade(
@@ -1613,7 +1616,7 @@ impl SpotOrderV2 {
                 )?
                 .amount;
             let trade = SpotTrade::new(
-                format!("{}-{}", input.match_id, trades.len() + 1),
+                concat3(input.match_id.as_str(), "-", trade_suffix.to_string().as_str()),
                 input.match_id.clone(),
                 self.asset,
                 self.symbol.clone(),
@@ -1680,7 +1683,7 @@ impl SpotOrderV2 {
         let mut released_reservation = self.reservation.clone();
         released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
         let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
-            format!("balance-ledger:unfreeze:{}", self.order_id),
+            concat2("balance-ledger:unfreeze:", self.order_id.as_str()),
             self.account_id.clone(),
             self.reservation.asset_id.clone(),
             input.balance_entity_id,
@@ -1935,7 +1938,7 @@ impl FieldDiff for SpotOrderV2 {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
 
         push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
         push_change(
@@ -2253,8 +2256,10 @@ mod tests {
     }
 
     fn maker_sell(price: u64) -> SpotOrderV2 {
+        let price_id = price.to_string();
+        let order_id = concat2("maker-", price_id.as_str());
         SpotOrderV2::new(
-            format!("maker-{price}"),
+            order_id.clone(),
             10_001,
             Some(price),
             "maker".to_string(),
@@ -2266,13 +2271,7 @@ mod tests {
             0,
             SpotOrderStatus::Open,
             None,
-            test_principal_reservation(
-                format!("maker-{price}").as_str(),
-                "maker",
-                SpotOrderSide::Sell,
-                1,
-                price,
-            ),
+            test_principal_reservation(order_id.as_str(), "maker", SpotOrderSide::Sell, 1, price),
             None,
             1,
         )

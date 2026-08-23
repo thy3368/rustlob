@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::balance_ledger_entry_v2::{BalanceLedgerEntryV2, BalanceLedgerEntryV2Error};
 use super::balance_ledger_reason::BalanceLedgerReason;
+use crate::support::concat2;
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
@@ -187,7 +188,7 @@ impl FieldDiff for SettlementTransferLeg {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 
@@ -358,12 +359,12 @@ impl SettlementTransferVoucher {
         &self,
         balance_entity_id_for: impl Fn(&str, &str) -> String,
     ) -> Result<Vec<BalanceLedgerEntryV2>, BalanceLedgerEntryV2Error> {
-        let mut entries = Vec::with_capacity(self.legs.len() * 2);
+        let mut entries = Vec::with_capacity(self.legs.len().saturating_mul(2));
 
         for leg in &self.legs {
             let reason = self.balance_ledger_reason_for(leg);
-            let debit_entry_id = format!("{}:debit", leg.balance_ledger_entry_id());
-            let credit_entry_id = format!("{}:credit", leg.balance_ledger_entry_id());
+            let debit_entry_id = concat2(leg.balance_ledger_entry_id(), ":debit");
+            let credit_entry_id = concat2(leg.balance_ledger_entry_id(), ":credit");
             let debit_balance_entity_id =
                 balance_entity_id_for(leg.from_account_id(), leg.asset_id());
             let credit_balance_entity_id =
@@ -542,39 +543,39 @@ impl FieldDiff for SettlementTransferVoucher {
         ];
 
         for (index, leg) in self.legs.iter().enumerate() {
-            let prefix = format!("leg_{index}");
+            let prefix = concat2("leg_", index.to_string().as_str());
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_leg_id"),
+                concat2(prefix.as_str(), "_leg_id"),
                 "",
                 leg.leg_id.clone(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_from_account_id"),
+                concat2(prefix.as_str(), "_from_account_id"),
                 "",
                 leg.from_account_id.clone(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_to_account_id"),
+                concat2(prefix.as_str(), "_to_account_id"),
                 "",
                 leg.to_account_id.clone(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_asset_id"),
+                concat2(prefix.as_str(), "_asset_id"),
                 "",
                 leg.asset_id.clone(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_amount"),
+                concat2(prefix.as_str(), "_amount"),
                 "",
                 leg.amount.to_string(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_purpose"),
+                concat2(prefix.as_str(), "_purpose"),
                 "",
                 leg.purpose.as_str(),
             ));
             changes.push(EntityFieldChange::new(
-                format!("{prefix}_balance_ledger_entry_id"),
+                concat2(prefix.as_str(), "_balance_ledger_entry_id"),
                 "",
                 leg.balance_ledger_entry_id.clone(),
             ));
@@ -584,7 +585,7 @@ impl FieldDiff for SettlementTransferVoucher {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 
@@ -787,7 +788,7 @@ mod tests {
                 "settle-1-1".to_string(),
                 "BTC",
                 "USDT",
-                String::new(),
+                String::with_capacity(0),
             )
             .unwrap();
 
@@ -843,7 +844,7 @@ mod tests {
                 "settle-overflow-1".to_string(),
                 "BTC",
                 "USDT",
-                String::new(),
+                String::with_capacity(0),
             ),
             None
         );

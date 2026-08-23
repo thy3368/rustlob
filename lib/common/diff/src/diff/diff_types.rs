@@ -776,11 +776,11 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
         }
         "string" => {
             // String 类型：去掉引号
-            if value.starts_with('\"') && value.ends_with('\"') && value.len() >= 2 {
-                Ok(value[1..value.len() - 1].to_string())
-            } else {
-                Ok(value.to_string())
-            }
+            Ok(value
+                .strip_prefix('\"')
+                .and_then(|v| v.strip_suffix('\"'))
+                .unwrap_or(value)
+                .to_string())
         }
         _ => Ok(value.to_string()),
     }

@@ -21,6 +21,7 @@ use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
     SettlementTransferVoucher, SpotOrderSide, spot as spot_entity,
 };
+use crate::support::{concat2, concat3, concat4};
 use crate::{
     CancelSpotOrderV2Input, MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution,
     SpotOrderTimeInForce, SpotOrderTriggerRole, SpotTrade,
@@ -265,11 +266,12 @@ pub enum SpotOrderV2UseCaseFamilyV3Error {
 #[derive(Debug, Clone, Default)]
 pub struct SpotOrderV2UseCaseFamilyV3;
 
+#[allow(clippy::disallowed_methods, clippy::vec_init_then_push)]
 impl ReplayableChanges for PlaceSpotOrderV2ChangesV3 {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let mut events = Vec::new();
+        let mut events = vec![];
         for trade in &self.created_trades {
             events.push(trade.track_create_event()?);
         }
@@ -299,6 +301,7 @@ impl ReplayableChanges for PlaceSpotOrderV2ChangesV3 {
     }
 }
 
+#[allow(clippy::disallowed_methods, clippy::vec_init_then_push)]
 impl ReplayableChanges for PlaceTriggerPendingSpotOrderV2ChangesV3 {
     fn to_replayable_events(
         &self,
@@ -307,11 +310,12 @@ impl ReplayableChanges for PlaceTriggerPendingSpotOrderV2ChangesV3 {
     }
 }
 
+#[allow(clippy::disallowed_methods, clippy::vec_init_then_push)]
 impl ReplayableChanges for TriggerSpotOrderV2ChangesV3 {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let mut events = Vec::new();
+        let mut events = vec![];
         for trade in &self.created_trades {
             events.push(trade.track_create_event()?);
         }
@@ -336,11 +340,12 @@ impl ReplayableChanges for TriggerSpotOrderV2ChangesV3 {
     }
 }
 
+#[allow(clippy::disallowed_methods, clippy::vec_init_then_push)]
 impl ReplayableChanges for CancelSpotOrderV2ChangesV3 {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let mut events = Vec::new();
+        let mut events = vec![];
         events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
@@ -716,7 +721,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
             return Err(SpotOrderV2UseCaseFamilyV3Error::OrderTemplateMismatch);
         }
         let taker_after = place_outcome.order;
-        let mut created_balance_ledger_entries = Vec::new();
+        let mut created_balance_ledger_entries = Vec::with_capacity(0);
         let freeze_ledger_entry =
             apply_behavior_ledger_entry(place_outcome.freeze_ledger_entry, &mut balance_book)?;
         created_balance_ledger_entries.push(freeze_ledger_entry);
@@ -803,7 +808,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
     ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
         let mut order_after = context.order.clone();
         let mut balance_book = BalanceMap::new(context.balances);
-        let mut created_balance_ledger_entries = Vec::new();
+        let mut created_balance_ledger_entries = Vec::with_capacity(0);
 
         let cancel_outcome = order_after.cancel(CancelSpotOrderV2Input {
             balance_entity_id: balance_entity_id_for_reservation(
@@ -847,8 +852,8 @@ fn compute_active_order_after(
         maker_fee_bps,
         taker_fee_bps,
     } = context;
-    let mut created_trades = Vec::new();
-    let mut created_vouchers = Vec::new();
+    let mut created_trades = Vec::with_capacity(0);
+    let mut created_vouchers = Vec::with_capacity(0);
 
     match spot_order_v2_matching_decision(&taker_after, maker_orders_after.first())? {
         SpotOrderV2MatchingDecision::Rest => {
@@ -886,7 +891,7 @@ fn compute_active_order_after(
     let match_outcome = taker_after.match_with_makers(
         &mut maker_orders_after,
         MatchSpotOrderV2Input {
-            match_id: format!("spot-match:{}", taker_after.order_id()),
+            match_id: concat2("spot-match:", taker_after.order_id()),
             maker_fee_bps,
             taker_fee_bps,
         },
@@ -907,13 +912,13 @@ fn compute_active_order_after(
             taker_principal_consume,
             ReservationCloseReason::Filled,
         )?;
-        let maker_principal_consume = principal_consume_amount_for_maker(
-            &maker_orders_after[index],
-            trade.qty,
-            trade_notional,
-        );
+        let Some(maker_order_after) = maker_orders_after.get_mut(index) else {
+            return Err(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound);
+        };
+        let maker_principal_consume =
+            principal_consume_amount_for_maker(maker_order_after, trade.qty, trade_notional);
         consume_reservation(
-            &mut maker_orders_after[index].reservation,
+            &mut maker_order_after.reservation,
             maker_principal_consume,
             ReservationCloseReason::Filled,
         )?;
@@ -924,15 +929,15 @@ fn compute_active_order_after(
             ReservationCloseReason::Filled,
         )?;
         consume_reservation(
-            &mut maker_orders_after[index].fee_reservation,
+            &mut maker_order_after.fee_reservation,
             trade.maker_fee,
             ReservationCloseReason::Filled,
         )?;
 
-        let settlement_id = format!("spot-settlement:{}", trade.trade_id);
+        let settlement_id = concat2("spot-settlement:", trade.trade_id.as_str());
         let voucher = trade
             .derive_spot_settlement_transfer_voucher_with_fees(
-                format!("spot-voucher:{}", trade.trade_id),
+                concat2("spot-voucher:", trade.trade_id.as_str()),
                 settlement_id.clone(),
                 base_asset_id,
                 quote_asset_id,
@@ -1094,7 +1099,7 @@ fn trigger_freeze_ledger_entry(
     balance_book: &BalanceMap,
 ) -> Result<BalanceLedgerEntryV2, SpotOrderV2UseCaseFamilyV3Error> {
     BalanceLedgerEntryV2::freeze(
-        format!("balance-ledger:freeze:{}", order.order_id()),
+        concat2("balance-ledger:freeze:", order.order_id()),
         order.account_id().to_string(),
         order.reservation.asset_id.clone(),
         balance_book
@@ -1385,9 +1390,18 @@ fn release_to_balance(
         },
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
+    let next_release_index = ledger_entries
+        .len()
+        .checked_add(1)
+        .ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
-        format!("balance-ledger:{}:release:{}", order.order_id(), ledger_entries.len() + 1),
+        concat4(
+            "balance-ledger:",
+            order.order_id(),
+            ":release:",
+            next_release_index.to_string().as_str(),
+        ),
         balance,
         amount,
         reason,
@@ -1432,7 +1446,7 @@ fn apply_balance_ledger_entry(
             reason,
         ),
         BalanceLedgerOperation::Freeze | BalanceLedgerOperation::DebitAvailable => {
-            unreachable!()
+            return Err(BalanceLedgerEntryV2Error::InvalidAmount);
         }
     }?;
     entry.apply_to(balance)?;
@@ -1515,7 +1529,7 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::CreditAvailable,
-            entry_id: format!("balance-ledger:{}:buyer-base", context.settlement_id),
+            entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-base"),
             account_id: buyer_account_id.clone(),
             asset_id: context.base_asset_id.to_string(),
             amount: trade.qty,
@@ -1527,7 +1541,7 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
-            entry_id: format!("balance-ledger:{}:buyer-quote", context.settlement_id),
+            entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-quote"),
             account_id: buyer_account_id,
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
@@ -1539,7 +1553,7 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::CreditAvailable,
-            entry_id: format!("balance-ledger:{}:seller-quote", context.settlement_id),
+            entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-quote"),
             account_id: seller_account_id.clone(),
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
@@ -1551,7 +1565,7 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
-            entry_id: format!("balance-ledger:{}:seller-base", context.settlement_id),
+            entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-base"),
             account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
             amount: trade.qty,
@@ -1570,7 +1584,7 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::DebitFrozen,
-                entry_id: format!("balance-ledger:{}:buyer-fee", context.settlement_id),
+                entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-fee"),
                 account_id: buyer_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
@@ -1582,7 +1596,7 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::CreditAvailable,
-                entry_id: format!("balance-ledger:{}:buyer-fee-recv", context.settlement_id),
+                entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-fee-recv"),
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
@@ -1602,7 +1616,7 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::DebitFrozen,
-                entry_id: format!("balance-ledger:{}:seller-fee", context.settlement_id),
+                entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-fee"),
                 account_id: seller_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
@@ -1614,7 +1628,7 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::CreditAvailable,
-                entry_id: format!("balance-ledger:{}:seller-fee-recv", context.settlement_id),
+                entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-fee-recv"),
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
@@ -1775,7 +1789,7 @@ impl BalanceMap {
         asset_id: &str,
     ) -> Result<&mut Balance, SpotOrderV2UseCaseFamilyV3Error> {
         self.balances
-            .get_mut(&format!("{account_id}:{asset_id}"))
+            .get_mut(&concat3(account_id, ":", asset_id))
             .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }
 
@@ -1792,7 +1806,7 @@ impl BalanceMap {
         asset_id: &str,
     ) -> Result<String, SpotOrderV2UseCaseFamilyV3Error> {
         self.balances
-            .get(&format!("{account_id}:{asset_id}"))
+            .get(&concat3(account_id, ":", asset_id))
             .map(Entity::entity_id)
             .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }

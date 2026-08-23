@@ -133,7 +133,7 @@ impl FieldDiff for HyperliquidPerpAdlExecution {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_optional_change(
             &mut changes,
             "execution_price",

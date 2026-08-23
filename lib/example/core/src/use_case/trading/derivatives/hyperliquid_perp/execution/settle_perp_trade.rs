@@ -11,6 +11,7 @@ use crate::entity::{
     Balance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
     SettlementTransferVoucher,
 };
+use crate::support::{concat3, concat4};
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
 
@@ -119,7 +120,7 @@ pub struct SettleHyperliquidPerpTradeChanges {
 
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(0);
         for voucher in &self.created_vouchers {
             events.push(voucher.track_create_event()?);
         }
@@ -195,7 +196,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                     .map(|after| UpdatedEntityPair { before: position.clone(), after })
             })
             .collect::<Vec<_>>();
-        let mut changed_margin_balances = Vec::new();
+        let mut changed_margin_balances = Vec::with_capacity(0);
         for balance in &state.margin_balances {
             let key = balance_key(&balance.account_id, &balance.asset_id);
             let Some(delta) = outcome.balance_deltas.get(&key) else {
@@ -306,7 +307,9 @@ fn derive_settlement_outcome(
             &mut balance_deltas,
             trade.taker_account_id.as_str(),
             state.margin_asset_id.as_str(),
-            i128::from(settlement.taker_outcome.realized_pnl_delta) - i128::from(taker_fee),
+            i128::from(settlement.taker_outcome.realized_pnl_delta)
+                .checked_sub(i128::from(taker_fee))
+                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
         )?;
         add_margin_delta(
             &mut balance_deltas,
@@ -318,7 +321,9 @@ fn derive_settlement_outcome(
             &mut balance_deltas,
             trade.maker_account_id.as_str(),
             state.margin_asset_id.as_str(),
-            i128::from(settlement.maker_outcome.realized_pnl_delta) - i128::from(maker_fee),
+            i128::from(settlement.maker_outcome.realized_pnl_delta)
+                .checked_sub(i128::from(maker_fee))
+                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
         )?;
 
         let taker_realized_pnl = settlement.taker_outcome.realized_pnl_delta;
@@ -326,9 +331,15 @@ fn derive_settlement_outcome(
         positions.insert(taker_position_key, settlement.taker_position_after);
         positions.insert(maker_position_key, settlement.maker_position_after);
 
-        let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), index + 1);
-        let voucher_id =
-            format!("perp-voucher:{}:{}", cmd.settlement_batch_id, trade.trade_id.as_str());
+        let next_index =
+            index.checked_add(1).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), next_index);
+        let voucher_id = concat4(
+            "perp-voucher:",
+            cmd.settlement_batch_id.as_str(),
+            ":",
+            trade.trade_id.as_str(),
+        );
         let voucher = trade
             .derive_perp_settlement_transfer_voucher(
                 voucher_id,
@@ -475,15 +486,16 @@ fn balance_map(balances: &[Balance]) -> HashMap<String, &Balance> {
 }
 
 fn position_key(account_id: &str, asset: u32, symbol: &str) -> String {
-    format!("{account_id}:{asset}:{symbol}")
+    let asset = asset.to_string();
+    concat3(account_id, ":", concat3(asset.as_str(), ":", symbol).as_str())
 }
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
-    format!("{account_id}:{asset_id}")
+    concat3(account_id, ":", asset_id)
 }
 
 fn settlement_id(settlement_batch_id: &str, index: usize) -> String {
-    format!("{settlement_batch_id}-{index}")
+    concat3(settlement_batch_id, "-", index.to_string().as_str())
 }
 
 #[cfg(test)]
@@ -575,7 +587,7 @@ mod tests {
             fee_account_id: "fee-account".to_string(),
             taker_fee_bps: 5,
             maker_fee_bps: 2,
-            settled_trade_ids: Vec::new(),
+            settled_trade_ids: Vec::with_capacity(0),
         }
     }
 
@@ -639,7 +651,7 @@ mod tests {
         );
 
         assert_eq!(
-            SettleHyperliquidPerpTradeUseCase.pre_check_command(&cmd(Vec::new())),
+            SettleHyperliquidPerpTradeUseCase.pre_check_command(&cmd(Vec::with_capacity(0))),
             Err(SettleHyperliquidPerpTradeError::EmptyTradeIds)
         );
     }

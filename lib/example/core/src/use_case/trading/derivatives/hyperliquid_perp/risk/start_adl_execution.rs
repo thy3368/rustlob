@@ -238,7 +238,7 @@ mod tests {
     fn pre_check_rejects_empty_party_id() {
         let err = StartHyperliquidPerpAdlExecutionUseCase
             .pre_check_command(&StartHyperliquidPerpAdlExecutionCmd {
-                party_id: String::new(),
+                party_id: String::with_capacity(0),
                 ..cmd()
             })
             .unwrap_err();

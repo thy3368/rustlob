@@ -100,8 +100,8 @@ pub fn immutable(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn function(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Err(error) = validate_single_kind(
         attr,
-        "function",
         &["business_query", "behavior"],
+        "function kind can only be specified once",
         "function only supports `kind = \"business_query\"` or `kind = \"behavior\"`",
         "function kind must be `business_query` or `behavior`",
         "function requires `kind = \"business_query\"` or `kind = \"behavior\"`",
@@ -131,25 +131,21 @@ pub fn ObjectType(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `compute_after_changes_unchecked`: 计算 use case 的 after truth
 #[proc_macro_attribute]
 pub fn action_type(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand_action_type("action_type", attr, item)
+    expand_action_type(attr, item)
 }
 
 /// `action_type` 的兼容别名，用于需要字面 `#[ActionType(...)]` 的标注场景。
 #[allow(non_snake_case)]
 #[proc_macro_attribute]
 pub fn ActionType(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand_action_type("ActionType", attr, item)
+    expand_action_type(attr, item)
 }
 
-fn expand_action_type(
-    macro_name: &'static str,
-    attr: TokenStream,
-    item: TokenStream,
-) -> TokenStream {
+fn expand_action_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Err(error) = validate_single_kind(
         attr,
-        macro_name,
         &["pre_check_command", "validate_against_given_state", "compute_after_changes_unchecked"],
+        "action_type kind can only be specified once",
         "action_type only supports use case V2 hook kinds",
         "action_type kind must be `pre_check_command`, `validate_against_given_state`, or `compute_after_changes_unchecked`",
         "action_type requires `kind = \"pre_check_command\"`, `kind = \"validate_against_given_state\"`, or `kind = \"compute_after_changes_unchecked\"`",
@@ -223,8 +219,8 @@ fn validate_object_type(attr: TokenStream) -> Result<(), TokenStream> {
 
 fn validate_single_kind(
     attr: TokenStream,
-    macro_name: &'static str,
     allowed_kinds: &'static [&'static str],
+    duplicate_kind_message: &'static str,
     unsupported_key_message: &'static str,
     unsupported_kind_message: &'static str,
     missing_kind_message: &'static str,
@@ -236,7 +232,7 @@ fn validate_single_kind(
         }
 
         if seen_kind {
-            return Err(meta.error(format!("{macro_name} kind can only be specified once")));
+            return Err(meta.error(duplicate_kind_message));
         }
         seen_kind = true;
 
@@ -392,7 +388,7 @@ fn infer_id_type(input: &DeriveInput, id_field_name: &str) -> proc_macro2::Token
 
 /// 生成 diff 字段比较逻辑
 fn generate_diff_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
-    let mut field_diffs = Vec::new();
+    let mut field_diffs = Vec::with_capacity(count_named_fields(input));
 
     if let Data::Struct(data) = &input.data {
         if let Fields::Named(fields) = &data.fields {
@@ -485,7 +481,7 @@ fn generate_replay_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
 /// 生成 replay 字段解析逻辑
 fn generate_replay_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
-    let mut field_replays = Vec::new();
+    let mut field_replays = Vec::with_capacity(count_named_fields(input));
 
     if let Data::Struct(data) = &input.data {
         if let Fields::Named(fields) = &data.fields {
@@ -624,7 +620,7 @@ fn generate_from_created_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
 /// 为每个字段生成构造代码
 fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
-    let mut constructions = Vec::new();
+    let mut constructions = Vec::with_capacity(count_named_fields(input));
 
     if let Data::Struct(data) = &input.data {
         if let Fields::Named(fields) = &data.fields {
@@ -778,7 +774,7 @@ fn generate_table_schema_method(input: &DeriveInput, type_name: &str) -> proc_ma
 
 /// 从结构体字段生成 FieldSchema 列表
 fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
-    let mut schemas = Vec::new();
+    let mut schemas = Vec::with_capacity(count_named_fields(input));
 
     if let Data::Struct(data) = &input.data {
         if let Fields::Named(fields) = &data.fields {
@@ -849,5 +845,15 @@ fn get_type_default(type_str: &str) -> &'static str {
         "bool" => "false",
         "String" => "\"\"",
         _ => "",
+    }
+}
+
+fn count_named_fields(input: &DeriveInput) -> usize {
+    match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => fields.named.len(),
+            _ => 0,
+        },
+        _ => 0,
     }
 }

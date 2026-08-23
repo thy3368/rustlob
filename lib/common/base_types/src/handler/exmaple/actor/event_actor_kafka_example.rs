@@ -1,6 +1,7 @@
 //! EventActor Kafka-style 示例。
 
 use std::collections::VecDeque;
+use std::sync::RwLock;
 use std::thread;
 
 use crate::handler::event_actor::EventRecvActor;
@@ -34,8 +35,8 @@ pub const KAFKA_TOPIC_TRADE_CREATED: &str = "trades.created";
 pub struct KafkaDispatcher {
     place_order_event_handler: PlaceOrderEventHandler,
     trade_event_handler: TradeEventHandler,
-    pending_records: std::sync::Mutex<VecDeque<KafkaRecord>>,
-    settlement_result: std::sync::Mutex<Option<SettlementResult>>,
+    pending_records: RwLock<VecDeque<KafkaRecord>>,
+    settlement_result: RwLock<Option<SettlementResult>>,
 }
 
 impl KafkaDispatcher {
@@ -43,17 +44,17 @@ impl KafkaDispatcher {
         Self {
             place_order_event_handler: PlaceOrderEventHandler::new(MatchHandler::new()),
             trade_event_handler: TradeEventHandler::new(SettlementHandler::new()),
-            pending_records: std::sync::Mutex::new(VecDeque::new()),
-            settlement_result: std::sync::Mutex::new(None),
+            pending_records: RwLock::new(VecDeque::new()),
+            settlement_result: RwLock::new(None),
         }
     }
 
     pub fn take_pending_record(&self) -> Option<KafkaRecord> {
-        self.pending_records.lock().ok()?.pop_front()
+        self.pending_records.write().ok()?.pop_front()
     }
 
     pub fn take_settlement_result(&self) -> Option<SettlementResult> {
-        self.settlement_result.lock().ok()?.take()
+        self.settlement_result.write().ok()?.take()
     }
 }
 
@@ -65,7 +66,7 @@ impl EventHandler<KafkaRecord, (), EventHandlerError> for KafkaDispatcher {
                     self.place_order_event_handler.event_handle(event)?;
                 if let Some(trade_event) = emit_trade_created_event(&match_output) {
                     self.pending_records
-                        .lock()
+                        .write()
                         .map_err(|_| EventHandlerError("pending kafka queue poisoned".into()))?
                         .push_back(KafkaRecord {
                             topic: KAFKA_TOPIC_TRADE_CREATED,
@@ -77,7 +78,7 @@ impl EventHandler<KafkaRecord, (), EventHandlerError> for KafkaDispatcher {
             }
             KafkaPayload::TradeCreated(event) => {
                 let settlement_result = self.trade_event_handler.event_handle(event)?;
-                *self.settlement_result.lock().map_err(|_| {
+                *self.settlement_result.write().map_err(|_| {
                     EventHandlerError("kafka settlement result lock poisoned".into())
                 })? = Some(settlement_result);
                 Ok(())

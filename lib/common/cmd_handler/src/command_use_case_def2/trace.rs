@@ -10,7 +10,7 @@ pub(super) fn use_case_command_summary<U>() -> String {
     let type_name = std::any::type_name::<U>();
     let simple_name = type_name.rsplit("::").next().unwrap_or(type_name);
     let base_name = simple_name.strip_suffix("UseCase").unwrap_or(simple_name);
-    let mut summary = String::with_capacity(base_name.len() + 8);
+    let mut summary = String::with_capacity(base_name.len().saturating_add(8));
 
     for (index, ch) in base_name.chars().enumerate() {
         if ch.is_uppercase() {

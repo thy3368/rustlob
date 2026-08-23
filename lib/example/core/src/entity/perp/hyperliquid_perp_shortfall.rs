@@ -172,7 +172,7 @@ impl FieldDiff for HyperliquidPerpShortfall {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(
             &mut changes,
             "covered_by_insurance_quote",

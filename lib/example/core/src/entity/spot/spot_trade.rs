@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::entity::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
+use crate::support::concat4;
 use crate::{SpotOrderSide, SpotTradeFeeRole};
 
 #[cfg(test)]
@@ -191,71 +192,79 @@ impl SpotTrade {
             fee_account_id,
             vec![
                 SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
+                    concat4(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str(),
                     ),
                     seller_account_id.to_string(),
                     buyer_account_id.to_string(),
                     base_asset_id.to_string(),
                     self.qty,
                     SettlementTransferPurpose::SpotBuyerReceiveBase,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str()
+                    concat4(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotBuyerReceiveBase.as_str(),
                     ),
                 ),
                 SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
+                    concat4(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str(),
                     ),
                     buyer_account_id.to_string(),
                     seller_account_id.to_string(),
                     quote_asset_id.to_string(),
                     quote_amount,
                     SettlementTransferPurpose::SpotBuyerPayQuote,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str()
+                    concat4(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotBuyerPayQuote.as_str(),
                     ),
                 ),
                 SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
+                    concat4(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str(),
                     ),
                     buyer_account_id.to_string(),
                     seller_account_id.to_string(),
                     quote_asset_id.to_string(),
                     quote_amount,
                     SettlementTransferPurpose::SpotSellerReceiveQuote,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str()
+                    concat4(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotSellerReceiveQuote.as_str(),
                     ),
                 ),
                 SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
+                    concat4(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str(),
                     ),
                     seller_account_id.to_string(),
                     buyer_account_id.to_string(),
                     base_asset_id.to_string(),
                     self.qty,
                     SettlementTransferPurpose::SpotSellerDeliverBase,
-                    format!(
-                        "balance-ledger:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str()
+                    concat4(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        ":",
+                        SettlementTransferPurpose::SpotSellerDeliverBase.as_str(),
                     ),
                 ),
             ],
@@ -286,22 +295,20 @@ impl SpotTrade {
         let buyer_fee = self.buyer_fee();
         if buyer_fee > 0 {
             voucher.push_leg(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    self.buyer_fee_role().as_str()
+                settlement_fee_leg_id(
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    self.buyer_fee_role().as_str(),
                 ),
                 self.buyer_account_id().to_string(),
                 fee_account_id.clone(),
                 quote_asset_id.to_string(),
                 buyer_fee,
                 SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    self.buyer_fee_role().as_str()
+                settlement_fee_balance_ledger_id(
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    self.buyer_fee_role().as_str(),
                 ),
             ));
         }
@@ -309,28 +316,72 @@ impl SpotTrade {
         let seller_fee = self.seller_fee();
         if seller_fee > 0 {
             voucher.push_leg(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    self.seller_fee_role().as_str()
+                settlement_fee_leg_id(
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    self.seller_fee_role().as_str(),
                 ),
                 self.seller_account_id().to_string(),
                 fee_account_id,
                 quote_asset_id.to_string(),
                 seller_fee,
                 SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:{}",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str(),
-                    self.seller_fee_role().as_str()
+                settlement_fee_balance_ledger_id(
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    self.seller_fee_role().as_str(),
                 ),
             ));
         }
 
         Some(voucher)
     }
+}
+
+fn settlement_fee_leg_id(
+    settlement_id: &str,
+    purpose: SettlementTransferPurpose,
+    fee_role: &str,
+) -> String {
+    let mut out = String::with_capacity(
+        "settlement-leg:"
+            .len()
+            .saturating_add(settlement_id.len())
+            .saturating_add(1)
+            .saturating_add(purpose.as_str().len())
+            .saturating_add(1)
+            .saturating_add(fee_role.len()),
+    );
+    out.push_str("settlement-leg:");
+    out.push_str(settlement_id);
+    out.push(':');
+    out.push_str(purpose.as_str());
+    out.push(':');
+    out.push_str(fee_role);
+    out
+}
+
+fn settlement_fee_balance_ledger_id(
+    settlement_id: &str,
+    purpose: SettlementTransferPurpose,
+    fee_role: &str,
+) -> String {
+    let mut out = String::with_capacity(
+        "balance-ledger:"
+            .len()
+            .saturating_add(settlement_id.len())
+            .saturating_add(1)
+            .saturating_add(purpose.as_str().len())
+            .saturating_add(1)
+            .saturating_add(fee_role.len()),
+    );
+    out.push_str("balance-ledger:");
+    out.push_str(settlement_id);
+    out.push(':');
+    out.push_str(purpose.as_str());
+    out.push(':');
+    out.push_str(fee_role);
+    out
 }
 
 impl FieldDiff for SpotTrade {
@@ -353,7 +404,7 @@ impl FieldDiff for SpotTrade {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 

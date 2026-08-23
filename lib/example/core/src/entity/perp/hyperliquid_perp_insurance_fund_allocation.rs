@@ -62,7 +62,7 @@ impl FieldDiff for HyperliquidPerpInsuranceFundAllocation {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 

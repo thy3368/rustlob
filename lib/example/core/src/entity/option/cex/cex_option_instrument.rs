@@ -121,7 +121,7 @@ impl FieldDiff for CexOptionInstrument {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(
             &mut changes,
             "underlying_asset",

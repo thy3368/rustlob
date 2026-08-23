@@ -49,6 +49,59 @@ const VERSION: u8 = 4;
 /// 头部大小（包含 padding）
 const HEADER_SIZE: usize = 24;
 
+fn checked_window(data: &[u8], start: usize, len: usize) -> Result<&[u8], DecodeError> {
+    let end = start.checked_add(len).ok_or(DecodeError::InsufficientData)?;
+    data.get(start..end).ok_or(DecodeError::InsufficientData)
+}
+
+fn read_u8_at(data: &[u8], index: usize) -> Result<u8, DecodeError> {
+    data.get(index).copied().ok_or(DecodeError::InsufficientData)
+}
+
+fn read_u16_at(data: &[u8], start: usize) -> Result<u16, DecodeError> {
+    let bytes: [u8; 2] =
+        checked_window(data, start, 2)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
+    Ok(u16::from_le_bytes(bytes))
+}
+
+fn read_u32_at(data: &[u8], start: usize) -> Result<u32, DecodeError> {
+    let bytes: [u8; 4] =
+        checked_window(data, start, 4)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
+    Ok(u32::from_le_bytes(bytes))
+}
+
+fn read_u64_at(data: &[u8], start: usize) -> Result<u64, DecodeError> {
+    let bytes: [u8; 8] =
+        checked_window(data, start, 8)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
+    Ok(u64::from_le_bytes(bytes))
+}
+
+fn advance(offset: usize, len: usize) -> Result<usize, DecodeError> {
+    offset.checked_add(len).ok_or(DecodeError::InsufficientData)
+}
+
+fn write_bytes(buffer: &mut [u8], offset: &mut usize, bytes: &[u8]) -> Result<(), EncodeError> {
+    let end = offset.checked_add(bytes.len()).ok_or(EncodeError::DataTooLarge)?;
+    let available = buffer.len();
+    let dst = buffer
+        .get_mut(*offset..end)
+        .ok_or(EncodeError::BufferTooSmall { required: end, available })?;
+    dst.copy_from_slice(bytes);
+    *offset = end;
+    Ok(())
+}
+
+fn write_zeroes(buffer: &mut [u8], offset: &mut usize, len: usize) -> Result<(), EncodeError> {
+    let end = offset.checked_add(len).ok_or(EncodeError::DataTooLarge)?;
+    let available = buffer.len();
+    let dst = buffer
+        .get_mut(*offset..end)
+        .ok_or(EncodeError::BufferTooSmall { required: end, available })?;
+    dst.fill(0);
+    *offset = end;
+    Ok(())
+}
+
 /// 编码错误
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EncodeError {
@@ -118,24 +171,24 @@ impl ChangeLogEntrySoaEncoder {
         let mut size = HEADER_SIZE;
 
         // Entry arrays
-        size += entry_count * size_of::<u64>(); // timestamps
-        size += entry_count * size_of::<u64>(); // sequences
-        size += entry_count * size_of::<u64>(); // old_versions
-        size += entry_count * size_of::<u64>(); // new_versions
-        size += entry_count * size_of::<i64>(); // entity_ids
-        size += entry_count * size_of::<u8>(); // entity_types
-        size += entry_count * size_of::<u8>(); // change_types
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u64>())); // timestamps
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u64>())); // sequences
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u64>())); // old_versions
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u64>())); // new_versions
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<i64>())); // entity_ids
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u8>())); // entity_types
+        size = size.saturating_add(entry_count.saturating_mul(size_of::<u8>())); // change_types
 
         // Field changes for each entry
         for fc_soa in &self.soa.field_changes {
             let fc_count = fc_soa.len();
-            size += size_of::<u32>(); // field_change_count
-            size += fc_count * 32; // field_names
-            size += fc_count * 64; // old_values
-            size += fc_count * size_of::<u16>(); // old_value_lens
-            size += fc_count * 64; // new_values
-            size += fc_count * size_of::<u16>(); // new_value_lens
-            size += fc_count * size_of::<u8>(); // field_types
+            size = size.saturating_add(size_of::<u32>()); // field_change_count
+            size = size.saturating_add(fc_count.saturating_mul(32)); // field_names
+            size = size.saturating_add(fc_count.saturating_mul(64)); // old_values
+            size = size.saturating_add(fc_count.saturating_mul(size_of::<u16>())); // old_value_lens
+            size = size.saturating_add(fc_count.saturating_mul(64)); // new_values
+            size = size.saturating_add(fc_count.saturating_mul(size_of::<u16>())); // new_value_lens
+            size = size.saturating_add(fc_count.saturating_mul(size_of::<u8>())); // field_types
         }
 
         size
@@ -164,100 +217,79 @@ impl ChangeLogEntrySoaEncoder {
         let mut offset = 0;
 
         // 写入头部
-        buffer[offset..offset + 4].copy_from_slice(MAGIC);
-        offset += 4;
-        buffer[offset] = VERSION;
-        offset += 1;
-        // padding (3 字节)
-        buffer[offset..offset + 3].fill(0);
-        offset += 3;
-        buffer[offset..offset + 8].copy_from_slice(&(entry_count as u64).to_le_bytes());
-        offset += 8;
-        // reserved (8 字节)
-        buffer[offset..offset + 8].fill(0);
-        offset += 8;
+        write_bytes(buffer, &mut offset, MAGIC)?;
+        write_bytes(buffer, &mut offset, &[VERSION])?;
+        write_zeroes(buffer, &mut offset, 3)?;
+        write_bytes(buffer, &mut offset, &(entry_count as u64).to_le_bytes())?;
+        write_zeroes(buffer, &mut offset, 8)?;
         // 对齐检查
         debug_assert_eq!(offset, HEADER_SIZE);
 
         // 写入 timestamps
         for &ts in &self.soa.timestamps {
-            buffer[offset..offset + 8].copy_from_slice(&ts.to_le_bytes());
-            offset += 8;
+            write_bytes(buffer, &mut offset, &ts.to_le_bytes())?;
         }
 
         // 写入 sequences
         for &seq in &self.soa.sequences {
-            buffer[offset..offset + 8].copy_from_slice(&seq.to_le_bytes());
-            offset += 8;
+            write_bytes(buffer, &mut offset, &seq.to_le_bytes())?;
         }
 
         // 写入 old_versions
         for &old_ver in &self.soa.old_versions {
-            buffer[offset..offset + 8].copy_from_slice(&old_ver.to_le_bytes());
-            offset += 8;
+            write_bytes(buffer, &mut offset, &old_ver.to_le_bytes())?;
         }
 
         // 写入 new_versions
         for &new_ver in &self.soa.new_versions {
-            buffer[offset..offset + 8].copy_from_slice(&new_ver.to_le_bytes());
-            offset += 8;
+            write_bytes(buffer, &mut offset, &new_ver.to_le_bytes())?;
         }
 
         // 写入 entity_ids
         for &entity_id in &self.soa.entity_ids {
-            buffer[offset..offset + 8].copy_from_slice(&entity_id.to_le_bytes());
-            offset += 8;
+            write_bytes(buffer, &mut offset, &entity_id.to_le_bytes())?;
         }
 
         // 写入 entity_types
-        buffer[offset..offset + entry_count].copy_from_slice(&self.soa.entity_types);
-        offset += entry_count;
+        write_bytes(buffer, &mut offset, &self.soa.entity_types)?;
 
         // 写入 change_types
-        buffer[offset..offset + entry_count].copy_from_slice(&self.soa.change_types);
-        offset += entry_count;
+        write_bytes(buffer, &mut offset, &self.soa.change_types)?;
 
         // 写入每个条目的字段变更数据
         for fc_soa in &self.soa.field_changes {
             let fc_count = fc_soa.len();
 
             // 写入字段变更数量
-            buffer[offset..offset + 4].copy_from_slice(&(fc_count as u32).to_le_bytes());
-            offset += 4;
+            write_bytes(buffer, &mut offset, &(fc_count as u32).to_le_bytes())?;
 
             // field_names
             for field_name in &fc_soa.field_names {
-                buffer[offset..offset + 32].copy_from_slice(field_name);
-                offset += 32;
+                write_bytes(buffer, &mut offset, field_name)?;
             }
 
             // old_values
             for old_value in &fc_soa.old_values {
-                buffer[offset..offset + 64].copy_from_slice(old_value);
-                offset += 64;
+                write_bytes(buffer, &mut offset, old_value)?;
             }
 
             // old_value_lens
             for &len in &fc_soa.old_value_lens {
-                buffer[offset..offset + 2].copy_from_slice(&len.to_le_bytes());
-                offset += 2;
+                write_bytes(buffer, &mut offset, &len.to_le_bytes())?;
             }
 
             // new_values
             for new_value in &fc_soa.new_values {
-                buffer[offset..offset + 64].copy_from_slice(new_value);
-                offset += 64;
+                write_bytes(buffer, &mut offset, new_value)?;
             }
 
             // new_value_lens
             for &len in &fc_soa.new_value_lens {
-                buffer[offset..offset + 2].copy_from_slice(&len.to_le_bytes());
-                offset += 2;
+                write_bytes(buffer, &mut offset, &len.to_le_bytes())?;
             }
 
             // field_types
-            buffer[offset..offset + fc_count].copy_from_slice(&fc_soa.field_types);
-            offset += fc_count;
+            write_bytes(buffer, &mut offset, &fc_soa.field_types)?;
         }
 
         Ok(offset)
@@ -301,71 +333,66 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         }
 
         // 验证魔数
-        if &data[0..4] != MAGIC {
+        if checked_window(data, 0, 4)? != MAGIC {
             return Err(DecodeError::InvalidMagic);
         }
 
         // 验证版本
-        let version = data[4];
+        let version = read_u8_at(data, 4)?;
         if version != VERSION {
             return Err(DecodeError::UnsupportedVersion(version));
         }
 
         // 读取头部
-        let entry_count = u64::from_le_bytes([
-            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-        ]) as usize;
+        let entry_count = read_u64_at(data, 8)? as usize;
 
         // 计算各个数组的偏移量
         let mut offset = HEADER_SIZE;
 
         let timestamps_offset = offset;
-        offset += entry_count * size_of::<u64>();
+        offset = advance(offset, entry_count.saturating_mul(size_of::<u64>()))?;
 
         let sequences_offset = offset;
-        offset += entry_count * size_of::<u64>();
+        offset = advance(offset, entry_count.saturating_mul(size_of::<u64>()))?;
 
         let old_versions_offset = offset;
-        offset += entry_count * size_of::<u64>();
+        offset = advance(offset, entry_count.saturating_mul(size_of::<u64>()))?;
 
         let new_versions_offset = offset;
-        offset += entry_count * size_of::<u64>();
+        offset = advance(offset, entry_count.saturating_mul(size_of::<u64>()))?;
 
         let entity_ids_offset = offset;
-        offset += entry_count * size_of::<i64>();
+        offset = advance(offset, entry_count.saturating_mul(size_of::<i64>()))?;
 
         let entity_types_offset = offset;
-        offset += entry_count;
+        offset = advance(offset, entry_count)?;
 
         let change_types_offset = offset;
-        offset += entry_count;
+        offset = advance(offset, entry_count)?;
 
         // 读取每个条目的字段变更信息
         let mut field_change_infos = Vec::with_capacity(entry_count);
         for _ in 0..entry_count {
-            if offset + 4 > data.len() {
+            let fc_count_bytes = checked_window(data, offset, 4)?;
+            if fc_count_bytes.len() != 4 {
                 return Err(DecodeError::InsufficientData);
             }
 
-            let fc_count = u32::from_le_bytes([
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                data[offset + 3],
-            ]) as usize;
-            offset += 4;
+            let fc_count = read_u32_at(data, offset)? as usize;
+            offset = advance(offset, 4)?;
 
             let fc_offset = offset;
 
             // 计算该条目字段变更数据的大小
-            let fc_size = fc_count * 32 // field_names
-                + fc_count * 64 // old_values
-                + fc_count * 2 // old_value_lens
-                + fc_count * 64 // new_values
-                + fc_count * 2 // new_value_lens
-                + fc_count; // field_types
+            let fc_size = fc_count
+                .saturating_mul(32) // field_names
+                .saturating_add(fc_count.saturating_mul(64)) // old_values
+                .saturating_add(fc_count.saturating_mul(2)) // old_value_lens
+                .saturating_add(fc_count.saturating_mul(64)) // new_values
+                .saturating_add(fc_count.saturating_mul(2)) // new_value_lens
+                .saturating_add(fc_count); // field_types
 
-            offset += fc_size;
+            offset = advance(offset, fc_size)?;
 
             field_change_infos.push(FieldChangeInfo { offset: fc_offset, count: fc_count });
         }
@@ -402,8 +429,8 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     /// 获取时间戳数组（零拷贝）
     pub fn timestamps(&self) -> &[u64] {
         let start = self.timestamps_offset;
-        let end = start + self.entry_count * size_of::<u64>();
-        let bytes = &self.data[start..end];
+        let end = start.saturating_add(self.entry_count.saturating_mul(size_of::<u64>()));
+        let bytes = self.data.get(start..end).unwrap_or(&[]);
         // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
@@ -411,8 +438,8 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     /// 获取序列号数组（零拷贝）
     pub fn sequences(&self) -> &[u64] {
         let start = self.sequences_offset;
-        let end = start + self.entry_count * size_of::<u64>();
-        let bytes = &self.data[start..end];
+        let end = start.saturating_add(self.entry_count.saturating_mul(size_of::<u64>()));
+        let bytes = self.data.get(start..end).unwrap_or(&[]);
         // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
@@ -420,8 +447,8 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     /// 获取旧版本号数组（零拷贝）
     pub fn old_versions(&self) -> &[u64] {
         let start = self.old_versions_offset;
-        let end = start + self.entry_count * size_of::<u64>();
-        let bytes = &self.data[start..end];
+        let end = start.saturating_add(self.entry_count.saturating_mul(size_of::<u64>()));
+        let bytes = self.data.get(start..end).unwrap_or(&[]);
         // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
@@ -429,8 +456,8 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     /// 获取新版本号数组（零拷贝）
     pub fn new_versions(&self) -> &[u64] {
         let start = self.new_versions_offset;
-        let end = start + self.entry_count * size_of::<u64>();
-        let bytes = &self.data[start..end];
+        let end = start.saturating_add(self.entry_count.saturating_mul(size_of::<u64>()));
+        let bytes = self.data.get(start..end).unwrap_or(&[]);
         // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
@@ -438,15 +465,15 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
     /// 获取实体类型数组（零拷贝）
     pub fn entity_types(&self) -> &[u8] {
         let start = self.entity_types_offset;
-        let end = start + self.entry_count;
-        &self.data[start..end]
+        let end = start.saturating_add(self.entry_count);
+        self.data.get(start..end).unwrap_or(&[])
     }
 
     /// 获取变更类型数组（零拷贝）
     pub fn change_types(&self) -> &[u8] {
         let start = self.change_types_offset;
-        let end = start + self.entry_count;
-        &self.data[start..end]
+        let end = start.saturating_add(self.entry_count);
+        self.data.get(start..end).unwrap_or(&[])
     }
 
     /// 获取指定索引的实体 ID
@@ -455,17 +482,13 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.entity_ids_offset + index * size_of::<i64>();
-        let bytes = [
-            self.data[start],
-            self.data[start + 1],
-            self.data[start + 2],
-            self.data[start + 3],
-            self.data[start + 4],
-            self.data[start + 5],
-            self.data[start + 6],
-            self.data[start + 7],
-        ];
+        let start = self
+            .entity_ids_offset
+            .checked_add(index.saturating_mul(size_of::<i64>()))
+            .ok_or(DecodeError::InsufficientData)?;
+        let bytes: [u8; 8] = checked_window(self.data, start, 8)?
+            .try_into()
+            .map_err(|_| DecodeError::InsufficientData)?;
         Ok(i64::from_le_bytes(bytes))
     }
 
@@ -474,7 +497,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         if entry_index >= self.entry_count {
             return Err(DecodeError::IndexOutOfBounds);
         }
-        Ok(self.field_change_infos[entry_index].count)
+        Ok(self.field_change_infos.get(entry_index).map(|info| info.count).unwrap_or(0))
     }
 
     /// 获取指定条目的字段变更 SOA（需要内存拷贝）
@@ -483,7 +506,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let info = &self.field_change_infos[entry_index];
+        let info = self.field_change_infos.get(entry_index).ok_or(DecodeError::IndexOutOfBounds)?;
         let fc_count = info.count;
         let mut offset = info.offset;
 
@@ -492,45 +515,45 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         // 读取 field_names
         for _ in 0..fc_count {
             let mut field_name = [0u8; 32];
-            field_name.copy_from_slice(&self.data[offset..offset + 32]);
+            field_name.copy_from_slice(checked_window(self.data, offset, 32)?);
             soa.field_names.push(field_name);
-            offset += 32;
+            offset = advance(offset, 32)?;
         }
 
         // 读取 old_values
         for _ in 0..fc_count {
             let mut old_value = [0u8; 64];
-            old_value.copy_from_slice(&self.data[offset..offset + 64]);
+            old_value.copy_from_slice(checked_window(self.data, offset, 64)?);
             soa.old_values.push(old_value);
-            offset += 64;
+            offset = advance(offset, 64)?;
         }
 
         // 读取 old_value_lens
         for _ in 0..fc_count {
-            let len = u16::from_le_bytes([self.data[offset], self.data[offset + 1]]);
+            let len = read_u16_at(self.data, offset)?;
             soa.old_value_lens.push(len);
-            offset += 2;
+            offset = advance(offset, 2)?;
         }
 
         // 读取 new_values
         for _ in 0..fc_count {
             let mut new_value = [0u8; 64];
-            new_value.copy_from_slice(&self.data[offset..offset + 64]);
+            new_value.copy_from_slice(checked_window(self.data, offset, 64)?);
             soa.new_values.push(new_value);
-            offset += 64;
+            offset = advance(offset, 64)?;
         }
 
         // 读取 new_value_lens
         for _ in 0..fc_count {
-            let len = u16::from_le_bytes([self.data[offset], self.data[offset + 1]]);
+            let len = read_u16_at(self.data, offset)?;
             soa.new_value_lens.push(len);
-            offset += 2;
+            offset = advance(offset, 2)?;
         }
 
         // 读取 field_types
         for _ in 0..fc_count {
-            soa.field_types.push(self.data[offset]);
-            offset += 1;
+            soa.field_types.push(read_u8_at(self.data, offset)?);
+            offset = advance(offset, 1)?;
         }
 
         Ok(soa)
@@ -756,12 +779,12 @@ impl FieldChangeSoaEncoder {
         let field_count = self.soa.len();
 
         FC_HEADER_SIZE
-            + field_count * 32 // field_names
-            + field_count * 64 // old_values
-            + field_count * size_of::<u16>() // old_value_lens
-            + field_count * 64 // new_values
-            + field_count * size_of::<u16>() // new_value_lens
-            + field_count * size_of::<u8>() // field_types
+            .saturating_add(field_count.saturating_mul(32)) // field_names
+            .saturating_add(field_count.saturating_mul(64)) // old_values
+            .saturating_add(field_count.saturating_mul(size_of::<u16>())) // old_value_lens
+            .saturating_add(field_count.saturating_mul(64)) // new_values
+            .saturating_add(field_count.saturating_mul(size_of::<u16>())) // new_value_lens
+            .saturating_add(field_count.saturating_mul(size_of::<u8>())) // field_types
     }
 
     /// 编码到新分配的 Vec
@@ -787,17 +810,11 @@ impl FieldChangeSoaEncoder {
         let mut offset = 0;
 
         // 写入头部
-        buffer[offset..offset + 4].copy_from_slice(FC_MAGIC);
-        offset += 4;
-        buffer[offset] = FC_VERSION;
-        offset += 1;
-        // padding (3 字节)
-        buffer[offset..offset + 3].fill(0);
-        offset += 3;
-        buffer[offset..offset + 8].copy_from_slice(&(field_count as u64).to_le_bytes());
-        offset += 8;
-        buffer[offset..offset + 8].copy_from_slice(&0u64.to_le_bytes()); // reserved
-        offset += 8;
+        write_bytes(buffer, &mut offset, FC_MAGIC)?;
+        write_bytes(buffer, &mut offset, &[FC_VERSION])?;
+        write_zeroes(buffer, &mut offset, 3)?;
+        write_bytes(buffer, &mut offset, &(field_count as u64).to_le_bytes())?;
+        write_bytes(buffer, &mut offset, &0u64.to_le_bytes())?; // reserved
         debug_assert_eq!(offset, FC_HEADER_SIZE);
 
         // 写入字段变更数据
@@ -805,37 +822,31 @@ impl FieldChangeSoaEncoder {
 
         // field_names
         for field_name in &fc.field_names {
-            buffer[offset..offset + 32].copy_from_slice(field_name);
-            offset += 32;
+            write_bytes(buffer, &mut offset, field_name)?;
         }
 
         // old_values
         for old_value in &fc.old_values {
-            buffer[offset..offset + 64].copy_from_slice(old_value);
-            offset += 64;
+            write_bytes(buffer, &mut offset, old_value)?;
         }
 
         // old_value_lens
         for &len in &fc.old_value_lens {
-            buffer[offset..offset + 2].copy_from_slice(&len.to_le_bytes());
-            offset += 2;
+            write_bytes(buffer, &mut offset, &len.to_le_bytes())?;
         }
 
         // new_values
         for new_value in &fc.new_values {
-            buffer[offset..offset + 64].copy_from_slice(new_value);
-            offset += 64;
+            write_bytes(buffer, &mut offset, new_value)?;
         }
 
         // new_value_lens
         for &len in &fc.new_value_lens {
-            buffer[offset..offset + 2].copy_from_slice(&len.to_le_bytes());
-            offset += 2;
+            write_bytes(buffer, &mut offset, &len.to_le_bytes())?;
         }
 
         // field_types
-        buffer[offset..offset + field_count].copy_from_slice(&fc.field_types);
-        offset += field_count;
+        write_bytes(buffer, &mut offset, &fc.field_types)?;
 
         Ok(offset)
     }
@@ -870,41 +881,39 @@ impl<'a> FieldChangeSoaDecoder<'a> {
         }
 
         // 验证魔数
-        if &data[0..4] != FC_MAGIC {
+        if checked_window(data, 0, 4)? != FC_MAGIC {
             return Err(DecodeError::InvalidMagic);
         }
 
         // 验证版本
-        let version = data[4];
+        let version = read_u8_at(data, 4)?;
         if version != FC_VERSION {
             return Err(DecodeError::UnsupportedVersion(version));
         }
 
         // 读取头部
-        let field_count = u64::from_le_bytes([
-            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-        ]) as usize;
+        let field_count = read_u64_at(data, 8)? as usize;
 
         // 计算各个数组的偏移量
         let mut offset = FC_HEADER_SIZE;
 
         let field_names_offset = offset;
-        offset += field_count * 32;
+        offset = advance(offset, field_count.saturating_mul(32))?;
 
         let old_values_offset = offset;
-        offset += field_count * 64;
+        offset = advance(offset, field_count.saturating_mul(64))?;
 
         let old_value_lens_offset = offset;
-        offset += field_count * size_of::<u16>();
+        offset = advance(offset, field_count.saturating_mul(size_of::<u16>()))?;
 
         let new_values_offset = offset;
-        offset += field_count * 64;
+        offset = advance(offset, field_count.saturating_mul(64))?;
 
         let new_value_lens_offset = offset;
-        offset += field_count * size_of::<u16>();
+        offset = advance(offset, field_count.saturating_mul(size_of::<u16>()))?;
 
         let field_types_offset = offset;
-        offset += field_count;
+        offset = advance(offset, field_count)?;
 
         // 验证数据长度
         if data.len() < offset {
@@ -959,8 +968,8 @@ impl<'a> FieldChangeSoaDecoder<'a> {
     /// 获取字段类型数组（零拷贝）
     pub fn field_types(&self) -> &[u8] {
         let start = self.field_types_offset;
-        let end = start + self.field_count;
-        &self.data[start..end]
+        let end = start.saturating_add(self.field_count);
+        self.data.get(start..end).unwrap_or(&[])
     }
 
     /// 获取指定字段变更的字段名
@@ -969,9 +978,11 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.field_names_offset + field_index * 32;
-        let end = start + 32;
-        Ok(self.data[start..end].try_into().unwrap())
+        let start = self
+            .field_names_offset
+            .checked_add(field_index.saturating_mul(32))
+            .ok_or(DecodeError::IndexOutOfBounds)?;
+        checked_window(self.data, start, 32)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的旧值
@@ -980,9 +991,11 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.old_values_offset + field_index * 64;
-        let end = start + 64;
-        Ok(self.data[start..end].try_into().unwrap())
+        let start = self
+            .old_values_offset
+            .checked_add(field_index.saturating_mul(64))
+            .ok_or(DecodeError::IndexOutOfBounds)?;
+        checked_window(self.data, start, 64)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的新值
@@ -991,9 +1004,11 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.new_values_offset + field_index * 64;
-        let end = start + 64;
-        Ok(self.data[start..end].try_into().unwrap())
+        let start = self
+            .new_values_offset
+            .checked_add(field_index.saturating_mul(64))
+            .ok_or(DecodeError::IndexOutOfBounds)?;
+        checked_window(self.data, start, 64)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的旧值长度
@@ -1002,8 +1017,11 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.old_value_lens_offset + field_index * 2;
-        Ok(u16::from_le_bytes([self.data[start], self.data[start + 1]]))
+        let start = self
+            .old_value_lens_offset
+            .checked_add(field_index.saturating_mul(2))
+            .ok_or(DecodeError::IndexOutOfBounds)?;
+        read_u16_at(self.data, start)
     }
 
     /// 获取指定字段变更的新值长度
@@ -1012,22 +1030,25 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let start = self.new_value_lens_offset + field_index * 2;
-        Ok(u16::from_le_bytes([self.data[start], self.data[start + 1]]))
+        let start = self
+            .new_value_lens_offset
+            .checked_add(field_index.saturating_mul(2))
+            .ok_or(DecodeError::IndexOutOfBounds)?;
+        read_u16_at(self.data, start)
     }
 
     /// 获取指定字段变更的旧值切片（根据实际长度）
     pub fn old_value_bytes(&self, field_index: usize) -> Result<&[u8], DecodeError> {
         let old_value = self.old_value(field_index)?;
         let len = self.old_value_len(field_index)? as usize;
-        Ok(&old_value[..len])
+        Ok(old_value.get(..len).unwrap_or(&[]))
     }
 
     /// 获取指定字段变更的新值切片（根据实际长度）
     pub fn new_value_bytes(&self, field_index: usize) -> Result<&[u8], DecodeError> {
         let new_value = self.new_value(field_index)?;
         let len = self.new_value_len(field_index)? as usize;
-        Ok(&new_value[..len])
+        Ok(new_value.get(..len).unwrap_or(&[]))
     }
 
     /// 转换为 FieldChangeSoa（需要内存拷贝）
@@ -1036,35 +1057,55 @@ impl<'a> FieldChangeSoaDecoder<'a> {
 
         // 拷贝字段名
         for i in 0..self.field_count {
-            soa.field_names.push(*self.field_name(i).unwrap());
+            if let Ok(field_name) = self.field_name(i) {
+                soa.field_names.push(*field_name);
+            }
         }
 
         // 拷贝其他字段变更数据
         for i in 0..self.field_count {
             // old_values
-            let start = self.old_values_offset + i * 64;
+            let start = self
+                .old_values_offset
+                .checked_add(i.saturating_mul(64))
+                .unwrap_or(self.old_values_offset);
             let mut old_value = [0u8; 64];
-            old_value.copy_from_slice(&self.data[start..start + 64]);
+            if let Some(bytes) = self.data.get(start..start.saturating_add(64)) {
+                old_value.copy_from_slice(bytes);
+            }
             soa.old_values.push(old_value);
 
             // old_value_lens
-            let start = self.old_value_lens_offset + i * 2;
-            let old_len = u16::from_le_bytes([self.data[start], self.data[start + 1]]);
+            let start = self
+                .old_value_lens_offset
+                .checked_add(i.saturating_mul(2))
+                .unwrap_or(self.old_value_lens_offset);
+            let old_len = read_u16_at(self.data, start).unwrap_or(0);
             soa.old_value_lens.push(old_len);
 
             // new_values
-            let start = self.new_values_offset + i * 64;
+            let start = self
+                .new_values_offset
+                .checked_add(i.saturating_mul(64))
+                .unwrap_or(self.new_values_offset);
             let mut new_value = [0u8; 64];
-            new_value.copy_from_slice(&self.data[start..start + 64]);
+            if let Some(bytes) = self.data.get(start..start.saturating_add(64)) {
+                new_value.copy_from_slice(bytes);
+            }
             soa.new_values.push(new_value);
 
             // new_value_lens
-            let start = self.new_value_lens_offset + i * 2;
-            let new_len = u16::from_le_bytes([self.data[start], self.data[start + 1]]);
+            let start = self
+                .new_value_lens_offset
+                .checked_add(i.saturating_mul(2))
+                .unwrap_or(self.new_value_lens_offset);
+            let new_len = read_u16_at(self.data, start).unwrap_or(0);
             soa.new_value_lens.push(new_len);
 
             // field_types
-            soa.field_types.push(self.field_types()[i]);
+            if let Some(field_type) = self.field_types().get(i) {
+                soa.field_types.push(*field_type);
+            }
         }
 
         soa

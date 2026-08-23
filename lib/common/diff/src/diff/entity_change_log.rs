@@ -75,8 +75,16 @@ impl FieldChange {
         let old_len = old_value.len().min(64);
         let new_len = new_value.len().min(64);
 
-        old_val[..old_len].copy_from_slice(&old_value[..old_len]);
-        new_val[..new_len].copy_from_slice(&new_value[..new_len]);
+        if let Some(dst) = old_val.get_mut(..old_len) {
+            if let Some(src) = old_value.get(..old_len) {
+                dst.copy_from_slice(src);
+            }
+        }
+        if let Some(dst) = new_val.get_mut(..new_len) {
+            if let Some(src) = new_value.get(..new_len) {
+                dst.copy_from_slice(src);
+            }
+        }
 
         Self {
             field_name,
@@ -93,24 +101,28 @@ impl FieldChange {
         let mut name = [0u8; 32];
         let bytes = s.as_bytes();
         let len = bytes.len().min(32);
-        name[..len].copy_from_slice(&bytes[..len]);
+        if let Some(dst) = name.get_mut(..len) {
+            if let Some(src) = bytes.get(..len) {
+                dst.copy_from_slice(src);
+            }
+        }
         name
     }
 
     /// 获取字段名的字符串表示
     pub fn field_name_as_str(&self) -> Result<&str, std::str::Utf8Error> {
         let end = self.field_name.iter().position(|&b| b == 0).unwrap_or(32);
-        std::str::from_utf8(&self.field_name[..end])
+        std::str::from_utf8(self.field_name.get(..end).unwrap_or(&[]))
     }
 
     /// 获取旧值切片
     pub fn old_value_bytes(&self) -> &[u8] {
-        &self.old_value[..self.old_value_len as usize]
+        self.old_value.get(..self.old_value_len as usize).unwrap_or(&[])
     }
 
     /// 获取新值切片
     pub fn new_value_bytes(&self) -> &[u8] {
-        &self.new_value[..self.new_value_len as usize]
+        self.new_value.get(..self.new_value_len as usize).unwrap_or(&[])
     }
 
     /// 检查是否有旧值
@@ -202,7 +214,9 @@ impl EntityReplayableEvent {
 
     /// 获取版本增量
     pub fn version_delta(&self) -> i64 {
-        self.new_version as i64 - self.old_version as i64
+        let new_version = i64::try_from(self.new_version).unwrap_or(i64::MAX);
+        let old_version = i64::try_from(self.old_version).unwrap_or(i64::MAX);
+        new_version.saturating_sub(old_version)
     }
 
     /// 从字符串解析 entity_id
@@ -269,12 +283,12 @@ impl FieldChangeSoa {
     /// 创建新的空 SOA 结构
     pub fn new() -> Self {
         Self {
-            field_names: Vec::new(),
-            old_values: Vec::new(),
-            old_value_lens: Vec::new(),
-            new_values: Vec::new(),
-            new_value_lens: Vec::new(),
-            field_types: Vec::new(),
+            field_names: Vec::with_capacity(0),
+            old_values: Vec::with_capacity(0),
+            old_value_lens: Vec::with_capacity(0),
+            new_values: Vec::with_capacity(0),
+            new_value_lens: Vec::with_capacity(0),
+            field_types: Vec::with_capacity(0),
         }
     }
 
@@ -336,12 +350,12 @@ impl FieldChangeSoa {
         }
 
         Some(FieldChange {
-            field_name: self.field_names[index],
-            old_value: self.old_values[index],
-            old_value_len: self.old_value_lens[index],
-            new_value: self.new_values[index],
-            new_value_len: self.new_value_lens[index],
-            field_type: self.field_types[index],
+            field_name: self.field_names.get(index).copied()?,
+            old_value: self.old_values.get(index).copied()?,
+            old_value_len: *self.old_value_lens.get(index)?,
+            new_value: self.new_values.get(index).copied()?,
+            new_value_len: *self.new_value_lens.get(index)?,
+            field_type: *self.field_types.get(index)?,
         })
     }
 
@@ -357,7 +371,7 @@ impl FieldChangeSoa {
 
     /// 转换为 Vec<FieldChange>
     pub fn to_vec(&self) -> Vec<FieldChange> {
-        (0..self.len()).map(|i| self.get(i).unwrap()).collect()
+        (0..self.len()).filter_map(|i| self.get(i)).collect()
     }
 }
 
@@ -402,14 +416,14 @@ impl EntityChangeLogSoa {
     /// 创建新的空 SOA 结构
     pub fn new() -> Self {
         Self {
-            timestamps: Vec::new(),
-            sequences: Vec::new(),
-            old_versions: Vec::new(),
-            new_versions: Vec::new(),
-            entity_ids: Vec::new(),
-            entity_types: Vec::new(),
-            change_types: Vec::new(),
-            field_changes: Vec::new(),
+            timestamps: Vec::with_capacity(0),
+            sequences: Vec::with_capacity(0),
+            old_versions: Vec::with_capacity(0),
+            new_versions: Vec::with_capacity(0),
+            entity_ids: Vec::with_capacity(0),
+            entity_types: Vec::with_capacity(0),
+            change_types: Vec::with_capacity(0),
+            field_changes: Vec::with_capacity(0),
         }
     }
 
@@ -490,14 +504,14 @@ impl EntityChangeLogSoa {
         }
 
         Some(EntityReplayableEvent {
-            timestamp: self.timestamps[index],
-            sequence: self.sequences[index],
-            old_version: self.old_versions[index],
-            new_version: self.new_versions[index],
-            entity_id: self.entity_ids[index],
-            entity_type: self.entity_types[index],
-            change_type: self.change_types[index],
-            field_changes: self.field_changes[index].to_vec(),
+            timestamp: *self.timestamps.get(index)?,
+            sequence: *self.sequences.get(index)?,
+            old_version: *self.old_versions.get(index)?,
+            new_version: *self.new_versions.get(index)?,
+            entity_id: *self.entity_ids.get(index)?,
+            entity_type: *self.entity_types.get(index)?,
+            change_type: *self.change_types.get(index)?,
+            field_changes: self.field_changes.get(index)?.to_vec(),
         })
     }
 
@@ -587,18 +601,7 @@ impl From<Vec<EntityReplayableEvent>> for EntityChangeLogSoa {
 /// SOA 到 AOS 的转换
 impl From<EntityChangeLogSoa> for Vec<EntityReplayableEvent> {
     fn from(soa: EntityChangeLogSoa) -> Self {
-        (0..soa.len())
-            .map(|i| EntityReplayableEvent {
-                timestamp: soa.timestamps[i],
-                sequence: soa.sequences[i],
-                old_version: soa.old_versions[i],
-                new_version: soa.new_versions[i],
-                entity_id: soa.entity_ids[i],
-                entity_type: soa.entity_types[i],
-                change_type: soa.change_types[i],
-                field_changes: soa.field_changes[i].to_vec(),
-            })
-            .collect()
+        (0..soa.len()).filter_map(|i| soa.get(i)).collect()
     }
 }
 

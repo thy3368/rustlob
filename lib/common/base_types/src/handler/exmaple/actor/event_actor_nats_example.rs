@@ -1,6 +1,7 @@
 //! EventActor NATS-style 示例。
 
 use std::collections::VecDeque;
+use std::sync::RwLock;
 use std::thread;
 
 use crate::handler::event_actor::EventRecvActor;
@@ -34,8 +35,8 @@ pub const NATS_SUBJECT_TRADE_CREATED: &str = "trades.created";
 pub struct NatsDispatcher {
     place_order_event_handler: PlaceOrderEventHandler,
     trade_event_handler: TradeEventHandler,
-    pending_messages: std::sync::Mutex<VecDeque<NatsMessage>>,
-    settlement_result: std::sync::Mutex<Option<SettlementResult>>,
+    pending_messages: RwLock<VecDeque<NatsMessage>>,
+    settlement_result: RwLock<Option<SettlementResult>>,
 }
 
 impl NatsDispatcher {
@@ -43,17 +44,17 @@ impl NatsDispatcher {
         Self {
             place_order_event_handler: PlaceOrderEventHandler::new(MatchHandler::new()),
             trade_event_handler: TradeEventHandler::new(SettlementHandler::new()),
-            pending_messages: std::sync::Mutex::new(VecDeque::new()),
-            settlement_result: std::sync::Mutex::new(None),
+            pending_messages: RwLock::new(VecDeque::new()),
+            settlement_result: RwLock::new(None),
         }
     }
 
     pub fn take_pending_message(&self) -> Option<NatsMessage> {
-        self.pending_messages.lock().ok()?.pop_front()
+        self.pending_messages.write().ok()?.pop_front()
     }
 
     pub fn take_settlement_result(&self) -> Option<SettlementResult> {
-        self.settlement_result.lock().ok()?.take()
+        self.settlement_result.write().ok()?.take()
     }
 }
 
@@ -65,7 +66,7 @@ impl EventHandler<NatsMessage, (), EventHandlerError> for NatsDispatcher {
                     self.place_order_event_handler.event_handle(event)?;
                 if let Some(trade_event) = emit_trade_created_event(&match_output) {
                     self.pending_messages
-                        .lock()
+                        .write()
                         .map_err(|_| EventHandlerError("pending nats queue poisoned".into()))?
                         .push_back(NatsMessage {
                             subject: NATS_SUBJECT_TRADE_CREATED,
@@ -77,7 +78,7 @@ impl EventHandler<NatsMessage, (), EventHandlerError> for NatsDispatcher {
             }
             NatsPayload::TradeCreated(event) => {
                 let settlement_result = self.trade_event_handler.event_handle(event)?;
-                *self.settlement_result.lock().map_err(|_| {
+                *self.settlement_result.write().map_err(|_| {
                     EventHandlerError("nats settlement result lock poisoned".into())
                 })? = Some(settlement_result);
                 Ok(())

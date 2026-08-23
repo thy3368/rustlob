@@ -11,6 +11,7 @@ use crate::entity::{
     Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
     HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionError,
 };
+use crate::support::{concat3, concat4};
 
 /// 批量结算 Hyperliquid perp 资金费的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +122,7 @@ pub struct SettleHyperliquidPerpFundingChanges {
 
 impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(0);
         for settlement in &self.created_settlements {
             events.push(settlement.track_create_event()?);
         }
@@ -194,8 +195,8 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             &outcome.settlements,
             state.margin_asset_id.as_str(),
         );
-        let mut changed_margin_balances = Vec::new();
-        let mut created_balance_ledger_entries = Vec::new();
+        let mut changed_margin_balances = Vec::with_capacity(0);
+        let mut created_balance_ledger_entries = Vec::with_capacity(0);
         for mut balance in state.margin_balances {
             let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
             let Some(delta) = outcome.balance_deltas.get(&key) else {
@@ -212,8 +213,12 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             let before = balance.clone();
             let amount = u64::try_from(delta.available_delta.unsigned_abs())
                 .map_err(|_| SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-            let entry_id =
-                format!("balance-ledger:funding:{}:{}", cmd.funding_batch_id, balance.entity_id());
+            let entry_id = concat4(
+                "balance-ledger:funding:",
+                cmd.funding_batch_id.as_str(),
+                ":",
+                balance.entity_id().as_str(),
+            );
             let mut entry = if delta.available_delta > 0 {
                 BalanceLedgerEntry::credit_available(
                     entry_id,
@@ -423,7 +428,7 @@ fn settlement_balance_ledger_reasons(
 }
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
-    format!("{account_id}:{asset_id}")
+    concat3(account_id, ":", asset_id)
 }
 
 fn map_funding_balance_ledger_error(
@@ -481,7 +486,7 @@ mod tests {
                 Balance::new("trader-2".to_string(), "USDC".to_string(), 1_000, 0, 11),
             ],
             margin_asset_id: "USDC".to_string(),
-            settled_position_ids: Vec::new(),
+            settled_position_ids: Vec::with_capacity(0),
             margin_mode: HyperliquidPerpMarginMode::Cross,
         }
     }
@@ -517,7 +522,7 @@ mod tests {
                 7,
             )],
             margin_asset_id: "USDC".to_string(),
-            settled_position_ids: Vec::new(),
+            settled_position_ids: Vec::with_capacity(0),
             margin_mode: HyperliquidPerpMarginMode::Cross,
         }
     }

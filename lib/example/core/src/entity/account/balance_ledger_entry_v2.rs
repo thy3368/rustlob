@@ -293,10 +293,14 @@ impl BalanceLedgerEntryV2 {
 
     fn derived_available_delta(&self) -> i128 {
         match self.operation {
-            BalanceLedgerOperation::Freeze => -(self.amount as i128),
+            BalanceLedgerOperation::Freeze => {
+                0_i128.checked_sub(self.amount as i128).unwrap_or(i128::MIN)
+            }
             BalanceLedgerOperation::Unfreeze => self.amount as i128,
             BalanceLedgerOperation::CreditAvailable => self.amount as i128,
-            BalanceLedgerOperation::DebitAvailable => -(self.amount as i128),
+            BalanceLedgerOperation::DebitAvailable => {
+                0_i128.checked_sub(self.amount as i128).unwrap_or(i128::MIN)
+            }
             BalanceLedgerOperation::DebitFrozen => 0,
         }
     }
@@ -304,10 +308,14 @@ impl BalanceLedgerEntryV2 {
     fn derived_frozen_delta(&self) -> i128 {
         match self.operation {
             BalanceLedgerOperation::Freeze => self.amount as i128,
-            BalanceLedgerOperation::Unfreeze => -(self.amount as i128),
+            BalanceLedgerOperation::Unfreeze => {
+                0_i128.checked_sub(self.amount as i128).unwrap_or(i128::MIN)
+            }
             BalanceLedgerOperation::CreditAvailable => 0,
             BalanceLedgerOperation::DebitAvailable => 0,
-            BalanceLedgerOperation::DebitFrozen => -(self.amount as i128),
+            BalanceLedgerOperation::DebitFrozen => {
+                0_i128.checked_sub(self.amount as i128).unwrap_or(i128::MIN)
+            }
         }
     }
 }
@@ -367,7 +375,7 @@ impl FieldDiff for BalanceLedgerEntryV2 {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 
@@ -429,7 +437,7 @@ impl Entity for BalanceLedgerEntryV2 {
 }
 
 fn option_u64_value(value: Option<u64>) -> String {
-    value.map_or_else(String::new, |value| value.to_string())
+    value.map_or_else(|| String::with_capacity(0), |value| value.to_string())
 }
 
 fn stable_balance_ledger_entry_id(value: &str) -> i64 {

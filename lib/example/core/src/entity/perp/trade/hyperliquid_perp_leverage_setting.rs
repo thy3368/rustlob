@@ -2,6 +2,7 @@ use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 use thiserror::Error;
 
 use crate::entity::HyperliquidPerpMarginMode;
+use crate::support::concat5;
 
 const HYPERLIQUID_PERP_LEVERAGE_SETTING_ENTITY_TYPE: u8 = 15;
 
@@ -61,7 +62,8 @@ impl HyperliquidPerpLeverageSetting {
         asset: u32,
         margin_mode: HyperliquidPerpMarginMode,
     ) -> String {
-        format!("{}:{}:{}", account_id, asset, margin_mode.as_str())
+        let asset = asset.to_string();
+        concat5(account_id, ":", asset.as_str(), ":", margin_mode.as_str())
     }
 
     /// 返回该配置是否属于指定账户。
@@ -116,7 +118,7 @@ impl FieldDiff for HyperliquidPerpLeverageSetting {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
         push_change(

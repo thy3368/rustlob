@@ -9,6 +9,7 @@ use crate::entity::{
     HyperliquidPerpOrder, HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus,
     HyperliquidPerpTrade,
 };
+use crate::support::concat3;
 
 /// 撮合 Hyperliquid perp taker 订单时需要的已加载业务状态。
 ///
@@ -108,7 +109,7 @@ pub struct MatchHyperliquidPerpOrderChanges {
 
 impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(0);
         for (trade, maker_order) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
             events.push(maker_order.after.track_update_event_from(&maker_order.before)?);
@@ -189,8 +190,8 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
         let mut taker_order_after = state.taker_order.clone();
         let mut taker_remaining = remaining_qty(&taker_order_after)?;
         let mut total_taker_fill = 0_u64;
-        let mut created_trades = Vec::new();
-        let mut updated_maker_orders = Vec::new();
+        let mut created_trades = Vec::with_capacity(0);
+        let mut updated_maker_orders = Vec::with_capacity(0);
 
         for (trade_index, maker_order) in state.maker_orders.iter().enumerate() {
             if taker_remaining == 0 {
@@ -209,9 +210,12 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
             if trade_qty == 0 {
                 continue;
             }
+            let trade_suffix = trade_index
+                .checked_add(1)
+                .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
             let trade = HyperliquidPerpTrade::new(
-                format!("{}-{}", cmd.match_id, trade_index + 1),
+                concat3(cmd.match_id.as_str(), "-", trade_suffix.to_string().as_str()),
                 cmd.match_id.clone(),
                 taker_order_after.asset,
                 taker_order_after.symbol.clone(),
@@ -367,7 +371,7 @@ mod tests {
             None,
             Some(
                 Reservation::new(
-                    format!("reservation:{order_id}"),
+                    crate::support::concat2("reservation:", order_id),
                     account_id.to_string(),
                     order_id.to_string(),
                     ReservationMarketKind::Perp,
@@ -476,7 +480,7 @@ mod tests {
     fn validate_rejects_taker_order_mismatch() {
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100),
-            maker_orders: Vec::new(),
+            maker_orders: Vec::with_capacity(0),
         };
         let mut cmd = cmd();
         cmd.taker_order_id = "different".to_string();
@@ -491,7 +495,7 @@ mod tests {
     fn validate_rejects_taker_owner_mismatch() {
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100),
-            maker_orders: Vec::new(),
+            maker_orders: Vec::with_capacity(0),
         };
         let mut cmd = cmd();
         cmd.party_id = "other".to_string();
@@ -556,7 +560,7 @@ mod tests {
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100)
                 .with_execution_state(HyperliquidPerpOrderStatus::Canceled, 0),
-            maker_orders: Vec::new(),
+            maker_orders: Vec::with_capacity(0),
         };
         assert_eq!(
             MatchHyperliquidPerpOrderUseCase.validate_against_state(&cmd(), &state),

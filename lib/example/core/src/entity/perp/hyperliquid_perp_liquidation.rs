@@ -315,7 +315,7 @@ impl FieldDiff for HyperliquidPerpLiquidation {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(
             &mut changes,

@@ -195,7 +195,7 @@ mod tests {
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
             &QueryHyperliquidPerpOrderDetail {
-                party_id: String::new(),
+                party_id: String::with_capacity(0),
                 order_id: "order-1".to_string(),
             },
         );
@@ -208,7 +208,7 @@ mod tests {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
             &QueryHyperliquidPerpOrderDetail {
                 party_id: "trader-1".to_string(),
-                order_id: String::new(),
+                order_id: String::with_capacity(0),
             },
         );
 

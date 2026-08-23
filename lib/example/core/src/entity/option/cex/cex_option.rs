@@ -515,7 +515,7 @@ impl FieldDiff for CexOptionOrder {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "instrument_id", &self.instrument_id, &other.instrument_id);
         push_change(

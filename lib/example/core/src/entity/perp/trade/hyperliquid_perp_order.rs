@@ -8,6 +8,7 @@ use crate::entity::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
     ReservationError, ReservationKind, ReservationMarketKind,
 };
+use crate::support::concat2;
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 
@@ -312,7 +313,7 @@ impl HyperliquidPerpOrder {
                 }
 
                 let reservation = Reservation::new(
-                    format!("reservation:{}", input.order_id),
+                    concat2("reservation:", input.order_id.as_str()),
                     input.account_id.clone(),
                     input.order_id.clone(),
                     ReservationMarketKind::Perp,
@@ -322,7 +323,7 @@ impl HyperliquidPerpOrder {
                 )?;
 
                 let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-                    format!("balance-ledger:freeze:{}", input.order_id),
+                    concat2("balance-ledger:freeze:", input.order_id.as_str()),
                     input.account_id.clone(),
                     reservation.asset_id.clone(),
                     margin_balance_entity_id,
@@ -495,7 +496,7 @@ impl FieldDiff for HyperliquidPerpOrder {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
 
         push_change(
             &mut changes,

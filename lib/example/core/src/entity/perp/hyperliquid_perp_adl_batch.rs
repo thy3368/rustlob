@@ -124,7 +124,7 @@ impl FieldDiff for HyperliquidPerpAdlBatch {
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::new();
+        let mut changes = Vec::with_capacity(0);
         push_change(&mut changes, "covered_quote", self.covered_quote, other.covered_quote);
         push_change(&mut changes, "remaining_quote", self.remaining_quote, other.remaining_quote);
         push_change(&mut changes, "entry_count", self.entry_count, other.entry_count);

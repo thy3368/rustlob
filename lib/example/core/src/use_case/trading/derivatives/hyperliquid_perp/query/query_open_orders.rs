@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpOpenOrdersUseCase.pre_check_query(
-            &QueryHyperliquidPerpOpenOrders { party_id: String::new(), symbol: None },
+            &QueryHyperliquidPerpOpenOrders { party_id: String::with_capacity(0), symbol: None },
         );
 
         assert_eq!(result, Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId));
@@ -253,7 +253,7 @@ mod tests {
         let result = QueryHyperliquidPerpOpenOrdersUseCase.pre_check_query(
             &QueryHyperliquidPerpOpenOrders {
                 party_id: "trader-1".to_string(),
-                symbol: Some(String::new()),
+                symbol: Some(String::with_capacity(0)),
             },
         );
 
@@ -395,10 +395,10 @@ mod tests {
     fn compute_view_allows_empty_result() {
         let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
             &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            QueryHyperliquidPerpOpenOrdersReadModel { orders: Vec::new() },
+            QueryHyperliquidPerpOpenOrdersReadModel { orders: Vec::with_capacity(0) },
         );
 
-        assert_eq!(result, Ok(Vec::new()));
+        assert_eq!(result, Ok(Vec::with_capacity(0)));
     }
 
     #[test]

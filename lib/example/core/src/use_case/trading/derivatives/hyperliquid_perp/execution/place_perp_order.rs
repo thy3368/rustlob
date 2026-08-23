@@ -11,6 +11,7 @@ use crate::entity::{
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
 };
+use crate::support::concat5;
 
 /// Hyperliquid perp 下单可能返回的业务错误。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -191,8 +192,10 @@ pub struct PlaceHyperliquidPerpOrderChanges {
 impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
         let mut events = Vec::with_capacity(
-            1 + self.updated_margin_balances.len()
-                + usize::from(self.created_balance_ledger_entry.is_some()),
+            self.updated_margin_balances
+                .len()
+                .saturating_add(usize::from(self.created_balance_ledger_entry.is_some()))
+                .saturating_add(1),
         );
         events.push(self.created_order.track_create_event()?);
         if let Some(ledger_entry) = &self.created_balance_ledger_entry {
@@ -290,7 +293,9 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     ) -> Result<Self::AfterChanges, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
-        let order_id = format!("{}-{}-{}", cmd.party_id, cmd.symbol, state.next_order_sequence);
+        let order_sequence = state.next_order_sequence.to_string();
+        let order_id =
+            concat5(cmd.party_id.as_str(), "-", cmd.symbol.as_str(), "-", order_sequence.as_str());
         let intent = if cmd.reduce_only {
             match derive_place_intent(cmd.side(), size, &state.position)? {
                 DerivedPerpOrderIntent::Close => PlaceHyperliquidPerpOrderIntent::ClosePosition,
@@ -346,7 +351,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
                 created_balance_ledger_entry: None,
-                updated_margin_balances: Vec::new(),
+                updated_margin_balances: Vec::with_capacity(0),
             });
         }
         let previous_balance = state.margin_balance.clone();

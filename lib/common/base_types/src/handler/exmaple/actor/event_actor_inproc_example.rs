@@ -1,5 +1,6 @@
 //! EventActor in-process channel 示例。
 
+use std::sync::RwLock;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
@@ -45,19 +46,19 @@ impl EventHandler<PlaceOrderAcceptedEvent, (), EventHandlerError> for InProcMatc
 
 pub struct InProcSettlementStageDispatcher {
     trade_event_handler: TradeEventHandler,
-    settlement_result: std::sync::Mutex<Option<SettlementResult>>,
+    settlement_result: RwLock<Option<SettlementResult>>,
 }
 
 impl InProcSettlementStageDispatcher {
     pub fn new() -> Self {
         Self {
             trade_event_handler: TradeEventHandler::new(SettlementHandler::new()),
-            settlement_result: std::sync::Mutex::new(None),
+            settlement_result: RwLock::new(None),
         }
     }
 
     pub fn take_settlement_result(&self) -> Option<SettlementResult> {
-        self.settlement_result.lock().ok()?.take()
+        self.settlement_result.write().ok()?.take()
     }
 }
 
@@ -66,7 +67,7 @@ impl EventHandler<TradeCreatedEvent, (), EventHandlerError> for InProcSettlement
         let settlement_result = self.trade_event_handler.event_handle(event)?;
         *self
             .settlement_result
-            .lock()
+            .write()
             .map_err(|_| EventHandlerError("settlement result lock poisoned".into()))? =
             Some(settlement_result);
         Ok(())

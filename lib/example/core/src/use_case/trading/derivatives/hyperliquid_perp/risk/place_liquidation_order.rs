@@ -9,6 +9,7 @@ use crate::entity::{
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce,
     HyperliquidPerpPosition,
 };
+use crate::support::{concat2, concat4};
 
 /// 发出单张 Hyperliquid perp 强平单的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,8 +142,11 @@ impl CommandUseCase4 for PlaceHyperliquidPerpLiquidationOrderUseCase {
             .liquidation
             .next_order_qty(state.position.qty())
             .ok_or(PlaceHyperliquidPerpLiquidationOrderError::ArithmeticOverflow)?;
-        let order_id =
-            format!("{}-{}-{}", state.account_id, state.position.coin, state.next_order_sequence);
+        let order_sequence = state.next_order_sequence.to_string();
+        let order_id = concat2(
+            concat4(state.account_id.as_str(), "-", state.position.coin.as_str(), "-").as_str(),
+            order_sequence.as_str(),
+        );
         let side = liquidation_order_side(&state.position)?;
         let created_order = HyperliquidPerpOrder::new(
             order_id.clone(),
@@ -286,7 +290,7 @@ mod tests {
             position: position(signed_size),
             account_id: "trader-1".to_string(),
             next_order_sequence: 11,
-            existing_open_liquidation_order_ids: Vec::new(),
+            existing_open_liquidation_order_ids: Vec::with_capacity(0),
         }
     }
 

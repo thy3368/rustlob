@@ -1,6 +1,7 @@
 use std::borrow::Cow;
+use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -48,8 +49,16 @@ impl ReplayFieldChange {
         let old_value_len = old_value.len().min(old_buffer.len());
         let new_value_len = new_value.len().min(new_buffer.len());
 
-        old_buffer[..old_value_len].copy_from_slice(&old_value[..old_value_len]);
-        new_buffer[..new_value_len].copy_from_slice(&new_value[..new_value_len]);
+        if let Some(dst) = old_buffer.get_mut(..old_value_len) {
+            if let Some(src) = old_value.get(..old_value_len) {
+                dst.copy_from_slice(src);
+            }
+        }
+        if let Some(dst) = new_buffer.get_mut(..new_value_len) {
+            if let Some(src) = new_value.get(..new_value_len) {
+                dst.copy_from_slice(src);
+            }
+        }
 
         Self {
             field_name,
@@ -76,7 +85,11 @@ impl ReplayFieldChange {
         let mut field_name = [0u8; 32];
         let bytes = value.as_bytes();
         let len = bytes.len().min(field_name.len());
-        field_name[..len].copy_from_slice(&bytes[..len]);
+        if let Some(dst) = field_name.get_mut(..len) {
+            if let Some(src) = bytes.get(..len) {
+                dst.copy_from_slice(src);
+            }
+        }
         field_name
     }
 
@@ -84,17 +97,17 @@ impl ReplayFieldChange {
     pub fn field_name_as_str(&self) -> Result<&str, std::str::Utf8Error> {
         let end =
             self.field_name.iter().position(|byte| *byte == 0).unwrap_or(self.field_name.len());
-        std::str::from_utf8(&self.field_name[..end])
+        std::str::from_utf8(self.field_name.get(..end).unwrap_or(&[]))
     }
 
     #[inline]
     pub fn old_value_bytes(&self) -> &[u8] {
-        &self.old_value[..self.old_value_len as usize]
+        self.old_value.get(..self.old_value_len as usize).unwrap_or(&[])
     }
 
     #[inline]
     pub fn new_value_bytes(&self) -> &[u8] {
-        &self.new_value[..self.new_value_len as usize]
+        self.new_value.get(..self.new_value_len as usize).unwrap_or(&[])
     }
 }
 
@@ -130,7 +143,7 @@ impl EntityReplayableEvent {
             entity_id,
             entity_type,
             change_type,
-            field_changes: Vec::new(),
+            field_changes: Vec::with_capacity(0),
         }
     }
 
@@ -223,12 +236,11 @@ pub fn next_sequence() -> u64 {
     EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
 }
 
+static START_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
+
 #[inline]
 pub fn current_timestamp() -> Result<u64, EntityError> {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| EntityError::ClockError(error.to_string()))?;
-    let nanos = duration.as_nanos();
+    let nanos = START_INSTANT.elapsed().as_nanos();
     u64::try_from(nanos).map_err(|error| EntityError::ClockError(error.to_string()))
 }
 

@@ -240,7 +240,7 @@ pub trait FieldDiff {
 
     #[inline]
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 

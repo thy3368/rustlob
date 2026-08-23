@@ -254,7 +254,7 @@ impl HyperliquidPerpTrade {
         taker_realized_pnl: i64,
         maker_realized_pnl: i64,
     ) -> Option<SettlementTransferVoucher> {
-        let mut legs = Vec::new();
+        let mut legs = Vec::with_capacity(0);
 
         match (taker_realized_pnl.cmp(&0), maker_realized_pnl.cmp(&0)) {
             (Ordering::Greater, Ordering::Less) => {
@@ -264,24 +264,24 @@ impl HyperliquidPerpTrade {
                     return None;
                 }
                 legs.push(SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        self.maker_account_id,
-                        self.taker_account_id
+                    perp_transfer_id(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                        self.maker_account_id.as_str(),
+                        self.taker_account_id.as_str(),
                     ),
                     self.maker_account_id.clone(),
                     self.taker_account_id.clone(),
                     margin_asset_id.to_string(),
                     profit,
                     SettlementTransferPurpose::PerpRealizedPnlTransfer,
-                    format!(
-                        "balance-ledger:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        self.maker_account_id,
-                        self.taker_account_id
+                    perp_transfer_id(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                        self.maker_account_id.as_str(),
+                        self.taker_account_id.as_str(),
                     ),
                 ));
             }
@@ -292,24 +292,24 @@ impl HyperliquidPerpTrade {
                     return None;
                 }
                 legs.push(SettlementTransferLeg::new(
-                    format!(
-                        "settlement-leg:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        self.taker_account_id,
-                        self.maker_account_id
+                    perp_transfer_id(
+                        "settlement-leg:",
+                        settlement_id.as_str(),
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                        self.taker_account_id.as_str(),
+                        self.maker_account_id.as_str(),
                     ),
                     self.taker_account_id.clone(),
                     self.maker_account_id.clone(),
                     margin_asset_id.to_string(),
                     profit,
                     SettlementTransferPurpose::PerpRealizedPnlTransfer,
-                    format!(
-                        "balance-ledger:{}:{}:{}:{}",
-                        settlement_id,
-                        SettlementTransferPurpose::PerpRealizedPnlTransfer.as_str(),
-                        self.taker_account_id,
-                        self.maker_account_id
+                    perp_transfer_id(
+                        "balance-ledger:",
+                        settlement_id.as_str(),
+                        SettlementTransferPurpose::PerpRealizedPnlTransfer,
+                        self.taker_account_id.as_str(),
+                        self.maker_account_id.as_str(),
                     ),
                 ));
             }
@@ -318,40 +318,44 @@ impl HyperliquidPerpTrade {
 
         if taker_fee > 0 {
             legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:taker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
+                perp_role_id(
+                    "settlement-leg:",
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    "taker",
                 ),
                 self.taker_account_id.clone(),
                 fee_account_id.clone(),
                 margin_asset_id.to_string(),
                 taker_fee,
                 SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:taker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
+                perp_role_id(
+                    "balance-ledger:",
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    "taker",
                 ),
             ));
         }
 
         if maker_fee > 0 {
             legs.push(SettlementTransferLeg::new(
-                format!(
-                    "settlement-leg:{}:{}:maker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
+                perp_role_id(
+                    "settlement-leg:",
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    "maker",
                 ),
                 self.maker_account_id.clone(),
                 fee_account_id.clone(),
                 margin_asset_id.to_string(),
                 maker_fee,
                 SettlementTransferPurpose::TradingFee,
-                format!(
-                    "balance-ledger:{}:{}:maker",
-                    settlement_id,
-                    SettlementTransferPurpose::TradingFee.as_str()
+                perp_role_id(
+                    "balance-ledger:",
+                    settlement_id.as_str(),
+                    SettlementTransferPurpose::TradingFee,
+                    "maker",
                 ),
             ));
         }
@@ -366,6 +370,41 @@ impl HyperliquidPerpTrade {
             legs,
         ))
     }
+}
+
+fn perp_transfer_id(
+    prefix: &str,
+    settlement_id: &str,
+    purpose: SettlementTransferPurpose,
+    from_account_id: &str,
+    to_account_id: &str,
+) -> String {
+    let mut out = String::with_capacity(128);
+    out.push_str(prefix);
+    out.push_str(settlement_id);
+    out.push(':');
+    out.push_str(purpose.as_str());
+    out.push(':');
+    out.push_str(from_account_id);
+    out.push(':');
+    out.push_str(to_account_id);
+    out
+}
+
+fn perp_role_id(
+    prefix: &str,
+    settlement_id: &str,
+    purpose: SettlementTransferPurpose,
+    role: &str,
+) -> String {
+    let mut out = String::with_capacity(96);
+    out.push_str(prefix);
+    out.push_str(settlement_id);
+    out.push(':');
+    out.push_str(purpose.as_str());
+    out.push(':');
+    out.push_str(role);
+    out
 }
 
 impl FieldDiff for HyperliquidPerpTrade {
@@ -387,7 +426,7 @@ impl FieldDiff for HyperliquidPerpTrade {
     }
 
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+        Vec::with_capacity(0)
     }
 }
 

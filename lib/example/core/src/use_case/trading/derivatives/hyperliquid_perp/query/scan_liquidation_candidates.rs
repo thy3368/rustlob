@@ -183,7 +183,7 @@ mod tests {
         let result = QueryHyperliquidPerpLiquidationCandidatesUseCase.pre_check_query(
             &QueryHyperliquidPerpLiquidationCandidates {
                 party_id: "risk-engine".to_string(),
-                scan_batch_id: String::new(),
+                scan_batch_id: String::with_capacity(0),
             },
         );
 

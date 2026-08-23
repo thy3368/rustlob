@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
-use std::time::{SystemTime as StdSystemTime, UNIX_EPOCH};
+use std::sync::LazyLock;
 
 use serde_json::{Map, Number, Value};
 use tracing::field::{Field, Visit};
@@ -92,8 +92,8 @@ fn should_keep_field(token: &str) -> bool {
 
 fn split_field_tokens(fields: &str) -> Vec<String> {
     let sanitized_fields = strip_ansi_sequences(fields);
-    let mut tokens = Vec::new();
-    let mut current = String::new();
+    let mut tokens = Vec::with_capacity(sanitized_fields.len().saturating_div(2).saturating_add(1));
+    let mut current = String::with_capacity(sanitized_fields.len());
     let mut in_quotes = false;
     let mut escape_next = false;
 
@@ -138,7 +138,13 @@ fn parse_scalar_token(raw: &str) -> Value {
     let value = raw.trim();
 
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
-        return Value::String(value[1..value.len() - 1].replace("\\\"", "\""));
+        return Value::String(
+            value
+                .strip_prefix('"')
+                .and_then(|v| v.strip_suffix('"'))
+                .unwrap_or(value)
+                .replace("\\\"", "\""),
+        );
     }
 
     if value == "true" {
@@ -243,10 +249,8 @@ fn extract_prefixed_object(
 }
 
 fn current_timestamp_millis() -> String {
-    StdSystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+    static START: LazyLock<minstant::Instant> = LazyLock::new(minstant::Instant::now);
+    START.elapsed().as_millis().to_string()
 }
 
 #[derive(Default)]

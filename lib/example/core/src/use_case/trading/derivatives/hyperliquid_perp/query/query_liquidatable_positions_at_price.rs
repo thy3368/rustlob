@@ -230,7 +230,7 @@ mod tests {
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpLiquidatablePositionsAtPriceUseCase.pre_check_query(
             &QueryHyperliquidPerpLiquidatablePositionsAtPrice {
-                party_id: String::new(),
+                party_id: String::with_capacity(0),
                 mark_price: 49_000,
             },
         );

@@ -5,6 +5,7 @@ use diff::Entity;
 use diff::diff_types::{ChangeType, DomainEvent};
 use entity_derive::immutable;
 use sqlx::MySql;
+use sqlx::mysql::MySqlPoolOptions;
 
 use crate::core::db_repo2::{CmdRepo2, PageRequest, PageResult, QueryRepo2, RepoError};
 
@@ -15,8 +16,7 @@ pub struct MySqlRepo {
 
 impl MySqlRepo {
     pub fn create(url: &str) -> Result<Self, RepoError> {
-        let rt = tokio::runtime::Handle::current();
-        let pool = rt.block_on(async { sqlx::Pool::<MySql>::connect(url).await }).map_err(|e| {
+        let pool = MySqlPoolOptions::new().connect_lazy(url).map_err(|e| {
             RepoError::DeserializationFailed(format!("Failed to connect to MySQL: {}", e))
         })?;
         Ok(Self { pool: Some(Arc::new(pool)) })

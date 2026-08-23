@@ -8,6 +8,7 @@ use crate::entity::{
     Balance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
 };
+use crate::support::concat3;
 use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
 
 /// 启动单个 Hyperliquid perp 仓位强平流程的命令。
@@ -205,7 +206,7 @@ fn validate_state(
 }
 
 fn liquidation_id(batch_id: &str, position_id: &str) -> String {
-    format!("{batch_id}-{position_id}")
+    concat3(batch_id, "-", position_id)
 }
 
 #[cfg(test)]
@@ -241,7 +242,7 @@ mod tests {
             mark_price: 49_000,
             bankruptcy_price: 50_000,
             trigger_reason: HyperliquidPerpLiquidationTriggerReason::MaintenanceMarginBreach,
-            existing_liquidation_position_ids: Vec::new(),
+            existing_liquidation_position_ids: Vec::with_capacity(0),
         }
     }
 
