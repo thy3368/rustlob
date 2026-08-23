@@ -1502,10 +1502,8 @@ fn apply_trade_balance_effects(
         trade_ids: trade_ids.clone(),
         settlement_ids: settlement_ids.clone(),
     };
-    let seller_release_base_reason = BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase {
-        trade_ids: trade_ids.clone(),
-        settlement_ids: settlement_ids.clone(),
-    };
+    let seller_release_base_reason =
+        BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase { trade_ids, settlement_ids };
 
     let quote_notional =
         trade.notional_quote().ok_or(SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow)?;
@@ -1530,7 +1528,7 @@ fn apply_trade_balance_effects(
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
             entry_id: format!("balance-ledger:{}:buyer-quote", context.settlement_id),
-            account_id: buyer_account_id.clone(),
+            account_id: buyer_account_id,
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
             reason: buyer_release_quote_reason,
@@ -1554,7 +1552,7 @@ fn apply_trade_balance_effects(
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
             entry_id: format!("balance-ledger:{}:seller-base", context.settlement_id),
-            account_id: seller_account_id.clone(),
+            account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
             amount: trade.qty,
             reason: seller_release_base_reason,
@@ -1697,12 +1695,9 @@ fn balance_replay_events_from_ledger_entries(
     ledger_entries: &[BalanceLedgerEntryV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
-    let mut expected_after_balances =
-        HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.entity_id();
-        current_balances.insert(balance_id.clone(), balance.before.clone());
-        expected_after_balances.insert(balance_id, balance.after.clone());
+        current_balances.insert(balance_id, balance.before.clone());
     }
 
     let mut events = Vec::with_capacity(ledger_entries.len());
@@ -1748,8 +1743,9 @@ fn balance_replay_events_from_ledger_entries(
         current_balances.insert(entry.balance_entity_id.clone(), after);
     }
 
-    for (balance_id, expected_after) in expected_after_balances {
-        if current_balances.get(&balance_id) != Some(&expected_after) {
+    for balance in updated_balances {
+        let balance_id = balance.after.entity_id();
+        if current_balances.get(&balance_id) != Some(&balance.after) {
             return Err(common_entity::EntityError::Custom(
                 "balance replay chain does not reach case-level balance after state".to_string(),
             ));
