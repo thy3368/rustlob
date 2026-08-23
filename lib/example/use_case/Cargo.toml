@@ -1,0 +1,21 @@
+[package]
+name = "example_core_use_case"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
+example_core_entity = { path = "../entity" }
+rust_decimal = { version = "1.41", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1"
+
+[lints]
+workspace = true
