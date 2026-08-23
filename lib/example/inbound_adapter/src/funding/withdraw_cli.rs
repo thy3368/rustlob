@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
-use example_core::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
+use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
 use serde::Serialize;
 
 use crate::common::{

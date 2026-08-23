@@ -2,10 +2,10 @@ use cmd_handler::command_use_case_def2::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
 };
-pub use example_core::CancelSpotOrderV2LookupV3;
+pub use example_core_use_case::CancelSpotOrderV2LookupV3;
 #[cfg(test)]
-use example_core::{Balance, SpotOrderV2};
-use example_core::{
+use example_core_use_case::{Balance, SpotOrderV2};
+use example_core_use_case::{
     CancelSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
     SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
 };
@@ -178,7 +178,7 @@ pub fn execute_cancel_spot_order_v2<OB>(
     outbound: &OB,
 ) -> Result<
     MiFamilyExecutionResult<SpotOrderV2CaseChangesV3>,
-    MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
+    MiFamilyExecutionError<example_core_use_case::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
 >
 where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
@@ -240,7 +240,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core::{SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce};
+    use example_core_use_case::{
+        SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
+    };
 
     use super::*;
 

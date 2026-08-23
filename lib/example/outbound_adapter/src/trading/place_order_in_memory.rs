@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-use example_core::{
+use example_core_use_case::{
     Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
     ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,

@@ -34,7 +34,7 @@ fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use cmd_handler::{EntityReplayableEvent, ReplayFieldChange};
-    use example_core::ORDER_ENTITY_TYPE;
+    use example_core_use_case::ORDER_ENTITY_TYPE;
 
     use super::event_order_sequence;
 

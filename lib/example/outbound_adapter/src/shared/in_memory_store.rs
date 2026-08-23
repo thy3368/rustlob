@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
-use example_core::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
+use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
 
 use super::StoreSnapshot;
 use crate::shared::StoreError;

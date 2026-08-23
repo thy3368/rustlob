@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-use example_core::SpotOrderV2UseCaseFamilyV3;
+use example_core_use_case::SpotOrderV2UseCaseFamilyV3;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -137,7 +137,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core::{SpotOrderV2CommandV3, SpotOrderV2GivenStateV3};
+    use example_core_use_case::{SpotOrderV2CommandV3, SpotOrderV2GivenStateV3};
 
     use super::*;
     use crate::exchange::actions::cancel::{CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request};

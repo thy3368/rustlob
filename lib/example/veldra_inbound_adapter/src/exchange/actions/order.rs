@@ -2,7 +2,7 @@ use cmd_handler::command_use_case_def2::{
     MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
     MiStateMachineFamilyExecutor,
 };
-use example_core::{
+use example_core_use_case::{
     PlaceSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
     SpotOrderV2UseCaseFamilyV3,
 };
@@ -346,7 +346,7 @@ pub fn execute_place_spot_order_v2<OB>(
     outbound: &OB,
 ) -> Result<
     MiFamilyExecutionResult<SpotOrderV2CaseChangesV3>,
-    MiFamilyExecutionError<example_core::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
+    MiFamilyExecutionError<example_core_use_case::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
 >
 where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
@@ -446,7 +446,7 @@ mod tests {
     use std::fmt;
 
     use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core::{
+    use example_core_use_case::{
         Balance, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
         SpotOrderV2,
     };

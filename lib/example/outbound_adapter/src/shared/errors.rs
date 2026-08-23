@@ -26,8 +26,8 @@ pub enum PlaceOrderOutboundError {
     Store(#[from] StoreError),
 }
 
-impl From<example_core::SpotOrderV2UseCaseFamilyV3Error> for PlaceOrderOutboundError {
-    fn from(error: example_core::SpotOrderV2UseCaseFamilyV3Error) -> Self {
+impl From<example_core_use_case::SpotOrderV2UseCaseFamilyV3Error> for PlaceOrderOutboundError {
+    fn from(error: example_core_use_case::SpotOrderV2UseCaseFamilyV3Error) -> Self {
         Self::BuildSpotOrderV2State(error.to_string())
     }
 }

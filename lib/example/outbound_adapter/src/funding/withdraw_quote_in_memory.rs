@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
-use example_core::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
+use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
 
 use crate::shared::{
     InMemoryStore, WithdrawQuoteOutboundError, balance_key, event_string_field, event_u64_field,

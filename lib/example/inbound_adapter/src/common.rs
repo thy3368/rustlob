@@ -6,7 +6,7 @@ use cmd_handler::command_use_case_def2::{
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, MiFamilyExecutionError,
     UseCaseReplyMapper,
 };
-use example_core::{
+use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
     WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
@@ -251,7 +251,7 @@ pub(crate) mod tests {
 
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, MiFamilyOutbound};
-    use example_core::{
+    use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
         WithdrawQuoteCmd, WithdrawQuoteState, build_place_spot_order_v2_taker_template_v3,

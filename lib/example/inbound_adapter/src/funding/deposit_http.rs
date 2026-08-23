@@ -9,7 +9,7 @@ use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };
-use example_core::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
+use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
 use serde::{Deserialize, Serialize};
 
 use crate::common::{

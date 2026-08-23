@@ -7,7 +7,7 @@ license.workspace = true
 
 [dependencies]
 cmd_handler = { path = "../../common/cmd_handler" }
-example_core = { path = "../core" }
+example_core_use_case = { path = "../use_case" }
 mysql = "24.0"
 thiserror = "1"
 
