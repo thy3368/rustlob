@@ -1836,10 +1836,6 @@ impl BalanceMap {
 }
 
 #[cfg(test)]
-#[path = "spot_order_v2_use_case_family_v3_bdd_conditional.rs"]
-mod spot_order_v2_use_case_family_v3_bdd_conditional;
-
-#[cfg(test)]
 mod tests {
     use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2};
 

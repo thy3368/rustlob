@@ -2,9 +2,9 @@ use common_entity::{
     MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked, ReplayableChanges,
 };
 
-use super::*;
-use crate::entity::account::balance_ledger_entry_v2::BalanceLedgerOperation;
-use crate::{Reservation, SpotOrderStatus, SpotOrderStatusReason};
+use example_core_use_case::*;
+use example_core_use_case::BalanceLedgerOperation;
+use example_core_use_case::{Reservation, SpotOrderStatus, SpotOrderStatusReason};
 
 fn test_principal_reservation(
     order_id: &str,
