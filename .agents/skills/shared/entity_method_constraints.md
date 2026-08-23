@@ -120,7 +120,7 @@ Do not expose these as use-case-visible entity methods:
 
 ## Reservation Calibration
 
-For `lib/example/core/src/entity/reservation/model.rs`, keep the four-way split strict:
+For `lib/example/entity/src/entity/reservation/model.rs`, keep the four-way split strict:
 
 - `Behavior Method` and tag it:
   - `new`, because it is currently the business creation entry for a frozen reservation.

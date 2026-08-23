@@ -34,8 +34,8 @@ This skill does not cover:
 ## Read First
 
 Load these files before writing or reviewing happy-path tests:
-- Main calibration example: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_happy_path.rs`
-- Style template: `lib/example/core/src/use_case/trading/spot/match_order/compute_replayable_events_spec_style_template.rs`
+- Main calibration example: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
+- Style template: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
 - Shared canonical `use_case` / `entity` facts: `.agents/skills/shared/use_case_entity_constraints.md`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`

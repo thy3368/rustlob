@@ -9,7 +9,7 @@ description: Write RustLOB core entities for command-style use cases. Use when c
 
 Use this skill to create or refactor RustLOB `core/src/entity` types so they carry reusable
 business meaning instead of being passive data bags. The reference pattern is
-`lib/example/core/src/entity/spot/spot_order_v2.rs`: an entity with high-semantic business entry
+`lib/example/entity/src/entity/spot/spot_order_v2.rs`: an entity with high-semantic business entry
 points and private/internal derivation details.
 
 `SpotOrderV2` is the current reference for entity API shape. Older `SpotOrder` code may be useful

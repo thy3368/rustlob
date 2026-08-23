@@ -19,7 +19,7 @@ Keep Rustdoc short, business-oriented, and example-driven.
 
 Start from these files:
 - Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
-- Example with Rustdoc: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
+- Example with Rustdoc: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
 - Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
 
 Read `.agents/skills/shared/changes_pair_first_rule.md` before documenting public `*Changes`.
@@ -117,7 +117,7 @@ Keep doctests:
 - compileable
 - independent from large fixture setup
 
-Prefer `use example_core::TypeName;` style imports when the type is re-exported publicly.
+Prefer `use example_core_use_case::TypeName;` style imports when the type is re-exported publicly.
 
 ## What To Avoid
 

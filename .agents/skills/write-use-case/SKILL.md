@@ -14,8 +14,8 @@ Treat source code as the contract of truth. This skill summarizes the expected s
 Start from these source files:
 - Contract: `lib/common/entity/src/use_case/state_machine_v2.rs`
 - Runtime executor contract: `lib/common/entity/src/use_case/mi_family_executor.rs`
-- Current calibration implementation: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order.rs`
-- Happy-path spec example: `lib/example/core/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
+- Current calibration implementation: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order.rs`
+- Happy-path spec example: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
 - Adapter executor examples: `lib/example/inbound_adapter/src/trading/http.rs` and `lib/example/inbound_adapter/src/trading/cli.rs`
 - Shared canonical `use_case` / `entity` facts: `.agents/skills/shared/use_case_entity_constraints.md`
 - Shared changes pair-first rule: `.agents/skills/shared/changes_pair_first_rule.md`

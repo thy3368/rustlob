@@ -130,8 +130,9 @@ find lib/example -maxdepth 4 -type f | sort | sed -n '1,160p'
 
 使用该结构作为目录建议时：
 
-- `lib/example/core` 对应 `core`
-- `lib/example/core/src/use_case/<use_case_group>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
+- `lib/example/entity` 对应 `core.entity`
+- `lib/example/use_case` 对应 `core.use_case`
+- `lib/example/use_case/src/use_case/<use_case_group>/<use_case>.rs` 对应具体业务用例，例如 `trading/spot/place_order.rs`
 - `lib/example/inbound_adapter` 对应 `adapter.inbound`
 - `lib/example/outbound_adapter` 对应 `adapter.outbound`
 ## Output Contract
