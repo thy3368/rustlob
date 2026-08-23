@@ -1,11 +1,9 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{AggregateRole, Entity, FinancialClassification};
-
-use super::balance::Balance;
-use super::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
+use example_core_entity::{
+    Balance, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
+    BalanceLedgerReason, SettlementTransferPurpose,
 };
-use super::{BalanceLedgerReason, SettlementTransferPurpose};
 
 fn order_reason() -> BalanceLedgerReason {
     BalanceLedgerReason::FreezeForOrder { order_id: "order-1".to_string() }

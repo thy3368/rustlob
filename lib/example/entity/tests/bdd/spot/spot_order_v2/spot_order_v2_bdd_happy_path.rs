@@ -1,4 +1,4 @@
-use super::*;
+use example_core_entity::*;
 
 // 本文件只承载 SpotOrderV2 订单生命周期的 happy path BDD 规格。
 
@@ -17,7 +17,8 @@ fn buy_order() -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
+        crate::test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100)
+            .unwrap(),
         Some("cloid-1".to_string()),
         1,
     )
@@ -38,7 +39,14 @@ fn market_buy_order() -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        test_principal_reservation("order-market-buy", "trader-3", SpotOrderSide::Buy, 2, 120),
+        crate::test_principal_reservation(
+            "order-market-buy",
+            "trader-3",
+            SpotOrderSide::Buy,
+            2,
+            120,
+        )
+        .unwrap(),
         None,
         1,
     )
@@ -107,8 +115,8 @@ fn reject_as_no_liquidity_uses_market_or_ioc_reason() -> Result<(), SpotOrderV2M
     let mut limit_ioc = SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Ioc, ..buy_order() };
 
     // When：撮合侧按无流动性拒绝。
-    market.reject_as_no_liquidity()?;
-    limit_ioc.reject_as_no_liquidity()?;
+    market.finish_after_match(0)?;
+    limit_ioc.finish_after_match(0)?;
 
     // Then：两类订单使用各自的业务拒绝原因。
     assert_eq!(market.status_reason, Some(SpotOrderStatusReason::MarketOrderNoLiquidityRejected));

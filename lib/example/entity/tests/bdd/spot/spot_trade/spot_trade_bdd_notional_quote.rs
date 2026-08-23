@@ -1,4 +1,4 @@
-use super::*;
+use example_core_entity::*;
 
 fn trade(price: u64, qty: u64, taker_fee: u64, maker_fee: u64) -> SpotTrade {
     SpotTrade::new(

@@ -10,11 +10,6 @@ use crate::entity::{
 use crate::support::concat4;
 use crate::{SpotOrderSide, SpotTradeFeeRole};
 
-#[cfg(test)]
-mod spot_trade_bdd_notional_quote;
-#[cfg(test)]
-mod spot_trade_bdd_settlement_transfer_voucher;
-
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
 /// 已完成撮合的一笔现货成交事实。

@@ -1,4 +1,4 @@
-use super::*;
+use example_core_entity::*;
 
 fn trade() -> SpotTrade {
     SpotTrade::new(

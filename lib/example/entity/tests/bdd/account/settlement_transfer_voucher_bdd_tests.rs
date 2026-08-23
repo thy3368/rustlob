@@ -1,5 +1,7 @@
-use super::{BalanceLedgerOperation, BalanceLedgerReason, SettlementTransferPurpose};
-use crate::{HyperliquidPerpTrade, SpotTrade};
+use example_core_entity::{
+    BalanceLedgerOperation, BalanceLedgerReason, HyperliquidPerpOrderSide, HyperliquidPerpTrade,
+    SettlementTransferPurpose, SpotOrderSide, SpotTrade,
+};
 
 fn balance_entity_id(account_id: &str, asset_id: &str) -> String {
     format!("balance:{account_id}:{asset_id}")
@@ -15,7 +17,7 @@ fn perp_trade() -> HyperliquidPerpTrade {
         "maker-order-1".to_string(),
         "winner".to_string(),
         "loser".to_string(),
-        crate::HyperliquidPerpOrderSide::Buy,
+        HyperliquidPerpOrderSide::Buy,
         100,
         1,
         1_717_171_717_000,
@@ -33,7 +35,7 @@ fn derive_balance_ledger_entries_maps_spot_principal_and_fee_legs() {
         "maker-ledger-1".to_string(),
         "buyer".to_string(),
         "seller".to_string(),
-        crate::SpotOrderSide::Buy,
+        SpotOrderSide::Buy,
         100,
         2,
         1,

@@ -1,4 +1,4 @@
-use super::{
+use example_core_entity::{
     Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 

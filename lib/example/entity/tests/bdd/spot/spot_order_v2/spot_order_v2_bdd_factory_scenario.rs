@@ -1,4 +1,5 @@
-use super::*;
+use example_core_entity::spot::spot_order_v2::SpotOrderLifecycle;
+use example_core_entity::*;
 
 fn factory_entry_parent_order() -> SpotOrderV2 {
     match SpotOrderV2::new_active(

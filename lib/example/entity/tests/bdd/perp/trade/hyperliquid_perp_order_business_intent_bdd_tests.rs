@@ -1,17 +1,14 @@
 use common_entity::Entity;
-use rust_decimal::Decimal;
-
-use super::hyperliquid_perp_order::{
-    HyperliquidPerpOrder, HyperliquidPerpOrderBehaviorError, HyperliquidPerpOrderExecution,
-    HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
-    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
-};
-use crate::entity::{
-    AccountId, Balance, BalanceLedgerReason, MarginReservation, PerpAssetRiskRule,
-    PerpClearinghouseState, PerpClearinghouseStateCalcInput, PerpCollateralSnapshot,
-    PerpMarketMark, PerpRiskPolicy, Reservation, ReservationKind, ReservationMarketKind,
+use example_core_entity::{
+    AccountId, Balance, BalanceLedgerReason, HyperliquidPerpOrder,
+    HyperliquidPerpOrderBehaviorError, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
+    HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce, MarginReservation,
+    PerpAssetRiskRule, PerpClearinghouseState, PerpClearinghouseStateCalcInput,
+    PerpCollateralSnapshot, PerpMarketMark, PerpRiskPolicy, PlaceHyperliquidPerpOrderInput,
+    PlaceHyperliquidPerpOrderIntent, Reservation, ReservationKind, ReservationMarketKind,
     ReservationStatus,
 };
+use rust_decimal::Decimal;
 
 fn dec(units: i64) -> Decimal {
     Decimal::from(units)

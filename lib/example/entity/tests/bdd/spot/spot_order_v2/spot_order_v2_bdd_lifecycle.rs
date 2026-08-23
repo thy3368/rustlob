@@ -1,4 +1,5 @@
-use super::*;
+use example_core_entity::spot::spot_order_v2::SpotOrderLifecycle;
+use example_core_entity::*;
 
 fn trigger_pending_order() -> SpotOrderV2 {
     SpotOrderV2::new_trigger_pending(

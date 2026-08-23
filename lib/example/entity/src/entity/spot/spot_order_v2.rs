@@ -18,17 +18,6 @@ use crate::entity::{
 };
 use crate::support::{concat2, concat3, concat4};
 
-#[cfg(test)]
-mod spot_order_v2_bdd_behavior_methods;
-#[cfg(test)]
-mod spot_order_v2_bdd_conditional_trigger_match_settlement;
-#[cfg(test)]
-mod spot_order_v2_bdd_factory_scenario;
-#[cfg(test)]
-mod spot_order_v2_bdd_happy_path;
-#[cfg(test)]
-mod spot_order_v2_bdd_lifecycle;
-
 const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
 
 /// `SpotOrderV2` 的冻结资产角色。

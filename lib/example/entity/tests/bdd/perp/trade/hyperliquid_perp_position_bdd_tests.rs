@@ -1,6 +1,6 @@
-use super::hyperliquid_perp_position::{
+use example_core_entity::{
     HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionError,
-    HyperliquidPerpPositionStatus,
+    HyperliquidPerpPositionStatus, HyperliquidPerpPositionTradeOutcome,
 };
 
 fn empty_position() -> HyperliquidPerpPosition {
@@ -17,10 +17,7 @@ fn open_from_empty_slot(
     signed_size: i64,
     entry_price: u64,
 ) -> Result<
-    (
-        HyperliquidPerpPosition,
-        super::hyperliquid_perp_position::HyperliquidPerpPositionTradeOutcome,
-    ),
+    (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
     HyperliquidPerpPositionError,
 > {
     let slot = empty_position();

@@ -1,5 +1,4 @@
-use super::*;
-use crate::entity::{BalanceLedgerOperation, ReservationStatus};
+use example_core_entity::{BalanceLedgerOperation, ReservationStatus, *};
 
 fn buy_order() -> SpotOrderV2 {
     SpotOrderV2::new(
@@ -15,7 +14,8 @@ fn buy_order() -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100),
+        crate::test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 2, 100)
+            .unwrap(),
         Some("cloid-1".to_string()),
         1,
     )
@@ -35,13 +35,14 @@ fn maker_sell_qty(order_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
         0,
         SpotOrderStatus::Open,
         None,
-        test_principal_reservation(
+        crate::test_principal_reservation(
             order_id,
             format!("account-{order_id}").as_str(),
             SpotOrderSide::Sell,
             qty,
             price,
-        ),
+        )
+        .unwrap(),
         None,
         1,
     )
@@ -123,7 +124,7 @@ fn place_rejects_invalid_quantity_price_and_overflow() {
 fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2BehaviorError> {
     let mut taker = SpotOrderV2 { qty: 3, ..buy_order() };
     taker.reservation =
-        test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100);
+        crate::test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100)?;
     let mut makers = vec![maker_sell_qty("maker-1", 1, 90), maker_sell_qty("maker-2", 3, 95)];
 
     let outcome = taker.match_with_makers(
@@ -158,7 +159,7 @@ fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2Beha
 fn match_with_makers_stops_at_first_non_crossing_maker() -> Result<(), SpotOrderV2BehaviorError> {
     let mut taker = SpotOrderV2 { qty: 3, ..buy_order() };
     taker.reservation =
-        test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100);
+        crate::test_principal_reservation("order-buy", "trader-1", SpotOrderSide::Buy, 3, 100)?;
     let mut makers = vec![maker_sell_qty("maker-1", 1, 90), maker_sell_qty("maker-2", 1, 110)];
 
     let outcome = taker.match_with_makers(

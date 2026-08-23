@@ -1,5 +1,5 @@
-use super::*;
-use crate::entity::{SettlementKind, SettlementTransferPurpose};
+use example_core_entity::spot::spot_order_v2::SpotOrderLifecycle;
+use example_core_entity::{SettlementKind, SettlementTransferPurpose, *};
 
 fn trigger_pending_buy_order() -> SpotOrderV2 {
     SpotOrderV2::new_trigger_pending(

@@ -1,5 +1,7 @@
-use super::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
-use crate::entity::{BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerReason};
+use example_core_entity::{
+    BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerReason,
+    HyperliquidPerpFundingSettlement,
+};
 
 fn funding_settlement(signed_usdc_delta: i128) -> HyperliquidPerpFundingSettlement {
     HyperliquidPerpFundingSettlement::new(

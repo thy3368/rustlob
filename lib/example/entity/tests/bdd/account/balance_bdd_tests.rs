@@ -1,4 +1,4 @@
-use super::balance::{Balance, BalanceError};
+use example_core_entity::{Balance, BalanceError};
 
 fn balance() -> Balance {
     Balance::new_with_snapshot_facts(

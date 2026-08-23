@@ -1,7 +1,6 @@
-use super::hyperliquid_perp_leverage_setting::{
-    HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError,
+use example_core_entity::{
+    HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError, HyperliquidPerpMarginMode,
 };
-use super::hyperliquid_perp_position::HyperliquidPerpMarginMode;
 
 fn cross_setting() -> HyperliquidPerpLeverageSetting {
     HyperliquidPerpLeverageSetting::new(

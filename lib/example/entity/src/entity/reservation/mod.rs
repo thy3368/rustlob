@@ -1,8 +1,6 @@
 mod model;
 
 #[cfg(test)]
-mod reservation_bdd_happy_path;
-#[cfg(test)]
 mod tests;
 
 pub use model::{

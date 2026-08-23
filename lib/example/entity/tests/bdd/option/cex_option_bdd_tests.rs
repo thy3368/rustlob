@@ -1,8 +1,7 @@
 use common_entity::{
     AggregateRole, Entity, FieldDiff, FinancialClassification, FourColorArchetype,
 };
-
-use crate::entity::option::cex::cex_option::*;
+use example_core_entity::option::cex::cex_option::*;
 
 fn put_instrument() -> CexOptionInstrument {
     CexOptionInstrument::new(

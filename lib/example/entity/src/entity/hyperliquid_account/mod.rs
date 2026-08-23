@@ -1,7 +1,5 @@
 pub mod account;
 pub mod perp;
-#[cfg(test)]
-mod perp_bdd_calculate_from_facts;
 pub mod spot;
 
 pub use account::{

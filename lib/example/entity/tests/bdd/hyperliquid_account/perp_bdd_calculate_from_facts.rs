@@ -1,15 +1,10 @@
-use rust_decimal::Decimal;
-
-use super::AccountId;
-use super::perp::{
+use example_core_entity::{
+    AccountId, HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation,
     PerpAssetRiskRule, PerpClearinghouseState, PerpClearinghouseStateCalcError,
     PerpClearinghouseStateCalcInput, PerpCollateralSnapshot, PerpMarketMark, PerpRiskPolicy,
-    RiskState,
+    Reservation, ReservationKind, ReservationMarketKind, RiskState,
 };
-use crate::entity::{
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, Reservation,
-    ReservationKind, ReservationMarketKind,
-};
+use rust_decimal::Decimal;
 
 fn dec(units: i64) -> Decimal {
     Decimal::from(units)
