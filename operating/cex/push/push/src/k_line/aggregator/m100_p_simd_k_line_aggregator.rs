@@ -33,12 +33,15 @@ impl<T> UnsafeCellWrapper<T> {
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut(&self) -> &mut T {
-        &mut *self.inner.get()
+        // SAFETY: 调用方必须保证同一时间只有一个线程访问该 slot，避免别名可变引用。
+        unsafe { &mut *self.inner.get() }
     }
 }
 
 // 不安全的 Send 和 Sync 实现，因为我们将确保每个 UnsafeCellWrapper 在固定线程上使用
+// SAFETY: 调度层按窗口固定线程访问，T: Send 时跨线程移动 wrapper 是安全的。
 unsafe impl<T: Send> Send for UnsafeCellWrapper<T> {}
+// SAFETY: 调度层保证内部可变访问互斥，T: Sync 时共享 wrapper 引用是安全的。
 unsafe impl<T: Sync> Sync for UnsafeCellWrapper<T> {}
 
 // M100PSimdKLineAggregator - 使用 Rayon 的并行无锁版本

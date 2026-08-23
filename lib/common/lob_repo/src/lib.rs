@@ -1,4 +1,16 @@
-#![allow(warnings)]
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_variables,
+    clippy::assign_op_pattern,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::todo,
+    clippy::type_complexity,
+    clippy::unnecessary_map_or,
+    clippy::unwrap_used,
+    reason = "lob_repo 仍包含未完成 adapter 与多版撮合实现；先显式记录历史债务，替代 allow(warnings)。"
+)]
 
 pub mod adapter;
 pub mod core;

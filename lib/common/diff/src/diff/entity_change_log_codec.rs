@@ -31,6 +31,13 @@
 //!   - field_types: [u8; field_change_count]
 //! ```
 
+#![allow(
+    clippy::too_many_arguments,
+    clippy::disallowed_methods,
+    clippy::unwrap_used,
+    reason = "零拷贝 codec 当前依赖固定长度切片转换，先显式记录遗留 unwrap 债务。"
+)]
+
 use std::mem::size_of;
 
 use super::entity_change_log::{EntityChangeLogSoa, FieldChange, FieldChangeSoa};
@@ -397,6 +404,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         let start = self.timestamps_offset;
         let end = start + self.entry_count * size_of::<u64>();
         let bytes = &self.data[start..end];
+        // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
 
@@ -405,6 +413,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         let start = self.sequences_offset;
         let end = start + self.entry_count * size_of::<u64>();
         let bytes = &self.data[start..end];
+        // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
 
@@ -413,6 +422,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         let start = self.old_versions_offset;
         let end = start + self.entry_count * size_of::<u64>();
         let bytes = &self.data[start..end];
+        // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
 
@@ -421,6 +431,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         let start = self.new_versions_offset;
         let end = start + self.entry_count * size_of::<u64>();
         let bytes = &self.data[start..end];
+        // SAFETY: `from_bytes` 校验了 offset 按 u64 对齐，长度由 entry_count 精确计算。
         unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u64, self.entry_count) }
     }
 

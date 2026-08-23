@@ -2,6 +2,12 @@
 //!
 //! 提供高性能命令处理框架，支持纳秒级延迟度量
 
+#![allow(
+    clippy::disallowed_macros,
+    clippy::todo,
+    reason = "cmd_handler 仍保留旧版 handler_cmd 草稿实现，先显式记录 todo 债务。"
+)]
+
 pub mod command_use_case_def2;
 pub mod handler_cmd;
 pub mod handler_query;

@@ -1,3 +1,13 @@
+#![allow(
+    unused_variables,
+    clippy::derivable_impls,
+    clippy::disallowed_methods,
+    clippy::disallowed_macros,
+    clippy::todo,
+    clippy::unwrap_used,
+    reason = "遗留 diff API 仍在迁移中；保留具体豁免，避免恢复 crate 级 allow(warnings)。"
+)]
+
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::sync::LazyLock;

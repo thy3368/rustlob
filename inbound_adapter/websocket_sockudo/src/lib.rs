@@ -1,5 +1,3 @@
-#![allow(warnings)]
-
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use simd_json::json;

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "benchmark setup/measurement path 使用 unwrap/expect 保持样例简洁，不进入生产执行路径。"
+)]
+
 use base_types::base_types::TraderId;
 use base_types::cqrs::cqrs_types::CMetadata;
 use base_types::exchange::spot::spot_types::{

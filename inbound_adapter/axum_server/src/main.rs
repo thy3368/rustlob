@@ -1,4 +1,20 @@
 // HTTP 接口层
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_mut,
+    unused_variables,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::new_without_default,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::todo,
+    clippy::unwrap_used,
+    reason = "axum_server adapter 仍含启动日志、草稿 websocket controller 和示例式错误处理，先显式豁免以替代宽泛 allow(warnings)。"
+)]
+
 pub mod interfaces {
 
     pub mod common {

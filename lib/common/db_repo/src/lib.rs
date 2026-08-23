@@ -1,4 +1,19 @@
-#![allow(warnings)]
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_mut,
+    unused_variables,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::empty_line_after_doc_comments,
+    clippy::expect_used,
+    clippy::manual_div_ceil,
+    clippy::needless_borrow,
+    clippy::ptr_arg,
+    clippy::todo,
+    clippy::unwrap_used,
+    reason = "db_repo 仍有未完成内存/PG adapter 与旧 MySQL 连接实现；先以具体 lint 豁免替代 allow(warnings)。"
+)]
 
 pub mod adapter;
 pub mod core;

@@ -1,5 +1,8 @@
 #![feature(portable_simd)]
-#![allow(warnings)]
+#![allow(
+    unused_features,
+    reason = "portable_simd 是 diff crate 既有实验性优化入口，暂未在默认路径启用。"
+)]
 
 pub mod diff;
 pub use diff::diff_types;

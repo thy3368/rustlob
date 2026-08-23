@@ -1,3 +1,11 @@
+#![allow(
+    clippy::repr_packed_without_abi,
+    clippy::too_many_arguments,
+    clippy::disallowed_methods,
+    clippy::unwrap_used,
+    reason = "变更日志二进制布局和构造 API 为遗留格式，后续需专项兼容性重构。"
+)]
+
 use zerocopy::{FromZeros, Immutable, IntoBytes, Unaligned};
 
 /// 变更日志条目（AOS 版本）

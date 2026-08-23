@@ -10,6 +10,22 @@ pub enum VmRuntimeError {
     ExecutionFailed(String),
 }
 
+impl std::fmt::Display for VmRuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VmRuntimeError::UnregisteredVmKind(vm_kind) => {
+                write!(f, "unregistered VM runtime: {vm_kind:?}")
+            }
+            VmRuntimeError::UnsupportedCapability { vm_kind, capability } => {
+                write!(f, "unsupported VM capability {capability} for {vm_kind:?}")
+            }
+            VmRuntimeError::ExecutionFailed(message) => write!(f, "VM execution failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for VmRuntimeError {}
+
 pub trait VmRuntime<Tx>: Send + Sync {
     fn execute(&self, input: VmExecutionInput<Tx>) -> Result<VmExecutionOutput, VmRuntimeError>;
 }

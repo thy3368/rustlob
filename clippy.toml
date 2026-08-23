@@ -3,6 +3,8 @@ disallowed-methods = [
     "std::option::Option::unwrap",
     "std::result::Result::unwrap",
     "std::result::Result::expect",
+    "std::thread::sleep",
+    "tokio::time::sleep",
 ]
 
 # 补充约束：禁止直接依赖 panic 运行时类型

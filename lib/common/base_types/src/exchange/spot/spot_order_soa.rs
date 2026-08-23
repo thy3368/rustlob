@@ -350,11 +350,13 @@ pub mod simd_arm {
 
             // 每次处理2个u64（128位）
             while i + 2 <= len {
-                let unfilled = vld1q_u64(self.unfilled_qtys.as_ptr().add(i));
+                // SAFETY: 循环条件保证 i..i+2 在 unfilled_qtys 范围内，函数契约要求 NEON 可用。
+                let unfilled = unsafe { vld1q_u64(self.unfilled_qtys.as_ptr().add(i)) };
                 let cmp = vceqq_u64(unfilled, zero);
 
                 let mut mask = [0u64; 2];
-                vst1q_u64(mask.as_mut_ptr(), cmp);
+                // SAFETY: mask 固定包含 2 个 u64，正好承接 128-bit NEON 写入。
+                unsafe { vst1q_u64(mask.as_mut_ptr(), cmp) };
                 results.push(mask[0] != 0);
                 results.push(mask[1] != 0);
 
