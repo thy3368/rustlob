@@ -1,5 +1,7 @@
 use cmd_handler::command_use_case_def2::CommandUseCase4;
-use example_core::{DepositQuoteChanges, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
+use example_core_use_case::{
+    DepositQuoteChanges, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
+};
 
 use crate::entity::{CommandEnvelope, ExchangeState, ProductCommand, TreasuryState};
 use crate::use_case::BuildBlockError;

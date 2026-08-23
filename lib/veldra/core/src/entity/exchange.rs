@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use example_core::{DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteCmd};
+use example_core_use_case::{DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteCmd};
 use serde::{Deserialize, Serialize};
 
 use super::{PerpState, SpotState, TreasuryState, stable_hash_hex};

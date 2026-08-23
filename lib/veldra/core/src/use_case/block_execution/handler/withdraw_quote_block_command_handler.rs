@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::CommandUseCase4;
-use example_core::{
+use example_core_use_case::{
     WithdrawQuoteChanges, WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
 

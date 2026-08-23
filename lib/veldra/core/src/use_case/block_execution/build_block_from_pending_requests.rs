@@ -1,7 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::ReplayableChanges;
 use common_entity::MiStateMachineV2Unchecked;
-use example_core::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
+use example_core_use_case::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
 
 use super::{
     BlockEntityChange, BuildBlockError, BuildBlockFromCommandsChanges,

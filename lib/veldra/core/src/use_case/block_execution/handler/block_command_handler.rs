@@ -1,4 +1,4 @@
-use example_core::{
+use example_core_use_case::{
     Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges,
     WithdrawQuoteCmd,
 };

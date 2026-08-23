@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use cmd_handler::command_use_case_def2::ReplayableChanges;
 use common_entity::MiStateMachineV2Unchecked;
-use example_core::{
+use example_core_use_case::{
     Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3, SpotOrderTimeInForce,
     WithdrawQuoteCmd,
 };

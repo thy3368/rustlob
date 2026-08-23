@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 bincode = "1.3"
 cmd_handler = { path = "../../common/cmd_handler" }
-example_core = { path = "../../example/core" }
+example_core_use_case = { path = "../../example/use_case" }
 libmdbx = "0.6"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"

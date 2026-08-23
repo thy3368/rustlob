@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use example_core::{Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3};
+use example_core_use_case::{Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3};
 use veldra_core::entity::{
     AccountAssetKey, BlockExecutionBody, ExchangeState, NewBlock, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand,

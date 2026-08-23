@@ -19,7 +19,8 @@ members = [
     "lib/core/l1",
     "lib/core/l1_adapter",
     # lib/example
-    "lib/example/core",
+    "lib/example/entity",
+    "lib/example/use_case",
     "lib/example/inbound_adapter",
     "lib/example/outbound_adapter",
     "lib/example/veldra_inbound_adapter",
@@ -61,7 +62,8 @@ default-members = [
     "lib/core/l1",
     "lib/core/l1_adapter",
     # lib/example
-    "lib/example/core",
+    "lib/example/entity",
+    "lib/example/use_case",
     "lib/example/inbound_adapter",
     "lib/example/outbound_adapter",
     # app

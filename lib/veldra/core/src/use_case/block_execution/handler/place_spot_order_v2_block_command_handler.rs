@@ -1,5 +1,5 @@
 use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked};
-use example_core::{
+use example_core_use_case::{
     PlaceSpotOrderV2ChangesV3, PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3,
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
     SpotOrderV2UseCaseFamilyV3, build_place_spot_order_v2_taker_template_v3,
@@ -171,7 +171,7 @@ fn build_place_state(
     if !settlement_balances.iter().any(|balance| {
         balance.account_id == fee_account_id && balance.asset_id == asset_pair.quote_asset_id
     }) {
-        settlement_balances.push(example_core::Balance::new(
+        settlement_balances.push(example_core_use_case::Balance::new(
             fee_account_id.clone(),
             asset_pair.quote_asset_id.clone(),
             0,
@@ -201,8 +201,8 @@ fn build_place_state(
                 && order.side() != taker_order.side()
                 && matches!(
                     order.status(),
-                    example_core::SpotOrderStatus::Open
-                        | example_core::SpotOrderStatus::PartiallyFilled
+                    example_core_use_case::SpotOrderStatus::Open
+                        | example_core_use_case::SpotOrderStatus::PartiallyFilled
                 )
         })
         .cloned()

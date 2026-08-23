@@ -1,4 +1,4 @@
-use example_core::Balance;
+use example_core_use_case::Balance;
 use veldra_core::entity::{BlockExecutionBody, NewBlock};
 use veldra_core::use_case::BlockEntityChange;
 

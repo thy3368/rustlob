@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use example_core::Balance;
+use example_core_use_case::Balance;
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
 

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use example_core::{
+use example_core_use_case::{
     Balance, HyperliquidPerpFundingSettlement, HyperliquidPerpOrder, HyperliquidPerpPosition,
 };
 

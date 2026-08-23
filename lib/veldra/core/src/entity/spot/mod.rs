@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use example_core::entity::AssetReservation;
-use example_core::{Balance, MarketRules, SpotOrderTimeInForce, SpotOrderV2};
+use example_core_use_case::entity::AssetReservation;
+use example_core_use_case::{Balance, MarketRules, SpotOrderTimeInForce, SpotOrderV2};
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
 
@@ -97,10 +97,10 @@ fn balance_commitment(balance: &Balance) -> String {
 
 fn spot_order_commitment(order: &SpotOrderV2) -> String {
     let execution = match order.execution {
-        example_core::SpotOrderExecution::Market { aggressive_price } => {
+        example_core_use_case::SpotOrderExecution::Market { aggressive_price } => {
             format!("market:{aggressive_price}")
         }
-        example_core::SpotOrderExecution::Limit { price } => format!("limit:{price}"),
+        example_core_use_case::SpotOrderExecution::Limit { price } => format!("limit:{price}"),
     };
     let status_reason = order.status_reason.map(|value| value.as_str()).unwrap_or_default();
     stable_hash_hex(&[

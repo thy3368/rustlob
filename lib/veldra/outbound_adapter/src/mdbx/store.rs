@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use cmd_handler::EntityReplayableEvent;
-use example_core::{Balance, SpotOrderV2};
+use example_core_use_case::{Balance, SpotOrderV2};
 use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags, WriteFlags};
 use veldra_core::entity::{BlockExecutionBody, CommandEnvelope, NewBlock, ProductCommand};
 use veldra_core::use_case::BlockEntityChange;
