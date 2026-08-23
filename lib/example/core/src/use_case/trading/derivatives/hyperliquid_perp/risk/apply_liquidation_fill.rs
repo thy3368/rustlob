@@ -8,6 +8,7 @@ use crate::entity::{
     HyperliquidPerpLiquidation, HyperliquidPerpLiquidationFill, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpTrade,
 };
+use crate::support::concat3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplyHyperliquidPerpLiquidationFillCmd {
@@ -155,7 +156,7 @@ impl CommandUseCase4 for ApplyHyperliquidPerpLiquidationFillUseCase {
             .notional_quote()
             .ok_or(ApplyHyperliquidPerpLiquidationFillError::ArithmeticOverflow)?;
         let created_fill = HyperliquidPerpLiquidationFill::new(
-            format!("{}-{}", cmd.liquidation_id, cmd.trade_id),
+            concat3(cmd.liquidation_id.as_str(), "-", cmd.trade_id.as_str()),
             cmd.liquidation_id.clone(),
             cmd.order_id.clone(),
             cmd.trade_id.clone(),

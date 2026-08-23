@@ -2,6 +2,8 @@ use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::support::concat3;
+
 const BALANCE_ENTITY_TYPE: u8 = 7;
 
 /// 余额实体行为错误。
@@ -242,7 +244,7 @@ impl Entity for Balance {
     type Id = String;
 
     fn entity_id(&self) -> Self::Id {
-        format!("{}:{}", self.account_id, self.asset_id)
+        concat3(self.account_id.as_str(), ":", self.asset_id.as_str())
     }
 
     fn entity_type() -> u8 {

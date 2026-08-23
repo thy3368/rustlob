@@ -103,7 +103,9 @@ pub fn compute_hourly_funding_rate_e8(
             .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
     }
 
-    let avg_premium_e8 = premium_sum_e8 / HYPERLIQUID_HOURLY_SAMPLE_COUNT as i128;
+    let avg_premium_e8 = premium_sum_e8
+        .checked_div(HYPERLIQUID_HOURLY_SAMPLE_COUNT as i128)
+        .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
     let interest_minus_premium = INTEREST_E8_8H
         .checked_sub(avg_premium_e8)
         .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
@@ -147,7 +149,9 @@ fn sample_premium_e8(
         .checked_mul(RATE_SCALE_E8)
         .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
 
-    Ok(scaled_delta / oracle_price)
+    scaled_delta
+        .checked_div(oracle_price)
+        .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)
 }
 
 fn validate_book_levels(
@@ -214,7 +218,9 @@ fn compute_impact_price_from_levels(
         let numerator = target_notional
             .checked_mul(level_price)
             .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
-        let avg_price = numerator / denominator;
+        let avg_price = numerator
+            .checked_div(denominator)
+            .ok_or(HyperliquidPerpFundingRateError::ArithmeticOverflow)?;
 
         return u64::try_from(avg_price)
             .map_err(|_| HyperliquidPerpFundingRateError::ArithmeticOverflow);

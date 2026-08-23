@@ -1,28 +1,66 @@
-# 严禁生产路径出现逃逸式控制流与调试输出
+# 隐式堆分配：热路径必须预分配或复用缓冲
 disallowed-methods = [
-    "std::option::Option::unwrap",
-    "std::result::Result::unwrap",
-    "std::result::Result::expect",
-    "std::thread::sleep",
-    "tokio::time::sleep",
+    { path = "std::option::Option::unwrap", reason = "禁止逃逸式控制流进入生产路径" },
+    { path = "std::result::Result::unwrap", reason = "禁止逃逸式控制流进入生产路径" },
+    { path = "std::result::Result::expect", reason = "禁止逃逸式控制流进入生产路径" },
+    { path = "alloc::vec::Vec::new", reason = "热路径必须预分配或复用缓冲，避免隐式堆分配" },
+    { path = "alloc::string::String::new", reason = "热路径必须预分配或复用缓冲，避免隐式堆分配" },
+    { path = "std::collections::HashMap::new", reason = "热路径必须预分配或复用缓冲，避免隐式堆分配" },
+    { path = "alloc::vec::Vec::resize", reason = "扩容会触发额外分配和搬移，热路径应显式控制容量" },
+
+    # 运行期 IO / syscall：启动期收敛，热路径禁止
+    { path = "std::thread::sleep", reason = "热路径禁止阻塞等待" },
+    { path = "tokio::time::sleep", reason = "热路径禁止异步等待" },
+    { path = "std::time::SystemTime::now", reason = "热路径禁止依赖运行期时钟查询" },
+    { path = "std::env::var", reason = "热路径禁止读取运行期环境变量" },
+    { path = "std::thread::spawn", reason = "热路径禁止动态创建线程" },
+    { path = "std::fs::File::open", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::File::create", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::read", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::read_to_string", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::write", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::remove_file", reason = "热路径禁止文件 IO" },
+    { path = "std::fs::read_dir", reason = "热路径禁止目录遍历" },
+    { path = "std::fs::OpenOptions::open", reason = "热路径禁止文件 IO" },
+    { path = "serde_json::from_slice", reason = "热路径禁止在关键链路做通用 JSON 反序列化" },
+
+    # 撮合/计费/风控精度：禁止浮点舍入语义进入业务计算
+    { path = "f32::ceil", reason = "业务计算禁止浮点舍入语义" },
+    { path = "f32::floor", reason = "业务计算禁止浮点舍入语义" },
+    { path = "f32::round", reason = "业务计算禁止浮点舍入语义" },
+    { path = "f64::ceil", reason = "业务计算禁止浮点舍入语义" },
+    { path = "f64::floor", reason = "业务计算禁止浮点舍入语义" },
+    { path = "f64::round", reason = "业务计算禁止浮点舍入语义" },
+
+    # 边界：禁止不透明转换和通用反序列化跨越架构边界
+    { path = "std::mem::transmute", reason = "禁止不透明内存转换跨越业务边界" },
 ]
 
-# 补充约束：禁止直接依赖 panic 运行时类型
+# 锁竞争：热路径禁止互斥锁和写锁
 disallowed-types = [
-    "core::panic::PanicInfo",
+    { path = "core::panic::PanicInfo", reason = "禁止直接依赖 panic 运行时类型" },
+    { path = "std::sync::Mutex", reason = "热路径禁止互斥锁" },
+    { path = "std::sync::RwLock", reason = "热路径禁止写锁/读写锁竞争" },
+    { path = "parking_lot::Mutex", reason = "热路径禁止互斥锁" },
+    { path = "parking_lot::RwLock", reason = "热路径禁止写锁/读写锁竞争" },
 ]
 
-# `PanicInfo` 不能拦住 `panic!`，这里直接禁用相关宏
+# 逃逸式控制流与调试输出：生产路径禁止
 disallowed-macros = [
-    "std::dbg",
-    "std::eprintln",
-    "std::panic",
-    "std::println",
-    "std::todo",
-    "std::unimplemented",
-    "core::panic",
-    "core::todo",
-    "core::unimplemented",
+    { path = "std::dbg", reason = "禁止调试输出进入生产路径" },
+    { path = "std::eprintln", reason = "禁止调试输出进入生产路径" },
+    { path = "std::format", reason = "热路径禁止隐式格式化分配" },
+    { path = "std::panic", reason = "禁止逃逸式控制流进入生产路径" },
+    { path = "std::println", reason = "禁止调试输出进入生产路径" },
+    { path = "std::todo", reason = "禁止未完成占位进入生产路径" },
+    { path = "std::unimplemented", reason = "禁止未完成占位进入生产路径" },
+    { path = "std::debug_assert", reason = "生产路径禁止调试断言" },
+    { path = "std::unreachable", reason = "生产路径禁止不透明不可达分支" },
+    { path = "core::debug_assert", reason = "生产路径禁止调试断言" },
+    { path = "core::panic", reason = "禁止逃逸式控制流进入生产路径" },
+    { path = "core::todo", reason = "禁止未完成占位进入生产路径" },
+    { path = "core::unimplemented", reason = "禁止未完成占位进入生产路径" },
+    { path = "core::unreachable", reason = "生产路径禁止不透明不可达分支" },
 ]
 
 # 测试代码允许使用调试性写法，生产代码仍按上面的硬禁项执行

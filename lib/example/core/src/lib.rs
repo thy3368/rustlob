@@ -1,4 +1,5 @@
 pub mod entity;
+mod support;
 pub mod use_case;
 
 pub use common_entity::{DomainReadModel, DomainReadSnapshot};

@@ -206,7 +206,14 @@ impl Reservation {
     }
 
     pub fn has_consistent_amounts(&self) -> bool {
-        self.original_amount == self.consumed_amount + self.released_amount + self.remaining_amount
+        let Some(total) = self
+            .consumed_amount
+            .checked_add(self.released_amount)
+            .and_then(|value| value.checked_add(self.remaining_amount))
+        else {
+            return false;
+        };
+        self.original_amount == total
     }
 
     /// 可 BDD 规格化的聚合根行为：消耗冻结量。
