@@ -2,8 +2,8 @@ use cmd_handler::command_use_case_def2::CommandUseCase4;
 use example_core_use_case::{
     DepositQuoteChanges, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
 };
+use veldra_core_entity::{CommandEnvelope, ExchangeState, ProductCommand, TreasuryState};
 
-use crate::entity::{CommandEnvelope, ExchangeState, ProductCommand, TreasuryState};
 use crate::use_case::BuildBlockError;
 use crate::use_case::block_execution::handler::block_command_handler::{
     BlockCommandHandler, apply_deposit_quote_changes, treasury_quote_balance,

@@ -2,13 +2,13 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::ReplayableChanges;
 use common_entity::MiStateMachineV2Unchecked;
 use example_core_use_case::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
+use veldra_core_entity::{
+    BlockExecutionBody, CommandEnvelope, ExchangeState, ProductCommand, build_new_block,
+};
 
 use super::{
     BlockEntityChange, BuildBlockError, BuildBlockFromCommandsChanges,
     BuildBlockFromCommandsCommand, BuildBlockFromCommandsState,
-};
-use crate::entity::{
-    BlockExecutionBody, CommandEnvelope, ExchangeState, ProductCommand, build_new_block,
 };
 use crate::use_case::block_execution::canonical_batch::validate_and_clone_canonical_commands;
 use crate::use_case::block_execution::handler::block_command_handler::{

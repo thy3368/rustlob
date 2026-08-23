@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
+use veldra_core_entity::{CommandEnvelope, ProductCommand, SpotCommand, TreasuryCommand};
+
 use super::BuildBlockError;
-use crate::entity::{CommandEnvelope, ProductCommand, SpotCommand, TreasuryCommand};
 
 /// 对 block builder 输入做最小防串改校验：
 /// 1. batch 内不能重复注入 command_id / (account_id, nonce)

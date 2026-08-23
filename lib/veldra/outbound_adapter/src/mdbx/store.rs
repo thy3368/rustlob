@@ -4,8 +4,8 @@ use std::path::Path;
 use cmd_handler::EntityReplayableEvent;
 use example_core_use_case::{Balance, SpotOrderV2};
 use libmdbx::{Database, DatabaseOptions, NoWriteMap, TableFlags, WriteFlags};
-use veldra_core::entity::{BlockExecutionBody, CommandEnvelope, NewBlock, ProductCommand};
-use veldra_core::use_case::BlockEntityChange;
+use veldra_core_entity::{BlockExecutionBody, CommandEnvelope, NewBlock, ProductCommand};
+use veldra_core_use_case::BlockEntityChange;
 
 use super::codec::{decode_record, encode_record};
 use super::error::VeldraMdbxStorageError;

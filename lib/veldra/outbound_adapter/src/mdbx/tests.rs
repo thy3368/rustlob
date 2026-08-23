@@ -1,6 +1,6 @@
 use example_core_use_case::Balance;
-use veldra_core::entity::{BlockExecutionBody, NewBlock};
-use veldra_core::use_case::BlockEntityChange;
+use veldra_core_entity::{BlockExecutionBody, NewBlock};
+use veldra_core_use_case::BlockEntityChange;
 
 use super::test_support::{TestDir, built_block, header_body_changes};
 use crate::{VeldraMdbxBlockStore, VeldraMdbxStorageError};

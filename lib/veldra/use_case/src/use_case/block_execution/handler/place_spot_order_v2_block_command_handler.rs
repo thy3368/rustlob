@@ -4,8 +4,10 @@ use example_core_use_case::{
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
     SpotOrderV2UseCaseFamilyV3, build_place_spot_order_v2_taker_template_v3,
 };
+use veldra_core_entity::{
+    AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState,
+};
 
-use crate::entity::{AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotState};
 use crate::use_case::BuildBlockError;
 use crate::use_case::block_execution::handler::block_command_handler::BlockCommandHandler;
 

@@ -1,4 +1,5 @@
-use crate::entity::{CommandEnvelope, ExchangeState, ProductCommand};
+use veldra_core_entity::{CommandEnvelope, ExchangeState, ProductCommand};
+
 use crate::use_case::BuildBlockError;
 
 pub(in crate::use_case::block_execution) static PERP_UNSUPPORTED_BLOCK_COMMAND_HANDLER:

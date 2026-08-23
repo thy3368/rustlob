@@ -6,12 +6,12 @@ use example_core_use_case::{
     Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3, SpotOrderTimeInForce,
     WithdrawQuoteCmd,
 };
-
-use super::*;
-use crate::entity::{
+use veldra_core_entity::{
     AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand, stable_hash_hex,
 };
+
+use super::*;
 use crate::use_case::block_execution::canonical_batch::{
     canonical_sort_commands, validate_and_clone_canonical_commands,
 };
@@ -90,7 +90,7 @@ fn sample_state() -> BuildBlockFromCommandsState {
         parent_height: 1,
         parent_block_hash: "parent-1".to_string(),
         exchange_state: ExchangeState {
-            spot: crate::entity::SpotState {
+            spot: veldra_core_entity::SpotState {
                 market_rules_by_symbol,
                 symbol_by_asset,
                 asset_pairs_by_symbol,
@@ -143,11 +143,13 @@ fn withdraw_envelope() -> CommandEnvelope<ProductCommand> {
     }
 }
 
-fn block(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::NewBlock {
+fn block(changes: &BuildBlockFromCommandsChanges) -> &veldra_core_entity::NewBlock {
     changes.new_block.as_ref().expect("block builder should always produce a block")
 }
 
-fn execution_body(changes: &BuildBlockFromCommandsChanges) -> &crate::entity::BlockExecutionBody {
+fn execution_body(
+    changes: &BuildBlockFromCommandsChanges,
+) -> &veldra_core_entity::BlockExecutionBody {
     changes.execution_body.as_ref().expect("block builder should always produce an execution body")
 }
 

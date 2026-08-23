@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use example_core_use_case::{Balance, SpotOrderV2};
-use veldra_core::entity::{CommandEnvelope, NewBlock, ProductCommand};
+use veldra_core_entity::{CommandEnvelope, NewBlock, ProductCommand};
 
 use super::codec::{SCHEMA_VERSION_V1, decode_record, encode_record};
 use super::error::VeldraMdbxStorageError;

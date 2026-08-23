@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "veldra_core_use_case"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -15,6 +15,7 @@ example_core_use_case = { path = "../../example/use_case" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
+veldra_core_entity = { path = "../entity" }
 
 [lints]
 workspace = true

@@ -2,11 +2,11 @@ use example_core_use_case::{
     Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges,
     WithdrawQuoteCmd,
 };
-
-use crate::entity::{
+use veldra_core_entity::{
     AccountAssetKey, CommandEnvelope, ExchangeState, ProductCommand, SpotCommand, TreasuryCommand,
     TreasuryState,
 };
+
 use crate::use_case::BuildBlockError;
 use crate::use_case::block_execution::handler::deposit_quote_block_command_handler::{
     DEPOSIT_QUOTE_BLOCK_COMMAND_HANDLER, DepositQuoteBlockCommandHandler,

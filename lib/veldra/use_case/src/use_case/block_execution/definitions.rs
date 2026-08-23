@@ -6,8 +6,9 @@ use common_entity::Entity;
 use example_core_use_case::entity::SettlementTransferVoucher;
 use example_core_use_case::{Balance, BalanceLedgerEntryV2, SpotOrderV2, SpotTrade};
 use thiserror::Error;
-
-use crate::entity::{BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand};
+use veldra_core_entity::{
+    BlockExecutionBody, CommandEnvelope, ExchangeState, NewBlock, ProductCommand,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildBlockFromCommandsCommand {

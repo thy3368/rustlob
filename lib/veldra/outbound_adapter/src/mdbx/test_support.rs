@@ -3,11 +3,11 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use example_core_use_case::{Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3};
-use veldra_core::entity::{
+use veldra_core_entity::{
     AccountAssetKey, BlockExecutionBody, ExchangeState, NewBlock, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand,
 };
-use veldra_core::use_case::{
+use veldra_core_use_case::{
     BlockEntityChange, BuildBlockFromCommandsChanges, BuildBlockFromCommandsCommand,
     BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase, MiStateMachineV2Unchecked,
 };
@@ -73,7 +73,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
         parent_height: 1,
         parent_block_hash: "parent-1".to_string(),
         exchange_state: ExchangeState {
-            spot: veldra_core::entity::SpotState {
+            spot: veldra_core_entity::SpotState {
                 market_rules_by_symbol,
                 symbol_by_asset,
                 asset_pairs_by_symbol,
@@ -84,7 +84,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                 settled_trade_ids: Default::default(),
                 next_order_sequence_by_account,
             },
-            treasury: veldra_core::entity::TreasuryState {
+            treasury: veldra_core_entity::TreasuryState {
                 balances: treasury_balances,
                 processed_transfer_ids: Default::default(),
                 processed_withdraw_ids: Default::default(),
@@ -93,7 +93,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
             ..ExchangeState::default()
         },
         commands: vec![
-            veldra_core::entity::CommandEnvelope {
+            veldra_core_entity::CommandEnvelope {
                 command_id: "cmd-1".to_string(),
                 account_id: "trader-1".to_string(),
                 nonce: 1,
@@ -110,7 +110,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                     },
                 )),
             },
-            veldra_core::entity::CommandEnvelope {
+            veldra_core_entity::CommandEnvelope {
                 command_id: "cmd-2".to_string(),
                 account_id: "trader-1".to_string(),
                 nonce: 2,

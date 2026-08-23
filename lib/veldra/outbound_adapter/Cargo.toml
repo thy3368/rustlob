@@ -12,7 +12,8 @@ example_core_use_case = { path = "../../example/use_case" }
 libmdbx = "0.6"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
-veldra_core = { package = "core", path = "../core" }
+veldra_core_entity = { path = "../entity" }
+veldra_core_use_case = { path = "../use_case" }
 
 [lints]
 workspace = true
