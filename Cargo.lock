@@ -2088,18 +2088,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "cmd_handler",
- "entity",
- "example_core_use_case",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6312,11 +6300,12 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "cmd_handler",
- "core",
  "example_core_use_case",
  "libmdbx",
  "serde",
  "thiserror 1.0.69",
+ "veldra_core_entity",
+ "veldra_core_use_case",
 ]
 
 [[package]]
@@ -10193,6 +10182,31 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "veldra_core_entity"
+version = "0.1.0"
+dependencies = [
+ "cmd_handler",
+ "entity",
+ "example_core_use_case",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "veldra_core_use_case"
+version = "0.1.0"
+dependencies = [
+ "cmd_handler",
+ "entity",
+ "example_core_use_case",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "veldra_core_entity",
+]
 
 [[package]]
 name = "version_check"

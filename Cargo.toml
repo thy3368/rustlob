@@ -38,7 +38,8 @@ members = [
     # study
     "study/web3",
     "study/hyperliquid_analyzer",
-    "lib/veldra/core",
+    "lib/veldra/entity",
+    "lib/veldra/use_case",
     "lib/veldra/outbound_adapter",
     "lib/veldra/inbound_adapter",
 ]
