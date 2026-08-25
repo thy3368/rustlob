@@ -45,6 +45,15 @@ disallowed-types = [
     { path = "parking_lot::RwLock", reason = "热路径禁止写锁/读写锁竞争" },
 ]
 
+# 缓存行对齐：关键结构体通过 `#[repr(align(64))]`、字段布局和填充字节实现
+# 这里只定义 workspace 级约定，不把对齐策略伪造成 Clippy 可执行规则
+
+# NUMA / CPU 亲和性：放在具体线程绑定、启动器和运行时初始化 crate 中实现
+# 这里仅保留性能约束说明，不在根 lint 中声明运行时无法静态检查的能力
+
+# 分支预测：通过热路径早返回、减少复杂嵌套、拆分冷路径实现
+# 这类优化依赖具体模块局部约定，不适合写成根 clippy 规则
+
 # 逃逸式控制流与调试输出：生产路径禁止
 disallowed-macros = [
     { path = "std::dbg", reason = "禁止调试输出进入生产路径" },
