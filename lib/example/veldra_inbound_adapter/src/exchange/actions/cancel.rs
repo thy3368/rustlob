@@ -142,7 +142,25 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 
 async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
     let outbound = DefaultSpotOrderV2CancelOutbound;
-    let statuses = execute_with_outbound(request, &outbound);
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+
+    let statuses = request
+        .action
+        .cancels
+        .iter()
+        .map(|cancel| {
+            let cancel_request =
+                CancelSpotOrderV2Request::from_wire_cancel(party_id.clone(), cancel);
+            match execute_cancel_spot_order_v2(&cancel_request, &outbound) {
+                Ok(_) => reply::CancelStatusWire::Success("success"),
+                Err(error) => {
+                    reply::CancelStatusWire::Error { error: cancel_execution_error_message(error) }
+                }
+            }
+        })
+        .collect();
+
     Ok(ok_statuses_response("cancel", statuses))
 }
 
@@ -162,31 +180,6 @@ where
         &command,
         outbound,
     )
-}
-
-fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::CancelStatusWire>
-where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
-    OB::Error: std::fmt::Display,
-{
-    let party_id =
-        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
-
-    request
-        .action
-        .cancels
-        .iter()
-        .map(|cancel| {
-            let cancel_request =
-                CancelSpotOrderV2Request::from_wire_cancel(party_id.clone(), cancel);
-            match execute_cancel_spot_order_v2(&cancel_request, outbound) {
-                Ok(_) => reply::CancelStatusWire::Success("success"),
-                Err(error) => {
-                    reply::CancelStatusWire::Error { error: cancel_execution_error_message(error) }
-                }
-            }
-        })
-        .collect()
 }
 
 pub(crate) fn cancel_execution_error_message<BE, OE>(
