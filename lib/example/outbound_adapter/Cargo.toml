@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+test-support = []
+
 [dependencies]
 cmd_handler = { path = "../../common/cmd_handler" }
 example_core_use_case = { path = "../use_case" }

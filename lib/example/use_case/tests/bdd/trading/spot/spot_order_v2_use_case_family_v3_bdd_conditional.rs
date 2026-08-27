@@ -1,10 +1,9 @@
 use common_entity::{
     MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked, ReplayableChanges,
 };
-
-use example_core_use_case::*;
-use example_core_use_case::BalanceLedgerOperation;
-use example_core_use_case::{Reservation, SpotOrderStatus, SpotOrderStatusReason};
+use example_core_use_case::{
+    BalanceLedgerOperation, Reservation, SpotOrderStatus, SpotOrderStatusReason, *,
+};
 
 fn test_principal_reservation(
     order_id: &str,

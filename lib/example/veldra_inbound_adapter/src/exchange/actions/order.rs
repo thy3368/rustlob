@@ -351,12 +351,12 @@ pub fn execute_place_spot_order_v2<OB>(
 where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
-    MiStateMachineFamilyExecutor
-        .execute::<SpotOrderV2UseCaseFamilyV3, SpotOrderV2PlaceExecutionSpec, OB>(
-            &SpotOrderV2UseCaseFamilyV3,
-            request,
-            outbound,
-        )
+    let command = SpotOrderV2PlaceExecutionSpec::command(request);
+    MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
+        &SpotOrderV2UseCaseFamilyV3,
+        &command,
+        outbound,
+    )
 }
 
 #[allow(dead_code)]

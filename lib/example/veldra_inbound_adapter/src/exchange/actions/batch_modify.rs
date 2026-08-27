@@ -3,6 +3,12 @@ use serde_json::Value;
 
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
+use crate::common::parse::parse_json_request as parse_exchange_json_request;
+use crate::exchange::actions::cancel::reply::CancelStatusWire;
+use crate::exchange::actions::cancel::{
+    CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID,
+};
+use crate::exchange::actions::order::PlaceSpotOrderV2Request;
 use crate::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
@@ -46,6 +52,16 @@ pub enum BatchModifyContractError {
 
 pub mod reply {
     pub use crate::exchange::actions::order::reply::OrderResponseWire as BatchModifyResponseWire;
+}
+
+pub trait BatchModifyCancelPlaceExecutor {
+    fn cancel(
+        &self,
+        request: CancelSpotOrderV2Request,
+    ) -> Result<CancelStatusWire, ExchangeHttpError>;
+
+    fn place(&self, request: PlaceSpotOrderV2Request)
+    -> Result<OrderStatusWire, ExchangeHttpError>;
 }
 
 pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
@@ -189,17 +205,8 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    // 官方文档未给出 batchModify 成功响应示例。
-    // 官方 Python SDK 的 modify_order() 实际组装的是 batchModify action，但示例仅打印返回值。
-    let statuses = request
-        .action
-        .modifies
-        .iter()
-        .enumerate()
-        .map(|(index, _)| OrderStatusWire::Resting {
-            resting: RestingOrderStatusWire { oid: STUB_BATCH_MODIFIED_OID_BASE + index as u64 },
-        })
-        .collect();
+    let executor = DefaultBatchModifyCancelPlaceExecutor::new();
+    let statuses = execute_with_cancel_place_executor(request, &executor);
     Ok(OrderResponseWire {
         status: "ok",
         response: OrderResponseEnvelopeWire {
@@ -207,6 +214,122 @@ async fn execute(
             data: OrderResponseDataWire { statuses },
         },
     })
+}
+
+pub fn run_batch_modify_cancel_replace_with_executor(
+    body: &[u8],
+    executor: &impl BatchModifyCancelPlaceExecutor,
+) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
+    let request = parse_exchange_json_request::<RequestWire, ExchangeHttpError>(body)?;
+    validate(&request)?;
+    let statuses = execute_with_cancel_place_executor(request, executor);
+    Ok(OrderResponseWire {
+        status: "ok",
+        response: OrderResponseEnvelopeWire {
+            type_: "order",
+            data: OrderResponseDataWire { statuses },
+        },
+    })
+}
+
+fn execute_with_cancel_place_executor(
+    request: RequestWire,
+    executor: &impl BatchModifyCancelPlaceExecutor,
+) -> Vec<OrderStatusWire> {
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+
+    request
+        .action
+        .modifies
+        .iter()
+        .map(|modify| execute_single_cancel_replace(&party_id, modify, executor))
+        .collect()
+}
+
+fn execute_single_cancel_replace(
+    party_id: &str,
+    modify: &ModifyWire,
+    executor: &impl BatchModifyCancelPlaceExecutor,
+) -> OrderStatusWire {
+    let cancel_request = match cancel_request_from_modify(party_id, modify) {
+        Ok(request) => request,
+        Err(error) => return OrderStatusWire::Error { error: error.to_string() },
+    };
+    if let Err(error) = executor.cancel(cancel_request) {
+        return OrderStatusWire::Error { error: error.to_string() };
+    }
+
+    let place_request = match place_request_from_modify(party_id, modify) {
+        Ok(request) => request,
+        Err(error) => return OrderStatusWire::Error { error: error.to_string() },
+    };
+    match executor.place(place_request) {
+        Ok(status) => status,
+        Err(error) => OrderStatusWire::Error { error: error.to_string() },
+    }
+}
+
+fn cancel_request_from_modify(
+    party_id: &str,
+    modify: &ModifyWire,
+) -> Result<CancelSpotOrderV2Request, ExchangeHttpError> {
+    let lookup = if let Some(oid) = modify.oid.as_u64() {
+        CancelSpotOrderV2LookupV3::Oid(oid)
+    } else if let Some(cloid) = modify.oid.as_str() {
+        CancelSpotOrderV2LookupV3::Cloid(cloid.to_string())
+    } else {
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOid));
+    };
+
+    Ok(CancelSpotOrderV2Request { party_id: party_id.to_string(), asset: modify.order.a, lookup })
+}
+
+fn place_request_from_modify(
+    party_id: &str,
+    modify: &ModifyWire,
+) -> Result<PlaceSpotOrderV2Request, ExchangeHttpError> {
+    let Some(limit) = &modify.order.t.limit else {
+        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOrderType));
+    };
+
+    Ok(PlaceSpotOrderV2Request {
+        party_id: party_id.to_string(),
+        asset: modify.order.a,
+        is_buy: modify.order.b,
+        price: modify.order.p.clone(),
+        size: modify.order.s.clone(),
+        tif: limit.tif.to_ascii_lowercase(),
+        cloid: modify.order.c.clone(),
+    })
+}
+
+struct DefaultBatchModifyCancelPlaceExecutor {
+    next_oid: std::cell::Cell<u64>,
+}
+
+impl DefaultBatchModifyCancelPlaceExecutor {
+    fn new() -> Self {
+        Self { next_oid: std::cell::Cell::new(STUB_BATCH_MODIFIED_OID_BASE) }
+    }
+}
+
+impl BatchModifyCancelPlaceExecutor for DefaultBatchModifyCancelPlaceExecutor {
+    fn cancel(
+        &self,
+        _request: CancelSpotOrderV2Request,
+    ) -> Result<CancelStatusWire, ExchangeHttpError> {
+        Ok(CancelStatusWire::Success("success"))
+    }
+
+    fn place(
+        &self,
+        _request: PlaceSpotOrderV2Request,
+    ) -> Result<OrderStatusWire, ExchangeHttpError> {
+        let oid = self.next_oid.get();
+        self.next_oid.set(oid + 1);
+        Ok(OrderStatusWire::Resting { resting: RestingOrderStatusWire { oid } })
+    }
 }
 
 #[cfg(test)]

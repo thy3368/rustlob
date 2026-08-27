@@ -27,7 +27,9 @@ pub enum MiFamilyExecutionError<BE, OE> {
     Publish(OE),
 }
 
-/// 把 adapter-side request 与 family command / authoritative given state 绑定起来。
+/// adapter-side request 到 family command 的映射约定。
+///
+/// executor 不直接依赖该 trait；adapter 可用它把 request 转成 command 后再执行。
 pub trait MiFamilyExecutionSpec<F>
 where
     F: MiStateMachineOwnedV2BeforeAfter,
@@ -53,8 +55,8 @@ where
 impl MiStateMachineFamilyExecutor {
     /// 执行一个 MI family use case 的运行时编排。
     ///
-    /// `request` 只用于派生 command。outbound 基于 command 加载 authoritative given state，
-    /// 后续业务校验与计算都只读取 command 和 owned given state。
+    /// adapter 应在调用前完成 request 到 command 的转换。outbound 基于 command 加载
+    /// authoritative given state，后续业务校验与计算都只读取 command 和 owned given state。
     ///
     /// 固定执行顺序为：pre-check -> load state -> validate -> compute ->
     /// merge -> project events -> persist -> replay -> publish。该函数只负
@@ -64,31 +66,29 @@ impl MiStateMachineFamilyExecutor {
     /// 事件投影错误映射为 [`MiFamilyExecutionError::ProjectEvents`]，
     /// outbound 端错误按发生阶段分别映射为 load / persist / replay /
     /// publish 对应的执行错误。
-    pub fn execute<F, S, OB>(
+    pub fn execute<F, OB>(
         &self,
         family: &F,
-        request: &S::Request,
+        command: &F::Command,
         outbound: &OB,
     ) -> MiFamilyExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2BeforeAfter,
-        S: MiFamilyExecutionSpec<F>,
         OB: MiFamilyOutbound<F>,
     {
-        let cmd = S::command(request);
-        family.pre_check_command(&cmd).map_err(MiFamilyExecutionError::Business)?;
+        family.pre_check_command(command).map_err(MiFamilyExecutionError::Business)?;
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
-            outbound.load_given_state(&cmd).map_err(MiFamilyExecutionError::LoadState)?;
+            outbound.load_given_state(command).map_err(MiFamilyExecutionError::LoadState)?;
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
-            .validate_against_given_state(&cmd, &given_state)
+            .validate_against_given_state(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
         let after = family
-            .compute_after_changes_unchecked(&cmd, &given_state)
+            .compute_after_changes_unchecked(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
         let changes = F::merge_before_and_after(given_state, after)
@@ -113,11 +113,6 @@ mod tests {
 
     use super::*;
     use crate::{EntityError, MiStateMachineV2Unchecked};
-
-    #[derive(Debug, Clone)]
-    struct StubRequest {
-        log: Arc<Mutex<Vec<&'static str>>>,
-    }
 
     #[derive(Debug, Clone)]
     struct StubCommand {
@@ -208,16 +203,6 @@ mod tests {
         }
     }
 
-    struct StubSpec;
-
-    impl MiFamilyExecutionSpec<StubFamily> for StubSpec {
-        type Request = StubRequest;
-
-        fn command(request: &Self::Request) -> StubCommand {
-            StubCommand { log: Arc::clone(&request.log) }
-        }
-    }
-
     #[derive(Debug)]
     struct StubOutbound {
         log: Arc<Mutex<Vec<&'static str>>>,
@@ -264,12 +249,12 @@ mod tests {
     #[test]
     fn mi_family_executor_runs_fixed_runtime_sequence() -> Result<(), String> {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let request = StubRequest { log: Arc::clone(&log) };
+        let command = StubCommand { log: Arc::clone(&log) };
         let executor = MiStateMachineFamilyExecutor;
         let outbound = StubOutbound { log: Arc::clone(&log) };
 
         executor
-            .execute::<StubFamily, StubSpec, _>(&StubFamily, &request, &outbound)
+            .execute::<StubFamily, _>(&StubFamily, &command, &outbound)
             .map_err(|err| format!("executor failed: {err:?}"))?;
         let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 

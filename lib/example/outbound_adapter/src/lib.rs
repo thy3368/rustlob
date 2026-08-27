@@ -12,4 +12,9 @@ pub use shared::{
     SpotPipelineMessage, SpotTradeMatchedMessage, StoreError, StoreSnapshot,
     WithdrawQuoteOutboundError,
 };
-pub use trading::{InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound};
+#[cfg(feature = "test-support")]
+pub use trading::FakeSpotOrderV2CancelOutbound;
+pub use trading::{
+    DefaultSpotOrderV2CancelOutbound, DefaultSpotOrderV2CancelOutboundError,
+    InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound,
+};

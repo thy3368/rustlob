@@ -69,18 +69,6 @@ impl PlaceOrderCliCommand {
     }
 }
 
-struct PlaceOrderCliExecutionSpec;
-
-impl cmd_handler::command_use_case_def2::MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3>
-    for PlaceOrderCliExecutionSpec
-{
-    type Request = SpotOrderV2CommandV3;
-
-    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
-        request.clone()
-    }
-}
-
 pub fn place_order_cli_usage() -> &'static str {
     PLACE_ORDER_CLI_USAGE
 }
@@ -161,12 +149,11 @@ where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = command.into_command();
-    let result = MiStateMachineFamilyExecutor
-        .execute::<SpotOrderV2UseCaseFamilyV3, PlaceOrderCliExecutionSpec, OB>(
-            &SpotOrderV2UseCaseFamilyV3,
-            &command,
-            outbound,
-        )?;
+    let result = MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
+        &SpotOrderV2UseCaseFamilyV3,
+        &command,
+        outbound,
+    )?;
     Ok(PlaceOrderCliReplyMapper.map(result.events))
 }
 

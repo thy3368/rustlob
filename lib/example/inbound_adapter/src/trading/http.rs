@@ -50,18 +50,6 @@ impl PlaceOrderHttpRequest {
     }
 }
 
-struct PlaceOrderHttpExecutionSpec;
-
-impl cmd_handler::command_use_case_def2::MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3>
-    for PlaceOrderHttpExecutionSpec
-{
-    type Request = SpotOrderV2CommandV3;
-
-    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
-        request.clone()
-    }
-}
-
 impl crate::common::ExampleBusinessErrorMapping for SpotOrderV2UseCaseFamilyV3Error {
     fn inbound_error_code(&self) -> &'static str {
         match self {
@@ -124,12 +112,11 @@ where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = request.into_command();
-    let result = MiStateMachineFamilyExecutor
-        .execute::<SpotOrderV2UseCaseFamilyV3, PlaceOrderHttpExecutionSpec, OB>(
-            &SpotOrderV2UseCaseFamilyV3,
-            &command,
-            outbound,
-        )?;
+    let result = MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
+        &SpotOrderV2UseCaseFamilyV3,
+        &command,
+        outbound,
+    )?;
     let _changes: SpotOrderV2CaseChangesV3 = result.changes;
     Ok(PlaceOrderHttpReplyMapper.map(result.events))
 }
