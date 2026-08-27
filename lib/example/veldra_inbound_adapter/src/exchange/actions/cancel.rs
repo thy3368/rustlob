@@ -3,17 +3,16 @@ use cmd_handler::command_use_case_def2::{
     MiStateMachineFamilyExecutor,
 };
 pub use example_core_use_case::CancelSpotOrderV2LookupV3;
-#[cfg(test)]
-use example_core_use_case::{Balance, SpotOrderV2};
 use example_core_use_case::{
     CancelSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
-    SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
+    SpotOrderV2UseCaseFamilyV3,
 };
+use example_outbound_adapter::DefaultSpotOrderV2CancelOutbound;
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
-use crate::common::parse::parse_json_request;
-use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
+use crate::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
+};
 use crate::exchange::common::validate::validate_envelope_common;
 use crate::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
 use crate::exchange::error::ExchangeHttpError;
@@ -101,39 +100,13 @@ impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3> for SpotOrderV2CancelExec
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum DefaultSpotOrderV2CancelOutboundError {
-    #[error("spot order v2 cancel state is not wired for default HTTP path")]
-    StateUnavailable,
-}
+pub struct CancelAction;
 
-#[derive(Debug, Default)]
-pub struct DefaultSpotOrderV2CancelOutbound;
-
-impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2CancelOutbound {
-    type Error = DefaultSpotOrderV2CancelOutboundError;
-
-    fn load_given_state(
-        &self,
-        _cmd: &SpotOrderV2CommandV3,
-    ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-        Err(DefaultSpotOrderV2CancelOutboundError::StateUnavailable)
-    }
-
-    fn persist(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn replay(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn publish(&self, _events: &[cmd_handler::EntityReplayableEvent]) -> Result<(), Self::Error> {
-        Ok(())
+impl CancelAction {
+    pub async fn run_json(body: &[u8]) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
+        run_exchange_action::<Self>(body).await
     }
 }
-
-pub(crate) struct CancelAction;
 
 impl ExchangeActionHandler for CancelAction {
     type Request = RequestWire;
@@ -183,12 +156,12 @@ pub fn execute_cancel_spot_order_v2<OB>(
 where
     OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
-    MiStateMachineFamilyExecutor
-        .execute::<SpotOrderV2UseCaseFamilyV3, SpotOrderV2CancelExecutionSpec, OB>(
-            &SpotOrderV2UseCaseFamilyV3,
-            request,
-            outbound,
-        )
+    let command = SpotOrderV2CancelExecutionSpec::command(request);
+    MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
+        &SpotOrderV2UseCaseFamilyV3,
+        &command,
+        outbound,
+    )
 }
 
 fn execute_with_outbound<OB>(request: RequestWire, outbound: &OB) -> Vec<reply::CancelStatusWire>
@@ -232,261 +205,5 @@ where
         MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
         MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
         MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use cmd_handler::command_use_case_def2::MiFamilyOutbound;
-    use example_core_use_case::{
-        SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
-    };
-
-    use super::*;
-
-    #[test]
-    fn parses_cancel_request() {
-        let request =
-            parse_json_request::<RequestWire, ExchangeHttpError>(valid_cancel_request_json())
-                .expect("cancel request should parse");
-
-        assert_eq!(request.action.type_, "cancel");
-        assert_eq!(request.action.cancels.len(), 1);
-        assert_eq!(request.action.cancels[0].o, 77738308);
-    }
-
-    #[test]
-    fn rejects_false_fast_flag() {
-        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
-            br#"{
-                "action": {
-                    "type": "cancel",
-                    "cancels": [{ "a": 10000, "o": 77738308 }],
-                    "f": false
-                },
-                "nonce": 1710000000000,
-                "signature": {
-                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
-                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
-                    "v": 27
-                }
-            }"#,
-        )
-        .expect("cancel request parses");
-
-        let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(
-            error.to_string(),
-            "Invalid `action.f`. Omit `f` unless fast cancel is enabled."
-        );
-    }
-
-    #[actix_web::test]
-    async fn cancel_default_path_returns_item_error_when_state_is_unavailable() {
-        let request =
-            parse_json_request::<RequestWire, ExchangeHttpError>(valid_cancel_request_json())
-                .expect("cancel request parses");
-        let response = execute(request).await.expect("cancel response builds");
-
-        let actual = serde_json::to_string_pretty(&response).expect("cancel response serializes");
-        let expected = r#"{
-  "status": "ok",
-  "response": {
-    "type": "cancel",
-    "data": {
-      "statuses": [
-        {
-          "error": "load_state failed: spot order v2 cancel state is not wired for default HTTP path"
-        }
-      ]
-    }
-  }
-}"#;
-
-        assert_eq!(actual, expected);
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-    #[error("fake outbound error")]
-    struct FakeOutboundError;
-
-    #[derive(Debug, Default)]
-    struct FakeSpotOrderV2CancelOutbound {
-        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
-    }
-
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
-        type Error = FakeOutboundError;
-
-        fn load_given_state(
-            &self,
-            cmd: &SpotOrderV2CommandV3,
-        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-            let SpotOrderV2CommandV3::Cancel(request) = cmd else {
-                panic!("expected cancel command");
-            };
-            *self.observed_lookup.lock().expect("lookup observation lock should be available") =
-                Some(request.lookup.clone());
-
-            let principal_reservation = SpotOrderV2::principal_reservation(
-                "order-1",
-                request.party_id.as_str(),
-                SpotOrderSide::Buy,
-                2,
-                100,
-                "BTC",
-                "USDT",
-            )
-            .map_err(|_| FakeOutboundError)?;
-            let fee_reservation = SpotOrderV2::fee_reservation(
-                "order-1",
-                request.party_id.as_str(),
-                SpotOrderSide::Buy,
-                2,
-                100,
-                "USDT",
-                5,
-                10,
-            )
-            .map_err(|_| FakeOutboundError)?;
-            let order = SpotOrderV2::new_with_fee_reservation(
-                "order-1".to_string(),
-                request.asset,
-                Some(77738308),
-                request.party_id.clone(),
-                "BTCUSDT".to_string(),
-                SpotOrderSide::Buy,
-                SpotOrderExecution::Limit { price: 100 },
-                SpotOrderTimeInForce::Gtc,
-                2,
-                0,
-                SpotOrderStatus::Open,
-                None,
-                principal_reservation,
-                fee_reservation,
-                None,
-                1,
-            );
-
-            Ok(SpotOrderV2GivenStateV3::Cancel {
-                balances: vec![Balance::new(
-                    request.party_id.clone(),
-                    "USDT".to_string(),
-                    1000,
-                    201,
-                    1,
-                )],
-                order,
-                base_asset_id: "BTC".to_string(),
-                quote_asset_id: "USDT".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
-            })
-        }
-
-        fn persist(
-            &self,
-            _events: &[cmd_handler::EntityReplayableEvent],
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn replay(
-            &self,
-            _events: &[cmd_handler::EntityReplayableEvent],
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn publish(
-            &self,
-            _events: &[cmd_handler::EntityReplayableEvent],
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn spot_order_v2_cancel_request_maps_wire_and_executes_with_fake_outbound() {
-        let wire =
-            parse_json_request::<RequestWire, ExchangeHttpError>(valid_cancel_request_json())
-                .expect("request parses");
-        let request = CancelSpotOrderV2Request::from_wire_cancel(
-            "buyer".to_string(),
-            &wire.action.cancels[0],
-        );
-        let outbound = FakeSpotOrderV2CancelOutbound::default();
-
-        let result = execute_cancel_spot_order_v2(&request, &outbound)
-            .expect("spot order v2 cancel family should execute");
-
-        assert_eq!(
-            *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
-            Some(CancelSpotOrderV2LookupV3::Oid(77738308))
-        );
-        let SpotOrderV2CaseChangesV3::Cancel(changes) = result.changes else {
-            panic!("expected cancel changes");
-        };
-        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(
-            changes
-                .updated_order
-                .after
-                .to_reservation("BTC", "USDT")
-                .expect("principal reservation should project")
-                .remaining_amount,
-            0
-        );
-        assert_eq!(changes.updated_order.after.to_fee_reservation().remaining_amount, 0);
-        assert!(!result.events.is_empty());
-    }
-
-    #[test]
-    fn cancel_error_shape_snapshot_is_stable() {
-        let response = reply::CancelResponseWire {
-            status: "ok",
-            response: reply::CancelResponseEnvelopeWire {
-                type_: "cancel",
-                data: reply::CancelResponseDataWire {
-                    statuses: vec![reply::CancelStatusWire::Error {
-                        error: "Order was never placed, already canceled, or filled.".to_string(),
-                    }],
-                },
-            },
-        };
-
-        let actual = serde_json::to_string_pretty(&response).expect("cancel response serializes");
-        let expected = r#"{
-  "status": "ok",
-  "response": {
-    "type": "cancel",
-    "data": {
-      "statuses": [
-        {
-          "error": "Order was never placed, already canceled, or filled."
-        }
-      ]
-    }
-  }
-}"#;
-
-        assert_eq!(actual, expected);
-    }
-
-    fn valid_cancel_request_json() -> &'static [u8] {
-        br#"{
-            "action": {
-                "type": "cancel",
-                "cancels": [{ "a": 10000, "o": 77738308 }]
-            },
-            "nonce": 1710000000000,
-            "signature": {
-                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
-                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
-                "v": 27
-            }
-        }"#
     }
 }
