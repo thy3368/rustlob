@@ -1,11 +1,13 @@
-use example_outbound_adapter::DefaultSpotOrderV2CancelOutbound;
+use cmd_handler::command_use_case_def2::MiFamilyExecutionSpec;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
+use crate::common::cancel_spot_order_v2::execute_cancel_spot_order_v2_with_outbound;
+#[cfg(test)]
 use crate::common::parse::parse_json_request;
 use crate::exchange::actions::cancel::{
-    CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, cancel_execution_error_message,
-    execute_cancel_spot_order_v2,
+    CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, SpotOrderV2CancelExecutionSpec,
+    cancel_execution_error_message, execute_cancel_spot_order_v2,
 };
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{validate_cloid, validate_envelope_common};
@@ -89,7 +91,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
-    let outbound = DefaultSpotOrderV2CancelOutbound;
     let party_id =
         request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
 
@@ -103,7 +104,8 @@ async fn execute(
                 cancel.asset,
                 cancel.cloid.clone(),
             );
-            match execute_cancel_spot_order_v2(&cancel_request, &outbound) {
+            let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
+            match execute_cancel_spot_order_v2(&command) {
                 Ok(_) => reply::CancelByCloidStatusWire::Success("success"),
                 Err(error) => reply::CancelByCloidStatusWire::Error {
                     error: cancel_execution_error_message(error),
@@ -252,9 +254,10 @@ mod tests {
             cancel.asset,
             cancel.cloid.clone(),
         );
+        let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
         let outbound = ObservingCancelOutbound::default();
 
-        let error = execute_cancel_spot_order_v2(&cancel_request, &outbound)
+        let error = execute_cancel_spot_order_v2_with_outbound(&command, &outbound)
             .expect_err("fake outbound should fail while loading state");
 
         assert_eq!(

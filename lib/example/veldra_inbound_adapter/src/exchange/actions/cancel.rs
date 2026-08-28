@@ -1,15 +1,11 @@
-use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyOutbound,
-    MiStateMachineFamilyExecutor,
-};
+use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecutionSpec};
 pub use example_core_use_case::CancelSpotOrderV2LookupV3;
 use example_core_use_case::{
-    CancelSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
-    SpotOrderV2UseCaseFamilyV3,
+    CancelSpotOrderV2CmdV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
 };
-use example_outbound_adapter::DefaultSpotOrderV2CancelOutbound;
 use serde::{Deserialize, Serialize};
 
+pub use crate::common::cancel_spot_order_v2::execute_cancel_spot_order_v2;
 use crate::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
 };
@@ -141,7 +137,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 }
 
 async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
-    let outbound = DefaultSpotOrderV2CancelOutbound;
     let party_id =
         request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
 
@@ -152,7 +147,8 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
         .map(|cancel| {
             let cancel_request =
                 CancelSpotOrderV2Request::from_wire_cancel(party_id.clone(), cancel);
-            match execute_cancel_spot_order_v2(&cancel_request, &outbound) {
+            let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
+            match execute_cancel_spot_order_v2(&command) {
                 Ok(_) => reply::CancelStatusWire::Success("success"),
                 Err(error) => {
                     reply::CancelStatusWire::Error { error: cancel_execution_error_message(error) }
@@ -162,24 +158,6 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
         .collect();
 
     Ok(ok_statuses_response("cancel", statuses))
-}
-
-pub fn execute_cancel_spot_order_v2<OB>(
-    request: &CancelSpotOrderV2Request,
-    outbound: &OB,
-) -> Result<
-    MiFamilyExecutionResult<SpotOrderV2CaseChangesV3>,
-    MiFamilyExecutionError<example_core_use_case::SpotOrderV2UseCaseFamilyV3Error, OB::Error>,
->
-where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
-{
-    let command = SpotOrderV2CancelExecutionSpec::command(request);
-    MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
-        &SpotOrderV2UseCaseFamilyV3,
-        &command,
-        outbound,
-    )
 }
 
 pub(crate) fn cancel_execution_error_message<BE, OE>(
@@ -198,5 +176,30 @@ where
         MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
         MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
         MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_cancel_by_oid_request_to_cancel_command() {
+        let request = CancelSpotOrderV2Request {
+            party_id: "buyer".to_string(),
+            asset: 10_000,
+            lookup: CancelSpotOrderV2LookupV3::Oid(42),
+        };
+
+        let command = SpotOrderV2CancelExecutionSpec::command(&request);
+
+        assert_eq!(
+            command,
+            SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3 {
+                party_id: "buyer".to_string(),
+                asset: 10_000,
+                lookup: CancelSpotOrderV2LookupV3::Oid(42),
+            })
+        );
     }
 }
