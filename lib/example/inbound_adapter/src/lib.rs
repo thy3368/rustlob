@@ -3,6 +3,9 @@ mod descriptor;
 mod funding;
 mod trading;
 
+pub mod event_source;
+
+
 pub use common::{
     CliInboundError, CliInboundErrorCategory, ExampleBusinessErrorMapping,
     ExampleCliParseErrorMapping, ExampleHttpErrorBody, ExampleHttpErrorResponse, HttpInboundError,

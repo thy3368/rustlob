@@ -2,6 +2,10 @@ mod funding;
 mod shared;
 mod trading;
 
+pub mod state_source;
+
+pub mod state_sink;
+
 pub use funding::{
     InMemoryDepositQuoteOutbound, InMemoryWithdrawQuoteOutbound, MySqlDepositQuoteOutbound,
     MySqlWithdrawQuoteOutbound,
