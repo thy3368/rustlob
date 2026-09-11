@@ -6,7 +6,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyStateSink, MiFamilyStateSource, MiStateMachineFamilyExecutor,
+    MiFamilyExecutionError, MiFamilyStateSink, MiFamilyStateSource, StateMachineExecutor,
     UseCaseReplyMapper,
 };
 use example_core_use_case::{
@@ -120,7 +120,7 @@ where
         > + MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = request.into_command();
-    let result = MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
+    let result = StateMachineExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
         &SpotOrderV2UseCaseFamilyV3,
         &command,
         outbound,

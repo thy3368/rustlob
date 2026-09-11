@@ -5,8 +5,8 @@ pub(crate) mod trace;
 mod use_case;
 
 pub use common_entity::{
-    IssuedByParty, MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec,
-    MiFamilyStateSink, MiFamilyStateSource, MiStateMachineFamilyExecutor,
+    IssuedByParty, MiFamilyExecutionError, ExecutionResult, MiFamilyExecutionSpec,
+    MiFamilyStateSink, MiFamilyStateSource, StateMachineExecutor,
 };
 pub use executor::{
     CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,

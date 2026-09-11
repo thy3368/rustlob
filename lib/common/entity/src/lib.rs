@@ -15,9 +15,9 @@ pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
-pub use use_case::mi_family_executor::{
-    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyExecutionSpec, MiFamilyStateSink,
-    MiFamilyStateSource, MiStateMachineFamilyExecutor,
+pub use use_case::executor::{
+    MiFamilyExecutionError, ExecutionResult, MiFamilyExecutionSpec, MiFamilyStateSink,
+    MiFamilyStateSource, StateMachineExecutor,
 };
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
@@ -34,7 +34,7 @@ pub use use_case::state_machine_v2::MiStateMachineV2Unchecked as MultiAggregateU
 pub use use_case::state_machine_v2::{
     MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2, MiStateMachineV2Unchecked,
 };
-pub use use_case::use_case_support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
+pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
 
