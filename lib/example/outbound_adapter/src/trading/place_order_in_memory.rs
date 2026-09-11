@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
+use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
     ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
@@ -68,7 +68,7 @@ const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
 const DEFAULT_MAKER_FEE_BPS: u64 = 5;
 const DEFAULT_TAKER_FEE_BPS: u64 = 10;
 
-impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
+impl StateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn load_given_state(
@@ -150,7 +150,7 @@ impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbo
     }
 }
 
-impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
+impl StateSink<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

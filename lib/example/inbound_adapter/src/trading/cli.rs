@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyStateSink, MiFamilyStateSource, StateMachineExecutor,
+    MiFamilyExecutionError, StateSink, StateSource, StateMachineExecutor,
     UseCaseReplyMapper,
 };
 use example_core_use_case::{
@@ -149,14 +149,14 @@ pub fn run_place_order_cli<OB>(
     PlaceOrderCliResponse,
     MiFamilyExecutionError<
         SpotOrderV2UseCaseFamilyV3Error,
-        <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
     >,
 >
 where
-    OB: MiFamilyStateSource<
+    OB: StateSource<
             SpotOrderV2UseCaseFamilyV3,
-            Error = <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
-        > + MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>,
+            Error = <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        > + StateSink<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = command.into_command();
     let result = StateMachineExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(

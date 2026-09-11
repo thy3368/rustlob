@@ -127,7 +127,7 @@ async fn execute(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
+    use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
     };
@@ -207,7 +207,7 @@ mod tests {
         observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
     }
 
-    impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl StateSource<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
@@ -223,7 +223,7 @@ mod tests {
         }
     }
 
-    impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl StateSink<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn persist(

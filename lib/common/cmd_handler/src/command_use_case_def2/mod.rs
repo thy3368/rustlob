@@ -6,7 +6,7 @@ mod use_case;
 
 pub use common_entity::{
     IssuedByParty, MiFamilyExecutionError, ExecutionResult, MiFamilyExecutionSpec,
-    MiFamilyStateSink, MiFamilyStateSource, StateMachineExecutor,
+    StateSink, StateSource, StateMachineExecutor,
 };
 pub use executor::{
     CommandUseCaseExecutionError, CommandUseCaseExecutor2, CommandUseCaseExecutor3,

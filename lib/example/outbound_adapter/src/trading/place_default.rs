@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
+use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
 };
@@ -13,7 +13,7 @@ pub enum DefaultSpotOrderV2PlaceOutboundError {
 #[derive(Debug, Default)]
 pub struct DefaultSpotOrderV2PlaceOutbound;
 
-impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2PlaceOutbound {
+impl StateSource<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2PlaceOutbound {
     type Error = DefaultSpotOrderV2PlaceOutboundError;
 
     fn load_given_state(
@@ -24,7 +24,7 @@ impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2Place
     }
 }
 
-impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2PlaceOutbound {
+impl StateSink<SpotOrderV2UseCaseFamilyV3> for DefaultSpotOrderV2PlaceOutbound {
     type Error = DefaultSpotOrderV2PlaceOutboundError;
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

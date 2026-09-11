@@ -251,7 +251,7 @@ pub(crate) mod tests {
 
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{
-        CommandUseCaseOutbound, MiFamilyStateSink, MiFamilyStateSource,
+        CommandUseCaseOutbound, StateSink, StateSource,
     };
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
@@ -346,7 +346,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+    impl StateSource<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
         fn load_given_state(
@@ -388,7 +388,7 @@ pub(crate) mod tests {
 
     }
 
-    impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+    impl StateSink<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

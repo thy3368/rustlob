@@ -6,7 +6,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyStateSink, MiFamilyStateSource, StateMachineExecutor,
+    MiFamilyExecutionError, StateSink, StateSource, StateMachineExecutor,
     UseCaseReplyMapper,
 };
 use example_core_use_case::{
@@ -19,8 +19,8 @@ use crate::common::{HttpInboundError, find_string_field, find_u64_field};
 
 pub trait PlaceOrderOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
-    type Outbound: MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>
-        + MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>;
+    type Outbound: StateSource<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>
+        + StateSink<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>;
 
     fn place_order_outbound(&self) -> &Self::Outbound;
 }
@@ -110,14 +110,14 @@ pub fn handle_place_order_http<OB>(
     PlaceOrderHttpResponse,
     MiFamilyExecutionError<
         SpotOrderV2UseCaseFamilyV3Error,
-        <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
     >,
 >
 where
-    OB: MiFamilyStateSource<
+    OB: StateSource<
             SpotOrderV2UseCaseFamilyV3,
-            Error = <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
-        > + MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>,
+            Error = <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        > + StateSink<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = request.into_command();
     let result = StateMachineExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(

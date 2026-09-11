@@ -40,7 +40,7 @@ where
 }
 
 /// MI family runtime 所需的 authoritative given state source port。
-pub trait MiFamilyStateSource<F>: Send + Sync
+pub trait StateSource<F>: Send + Sync
 where
     F: MiStateMachineOwnedV2BeforeAfter,
 {
@@ -50,7 +50,7 @@ where
 }
 
 /// MI family runtime 所需的事件副作用 outbound port。
-pub trait MiFamilyStateSink<F>: Send + Sync
+pub trait StateSink<F>: Send + Sync
 where
     F: MiStateMachineOwnedV2BeforeAfter,
 {
@@ -84,8 +84,8 @@ impl StateMachineExecutor {
     ) -> ExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2BeforeAfter,
-        SS: MiFamilyStateSource<F, Error = OB::Error>,
-        OB: MiFamilyStateSink<F>,
+        SS: StateSource<F, Error = OB::Error>,
+        OB: StateSink<F>,
     {
         family.pre_check_command(command).map_err(MiFamilyExecutionError::Business)?;
 

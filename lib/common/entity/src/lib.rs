@@ -16,8 +16,8 @@ pub use entity_v2::entity_field_change::{
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use use_case::executor::{
-    MiFamilyExecutionError, ExecutionResult, MiFamilyExecutionSpec, MiFamilyStateSink,
-    MiFamilyStateSource, StateMachineExecutor,
+    MiFamilyExecutionError, ExecutionResult, MiFamilyExecutionSpec, StateSink,
+    StateSource, StateMachineExecutor,
 };
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
