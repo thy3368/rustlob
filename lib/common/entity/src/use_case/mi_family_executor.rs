@@ -39,14 +39,23 @@ where
     fn command(request: &Self::Request) -> F::Command;
 }
 
-/// MI family runtime 所需的 outbound port。
-pub trait MiFamilyOutbound<F>: Send + Sync
+/// MI family runtime 所需的 authoritative given state source port。
+pub trait MiFamilyStateSource<F>: Send + Sync
 where
     F: MiStateMachineOwnedV2BeforeAfter,
 {
     type Error: std::error::Error;
 
     fn load_given_state(&self, cmd: &F::Command) -> Result<F::GivenState, Self::Error>;
+}
+
+/// MI family runtime 所需的事件副作用 outbound port。
+pub trait MiFamilyOutbound<F>: Send + Sync
+where
+    F: MiStateMachineOwnedV2BeforeAfter,
+{
+    type Error: std::error::Error;
+
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
     fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
@@ -55,7 +64,7 @@ where
 impl MiStateMachineFamilyExecutor {
     /// 执行一个 MI family use case 的运行时编排。
     ///
-    /// adapter 应在调用前完成 request 到 command 的转换。outbound 基于 command 加载
+    /// adapter 应在调用前完成 request 到 command 的转换。state source 基于 command 加载
     /// authoritative given state，后续业务校验与计算都只读取 command 和 owned given state。
     ///
     /// 固定执行顺序为：pre-check -> load state -> validate -> compute ->
@@ -66,21 +75,23 @@ impl MiStateMachineFamilyExecutor {
     /// 事件投影错误映射为 [`MiFamilyExecutionError::ProjectEvents`]，
     /// outbound 端错误按发生阶段分别映射为 load / persist / replay /
     /// publish 对应的执行错误。
-    pub fn execute<F, OB>(
+    pub fn execute<F, SS, OB>(
         &self,
         family: &F,
         command: &F::Command,
+        state_source: &SS,
         outbound: &OB,
     ) -> MiFamilyExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2BeforeAfter,
+        SS: MiFamilyStateSource<F, Error = OB::Error>,
         OB: MiFamilyOutbound<F>,
     {
         family.pre_check_command(command).map_err(MiFamilyExecutionError::Business)?;
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
-            outbound.load_given_state(command).map_err(MiFamilyExecutionError::LoadState)?;
+            state_source.load_given_state(command).map_err(MiFamilyExecutionError::LoadState)?;
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
@@ -208,7 +219,7 @@ mod tests {
         log: Arc<Mutex<Vec<&'static str>>>,
     }
 
-    impl MiFamilyOutbound<StubFamily> for StubOutbound {
+    impl MiFamilyStateSource<StubFamily> for StubOutbound {
         type Error = StubOutboundError;
 
         fn load_given_state(
@@ -220,6 +231,10 @@ mod tests {
             }
             Ok(Arc::clone(&cmd.log))
         }
+    }
+
+    impl MiFamilyOutbound<StubFamily> for StubOutbound {
+        type Error = StubOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             assert!(events.is_empty());
@@ -254,7 +269,7 @@ mod tests {
         let outbound = StubOutbound { log: Arc::clone(&log) };
 
         executor
-            .execute::<StubFamily, _>(&StubFamily, &command, &outbound)
+            .execute::<StubFamily, _, _>(&StubFamily, &command, &outbound, &outbound)
             .map_err(|err| format!("executor failed: {err:?}"))?;
         let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 

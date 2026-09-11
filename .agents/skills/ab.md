@@ -1,4 +1,3 @@
-
 # workflow
 
 - 由多个use_case组成
@@ -15,14 +14,21 @@
 - given_state的proptest
 - compute_event的proptest
 
-
-
-
 # entity
 
 - entity的proptest 枚举业务场景，证明entity设计是合理的
 
 
-
-
 - use_case间不互调， use_case和entity是多对一关系。
+
+# 角色
+
+## 1.产品经理
+
+- 定义 红色的 bdd
+
+- 明确定义，没问题后再走开发，成本低，不返功
+
+## 2.开发
+
+- 实现bdd 直到变绿

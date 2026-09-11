@@ -9,6 +9,8 @@ pub mod spot;
 
 pub mod account;
 
+pub mod market_data;
+
 pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,

@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+use cmd_handler::command_use_case_def2::{MiFamilyOutbound, MiFamilyStateSource};
 use example_core_use_case::{
     Balance, MarketRules, ORDER_ENTITY_TYPE, PlaceSpotOrderV2TakerTemplateContextV3,
     SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
@@ -64,7 +64,7 @@ const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
 const DEFAULT_MAKER_FEE_BPS: u64 = 5;
 const DEFAULT_TAKER_FEE_BPS: u64 = 10;
 
-impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
+impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn load_given_state(
@@ -153,6 +153,10 @@ impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
             taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
         })
     }
+}
+
+impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;

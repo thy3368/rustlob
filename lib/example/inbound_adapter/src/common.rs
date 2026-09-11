@@ -250,7 +250,9 @@ pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
     use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, MiFamilyOutbound};
+    use cmd_handler::command_use_case_def2::{
+        CommandUseCaseOutbound, MiFamilyOutbound, MiFamilyStateSource,
+    };
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
@@ -344,7 +346,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+    impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
         fn load_given_state(
@@ -383,6 +385,11 @@ pub(crate) mod tests {
                 taker_fee_bps: 10,
             })
         }
+
+    }
+
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+        type Error = TestOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)

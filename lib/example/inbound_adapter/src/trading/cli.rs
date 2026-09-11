@@ -1,6 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyOutbound, MiStateMachineFamilyExecutor, UseCaseReplyMapper,
+    MiFamilyExecutionError, MiFamilyOutbound, MiFamilyStateSource,
+    MiStateMachineFamilyExecutor, UseCaseReplyMapper,
 };
 use example_core_use_case::{
     PlaceSpotOrderV2CmdV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
@@ -144,14 +145,24 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
 pub fn run_place_order_cli<OB>(
     command: PlaceOrderCliCommand,
     outbound: &OB,
-) -> Result<PlaceOrderCliResponse, MiFamilyExecutionError<SpotOrderV2UseCaseFamilyV3Error, OB::Error>>
+) -> Result<
+    PlaceOrderCliResponse,
+    MiFamilyExecutionError<
+        SpotOrderV2UseCaseFamilyV3Error,
+        <OB as MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>>::Error,
+    >,
+>
 where
-    OB: MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
+    OB: MiFamilyStateSource<
+            SpotOrderV2UseCaseFamilyV3,
+            Error = <OB as MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>>::Error,
+        > + MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
 {
     let command = command.into_command();
-    let result = MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB>(
+    let result = MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
         &SpotOrderV2UseCaseFamilyV3,
         &command,
+        outbound,
         outbound,
     )?;
     Ok(PlaceOrderCliReplyMapper.map(result.events))

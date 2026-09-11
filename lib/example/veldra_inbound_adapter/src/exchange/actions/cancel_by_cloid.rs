@@ -127,7 +127,7 @@ async fn execute(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use cmd_handler::command_use_case_def2::MiFamilyOutbound;
+    use cmd_handler::command_use_case_def2::{MiFamilyOutbound, MiFamilyStateSource};
     use example_core_use_case::{
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
     };
@@ -207,7 +207,7 @@ mod tests {
         observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
     }
 
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
@@ -221,6 +221,10 @@ mod tests {
                 Some(request.lookup.clone());
             Err(FakeOutboundError)
         }
+    }
+
+    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+        type Error = FakeOutboundError;
 
         fn persist(
             &self,
