@@ -50,7 +50,7 @@ where
 }
 
 /// MI family runtime 所需的事件副作用 outbound port。
-pub trait MiFamilyOutbound<F>: Send + Sync
+pub trait MiFamilyStateSink<F>: Send + Sync
 where
     F: MiStateMachineOwnedV2BeforeAfter,
 {
@@ -85,7 +85,7 @@ impl MiStateMachineFamilyExecutor {
     where
         F: MiStateMachineOwnedV2BeforeAfter,
         SS: MiFamilyStateSource<F, Error = OB::Error>,
-        OB: MiFamilyOutbound<F>,
+        OB: MiFamilyStateSink<F>,
     {
         family.pre_check_command(command).map_err(MiFamilyExecutionError::Business)?;
 
@@ -233,7 +233,7 @@ mod tests {
         }
     }
 
-    impl MiFamilyOutbound<StubFamily> for StubOutbound {
+    impl MiFamilyStateSink<StubFamily> for StubOutbound {
         type Error = StubOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

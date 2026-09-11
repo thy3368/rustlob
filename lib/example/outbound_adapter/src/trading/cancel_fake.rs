@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{MiFamilyOutbound, MiFamilyStateSource};
+use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2LookupV3, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
     SpotOrderTimeInForce, SpotOrderV2, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
@@ -93,7 +93,7 @@ impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOu
     }
 }
 
-impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
+impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
     type Error = FakeSpotOrderV2CancelOutboundError;
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

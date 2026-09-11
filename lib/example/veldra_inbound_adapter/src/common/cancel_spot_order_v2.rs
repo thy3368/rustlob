@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyOutbound, MiFamilyStateSource,
+    MiFamilyExecutionError, MiFamilyExecutionResult, MiFamilyStateSink, MiFamilyStateSource,
     MiStateMachineFamilyExecutor,
 };
 use example_core_use_case::{
@@ -28,14 +28,14 @@ pub(crate) fn execute_cancel_spot_order_v2_with_outbound<OB>(
     MiFamilyExecutionResult<SpotOrderV2CaseChangesV3>,
     MiFamilyExecutionError<
         example_core_use_case::SpotOrderV2UseCaseFamilyV3Error,
-        <OB as MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>>::Error,
+        <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
     >,
 >
 where
     OB: MiFamilyStateSource<
             SpotOrderV2UseCaseFamilyV3,
-            Error = <OB as MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>>::Error,
-        > + MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3>,
+            Error = <OB as MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        > + MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3>,
 {
     MiStateMachineFamilyExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
         &SpotOrderV2UseCaseFamilyV3,

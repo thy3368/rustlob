@@ -127,7 +127,7 @@ async fn execute(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use cmd_handler::command_use_case_def2::{MiFamilyOutbound, MiFamilyStateSource};
+    use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
     use example_core_use_case::{
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
     };
@@ -223,7 +223,7 @@ mod tests {
         }
     }
 
-    impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn persist(

@@ -1,5 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{MiFamilyOutbound, MiFamilyStateSource};
+use cmd_handler::command_use_case_def2::{MiFamilyStateSink, MiFamilyStateSource};
 use example_core_use_case::{
     Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
     ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
@@ -150,7 +150,7 @@ impl MiFamilyStateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbo
     }
 }
 
-impl MiFamilyOutbound<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
+impl MiFamilyStateSink<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
