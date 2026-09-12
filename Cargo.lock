@@ -3019,6 +3019,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.24.0",
+ "use_case_executor",
 ]
 
 [[package]]
@@ -10161,6 +10162,17 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "use_case_executor"
+version = "0.1.0"
+dependencies = [
+ "cmd_handler",
+ "entity",
+ "example_core_use_case",
+ "example_outbound_adapter",
+ "rstest",
 ]
 
 [[package]]

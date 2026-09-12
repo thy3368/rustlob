@@ -5,7 +5,7 @@ use example_core_use_case::{
 };
 use serde::{Deserialize, Serialize};
 
-pub use crate::common::cancel_spot_order_v2::execute_cancel_spot_order_v2;
+pub use use_case_executor::trading::spot::cancel_spot_order_v2::execute_cancel_spot_order_v2;
 use crate::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
 };

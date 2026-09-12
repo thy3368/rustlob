@@ -5,7 +5,7 @@ use example_core_use_case::{
 };
 use serde::{Deserialize, Serialize};
 
-pub use crate::common::place_spot_order_v2::execute_place_spot_order_v2;
+pub use use_case_executor::trading::spot::place_spot_order_v2::execute_place_spot_order_v2;
 use crate::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
 use crate::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::exchange::common::validate::{

@@ -1,23 +1,15 @@
 [package]
-name = "example_veldra_inbound_adapter"
+name = "use_case_executor"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
 [dependencies]
-actix-web = "4"
 cmd_handler = { path = "../../common/cmd_handler" }
 common_entity = { package = "entity", path = "../../common/entity" }
 example_core_use_case = { path = "../use_case" }
-use_case_executor = { path = "../use_case_executor" }
 example_outbound_adapter = { path = "../outbound_adapter" }
-futures-util = "0.3"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 
 [dev-dependencies]
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }

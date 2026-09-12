@@ -21,7 +21,7 @@ pub fn execute_cancel_spot_order_v2(
     execute_cancel_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2CancelOutbound)
 }
 
-pub(crate) fn execute_cancel_spot_order_v2_with_outbound<OB>(
+pub fn execute_cancel_spot_order_v2_with_outbound<OB>(
     command: &SpotOrderV2CommandV3,
     outbound: &OB,
 ) -> Result<

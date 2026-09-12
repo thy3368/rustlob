@@ -163,6 +163,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/veldra/entity/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/veldra/use_case/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/veldra_inbound_adapter/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/example/use_case_executor/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

@@ -2,7 +2,7 @@ use cmd_handler::command_use_case_def2::MiFamilyExecutionSpec;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use crate::common::cancel_spot_order_v2::execute_cancel_spot_order_v2_with_outbound;
+use use_case_executor::trading::spot::cancel_spot_order_v2::execute_cancel_spot_order_v2_with_outbound;
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
 use crate::exchange::actions::cancel::{
