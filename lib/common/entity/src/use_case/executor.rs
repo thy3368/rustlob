@@ -80,7 +80,7 @@ impl StateMachineExecutor {
         family: &F,
         command: &F::Command,
         state_source: &SS,
-        outbound: &OB,
+        state_sink: &OB,
     ) -> ExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2BeforeAfter,
@@ -109,9 +109,9 @@ impl StateMachineExecutor {
         let events =
             changes.to_replayable_events().map_err(MiFamilyExecutionError::ProjectEvents)?;
 
-        outbound.persist(&events).map_err(MiFamilyExecutionError::Persist)?;
-        outbound.replay(&events).map_err(MiFamilyExecutionError::Replay)?;
-        outbound.publish(&events).map_err(MiFamilyExecutionError::Publish)?;
+        state_sink.persist(&events).map_err(MiFamilyExecutionError::Persist)?;
+        state_sink.replay(&events).map_err(MiFamilyExecutionError::Replay)?;
+        state_sink.publish(&events).map_err(MiFamilyExecutionError::Publish)?;
 
         Ok(ExecutionResult { changes, events })
     }
