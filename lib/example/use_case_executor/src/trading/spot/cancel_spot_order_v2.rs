@@ -1,6 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, ExecutionResult, StateSink, StateSource,
-    StateMachineExecutor,
+    ExecutionResult, MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,

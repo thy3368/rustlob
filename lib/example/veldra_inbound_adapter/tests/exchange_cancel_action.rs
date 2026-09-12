@@ -1,6 +1,6 @@
-use example_veldra_inbound_adapter::exchange::actions::cancel::CancelAction;
-use example_veldra_inbound_adapter::exchange::actions::cancel::reply::CancelStatusWire;
-use example_veldra_inbound_adapter::exchange::error::ExchangeHttpError;
+use example_veldra_inbound_adapter::command::exchange::actions::cancel::CancelAction;
+use example_veldra_inbound_adapter::command::exchange::actions::cancel::reply::CancelStatusWire;
+use example_veldra_inbound_adapter::command::exchange::error::ExchangeHttpError;
 use rstest::rstest;
 
 #[actix_web::test]

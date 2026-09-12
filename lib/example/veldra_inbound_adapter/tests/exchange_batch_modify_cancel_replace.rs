@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
-use example_veldra_inbound_adapter::exchange::error::ExchangeHttpError;
-use example_veldra_inbound_adapter::exchange::{
+use example_veldra_inbound_adapter::command::exchange::error::ExchangeHttpError;
+use example_veldra_inbound_adapter::command::exchange::{
     BatchModifyCancelPlaceExecutor, CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request,
     CancelStatusWire, OrderStatusWire, PlaceSpotOrderV2Request,
     run_batch_modify_cancel_replace_with_executor,
@@ -45,7 +45,9 @@ impl BatchModifyCancelPlaceExecutor for ObservingCancelPlaceExecutor {
         let oid = if request.asset == 10000 { 77738308 } else { 77_001 };
         self.observed.borrow_mut().push(ObservedAction::Place(request));
         Ok(OrderStatusWire::Resting {
-            resting: example_veldra_inbound_adapter::exchange::RestingOrderStatusWire { oid },
+            resting: example_veldra_inbound_adapter::command::exchange::RestingOrderStatusWire {
+                oid,
+            },
         })
     }
 }
@@ -111,14 +113,16 @@ fn batch_modify_executes_cancel_then_place_for_each_entry_in_request_order() {
         response.response.data.statuses,
         vec![
             OrderStatusWire::Resting {
-                resting: example_veldra_inbound_adapter::exchange::RestingOrderStatusWire {
-                    oid: 77738308,
-                },
+                resting:
+                    example_veldra_inbound_adapter::command::exchange::RestingOrderStatusWire {
+                        oid: 77738308,
+                    },
             },
             OrderStatusWire::Resting {
-                resting: example_veldra_inbound_adapter::exchange::RestingOrderStatusWire {
-                    oid: 77_001,
-                },
+                resting:
+                    example_veldra_inbound_adapter::command::exchange::RestingOrderStatusWire {
+                        oid: 77_001,
+                    },
             },
         ]
     );

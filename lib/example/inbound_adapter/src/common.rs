@@ -250,9 +250,7 @@ pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
     use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::command_use_case_def2::{
-        CommandUseCaseOutbound, StateSink, StateSource,
-    };
+    use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
         SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
@@ -385,7 +383,6 @@ pub(crate) mod tests {
                 taker_fee_bps: 10,
             })
         }
-
     }
 
     impl StateSink<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {

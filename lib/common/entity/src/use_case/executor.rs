@@ -14,8 +14,7 @@ pub struct ExecutionResult<C> {
     pub events: Vec<EntityReplayableEvent>,
 }
 
-pub type ExecutionOutcome<C, BE, OE> =
-    Result<ExecutionResult<C>, MiFamilyExecutionError<BE, OE>>;
+pub type ExecutionOutcome<C, BE, OE> = Result<ExecutionResult<C>, MiFamilyExecutionError<BE, OE>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MiFamilyExecutionError<BE, OE> {
@@ -116,4 +115,3 @@ impl StateMachineExecutor {
         Ok(ExecutionResult { changes, events })
     }
 }
-
