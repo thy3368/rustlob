@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use example_veldra_inbound_adapter::command::exchange::error::ExchangeHttpError;
 use example_veldra_inbound_adapter::command::exchange::{
-    BatchModifyCancelPlaceExecutor, CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request,
+    BatchModifyCancelPlaceExecutor, CancelSpotOrderV2Lookup, CancelSpotOrderV2Request,
     CancelStatusWire, OrderStatusWire, PlaceSpotOrderV2Request,
     run_batch_modify_cancel_replace_with_executor,
 };
@@ -26,7 +26,7 @@ impl BatchModifyCancelPlaceExecutor for ObservingCancelPlaceExecutor {
         &self,
         request: CancelSpotOrderV2Request,
     ) -> Result<CancelStatusWire, ExchangeHttpError> {
-        if matches!(request.lookup, CancelSpotOrderV2LookupV3::Oid(oid) if Some(oid) == self.fail_cancel_for_oid)
+        if matches!(request.lookup, CancelSpotOrderV2Lookup::Oid(oid) if Some(oid) == self.fail_cancel_for_oid)
         {
             return Err(ExchangeHttpError::contract("cancel rejected"));
         }
@@ -65,7 +65,7 @@ fn batch_modify_executes_cancel_then_place_for_each_entry_in_request_order() {
         matches!(
             &observed[0],
             ObservedAction::Cancel(CancelSpotOrderV2Request {
-                lookup: CancelSpotOrderV2LookupV3::Oid(77738308),
+                lookup: CancelSpotOrderV2Lookup::Oid(77738308),
                 ..
             })
         ),
@@ -89,7 +89,7 @@ fn batch_modify_executes_cancel_then_place_for_each_entry_in_request_order() {
         matches!(
             &observed[2],
             ObservedAction::Cancel(CancelSpotOrderV2Request {
-                lookup: CancelSpotOrderV2LookupV3::Cloid(cloid),
+                lookup: CancelSpotOrderV2Lookup::Cloid(cloid),
                 ..
             }) if cloid == "0x1234567890abcdef1234567890abcdef"
         ),
@@ -161,7 +161,7 @@ fn batch_modify_single_entry_failure_returns_error_and_continues_following_entri
         assert!(matches!(
             &observed[0],
             ObservedAction::Cancel(CancelSpotOrderV2Request {
-                lookup: CancelSpotOrderV2LookupV3::Oid(77738308),
+                lookup: CancelSpotOrderV2Lookup::Oid(77738308),
                 ..
             })
         ));
@@ -173,7 +173,7 @@ fn batch_modify_single_entry_failure_returns_error_and_continues_following_entri
     assert!(matches!(
         &observed[second_entry_offset],
         ObservedAction::Cancel(CancelSpotOrderV2Request {
-            lookup: CancelSpotOrderV2LookupV3::Cloid(cloid),
+            lookup: CancelSpotOrderV2Lookup::Cloid(cloid),
             ..
         }) if cloid == "0x1234567890abcdef1234567890abcdef"
     ));

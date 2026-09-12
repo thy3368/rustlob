@@ -23,8 +23,8 @@ use crate::entity::{
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{
-    CancelSpotOrderV2Input, MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution,
-    SpotOrderTimeInForce, SpotOrderTriggerRole, SpotTrade,
+    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTimeInForce,
+    SpotOrderTriggerRole, SpotTrade,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -68,27 +68,11 @@ pub struct PlaceTriggerPendingSpotOrderV2TemplateContextV3 {
     pub symbol: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct CancelSpotOrderV2CmdV3 {
-    pub party_id: String,
-    pub asset: u32,
-    pub lookup: CancelSpotOrderV2LookupV3,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum CancelSpotOrderV2LookupV3 {
-    #[default]
-    Missing,
-    Oid(u64),
-    Cloid(String),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderV2CommandV3 {
     Place(PlaceSpotOrderV2CmdV3),
     PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2CmdV3),
     Trigger(TriggerSpotOrderV2CmdV3),
-    Cancel(CancelSpotOrderV2CmdV3),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -123,14 +107,6 @@ pub enum SpotOrderV2GivenStateV3 {
         maker_fee_bps: u64,
         taker_fee_bps: u64,
     },
-    Cancel {
-        order: SpotOrderV2,
-        balances: Vec<Balance>,
-        base_asset_id: String,
-        quote_asset_id: String,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,18 +136,10 @@ pub struct TriggerSpotOrderV2AfterChangesV3 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderV2AfterChangesV3 {
-    pub order_after: SpotOrderV2,
-    pub balances_after: Vec<Balance>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2AfterChangesV3 {
     Place(PlaceSpotOrderV2AfterChangesV3),
     PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2AfterChangesV3),
     Trigger(Box<TriggerSpotOrderV2AfterChangesV3>),
-    Cancel(CancelSpotOrderV2AfterChangesV3),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,18 +169,10 @@ pub struct TriggerSpotOrderV2ChangesV3 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderV2ChangesV3 {
-    pub updated_order: UpdatedEntityPair<SpotOrderV2>,
-    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV2CaseChangesV3 {
     Place(PlaceSpotOrderV2ChangesV3),
     PlaceTriggerPending(PlaceTriggerPendingSpotOrderV2ChangesV3),
     Trigger(Box<TriggerSpotOrderV2ChangesV3>),
-    Cancel(CancelSpotOrderV2ChangesV3),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -355,26 +315,6 @@ impl ReplayableChanges for TriggerSpotOrderV2ChangesV3 {
     }
 }
 
-impl ReplayableChanges for CancelSpotOrderV2ChangesV3 {
-    fn to_replayable_events(
-        &self,
-    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let event_capacity = 1usize
-            .saturating_add(self.created_balance_ledger_entries.len())
-            .saturating_add(self.created_balance_ledger_entries.len());
-        let mut events = Vec::with_capacity(event_capacity);
-        events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
-        events.extend(balance_replay_events_from_ledger_entries(
-            &self.updated_balances,
-            &self.created_balance_ledger_entries,
-        )?);
-        for entry in &self.created_balance_ledger_entries {
-            events.push(entry.track_create_event()?);
-        }
-        Ok(events)
-    }
-}
-
 impl ReplayableChanges for SpotOrderV2CaseChangesV3 {
     fn to_replayable_events(
         &self,
@@ -383,7 +323,6 @@ impl ReplayableChanges for SpotOrderV2CaseChangesV3 {
             Self::Place(changes) => changes.to_replayable_events(),
             Self::PlaceTriggerPending(changes) => changes.to_replayable_events(),
             Self::Trigger(changes) => changes.to_replayable_events(),
-            Self::Cancel(changes) => changes.to_replayable_events(),
         }
     }
 }
@@ -414,7 +353,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 Ok(())
             }
             SpotOrderV2CommandV3::Trigger(_) => Ok(()),
-            SpotOrderV2CommandV3::Cancel(_) => Ok(()),
         }
     }
 
@@ -505,26 +443,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 }
                 Ok(())
             }
-            (
-                SpotOrderV2CommandV3::Cancel(_),
-                SpotOrderV2GivenStateV3::Cancel {
-                    order,
-                    balances,
-                    base_asset_id,
-                    quote_asset_id,
-                    ..
-                },
-            ) => {
-                let mut order_after = order.clone();
-                order_after.cancel(CancelSpotOrderV2Input {
-                    balance_entity_id: balance_entity_id_for_reservation(
-                        balances,
-                        &order.reservation,
-                    )?,
-                })?;
-                validate_all_reservations_for_order(order, base_asset_id, quote_asset_id)?;
-                Ok(())
-            }
             _ => Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch),
         }
     }
@@ -585,21 +503,6 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 maker_fee_bps: *maker_fee_bps,
                 taker_fee_bps: *taker_fee_bps,
             }),
-            (
-                SpotOrderV2CommandV3::Cancel(_),
-                SpotOrderV2GivenStateV3::Cancel {
-                    order,
-                    balances,
-                    maker_fee_bps,
-                    taker_fee_bps,
-                    ..
-                },
-            ) => self.compute_cancel_after(CancelAfterContext {
-                order,
-                balances,
-                maker_fee_bps: *maker_fee_bps,
-                taker_fee_bps: *taker_fee_bps,
-            }),
             _ => Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch),
         }
     }
@@ -652,14 +555,6 @@ impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
                 created_vouchers: after.created_vouchers,
                 created_balance_ledger_entries: after.created_balance_ledger_entries,
             }))),
-            (
-                SpotOrderV2GivenStateV3::Cancel { order, balances, .. },
-                SpotOrderV2AfterChangesV3::Cancel(after),
-            ) => Ok(SpotOrderV2CaseChangesV3::Cancel(CancelSpotOrderV2ChangesV3 {
-                updated_order: UpdatedEntityPair { before: order, after: after.order_after },
-                updated_balances: merge_balance_pairs(balances, after.balances_after)?,
-                created_balance_ledger_entries: after.created_balance_ledger_entries,
-            })),
             _ => Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch),
         }
     }
@@ -673,13 +568,6 @@ struct PlaceAfterContext<'a> {
     base_asset_id: &'a str,
     quote_asset_id: &'a str,
     fee_account_id: &'a str,
-    maker_fee_bps: u64,
-    taker_fee_bps: u64,
-}
-
-struct CancelAfterContext<'a> {
-    order: &'a SpotOrderV2,
-    balances: &'a [Balance],
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 }
@@ -817,41 +705,6 @@ impl SpotOrderV2UseCaseFamilyV3 {
             created_vouchers: after.created_vouchers,
             created_balance_ledger_entries: after.created_balance_ledger_entries,
         })))
-    }
-
-    fn compute_cancel_after(
-        &self,
-        context: CancelAfterContext<'_>,
-    ) -> Result<SpotOrderV2AfterChangesV3, SpotOrderV2UseCaseFamilyV3Error> {
-        let mut order_after = context.order.clone();
-        let mut balance_book = BalanceMap::new(context.balances);
-        let mut created_balance_ledger_entries = Vec::with_capacity(0);
-
-        let cancel_outcome = order_after.cancel(CancelSpotOrderV2Input {
-            balance_entity_id: balance_entity_id_for_reservation(
-                context.balances,
-                &context.order.reservation,
-            )?,
-        })?;
-        if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
-            let unfreeze_ledger_entry =
-                apply_behavior_ledger_entry(unfreeze_ledger_entry, &mut balance_book)?;
-            created_balance_ledger_entries.push(unfreeze_ledger_entry);
-        }
-
-        release_remaining_for_cancel(
-            &mut order_after,
-            &mut balance_book,
-            &mut created_balance_ledger_entries,
-            context.maker_fee_bps,
-            context.taker_fee_bps,
-        )?;
-
-        Ok(SpotOrderV2AfterChangesV3::Cancel(CancelSpotOrderV2AfterChangesV3 {
-            order_after,
-            balances_after: balance_book.into_balances(),
-            created_balance_ledger_entries,
-        }))
     }
 }
 
@@ -1187,7 +1040,7 @@ fn place_input_from_context(
     })
 }
 
-fn balance_entity_id_for_account_asset(
+pub(super) fn balance_entity_id_for_account_asset(
     balances: &[Balance],
     account_id: &str,
     asset_id: &str,
@@ -1199,7 +1052,7 @@ fn balance_entity_id_for_account_asset(
         .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
 }
 
-fn balance_entity_id_for_reservation(
+pub(super) fn balance_entity_id_for_reservation(
     balances: &[Balance],
     reservation: &Reservation,
 ) -> Result<String, SpotOrderV2UseCaseFamilyV3Error> {
@@ -1239,7 +1092,7 @@ fn validate_reservation_for_order(
     Ok(())
 }
 
-fn validate_all_reservations_for_order(
+pub(super) fn validate_all_reservations_for_order(
     order: &SpotOrderV2,
     base_asset_id: &str,
     quote_asset_id: &str,
@@ -1334,7 +1187,7 @@ fn release_remaining_for_terminal(
     Ok(())
 }
 
-fn release_remaining_for_cancel(
+pub(super) fn release_remaining_for_cancel(
     order: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
@@ -1496,7 +1349,7 @@ fn push_applied_balance_ledger_entry(
     Ok(())
 }
 
-fn apply_behavior_ledger_entry(
+pub(super) fn apply_behavior_ledger_entry(
     mut entry: BalanceLedgerEntryV2,
     balance_book: &mut BalanceMap,
 ) -> Result<BalanceLedgerEntryV2, SpotOrderV2UseCaseFamilyV3Error> {
@@ -1699,7 +1552,7 @@ fn zip_pairs<T>(
         .collect())
 }
 
-fn merge_balance_pairs(
+pub(super) fn merge_balance_pairs(
     before: Vec<Balance>,
     after: Vec<Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, SpotOrderV2UseCaseFamilyV3Error> {
@@ -1721,7 +1574,7 @@ fn merge_balance_pairs(
     Ok(pairs)
 }
 
-fn balance_replay_events_from_ledger_entries(
+pub(super) fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
     ledger_entries: &[BalanceLedgerEntryV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
@@ -1785,12 +1638,12 @@ fn balance_replay_events_from_ledger_entries(
     Ok(events)
 }
 
-struct BalanceMap {
+pub(super) struct BalanceMap {
     balances: HashMap<String, Balance>,
 }
 
 impl BalanceMap {
-    fn new(balances: &[Balance]) -> Self {
+    pub(super) fn new(balances: &[Balance]) -> Self {
         Self {
             balances: balances
                 .iter()
@@ -1800,7 +1653,7 @@ impl BalanceMap {
         }
     }
 
-    fn get_mut(
+    pub(super) fn get_mut(
         &mut self,
         account_id: &str,
         asset_id: &str,
@@ -1810,14 +1663,14 @@ impl BalanceMap {
             .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }
 
-    fn get_by_entity_id_mut(
+    pub(super) fn get_by_entity_id_mut(
         &mut self,
         entity_id: &str,
     ) -> Result<&mut Balance, SpotOrderV2UseCaseFamilyV3Error> {
         self.balances.get_mut(entity_id).ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }
 
-    fn entity_id_for_account_asset(
+    pub(super) fn entity_id_for_account_asset(
         &self,
         account_id: &str,
         asset_id: &str,
@@ -1828,7 +1681,7 @@ impl BalanceMap {
             .ok_or(SpotOrderV2UseCaseFamilyV3Error::BalanceNotFound)
     }
 
-    fn into_balances(self) -> Vec<Balance> {
+    pub(super) fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances
@@ -2086,61 +1939,6 @@ mod tests {
                 .created_balance_ledger_entries
                 .iter()
                 .any(|entry| entry.operation == BalanceLedgerOperation::Unfreeze)
-        );
-    }
-
-    #[test]
-    fn cancel_open_order_releases_principal_and_fee() {
-        let family = SpotOrderV2UseCaseFamilyV3;
-        let order = buy_order(SpotOrderTimeInForce::Gtc);
-        let balances = vec![balance("buyer", "USDT", 1000, 201)];
-        let state = SpotOrderV2GivenStateV3::Cancel {
-            order: order.clone(),
-            balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let SpotOrderV2CaseChangesV3::Cancel(changes) = family
-            .compute_before_after_changes(
-                &SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3::default()),
-                state,
-            )
-            .unwrap()
-        else {
-            panic!("expected cancel changes");
-        };
-
-        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(
-            changes.updated_order.after.status_reason(),
-            Some(SpotOrderStatusReason::CanceledByUser)
-        );
-        assert_eq!(changes.updated_order.after.reservation.remaining_amount, 0);
-        assert_eq!(changes.updated_order.after.fee_reservation.remaining_amount, 0);
-        assert!(!changes.created_balance_ledger_entries.is_empty());
-        assert!(!changes.to_replayable_events().unwrap().is_empty());
-    }
-
-    #[test]
-    fn validate_rejects_branch_mismatch() {
-        let family = SpotOrderV2UseCaseFamilyV3;
-        let order = buy_order(SpotOrderTimeInForce::Gtc);
-        let balances = vec![balance("buyer", "USDT", 1000, 201)];
-        let state = SpotOrderV2GivenStateV3::Cancel {
-            order: order.clone(),
-            balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        assert_eq!(
-            family.compute_after_changes(&place_cmd("gtc"), &state),
-            Err(SpotOrderV2UseCaseFamilyV3Error::BranchMismatch)
         );
     }
 }

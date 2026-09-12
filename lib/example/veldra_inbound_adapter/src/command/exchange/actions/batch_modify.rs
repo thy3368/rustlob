@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::command::exchange::actions::cancel::reply::CancelStatusWire;
 use crate::command::exchange::actions::cancel::{
-    CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID,
+    CancelSpotOrderV2Lookup, CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID,
 };
 use crate::command::exchange::actions::order::PlaceSpotOrderV2Request;
 use crate::command::exchange::actions::order::reply::{
@@ -275,9 +275,9 @@ fn cancel_request_from_modify(
     modify: &ModifyWire,
 ) -> Result<CancelSpotOrderV2Request, ExchangeHttpError> {
     let lookup = if let Some(oid) = modify.oid.as_u64() {
-        CancelSpotOrderV2LookupV3::Oid(oid)
+        CancelSpotOrderV2Lookup::Oid(oid)
     } else if let Some(cloid) = modify.oid.as_str() {
-        CancelSpotOrderV2LookupV3::Cloid(cloid.to_string())
+        CancelSpotOrderV2Lookup::Cloid(cloid.to_string())
     } else {
         return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOid));
     };

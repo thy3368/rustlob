@@ -1,8 +1,6 @@
 use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecutionSpec};
-pub use example_core_use_case::CancelSpotOrderV2LookupV3;
-use example_core_use_case::{
-    CancelSpotOrderV2CmdV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
-};
+pub use example_core_use_case::CancelSpotOrderV2Lookup;
+use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
 use serde::{Deserialize, Serialize};
 pub use use_case_executor::trading::spot::cancel_spot_order_v2::execute_cancel_spot_order_v2;
 
@@ -68,31 +66,31 @@ pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
 pub struct CancelSpotOrderV2Request {
     pub party_id: String,
     pub asset: u32,
-    pub lookup: CancelSpotOrderV2LookupV3,
+    pub lookup: CancelSpotOrderV2Lookup,
 }
 
 impl CancelSpotOrderV2Request {
     fn from_wire_cancel(party_id: String, cancel: &CancelItemWire) -> Self {
-        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2LookupV3::Oid(cancel.o) }
+        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2Lookup::Oid(cancel.o) }
     }
 
     #[allow(dead_code)]
     pub fn from_cloid(party_id: String, asset: u32, cloid: String) -> Self {
-        Self { party_id, asset, lookup: CancelSpotOrderV2LookupV3::Cloid(cloid) }
+        Self { party_id, asset, lookup: CancelSpotOrderV2Lookup::Cloid(cloid) }
     }
 }
 
 pub struct SpotOrderV2CancelExecutionSpec;
 
-impl MiFamilyExecutionSpec<SpotOrderV2UseCaseFamilyV3> for SpotOrderV2CancelExecutionSpec {
+impl MiFamilyExecutionSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
 
-    fn command(request: &Self::Request) -> SpotOrderV2CommandV3 {
-        SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3 {
+    fn command(request: &Self::Request) -> CancelSpotOrderV2Cmd {
+        CancelSpotOrderV2Cmd {
             party_id: request.party_id.clone(),
             asset: request.asset,
             lookup: request.lookup.clone(),
-        })
+        }
     }
 }
 
@@ -188,18 +186,18 @@ mod tests {
         let request = CancelSpotOrderV2Request {
             party_id: "buyer".to_string(),
             asset: 10_000,
-            lookup: CancelSpotOrderV2LookupV3::Oid(42),
+            lookup: CancelSpotOrderV2Lookup::Oid(42),
         };
 
         let command = SpotOrderV2CancelExecutionSpec::command(&request);
 
         assert_eq!(
             command,
-            SpotOrderV2CommandV3::Cancel(CancelSpotOrderV2CmdV3 {
+            CancelSpotOrderV2Cmd {
                 party_id: "buyer".to_string(),
                 asset: 10_000,
-                lookup: CancelSpotOrderV2LookupV3::Oid(42),
-            })
+                lookup: CancelSpotOrderV2Lookup::Oid(42),
+            }
         );
     }
 }

@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
-    Balance, CancelSpotOrderV2LookupV3, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
-    SpotOrderTimeInForce, SpotOrderV2, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
-    SpotOrderV2UseCaseFamilyV3,
+    Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
+    CancelSpotOrderV2UseCase, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
+    SpotOrderTimeInForce, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -14,25 +14,22 @@ pub struct FakeSpotOrderV2CancelOutboundError;
 
 #[derive(Debug, Default)]
 pub struct FakeSpotOrderV2CancelOutbound {
-    observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
+    observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
 }
 
 impl FakeSpotOrderV2CancelOutbound {
-    pub fn observed_lookup(&self) -> Option<CancelSpotOrderV2LookupV3> {
+    pub fn observed_lookup(&self) -> Option<CancelSpotOrderV2Lookup> {
         self.observed_lookup.lock().map(|lookup| lookup.clone()).unwrap_or(None)
     }
 }
 
-impl StateSource<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
+impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
     type Error = FakeSpotOrderV2CancelOutboundError;
 
     fn load_given_state(
         &self,
-        cmd: &SpotOrderV2CommandV3,
-    ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-        let SpotOrderV2CommandV3::Cancel(request) = cmd else {
-            return Err(FakeSpotOrderV2CancelOutboundError);
-        };
+        request: &CancelSpotOrderV2Cmd,
+    ) -> Result<CancelSpotOrderV2State, Self::Error> {
         *self.observed_lookup.lock().map_err(|_| FakeSpotOrderV2CancelOutboundError)? =
             Some(request.lookup.clone());
 
@@ -76,7 +73,7 @@ impl StateSource<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
             1,
         );
 
-        Ok(SpotOrderV2GivenStateV3::Cancel {
+        Ok(CancelSpotOrderV2State {
             balances: vec![Balance::new(
                 request.party_id.clone(),
                 "USDT".to_string(),
@@ -93,7 +90,7 @@ impl StateSource<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
     }
 }
 
-impl StateSink<SpotOrderV2UseCaseFamilyV3> for FakeSpotOrderV2CancelOutbound {
+impl StateSink<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
     type Error = FakeSpotOrderV2CancelOutboundError;
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

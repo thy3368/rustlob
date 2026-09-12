@@ -129,12 +129,12 @@ mod tests {
 
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
-        SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
+        CancelSpotOrderV2Cmd, CancelSpotOrderV2State, CancelSpotOrderV2UseCase,
     };
 
     use super::*;
     use crate::command::exchange::actions::cancel::{
-        CancelSpotOrderV2LookupV3, CancelSpotOrderV2Request,
+        CancelSpotOrderV2Lookup, CancelSpotOrderV2Request,
     };
 
     #[test]
@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(mapped.asset, 10000);
         assert_eq!(
             mapped.lookup,
-            CancelSpotOrderV2LookupV3::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
+            CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
         );
     }
 
@@ -206,26 +206,23 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct ObservingCancelOutbound {
-        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2LookupV3>>>,
+        observed_lookup: Arc<Mutex<Option<CancelSpotOrderV2Lookup>>>,
     }
 
-    impl StateSource<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl StateSource<CancelSpotOrderV2UseCase> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
             &self,
-            cmd: &SpotOrderV2CommandV3,
-        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-            let SpotOrderV2CommandV3::Cancel(request) = cmd else {
-                panic!("expected cancel command");
-            };
+            request: &CancelSpotOrderV2Cmd,
+        ) -> Result<CancelSpotOrderV2State, Self::Error> {
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
             Err(FakeOutboundError)
         }
     }
 
-    impl StateSink<SpotOrderV2UseCaseFamilyV3> for ObservingCancelOutbound {
+    impl StateSink<CancelSpotOrderV2UseCase> for ObservingCancelOutbound {
         type Error = FakeOutboundError;
 
         fn persist(
@@ -268,9 +265,7 @@ mod tests {
 
         assert_eq!(
             *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
-            Some(CancelSpotOrderV2LookupV3::Cloid(
-                "0x1234567890abcdef1234567890abcdef".to_string()
-            ))
+            Some(CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string()))
         );
         assert_eq!(cancel_execution_error_message(error), "load_state failed: fake outbound error");
     }
