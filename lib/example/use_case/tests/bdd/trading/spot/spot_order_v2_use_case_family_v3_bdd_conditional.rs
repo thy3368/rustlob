@@ -243,7 +243,7 @@ fn given_active_order_when_trigger_command_runs_then_it_rejects_non_pending_orde
     let state = trigger_state(order, vec![], vec![balance("buyer", "USDT", 1000, 200)]);
 
     assert_eq!(
-        family.validate_against_given_state(&trigger_cmd("active-buy"), &state),
+        family.validate_given_state(&trigger_cmd("active-buy"), &state),
         Err(SpotOrderV2UseCaseFamilyV3Error::OrderNotTriggerPending)
     );
 }
@@ -255,7 +255,7 @@ fn given_invalid_conditional_command_when_pre_checked_then_business_error_is_ret
     cmd.trigger_price = "0".to_string();
 
     assert_eq!(
-        family.pre_check_command(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd)),
+        family.check_command(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd)),
         Err(SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerPrice)
     );
 }

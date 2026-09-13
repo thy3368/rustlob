@@ -27,14 +27,14 @@ impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
     type Error = BuildBlockError;
     type AfterChanges = BuildBlockFromCommandsChanges;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.block_height == 0 {
             return Err(BuildBlockError::BlockHeightMustBePositive);
         }
         Ok(())
     }
 
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,

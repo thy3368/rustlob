@@ -333,7 +333,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
     type Error = SpotOrderV2UseCaseFamilyV3Error;
     type AfterChanges = SpotOrderV2AfterChangesV3;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match cmd {
             SpotOrderV2CommandV3::Place(cmd) => {
                 parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?;
@@ -356,7 +356,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
         }
     }
 
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         given_state: &SpotOrderV2GivenStateV3,

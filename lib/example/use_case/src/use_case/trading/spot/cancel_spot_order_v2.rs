@@ -113,7 +113,7 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
     type Error = CancelSpotOrderV2Error;
     type AfterChanges = CancelSpotOrderV2AfterChanges;
 
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         _cmd: &Self::Command,
         given_state: &Self::GivenState,

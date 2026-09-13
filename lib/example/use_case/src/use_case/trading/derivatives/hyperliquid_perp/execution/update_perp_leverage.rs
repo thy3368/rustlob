@@ -100,7 +100,7 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
     type Error = UpdateHyperliquidPerpLeverageError;
     type AfterChanges = UpdateHyperliquidPerpLeverageChanges;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(UpdateHyperliquidPerpLeverageError::InvalidPartyId);
         }
@@ -110,7 +110,7 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -263,11 +263,11 @@ mod tests {
         let mut invalid_party = cmd(10, true);
         invalid_party.party_id.clear();
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase.pre_check_command(&invalid_party),
+            UpdateHyperliquidPerpLeverageUseCase.check_command(&invalid_party),
             Err(UpdateHyperliquidPerpLeverageError::InvalidPartyId)
         );
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase.pre_check_command(&cmd(0, true)),
+            UpdateHyperliquidPerpLeverageUseCase.check_command(&cmd(0, true)),
             Err(UpdateHyperliquidPerpLeverageError::InvalidLeverage)
         );
     }
@@ -335,7 +335,7 @@ mod tests {
 
         assert_eq!(
             UpdateHyperliquidPerpLeverageUseCase
-                .validate_against_given_state(&cmd(10, true), &state),
+                .validate_given_state(&cmd(10, true), &state),
             Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch)
         );
     }

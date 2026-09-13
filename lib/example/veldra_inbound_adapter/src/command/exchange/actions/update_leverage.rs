@@ -187,10 +187,10 @@ where
         leverage: request.leverage,
     };
 
-    use_case.pre_check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
+    use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
     let state = outbound.load_given_state(&cmd).map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case
-        .validate_against_given_state(&cmd, &state)
+        .validate_given_state(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
         .compute_after_state_unchecked(&cmd, &state)

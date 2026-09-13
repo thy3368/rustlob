@@ -60,16 +60,16 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
     type Error = PlaceTriggerPendingSpotOrderV2Error;
     type AfterChanges = PlaceTriggerPendingSpotOrderV2AfterChanges;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3
-            .pre_check_command(&SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)))
+            .check_command(&SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)))
     }
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        SpotOrderV2UseCaseFamilyV3.validate_against_given_state(
+        SpotOrderV2UseCaseFamilyV3.validate_given_state(
             &SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)),
             &SpotOrderV2GivenStateV3::PlaceTriggerPending {
                 order_template: state.order_template.clone(),

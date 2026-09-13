@@ -459,7 +459,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 
     /// 对命令本身做不依赖 `GivenState` 的快速校验。
     #[action_type(kind = "pre_check_command")]
-    fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -468,7 +468,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// `GivenState` 可以由多个聚合和上下文字段组成。实现者应在这里显式拒绝
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
     #[action_type(kind = "validate_against_given_state")]
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         _cmd: &Self::Command,
         _given_state: &Self::GivenState,
@@ -501,8 +501,8 @@ pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
         cmd: &Self::Command,
         given_state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
-        self.pre_check_command(cmd)?;
-        self.validate_against_given_state(cmd, given_state)?;
+        self.check_command(cmd)?;
+        self.validate_given_state(cmd, given_state)?;
         self.compute_after_state_unchecked(cmd, given_state)
     }
 }
@@ -566,14 +566,14 @@ mod tests {
         type Error = HookError;
         type AfterChanges = ();
 
-        fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
             if cmd.reject_in_pre_check {
                 return Err(HookError::PreCheckRejected);
             }
             Ok(())
         }
 
-        fn validate_against_given_state(
+        fn validate_given_state(
             &self,
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,

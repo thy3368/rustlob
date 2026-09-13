@@ -86,7 +86,7 @@ impl StateMachineExecutor {
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {
-        family.pre_check_command(command).map_err(MiFamilyExecutionError::Business)?;
+        family.check_command(command).map_err(MiFamilyExecutionError::Business)?;
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
@@ -94,7 +94,7 @@ impl StateMachineExecutor {
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
-            .validate_against_given_state(command, &given_state)
+            .validate_given_state(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
         let after = family

@@ -36,10 +36,10 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
         let cmd = SpotOrderV2CommandV3::Place(command.clone());
         let state = build_place_state(command, &exchange_state.spot)?;
         family
-            .pre_check_command(&cmd)
+            .check_command(&cmd)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
         family
-            .validate_against_given_state(&cmd, &state)
+            .validate_given_state(&cmd, &state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))
     }
 
@@ -94,10 +94,10 @@ fn execute_place_spot_order_v2(
     let cmd = SpotOrderV2CommandV3::Place(command.clone());
     let state = build_place_state(command, spot_state)?;
     family
-        .pre_check_command(&cmd)
+        .check_command(&cmd)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     family
-        .validate_against_given_state(&cmd, &state)
+        .validate_given_state(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let after = family
         .compute_after_state_unchecked(&cmd, &state)

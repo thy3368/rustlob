@@ -215,7 +215,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     type AfterChanges = PlaceHyperliquidPerpOrderChanges;
 
     #[action_type(kind = "pre_check_command")]
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(PlaceHyperliquidPerpOrderError::InvalidPartyId);
         }
@@ -228,7 +228,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     }
 
     #[action_type(kind = "validate_against_given_state")]
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,

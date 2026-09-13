@@ -995,14 +995,14 @@ impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
     type Error = PlaceSpotOrderV2Error;
     type AfterChanges = PlaceSpotOrderV2AfterChanges;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         parse_positive_u64(&cmd.price, PlaceSpotOrderV2Error::InvalidPrice)?;
         parse_positive_u64(&cmd.size, PlaceSpotOrderV2Error::InvalidSize)?;
         parse_tif(&cmd.tif)?;
         Ok(())
     }
 
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,

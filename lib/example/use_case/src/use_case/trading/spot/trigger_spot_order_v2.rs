@@ -66,16 +66,16 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
     type Error = TriggerSpotOrderV2Error;
     type AfterChanges = TriggerSpotOrderV2AfterChanges;
 
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3
-            .pre_check_command(&SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)))
+            .check_command(&SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)))
     }
-    fn validate_against_given_state(
+    fn validate_given_state(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        SpotOrderV2UseCaseFamilyV3.validate_against_given_state(
+        SpotOrderV2UseCaseFamilyV3.validate_given_state(
             &SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)),
             &legacy_state(state),
         )
