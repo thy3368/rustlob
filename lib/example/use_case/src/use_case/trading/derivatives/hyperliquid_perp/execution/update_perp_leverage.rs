@@ -145,7 +145,7 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -277,7 +277,7 @@ mod tests {
         let state = state(HyperliquidPerpMarginMode::Cross, None);
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_changes_unchecked(&cmd(10, true), &state)
+            .compute_after_state_unchecked(&cmd(10, true), &state)
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
@@ -295,7 +295,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_changes_unchecked(&cmd(10, true), &state)
+            .compute_after_state_unchecked(&cmd(10, true), &state)
             .unwrap();
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -316,7 +316,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_changes_unchecked(&cmd(10, false), &state)
+            .compute_after_state_unchecked(&cmd(10, false), &state)
             .unwrap();
 
         assert_eq!(

@@ -1,4 +1,4 @@
-use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked};
+use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked};
 use example_core_use_case::{
     PlaceSpotOrderV2ChangesV3, PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3,
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,
@@ -100,7 +100,7 @@ fn execute_place_spot_order_v2(
         .validate_against_given_state(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let after = family
-        .compute_after_changes_unchecked(&cmd, &state)
+        .compute_after_state_unchecked(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let SpotOrderV2CaseChangesV3::Place(changes) =
         SpotOrderV2UseCaseFamilyV3::merge_before_and_after(state, after)

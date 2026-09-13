@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
@@ -447,7 +447,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
         }
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         given_state: &SpotOrderV2GivenStateV3,
@@ -508,13 +508,13 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
     }
 }
 
-impl MiStateMachineOwnedV2BeforeAfter for SpotOrderV2UseCaseFamilyV3 {
-    type BeforeAfterChanges = SpotOrderV2CaseChangesV3;
+impl MiStateMachineOwnedV2Diff for SpotOrderV2UseCaseFamilyV3 {
+    type DiffChanges = SpotOrderV2CaseChangesV3;
 
     fn merge_before_and_after(
         given_state: SpotOrderV2GivenStateV3,
         after: Self::AfterChanges,
-    ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+    ) -> Result<Self::DiffChanges, Self::Error> {
         match (given_state, after) {
             (
                 SpotOrderV2GivenStateV3::Place {
@@ -1690,7 +1690,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2};
+    use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2};
 
     use super::*;
     use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
@@ -1798,7 +1798,7 @@ mod tests {
         };
 
         let SpotOrderV2AfterChangesV3::Place(after) =
-            family.compute_after_changes(&place_cmd("gtc"), &state).unwrap()
+            family.compute_after_state(&place_cmd("gtc"), &state).unwrap()
         else {
             panic!("expected place after changes");
         };
@@ -1838,7 +1838,7 @@ mod tests {
         };
 
         let SpotOrderV2CaseChangesV3::Place(changes) =
-            family.compute_before_after_changes(&place_cmd("ioc"), state).unwrap()
+            family.compute_diff(&place_cmd("ioc"), state).unwrap()
         else {
             panic!("expected place case changes");
         };
@@ -1878,7 +1878,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = family.compute_after_changes(&place_cmd("ioc"), &state).unwrap();
+        let after = family.compute_after_state(&place_cmd("ioc"), &state).unwrap();
 
         let SpotOrderV2CaseChangesV3::Place(changes) =
             SpotOrderV2UseCaseFamilyV3::merge_before_and_after(state, after).unwrap()
@@ -1923,7 +1923,7 @@ mod tests {
         };
 
         let SpotOrderV2AfterChangesV3::Place(after) =
-            family.compute_after_changes(&place_cmd("alo"), &state).unwrap()
+            family.compute_after_state(&place_cmd("alo"), &state).unwrap()
         else {
             panic!("expected place after");
         };

@@ -286,7 +286,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     }
 
     #[action_type(kind = "compute_after_changes_unchecked")]
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,

@@ -1,5 +1,5 @@
 use common_entity::{
-    MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked, ReplayableChanges,
+    MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked, ReplayableChanges,
 };
 use example_core_use_case::{
     BalanceLedgerOperation, Reservation, SpotOrderStatus, SpotOrderStatusReason, *,
@@ -155,7 +155,7 @@ fn given_conditional_order_command_when_placed_then_trigger_pending_order_is_cre
         SpotOrderV2GivenStateV3::PlaceTriggerPending { order_template: order_template.clone() };
 
     let SpotOrderV2CaseChangesV3::PlaceTriggerPending(changes) = family
-        .compute_before_after_changes(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd), state)
+        .compute_diff(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd), state)
         .unwrap()
     else {
         panic!("expected place trigger pending changes");
@@ -176,7 +176,7 @@ fn given_trigger_pending_order_when_triggered_then_order_becomes_active_and_free
     let state = trigger_state(order.clone(), vec![], balances);
 
     let SpotOrderV2CaseChangesV3::Trigger(changes) =
-        family.compute_before_after_changes(&trigger_cmd("conditional-2"), state).unwrap()
+        family.compute_diff(&trigger_cmd("conditional-2"), state).unwrap()
     else {
         panic!("expected trigger changes");
     };
@@ -212,7 +212,7 @@ fn given_trigger_pending_order_crossing_book_when_triggered_then_it_freezes_matc
     let state = trigger_state(order, vec![maker], balances);
 
     let SpotOrderV2CaseChangesV3::Trigger(changes) =
-        family.compute_before_after_changes(&trigger_cmd("conditional-3"), state).unwrap()
+        family.compute_diff(&trigger_cmd("conditional-3"), state).unwrap()
     else {
         panic!("expected trigger changes");
     };

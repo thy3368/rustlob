@@ -1,5 +1,5 @@
 use crate::{
-    EntityError, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, ReplayableChanges,
+    EntityError, EntityReplayableEvent, MiStateMachineOwnedV2Diff, ReplayableChanges,
 };
 
 /// 多聚合 MI state-machine family 的运行时编排器。
@@ -31,7 +31,7 @@ pub enum MiFamilyExecutionError<BE, OE> {
 /// executor 不直接依赖该 trait；adapter 可用它把 request 转成 command 后再执行。
 pub trait MiFamilyExecutionSpec<F>
 where
-    F: MiStateMachineOwnedV2BeforeAfter,
+    F: MiStateMachineOwnedV2Diff,
 {
     type Request;
 
@@ -41,7 +41,7 @@ where
 /// MI family runtime 所需的 authoritative given state source port。
 pub trait StateSource<F>: Send + Sync
 where
-    F: MiStateMachineOwnedV2BeforeAfter,
+    F: MiStateMachineOwnedV2Diff,
 {
     type Error: std::error::Error;
 
@@ -51,7 +51,7 @@ where
 /// MI family runtime 所需的事件副作用 outbound port。
 pub trait StateSink<F>: Send + Sync
 where
-    F: MiStateMachineOwnedV2BeforeAfter,
+    F: MiStateMachineOwnedV2Diff,
 {
     type Error: std::error::Error;
 
@@ -80,9 +80,9 @@ impl StateMachineExecutor {
         command: &F::Command,
         state_source: &SS,
         state_sink: &OB,
-    ) -> ExecutionOutcome<F::BeforeAfterChanges, F::Error, OB::Error>
+    ) -> ExecutionOutcome<F::DiffChanges, F::Error, OB::Error>
     where
-        F: MiStateMachineOwnedV2BeforeAfter,
+        F: MiStateMachineOwnedV2Diff,
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {
@@ -98,7 +98,7 @@ impl StateMachineExecutor {
             .map_err(MiFamilyExecutionError::Business)?;
 
         let after = family
-            .compute_after_changes_unchecked(command, &given_state)
+            .compute_after_state_unchecked(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
         let changes = F::merge_before_and_after(given_state, after)

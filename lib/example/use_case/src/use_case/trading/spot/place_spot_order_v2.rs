@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
@@ -1033,7 +1033,7 @@ impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
         Ok(())
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
@@ -1094,13 +1094,13 @@ impl PlaceSpotOrderV2UseCase {
     }
 }
 
-impl MiStateMachineOwnedV2BeforeAfter for PlaceSpotOrderV2UseCase {
-    type BeforeAfterChanges = PlaceSpotOrderV2Changes;
+impl MiStateMachineOwnedV2Diff for PlaceSpotOrderV2UseCase {
+    type DiffChanges = PlaceSpotOrderV2Changes;
 
     fn merge_before_and_after(
         state: PlaceSpotOrderV2State,
         after: Self::AfterChanges,
-    ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+    ) -> Result<Self::DiffChanges, Self::Error> {
         let updated_taker_order =
             (after.created_taker_order != after.taker_order_after).then(|| UpdatedEntityPair {
                 before: after.created_taker_order.clone(),
@@ -1184,7 +1184,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2};
+    use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2};
 
     use super::*;
     use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
@@ -1292,7 +1292,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_changes(&place_cmd("gtc"), &state).unwrap();
+        let after = use_case.compute_after_state(&place_cmd("gtc"), &state).unwrap();
 
         assert_eq!(after.created_taker_order, taker);
         assert_eq!(after.taker_order_after, taker);
@@ -1333,7 +1333,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let changes = use_case.compute_before_after_changes(&place_cmd("ioc"), state).unwrap();
+        let changes = use_case.compute_diff(&place_cmd("ioc"), state).unwrap();
 
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.created_trades[0].taker_fee, 1);
@@ -1374,7 +1374,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_changes(&place_cmd("ioc"), &state).unwrap();
+        let after = use_case.compute_after_state(&place_cmd("ioc"), &state).unwrap();
 
         let changes = PlaceSpotOrderV2UseCase::merge_before_and_after(state, after).unwrap();
 
@@ -1415,7 +1415,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_changes(&place_cmd("alo"), &state).unwrap();
+        let after = use_case.compute_after_state(&place_cmd("alo"), &state).unwrap();
 
         assert_eq!(after.created_taker_order.status(), SpotOrderStatus::Open);
         assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);

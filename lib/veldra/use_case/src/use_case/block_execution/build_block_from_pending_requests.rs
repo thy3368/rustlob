@@ -54,7 +54,7 @@ impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
         validate_batch_commands(&commands, &state.exchange_state)
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,

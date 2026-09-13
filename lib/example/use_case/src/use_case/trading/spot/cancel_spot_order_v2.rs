@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
@@ -133,7 +133,7 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
         Ok(())
     }
 
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         _cmd: &Self::Command,
         given_state: &Self::GivenState,
@@ -170,13 +170,13 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
     }
 }
 
-impl MiStateMachineOwnedV2BeforeAfter for CancelSpotOrderV2UseCase {
-    type BeforeAfterChanges = CancelSpotOrderV2Changes;
+impl MiStateMachineOwnedV2Diff for CancelSpotOrderV2UseCase {
+    type DiffChanges = CancelSpotOrderV2Changes;
 
     fn merge_before_and_after(
         given_state: CancelSpotOrderV2State,
         after: Self::AfterChanges,
-    ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+    ) -> Result<Self::DiffChanges, Self::Error> {
         Ok(CancelSpotOrderV2Changes {
             updated_order: UpdatedEntityPair {
                 before: given_state.order,
@@ -548,7 +548,7 @@ fn map_reservation_error_to_cancel(error: crate::ReservationError) -> CancelSpot
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2BeforeAfter, ReplayableChanges};
+    use common_entity::{MiStateMachineOwnedV2Diff, ReplayableChanges};
 
     use super::*;
     use crate::{
@@ -570,7 +570,7 @@ mod tests {
         };
 
         let changes = CancelSpotOrderV2UseCase
-            .compute_before_after_changes(&CancelSpotOrderV2Cmd::default(), state)
+            .compute_diff(&CancelSpotOrderV2Cmd::default(), state)
             .expect("open order cancellation should compute changes");
 
         assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Open);

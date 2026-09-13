@@ -193,7 +193,7 @@ where
         .validate_against_given_state(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
-        .compute_after_changes_unchecked(&cmd, &state)
+        .compute_after_state_unchecked(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
     let events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;

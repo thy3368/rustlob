@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2, MiStateMachineV2Unchecked,
+    MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 
@@ -80,13 +80,13 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
             &legacy_state(state),
         )
     }
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         let SpotOrderV2AfterChangesV3::Trigger(after) = SpotOrderV2UseCaseFamilyV3
-            .compute_after_changes(
+            .compute_after_state(
                 &SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)),
                 &legacy_state(state),
             )?
@@ -97,12 +97,12 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
     }
 }
 
-impl common_entity::MiStateMachineOwnedV2BeforeAfter for TriggerSpotOrderV2UseCase {
-    type BeforeAfterChanges = TriggerSpotOrderV2Changes;
+impl common_entity::MiStateMachineOwnedV2Diff for TriggerSpotOrderV2UseCase {
+    type DiffChanges = TriggerSpotOrderV2Changes;
     fn merge_before_and_after(
         state: TriggerSpotOrderV2State,
         after: Self::AfterChanges,
-    ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+    ) -> Result<Self::DiffChanges, Self::Error> {
         let changes = SpotOrderV2UseCaseFamilyV3::merge_before_and_after(
             legacy_state(&state),
             SpotOrderV2AfterChangesV3::Trigger(Box::new(after)),

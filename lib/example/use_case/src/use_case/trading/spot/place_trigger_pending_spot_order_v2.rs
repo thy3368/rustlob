@@ -1,5 +1,5 @@
 use common_entity::{
-    MiStateMachineOwnedV2BeforeAfter, MiStateMachineV2, MiStateMachineV2Unchecked,
+    MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 
@@ -76,13 +76,13 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
             },
         )
     }
-    fn compute_after_changes_unchecked(
+    fn compute_after_state_unchecked(
         &self,
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
         let SpotOrderV2AfterChangesV3::PlaceTriggerPending(after) = SpotOrderV2UseCaseFamilyV3
-            .compute_after_changes(
+            .compute_after_state(
                 &SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)),
                 &SpotOrderV2GivenStateV3::PlaceTriggerPending {
                     order_template: state.order_template.clone(),
@@ -95,12 +95,12 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
     }
 }
 
-impl MiStateMachineOwnedV2BeforeAfter for PlaceTriggerPendingSpotOrderV2UseCase {
-    type BeforeAfterChanges = PlaceTriggerPendingSpotOrderV2Changes;
+impl MiStateMachineOwnedV2Diff for PlaceTriggerPendingSpotOrderV2UseCase {
+    type DiffChanges = PlaceTriggerPendingSpotOrderV2Changes;
     fn merge_before_and_after(
         state: PlaceTriggerPendingSpotOrderV2State,
         after: Self::AfterChanges,
-    ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+    ) -> Result<Self::DiffChanges, Self::Error> {
         let SpotOrderV2CaseChangesV3::PlaceTriggerPending(changes) =
             SpotOrderV2UseCaseFamilyV3::merge_before_and_after(
                 SpotOrderV2GivenStateV3::PlaceTriggerPending {
