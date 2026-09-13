@@ -1,5 +1,8 @@
 pub mod cancel_spot_order_v2;
 pub mod place_spot_order_v2;
+
+pub mod modify_spot_order_v2;
+
 pub mod place_trigger_pending_spot_order_v2;
 pub mod spot_order_v2_use_case_family_v3;
 pub mod trigger_spot_order_v2;
