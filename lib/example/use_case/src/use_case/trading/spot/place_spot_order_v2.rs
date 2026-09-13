@@ -7,8 +7,8 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{
-    SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotOrderV2MatchingDecision,
-    spot_order_v2_matching_decision,
+    PlaceSpotOrderV2Outcome, SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError,
+    SpotOrderV2MatchingDecision, spot_order_v2_matching_decision,
 };
 use thiserror::Error;
 
@@ -51,7 +51,7 @@ pub struct PlaceSpotOrderV2TakerTemplateContext<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderV2AfterChanges {
-    pub taker_order_initial: SpotOrderV2,
+    pub created_taker_order: SpotOrderV2,
     pub taker_order_after: SpotOrderV2,
     pub maker_orders_after: Vec<SpotOrderV2>,
     pub balances_after: Vec<Balance>,
@@ -62,7 +62,8 @@ pub struct PlaceSpotOrderV2AfterChanges {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderV2Changes {
-    pub updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
+    pub created_taker_order: SpotOrderV2,
+    pub updated_taker_order: Option<UpdatedEntityPair<SpotOrderV2>>,
     pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_trades: Vec<SpotTrade>,
@@ -110,29 +111,25 @@ impl ReplayableChanges for PlaceSpotOrderV2Changes {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let event_capacity = self
-            .created_trades
-            .len()
+        let event_capacity = 1_usize
+            .saturating_add(usize::from(self.updated_taker_order.is_some()))
+            .saturating_add(self.created_trades.len())
             .saturating_add(self.updated_maker_orders.len())
-            .saturating_add(1)
             .saturating_add(self.created_vouchers.len())
             .saturating_add(self.created_balance_ledger_entries.len())
             .saturating_add(self.created_balance_ledger_entries.len());
         let mut events = Vec::with_capacity(event_capacity);
+        events.push(self.created_taker_order.track_create_event()?);
+        if let Some(updated_taker_order) = &self.updated_taker_order {
+            events.push(
+                updated_taker_order.after.track_update_event_from(&updated_taker_order.before)?,
+            );
+        }
         for trade in &self.created_trades {
             events.push(trade.track_create_event()?);
         }
         for maker in &self.updated_maker_orders {
             events.push(maker.after.track_update_event_from(&maker.before)?);
-        }
-        if self.updated_taker_order.before == self.updated_taker_order.after {
-            events.push(self.updated_taker_order.after.track_create_event()?);
-        } else {
-            events.push(
-                self.updated_taker_order
-                    .after
-                    .track_update_event_from(&self.updated_taker_order.before)?,
-            );
         }
         for voucher in &self.created_vouchers {
             events.push(voucher.track_create_event()?);
@@ -146,19 +143,6 @@ impl ReplayableChanges for PlaceSpotOrderV2Changes {
         }
         Ok(events)
     }
-}
-
-struct PlaceAfterContext<'a> {
-    cmd: &'a PlaceSpotOrderV2Cmd,
-    order_id: &'a str,
-    symbol: &'a str,
-    maker_orders: &'a [SpotOrderV2],
-    settlement_balances: &'a [Balance],
-    base_asset_id: &'a str,
-    quote_asset_id: &'a str,
-    fee_account_id: &'a str,
-    maker_fee_bps: u64,
-    taker_fee_bps: u64,
 }
 
 struct ActiveOrderAfterContext<'a> {
@@ -180,53 +164,6 @@ struct ActiveOrderAfter {
     created_trades: Vec<SpotTrade>,
     created_vouchers: Vec<SettlementTransferVoucher>,
     created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-}
-
-fn compute_place_after(
-    context: PlaceAfterContext<'_>,
-) -> Result<PlaceSpotOrderV2AfterChanges, PlaceSpotOrderV2Error> {
-    let maker_orders_after = context.maker_orders.to_vec();
-    let mut balance_book = BalanceMap::new(context.settlement_balances);
-    let place_input = place_input_from_context(
-        context.cmd,
-        &PlaceSpotOrderV2TakerTemplateContext {
-            order_id: context.order_id.to_string(),
-            symbol: context.symbol.to_string(),
-            settlement_balances: context.settlement_balances,
-            base_asset_id: context.base_asset_id.to_string(),
-            quote_asset_id: context.quote_asset_id.to_string(),
-            maker_fee_bps: context.maker_fee_bps,
-            taker_fee_bps: context.taker_fee_bps,
-        },
-    )?;
-    let place_outcome = SpotOrderV2::place(place_input)?;
-    let taker_initial = place_outcome.order.clone();
-    let taker_after = place_outcome.order;
-    let mut created_balance_ledger_entries = Vec::with_capacity(1);
-    let freeze_ledger_entry =
-        apply_behavior_ledger_entry(place_outcome.freeze_ledger_entry, &mut balance_book)?;
-    created_balance_ledger_entries.push(freeze_ledger_entry);
-    let after = compute_active_order_after(ActiveOrderAfterContext {
-        taker_after,
-        maker_orders_after,
-        balance_book,
-        created_balance_ledger_entries,
-        base_asset_id: context.base_asset_id,
-        quote_asset_id: context.quote_asset_id,
-        fee_account_id: context.fee_account_id,
-        maker_fee_bps: context.maker_fee_bps,
-        taker_fee_bps: context.taker_fee_bps,
-    })?;
-
-    Ok(PlaceSpotOrderV2AfterChanges {
-        taker_order_initial: taker_initial,
-        taker_order_after: after.taker_order_after,
-        maker_orders_after: after.maker_orders_after,
-        balances_after: after.balances_after,
-        created_trades: after.created_trades,
-        created_vouchers: after.created_vouchers,
-        created_balance_ledger_entries: after.created_balance_ledger_entries,
-    })
 }
 
 fn compute_active_order_after(
@@ -1101,18 +1038,59 @@ impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
         cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<Self::AfterChanges, Self::Error> {
-        compute_place_after(PlaceAfterContext {
-            cmd,
-            order_id: &state.order_id,
-            symbol: &state.symbol,
-            maker_orders: &state.maker_orders,
-            settlement_balances: &state.settlement_balances,
+        let taker_order_outcome = self.place_taker_order_from_state(cmd, state)?;
+        let created_taker_order = taker_order_outcome.order.clone();
+        let mut balance_book = BalanceMap::new(&state.settlement_balances);
+        let mut created_balance_ledger_entries = Vec::with_capacity(1);
+        let freeze_ledger_entry = apply_behavior_ledger_entry(
+            taker_order_outcome.freeze_ledger_entry,
+            &mut balance_book,
+        )?;
+        created_balance_ledger_entries.push(freeze_ledger_entry);
+
+        let after = compute_active_order_after(ActiveOrderAfterContext {
+            taker_after: taker_order_outcome.order,
+            maker_orders_after: state.maker_orders.clone(),
+            balance_book,
+            created_balance_ledger_entries,
             base_asset_id: &state.base_asset_id,
             quote_asset_id: &state.quote_asset_id,
             fee_account_id: &state.fee_account_id,
             maker_fee_bps: state.maker_fee_bps,
             taker_fee_bps: state.taker_fee_bps,
+        })?;
+
+        Ok(PlaceSpotOrderV2AfterChanges {
+            created_taker_order,
+            taker_order_after: after.taker_order_after,
+            maker_orders_after: after.maker_orders_after,
+            balances_after: after.balances_after,
+            created_trades: after.created_trades,
+            created_vouchers: after.created_vouchers,
+            created_balance_ledger_entries: after.created_balance_ledger_entries,
         })
+    }
+}
+
+impl PlaceSpotOrderV2UseCase {
+    fn place_taker_order_from_state(
+        &self,
+        cmd: &PlaceSpotOrderV2Cmd,
+        state: &PlaceSpotOrderV2State,
+    ) -> Result<PlaceSpotOrderV2Outcome, PlaceSpotOrderV2Error> {
+        let input = place_input_from_context(
+            cmd,
+            &PlaceSpotOrderV2TakerTemplateContext {
+                order_id: state.order_id.clone(),
+                symbol: state.symbol.clone(),
+                settlement_balances: &state.settlement_balances,
+                base_asset_id: state.base_asset_id.clone(),
+                quote_asset_id: state.quote_asset_id.clone(),
+                maker_fee_bps: state.maker_fee_bps,
+                taker_fee_bps: state.taker_fee_bps,
+            },
+        )?;
+        Ok(SpotOrderV2::place(input)?)
     }
 }
 
@@ -1123,17 +1101,26 @@ impl MiStateMachineOwnedV2BeforeAfter for PlaceSpotOrderV2UseCase {
         state: PlaceSpotOrderV2State,
         after: Self::AfterChanges,
     ) -> Result<Self::BeforeAfterChanges, Self::Error> {
+        let updated_taker_order =
+            (after.created_taker_order != after.taker_order_after).then(|| UpdatedEntityPair {
+                before: after.created_taker_order.clone(),
+                after: after.taker_order_after.clone(),
+            });
         Ok(PlaceSpotOrderV2Changes {
-            updated_taker_order: UpdatedEntityPair {
-                before: after.taker_order_initial,
-                after: after.taker_order_after,
-            },
+            created_taker_order: after.created_taker_order,
+            updated_taker_order,
             updated_maker_orders: zip_pairs(state.maker_orders, after.maker_orders_after)?,
             updated_balances: merge_balance_pairs(state.settlement_balances, after.balances_after)?,
             created_trades: after.created_trades,
             created_vouchers: after.created_vouchers,
             created_balance_ledger_entries: after.created_balance_ledger_entries,
         })
+    }
+}
+
+impl PlaceSpotOrderV2Changes {
+    pub fn taker_order_after(&self) -> &SpotOrderV2 {
+        self.updated_taker_order.as_ref().map_or(&self.created_taker_order, |pair| &pair.after)
     }
 }
 
@@ -1307,6 +1294,7 @@ mod tests {
 
         let after = use_case.compute_after_changes(&place_cmd("gtc"), &state).unwrap();
 
+        assert_eq!(after.created_taker_order, taker);
         assert_eq!(after.taker_order_after, taker);
         assert_eq!(after.maker_orders_after, makers);
         assert!(after.created_trades.is_empty());
@@ -1316,6 +1304,10 @@ mod tests {
             after.created_balance_ledger_entries[0].operation,
             BalanceLedgerOperation::Freeze
         );
+        let changes =
+            PlaceSpotOrderV2UseCase::merge_before_and_after(state, after.clone()).unwrap();
+        assert_eq!(changes.created_taker_order, taker);
+        assert!(changes.updated_taker_order.is_none());
     }
 
     #[test]
@@ -1346,13 +1338,16 @@ mod tests {
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.created_trades[0].taker_fee, 1);
         assert_eq!(changes.created_trades[0].maker_fee, 1);
-        assert_eq!(changes.updated_taker_order.after.status(), SpotOrderStatus::Canceled);
+        assert!(changes.updated_taker_order.is_some());
+        assert_eq!(changes.taker_order_after().status(), SpotOrderStatus::Canceled);
         assert_eq!(
-            changes.updated_taker_order.after.status_reason(),
+            changes.taker_order_after().status_reason(),
             Some(SpotOrderStatusReason::IocCancelRejected)
         );
         assert!(!changes.created_balance_ledger_entries.is_empty());
-        assert!(!changes.to_replayable_events().unwrap().is_empty());
+        let events = changes.to_replayable_events().unwrap();
+        assert!(events.first().is_some_and(EntityReplayableEvent::is_created));
+        assert!(events.get(1).is_some_and(EntityReplayableEvent::is_updated));
     }
 
     #[test]
@@ -1383,7 +1378,8 @@ mod tests {
 
         let changes = PlaceSpotOrderV2UseCase::merge_before_and_after(state, after).unwrap();
 
-        assert_eq!(changes.updated_taker_order.before, taker);
+        assert_eq!(changes.created_taker_order, taker);
+        assert_eq!(changes.updated_taker_order.as_ref().map(|pair| &pair.before), Some(&taker));
         assert_eq!(changes.updated_maker_orders[0].before, makers[0]);
         assert_eq!(changes.updated_balances.len(), balances.len());
         let before_by_key = balances
@@ -1421,6 +1417,7 @@ mod tests {
 
         let after = use_case.compute_after_changes(&place_cmd("alo"), &state).unwrap();
 
+        assert_eq!(after.created_taker_order.status(), SpotOrderStatus::Open);
         assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);
         assert_eq!(
             after.taker_order_after.status_reason(),

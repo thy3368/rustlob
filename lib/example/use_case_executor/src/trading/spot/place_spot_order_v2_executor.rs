@@ -176,7 +176,7 @@ mod tests {
                 .expect("place spot order v2 should execute");
 
         let changes = result.changes;
-        assert_eq!(changes.updated_taker_order.after.status(), SpotOrderStatus::Canceled);
+        assert_eq!(changes.taker_order_after().status(), SpotOrderStatus::Canceled);
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(changes.created_trades.len(), 1);
         assert!(!changes.updated_balances.is_empty());
