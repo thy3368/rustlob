@@ -39,7 +39,7 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
             .check_command(&cmd)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
         family
-            .validate_given_state(&cmd, &state)
+            .validate_state_given(&cmd, &state)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))
     }
 
@@ -97,7 +97,7 @@ fn execute_place_spot_order_v2(
         .check_command(&cmd)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     family
-        .validate_given_state(&cmd, &state)
+        .validate_state_given(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let after = family
         .compute_state_changed_unchecked(&cmd, &state)

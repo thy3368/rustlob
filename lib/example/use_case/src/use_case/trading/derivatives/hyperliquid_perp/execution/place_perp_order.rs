@@ -228,7 +228,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     }
 
     #[action_type(kind = "validate_against_given_state")]
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,

@@ -34,7 +34,7 @@ impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
         Ok(())
     }
 
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,

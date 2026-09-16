@@ -190,7 +190,7 @@ where
     use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
     let state = outbound.load_given_state(&cmd).map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case
-        .validate_given_state(&cmd, &state)
+        .validate_state_given(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
         .compute_state_changed_unchecked(&cmd, &state)

@@ -94,7 +94,7 @@ impl StateMachineExecutor {
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
         family
-            .validate_given_state(command, &given_state)
+            .validate_state_given(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
         let after = family

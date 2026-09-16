@@ -252,7 +252,7 @@ fn flat_account_buys_limit_order_and_freezes_margin_for_each_supported_tif() {
             execution: PlaceHyperliquidPerpOrderExecution::Limit { price: 101, time_in_force },
             ..limit_cmd()
         };
-        assert_eq!(use_case().validate_given_state(&cmd, &state()), Ok(()));
+        assert_eq!(use_case().validate_state_given(&cmd, &state()), Ok(()));
 
         // act
         let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -293,7 +293,7 @@ fn flat_account_sells_limit_order_and_freezes_full_order_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    assert_eq!(use_case().validate_given_state(&cmd, &state()), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -333,7 +333,7 @@ fn flat_account_buys_market_order_and_projects_market_ioc_with_aggressive_price(
 
     // arrange
     let cmd = market_cmd();
-    assert_eq!(use_case().validate_given_state(&cmd, &state()), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -373,7 +373,7 @@ fn flat_account_sells_market_order_and_projects_market_ioc_with_aggressive_price
 
     // arrange
     let cmd = sell_market_cmd();
-    assert_eq!(use_case().validate_given_state(&cmd, &state()), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -414,7 +414,7 @@ fn long_position_buys_same_side_and_freezes_full_new_order_margin() {
     // arrange
     let cmd = limit_cmd();
     let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &long_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -455,7 +455,7 @@ fn short_position_sells_same_side_and_freezes_full_new_order_margin() {
     // arrange
     let cmd = sell_limit_cmd();
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &short_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -497,7 +497,7 @@ fn long_position_places_sell_reduce_only_order_without_freezing_margin() {
     let mut cmd = sell_limit_cmd();
     cmd.reduce_only = true;
     let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &long_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -536,7 +536,7 @@ fn short_position_places_buy_reduce_only_order_without_freezing_margin() {
     let mut cmd = limit_cmd();
     cmd.reduce_only = true;
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &short_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -574,7 +574,7 @@ fn long_position_places_opposite_sell_that_closes_without_new_margin() {
     // arrange
     let cmd = sell_limit_cmd();
     let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &long_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -614,7 +614,7 @@ fn long_position_places_opposite_sell_that_exactly_closes_without_new_margin() {
     cmd.size = 5;
     cmd.reduce_only = false;
     let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &long_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -653,7 +653,7 @@ fn long_position_rejects_single_opposite_sell_flip_until_split_workflow_handles_
     cmd.size = 8;
     let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(
-        use_case().validate_given_state(&cmd, &long_state),
+        use_case().validate_state_given(&cmd, &long_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
     );
 }
@@ -677,7 +677,7 @@ fn short_position_places_opposite_buy_that_closes_without_new_margin() {
     // arrange
     let cmd = limit_cmd();
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &short_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -717,7 +717,7 @@ fn short_position_places_opposite_buy_that_exactly_closes_without_new_margin() {
     cmd.size = 5;
     cmd.reduce_only = false;
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
-    assert_eq!(use_case().validate_given_state(&cmd, &short_state), Ok(()));
+    assert_eq!(use_case().validate_state_given(&cmd, &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -756,7 +756,7 @@ fn short_position_rejects_single_opposite_buy_flip_until_split_workflow_handles_
     cmd.size = 8;
     let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(
-        use_case().validate_given_state(&cmd, &short_state),
+        use_case().validate_state_given(&cmd, &short_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
     );
 }

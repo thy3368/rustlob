@@ -243,7 +243,7 @@ fn given_active_order_when_trigger_command_runs_then_it_rejects_non_pending_orde
     let state = trigger_state(order, vec![], vec![balance("buyer", "USDT", 1000, 200)]);
 
     assert_eq!(
-        family.validate_given_state(&trigger_cmd("active-buy"), &state),
+        family.validate_state_given(&trigger_cmd("active-buy"), &state),
         Err(SpotOrderV2UseCaseFamilyV3Error::OrderNotTriggerPending)
     );
 }

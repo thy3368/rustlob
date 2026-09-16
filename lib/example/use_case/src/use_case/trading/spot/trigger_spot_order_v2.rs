@@ -70,12 +70,12 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
         SpotOrderV2UseCaseFamilyV3
             .check_command(&SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)))
     }
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        SpotOrderV2UseCaseFamilyV3.validate_given_state(
+        SpotOrderV2UseCaseFamilyV3.validate_state_given(
             &SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)),
             &legacy_state(state),
         )

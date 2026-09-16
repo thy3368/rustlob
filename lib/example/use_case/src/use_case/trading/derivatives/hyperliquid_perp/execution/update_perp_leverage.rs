@@ -110,7 +110,7 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
@@ -335,7 +335,7 @@ mod tests {
 
         assert_eq!(
             UpdateHyperliquidPerpLeverageUseCase
-                .validate_given_state(&cmd(10, true), &state),
+                .validate_state_given(&cmd(10, true), &state),
             Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch)
         );
     }

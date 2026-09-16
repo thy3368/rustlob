@@ -356,7 +356,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
         }
     }
 
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
         given_state: &SpotOrderV2GivenStateV3,

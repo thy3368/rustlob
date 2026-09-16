@@ -184,7 +184,7 @@ fn pre_check_rejects_zero_block_height() {
 fn validate_rejects_empty_batch() {
     let mut state = sample_state();
     state.commands.clear();
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -425,7 +425,7 @@ fn validate_rejects_duplicate_command_id_in_batch() {
         treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
     ];
 
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -449,7 +449,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
         treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
     ];
 
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -470,7 +470,7 @@ fn validate_rejects_zero_timestamp_command() {
     state.commands =
         vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, SpotOrderTimeInForce::Gtc)];
 
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -489,7 +489,7 @@ fn validate_rejects_envelope_account_mismatch() {
     mismatched.account_id = "operator-1".to_string();
     state.commands = vec![mismatched];
 
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -512,7 +512,7 @@ fn validate_rejects_non_canonical_command_order() {
     let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = MiStateMachineV2Unchecked::validate_given_state(
+    let result = MiStateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,

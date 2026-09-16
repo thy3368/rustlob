@@ -468,7 +468,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// `GivenState` 可以由多个聚合和上下文字段组成。实现者应在这里显式拒绝
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
     #[action_type(kind = "validate_against_given_state")]
-    fn validate_given_state(
+    fn validate_state_given(
         &self,
         _cmd: &Self::Command,
         _given_state: &Self::StateGiven,
@@ -502,7 +502,7 @@ pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
-        self.validate_given_state(cmd, given_state)?;
+        self.validate_state_given(cmd, given_state)?;
         self.compute_state_changed_unchecked(cmd, given_state)
     }
 }
@@ -573,7 +573,7 @@ mod tests {
             Ok(())
         }
 
-        fn validate_given_state(
+        fn validate_state_given(
             &self,
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
