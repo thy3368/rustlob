@@ -1,5 +1,18 @@
 有，但**不是传统 CEX 那种「父单成交后自动下子单」的主子单树**，而是 **TPSL Bracket（括号单）**。
 
+## 当前实现边界（2026-09-16）
+
+当前 `SpotOrderV2` 只落地 `normalTpsl` 的父子关系建模与原子创建校验：父单标记为
+`NormalTpslParent`，子单标记为 `NormalTpslChild { parent_order_id }`。父单继续按普通
+Limit 单产生冻结流水，TP/SL 子单保持 `TriggerPending` 且不产生冻结流水。
+
+本阶段**未实现**父单成交后自动激活子单、父撤联动子撤、兄弟子单互斥取消、部分成交后的
+子单数量缩放。这些跨订单行为应由后续独立 use case 编排，不能从当前关系字段推断为已支持。
+
+Hyperliquid wire action 使用同一个 `orders[]` 承载 entry 与 TP/SL，并通过
+`grouping: "normalTpsl"` 表达分组；当前实体设计不引入独立 `tpsl[]` wire 结构，也不虚构
+额外持久化 group ID，唯一关联键是 `parent_order_id`。
+
 ---
 
 ## 一、Hyperliquid 的"主子单"是什么？
@@ -23,17 +36,15 @@
 {
   "type": "order",
   "orders": [
-    { "asset": 10000, "isBuy": true, "sz": "10", "limitPx": "0.50", "orderType": { "limit": { "tif": "Gtc" } } }
+    { "asset": 10000, "isBuy": true, "sz": "10", "limitPx": "0.50", "orderType": { "limit": { "tif": "Gtc" } }, "reduceOnly": false },
+    { "asset": 10000, "isBuy": false, "sz": "10", "limitPx": "0.70", "orderType": { "trigger": { "isMarket": true, "triggerPx": "0.70", "tpsl": "tp" } }, "reduceOnly": true },
+    { "asset": 10000, "isBuy": false, "sz": "10", "limitPx": "0.40", "orderType": { "trigger": { "isMarket": true, "triggerPx": "0.40", "tpsl": "sl" } }, "reduceOnly": true }
   ],
-  "grouping": "normalTpsl",
-  "tpsl": [
-    { "asset": 10000, "isBuy": false, "sz": "10", "triggerPx": "0.70", "orderType": { "trigger": { "isMarket": true, "tpsl": "tp" } }, "reduceOnly": true },
-    { "asset": 10000, "isBuy": false, "sz": "10", "triggerPx": "0.40", "orderType": { "trigger": { "trigger": { "isMarket": true, "tpsl": "sl" } }, "reduceOnly": true }
-  ]
+  "grouping": "normalTpsl"
 }
 ```
 
-> 一个 `orders[0]` 是父单，`tpsl[]` 是子单。  
+> `orders[0]` 是父单，后续 trigger orders 是 TP/SL 子单。
 > `grouping: "normalTpsl"` 告诉系统：这是一组 bracket。
 
 ---

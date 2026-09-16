@@ -1,6 +1,4 @@
-use common_entity::{
-    MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked,
-};
+use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked};
 use serde::{Deserialize, Serialize};
 
 use super::spot_order_v2_use_case_family_v3::{

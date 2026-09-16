@@ -1,7 +1,5 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
-use common_entity::{
-    MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked,
-};
+use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2, MiStateMachineV2Unchecked};
 use serde::{Deserialize, Serialize};
 
 use super::spot_order_v2_use_case_family_v3::{
@@ -67,8 +65,7 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
     type StateChanged = TriggerSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        SpotOrderV2UseCaseFamilyV3
-            .check_command(&SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)))
+        SpotOrderV2UseCaseFamilyV3.check_command(&SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)))
     }
     fn validate_state_given(
         &self,

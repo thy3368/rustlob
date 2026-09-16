@@ -251,6 +251,15 @@ pub struct PlaceHyperliquidSpotOrderV2Outcome {
     pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
 }
 
+/// Hyperliquid `normalTpsl` 原子创建结果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHyperliquidNormalTpslOutcome {
+    /// 产生 principal 冻结流水的 entry 父单。
+    pub parent: PlaceHyperliquidSpotOrderV2Outcome,
+    /// 保持 `TriggerPending` 且不产生冻结流水的 TP/SL 子单。
+    pub children: Vec<PlaceHyperliquidSpotOrderV2Outcome>,
+}
+
 /// 下单行为结果。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderV2Outcome {
@@ -333,6 +342,42 @@ pub enum SpotOrderV2BehaviorError {
     BalanceLedger(#[from] BalanceLedgerEntryV2Error),
 }
 
+/// `normalTpsl` 父子订单关系校验错误。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SpotOrderGroupRelationError {
+    #[error("normalTpsl parent must be a limit order")]
+    ParentMustBeLimit,
+    #[error("normalTpsl parent must not be reduce-only")]
+    ParentMustNotBeReduceOnly,
+    #[error("normalTpsl must contain at least one child order")]
+    ChildrenRequired,
+    #[error("normalTpsl child must be a trigger order")]
+    ChildMustBeTrigger,
+    #[error("normalTpsl child must be reduce-only")]
+    ChildMustBeReduceOnly,
+    #[error("normalTpsl child must have the opposite side from its parent")]
+    ChildSideMustOpposeParent,
+    #[error("normalTpsl child account differs from its parent")]
+    ChildAccountMismatch,
+    #[error("normalTpsl child asset differs from its parent")]
+    ChildAssetMismatch,
+    #[error("normalTpsl child symbol differs from its parent")]
+    ChildSymbolMismatch,
+    #[error("normalTpsl child quantity exceeds its parent quantity")]
+    ChildQuantityExceedsParent,
+    #[error("normalTpsl order ids must be unique")]
+    DuplicateOrderId,
+}
+
+/// `normalTpsl` 创建错误，保留关系错误与单单下单错误的具体语义。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum PlaceHyperliquidNormalTpslError {
+    #[error(transparent)]
+    Relation(#[from] SpotOrderGroupRelationError),
+    #[error(transparent)]
+    Placement(#[from] SpotOrderV2BehaviorError),
+}
+
 impl From<SpotOrderV2MatchError> for SpotOrderV2BehaviorError {
     fn from(error: SpotOrderV2MatchError) -> Self {
         match error {
@@ -394,6 +439,30 @@ pub struct SpotOrderCommonFacts {
     pub side: SpotOrderSide,
     /// 以 base asset 计价的下单数量。
     pub qty: u64,
+}
+
+/// 现货订单在 `normalTpsl` 中承担的关系角色。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum SpotOrderGroupRelation {
+    /// 不属于父子订单组。
+    #[default]
+    Standalone,
+    /// `normalTpsl` entry 父单。
+    NormalTpslParent,
+    /// `normalTpsl` TP/SL 子单及其父单 ID。
+    NormalTpslChild { parent_order_id: String },
+}
+
+impl SpotOrderGroupRelation {
+    fn replay_value(&self) -> String {
+        match self {
+            Self::Standalone => "standalone".to_owned(),
+            Self::NormalTpslParent => "normal_tpsl_parent".to_owned(),
+            Self::NormalTpslChild { parent_order_id } => {
+                concat2("normal_tpsl_child:", parent_order_id)
+            }
+        }
+    }
 }
 
 /// `SpotOrderV2` 的唯一权威状态。
@@ -472,6 +541,9 @@ pub struct SpotOrderV2 {
     /// 统一的 Hyperliquid 订单类型事实。
     #[serde(default = "SpotOrderV2::serde_default_order_type")]
     pub order_type: SpotOrderType,
+    /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
+    #[serde(default)]
+    pub group_relation: SpotOrderGroupRelation,
     /// 进入执行流程后的执行意图。
     pub execution: SpotOrderExecution,
     /// Hyperliquid `t.limit.tif`。市价意图通常映射为 `Ioc`。
@@ -643,6 +715,7 @@ impl SpotOrderV2 {
             limit_price: execution.order_price(),
             reduce_only: false,
             order_type: SpotOrderType::Limit { tif: time_in_force.into() },
+            group_relation: SpotOrderGroupRelation::Standalone,
             execution,
             time_in_force,
             qty,
@@ -770,6 +843,7 @@ impl SpotOrderV2 {
                 trigger_price,
                 tpsl: trigger_role,
             },
+            group_relation: SpotOrderGroupRelation::Standalone,
             execution: trigger_execution,
             time_in_force: triggered_time_in_force,
             qty,
@@ -921,6 +995,74 @@ impl SpotOrderV2 {
             order: outcome.order,
             freeze_ledger_entry: Some(outcome.freeze_ledger_entry),
         })
+    }
+
+    /// 原子校验并创建 Hyperliquid `normalTpsl` entry 父单及 TP/SL 子单。
+    pub fn place_hyperliquid_normal_tpsl(
+        parent: PlaceHyperliquidSpotOrderV2Input,
+        children: Vec<PlaceHyperliquidSpotOrderV2Input>,
+    ) -> Result<PlaceHyperliquidNormalTpslOutcome, PlaceHyperliquidNormalTpslError> {
+        Self::validate_normal_tpsl_relation(&parent, children.as_slice())?;
+
+        let parent_order_id = parent.order_id.clone();
+        let mut parent_outcome = Self::place_hyperliquid(parent)?;
+        parent_outcome.order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
+
+        let mut child_outcomes = Vec::with_capacity(children.len());
+        for child in children {
+            let mut child_outcome = Self::place_hyperliquid(child)?;
+            child_outcome.order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
+                parent_order_id: parent_order_id.clone(),
+            };
+            child_outcomes.push(child_outcome);
+        }
+
+        Ok(PlaceHyperliquidNormalTpslOutcome { parent: parent_outcome, children: child_outcomes })
+    }
+
+    fn validate_normal_tpsl_relation(
+        parent: &PlaceHyperliquidSpotOrderV2Input,
+        children: &[PlaceHyperliquidSpotOrderV2Input],
+    ) -> Result<(), SpotOrderGroupRelationError> {
+        if !matches!(parent.order_type, SpotOrderType::Limit { .. }) {
+            return Err(SpotOrderGroupRelationError::ParentMustBeLimit);
+        }
+        if parent.reduce_only {
+            return Err(SpotOrderGroupRelationError::ParentMustNotBeReduceOnly);
+        }
+        if children.is_empty() {
+            return Err(SpotOrderGroupRelationError::ChildrenRequired);
+        }
+
+        for (index, child) in children.iter().enumerate() {
+            if !child.order_type.is_trigger() {
+                return Err(SpotOrderGroupRelationError::ChildMustBeTrigger);
+            }
+            if !child.reduce_only {
+                return Err(SpotOrderGroupRelationError::ChildMustBeReduceOnly);
+            }
+            if child.side == parent.side {
+                return Err(SpotOrderGroupRelationError::ChildSideMustOpposeParent);
+            }
+            if child.account_id != parent.account_id {
+                return Err(SpotOrderGroupRelationError::ChildAccountMismatch);
+            }
+            if child.asset != parent.asset {
+                return Err(SpotOrderGroupRelationError::ChildAssetMismatch);
+            }
+            if child.symbol != parent.symbol {
+                return Err(SpotOrderGroupRelationError::ChildSymbolMismatch);
+            }
+            if child.qty > parent.qty {
+                return Err(SpotOrderGroupRelationError::ChildQuantityExceedsParent);
+            }
+            if child.order_id == parent.order_id
+                || children[..index].iter().any(|previous| previous.order_id == child.order_id)
+            {
+                return Err(SpotOrderGroupRelationError::DuplicateOrderId);
+            }
+        }
+        Ok(())
     }
 
     /// 可 BDD 规格化的聚合根行为：未触发条件单进入 active 订单生命周期。
@@ -1937,6 +2079,7 @@ impl FieldDiff for SpotOrderV2 {
             EntityFieldChange::new("side", "", self.side.as_str()),
             EntityFieldChange::new("execution", "", self.execution.as_str()),
             EntityFieldChange::new("time_in_force", "", self.time_in_force.as_str()),
+            EntityFieldChange::new("group_relation", "", self.group_relation.replay_value()),
             EntityFieldChange::new("price", "", self.order_price().to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
@@ -2041,6 +2184,12 @@ impl FieldDiff for SpotOrderV2 {
             "time_in_force",
             self.time_in_force.as_str(),
             other.time_in_force.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "group_relation",
+            self.group_relation.replay_value(),
+            other.group_relation.replay_value(),
         );
         push_change(
             &mut changes,
@@ -2220,6 +2369,7 @@ impl Entity for SpotOrderV2 {
             | "side"
             | "execution"
             | "time_in_force"
+            | "group_relation"
             | "status"
             | "status_reason"
             | "client_order_id"

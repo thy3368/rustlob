@@ -1,6 +1,4 @@
-use common_entity::{
-    MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked, ReplayableChanges,
-};
+use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked, ReplayableChanges};
 use example_core_use_case::{
     BalanceLedgerOperation, Reservation, SpotOrderStatus, SpotOrderStatusReason, *,
 };
@@ -154,9 +152,8 @@ fn given_conditional_order_command_when_placed_then_trigger_pending_order_is_cre
     let state =
         SpotOrderV2GivenStateV3::PlaceTriggerPending { order_template: order_template.clone() };
 
-    let SpotOrderV2CaseChangesV3::PlaceTriggerPending(changes) = family
-        .compute_state_diff(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd), state)
-        .unwrap()
+    let SpotOrderV2CaseChangesV3::PlaceTriggerPending(changes) =
+        family.compute_state_diff(&SpotOrderV2CommandV3::PlaceTriggerPending(cmd), state).unwrap()
     else {
         panic!("expected place trigger pending changes");
     };

@@ -1304,8 +1304,7 @@ mod tests {
             after.created_balance_ledger_entries[0].operation,
             BalanceLedgerOperation::Freeze
         );
-        let changes =
-            PlaceSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
+        let changes = PlaceSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
         assert_eq!(changes.created_taker_order, taker);
         assert!(changes.updated_taker_order.is_none());
     }

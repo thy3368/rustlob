@@ -1,6 +1,4 @@
-use crate::{
-    EntityError, EntityReplayableEvent, MiStateMachineOwnedV2Diff, ReplayableChanges,
-};
+use crate::{EntityError, EntityReplayableEvent, MiStateMachineOwnedV2Diff, ReplayableChanges};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///

@@ -640,10 +640,7 @@ mod tests {
         let machine = HookMachine;
 
         machine
-            .compute_state_diff(
-                &HookCommand { reject_in_pre_check: false },
-                Arc::clone(&log),
-            )
+            .compute_state_diff(&HookCommand { reject_in_pre_check: false }, Arc::clone(&log))
             .map_err(|err| format!("compute_before_after_changes failed: {err:?}"))?;
         let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 

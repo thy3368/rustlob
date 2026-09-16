@@ -334,8 +334,7 @@ mod tests {
         );
 
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase
-                .validate_state_given(&cmd(10, true), &state),
+            UpdateHyperliquidPerpLeverageUseCase.validate_state_given(&cmd(10, true), &state),
             Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch)
         );
     }
