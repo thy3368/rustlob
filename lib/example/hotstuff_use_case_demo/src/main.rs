@@ -206,6 +206,7 @@ impl SpotOrderApp {
         AppStateUpdates::new()
     }
 
+    //todo 重点改的是这个方法
     fn execute(requests: &[ConsensusRequest]) -> Option<AppStateUpdates> {
         let mut updates = AppStateUpdates::new();
         let mut has_changes = false;
