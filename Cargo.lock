@@ -3833,6 +3833,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hotstuff_use_case_demo"
+version = "0.1.0"
+dependencies = [
+ "cmd_handler",
+ "ed25519-dalek",
+ "example_core_use_case",
+ "example_outbound_adapter",
+ "hotstuff_rs",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "use_case_executor",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

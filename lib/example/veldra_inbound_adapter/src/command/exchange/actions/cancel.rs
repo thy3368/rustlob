@@ -2,7 +2,7 @@ use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecuti
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
 use serde::{Deserialize, Serialize};
-pub use use_case_executor::trading::spot::cancel_spot_order_v2::execute_cancel_spot_order_v2;
+pub use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2;
 
 use crate::command::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
