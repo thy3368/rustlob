@@ -96,9 +96,9 @@ impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
 
 impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
     type Command = UpdateHyperliquidPerpLeverageCmd;
-    type GivenState = UpdateHyperliquidPerpLeverageState;
+    type StateGiven = UpdateHyperliquidPerpLeverageState;
     type Error = UpdateHyperliquidPerpLeverageError;
-    type AfterChanges = UpdateHyperliquidPerpLeverageChanges;
+    type StateChanged = UpdateHyperliquidPerpLeverageChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
@@ -113,7 +113,7 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         if state.account_id != cmd.party_id {
             return Err(UpdateHyperliquidPerpLeverageError::AccountMismatch);
@@ -145,11 +145,11 @@ impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         Ok(())
     }
 
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let before = state.leverage_setting.clone();
         let after = before.update_leverage(cmd.leverage).map_err(map_leverage_setting_error)?;
         let changed_position = if let Some(position) = &state.position {
@@ -277,7 +277,7 @@ mod tests {
         let state = state(HyperliquidPerpMarginMode::Cross, None);
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_state_unchecked(&cmd(10, true), &state)
+            .compute_state_changed_unchecked(&cmd(10, true), &state)
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
@@ -295,7 +295,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_state_unchecked(&cmd(10, true), &state)
+            .compute_state_changed_unchecked(&cmd(10, true), &state)
             .unwrap();
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -316,7 +316,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_after_state_unchecked(&cmd(10, false), &state)
+            .compute_state_changed_unchecked(&cmd(10, false), &state)
             .unwrap();
 
         assert_eq!(

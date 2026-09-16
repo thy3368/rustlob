@@ -109,14 +109,14 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
 
 impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
     type Command = CancelSpotOrderV2Cmd;
-    type GivenState = CancelSpotOrderV2State;
+    type StateGiven = CancelSpotOrderV2State;
     type Error = CancelSpotOrderV2Error;
-    type AfterChanges = CancelSpotOrderV2AfterChanges;
+    type StateChanged = CancelSpotOrderV2AfterChanges;
 
     fn validate_given_state(
         &self,
         _cmd: &Self::Command,
-        given_state: &Self::GivenState,
+        given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let mut order_after = given_state.order.clone();
         order_after.cancel(CancelSpotOrderV2Input {
@@ -133,11 +133,11 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
         Ok(())
     }
 
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         _cmd: &Self::Command,
-        given_state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        given_state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let mut order_after = given_state.order.clone();
         let mut balance_book = BalanceMap::new(&given_state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(0);
@@ -171,12 +171,12 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
 }
 
 impl MiStateMachineOwnedV2Diff for CancelSpotOrderV2UseCase {
-    type DiffChanges = CancelSpotOrderV2Changes;
+    type StateDiff = CancelSpotOrderV2Changes;
 
-    fn merge_before_and_after(
+    fn do_compute_state_diff(
         given_state: CancelSpotOrderV2State,
-        after: Self::AfterChanges,
-    ) -> Result<Self::DiffChanges, Self::Error> {
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
         Ok(CancelSpotOrderV2Changes {
             updated_order: UpdatedEntityPair {
                 before: given_state.order,
@@ -570,7 +570,7 @@ mod tests {
         };
 
         let changes = CancelSpotOrderV2UseCase
-            .compute_diff(&CancelSpotOrderV2Cmd::default(), state)
+            .compute_state_diff(&CancelSpotOrderV2Cmd::default(), state)
             .expect("open order cancellation should compute changes");
 
         assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Open);

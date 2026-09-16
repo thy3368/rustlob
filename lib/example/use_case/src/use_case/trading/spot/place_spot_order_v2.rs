@@ -991,9 +991,9 @@ pub struct PlaceSpotOrderV2UseCase;
 
 impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
     type Command = PlaceSpotOrderV2Cmd;
-    type GivenState = PlaceSpotOrderV2State;
+    type StateGiven = PlaceSpotOrderV2State;
     type Error = PlaceSpotOrderV2Error;
-    type AfterChanges = PlaceSpotOrderV2AfterChanges;
+    type StateChanged = PlaceSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         parse_positive_u64(&cmd.price, PlaceSpotOrderV2Error::InvalidPrice)?;
@@ -1005,7 +1005,7 @@ impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         if state.fee_account_id.is_empty() {
             return Err(PlaceSpotOrderV2Error::InvalidFeeAccountId);
@@ -1033,11 +1033,11 @@ impl MiStateMachineV2Unchecked for PlaceSpotOrderV2UseCase {
         Ok(())
     }
 
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let taker_order_outcome = self.place_taker_order_from_state(cmd, state)?;
         let created_taker_order = taker_order_outcome.order.clone();
         let mut balance_book = BalanceMap::new(&state.settlement_balances);
@@ -1095,12 +1095,12 @@ impl PlaceSpotOrderV2UseCase {
 }
 
 impl MiStateMachineOwnedV2Diff for PlaceSpotOrderV2UseCase {
-    type DiffChanges = PlaceSpotOrderV2Changes;
+    type StateDiff = PlaceSpotOrderV2Changes;
 
-    fn merge_before_and_after(
+    fn do_compute_state_diff(
         state: PlaceSpotOrderV2State,
-        after: Self::AfterChanges,
-    ) -> Result<Self::DiffChanges, Self::Error> {
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
         let updated_taker_order =
             (after.created_taker_order != after.taker_order_after).then(|| UpdatedEntityPair {
                 before: after.created_taker_order.clone(),
@@ -1292,7 +1292,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_state(&place_cmd("gtc"), &state).unwrap();
+        let after = use_case.compute_state_changed(&place_cmd("gtc"), &state).unwrap();
 
         assert_eq!(after.created_taker_order, taker);
         assert_eq!(after.taker_order_after, taker);
@@ -1305,7 +1305,7 @@ mod tests {
             BalanceLedgerOperation::Freeze
         );
         let changes =
-            PlaceSpotOrderV2UseCase::merge_before_and_after(state, after.clone()).unwrap();
+            PlaceSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
         assert_eq!(changes.created_taker_order, taker);
         assert!(changes.updated_taker_order.is_none());
     }
@@ -1333,7 +1333,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let changes = use_case.compute_diff(&place_cmd("ioc"), state).unwrap();
+        let changes = use_case.compute_state_diff(&place_cmd("ioc"), state).unwrap();
 
         assert_eq!(changes.created_trades.len(), 1);
         assert_eq!(changes.created_trades[0].taker_fee, 1);
@@ -1374,9 +1374,9 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_state(&place_cmd("ioc"), &state).unwrap();
+        let after = use_case.compute_state_changed(&place_cmd("ioc"), &state).unwrap();
 
-        let changes = PlaceSpotOrderV2UseCase::merge_before_and_after(state, after).unwrap();
+        let changes = PlaceSpotOrderV2UseCase::do_compute_state_diff(state, after).unwrap();
 
         assert_eq!(changes.created_taker_order, taker);
         assert_eq!(changes.updated_taker_order.as_ref().map(|pair| &pair.before), Some(&taker));
@@ -1415,7 +1415,7 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_after_state(&place_cmd("alo"), &state).unwrap();
+        let after = use_case.compute_state_changed(&place_cmd("alo"), &state).unwrap();
 
         assert_eq!(after.created_taker_order.status(), SpotOrderStatus::Open);
         assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);

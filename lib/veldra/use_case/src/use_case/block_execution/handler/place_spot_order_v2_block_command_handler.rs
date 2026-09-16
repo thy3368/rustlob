@@ -100,10 +100,10 @@ fn execute_place_spot_order_v2(
         .validate_given_state(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let after = family
-        .compute_after_state_unchecked(&cmd, &state)
+        .compute_state_changed_unchecked(&cmd, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let SpotOrderV2CaseChangesV3::Place(changes) =
-        SpotOrderV2UseCaseFamilyV3::merge_before_and_after(state, after)
+        SpotOrderV2UseCaseFamilyV3::do_compute_state_diff(state, after)
             .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?
     else {
         return Err(BuildBlockError::SpotExecution("unexpected spot order v2 branch".to_string()));

@@ -56,9 +56,9 @@ fn legacy_cmd(cmd: &PlaceTriggerPendingSpotOrderV2Cmd) -> PlaceTriggerPendingSpo
 
 impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
     type Command = PlaceTriggerPendingSpotOrderV2Cmd;
-    type GivenState = PlaceTriggerPendingSpotOrderV2State;
+    type StateGiven = PlaceTriggerPendingSpotOrderV2State;
     type Error = PlaceTriggerPendingSpotOrderV2Error;
-    type AfterChanges = PlaceTriggerPendingSpotOrderV2AfterChanges;
+    type StateChanged = PlaceTriggerPendingSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3
@@ -67,7 +67,7 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3.validate_given_state(
             &SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)),
@@ -76,13 +76,13 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
             },
         )
     }
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let SpotOrderV2AfterChangesV3::PlaceTriggerPending(after) = SpotOrderV2UseCaseFamilyV3
-            .compute_after_state(
+            .compute_state_changed(
                 &SpotOrderV2CommandV3::PlaceTriggerPending(legacy_cmd(cmd)),
                 &SpotOrderV2GivenStateV3::PlaceTriggerPending {
                     order_template: state.order_template.clone(),
@@ -96,13 +96,13 @@ impl MiStateMachineV2Unchecked for PlaceTriggerPendingSpotOrderV2UseCase {
 }
 
 impl MiStateMachineOwnedV2Diff for PlaceTriggerPendingSpotOrderV2UseCase {
-    type DiffChanges = PlaceTriggerPendingSpotOrderV2Changes;
-    fn merge_before_and_after(
+    type StateDiff = PlaceTriggerPendingSpotOrderV2Changes;
+    fn do_compute_state_diff(
         state: PlaceTriggerPendingSpotOrderV2State,
-        after: Self::AfterChanges,
-    ) -> Result<Self::DiffChanges, Self::Error> {
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
         let SpotOrderV2CaseChangesV3::PlaceTriggerPending(changes) =
-            SpotOrderV2UseCaseFamilyV3::merge_before_and_after(
+            SpotOrderV2UseCaseFamilyV3::do_compute_state_diff(
                 SpotOrderV2GivenStateV3::PlaceTriggerPending {
                     order_template: state.order_template,
                 },

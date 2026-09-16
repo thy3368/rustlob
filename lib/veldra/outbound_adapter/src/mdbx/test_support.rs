@@ -126,7 +126,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
 
 pub fn built_block() -> BuildBlockFromCommandsChanges {
     BuildBlockFromCommandsUseCase
-        .compute_after_state_unchecked(&sample_command(), &sample_state())
+        .compute_state_changed_unchecked(&sample_command(), &sample_state())
         .expect("block should build")
 }
 

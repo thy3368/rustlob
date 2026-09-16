@@ -210,9 +210,9 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
 
 impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     type Command = PlaceHyperliquidPerpOrderCmd;
-    type GivenState = PlaceHyperliquidPerpOrderState;
+    type StateGiven = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;
-    type AfterChanges = PlaceHyperliquidPerpOrderChanges;
+    type StateChanged = PlaceHyperliquidPerpOrderChanges;
 
     #[action_type(kind = "pre_check_command")]
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
@@ -231,7 +231,7 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
@@ -286,11 +286,11 @@ impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     }
 
     #[action_type(kind = "compute_after_changes_unchecked")]
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
         let order_sequence = state.next_order_sequence.to_string();

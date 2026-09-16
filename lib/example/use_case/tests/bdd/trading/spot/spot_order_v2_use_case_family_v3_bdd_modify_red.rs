@@ -109,7 +109,7 @@ fn given_open_limit_order_when_modify_price_and_size_then_order_keeps_identity_a
     let family = SpotOrderV2UseCaseFamilyV3;
 
     let SpotOrderV2CaseChangesV3::Modify(changes) = family
-        .compute_diff(
+        .compute_state_diff(
             &modify_cmd(ModifySpotOrderV2LookupV3::Oid(88_001), new_price, new_size),
             given_open_buy_limit_order,
         )
@@ -168,7 +168,7 @@ fn given_open_order_when_modify_lookup_is_cloid_then_same_order_is_modified() {
     };
 
     let SpotOrderV2CaseChangesV3::Modify(changes) = family
-        .compute_diff(
+        .compute_state_diff(
             &modify_cmd(
                 ModifySpotOrderV2LookupV3::Cloid("0x1234567890abcdef1234567890abcdef".into()),
                 90,
@@ -211,7 +211,7 @@ fn given_terminal_order_when_modify_then_business_error_is_returned(
     };
 
     assert_eq!(
-        family.compute_diff(
+        family.compute_state_diff(
             &modify_cmd(ModifySpotOrderV2LookupV3::Oid(88_002), 120, 3),
             state,
         ),
@@ -251,7 +251,7 @@ fn given_trigger_pending_order_when_modify_trigger_price_then_pending_trigger_te
     };
 
     let SpotOrderV2CaseChangesV3::Modify(changes) = family
-        .compute_diff(
+        .compute_state_diff(
             &SpotOrderV2CommandV3::Modify(ModifySpotOrderV2CmdV3 {
                 party_id: "buyer".to_string(),
                 asset: 10_001,

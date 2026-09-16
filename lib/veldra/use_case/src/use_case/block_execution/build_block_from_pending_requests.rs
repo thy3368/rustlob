@@ -23,9 +23,9 @@ pub struct BuildBlockFromCommandsUseCase;
 
 impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
     type Command = BuildBlockFromCommandsCommand;
-    type GivenState = BuildBlockFromCommandsState;
+    type StateGiven = BuildBlockFromCommandsState;
     type Error = BuildBlockError;
-    type AfterChanges = BuildBlockFromCommandsChanges;
+    type StateChanged = BuildBlockFromCommandsChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.block_height == 0 {
@@ -37,7 +37,7 @@ impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         if state.commands.is_empty() {
             return Err(BuildBlockError::EmptyCommands);
@@ -54,11 +54,11 @@ impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
         validate_batch_commands(&commands, &state.exchange_state)
     }
 
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let parent_block_hash = state.parent_block_hash.clone();
         let mut exchange_state = state.exchange_state.clone();
         let commands = validate_and_clone_canonical_commands(&state.commands)?;

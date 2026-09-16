@@ -62,9 +62,9 @@ fn legacy_state(state: &TriggerSpotOrderV2State) -> SpotOrderV2GivenStateV3 {
 
 impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
     type Command = TriggerSpotOrderV2Cmd;
-    type GivenState = TriggerSpotOrderV2State;
+    type StateGiven = TriggerSpotOrderV2State;
     type Error = TriggerSpotOrderV2Error;
-    type AfterChanges = TriggerSpotOrderV2AfterChanges;
+    type StateChanged = TriggerSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3
@@ -73,20 +73,20 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
     fn validate_given_state(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         SpotOrderV2UseCaseFamilyV3.validate_given_state(
             &SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)),
             &legacy_state(state),
         )
     }
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let SpotOrderV2AfterChangesV3::Trigger(after) = SpotOrderV2UseCaseFamilyV3
-            .compute_after_state(
+            .compute_state_changed(
                 &SpotOrderV2CommandV3::Trigger(legacy_cmd(cmd)),
                 &legacy_state(state),
             )?
@@ -98,12 +98,12 @@ impl MiStateMachineV2Unchecked for TriggerSpotOrderV2UseCase {
 }
 
 impl common_entity::MiStateMachineOwnedV2Diff for TriggerSpotOrderV2UseCase {
-    type DiffChanges = TriggerSpotOrderV2Changes;
-    fn merge_before_and_after(
+    type StateDiff = TriggerSpotOrderV2Changes;
+    fn do_compute_state_diff(
         state: TriggerSpotOrderV2State,
-        after: Self::AfterChanges,
-    ) -> Result<Self::DiffChanges, Self::Error> {
-        let changes = SpotOrderV2UseCaseFamilyV3::merge_before_and_after(
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        let changes = SpotOrderV2UseCaseFamilyV3::do_compute_state_diff(
             legacy_state(&state),
             SpotOrderV2AfterChangesV3::Trigger(Box::new(after)),
         )?;

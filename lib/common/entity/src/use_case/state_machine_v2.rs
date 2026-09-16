@@ -388,7 +388,7 @@
 //! };
 //!
 //! let after = orchestrator
-//!     .compute_after_state(&command, &placeable_state)
+//!     .compute_state_changed(&command, &placeable_state)
 //!     .unwrap();
 //! assert_eq!(after.order_after.status, OrderStatus::Open);
 //! assert_eq!(after.cash_after.available, 70);
@@ -416,7 +416,7 @@
 //!     SpotTradingGivenState::Cancelable { .. } => unreachable!(),
 //! };
 //! assert_eq!(
-//!     orchestrator.compute_after_state(&command, &disabled_state),
+//!     orchestrator.compute_state_changed(&command, &disabled_state),
 //!     Err(TradingError::TradingDisabled)
 //! );
 //!
@@ -429,7 +429,7 @@
 //!     },
 //! };
 //! assert_eq!(
-//!     orchestrator.compute_after_state(&command, &cancelable_state),
+//!     orchestrator.compute_state_changed(&command, &cancelable_state),
 //!     Err(TradingError::BranchMismatch)
 //! );
 //! ```
@@ -446,7 +446,7 @@ use crate::{ReplayableChanges, action_type};
 pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type Command;
 
-    type GivenState;
+    type StateGiven;
 
     /// 当前 family 的业务错误类型。
     type Error;
@@ -455,7 +455,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     ///
     /// 这里不要求它长成单实体 after 快照；它可以是多聚合重组结果、业务结果 struct，
     /// 或命令族分支对应的 case 级 after truth。
-    type AfterChanges;
+    type StateChanged;
 
     /// 对命令本身做不依赖 `GivenState` 的快速校验。
     #[action_type(kind = "pre_check_command")]
@@ -471,7 +471,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     fn validate_given_state(
         &self,
         _cmd: &Self::Command,
-        _given_state: &Self::GivenState,
+        _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -482,11 +482,11 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
     /// 的统一链路。
     #[action_type(kind = "compute_after_changes_unchecked")]
-    fn compute_after_state_unchecked(
+    fn compute_state_changed_unchecked(
         &self,
         cmd: &Self::Command,
-        given_state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error>;
+        given_state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error>;
 }
 
 /// 多聚合 `use-case family` 的稳定对外入口。
@@ -496,14 +496,14 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 ///
 /// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
 pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
-    fn compute_after_state(
+    fn compute_state_changed(
         &self,
         cmd: &Self::Command,
-        given_state: &Self::GivenState,
-    ) -> Result<Self::AfterChanges, Self::Error> {
+        given_state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
         self.validate_given_state(cmd, given_state)?;
-        self.compute_after_state_unchecked(cmd, given_state)
+        self.compute_state_changed_unchecked(cmd, given_state)
     }
 }
 
@@ -516,25 +516,25 @@ impl<T> MiStateMachineV2 for T where T: MiStateMachineV2Unchecked {}
 /// 提取 case 级 before 并合并成 replayable changes。
 pub trait MiStateMachineOwnedV2Diff: MiStateMachineV2 {
     /// 最终可 replay 的 before/after changes。
-    type DiffChanges: ReplayableChanges;
+    type StateDiff: ReplayableChanges;
 
     /// 把 `GivenState` 中的 before truth 与 after 结果合并成最终 replayable changes。
     ///
     /// 这里的 `GivenState` 仍然只是运输形状；实现者可以直接使用其全部内容，也可以只提取
     /// 必要子集，或重组为异构 before truth 后再与 after 稳定配对。
-    fn merge_before_and_after(
-        given_state: Self::GivenState,
-        after: Self::AfterChanges,
-    ) -> Result<Self::DiffChanges, Self::Error>;
+    fn do_compute_state_diff(
+        given_state: Self::StateGiven,
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error>;
 
     /// 基于 `Command + GivenState` 计算稳定的 replayable before/after changes。
-    fn compute_diff(
+    fn compute_state_diff(
         &self,
         cmd: &Self::Command,
-        given_state: Self::GivenState,
-    ) -> Result<Self::DiffChanges, Self::Error> {
-        let after = <Self as MiStateMachineV2>::compute_after_state(self, cmd, &given_state)?;
-        Self::merge_before_and_after(given_state, after)
+        given_state: Self::StateGiven,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        let after = <Self as MiStateMachineV2>::compute_state_changed(self, cmd, &given_state)?;
+        Self::do_compute_state_diff(given_state, after)
     }
 }
 
@@ -562,9 +562,9 @@ mod tests {
 
     impl MiStateMachineV2Unchecked for HookMachine {
         type Command = HookCommand;
-        type GivenState = Arc<Mutex<Vec<&'static str>>>;
+        type StateGiven = Arc<Mutex<Vec<&'static str>>>;
         type Error = HookError;
-        type AfterChanges = ();
+        type StateChanged = ();
 
         fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
             if cmd.reject_in_pre_check {
@@ -584,11 +584,11 @@ mod tests {
             Ok(())
         }
 
-        fn compute_after_state_unchecked(
+        fn compute_state_changed_unchecked(
             &self,
             _cmd: &Self::Command,
             given_state: &Arc<Mutex<Vec<&'static str>>>,
-        ) -> Result<Self::AfterChanges, Self::Error> {
+        ) -> Result<Self::StateChanged, Self::Error> {
             if let Ok(mut log) = given_state.lock() {
                 log.push("unchecked");
             }
@@ -606,12 +606,12 @@ mod tests {
     }
 
     impl MiStateMachineOwnedV2Diff for HookMachine {
-        type DiffChanges = ReplayableLog;
+        type StateDiff = ReplayableLog;
 
-        fn merge_before_and_after(
+        fn do_compute_state_diff(
             given_state: Arc<Mutex<Vec<&'static str>>>,
-            _after: Self::AfterChanges,
-        ) -> Result<Self::DiffChanges, Self::Error> {
+            _after: Self::StateChanged,
+        ) -> Result<Self::StateDiff, Self::Error> {
             if let Ok(mut log) = given_state.lock() {
                 log.push("merge");
             }
@@ -625,7 +625,7 @@ mod tests {
         let machine = HookMachine;
 
         machine
-            .compute_after_state(&HookCommand { reject_in_pre_check: false }, &log)
+            .compute_state_changed(&HookCommand { reject_in_pre_check: false }, &log)
             .map_err(|err| format!("compute_after_changes failed: {err:?}"))?;
         let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
 
@@ -640,7 +640,7 @@ mod tests {
         let machine = HookMachine;
 
         machine
-            .compute_diff(
+            .compute_state_diff(
                 &HookCommand { reject_in_pre_check: false },
                 Arc::clone(&log),
             )
@@ -657,7 +657,7 @@ mod tests {
         let machine = HookMachine;
 
         assert_eq!(
-            machine.compute_after_state(&HookCommand { reject_in_pre_check: true }, &log,),
+            machine.compute_state_changed(&HookCommand { reject_in_pre_check: true }, &log,),
             Err(HookError::PreCheckRejected)
         );
         assert!(log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?.is_empty());

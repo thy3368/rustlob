@@ -45,7 +45,7 @@ where
 {
     type Error: std::error::Error;
 
-    fn load_given_state(&self, cmd: &F::Command) -> Result<F::GivenState, Self::Error>;
+    fn load_given_state(&self, cmd: &F::Command) -> Result<F::StateGiven, Self::Error>;
 }
 
 /// MI family runtime 所需的事件副作用 outbound port。
@@ -80,7 +80,7 @@ impl StateMachineExecutor {
         command: &F::Command,
         state_source: &SS,
         state_sink: &OB,
-    ) -> ExecutionOutcome<F::DiffChanges, F::Error, OB::Error>
+    ) -> ExecutionOutcome<F::StateDiff, F::Error, OB::Error>
     where
         F: MiStateMachineOwnedV2Diff,
         SS: StateSource<F, Error = OB::Error>,
@@ -98,10 +98,10 @@ impl StateMachineExecutor {
             .map_err(MiFamilyExecutionError::Business)?;
 
         let after = family
-            .compute_after_state_unchecked(command, &given_state)
+            .compute_state_changed_unchecked(command, &given_state)
             .map_err(MiFamilyExecutionError::Business)?;
 
-        let changes = F::merge_before_and_after(given_state, after)
+        let changes = F::do_compute_state_diff(given_state, after)
             .map_err(MiFamilyExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
