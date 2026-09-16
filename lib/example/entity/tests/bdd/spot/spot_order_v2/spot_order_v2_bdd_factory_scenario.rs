@@ -1,4 +1,4 @@
-use example_core_entity::spot::spot_order_v2::SpotOrderLifecycle;
+use example_core_entity::spot::spot_order_v2::SpotOrderState;
 use example_core_entity::*;
 
 fn factory_entry_parent_order() -> SpotOrderV2 {
@@ -105,7 +105,7 @@ fn assert_tpsl_child_shape(parent: &SpotOrderV2, child: &SpotOrderV2) {
 fn given_factory_parent_with_tp_sl_when_created_then_three_spot_order_v2_orders_exist() {
     let (parent, take_profit, stop_loss) = factory_parent_with_tpsl_orders();
 
-    assert!(matches!(parent.lifecycle, SpotOrderLifecycle::Active(_)));
+    assert!(matches!(parent.state, SpotOrderState::Open { .. }));
     assert_eq!(parent.status(), SpotOrderStatus::Open);
 
     assert_tpsl_child_shape(&parent, &take_profit);
@@ -166,9 +166,9 @@ fn given_factory_child_when_triggered_then_it_becomes_active_spot_order_v2()
         taker_fee_bps: 10,
     })?;
 
-    assert!(matches!(take_profit.lifecycle, SpotOrderLifecycle::Active(_)));
+    assert!(matches!(take_profit.state, SpotOrderState::Open { .. }));
     assert_eq!(take_profit.status(), SpotOrderStatus::Open);
-    assert_eq!(take_profit.status_reason(), Some(SpotOrderStatusReason::Triggered));
+    assert_eq!(take_profit.status_reason(), None);
     assert_eq!(
         take_profit.active_reservation().map(|reservation| reservation.remaining_amount),
         Some(1)

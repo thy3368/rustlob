@@ -1,4 +1,4 @@
-use example_core_entity::spot::spot_order_v2::SpotOrderLifecycle;
+use example_core_entity::spot::spot_order_v2::SpotOrderState;
 use example_core_entity::{SettlementKind, SettlementTransferPurpose, *};
 
 fn trigger_pending_buy_order() -> SpotOrderV2 {
@@ -86,9 +86,9 @@ fn given_trigger_pending_buy_order_when_triggered_without_crossing_maker_then_it
         taker.match_with_makers(makers.as_mut_slice(), match_input("match-non-crossing"))?;
 
     // Then: 订单已进入 active，可挂单等待后续撮合；本轮不产生成交事实。
-    assert!(matches!(taker.lifecycle, SpotOrderLifecycle::Active(_)));
+    assert!(matches!(taker.state, SpotOrderState::Open { .. }));
     assert_eq!(taker.status(), SpotOrderStatus::Open);
-    assert_eq!(taker.status_reason(), Some(SpotOrderStatusReason::Triggered));
+    assert_eq!(taker.status_reason(), None);
     assert_eq!(
         taker.active_reservation().map(|reservation| reservation.reservation_kind),
         Some(ReservationKind::SpotBuyQuote)

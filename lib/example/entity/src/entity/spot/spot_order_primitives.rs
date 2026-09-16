@@ -82,6 +82,16 @@ pub enum SpotOrderTif {
     Alo,
 }
 
+impl SpotOrderTif {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Gtc => "gtc",
+            Self::Ioc => "ioc",
+            Self::Alo => "alo",
+        }
+    }
+}
+
 impl From<SpotOrderTif> for SpotOrderTimeInForce {
     fn from(value: SpotOrderTif) -> Self {
         match value {
@@ -141,6 +151,14 @@ impl SpotOrderType {
 
     pub const fn is_trigger(self) -> bool {
         matches!(self, Self::Trigger { .. })
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Limit { .. } => "limit",
+            Self::Trigger { is_market: true, .. } => "trigger_market",
+            Self::Trigger { is_market: false, .. } => "trigger_limit",
+        }
     }
 }
 
