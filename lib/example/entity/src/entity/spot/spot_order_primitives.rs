@@ -74,6 +74,34 @@ pub enum SpotOrderTimeInForce {
     Alo,
 }
 
+/// Hyperliquid 现货限价单的有效方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotOrderTif {
+    Gtc,
+    Ioc,
+    Alo,
+}
+
+impl From<SpotOrderTif> for SpotOrderTimeInForce {
+    fn from(value: SpotOrderTif) -> Self {
+        match value {
+            SpotOrderTif::Gtc => Self::Gtc,
+            SpotOrderTif::Ioc => Self::Ioc,
+            SpotOrderTif::Alo => Self::Alo,
+        }
+    }
+}
+
+impl From<SpotOrderTimeInForce> for SpotOrderTif {
+    fn from(value: SpotOrderTimeInForce) -> Self {
+        match value {
+            SpotOrderTimeInForce::Gtc => Self::Gtc,
+            SpotOrderTimeInForce::Ioc => Self::Ioc,
+            SpotOrderTimeInForce::Alo => Self::Alo,
+        }
+    }
+}
+
 impl SpotOrderTimeInForce {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -91,6 +119,29 @@ pub enum SpotOrderTriggerRole {
     TakeProfit,
     /// 止损触发单。
     StopLoss,
+}
+
+/// Hyperliquid 现货订单类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotOrderType {
+    /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
+    Limit { tif: SpotOrderTif },
+    /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
+    Trigger { is_market: bool, trigger_price: u64, tpsl: SpotOrderTriggerRole },
+}
+
+impl SpotOrderType {
+    pub const fn effective_tif(self) -> SpotOrderTif {
+        match self {
+            Self::Limit { tif } => tif,
+            Self::Trigger { is_market: true, .. } => SpotOrderTif::Ioc,
+            Self::Trigger { is_market: false, .. } => SpotOrderTif::Gtc,
+        }
+    }
+
+    pub const fn is_trigger(self) -> bool {
+        matches!(self, Self::Trigger { .. })
+    }
 }
 
 impl SpotOrderTriggerRole {

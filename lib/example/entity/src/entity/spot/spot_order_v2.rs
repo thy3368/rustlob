@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTimeInForce, SpotOrderTriggerRole, option_status_reason_value, option_u64_value,
-    push_change, stable_order_entity_id,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif,
+    SpotOrderTimeInForce, SpotOrderTriggerRole, SpotOrderType, option_status_reason_value,
+    option_u64_value, push_change, stable_order_entity_id,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -224,6 +224,33 @@ pub struct PlaceSpotOrderV2Input {
     pub client_order_id: Option<String>,
 }
 
+/// Hyperliquid 订单事实驱动的下单输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceHyperliquidSpotOrderV2Input {
+    pub order_id: String,
+    pub asset: u32,
+    pub account_id: String,
+    pub symbol: String,
+    pub side: SpotOrderSide,
+    pub limit_price: u64,
+    pub qty: u64,
+    pub reduce_only: bool,
+    pub order_type: SpotOrderType,
+    pub base_asset_id: String,
+    pub quote_asset_id: String,
+    pub base_balance_entity_id: String,
+    pub quote_balance_entity_id: String,
+    pub maker_fee_bps: u64,
+    pub taker_fee_bps: u64,
+    pub client_order_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHyperliquidSpotOrderV2Outcome {
+    pub order: SpotOrderV2,
+    pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
+}
+
 /// 下单行为结果。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderV2Outcome {
@@ -369,62 +396,27 @@ pub struct SpotOrderCommonFacts {
     pub qty: u64,
 }
 
-/// 未触发条件单状态，只保存触发规则和触发后的执行意图。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotTriggerPendingState {
-    /// 触发价格，使用 core fixed-point 整数价格。
-    pub trigger_price: u64,
-    /// 触发单业务角色。
-    pub trigger_role: SpotOrderTriggerRole,
-    /// 触发后的执行意图。
-    pub trigger_execution: SpotOrderExecution,
-    /// 触发后 active 订单使用的 TIF。
-    pub triggered_time_in_force: SpotOrderTimeInForce,
-}
-
-/// 已进入撮合生命周期的订单状态。
+/// `SpotOrderV2` 的唯一权威状态。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotActiveOrderState {
-    /// 执行意图。
-    pub execution: SpotOrderExecution,
-    /// 订单有效方式。
-    pub time_in_force: SpotOrderTimeInForce,
-    /// 已成交数量。
-    pub filled_qty: u64,
-    /// 订单 principal 冻结凭证。
-    pub reservation: Reservation,
-    /// 订单 fee 冻结凭证。
-    pub fee_reservation: Reservation,
-}
-
-/// 订单终态状态。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotTerminalOrderState {
-    /// 本地生命周期终态。
-    pub status: SpotOrderStatus,
-    /// Hyperliquid 细分状态原因。
-    pub status_reason: Option<SpotOrderStatusReason>,
-    /// 终态时已经成交的数量。
-    pub filled_qty: u64,
-}
-
-/// `SpotOrderV2` 的统一生命周期。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderLifecycle {
+pub enum SpotOrderState {
     /// 条件单已接受，等待触发；不冻结、不撮合。
-    TriggerPending(SpotTriggerPendingState),
+    TriggerPending,
     /// 普通订单已进入执行流程，尚未成交。
-    Active(SpotActiveOrderState),
+    Open { reservation: Reservation, fee_reservation: Reservation },
     /// 普通订单已部分成交，剩余数量仍在业务上可撤。
-    PartiallyFilled(SpotActiveOrderState),
+    PartiallyFilled {
+        filled_qty: u64,
+        reservation: Reservation,
+        fee_reservation: Reservation,
+    },
     /// 订单已完全成交。
-    Filled(SpotTerminalOrderState),
+    Filled { filled_qty: u64, reason: SpotOrderStatusReason },
     /// 订单已取消。
-    Canceled(SpotTerminalOrderState),
+    Canceled { filled_qty: u64, reason: SpotOrderStatusReason },
     /// 订单提交或触发时被拒绝。
-    Rejected(SpotTerminalOrderState),
+    Rejected { reason: SpotOrderStatusReason },
     /// 条件单或订单已过期。
-    Expired(SpotTerminalOrderState),
+    Expired { filled_qty: u64, reason: SpotOrderStatusReason },
 }
 
 /// 条件单触发输入。
@@ -461,8 +453,8 @@ pub struct SpotOrderV2 {
     #[serde(skip, default = "SpotOrderV2::serde_default_common")]
     pub common: SpotOrderCommonFacts,
     /// 订单生命周期权威状态。
-    #[serde(skip, default = "SpotOrderV2::serde_default_lifecycle")]
-    pub lifecycle: SpotOrderLifecycle,
+    #[serde(default = "SpotOrderV2::serde_default_state")]
+    pub state: SpotOrderState,
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
@@ -475,6 +467,15 @@ pub struct SpotOrderV2 {
     pub symbol: String,
     /// 买卖方向。
     pub side: SpotOrderSide,
+    /// Hyperliquid `p` 字段；market 意图同样保存其激进限价。
+    #[serde(default)]
+    pub limit_price: u64,
+    /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。
+    #[serde(default)]
+    pub reduce_only: bool,
+    /// 统一的 Hyperliquid 订单类型事实。
+    #[serde(default = "SpotOrderV2::serde_default_order_type")]
+    pub order_type: SpotOrderType,
     /// 进入执行流程后的执行意图。
     pub execution: SpotOrderExecution,
     /// Hyperliquid `t.limit.tif`。市价意图通常映射为 `Ioc`。
@@ -516,7 +517,7 @@ impl SpotOrderV2 {
         SpotOrderCommonFacts { side: SpotOrderSide::Buy, qty: 0 }
     }
 
-    fn serde_default_lifecycle() -> SpotOrderLifecycle {
+    fn serde_default_state() -> SpotOrderState {
         let reservation = Self::empty_trigger_reservation(
             "serde-default",
             "",
@@ -529,13 +530,11 @@ impl SpotOrderV2 {
             ReservationKind::SpotBuyFeeQuote,
             "UNRESERVED",
         );
-        SpotOrderLifecycle::Active(SpotActiveOrderState {
-            execution: SpotOrderExecution::Limit { price: 0 },
-            time_in_force: SpotOrderTimeInForce::Gtc,
-            filled_qty: 0,
-            reservation,
-            fee_reservation,
-        })
+        SpotOrderState::Open { reservation, fee_reservation }
+    }
+
+    fn serde_default_order_type() -> SpotOrderType {
+        SpotOrderType::Limit { tif: SpotOrderTif::Gtc }
     }
 
     /// 从已校验业务事实或回放事件构造订单快照。
@@ -645,6 +644,9 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
+            limit_price: execution.order_price(),
+            reduce_only: false,
+            order_type: SpotOrderType::Limit { tif: time_in_force.into() },
             execution,
             time_in_force,
             qty,
@@ -770,6 +772,13 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
+            limit_price: trigger_execution.order_price(),
+            reduce_only: false,
+            order_type: SpotOrderType::Trigger {
+                is_market: matches!(trigger_execution, SpotOrderExecution::Market { .. }),
+                trigger_price,
+                tpsl: trigger_role,
+            },
             execution: trigger_execution,
             time_in_force: triggered_time_in_force,
             qty,
@@ -852,6 +861,77 @@ impl SpotOrderV2 {
         Ok(PlaceSpotOrderV2Outcome { order, freeze_ledger_entry })
     }
 
+    /// 按 Hyperliquid 强类型订单事实创建订单。
+    pub fn place_hyperliquid(
+        input: PlaceHyperliquidSpotOrderV2Input,
+    ) -> Result<PlaceHyperliquidSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
+        if input.qty == 0 {
+            return Err(SpotOrderV2BehaviorError::InvalidQuantity);
+        }
+        if input.limit_price == 0 {
+            return Err(SpotOrderV2BehaviorError::InvalidPrice);
+        }
+        if let SpotOrderType::Trigger { trigger_price: 0, .. } = input.order_type {
+            return Err(SpotOrderV2BehaviorError::InvalidPrice);
+        }
+
+        if input.order_type.is_trigger() {
+            let (is_market, trigger_price, tpsl) = match input.order_type {
+                SpotOrderType::Trigger { is_market, trigger_price, tpsl } => {
+                    (is_market, trigger_price, tpsl)
+                }
+                SpotOrderType::Limit { .. } => return Err(SpotOrderV2BehaviorError::InvalidPrice),
+            };
+            let execution = if is_market {
+                SpotOrderExecution::Market { aggressive_price: input.limit_price }
+            } else {
+                SpotOrderExecution::Limit { price: input.limit_price }
+            };
+            let mut order = Self::new_trigger_pending(
+                input.order_id,
+                input.asset,
+                None,
+                input.account_id,
+                input.symbol,
+                input.side,
+                input.qty,
+                trigger_price,
+                tpsl,
+                execution,
+                input.order_type.effective_tif().into(),
+                input.client_order_id,
+                1,
+            );
+            order.reduce_only = input.reduce_only;
+            return Ok(PlaceHyperliquidSpotOrderV2Outcome { order, freeze_ledger_entry: None });
+        }
+
+        let execution = SpotOrderExecution::Limit { price: input.limit_price };
+        let mut outcome = Self::place(PlaceSpotOrderV2Input {
+            order_id: input.order_id,
+            asset: input.asset,
+            account_id: input.account_id,
+            symbol: input.symbol,
+            side: input.side,
+            execution,
+            time_in_force: input.order_type.effective_tif().into(),
+            qty: input.qty,
+            base_asset_id: input.base_asset_id,
+            quote_asset_id: input.quote_asset_id,
+            base_balance_entity_id: input.base_balance_entity_id,
+            quote_balance_entity_id: input.quote_balance_entity_id,
+            maker_fee_bps: input.maker_fee_bps,
+            taker_fee_bps: input.taker_fee_bps,
+            client_order_id: input.client_order_id,
+        })?;
+        outcome.order.reduce_only = input.reduce_only;
+        outcome.order.order_type = input.order_type;
+        Ok(PlaceHyperliquidSpotOrderV2Outcome {
+            order: outcome.order,
+            freeze_ledger_entry: Some(outcome.freeze_ledger_entry),
+        })
+    }
+
     /// 可 BDD 规格化的聚合根行为：未触发条件单进入 active 订单生命周期。
     ///
     /// 触发前不冻结、不撮合；触发时才生成 principal / fee reservation。
@@ -887,6 +967,7 @@ impl SpotOrderV2 {
 
         self.execution = pending.trigger_execution;
         self.time_in_force = pending.triggered_time_in_force;
+        self.limit_price = pending.trigger_execution.order_price();
         self.filled_qty = 0;
         self.status = SpotOrderStatus::Open;
         self.status_reason = Some(SpotOrderStatusReason::Triggered);
@@ -1554,6 +1635,7 @@ impl SpotOrderV2 {
     ///
     /// 可 BDD 规格化的聚合根行为：成交后推进 filled quantity 与生命周期状态。
     pub fn fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+        self.ensure_matchable()?;
         let next_filled_qty = self
             .filled_qty
             .checked_add(added_fill_qty)

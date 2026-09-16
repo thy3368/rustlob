@@ -44,6 +44,8 @@ mod spot_order_v2_bdd_conditional_trigger_match_settlement;
 mod spot_order_v2_bdd_factory_scenario;
 #[path = "bdd/spot/spot_order_v2/spot_order_v2_bdd_happy_path.rs"]
 mod spot_order_v2_bdd_happy_path;
+#[path = "bdd/spot/spot_order_v2/spot_order_v2_bdd_hyperliquid_order_types.rs"]
+mod spot_order_v2_bdd_hyperliquid_order_types;
 #[path = "bdd/spot/spot_order_v2/spot_order_v2_bdd_lifecycle.rs"]
 mod spot_order_v2_bdd_lifecycle;
 #[path = "bdd/spot/spot_trade/spot_trade_bdd_notional_quote.rs"]
