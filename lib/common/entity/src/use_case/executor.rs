@@ -1,4 +1,4 @@
-use crate::{EntityError, EntityReplayableEvent, MiStateMachineOwnedV2Diff, ReplayableChanges};
+use crate::{EntityError, EntityReplayableEvent, StateMachineOwnedV2Diff, ReplayableChanges};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///
@@ -29,7 +29,7 @@ pub enum MiFamilyExecutionError<BE, OE> {
 /// executor 不直接依赖该 trait；adapter 可用它把 request 转成 command 后再执行。
 pub trait MiFamilyExecutionSpec<F>
 where
-    F: MiStateMachineOwnedV2Diff,
+    F: StateMachineOwnedV2Diff,
 {
     type Request;
 
@@ -39,7 +39,7 @@ where
 /// MI family runtime 所需的 authoritative given state source port。
 pub trait StateSource<F>: Send + Sync
 where
-    F: MiStateMachineOwnedV2Diff,
+    F: StateMachineOwnedV2Diff,
 {
     type Error: std::error::Error;
 
@@ -49,7 +49,7 @@ where
 /// MI family runtime 所需的事件副作用 outbound port。
 pub trait StateSink<F>: Send + Sync
 where
-    F: MiStateMachineOwnedV2Diff,
+    F: StateMachineOwnedV2Diff,
 {
     type Error: std::error::Error;
 
@@ -80,7 +80,7 @@ impl StateMachineExecutor {
         state_sink: &OB,
     ) -> ExecutionOutcome<F::StateDiff, F::Error, OB::Error>
     where
-        F: MiStateMachineOwnedV2Diff,
+        F: StateMachineOwnedV2Diff,
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {

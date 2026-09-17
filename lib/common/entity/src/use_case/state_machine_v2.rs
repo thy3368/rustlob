@@ -514,7 +514,7 @@ impl<T> MiStateMachineV2 for T where T: MiStateMachineV2Unchecked {}
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait MiStateMachineOwnedV2Diff: MiStateMachineV2 {
+pub trait StateMachineOwnedV2Diff: MiStateMachineV2 {
     /// 最终可 replay 的 before/after changes。
     type StateDiff: ReplayableChanges;
 
@@ -543,7 +543,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        EntityError, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2,
+        EntityError, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2,
         MiStateMachineV2Unchecked,
     };
 
@@ -605,7 +605,7 @@ mod tests {
         }
     }
 
-    impl MiStateMachineOwnedV2Diff for HookMachine {
+    impl StateMachineOwnedV2Diff for HookMachine {
         type StateDiff = ReplayableLog;
 
         fn do_compute_state_diff(

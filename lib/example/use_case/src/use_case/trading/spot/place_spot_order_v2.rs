@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
@@ -1094,7 +1094,7 @@ impl PlaceSpotOrderV2UseCase {
     }
 }
 
-impl MiStateMachineOwnedV2Diff for PlaceSpotOrderV2UseCase {
+impl StateMachineOwnedV2Diff for PlaceSpotOrderV2UseCase {
     type StateDiff = PlaceSpotOrderV2Changes;
 
     fn do_compute_state_diff(
@@ -1184,7 +1184,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2Diff, MiStateMachineV2};
+    use common_entity::{StateMachineOwnedV2Diff, MiStateMachineV2};
 
     use super::*;
     use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
     ReplayableChanges,
 };
 use serde::{Deserialize, Serialize};
@@ -170,7 +170,7 @@ impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
     }
 }
 
-impl MiStateMachineOwnedV2Diff for CancelSpotOrderV2UseCase {
+impl StateMachineOwnedV2Diff for CancelSpotOrderV2UseCase {
     type StateDiff = CancelSpotOrderV2Changes;
 
     fn do_compute_state_diff(
@@ -548,7 +548,7 @@ fn map_reservation_error_to_cancel(error: crate::ReservationError) -> CancelSpot
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineOwnedV2Diff, ReplayableChanges};
+    use common_entity::{StateMachineOwnedV2Diff, ReplayableChanges};
 
     use super::*;
     use crate::{

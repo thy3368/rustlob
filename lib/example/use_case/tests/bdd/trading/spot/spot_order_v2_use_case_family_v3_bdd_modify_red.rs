@@ -1,4 +1,4 @@
-use common_entity::{MiStateMachineOwnedV2Diff, ReplayableChanges};
+use common_entity::{StateMachineOwnedV2Diff, ReplayableChanges};
 use example_core_entity::spot::spot_order_v2::{SpotOrderLifecycle, SpotTerminalOrderState};
 use example_core_use_case::*;
 use rstest::{fixture, rstest};
