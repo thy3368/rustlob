@@ -3,7 +3,7 @@ use std::io;
 use actix_web::{App, HttpServer};
 use example_veldra_inbound_adapter::command::exchange::http::build_exchange_scope;
 use example_veldra_inbound_adapter::command::info::http::build_info_scope;
-use example_veldra_inbound_adapter::on_time::timer::run_timer;
+use example_veldra_inbound_adapter::on_time::spot::timer::run_timer;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
