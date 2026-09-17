@@ -76,7 +76,7 @@ pub fn create_kafka_consumer(config: &KafkaConsumerConfig) -> Result<StreamConsu
         .set("enable.partition.eof", "false")
         .set("auto.offset.reset", "earliest")
         .create()
-        .map_err(|e| format!("Failed to create Kafka consumer: {}", e))?;
+        .map_err(|e| format!("Failed to create Kafka on_event: {}", e))?;
 
     consumer
         .subscribe(&[&config.topic])

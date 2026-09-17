@@ -132,7 +132,7 @@ impl UserRingBuffer {
     /// Submit a sample to the user ring buffer.
     ///
     /// This function takes ownership of the sample and submits it to the ring
-    /// buffer. After submission, the consumer will be able to read the sample
+    /// buffer. After submission, the on_event will be able to read the sample
     /// from the ring buffer.
     ///
     /// This function is thread-safe. It is *not* necessary to synchronize

@@ -1,5 +1,9 @@
 pub mod cancel_spot_order_v2;
-pub mod place_spot_order_v2;
+pub mod place_match_spot_order_v2;
+
+pub mod place_only_spot_order_v2;
+
+pub mod match_spot_order_v2;
 
 pub mod modify_spot_order_v2;
 
@@ -14,7 +18,7 @@ pub use modify_spot_order_v2::{
     ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
     ModifySpotOrderV2OrderType, ModifySpotOrderV2State, OrderId,
 };
-pub use place_spot_order_v2::{
+pub use place_match_spot_order_v2::{
     PlaceSpotOrderV2AfterChanges, PlaceSpotOrderV2Changes, PlaceSpotOrderV2Cmd,
     PlaceSpotOrderV2Error, PlaceSpotOrderV2State, PlaceSpotOrderV2TakerTemplateContext,
     PlaceSpotOrderV2UseCase, build_place_spot_order_v2_taker_template,

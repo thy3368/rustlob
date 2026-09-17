@@ -3,9 +3,9 @@
 //! 展示：
 //! - PlaceOrderHandler 产出收单事件
 //! - 事件进入进程内 memory queue
-//! - consumer 消费后调用 PlaceOrderEventHandler
+//! - on_event 消费后调用 PlaceOrderEventHandler
 //! - 再产生成交事件并继续入队
-//! - consumer 调用 TradeEventHandler 完成结算
+//! - on_event 调用 TradeEventHandler 完成结算
 
 use std::collections::VecDeque;
 

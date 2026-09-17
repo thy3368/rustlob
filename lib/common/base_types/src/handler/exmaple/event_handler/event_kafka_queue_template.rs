@@ -3,9 +3,9 @@
 //! 展示：
 //! - PlaceOrderHandler 产出收单事件
 //! - producer 将事件发布到 topic
-//! - consumer 按 topic 消费并调用 PlaceOrderEventHandler
+//! - on_event 按 topic 消费并调用 PlaceOrderEventHandler
 //! - 再把成交事件发布到 trade topic
-//! - consumer 调用 TradeEventHandler 完成结算
+//! - on_event 调用 TradeEventHandler 完成结算
 //!
 //! 这里使用 mock broker / mock record 表达 Kafka publish-consume 语义，
 //! 不引入真实 Kafka 依赖。
