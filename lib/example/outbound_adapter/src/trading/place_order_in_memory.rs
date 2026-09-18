@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
     ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderV2,
-    SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3, SpotTrade,
+    SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotOrderV2CommandV3,
+    SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3, SpotTrade,
     build_place_spot_order_v2_taker_template_v3,
 };
 
@@ -188,8 +188,8 @@ impl StateSink<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
                     event_string_field(event, "symbol")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                     decode_side(event)?,
-                    decode_execution(event)?,
-                    decode_time_in_force(event)?,
+                    decode_limit_price(event)?,
+                    decode_order_type(event)?,
                     event_u64_field(event, "qty")
                         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                     event_u64_field(event, "filled_qty")
@@ -292,25 +292,48 @@ fn decode_side(event: &EntityReplayableEvent) -> Result<SpotOrderSide, PlaceOrde
     }
 }
 
-fn decode_execution(
-    event: &EntityReplayableEvent,
-) -> Result<SpotOrderExecution, PlaceOrderOutboundError> {
-    let price =
-        event_u64_field(event, "price").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-    match event_string_field(event, "execution").as_deref() {
-        Some("market") => Ok(SpotOrderExecution::Market { aggressive_price: price }),
-        Some("limit") => Ok(SpotOrderExecution::Limit { price }),
-        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
-    }
+fn decode_limit_price(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderOutboundError> {
+    event_u64_field(event, "limit_price")
+        .or_else(|| event_u64_field(event, "price"))
+        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)
 }
 
-fn decode_time_in_force(
+fn decode_order_type(
     event: &EntityReplayableEvent,
-) -> Result<SpotOrderTif, PlaceOrderOutboundError> {
-    match event_string_field(event, "time_in_force").as_deref() {
-        Some("gtc") => Ok(SpotOrderTif::Gtc),
-        Some("ioc") => Ok(SpotOrderTif::Ioc),
-        Some("alo") => Ok(SpotOrderTif::Alo),
+) -> Result<SpotOrderType, PlaceOrderOutboundError> {
+    let tif = match event_string_field(event, "effective_tif")
+        .or_else(|| event_string_field(event, "time_in_force"))
+        .as_deref()
+    {
+        Some("gtc") => SpotOrderTif::Gtc,
+        Some("ioc") => SpotOrderTif::Ioc,
+        Some("alo") => SpotOrderTif::Alo,
+        _ => return Err(PlaceOrderOutboundError::EventDecodeFailed),
+    };
+    Ok(match event_string_field(event, "order_type").as_deref() {
+        Some("trigger_market") => SpotOrderType::Trigger {
+            is_market: true,
+            trigger_price: event_u64_field(event, "trigger_price")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+            tpsl: decode_trigger_role(event_string_field(event, "tpsl").as_deref())?,
+        },
+        Some("trigger_limit") => SpotOrderType::Trigger {
+            is_market: false,
+            trigger_price: event_u64_field(event, "trigger_price")
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+            tpsl: decode_trigger_role(event_string_field(event, "tpsl").as_deref())?,
+        },
+        Some("limit") | None => SpotOrderType::Limit { tif },
+        Some(_) => return Err(PlaceOrderOutboundError::EventDecodeFailed),
+    })
+}
+
+fn decode_trigger_role(
+    value: Option<&str>,
+) -> Result<example_core_use_case::SpotOrderTriggerRole, PlaceOrderOutboundError> {
+    match value {
+        Some("take_profit") => Ok(example_core_use_case::SpotOrderTriggerRole::TakeProfit),
+        Some("stop_loss") => Ok(example_core_use_case::SpotOrderTriggerRole::StopLoss),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
@@ -540,8 +563,8 @@ fn decode_order_snapshot_from_event(
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_string_field(event, "symbol").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         decode_side(event)?,
-        decode_execution(event)?,
-        decode_time_in_force(event)?,
+        decode_limit_price(event)?,
+        decode_order_type(event)?,
         event_u64_field(event, "qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "filled_qty").unwrap_or(0),
         decode_status(event).unwrap_or(SpotOrderStatus::Open),

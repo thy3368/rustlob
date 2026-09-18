@@ -7,7 +7,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, PlaceSpotOrderV2Cmd,
+    Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, MatchSpotOrderV2Cmd,
     PlaceSpotOrderV2State, PlaceSpotOrderV2UseCase, SpotOrderExecution, SpotOrderSide,
     SpotOrderStatus, SpotOrderTif, SpotOrderV2,
 };
@@ -164,7 +164,7 @@ fn mock_network(peers: impl Iterator<Item = VerifyingKey>) -> Vec<NetworkStub> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum ConsensusRequest {
-    PlaceSpotOrderV2(PlaceSpotOrderV2Cmd),
+    PlaceSpotOrderV2(MatchSpotOrderV2Cmd),
     CancelSpotOrderV2(CancelSpotOrderV2Cmd),
 }
 
@@ -281,7 +281,7 @@ impl StateSource<PlaceSpotOrderV2UseCase> for DemoPlaceSpotOrderV2Outbound {
 
     fn load_given_state(
         &self,
-        _request: &PlaceSpotOrderV2Cmd,
+        _request: &MatchSpotOrderV2Cmd,
     ) -> Result<PlaceSpotOrderV2State, Self::Error> {
         Ok(PlaceSpotOrderV2State {
             order_id: "taker-buy".to_string(),
@@ -427,7 +427,7 @@ fn cancel_result_key(command: &CancelSpotOrderV2Cmd) -> Vec<u8> {
     }
 }
 
-fn place_result_key(command: &PlaceSpotOrderV2Cmd) -> Vec<u8> {
+fn place_result_key(command: &MatchSpotOrderV2Cmd) -> Vec<u8> {
     format!("place:{}:{}", command.party_id, command.cloid.as_deref().unwrap_or("missing"))
         .into_bytes()
 }
@@ -522,7 +522,7 @@ fn main() -> DemoResult<()> {
         println!("[hotstuff_use_case_demo] 已启动副本 {index}");
     }
 
-    let place_command = PlaceSpotOrderV2Cmd {
+    let place_command = MatchSpotOrderV2Cmd {
         party_id: "buyer".to_string(),
         asset: 10_001,
         is_buy: true,

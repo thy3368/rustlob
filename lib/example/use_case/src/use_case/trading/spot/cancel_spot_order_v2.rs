@@ -552,8 +552,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        Balance, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-        SpotOrderTif,
+        Balance, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     };
 
     #[test]
@@ -625,8 +624,8 @@ mod tests {
             "buyer".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
-            SpotOrderExecution::Limit { price: 100 },
-            SpotOrderTif::Gtc,
+            100,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             2,
             0,
             SpotOrderStatus::Open,

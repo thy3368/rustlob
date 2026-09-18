@@ -120,7 +120,7 @@ impl StateSource<SpotOrderV2UseCaseFamilyV3> for MySqlPlaceOrderOutbound {
                 version,
             ),
             Balance::new(
-                account_id.clone(),
+                account_id,
                 quote_asset_id.clone(),
                 available_quote,
                 frozen_quote,

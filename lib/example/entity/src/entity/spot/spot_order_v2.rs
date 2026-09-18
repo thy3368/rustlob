@@ -6,9 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif,
-    SpotOrderTriggerRole, SpotOrderType, option_status_reason_value, option_u64_value, push_change,
-    stable_order_entity_id,
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
+    option_status_reason_value, option_u64_value, push_change, stable_order_entity_id,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -202,10 +201,10 @@ pub struct PlaceSpotOrderV2Input {
     pub symbol: String,
     /// 买卖方向。
     pub side: SpotOrderSide,
-    /// 执行意图。
-    pub execution: SpotOrderExecution,
-    /// 订单有效方式。
-    pub time_in_force: SpotOrderTif,
+    /// Hyperliquid `p` 字段；普通市价意图同样保存激进限价。
+    pub limit_price: u64,
+    /// 订单类型；普通市价意图由 IOC 限价表达。
+    pub order_type: SpotOrderType,
     /// base 计价下单数量。
     pub qty: u64,
     /// base 资产 ID。
@@ -559,8 +558,8 @@ impl SpotOrderV2 {
         account_id: String,
         symbol: String,
         side: SpotOrderSide,
-        execution: SpotOrderExecution,
-        time_in_force: SpotOrderTif,
+        limit_price: u64,
+        order_type: SpotOrderType,
         qty: u64,
         filled_qty: u64,
         status: SpotOrderStatus,
@@ -574,10 +573,7 @@ impl SpotOrderV2 {
             account_id.as_str(),
             side,
             qty,
-            match execution {
-                SpotOrderExecution::Limit { price }
-                | SpotOrderExecution::Market { aggressive_price: price } => price,
-            },
+            limit_price,
             "USDT",
         );
         Self::new_with_fee_reservation(
@@ -587,8 +583,8 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
-            execution,
-            time_in_force,
+            limit_price,
+            order_type,
             qty,
             filled_qty,
             status,
@@ -609,8 +605,8 @@ impl SpotOrderV2 {
         account_id: String,
         symbol: String,
         side: SpotOrderSide,
-        execution: SpotOrderExecution,
-        time_in_force: SpotOrderTif,
+        limit_price: u64,
+        order_type: SpotOrderType,
         qty: u64,
         filled_qty: u64,
         status: SpotOrderStatus,
@@ -636,9 +632,9 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
-            limit_price: execution.order_price(),
+            limit_price,
             reduce_only: false,
-            order_type: Self::order_type_from_execution(execution, time_in_force),
+            order_type,
             group_relation: SpotOrderGroupRelation::Standalone,
             qty,
             filled_qty,
@@ -660,8 +656,8 @@ impl SpotOrderV2 {
         account_id: String,
         symbol: String,
         side: SpotOrderSide,
-        execution: SpotOrderExecution,
-        time_in_force: SpotOrderTif,
+        limit_price: u64,
+        order_type: SpotOrderType,
         qty: u64,
         base_asset_id: &str,
         quote_asset_id: &str,
@@ -669,13 +665,12 @@ impl SpotOrderV2 {
         taker_fee_bps: u64,
         client_order_id: Option<String>,
     ) -> Result<Self, SpotOrderV2BehaviorError> {
-        let order_price = execution.order_price();
         let reservation = Self::principal_reservation(
             order_id.as_str(),
             account_id.as_str(),
             side,
             qty,
-            order_price,
+            limit_price,
             base_asset_id,
             quote_asset_id,
         )?;
@@ -684,7 +679,7 @@ impl SpotOrderV2 {
             account_id.as_str(),
             side,
             qty,
-            order_price,
+            limit_price,
             quote_asset_id,
             maker_fee_bps,
             taker_fee_bps,
@@ -696,8 +691,8 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
-            execution,
-            time_in_force,
+            limit_price,
+            order_type,
             qty,
             0,
             SpotOrderStatus::Open,
@@ -719,10 +714,8 @@ impl SpotOrderV2 {
         symbol: String,
         side: SpotOrderSide,
         qty: u64,
-        trigger_price: u64,
-        trigger_role: SpotOrderTriggerRole,
-        trigger_execution: SpotOrderExecution,
-        _triggered_time_in_force: SpotOrderTif,
+        limit_price: u64,
+        order_type: SpotOrderType,
         client_order_id: Option<String>,
         version: u64,
     ) -> Self {
@@ -754,13 +747,9 @@ impl SpotOrderV2 {
             account_id,
             symbol,
             side,
-            limit_price: trigger_execution.order_price(),
+            limit_price,
             reduce_only: false,
-            order_type: SpotOrderType::Trigger {
-                is_market: matches!(trigger_execution, SpotOrderExecution::Market { .. }),
-                trigger_price,
-                tpsl: trigger_role,
-            },
+            order_type,
             group_relation: SpotOrderGroupRelation::Standalone,
             qty,
             filled_qty: 0,
@@ -770,16 +759,6 @@ impl SpotOrderV2 {
             fee_reservation,
             client_order_id,
             version,
-        }
-    }
-
-    fn order_type_from_execution(
-        execution: SpotOrderExecution,
-        time_in_force: SpotOrderTif,
-    ) -> SpotOrderType {
-        match execution {
-            SpotOrderExecution::Market { .. } => SpotOrderType::Market,
-            SpotOrderExecution::Limit { .. } => SpotOrderType::Limit { tif: time_in_force },
         }
     }
 
@@ -793,7 +772,7 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2BehaviorError::InvalidQuantity);
         }
 
-        let order_price = input.execution.order_price();
+        let order_price = input.limit_price;
         if order_price == 0 {
             return Err(SpotOrderV2BehaviorError::InvalidPrice);
         }
@@ -837,8 +816,8 @@ impl SpotOrderV2 {
             input.account_id,
             input.symbol,
             input.side,
-            input.execution,
-            input.time_in_force,
+            input.limit_price,
+            input.order_type,
             input.qty,
             0,
             SpotOrderStatus::Open,
@@ -867,19 +846,9 @@ impl SpotOrderV2 {
         }
 
         if input.order_type.is_trigger() {
-            let (is_market, trigger_price, tpsl) = match input.order_type {
-                SpotOrderType::Trigger { is_market, trigger_price, tpsl } => {
-                    (is_market, trigger_price, tpsl)
-                }
-                SpotOrderType::Limit { .. } | SpotOrderType::Market => {
-                    return Err(SpotOrderV2BehaviorError::InvalidPrice);
-                }
-            };
-            let execution = if is_market {
-                SpotOrderExecution::Market { aggressive_price: input.limit_price }
-            } else {
-                SpotOrderExecution::Limit { price: input.limit_price }
-            };
+            if !matches!(input.order_type, SpotOrderType::Trigger { .. }) {
+                return Err(SpotOrderV2BehaviorError::InvalidPrice);
+            }
             let mut order = Self::new_trigger_pending(
                 input.order_id,
                 input.asset,
@@ -888,10 +857,8 @@ impl SpotOrderV2 {
                 input.symbol,
                 input.side,
                 input.qty,
-                trigger_price,
-                tpsl,
-                execution,
-                input.order_type.effective_tif(),
+                input.limit_price,
+                input.order_type,
                 input.client_order_id,
                 1,
             );
@@ -899,21 +866,17 @@ impl SpotOrderV2 {
             return Ok(PlaceHyperliquidSpotOrderV2Outcome { order, freeze_ledger_entry: None });
         }
 
-        let execution = match input.order_type {
-            SpotOrderType::Market => {
-                SpotOrderExecution::Market { aggressive_price: input.limit_price }
-            }
-            SpotOrderType::Limit { .. } => SpotOrderExecution::Limit { price: input.limit_price },
-            SpotOrderType::Trigger { .. } => return Err(SpotOrderV2BehaviorError::InvalidPrice),
-        };
+        if !matches!(input.order_type, SpotOrderType::Limit { .. }) {
+            return Err(SpotOrderV2BehaviorError::InvalidPrice);
+        }
         let mut outcome = Self::place(PlaceSpotOrderV2Input {
             order_id: input.order_id,
             asset: input.asset,
             account_id: input.account_id,
             symbol: input.symbol,
             side: input.side,
-            execution,
-            time_in_force: input.order_type.effective_tif(),
+            limit_price: input.limit_price,
+            order_type: input.order_type,
             qty: input.qty,
             base_asset_id: input.base_asset_id,
             quote_asset_id: input.quote_asset_id,
@@ -924,7 +887,6 @@ impl SpotOrderV2 {
             client_order_id: input.client_order_id,
         })?;
         outcome.order.reduce_only = input.reduce_only;
-        outcome.order.order_type = input.order_type;
         Ok(PlaceHyperliquidSpotOrderV2Outcome {
             order: outcome.order,
             freeze_ledger_entry: Some(outcome.freeze_ledger_entry),
@@ -1278,11 +1240,7 @@ impl SpotOrderV2 {
     }
 
     fn match_limit_price(&self) -> Option<u64> {
-        match self.order_type {
-            SpotOrderType::Market => None,
-            SpotOrderType::Trigger { is_market: true, .. } => None,
-            _ => Some(self.limit_price),
-        }
+        Some(self.limit_price)
     }
 
     /// 返回需要提交给交易所的价格字段。
@@ -1290,15 +1248,17 @@ impl SpotOrderV2 {
         self.limit_price
     }
 
-    /// 返回由订单类型和价格派生的执行意图。
-    pub fn execution(&self) -> SpotOrderExecution {
+    fn trigger_price_value(&self) -> String {
         match self.order_type {
-            SpotOrderType::Market | SpotOrderType::Trigger { is_market: true, .. } => {
-                SpotOrderExecution::Market { aggressive_price: self.limit_price }
-            }
-            SpotOrderType::Limit { .. } | SpotOrderType::Trigger { is_market: false, .. } => {
-                SpotOrderExecution::Limit { price: self.limit_price }
-            }
+            SpotOrderType::Trigger { trigger_price, .. } => trigger_price.to_string(),
+            SpotOrderType::Limit { .. } => String::new(),
+        }
+    }
+
+    fn tpsl_value(&self) -> &'static str {
+        match self.order_type {
+            SpotOrderType::Trigger { tpsl, .. } => tpsl.as_str(),
+            SpotOrderType::Limit { .. } => "",
         }
     }
 
@@ -1314,7 +1274,7 @@ impl SpotOrderV2 {
 
     /// 返回订单 quote 名义价值。
     ///
-    /// 市价意图没有稳定限价价格，或乘法溢出时返回 `None`。
+    /// 价格乘法溢出时返回 `None`。
     pub fn notional_quote(&self) -> Option<u64> {
         self.qty.checked_mul(self.match_limit_price()?)
     }
@@ -1892,7 +1852,11 @@ impl SpotOrderV2 {
     }
 
     fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
-        if matches!(self.execution(), SpotOrderExecution::Market { .. }) {
+        if matches!(
+            self.order_type,
+            SpotOrderType::Limit { tif: SpotOrderTif::Ioc }
+                | SpotOrderType::Trigger { is_market: true, .. }
+        ) {
             SpotOrderStatusReason::MarketOrderNoLiquidityRejected
         } else {
             SpotOrderStatusReason::IocCancelRejected
@@ -1970,10 +1934,13 @@ impl FieldDiff for SpotOrderV2 {
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
             EntityFieldChange::new("side", "", self.side.as_str()),
-            EntityFieldChange::new("execution", "", self.execution().as_str()),
-            EntityFieldChange::new("time_in_force", "", self.time_in_force().as_str()),
+            EntityFieldChange::new("limit_price", "", self.limit_price.to_string()),
+            EntityFieldChange::new("order_type", "", self.order_type.as_str()),
+            EntityFieldChange::new("effective_tif", "", self.effective_tif().as_str()),
+            EntityFieldChange::new("trigger_price", "", self.trigger_price_value()),
+            EntityFieldChange::new("tpsl", "", self.tpsl_value()),
+            EntityFieldChange::new("reduce_only", "", self.reduce_only.to_string()),
             EntityFieldChange::new("group_relation", "", self.group_relation.replay_value()),
-            EntityFieldChange::new("price", "", self.order_price().to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
@@ -2073,27 +2040,40 @@ impl FieldDiff for SpotOrderV2 {
         push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
         push_change(
             &mut changes,
-            "execution",
-            self.execution().as_str(),
-            other.execution().as_str(),
+            "limit_price",
+            self.limit_price.to_string(),
+            other.limit_price.to_string(),
         );
         push_change(
             &mut changes,
-            "time_in_force",
-            self.time_in_force().as_str(),
-            other.time_in_force().as_str(),
+            "order_type",
+            self.order_type.as_str(),
+            other.order_type.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "effective_tif",
+            self.effective_tif().as_str(),
+            other.effective_tif().as_str(),
+        );
+        push_change(
+            &mut changes,
+            "trigger_price",
+            self.trigger_price_value(),
+            other.trigger_price_value(),
+        );
+        push_change(&mut changes, "tpsl", self.tpsl_value(), other.tpsl_value());
+        push_change(
+            &mut changes,
+            "reduce_only",
+            self.reduce_only.to_string(),
+            other.reduce_only.to_string(),
         );
         push_change(
             &mut changes,
             "group_relation",
             self.group_relation.replay_value(),
             other.group_relation.replay_value(),
-        );
-        push_change(
-            &mut changes,
-            "price",
-            self.order_price().to_string(),
-            other.order_price().to_string(),
         );
         push_change(&mut changes, "qty", self.qty.to_string(), other.qty.to_string());
         push_change(
@@ -2265,8 +2245,11 @@ impl Entity for SpotOrderV2 {
             | "account_id"
             | "symbol"
             | "side"
-            | "execution"
-            | "time_in_force"
+            | "order_type"
+            | "effective_tif"
+            | "trigger_price"
+            | "tpsl"
+            | "reduce_only"
             | "group_relation"
             | "status"
             | "status_reason"
@@ -2283,7 +2266,7 @@ impl Entity for SpotOrderV2 {
             | "exchange_oid"
             | "qty"
             | "filled_qty"
-            | "price"
+            | "limit_price"
             | "version"
             | "reservation_original_amount"
             | "reservation_consumed_amount"
@@ -2336,8 +2319,8 @@ mod tests {
             "trader-1".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
-            SpotOrderExecution::Limit { price: 100 },
-            SpotOrderTif::Gtc,
+            100,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             2,
             0,
             SpotOrderStatus::Open,
@@ -2356,8 +2339,8 @@ mod tests {
             "trader-2".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
-            SpotOrderExecution::Limit { price: 105 },
-            SpotOrderTif::Gtc,
+            105,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             3,
             0,
             SpotOrderStatus::Open,
@@ -2376,8 +2359,8 @@ mod tests {
             "trader-3".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
-            SpotOrderExecution::Market { aggressive_price: 120 },
-            SpotOrderTif::Ioc,
+            120,
+            SpotOrderType::Limit { tif: SpotOrderTif::Ioc },
             2,
             0,
             SpotOrderStatus::Open,
@@ -2417,8 +2400,8 @@ mod tests {
             "maker".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
-            SpotOrderExecution::Limit { price },
-            SpotOrderTif::Gtc,
+            price,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             1,
             0,
             SpotOrderStatus::Open,
@@ -2480,8 +2463,8 @@ mod tests {
             "trader-4".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
-            SpotOrderExecution::Limit { price: 101 },
-            SpotOrderTif::Gtc,
+            101,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             3,
             0,
             SpotOrderStatus::Open,
@@ -2606,7 +2589,7 @@ mod tests {
             ..buy_order()
         };
         let ioc_canceled = SpotOrderV2 {
-            order_type: SpotOrderType::Market,
+            order_type: SpotOrderType::Limit { tif: SpotOrderTif::Ioc },
             filled_qty: 1,
             status: SpotOrderStatus::Canceled,
             status_reason: Some(SpotOrderStatusReason::IocCancelRejected),

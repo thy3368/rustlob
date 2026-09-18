@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use example_core_use_case::{
-    Balance, MarketRules, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
-    SpotOrderV2,
+    Balance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -210,8 +209,8 @@ impl MySqlStore {
                     price,
                 )| {
                     let side = decode_side_mysql(side.as_str())?;
-                    let execution = decode_execution_mysql(execution.as_str(), price)?;
-                    let time_in_force = decode_time_in_force_mysql(time_in_force.as_str())?;
+                    let order_type =
+                        decode_order_type_mysql(execution.as_str(), time_in_force.as_str())?;
                     let reservation = SpotOrderV2::principal_reservation(
                         order_id.as_str(),
                         account_id.as_str(),
@@ -229,8 +228,8 @@ impl MySqlStore {
                         account_id,
                         symbol,
                         side,
-                        execution,
-                        time_in_force,
+                        price,
+                        order_type,
                         qty,
                         0,
                         SpotOrderStatus::Open,
@@ -286,19 +285,15 @@ fn decode_side_mysql(value: &str) -> Option<SpotOrderSide> {
     }
 }
 
-fn decode_execution_mysql(value: &str, price: u64) -> Option<SpotOrderExecution> {
-    match value {
-        "market" => Some(SpotOrderExecution::Market { aggressive_price: price }),
-        "limit" => Some(SpotOrderExecution::Limit { price }),
-        _ => None,
-    }
-}
-
-fn decode_time_in_force_mysql(value: &str) -> Option<SpotOrderTif> {
-    match value {
-        "gtc" => Some(SpotOrderTif::Gtc),
-        "ioc" => Some(SpotOrderTif::Ioc),
-        "alo" => Some(SpotOrderTif::Alo),
+fn decode_order_type_mysql(execution: &str, time_in_force: &str) -> Option<SpotOrderType> {
+    let tif = match time_in_force {
+        "gtc" => SpotOrderTif::Gtc,
+        "ioc" => SpotOrderTif::Ioc,
+        "alo" => SpotOrderTif::Alo,
+        _ => return None,
+    };
+    match execution {
+        "limit" | "market" => Some(SpotOrderType::Limit { tif }),
         _ => None,
     }
 }

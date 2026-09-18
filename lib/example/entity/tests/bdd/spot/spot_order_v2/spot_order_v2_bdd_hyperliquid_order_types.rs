@@ -1,8 +1,8 @@
 use example_core_entity::{
     CancelSpotOrderV2Input, PlaceHyperliquidNormalTpslError, PlaceHyperliquidSpotOrderV2Input,
-    SpotOrderExecution, SpotOrderGroupRelation, SpotOrderGroupRelationError, SpotOrderSide,
-    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole, SpotOrderType,
-    SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError, TriggerSpotOrderV2Input,
+    SpotOrderGroupRelation, SpotOrderGroupRelationError, SpotOrderSide, SpotOrderStatus,
+    SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole, SpotOrderType, SpotOrderV2,
+    SpotOrderV2BehaviorError, SpotOrderV2MatchError, TriggerSpotOrderV2Input,
 };
 
 fn input(order_id: &str, order_type: SpotOrderType) -> PlaceHyperliquidSpotOrderV2Input {
@@ -174,7 +174,7 @@ fn trigger_market_sl_becomes_ioc_and_converges_after_match()
         maker_fee_bps: 2,
         taker_fee_bps: 5,
     })?;
-    assert_eq!(order.execution(), SpotOrderExecution::Market { aggressive_price: 110 });
+    assert_eq!(order.limit_price, 110);
     assert_eq!(order.time_in_force(), example_core_entity::SpotOrderTif::Ioc);
     order.finish_after_match(1)?;
     assert_eq!(order.status, SpotOrderStatus::Canceled);

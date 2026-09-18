@@ -1,15 +1,15 @@
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use example_core_use_case::PlaceSpotOrderV2Cmd;
+use example_core_use_case::MatchSpotOrderV2Cmd;
 use use_case_executor::trading::spot::place_spot_order_v2_executor::execute_place_spot_order_v2;
 
-fn scheduled_place_commands(round: u64) -> [PlaceSpotOrderV2Cmd; 2] {
+fn scheduled_place_commands(round: u64) -> [MatchSpotOrderV2Cmd; 2] {
     [scheduled_place_command(round, 1), scheduled_place_command(round, 2)]
 }
 
-fn scheduled_place_command(round: u64, sequence: u8) -> PlaceSpotOrderV2Cmd {
-    PlaceSpotOrderV2Cmd {
+fn scheduled_place_command(round: u64, sequence: u8) -> MatchSpotOrderV2Cmd {
+    MatchSpotOrderV2Cmd {
         party_id: "buyer".to_string(),
         asset: 10001,
         is_buy: true,

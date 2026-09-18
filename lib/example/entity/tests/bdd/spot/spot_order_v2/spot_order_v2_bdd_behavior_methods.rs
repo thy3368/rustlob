@@ -8,8 +8,8 @@ fn buy_order() -> SpotOrderV2 {
         "trader-1".to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
-        SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTif::Gtc,
+        100,
+        SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
         2,
         0,
         SpotOrderStatus::Open,
@@ -29,8 +29,8 @@ fn maker_sell_qty(order_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
         format!("account-{order_id}"),
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
-        SpotOrderExecution::Limit { price },
-        SpotOrderTif::Gtc,
+        price,
+        SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
         qty,
         0,
         SpotOrderStatus::Open,
@@ -55,8 +55,8 @@ fn place_input(side: SpotOrderSide) -> PlaceSpotOrderV2Input {
         account_id: "placer".to_string(),
         symbol: "BTCUSDT".to_string(),
         side,
-        execution: SpotOrderExecution::Limit { price: 100 },
-        time_in_force: SpotOrderTif::Gtc,
+        limit_price: 100,
+        order_type: SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
         qty: 2,
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),
@@ -111,12 +111,12 @@ fn place_rejects_invalid_quantity_price_and_overflow() {
     assert_eq!(SpotOrderV2::place(zero_qty), Err(SpotOrderV2BehaviorError::InvalidQuantity));
 
     let mut zero_price = place_input(SpotOrderSide::Buy);
-    zero_price.execution = SpotOrderExecution::Limit { price: 0 };
+    zero_price.limit_price = 0;
     assert_eq!(SpotOrderV2::place(zero_price), Err(SpotOrderV2BehaviorError::InvalidPrice));
 
     let mut overflow = place_input(SpotOrderSide::Buy);
     overflow.qty = u64::MAX;
-    overflow.execution = SpotOrderExecution::Limit { price: 2 };
+    overflow.limit_price = 2;
     assert_eq!(SpotOrderV2::place(overflow), Err(SpotOrderV2BehaviorError::ArithmeticOverflow));
 }
 

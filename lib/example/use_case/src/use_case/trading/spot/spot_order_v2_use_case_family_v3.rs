@@ -19,12 +19,11 @@ use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
-    SettlementTransferVoucher, SpotOrderSide, spot as spot_entity,
+    SettlementTransferVoucher, SpotOrderSide, SpotOrderType, spot as spot_entity,
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{
-    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTif,
-    SpotOrderTriggerRole, SpotTrade,
+    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderTif, SpotOrderTriggerRole, SpotTrade,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -882,15 +881,15 @@ pub fn build_place_trigger_pending_spot_order_v2_template_v3(
         context.symbol,
         side,
         parse_positive_u64(&cmd.size, SpotOrderV2UseCaseFamilyV3Error::InvalidSize)?,
-        parse_positive_u64(
-            &cmd.trigger_price,
-            SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerPrice,
-        )?,
-        parse_trigger_role(&cmd.trigger_role)?,
-        SpotOrderExecution::Limit {
-            price: parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?,
+        parse_positive_u64(&cmd.price, SpotOrderV2UseCaseFamilyV3Error::InvalidPrice)?,
+        SpotOrderType::Trigger {
+            is_market: matches!(parse_tif(&cmd.tif)?, SpotOrderTif::Ioc),
+            trigger_price: parse_positive_u64(
+                &cmd.trigger_price,
+                SpotOrderV2UseCaseFamilyV3Error::InvalidTriggerPrice,
+            )?,
+            tpsl: parse_trigger_role(&cmd.trigger_role)?,
         },
-        parse_tif(&cmd.tif)?,
         cmd.cloid.clone(),
         1,
     ))
@@ -1027,8 +1026,8 @@ fn place_input_from_context(
         account_id: cmd.party_id.clone(),
         symbol: context.symbol.clone(),
         side,
-        execution: SpotOrderExecution::Limit { price },
-        time_in_force: parse_tif(&cmd.tif)?,
+        limit_price: price,
+        order_type: SpotOrderType::Limit { tif: parse_tif(&cmd.tif)? },
         qty,
         base_asset_id: context.base_asset_id.clone(),
         quote_asset_id: context.quote_asset_id.clone(),
@@ -1693,7 +1692,7 @@ mod tests {
     use common_entity::{MiStateMachineV2, StateMachineOwnedV2Diff};
 
     use super::*;
-    use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif};
+    use crate::{SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType};
 
     fn test_principal_reservation(
         order_id: &str,
@@ -1723,8 +1722,8 @@ mod tests {
             account_id: "buyer".to_string(),
             symbol: "BTCUSDT".to_string(),
             side: SpotOrderSide::Buy,
-            execution: SpotOrderExecution::Limit { price: 100 },
-            time_in_force: tif,
+            limit_price: 100,
+            order_type: SpotOrderType::Limit { tif },
             qty: 2,
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -1758,8 +1757,8 @@ mod tests {
             account_id.to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
-            SpotOrderExecution::Limit { price },
-            SpotOrderTif::Gtc,
+            price,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             qty,
             0,
             SpotOrderStatus::Open,

@@ -543,8 +543,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        EntityError, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2,
-        MiStateMachineV2Unchecked,
+        EntityError, EntityReplayableEvent, MiStateMachineV2, MiStateMachineV2Unchecked,
+        StateMachineOwnedV2Diff,
     };
 
     #[derive(Debug, Clone, PartialEq, Eq)]

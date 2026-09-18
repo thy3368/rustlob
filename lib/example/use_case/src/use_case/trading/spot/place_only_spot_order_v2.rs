@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    SpotOrderExecution, SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif, SpotOrderTriggerRole,
-    SpotOrderType, SpotOrderV2, SpotOrderV2BehaviorError,
+    SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif, SpotOrderTriggerRole, SpotOrderType,
+    SpotOrderV2, SpotOrderV2BehaviorError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -315,8 +315,8 @@ fn build_order(
                 order.party_id.clone(),
                 order.symbol.clone(),
                 side,
-                SpotOrderExecution::Limit { price },
-                tif,
+                price,
+                SpotOrderType::Limit { tif },
                 qty,
                 order.base_asset_id.as_str(),
                 order.quote_asset_id.as_str(),
@@ -325,16 +325,10 @@ fn build_order(
                 order.cloid.clone(),
             )?;
             created.reduce_only = order.reduce_only;
-            created.order_type = SpotOrderType::Limit { tif: tif.into() };
+            created.order_type = SpotOrderType::Limit { tif };
             Ok(created)
         }
         PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
-            let execution = if *is_market {
-                SpotOrderExecution::Market { aggressive_price: price }
-            } else {
-                SpotOrderExecution::Limit { price }
-            };
-            let tif = if *is_market { SpotOrderTif::Ioc } else { SpotOrderTif::Gtc };
             let mut created = SpotOrderV2::new_trigger_pending(
                 order.order_id.clone(),
                 order.asset,
@@ -343,10 +337,15 @@ fn build_order(
                 order.symbol.clone(),
                 side,
                 qty,
-                parse_positive_u64(trigger_price, PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)?,
-                parse_trigger_role(trigger_role)?,
-                execution,
-                tif,
+                price,
+                SpotOrderType::Trigger {
+                    is_market: *is_market,
+                    trigger_price: parse_positive_u64(
+                        trigger_price,
+                        PlaceOnlySpotOrderV2Error::InvalidTriggerPrice,
+                    )?,
+                    tpsl: parse_trigger_role(trigger_role)?,
+                },
                 order.cloid.clone(),
                 1,
             );

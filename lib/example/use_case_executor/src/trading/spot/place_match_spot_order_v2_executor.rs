@@ -8,16 +8,16 @@ use example_outbound_adapter::{
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
 };
 
-pub fn execute_place_spot_order_v2(
+pub fn execute_place_match_spot_order_v2(
     command: &MatchSpotOrderV2Cmd,
 ) -> Result<
     ExecutionResult<MatchSpotOrderV2Changes>,
     MiFamilyExecutionError<MatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>,
 > {
-    execute_place_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2PlaceOutbound)
+    execute_place_match_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2PlaceOutbound)
 }
 
-pub fn execute_place_spot_order_v2_with_outbound<OB>(
+pub fn execute_place_match_spot_order_v2_with_outbound<OB>(
     command: &MatchSpotOrderV2Cmd,
     outbound: &OB,
 ) -> Result<
@@ -53,21 +53,21 @@ mod tests {
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    struct FakePlaceSpotOrderV2OutboundError;
+    struct FakePlaceMatchSpotOrderV2OutboundError;
 
-    impl std::fmt::Display for FakePlaceSpotOrderV2OutboundError {
+    impl std::fmt::Display for FakePlaceMatchSpotOrderV2OutboundError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "fake place spot order v2 outbound error")
+            write!(f, "fake place match spot order v2 outbound error")
         }
     }
 
-    impl std::error::Error for FakePlaceSpotOrderV2OutboundError {}
+    impl std::error::Error for FakePlaceMatchSpotOrderV2OutboundError {}
 
     #[derive(Debug, Default)]
-    struct FakePlaceSpotOrderV2Outbound;
+    struct FakePlaceMatchSpotOrderV2Outbound;
 
-    impl StateSource<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
-        type Error = FakePlaceSpotOrderV2OutboundError;
+    impl StateSource<MatchSpotOrderV2UseCase> for FakePlaceMatchSpotOrderV2Outbound {
+        type Error = FakePlaceMatchSpotOrderV2OutboundError;
 
         fn load_given_state(
             &self,
@@ -92,8 +92,8 @@ mod tests {
         }
     }
 
-    impl StateSink<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
-        type Error = FakePlaceSpotOrderV2OutboundError;
+    impl StateSink<MatchSpotOrderV2UseCase> for FakePlaceMatchSpotOrderV2Outbound {
+        type Error = FakePlaceMatchSpotOrderV2OutboundError;
 
         fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             Ok(())
@@ -122,7 +122,7 @@ mod tests {
         price: u64,
         qty: u64,
         tif: SpotOrderTif,
-    ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
+    ) -> Result<SpotOrderV2, FakePlaceMatchSpotOrderV2OutboundError> {
         order(order_id, account_id, SpotOrderSide::Buy, price, qty, tif)
     }
 
@@ -131,7 +131,7 @@ mod tests {
         account_id: &str,
         price: u64,
         qty: u64,
-    ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
+    ) -> Result<SpotOrderV2, FakePlaceMatchSpotOrderV2OutboundError> {
         order(order_id, account_id, SpotOrderSide::Sell, price, qty, SpotOrderTif::Gtc)
     }
 
@@ -142,11 +142,11 @@ mod tests {
         price: u64,
         qty: u64,
         tif: SpotOrderTif,
-    ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
+    ) -> Result<SpotOrderV2, FakePlaceMatchSpotOrderV2OutboundError> {
         let reservation = SpotOrderV2::principal_reservation(
             order_id, account_id, side, qty, price, "BTC", "USDT",
         )
-        .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
+        .map_err(|_| FakePlaceMatchSpotOrderV2OutboundError)?;
 
         Ok(SpotOrderV2::new(
             order_id.to_string(),
@@ -168,8 +168,8 @@ mod tests {
     }
 
     #[test]
-    fn execute_place_with_default_outbound_stops_at_load_state() {
-        let result = execute_place_spot_order_v2(&place_cmd());
+    fn execute_place_match_with_default_outbound_stops_at_load_state() {
+        let result = execute_place_match_spot_order_v2(&place_cmd());
 
         assert_eq!(
             result,
@@ -180,10 +180,12 @@ mod tests {
     }
 
     #[test]
-    fn execute_place_ioc_crosses_book_and_projects_events() {
-        let result =
-            execute_place_spot_order_v2_with_outbound(&place_cmd(), &FakePlaceSpotOrderV2Outbound)
-                .expect("place spot order v2 should execute");
+    fn execute_place_match_ioc_crosses_book_and_projects_events() {
+        let result = execute_place_match_spot_order_v2_with_outbound(
+            &place_cmd(),
+            &FakePlaceMatchSpotOrderV2Outbound,
+        )
+        .expect("place match spot order v2 should execute");
 
         let changes = result.changes;
         assert_eq!(

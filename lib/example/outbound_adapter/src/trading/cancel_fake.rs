@@ -4,7 +4,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
+    CancelSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
     SpotOrderV2,
 };
 
@@ -61,8 +61,8 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             request.party_id.clone(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
-            SpotOrderExecution::Limit { price: 100 },
-            SpotOrderTif::Gtc,
+            100,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
             2,
             0,
             SpotOrderStatus::Open,
