@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, MiStateMachineV2Unchecked};
+use common_entity::{Entity, StateMachineV2Unchecked};
 use thiserror::Error;
 
 use crate::entity::{
@@ -94,7 +94,7 @@ impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
     }
 }
 
-impl MiStateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
+impl StateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
     type Command = UpdateHyperliquidPerpLeverageCmd;
     type StateGiven = UpdateHyperliquidPerpLeverageState;
     type Error = UpdateHyperliquidPerpLeverageError;
@@ -214,7 +214,7 @@ fn map_leverage_setting_error(
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::ReplayableChanges;
-    use common_entity::MiStateMachineV2Unchecked;
+    use common_entity::StateMachineV2Unchecked;
 
     use super::*;
     use crate::entity::HyperliquidPerpPositionStatus;

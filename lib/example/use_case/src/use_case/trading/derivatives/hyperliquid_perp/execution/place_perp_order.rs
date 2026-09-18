@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, MiStateMachineV2Unchecked, action_type};
+use common_entity::{Entity, StateMachineV2Unchecked, action_type};
 use thiserror::Error;
 
 use crate::MarketRules;
@@ -208,7 +208,7 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     }
 }
 
-impl MiStateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
+impl StateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     type Command = PlaceHyperliquidPerpOrderCmd;
     type StateGiven = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;

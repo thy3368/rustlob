@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::MiStateMachineV2Unchecked;
+use common_entity::StateMachineV2Unchecked;
 use example_core_use_case::{
     Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3, SpotOrderTimeInForce,
     WithdrawQuoteCmd,
@@ -176,7 +176,7 @@ fn spot_balance_after<'a>(
 #[test]
 fn pre_check_rejects_zero_block_height() {
     let cmd = BuildBlockFromCommandsCommand { block_height: 0 };
-    let result = MiStateMachineV2Unchecked::check_command(&BuildBlockFromCommandsUseCase, &cmd);
+    let result = StateMachineV2Unchecked::check_command(&BuildBlockFromCommandsUseCase, &cmd);
     assert_eq!(result, Err(BuildBlockError::BlockHeightMustBePositive));
 }
 
@@ -184,7 +184,7 @@ fn pre_check_rejects_zero_block_height() {
 fn validate_rejects_empty_batch() {
     let mut state = sample_state();
     state.commands.clear();
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -194,7 +194,7 @@ fn validate_rejects_empty_batch() {
 
 #[test]
 fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
@@ -226,12 +226,12 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
 
 #[test]
 fn same_input_produces_same_block_commitment() -> Result<(), BuildBlockError> {
-    let first = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let first = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
     )?;
-    let second = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let second = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
@@ -252,7 +252,7 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![treasury_envelope()];
 
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -277,7 +277,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -322,7 +322,7 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     );
     state.commands = vec![sample_envelope(), treasury_envelope()];
 
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -425,7 +425,7 @@ fn validate_rejects_duplicate_command_id_in_batch() {
         treasury_envelope_with("dup-cmd", "trader-2", 2, 1_001, 500),
     ];
 
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -449,7 +449,7 @@ fn validate_rejects_duplicate_account_nonce_in_batch() {
         treasury_envelope_with("cmd-b", "trader-1", 7, 1_001, 500),
     ];
 
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -470,7 +470,7 @@ fn validate_rejects_zero_timestamp_command() {
     state.commands =
         vec![sample_spot_envelope_with("cmd-zero", "trader-1", 1, 0, SpotOrderTimeInForce::Gtc)];
 
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -489,7 +489,7 @@ fn validate_rejects_envelope_account_mismatch() {
     mismatched.account_id = "operator-1".to_string();
     state.commands = vec![mismatched];
 
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -512,7 +512,7 @@ fn validate_rejects_non_canonical_command_order() {
     let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = MiStateMachineV2Unchecked::validate_state_given(
+    let result = StateMachineV2Unchecked::validate_state_given(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -540,7 +540,7 @@ fn compute_changes_rejects_non_canonical_batch() {
     let gtc = sample_spot_envelope_with("cmd-gtc", "trader-1", 1, 1_000, SpotOrderTimeInForce::Gtc);
     state.commands = vec![gtc, alo];
 
-    let result = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let result = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -564,7 +564,7 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
     let expected_root =
         stable_hash_hex(&canonical.iter().map(CommandEnvelope::commitment).collect::<Vec<_>>());
 
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
@@ -578,7 +578,7 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
 #[test]
 fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
 -> Result<(), BuildBlockError> {
-    let changes = MiStateMachineV2Unchecked::compute_state_changed_unchecked(
+    let changes = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),

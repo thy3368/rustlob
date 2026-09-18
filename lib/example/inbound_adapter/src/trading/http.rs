@@ -6,7 +6,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
-    MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
+    ExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
 };
 use example_core_use_case::{
     PlaceSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
@@ -107,7 +107,7 @@ pub fn handle_place_order_http<OB>(
     outbound: &OB,
 ) -> Result<
     PlaceOrderHttpResponse,
-    MiFamilyExecutionError<
+    ExecutionError<
         SpotOrderV2UseCaseFamilyV3Error,
         <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
     >,

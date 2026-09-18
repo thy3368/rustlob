@@ -443,7 +443,7 @@ use crate::{ReplayableChanges, action_type};
 /// `Command` 可以是单个业务命令，也可以是一组相关动作的命令族；
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
-pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
+pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
     type Command;
 
     type StateGiven;
@@ -495,7 +495,7 @@ pub trait MiStateMachineV2Unchecked: Clone + Debug + Send + Sync {
 /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
 ///
 /// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
-pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
+pub trait StateMachineV2: StateMachineV2Unchecked {
     fn compute_state_changed(
         &self,
         cmd: &Self::Command,
@@ -507,14 +507,14 @@ pub trait MiStateMachineV2: MiStateMachineV2Unchecked {
     }
 }
 
-impl<T> MiStateMachineV2 for T where T: MiStateMachineV2Unchecked {}
+impl<T> StateMachineV2 for T where T: StateMachineV2Unchecked {}
 
 /// 在同一多聚合 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
 ///
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait StateMachineOwnedV2Diff: MiStateMachineV2 {
+pub trait StateMachineOwnedV2Diff: StateMachineV2 {
     /// 最终可 replay 的 before/after changes。
     type StateDiff: ReplayableChanges;
 
@@ -533,7 +533,7 @@ pub trait StateMachineOwnedV2Diff: MiStateMachineV2 {
         cmd: &Self::Command,
         given_state: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let after = <Self as MiStateMachineV2>::compute_state_changed(self, cmd, &given_state)?;
+        let after = <Self as StateMachineV2>::compute_state_changed(self, cmd, &given_state)?;
         Self::do_compute_state_diff(given_state, after)
     }
 }
@@ -543,8 +543,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        EntityError, EntityReplayableEvent, MiStateMachineV2, MiStateMachineV2Unchecked,
-        StateMachineOwnedV2Diff,
+        EntityError, EntityReplayableEvent, StateMachineOwnedV2Diff, StateMachineV2,
+        StateMachineV2Unchecked,
     };
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -560,7 +560,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct HookMachine;
 
-    impl MiStateMachineV2Unchecked for HookMachine {
+    impl StateMachineV2Unchecked for HookMachine {
         type Command = HookCommand;
         type StateGiven = Arc<Mutex<Vec<&'static str>>>;
         type Error = HookError;

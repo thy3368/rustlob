@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, MiStateMachineV2, MiStateMachineV2Unchecked,
-    ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2, StateMachineV2Unchecked,
 };
 use thiserror::Error;
 
@@ -95,7 +95,7 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
     }
 }
 
-impl MiStateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
+impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
     type Command = PlaceOnlySpotOrderV2Cmd;
     type StateGiven = PlaceMatchSpotOrderV2State;
     type Error = PlaceMatchSpotOrderV2Error;

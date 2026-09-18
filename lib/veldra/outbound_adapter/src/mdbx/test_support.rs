@@ -9,7 +9,7 @@ use veldra_core_entity::{
 };
 use veldra_core_use_case::{
     BlockEntityChange, BuildBlockFromCommandsChanges, BuildBlockFromCommandsCommand,
-    BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase, MiStateMachineV2Unchecked,
+    BuildBlockFromCommandsState, BuildBlockFromCommandsUseCase, StateMachineV2Unchecked,
 };
 
 pub struct TestDir {

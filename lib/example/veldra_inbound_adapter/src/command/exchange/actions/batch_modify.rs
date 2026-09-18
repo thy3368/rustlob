@@ -1,11 +1,12 @@
+use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
+use example_core_use_case::{ModifySpotOrderV2OrderType, OrderId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::command::exchange::actions::cancel::reply::CancelStatusWire;
-use crate::command::exchange::actions::cancel::{
-    CancelSpotOrderV2Lookup, CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID,
+use crate::command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
+use crate::command::exchange::actions::modify::{
+    ModifySpotOrderV2Request, SpotOrderV2ModifyExecutionSpec, execute_modify_spot_order_v2,
 };
-use crate::command::exchange::actions::order::PlaceSpotOrderV2Request;
 use crate::command::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
@@ -16,9 +17,6 @@ use crate::command::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::command::exchange::error::ExchangeHttpError;
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
-use crate::common::parse::parse_json_request as parse_exchange_json_request;
-
-const STUB_BATCH_MODIFIED_OID_BASE: u64 = 77738400;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BatchModifyContractError {
@@ -52,16 +50,6 @@ pub enum BatchModifyContractError {
 
 pub mod reply {
     pub use crate::command::exchange::actions::order::reply::OrderResponseWire as BatchModifyResponseWire;
-}
-
-pub trait BatchModifyCancelPlaceExecutor {
-    fn cancel(
-        &self,
-        request: CancelSpotOrderV2Request,
-    ) -> Result<CancelStatusWire, ExchangeHttpError>;
-
-    fn place(&self, request: PlaceSpotOrderV2Request)
-    -> Result<OrderStatusWire, ExchangeHttpError>;
 }
 
 pub(crate) type RequestWire = ExchangeRequestEnvelopeWire<ActionWire>;
@@ -205,130 +193,121 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    let executor = DefaultBatchModifyCancelPlaceExecutor::new();
-    let statuses = execute_with_cancel_place_executor(request, &executor);
-    Ok(OrderResponseWire {
-        status: "ok",
-        response: OrderResponseEnvelopeWire {
-            type_: "order",
-            data: OrderResponseDataWire { statuses },
-        },
-    })
-}
-
-pub fn run_batch_modify_cancel_replace_with_executor(
-    body: &[u8],
-    executor: &impl BatchModifyCancelPlaceExecutor,
-) -> Result<reply::BatchModifyResponseWire, ExchangeHttpError> {
-    let request = parse_exchange_json_request::<RequestWire, ExchangeHttpError>(body)?;
-    validate(&request)?;
-    let statuses = execute_with_cancel_place_executor(request, executor);
-    Ok(OrderResponseWire {
-        status: "ok",
-        response: OrderResponseEnvelopeWire {
-            type_: "order",
-            data: OrderResponseDataWire { statuses },
-        },
-    })
-}
-
-fn execute_with_cancel_place_executor(
-    request: RequestWire,
-    executor: &impl BatchModifyCancelPlaceExecutor,
-) -> Vec<OrderStatusWire> {
     let party_id =
         request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
-
-    request
+    let statuses = request
         .action
         .modifies
         .iter()
-        .map(|modify| execute_single_cancel_replace(&party_id, modify, executor))
-        .collect()
+        .map(|modify| execute_single_modify(&party_id, modify))
+        .collect();
+
+    Ok(OrderResponseWire {
+        status: "ok",
+        response: OrderResponseEnvelopeWire {
+            type_: "order",
+            data: OrderResponseDataWire { statuses },
+        },
+    })
 }
 
-fn execute_single_cancel_replace(
-    party_id: &str,
-    modify: &ModifyWire,
-    executor: &impl BatchModifyCancelPlaceExecutor,
-) -> OrderStatusWire {
-    let cancel_request = match cancel_request_from_modify(party_id, modify) {
+fn execute_single_modify(party_id: &str, modify: &ModifyWire) -> OrderStatusWire {
+    let modify_request = match from_wire_batch_modify(party_id, modify) {
         Ok(request) => request,
         Err(error) => return OrderStatusWire::Error { error: error.to_string() },
     };
-    if let Err(error) = executor.cancel(cancel_request) {
-        return OrderStatusWire::Error { error: error.to_string() };
-    }
+    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
 
-    let place_request = match place_request_from_modify(party_id, modify) {
-        Ok(request) => request,
-        Err(error) => return OrderStatusWire::Error { error: error.to_string() },
-    };
-    match executor.place(place_request) {
-        Ok(status) => status,
-        Err(error) => OrderStatusWire::Error { error: error.to_string() },
+    match execute_modify_spot_order_v2(&command) {
+        Ok(result) => OrderStatusWire::Resting {
+            resting: RestingOrderStatusWire {
+                oid: result.changes.updated_order.after.exchange_oid().unwrap_or(0),
+            },
+        },
+        Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
     }
 }
 
-fn cancel_request_from_modify(
+fn from_wire_batch_modify(
     party_id: &str,
     modify: &ModifyWire,
-) -> Result<CancelSpotOrderV2Request, ExchangeHttpError> {
-    let lookup = if let Some(oid) = modify.oid.as_u64() {
-        CancelSpotOrderV2Lookup::Oid(oid)
-    } else if let Some(cloid) = modify.oid.as_str() {
-        CancelSpotOrderV2Lookup::Cloid(cloid.to_string())
-    } else {
-        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOid));
-    };
-
-    Ok(CancelSpotOrderV2Request { party_id: party_id.to_string(), asset: modify.order.a, lookup })
-}
-
-fn place_request_from_modify(
-    party_id: &str,
-    modify: &ModifyWire,
-) -> Result<PlaceSpotOrderV2Request, ExchangeHttpError> {
-    let Some(limit) = &modify.order.t.limit else {
-        return Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOrderType));
-    };
-
-    Ok(PlaceSpotOrderV2Request {
+) -> Result<ModifySpotOrderV2Request, BatchModifyContractError> {
+    Ok(ModifySpotOrderV2Request {
         party_id: party_id.to_string(),
         asset: modify.order.a,
+        order_id: order_id_from_wire_oid(&modify.oid)?,
         is_buy: modify.order.b,
-        price: modify.order.p.clone(),
-        size: modify.order.s.clone(),
-        tif: limit.tif.to_ascii_lowercase(),
+        price: decimal_wire_to_core_units(&modify.order.p),
+        size: decimal_wire_to_core_units(&modify.order.s),
+        order_type: modify_order_type_from_wire(&modify.order.t)?,
         cloid: modify.order.c.clone(),
     })
 }
 
-struct DefaultBatchModifyCancelPlaceExecutor {
-    next_oid: std::cell::Cell<u64>,
+fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, BatchModifyContractError> {
+    if let Some(oid) = oid.as_u64() {
+        if oid > 0 {
+            return Ok(OrderId::Oid(oid));
+        }
+    }
+    if let Some(cloid) = oid.as_str() {
+        if validate_cloid(cloid).is_ok() {
+            return Ok(OrderId::Cloid(cloid.to_string()));
+        }
+    }
+    Err(BatchModifyContractError::InvalidOid)
 }
 
-impl DefaultBatchModifyCancelPlaceExecutor {
-    fn new() -> Self {
-        Self { next_oid: std::cell::Cell::new(STUB_BATCH_MODIFIED_OID_BASE) }
+fn modify_order_type_from_wire(
+    order_type: &OrderTypeWire,
+) -> Result<ModifySpotOrderV2OrderType, BatchModifyContractError> {
+    match (&order_type.limit, &order_type.trigger) {
+        (Some(limit), None) => Ok(ModifySpotOrderV2OrderType::Limit { tif: limit.tif.clone() }),
+        (None, Some(trigger)) => Ok(ModifySpotOrderV2OrderType::Trigger {
+            is_market: trigger.is_market,
+            trigger_price: decimal_wire_to_core_units(&trigger.trigger_px),
+            trigger_role: trigger.tpsl.clone(),
+        }),
+        _ => Err(BatchModifyContractError::InvalidOrderType),
     }
 }
 
-impl BatchModifyCancelPlaceExecutor for DefaultBatchModifyCancelPlaceExecutor {
-    fn cancel(
-        &self,
-        _request: CancelSpotOrderV2Request,
-    ) -> Result<CancelStatusWire, ExchangeHttpError> {
-        Ok(CancelStatusWire::Success("success"))
+fn decimal_wire_to_core_units(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let mut seen_dot = false;
+    let mut normalized = String::with_capacity(trimmed.len());
+
+    for ch in trimmed.chars() {
+        if ch == '.' {
+            if seen_dot {
+                return raw.to_string();
+            }
+            seen_dot = true;
+            continue;
+        }
+        if !ch.is_ascii_digit() {
+            return raw.to_string();
+        }
+        normalized.push(ch);
     }
 
-    fn place(
-        &self,
-        _request: PlaceSpotOrderV2Request,
-    ) -> Result<OrderStatusWire, ExchangeHttpError> {
-        let oid = self.next_oid.get();
-        self.next_oid.set(oid + 1);
-        Ok(OrderStatusWire::Resting { resting: RestingOrderStatusWire { oid } })
+    if normalized.is_empty() { raw.to_string() } else { normalized }
+}
+
+fn modify_execution_error_message<BE, OE>(error: ExecutionError<BE, OE>) -> String
+where
+    BE: std::fmt::Display,
+    OE: std::fmt::Display,
+{
+    match error {
+        ExecutionError::Business(error) => error.to_string(),
+        ExecutionError::ProjectEvents(error) => {
+            format!("project replayable events failed: {error}")
+        }
+        ExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        ExecutionError::Persist(error) => format!("persist failed: {error}"),
+        ExecutionError::Replay(error) => format!("replay failed: {error}"),
+        ExecutionError::Publish(error) => format!("publish failed: {error}"),
     }
 }
 
@@ -364,6 +343,104 @@ mod tests {
         );
     }
 
+    #[test]
+    fn maps_batch_items_to_modify_commands() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request parses");
+
+        let first = from_wire_batch_modify("trader", &request.action.modifies[0])
+            .expect("first modify request should build");
+        let first_command = SpotOrderV2ModifyExecutionSpec::command(&first);
+        assert_eq!(first_command.party_id, "trader");
+        assert_eq!(first_command.asset, 10_000);
+        assert_eq!(first_command.order_id, OrderId::Oid(77738308));
+        assert!(first_command.is_buy);
+        assert_eq!(first_command.price, "18914");
+        assert_eq!(first_command.size, "002");
+        assert_eq!(
+            first_command.order_type,
+            ModifySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() }
+        );
+
+        let second = from_wire_batch_modify("trader", &request.action.modifies[1])
+            .expect("second modify request should build");
+        let second_command = SpotOrderV2ModifyExecutionSpec::command(&second);
+        assert_eq!(
+            second_command.order_id,
+            OrderId::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
+        );
+        assert_eq!(
+            second_command.order_type,
+            ModifySpotOrderV2OrderType::Limit { tif: "Ioc".to_string() }
+        );
+    }
+
+    #[test]
+    fn maps_trigger_batch_item_to_modify_command() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "batchModify",
+                    "modifies": [
+                        {
+                            "oid": "0x1234567890abcdef1234567890abcdef",
+                            "order": {
+                                "a": 10000,
+                                "b": false,
+                                "p": "1891.4",
+                                "s": "0.02",
+                                "r": false,
+                                "t": {
+                                    "trigger": {
+                                        "isMarket": true,
+                                        "triggerPx": "1900.5",
+                                        "tpsl": "tp"
+                                    }
+                                },
+                                "c": "0xfedcba0987654321fedcba0987654321"
+                            }
+                        }
+                    ]
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("request parses");
+
+        let modify_request = from_wire_batch_modify("seller", &request.action.modifies[0])
+            .expect("modify request should build");
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+
+        assert_eq!(command.party_id, "seller");
+        assert_eq!(command.cloid.as_deref(), Some("0xfedcba0987654321fedcba0987654321"));
+        assert_eq!(
+            command.order_type,
+            ModifySpotOrderV2OrderType::Trigger {
+                is_market: true,
+                trigger_price: "19005".to_string(),
+                trigger_role: "tp".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn missing_vault_address_uses_default_party_id() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request parses");
+        let party_id =
+            request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+
+        let modify_request = from_wire_batch_modify(&party_id, &request.action.modifies[0])
+            .expect("modify request should build");
+
+        assert_eq!(modify_request.party_id, DEFAULT_EXCHANGE_PARTY_ID);
+    }
+
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
         let response = execute(
@@ -375,7 +452,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"resting\": {\n            \"oid\": 77738400\n          }\n        },\n        {\n          \"resting\": {\n            \"oid\": 77738401\n          }\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        },\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
         );
     }
 

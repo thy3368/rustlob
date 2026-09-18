@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineV2Unchecked, ReplayableChanges,
-    StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -107,7 +107,7 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
     }
 }
 
-impl MiStateMachineV2Unchecked for CancelSpotOrderV2UseCase {
+impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
     type Command = CancelSpotOrderV2Cmd;
     type StateGiven = CancelSpotOrderV2State;
     type Error = CancelSpotOrderV2Error;

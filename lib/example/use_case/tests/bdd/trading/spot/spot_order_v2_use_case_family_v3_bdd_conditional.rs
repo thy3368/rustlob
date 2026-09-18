@@ -1,4 +1,4 @@
-use common_entity::{MiStateMachineV2Unchecked, ReplayableChanges, StateMachineOwnedV2Diff};
+use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked};
 use example_core_use_case::{
     BalanceLedgerOperation, Reservation, SpotOrderStatus, SpotOrderStatusReason, *,
 };

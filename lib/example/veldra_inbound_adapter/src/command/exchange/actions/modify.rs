@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecutionSpec};
+use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
 use example_core_use_case::{
     ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,
 };
@@ -286,20 +286,20 @@ async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, Exch
     Ok(ok_statuses_response("order", vec![status]))
 }
 
-fn modify_execution_error_message<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> String
+fn modify_execution_error_message<BE, OE>(error: ExecutionError<BE, OE>) -> String
 where
     BE: std::fmt::Display,
     OE: std::fmt::Display,
 {
     match error {
-        MiFamilyExecutionError::Business(error) => error.to_string(),
-        MiFamilyExecutionError::ProjectEvents(error) => {
+        ExecutionError::Business(error) => error.to_string(),
+        ExecutionError::ProjectEvents(error) => {
             format!("project replayable events failed: {error}")
         }
-        MiFamilyExecutionError::LoadState(error) => format!("load_state failed: {error}"),
-        MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
-        MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
-        MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+        ExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        ExecutionError::Persist(error) => format!("persist failed: {error}"),
+        ExecutionError::Replay(error) => format!("replay failed: {error}"),
+        ExecutionError::Publish(error) => format!("publish failed: {error}"),
     }
 }
 

@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::{MiStateMachineV2, MiStateMachineV2Unchecked};
+use common_entity::{StateMachineV2, StateMachineV2Unchecked};
 
 use super::*;
 

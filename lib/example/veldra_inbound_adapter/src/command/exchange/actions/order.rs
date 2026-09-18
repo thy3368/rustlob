@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::MiFamilyExecutionError;
+use cmd_handler::command_use_case_def2::ExecutionError;
 use example_core_use_case::{
     MatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -427,7 +427,7 @@ fn execute_with_default_outbound(request: RequestWire) -> Vec<reply::OrderStatus
 
 fn repeated_error_statuses<BE, OE>(
     count: usize,
-    error: MiFamilyExecutionError<BE, OE>,
+    error: ExecutionError<BE, OE>,
 ) -> Vec<reply::OrderStatusWire>
 where
     BE: std::fmt::Display,
@@ -496,20 +496,20 @@ fn resting_status(oid: u64) -> reply::OrderStatusWire {
     reply::OrderStatusWire::Resting { resting: reply::RestingOrderStatusWire { oid } }
 }
 
-fn order_execution_error_message<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> String
+fn order_execution_error_message<BE, OE>(error: ExecutionError<BE, OE>) -> String
 where
     BE: std::fmt::Display,
     OE: std::fmt::Display,
 {
     match error {
-        MiFamilyExecutionError::Business(error) => error.to_string(),
-        MiFamilyExecutionError::ProjectEvents(error) => {
+        ExecutionError::Business(error) => error.to_string(),
+        ExecutionError::ProjectEvents(error) => {
             format!("project replayable events failed: {error}")
         }
-        MiFamilyExecutionError::LoadState(error) => format!("load_state failed: {error}"),
-        MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
-        MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
-        MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+        ExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        ExecutionError::Persist(error) => format!("persist failed: {error}"),
+        ExecutionError::Replay(error) => format!("replay failed: {error}"),
+        ExecutionError::Publish(error) => format!("publish failed: {error}"),
     }
 }
 

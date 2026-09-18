@@ -1,4 +1,4 @@
-use common_entity::{MiStateMachineV2Unchecked, StateMachineOwnedV2Diff};
+use common_entity::{StateMachineOwnedV2Diff, StateMachineV2Unchecked};
 use example_core_use_case::{
     PlaceSpotOrderV2ChangesV3, PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3,
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2GivenStateV3,

@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, MiStateMachineV2Unchecked, ReplayableChanges,
-    StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{
@@ -326,7 +326,7 @@ impl ReplayableChanges for SpotOrderV2CaseChangesV3 {
     }
 }
 
-impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
+impl StateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
     type Command = SpotOrderV2CommandV3;
     type StateGiven = SpotOrderV2GivenStateV3;
     type Error = SpotOrderV2UseCaseFamilyV3Error;
@@ -1689,7 +1689,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{MiStateMachineV2, StateMachineOwnedV2Diff};
+    use common_entity::{StateMachineOwnedV2Diff, StateMachineV2};
 
     use super::*;
     use crate::{SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType};

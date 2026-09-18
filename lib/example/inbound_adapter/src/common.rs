@@ -3,8 +3,7 @@ use axum::response::{IntoResponse, Response};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, MiFamilyExecutionError,
-    UseCaseReplyMapper,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, ExecutionError, UseCaseReplyMapper,
 };
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
@@ -41,7 +40,7 @@ impl HttpInboundError {
         self.0.status_code()
     }
 
-    pub fn from_mi_execution_error<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> Self
+    pub fn from_mi_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
     where
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
@@ -110,7 +109,7 @@ impl CliInboundError {
         ))
     }
 
-    pub fn from_mi_execution_error<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> Self
+    pub fn from_mi_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
     where
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
@@ -131,27 +130,25 @@ impl CliInboundError {
 }
 
 fn mi_error_to_command_error<BE, OE>(
-    error: MiFamilyExecutionError<BE, OE>,
+    error: ExecutionError<BE, OE>,
 ) -> CommandUseCaseExecutionError<BE, OE>
 where
     BE: std::error::Error + 'static,
     OE: std::error::Error + 'static,
 {
     match error {
-        MiFamilyExecutionError::Business(error) => CommandUseCaseExecutionError::Business(error),
-        MiFamilyExecutionError::ProjectEvents(error) => {
-            CommandUseCaseExecutionError::event_project(error)
-        }
-        MiFamilyExecutionError::LoadState(error) => {
+        ExecutionError::Business(error) => CommandUseCaseExecutionError::Business(error),
+        ExecutionError::ProjectEvents(error) => CommandUseCaseExecutionError::event_project(error),
+        ExecutionError::LoadState(error) => {
             CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::LoadState, error)
         }
-        MiFamilyExecutionError::Persist(error) => {
+        ExecutionError::Persist(error) => {
             CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Persist, error)
         }
-        MiFamilyExecutionError::Replay(error) => {
+        ExecutionError::Replay(error) => {
             CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Replay, error)
         }
-        MiFamilyExecutionError::Publish(error) => {
+        ExecutionError::Publish(error) => {
             CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Publish, error)
         }
     }

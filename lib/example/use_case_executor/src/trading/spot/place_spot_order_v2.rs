@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    ExecutionResult, MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
@@ -12,7 +12,7 @@ pub fn execute_place_spot_order_v2(
     command: &SpotOrderV2CommandV3,
 ) -> Result<
     ExecutionResult<SpotOrderV2CaseChangesV3>,
-    MiFamilyExecutionError<
+    ExecutionError<
         example_core_use_case::SpotOrderV2UseCaseFamilyV3Error,
         DefaultSpotOrderV2PlaceOutboundError,
     >,
@@ -25,7 +25,7 @@ pub fn execute_place_spot_order_v2_with_outbound<OB>(
     outbound: &OB,
 ) -> Result<
     ExecutionResult<SpotOrderV2CaseChangesV3>,
-    MiFamilyExecutionError<
+    ExecutionError<
         example_core_use_case::SpotOrderV2UseCaseFamilyV3Error,
         <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
     >,

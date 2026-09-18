@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    ExecutionResult, MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
@@ -13,7 +13,7 @@ pub fn execute_cancel_spot_order_v2(
     command: &CancelSpotOrderV2Cmd,
 ) -> Result<
     ExecutionResult<CancelSpotOrderV2Changes>,
-    MiFamilyExecutionError<CancelSpotOrderV2Error, DefaultSpotOrderV2CancelOutboundError>,
+    ExecutionError<CancelSpotOrderV2Error, DefaultSpotOrderV2CancelOutboundError>,
 > {
     execute_cancel_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2CancelOutbound)
 }
@@ -23,10 +23,7 @@ pub fn execute_cancel_spot_order_v2_with_outbound<OB>(
     outbound: &OB,
 ) -> Result<
     ExecutionResult<CancelSpotOrderV2Changes>,
-    MiFamilyExecutionError<
-        CancelSpotOrderV2Error,
-        <OB as StateSink<CancelSpotOrderV2UseCase>>::Error,
-    >,
+    ExecutionError<CancelSpotOrderV2Error, <OB as StateSink<CancelSpotOrderV2UseCase>>::Error>,
 >
 where
     OB: StateSource<
@@ -63,9 +60,9 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(MiFamilyExecutionError::LoadState(
-                DefaultSpotOrderV2CancelOutboundError::StateUnavailable,
-            )),
+            Err(
+                ExecutionError::LoadState(DefaultSpotOrderV2CancelOutboundError::StateUnavailable,)
+            ),
         );
     }
 

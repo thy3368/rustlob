@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    ExecutionResult, MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase,
@@ -13,7 +13,7 @@ pub fn execute_place_match_spot_order_v2(
     command: &PlaceOnlySpotOrderV2Cmd,
 ) -> Result<
     ExecutionResult<PlaceMatchSpotOrderV2Changes>,
-    MiFamilyExecutionError<PlaceMatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>,
+    ExecutionError<PlaceMatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>,
 > {
     execute_place_match_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2PlaceOutbound)
 }
@@ -23,7 +23,7 @@ pub fn execute_place_match_spot_order_v2_with_outbound<OB>(
     outbound: &OB,
 ) -> Result<
     ExecutionResult<PlaceMatchSpotOrderV2Changes>,
-    MiFamilyExecutionError<
+    ExecutionError<
         PlaceMatchSpotOrderV2Error,
         <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
     >,
@@ -167,9 +167,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(MiFamilyExecutionError::LoadState(
-                DefaultSpotOrderV2PlaceOutboundError::StateUnavailable,
-            )),
+            Err(ExecutionError::LoadState(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable,)),
         );
     }
 

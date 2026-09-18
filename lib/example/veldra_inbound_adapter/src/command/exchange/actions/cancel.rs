@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecutionSpec};
+use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
 use serde::{Deserialize, Serialize};
@@ -158,22 +158,20 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
     Ok(ok_statuses_response("cancel", statuses))
 }
 
-pub(crate) fn cancel_execution_error_message<BE, OE>(
-    error: MiFamilyExecutionError<BE, OE>,
-) -> String
+pub(crate) fn cancel_execution_error_message<BE, OE>(error: ExecutionError<BE, OE>) -> String
 where
     BE: std::fmt::Display,
     OE: std::fmt::Display,
 {
     match error {
-        MiFamilyExecutionError::Business(error) => error.to_string(),
-        MiFamilyExecutionError::ProjectEvents(error) => {
+        ExecutionError::Business(error) => error.to_string(),
+        ExecutionError::ProjectEvents(error) => {
             format!("project replayable events failed: {error}")
         }
-        MiFamilyExecutionError::LoadState(error) => format!("load_state failed: {error}"),
-        MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
-        MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
-        MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+        ExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        ExecutionError::Persist(error) => format!("persist failed: {error}"),
+        ExecutionError::Replay(error) => format!("replay failed: {error}"),
+        ExecutionError::Publish(error) => format!("publish failed: {error}"),
     }
 }
 

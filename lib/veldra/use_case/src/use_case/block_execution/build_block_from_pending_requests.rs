@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::MiStateMachineV2Unchecked;
+use common_entity::StateMachineV2Unchecked;
 use example_core_use_case::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
 use veldra_core_entity::{
     BlockExecutionBody, CommandEnvelope, ExchangeState, ProductCommand, build_new_block,
@@ -21,7 +21,7 @@ use crate::use_case::block_execution::handler::perp_unsupported_block_command_ha
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BuildBlockFromCommandsUseCase;
 
-impl MiStateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
+impl StateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
     type Command = BuildBlockFromCommandsCommand;
     type StateGiven = BuildBlockFromCommandsState;
     type Error = BuildBlockError;

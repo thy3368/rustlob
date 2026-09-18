@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, MiStateMachineV2Unchecked,
-    ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityError, EntityReplayableEvent, IssuedByParty, ReplayableChanges,
+    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -136,7 +136,7 @@ impl ReplayableChanges for PlaceOnlySpotOrderV2Changes {
     }
 }
 
-impl MiStateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
+impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
     type Command = PlaceOnlySpotOrderV2Cmd;
     type StateGiven = PlaceOnlySpotOrderV2State;
     type Error = PlaceOnlySpotOrderV2Error;

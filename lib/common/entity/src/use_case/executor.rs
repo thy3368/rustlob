@@ -12,10 +12,10 @@ pub struct ExecutionResult<C> {
     pub events: Vec<EntityReplayableEvent>,
 }
 
-pub type ExecutionOutcome<C, BE, OE> = Result<ExecutionResult<C>, MiFamilyExecutionError<BE, OE>>;
+pub type ExecutionOutcome<C, BE, OE> = Result<ExecutionResult<C>, ExecutionError<BE, OE>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MiFamilyExecutionError<BE, OE> {
+pub enum ExecutionError<BE, OE> {
     Business(BE),
     ProjectEvents(EntityError),
     LoadState(OE),
@@ -68,8 +68,8 @@ impl StateMachineExecutor {
     /// merge -> project events -> persist -> replay -> publish。该函数只负
     /// 责顺序编排和错误映射，不承载业务规则。
     ///
-    /// family 返回的业务错误映射为 [`MiFamilyExecutionError::Business`]，
-    /// 事件投影错误映射为 [`MiFamilyExecutionError::ProjectEvents`]，
+    /// family 返回的业务错误映射为 [`ExecutionError::Business`]，
+    /// 事件投影错误映射为 [`ExecutionError::ProjectEvents`]，
     /// outbound 端错误按发生阶段分别映射为 load / persist / replay /
     /// publish 对应的执行错误。
     pub fn execute<F, SS, OB>(
@@ -84,31 +84,28 @@ impl StateMachineExecutor {
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {
-        family.check_command(command).map_err(MiFamilyExecutionError::Business)?;
+        family.check_command(command).map_err(ExecutionError::Business)?;
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
-            state_source.load_given_state(command).map_err(MiFamilyExecutionError::LoadState)?;
+            state_source.load_given_state(command).map_err(ExecutionError::LoadState)?;
 
         // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
-        family
-            .validate_state_given(command, &given_state)
-            .map_err(MiFamilyExecutionError::Business)?;
+        family.validate_state_given(command, &given_state).map_err(ExecutionError::Business)?;
 
         let after = family
             .compute_state_changed_unchecked(command, &given_state)
-            .map_err(MiFamilyExecutionError::Business)?;
+            .map_err(ExecutionError::Business)?;
 
-        let changes = F::do_compute_state_diff(given_state, after)
-            .map_err(MiFamilyExecutionError::Business)?;
+        let changes =
+            F::do_compute_state_diff(given_state, after).map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
-        let events =
-            changes.to_replayable_events().map_err(MiFamilyExecutionError::ProjectEvents)?;
+        let events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
 
-        state_sink.persist(&events).map_err(MiFamilyExecutionError::Persist)?;
-        state_sink.replay(&events).map_err(MiFamilyExecutionError::Replay)?;
-        state_sink.publish(&events).map_err(MiFamilyExecutionError::Publish)?;
+        state_sink.persist(&events).map_err(ExecutionError::Persist)?;
+        state_sink.replay(&events).map_err(ExecutionError::Replay)?;
+        state_sink.publish(&events).map_err(ExecutionError::Publish)?;
 
         Ok(ExecutionResult { changes, events })
     }
