@@ -20,6 +20,16 @@ pub enum BalanceLedgerReason {
         /// 触发本次余额冻结的订单 ID。
         order_id: String,
     },
+    /// 现货改单增加冻结余额。
+    ModifySpotOrderFreeze {
+        /// 触发本次余额冻结调整的订单 ID。
+        order_id: String,
+    },
+    /// 现货改单释放冻结余额。
+    ModifySpotOrderUnfreeze {
+        /// 触发本次余额解冻调整的订单 ID。
+        order_id: String,
+    },
     /// 现货撤单为买单释放冻结 quote。
     CancelSpotOrderReleaseQuote {
         /// 被撤销订单 ID。
@@ -98,6 +108,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { .. } => "freeze_for_order",
             Self::UnfreezeForCancel { .. } => "unfreeze_for_cancel",
             Self::ReserveForImmediateOrder { .. } => "reserve_for_immediate_order",
+            Self::ModifySpotOrderFreeze { .. } => "modify_spot_order_freeze",
+            Self::ModifySpotOrderUnfreeze { .. } => "modify_spot_order_unfreeze",
             Self::CancelSpotOrderReleaseQuote { .. } => "cancel_spot_order_release_quote",
             Self::CancelSpotOrderReleaseBase { .. } => "cancel_spot_order_release_base",
             Self::SettleSpotTradeBuyerReceiveBase { .. } => "settle_spot_trade_buyer_receive_base",
@@ -122,6 +134,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { order_id }
             | Self::UnfreezeForCancel { order_id }
             | Self::ReserveForImmediateOrder { order_id }
+            | Self::ModifySpotOrderFreeze { order_id }
+            | Self::ModifySpotOrderUnfreeze { order_id }
             | Self::CancelSpotOrderReleaseQuote { order_id }
             | Self::CancelSpotOrderReleaseBase { order_id } => Some(order_id.as_str()),
             Self::SettleSpotTradeBuyerReceiveBase { .. }
@@ -140,6 +154,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { .. }
             | Self::UnfreezeForCancel { .. }
             | Self::ReserveForImmediateOrder { .. }
+            | Self::ModifySpotOrderFreeze { .. }
+            | Self::ModifySpotOrderUnfreeze { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettlePerpFunding { .. } => &[],
@@ -159,6 +175,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { .. }
             | Self::UnfreezeForCancel { .. }
             | Self::ReserveForImmediateOrder { .. }
+            | Self::ModifySpotOrderFreeze { .. }
+            | Self::ModifySpotOrderUnfreeze { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTrade { .. } => &[],
@@ -178,6 +196,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { .. }
             | Self::UnfreezeForCancel { .. }
             | Self::ReserveForImmediateOrder { .. }
+            | Self::ModifySpotOrderFreeze { .. }
+            | Self::ModifySpotOrderUnfreeze { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTradeBuyerReceiveBase { .. }
@@ -214,6 +234,8 @@ impl BalanceLedgerReason {
             Self::FreezeForOrder { .. }
             | Self::UnfreezeForCancel { .. }
             | Self::ReserveForImmediateOrder { .. }
+            | Self::ModifySpotOrderFreeze { .. }
+            | Self::ModifySpotOrderUnfreeze { .. }
             | Self::CancelSpotOrderReleaseQuote { .. }
             | Self::CancelSpotOrderReleaseBase { .. }
             | Self::SettleSpotTradeBuyerReceiveBase { .. }

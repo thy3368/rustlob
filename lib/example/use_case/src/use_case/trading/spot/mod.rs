@@ -12,6 +12,11 @@ pub use cancel_spot_order_v2::{
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase,
 };
+pub use modify_spot_order_v2::{
+    ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
+    ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
+    ModifySpotOrderV2UseCase, OrderId,
+};
 pub use open_match_spot_order_v2::{
     MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
     MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
