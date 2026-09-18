@@ -1,4 +1,4 @@
-use common_entity::{StateMachineOwnedV2Diff, MiStateMachineV2Unchecked, ReplayableChanges};
+use common_entity::{MiStateMachineV2Unchecked, ReplayableChanges, StateMachineOwnedV2Diff};
 use example_core_use_case::{
     BalanceLedgerOperation, Reservation, SpotOrderStatus, SpotOrderStatusReason, *,
 };
@@ -68,7 +68,7 @@ fn active_buy_order(order_id: &str) -> SpotOrderV2 {
         symbol: "BTCUSDT".to_string(),
         side: SpotOrderSide::Buy,
         execution: SpotOrderExecution::Limit { price: 100 },
-        time_in_force: SpotOrderTimeInForce::Gtc,
+        time_in_force: SpotOrderTif::Gtc,
         qty: 2,
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),
@@ -91,7 +91,7 @@ fn sell_order(order_id: &str, account_id: &str, price: u64, qty: u64) -> SpotOrd
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
         SpotOrderExecution::Limit { price },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         qty,
         0,
         SpotOrderStatus::Open,
@@ -160,6 +160,7 @@ fn given_conditional_order_command_when_placed_then_trigger_pending_order_is_cre
 
     assert_eq!(changes.created_order, order_template);
     assert!(changes.created_order.is_trigger_pending());
+    assert_eq!(changes.created_order.status(), SpotOrderStatus::Pending);
     assert!(changes.created_order.active_reservation().is_none());
     assert!(changes.created_order.active_fee_reservation().is_none());
     assert_eq!(changes.to_replayable_events().unwrap().len(), 1);

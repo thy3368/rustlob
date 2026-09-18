@@ -137,6 +137,7 @@ fn trigger_limit_tp_has_no_hold_until_trigger_then_becomes_gtc()
 
     assert!(outcome.freeze_ledger_entry.is_none());
     assert!(order.is_trigger_pending());
+    assert_eq!(order.status, SpotOrderStatus::Pending);
     assert!(order.active_reservation().is_none());
     assert_eq!(order.fill(1), Err(SpotOrderV2MatchError::OrderNotMatchable));
 
@@ -148,7 +149,7 @@ fn trigger_limit_tp_has_no_hold_until_trigger_then_becomes_gtc()
     })?;
     assert!(!order.is_trigger_pending());
     assert!(order.active_reservation().is_some());
-    assert_eq!(order.time_in_force, example_core_entity::SpotOrderTimeInForce::Gtc);
+    assert_eq!(order.time_in_force(), example_core_entity::SpotOrderTif::Gtc);
     assert_eq!(order.version, 2);
     Ok(())
 }
@@ -173,8 +174,8 @@ fn trigger_market_sl_becomes_ioc_and_converges_after_match()
         maker_fee_bps: 2,
         taker_fee_bps: 5,
     })?;
-    assert_eq!(order.execution, SpotOrderExecution::Market { aggressive_price: 110 });
-    assert_eq!(order.time_in_force, example_core_entity::SpotOrderTimeInForce::Ioc);
+    assert_eq!(order.execution(), SpotOrderExecution::Market { aggressive_price: 110 });
+    assert_eq!(order.time_in_force(), example_core_entity::SpotOrderTif::Ioc);
     order.finish_after_match(1)?;
     assert_eq!(order.status, SpotOrderStatus::Canceled);
     assert_eq!(order.filled_qty, 1);
@@ -222,6 +223,7 @@ fn normal_tpsl_atomically_creates_parent_and_tp_sl_children()
             }
         );
         assert!(child.order.is_trigger_pending());
+        assert_eq!(child.order.status, SpotOrderStatus::Pending);
         assert!(child.order.active_reservation().is_none());
         assert!(child.freeze_ledger_entry.is_none());
         assert_eq!(child.order.fill(1), Err(SpotOrderV2MatchError::OrderNotMatchable));

@@ -5,7 +5,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, SpotOrderExecution, SpotOrderSide, SpotOrderStatus,
-    SpotOrderTimeInForce, SpotOrderV2,
+    SpotOrderTif, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -62,7 +62,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
             SpotOrderExecution::Limit { price: 100 },
-            SpotOrderTimeInForce::Gtc,
+            SpotOrderTif::Gtc,
             2,
             0,
             SpotOrderStatus::Open,

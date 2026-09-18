@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use example_core_use_case::{
-    Balance, MarketRules, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce,
+    Balance, MarketRules, SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
     SpotOrderV2,
 };
 use mysql::prelude::Queryable;
@@ -294,11 +294,11 @@ fn decode_execution_mysql(value: &str, price: u64) -> Option<SpotOrderExecution>
     }
 }
 
-fn decode_time_in_force_mysql(value: &str) -> Option<SpotOrderTimeInForce> {
+fn decode_time_in_force_mysql(value: &str) -> Option<SpotOrderTif> {
     match value {
-        "gtc" => Some(SpotOrderTimeInForce::Gtc),
-        "ioc" => Some(SpotOrderTimeInForce::Ioc),
-        "alo" => Some(SpotOrderTimeInForce::Alo),
+        "gtc" => Some(SpotOrderTif::Gtc),
+        "ioc" => Some(SpotOrderTif::Ioc),
+        "alo" => Some(SpotOrderTif::Alo),
         _ => None,
     }
 }

@@ -82,7 +82,7 @@ use spot as spot_entity;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif,
-    SpotOrderTimeInForce, SpotOrderTriggerRole, SpotOrderType,
+    SpotOrderTriggerRole, SpotOrderType,
 };
 pub use spot_entity::spot_order_v2::{
     CancelSpotOrderV2Input, CancelSpotOrderV2Outcome, MatchSpotOrderV2Input,

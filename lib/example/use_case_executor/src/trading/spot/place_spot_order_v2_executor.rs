@@ -47,7 +47,7 @@ mod tests {
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
         Balance, PlaceSpotOrderV2Cmd, PlaceSpotOrderV2State, PlaceSpotOrderV2UseCase,
-        SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,
+        SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderV2,
     };
 
     use super::*;
@@ -146,7 +146,7 @@ mod tests {
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
             SpotOrderExecution::Limit { price },
-            SpotOrderTimeInForce::Gtc,
+            SpotOrderTif::Gtc,
             qty,
             0,
             SpotOrderStatus::Open,

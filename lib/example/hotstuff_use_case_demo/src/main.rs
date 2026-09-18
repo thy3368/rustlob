@@ -9,7 +9,7 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, PlaceSpotOrderV2Cmd,
     PlaceSpotOrderV2State, PlaceSpotOrderV2UseCase, SpotOrderExecution, SpotOrderSide,
-    SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,
+    SpotOrderStatus, SpotOrderTif, SpotOrderV2,
 };
 use example_outbound_adapter::FakeSpotOrderV2CancelOutbound;
 use hotstuff_rs::app::{
@@ -344,7 +344,7 @@ fn demo_sell_order(
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
         SpotOrderExecution::Limit { price },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         qty,
         0,
         SpotOrderStatus::Open,

@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
     ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
-    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTimeInForce, SpotOrderV2,
+    SpotOrderExecution, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderV2,
     SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3, SpotTrade,
     build_place_spot_order_v2_taker_template_v3,
 };
@@ -306,11 +306,11 @@ fn decode_execution(
 
 fn decode_time_in_force(
     event: &EntityReplayableEvent,
-) -> Result<SpotOrderTimeInForce, PlaceOrderOutboundError> {
+) -> Result<SpotOrderTif, PlaceOrderOutboundError> {
     match event_string_field(event, "time_in_force").as_deref() {
-        Some("gtc") => Ok(SpotOrderTimeInForce::Gtc),
-        Some("ioc") => Ok(SpotOrderTimeInForce::Ioc),
-        Some("alo") => Ok(SpotOrderTimeInForce::Alo),
+        Some("gtc") => Ok(SpotOrderTif::Gtc),
+        Some("ioc") => Ok(SpotOrderTif::Ioc),
+        Some("alo") => Ok(SpotOrderTif::Alo),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
@@ -319,6 +319,7 @@ fn decode_status(
     event: &EntityReplayableEvent,
 ) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
     match event_string_field(event, "status").as_deref() {
+        Some("pending") => Ok(SpotOrderStatus::Pending),
         Some("open") => Ok(SpotOrderStatus::Open),
         Some("partially_filled") => Ok(SpotOrderStatus::PartiallyFilled),
         Some("filled") => Ok(SpotOrderStatus::Filled),
@@ -553,6 +554,7 @@ fn decode_order_snapshot_from_event(
 
 fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
     match value {
+        "pending" => Ok(SpotOrderStatus::Pending),
         "open" => Ok(SpotOrderStatus::Open),
         "partially_filled" => Ok(SpotOrderStatus::PartiallyFilled),
         "filled" => Ok(SpotOrderStatus::Filled),

@@ -13,7 +13,7 @@ fn trigger_pending_order() -> SpotOrderV2 {
         95,
         SpotOrderTriggerRole::StopLoss,
         SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         Some("trigger-cloid".to_string()),
         1,
     )
@@ -28,7 +28,7 @@ fn active_buy_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
         SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         2,
         "BTC",
         "USDT",
@@ -50,7 +50,7 @@ fn maker_sell_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
         SpotOrderExecution::Limit { price: 90 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         1,
         "BTC",
         "USDT",
@@ -69,6 +69,7 @@ fn given_trigger_pending_order_when_created_then_it_has_no_reservation_and_canno
     let mut makers = vec![maker_sell_order()];
 
     assert!(order.is_trigger_pending());
+    assert_eq!(order.status(), SpotOrderStatus::Pending);
     assert_eq!(order.active_reservation(), None);
     assert_eq!(order.active_fee_reservation(), None);
     assert_eq!(

@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    ReservationStatus, SpotOrderExecution, SpotOrderGroupRelation, SpotOrderSide, SpotOrderState,
-    SpotOrderStatus, SpotOrderTimeInForce, SpotOrderTriggerRole, SpotOrderType, SpotOrderV2,
-    SpotOrderV2BehaviorError,
+    SpotOrderExecution, SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif,
+    SpotOrderTriggerRole, SpotOrderType, SpotOrderV2, SpotOrderV2BehaviorError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,10 +39,7 @@ pub struct PlaceOnlySpotOrderV2OrderCmd {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceOnlySpotOrderV2Cmd {
     Single(PlaceOnlySpotOrderV2OrderCmd),
-    NormalTpsl {
-        parent: PlaceOnlySpotOrderV2OrderCmd,
-        children: Vec<PlaceOnlySpotOrderV2OrderCmd>,
-    },
+    NormalTpsl { parent: PlaceOnlySpotOrderV2OrderCmd, children: Vec<PlaceOnlySpotOrderV2OrderCmd> },
 }
 
 impl IssuedByParty for PlaceOnlySpotOrderV2Cmd {
@@ -59,24 +55,14 @@ pub type PlaceOnlySpotOrderV2State = ();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV2AfterChanges {
-    Single {
-        created_order: SpotOrderV2,
-    },
-    NormalTpsl {
-        created_parent_order: SpotOrderV2,
-        created_child_orders: Vec<SpotOrderV2>,
-    },
+    Single { created_order: SpotOrderV2 },
+    NormalTpsl { created_parent_order: SpotOrderV2, created_child_orders: Vec<SpotOrderV2> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV2Changes {
-    Single {
-        created_order: SpotOrderV2,
-    },
-    NormalTpsl {
-        created_parent_order: SpotOrderV2,
-        created_child_orders: Vec<SpotOrderV2>,
-    },
+    Single { created_order: SpotOrderV2 },
+    NormalTpsl { created_parent_order: SpotOrderV2, created_child_orders: Vec<SpotOrderV2> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -138,10 +124,7 @@ impl ReplayableChanges for PlaceOnlySpotOrderV2Changes {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         match self {
             Self::Single { created_order } => Ok(vec![created_order.track_create_event()?]),
-            Self::NormalTpsl {
-                created_parent_order,
-                created_child_orders,
-            } => {
+            Self::NormalTpsl { created_parent_order, created_child_orders } => {
                 let mut events = Vec::with_capacity(created_child_orders.len().saturating_add(1));
                 events.push(created_parent_order.track_create_event()?);
                 for child in created_child_orders {
@@ -193,9 +176,7 @@ impl MiStateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         match cmd {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
-                Ok(PlaceOnlySpotOrderV2AfterChanges::Single {
-                    created_order: build_order(order)?,
-                })
+                Ok(PlaceOnlySpotOrderV2AfterChanges::Single { created_order: build_order(order)? })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
@@ -242,7 +223,9 @@ impl StateMachineOwnedV2Diff for PlaceOnlySpotOrderV2UseCase {
     }
 }
 
-fn check_order_command(order: &PlaceOnlySpotOrderV2OrderCmd) -> Result<(), PlaceOnlySpotOrderV2Error> {
+fn check_order_command(
+    order: &PlaceOnlySpotOrderV2OrderCmd,
+) -> Result<(), PlaceOnlySpotOrderV2Error> {
     if order.party_id.is_empty() {
         return Err(PlaceOnlySpotOrderV2Error::EmptyPartyId);
     }
@@ -261,15 +244,8 @@ fn check_order_command(order: &PlaceOnlySpotOrderV2OrderCmd) -> Result<(), Place
         PlaceOnlySpotOrderV2OrderType::Limit { tif } => {
             parse_tif(tif)?;
         }
-        PlaceOnlySpotOrderV2OrderType::Trigger {
-            trigger_price,
-            trigger_role,
-            ..
-        } => {
-            parse_positive_u64(
-                trigger_price,
-                PlaceOnlySpotOrderV2Error::InvalidTriggerPrice,
-            )?;
+        PlaceOnlySpotOrderV2OrderType::Trigger { trigger_price, trigger_role, .. } => {
+            parse_positive_u64(trigger_price, PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)?;
             parse_trigger_role(trigger_role)?;
         }
     }
@@ -323,7 +299,9 @@ fn validate_normal_tpsl(
     Ok(())
 }
 
-fn build_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
+fn build_order(
+    order: &PlaceOnlySpotOrderV2OrderCmd,
+) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
     let side = if order.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
     let qty = parse_positive_u64(&order.size, PlaceOnlySpotOrderV2Error::InvalidSize)?;
     let price = parse_positive_u64(&order.price, PlaceOnlySpotOrderV2Error::InvalidPrice)?;
@@ -350,21 +328,14 @@ fn build_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> Result<SpotOrderV2, Plac
             created.order_type = SpotOrderType::Limit { tif: tif.into() };
             Ok(created)
         }
-        PlaceOnlySpotOrderV2OrderType::Trigger {
-            is_market,
-            trigger_price,
-            trigger_role,
-        } => {
+        PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
             let execution = if *is_market {
                 SpotOrderExecution::Market { aggressive_price: price }
             } else {
                 SpotOrderExecution::Limit { price }
             };
-            let tif = if *is_market {
-                SpotOrderTimeInForce::Ioc
-            } else {
-                SpotOrderTimeInForce::Gtc
-            };
+            let tif =
+                if *is_market { SpotOrderTif::Ioc } else { SpotOrderTif::Gtc };
             let mut created = SpotOrderV2::new_trigger_pending(
                 order.order_id.clone(),
                 order.asset,
@@ -373,10 +344,7 @@ fn build_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> Result<SpotOrderV2, Plac
                 order.symbol.clone(),
                 side,
                 qty,
-                parse_positive_u64(
-                    trigger_price,
-                    PlaceOnlySpotOrderV2Error::InvalidTriggerPrice,
-                )?,
+                parse_positive_u64(trigger_price, PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)?,
                 parse_trigger_role(trigger_role)?,
                 execution,
                 tif,
@@ -399,11 +367,11 @@ fn parse_positive_u64(
     }
 }
 
-fn parse_tif(raw: &str) -> Result<SpotOrderTimeInForce, PlaceOnlySpotOrderV2Error> {
+fn parse_tif(raw: &str) -> Result<SpotOrderTif, PlaceOnlySpotOrderV2Error> {
     match raw {
-        "gtc" | "Gtc" => Ok(SpotOrderTimeInForce::Gtc),
-        "ioc" | "Ioc" => Ok(SpotOrderTimeInForce::Ioc),
-        "alo" | "Alo" => Ok(SpotOrderTimeInForce::Alo),
+        "gtc" | "Gtc" => Ok(SpotOrderTif::Gtc),
+        "ioc" | "Ioc" => Ok(SpotOrderTif::Ioc),
+        "alo" | "Alo" => Ok(SpotOrderTif::Alo),
         _ => Err(PlaceOnlySpotOrderV2Error::InvalidTimeInForce),
     }
 }
@@ -418,8 +386,10 @@ fn parse_trigger_role(raw: &str) -> Result<SpotOrderTriggerRole, PlaceOnlySpotOr
 
 #[cfg(test)]
 mod tests {
+    use common_entity::StateMachineOwnedV2Diff;
+
     use super::*;
-    use common_entity::{MiStateMachineV2, StateMachineOwnedV2Diff};
+    use crate::entity::{ReservationStatus, SpotOrderState, SpotOrderStatus};
 
     fn limit_cmd(tif: &str) -> PlaceOnlySpotOrderV2OrderCmd {
         PlaceOnlySpotOrderV2OrderCmd {
@@ -460,10 +430,9 @@ mod tests {
     fn single_order(
         order: PlaceOnlySpotOrderV2OrderCmd,
     ) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
-        match PlaceOnlySpotOrderV2UseCase.compute_state_diff(
-            &PlaceOnlySpotOrderV2Cmd::Single(order),
-            (),
-        )? {
+        match PlaceOnlySpotOrderV2UseCase
+            .compute_state_diff(&PlaceOnlySpotOrderV2Cmd::Single(order), ())?
+        {
             PlaceOnlySpotOrderV2Changes::Single { created_order } => Ok(created_order),
             PlaceOnlySpotOrderV2Changes::NormalTpsl { .. } => {
                 Err(PlaceOnlySpotOrderV2Error::BranchMismatch)
@@ -503,15 +472,33 @@ mod tests {
             use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger)),
             Err(PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)
         );
+
+        let mut invalid_trigger_role = trigger_cmd("trigger-2", false);
+        invalid_trigger_role.order_type = PlaceOnlySpotOrderV2OrderType::Trigger {
+            is_market: false,
+            trigger_price: "90".to_string(),
+            trigger_role: "bad".to_string(),
+        };
+        assert_eq!(
+            use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_role)),
+            Err(PlaceOnlySpotOrderV2Error::InvalidTriggerRole)
+        );
+
+        let mut empty_party = limit_cmd("gtc");
+        empty_party.party_id.clear();
+        assert_eq!(
+            use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(empty_party)),
+            Err(PlaceOnlySpotOrderV2Error::EmptyPartyId)
+        );
     }
 
     #[test]
-    fn creates_limit_and_trigger_orders_without_side_effect_facts(
-    ) -> Result<(), PlaceOnlySpotOrderV2Error> {
+    fn creates_limit_and_trigger_orders_without_side_effect_facts()
+    -> Result<(), PlaceOnlySpotOrderV2Error> {
         for (tif, expected_tif) in [
-            ("gtc", SpotOrderTimeInForce::Gtc),
-            ("Alo", SpotOrderTimeInForce::Alo),
-            ("Ioc", SpotOrderTimeInForce::Ioc),
+            ("gtc", SpotOrderTif::Gtc),
+            ("Alo", SpotOrderTif::Alo),
+            ("Ioc", SpotOrderTif::Ioc),
         ] {
             let order = single_order(limit_cmd(tif))?;
             assert!(matches!(order.state, SpotOrderState::Open { .. }));
@@ -521,12 +508,12 @@ mod tests {
             assert!(order.fee_reservation.is_active());
         }
 
-        for (is_market, expected_tif) in [
-            (false, SpotOrderTimeInForce::Gtc),
-            (true, SpotOrderTimeInForce::Ioc),
-        ] {
+        for (is_market, expected_tif) in
+            [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)]
+        {
             let order = single_order(trigger_cmd("trigger-1", is_market))?;
             assert_eq!(order.state, SpotOrderState::TriggerPending);
+            assert_eq!(order.status, SpotOrderStatus::Pending);
             assert_eq!(order.time_in_force, expected_tif);
             assert_eq!(order.reservation.status, ReservationStatus::ClosedByRelease);
             assert_eq!(order.fee_reservation.status, ReservationStatus::ClosedByRelease);
@@ -534,10 +521,8 @@ mod tests {
             assert_eq!(order.fee_reservation.remaining_amount, 0);
         }
 
-        let changes = PlaceOnlySpotOrderV2UseCase.compute_state_diff(
-            &PlaceOnlySpotOrderV2Cmd::Single(limit_cmd("gtc")),
-            (),
-        )?;
+        let changes = PlaceOnlySpotOrderV2UseCase
+            .compute_state_diff(&PlaceOnlySpotOrderV2Cmd::Single(limit_cmd("gtc")), ())?;
         let events = changes.to_replayable_events()?;
         assert_eq!(events.len(), 1);
         assert!(events[0].is_created());
@@ -546,17 +531,15 @@ mod tests {
     }
 
     #[test]
-    fn creates_normal_tpsl_and_replays_parent_then_children(
-    ) -> Result<(), PlaceOnlySpotOrderV2Error> {
+    fn creates_normal_tpsl_and_replays_parent_then_children()
+    -> Result<(), PlaceOnlySpotOrderV2Error> {
         let cmd = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
             parent: limit_cmd("gtc"),
             children: vec![trigger_cmd("child-tp", false), trigger_cmd("child-sl", true)],
         };
         let changes = PlaceOnlySpotOrderV2UseCase.compute_state_diff(&cmd, ())?;
-        let PlaceOnlySpotOrderV2Changes::NormalTpsl {
-            created_parent_order,
-            created_child_orders,
-        } = &changes
+        let PlaceOnlySpotOrderV2Changes::NormalTpsl { created_parent_order, created_child_orders } =
+            &changes
         else {
             return Err(PlaceOnlySpotOrderV2Error::BranchMismatch);
         };
@@ -565,6 +548,7 @@ mod tests {
         assert_eq!(created_child_orders.len(), 2);
         for child in created_child_orders {
             assert_eq!(child.state, SpotOrderState::TriggerPending);
+            assert_eq!(child.status, SpotOrderStatus::Pending);
             assert!(child.reduce_only);
             assert_ne!(child.side, created_parent_order.side);
             assert_eq!(child.account_id, created_parent_order.account_id);
@@ -590,6 +574,13 @@ mod tests {
         let use_case = PlaceOnlySpotOrderV2UseCase;
         assert_eq!(
             use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: limit_cmd("gtc"), children: vec![] },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildrenRequired)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
                 &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
                     parent: trigger_cmd("parent", false),
                     children: vec![trigger_cmd("child", false)],
@@ -597,6 +588,31 @@ mod tests {
                 ()
             ),
             Err(PlaceOnlySpotOrderV2Error::ParentMustBeLimit)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: PlaceOnlySpotOrderV2OrderCmd { reduce_only: true, ..limit_cmd("gtc") },
+                    children: vec![trigger_cmd("child", false)],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ParentMustNotBeReduceOnly)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: limit_cmd("gtc"),
+                    children: vec![PlaceOnlySpotOrderV2OrderCmd {
+                        order_id: "child".to_string(),
+                        is_buy: false,
+                        reduce_only: true,
+                        ..limit_cmd("gtc")
+                    }],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildMustBeTrigger)
         );
         assert_eq!(
             use_case.compute_state_diff(
@@ -623,6 +639,58 @@ mod tests {
                 ()
             ),
             Err(PlaceOnlySpotOrderV2Error::ChildSideMustOpposeParent)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: limit_cmd("gtc"),
+                    children: vec![PlaceOnlySpotOrderV2OrderCmd {
+                        party_id: "trader-2".to_string(),
+                        ..trigger_cmd("child", false)
+                    }],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildAccountMismatch)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: limit_cmd("gtc"),
+                    children: vec![PlaceOnlySpotOrderV2OrderCmd {
+                        asset: 10_002,
+                        ..trigger_cmd("child", false)
+                    }],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildAssetMismatch)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: limit_cmd("gtc"),
+                    children: vec![PlaceOnlySpotOrderV2OrderCmd {
+                        symbol: "ETHUSDT".to_string(),
+                        ..trigger_cmd("child", false)
+                    }],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildSymbolMismatch)
+        );
+        assert_eq!(
+            use_case.compute_state_diff(
+                &PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                    parent: limit_cmd("gtc"),
+                    children: vec![PlaceOnlySpotOrderV2OrderCmd {
+                        size: "3".to_string(),
+                        ..trigger_cmd("child", false)
+                    }],
+                },
+                ()
+            ),
+            Err(PlaceOnlySpotOrderV2Error::ChildQuantityExceedsParent)
         );
         assert_eq!(
             use_case.compute_state_diff(

@@ -10,7 +10,7 @@ fn factory_entry_parent_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
         SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         2,
         "BTC",
         "USDT",
@@ -35,7 +35,7 @@ fn factory_take_profit_child_order(parent: &SpotOrderV2) -> SpotOrderV2 {
         120,
         SpotOrderTriggerRole::TakeProfit,
         SpotOrderExecution::Limit { price: 119 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         Some("factory-tp-cloid".to_string()),
         1,
     )
@@ -53,7 +53,7 @@ fn factory_stop_loss_child_order(parent: &SpotOrderV2) -> SpotOrderV2 {
         90,
         SpotOrderTriggerRole::StopLoss,
         SpotOrderExecution::Limit { price: 89 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         Some("factory-sl-cloid".to_string()),
         1,
     )
@@ -75,7 +75,7 @@ fn maker_buy_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
         SpotOrderExecution::Limit { price: 130 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         1,
         "BTC",
         "USDT",
@@ -96,6 +96,7 @@ fn assert_same_market_and_owner(parent: &SpotOrderV2, child: &SpotOrderV2) {
 
 fn assert_tpsl_child_shape(parent: &SpotOrderV2, child: &SpotOrderV2) {
     assert!(child.is_trigger_pending());
+    assert_eq!(child.status(), SpotOrderStatus::Pending);
     assert_same_market_and_owner(parent, child);
     assert_ne!(child.side, parent.side);
     assert!(child.qty <= parent.qty);

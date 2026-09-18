@@ -63,17 +63,6 @@ impl SpotOrderExecution {
     }
 }
 
-/// 现货限价订单有效方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderTimeInForce {
-    /// 一直有效，直到成交或取消。
-    Gtc,
-    /// 立即成交，剩余取消。
-    Ioc,
-    /// 只做 Maker，若会立即吃单则拒绝。
-    Alo,
-}
-
 /// Hyperliquid 现货限价单的有效方式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderTif {
@@ -83,36 +72,6 @@ pub enum SpotOrderTif {
 }
 
 impl SpotOrderTif {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Gtc => "gtc",
-            Self::Ioc => "ioc",
-            Self::Alo => "alo",
-        }
-    }
-}
-
-impl From<SpotOrderTif> for SpotOrderTimeInForce {
-    fn from(value: SpotOrderTif) -> Self {
-        match value {
-            SpotOrderTif::Gtc => Self::Gtc,
-            SpotOrderTif::Ioc => Self::Ioc,
-            SpotOrderTif::Alo => Self::Alo,
-        }
-    }
-}
-
-impl From<SpotOrderTimeInForce> for SpotOrderTif {
-    fn from(value: SpotOrderTimeInForce) -> Self {
-        match value {
-            SpotOrderTimeInForce::Gtc => Self::Gtc,
-            SpotOrderTimeInForce::Ioc => Self::Ioc,
-            SpotOrderTimeInForce::Alo => Self::Alo,
-        }
-    }
-}
-
-impl SpotOrderTimeInForce {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Gtc => "gtc",
@@ -136,6 +95,8 @@ pub enum SpotOrderTriggerRole {
 pub enum SpotOrderType {
     /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
     Limit { tif: SpotOrderTif },
+    /// 市价意图；本地仍保存提交给交易所的激进限价。
+    Market,
     /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
     Trigger { is_market: bool, trigger_price: u64, tpsl: SpotOrderTriggerRole },
 }
@@ -144,6 +105,7 @@ impl SpotOrderType {
     pub const fn effective_tif(self) -> SpotOrderTif {
         match self {
             Self::Limit { tif } => tif,
+            Self::Market => SpotOrderTif::Ioc,
             Self::Trigger { is_market: true, .. } => SpotOrderTif::Ioc,
             Self::Trigger { is_market: false, .. } => SpotOrderTif::Gtc,
         }
@@ -156,6 +118,7 @@ impl SpotOrderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Limit { .. } => "limit",
+            Self::Market => "market",
             Self::Trigger { is_market: true, .. } => "trigger_market",
             Self::Trigger { is_market: false, .. } => "trigger_limit",
         }
@@ -174,6 +137,8 @@ impl SpotOrderTriggerRole {
 /// 已进入执行流程的现货订单生命周期状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderStatus {
+    /// 条件单已接受，等待触发；尚未进入执行流程。
+    Pending,
     /// 订单已进入执行流程，尚未成交。
     Open,
     /// 订单已部分成交，剩余数量仍在业务上可撤。
@@ -189,6 +154,7 @@ pub enum SpotOrderStatus {
 impl SpotOrderStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Pending => "pending",
             Self::Open => "open",
             Self::PartiallyFilled => "partially_filled",
             Self::Filled => "filled",
@@ -198,7 +164,18 @@ impl SpotOrderStatus {
     }
 
     pub const fn is_cancelable(self) -> bool {
-        matches!(self, Self::Open | Self::PartiallyFilled)
+        matches!(self, Self::Pending | Self::Open | Self::PartiallyFilled)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_status_uses_public_pending_label_and_remains_cancelable() {
+        assert_eq!(SpotOrderStatus::Pending.as_str(), "pending");
+        assert!(SpotOrderStatus::Pending.is_cancelable());
     }
 }
 

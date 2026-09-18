@@ -23,7 +23,7 @@ use crate::entity::{
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{
-    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTimeInForce,
+    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTif,
     SpotOrderTriggerRole, SpotTrade,
 };
 
@@ -934,11 +934,11 @@ fn parse_positive_u64(
     Ok(value)
 }
 
-fn parse_tif(raw: &str) -> Result<SpotOrderTimeInForce, SpotOrderV2UseCaseFamilyV3Error> {
+fn parse_tif(raw: &str) -> Result<SpotOrderTif, SpotOrderV2UseCaseFamilyV3Error> {
     match raw {
-        "gtc" | "Gtc" => Ok(SpotOrderTimeInForce::Gtc),
-        "ioc" | "Ioc" => Ok(SpotOrderTimeInForce::Ioc),
-        "alo" | "Alo" => Ok(SpotOrderTimeInForce::Alo),
+        "gtc" | "Gtc" => Ok(SpotOrderTif::Gtc),
+        "ioc" | "Ioc" => Ok(SpotOrderTif::Ioc),
+        "alo" | "Alo" => Ok(SpotOrderTif::Alo),
         _ => Err(SpotOrderV2UseCaseFamilyV3Error::InvalidTimeInForce),
     }
 }
@@ -1693,7 +1693,7 @@ mod tests {
     use common_entity::{StateMachineOwnedV2Diff, MiStateMachineV2};
 
     use super::*;
-    use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTimeInForce};
+    use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif};
 
     fn test_principal_reservation(
         order_id: &str,
@@ -1716,7 +1716,7 @@ mod tests {
         }
     }
 
-    fn buy_order(tif: SpotOrderTimeInForce) -> SpotOrderV2 {
+    fn buy_order(tif: SpotOrderTif) -> SpotOrderV2 {
         SpotOrderV2::place(PlaceSpotOrderV2Input {
             order_id: "taker-buy".to_string(),
             asset: 10_001,
@@ -1759,7 +1759,7 @@ mod tests {
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
             SpotOrderExecution::Limit { price },
-            SpotOrderTimeInForce::Gtc,
+            SpotOrderTif::Gtc,
             qty,
             0,
             SpotOrderStatus::Open,
@@ -1777,7 +1777,7 @@ mod tests {
     #[test]
     fn place_gtc_without_cross_keeps_state_and_outputs_no_side_effects() {
         let family = SpotOrderV2UseCaseFamilyV3;
-        let taker = buy_order(SpotOrderTimeInForce::Gtc);
+        let taker = buy_order(SpotOrderTif::Gtc);
         let makers = vec![sell_order("maker-1", "seller", 110, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
@@ -1817,7 +1817,7 @@ mod tests {
     #[test]
     fn place_ioc_partial_fill_releases_remainder() {
         let family = SpotOrderV2UseCaseFamilyV3;
-        let taker = buy_order(SpotOrderTimeInForce::Ioc);
+        let taker = buy_order(SpotOrderTif::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
@@ -1858,7 +1858,7 @@ mod tests {
     #[test]
     fn merge_before_after_extracts_before_truth_from_given_state() {
         let family = SpotOrderV2UseCaseFamilyV3;
-        let taker = buy_order(SpotOrderTimeInForce::Ioc);
+        let taker = buy_order(SpotOrderTif::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),
@@ -1902,7 +1902,7 @@ mod tests {
     #[test]
     fn place_alo_cross_rejects_and_releases() {
         let family = SpotOrderV2UseCaseFamilyV3;
-        let taker = buy_order(SpotOrderTimeInForce::Alo);
+        let taker = buy_order(SpotOrderTif::Alo);
         let makers = vec![sell_order("maker-1", "seller", 99, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1200, 1),

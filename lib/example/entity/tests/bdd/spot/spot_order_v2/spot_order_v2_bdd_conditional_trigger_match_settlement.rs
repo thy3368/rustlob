@@ -13,7 +13,7 @@ fn trigger_pending_buy_order() -> SpotOrderV2 {
         95,
         SpotOrderTriggerRole::StopLoss,
         SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         Some("conditional-buy-cloid".to_string()),
         1,
     )
@@ -28,7 +28,7 @@ fn maker_sell_order(order_id: &str, qty: u64, price: u64) -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
         SpotOrderExecution::Limit { price },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         qty,
         "BTC",
         "USDT",
@@ -66,6 +66,7 @@ fn given_trigger_pending_order_when_match_is_attempted_before_trigger_then_it_is
         Err(SpotOrderV2BehaviorError::OrderNotMatchable)
     );
     assert!(taker.is_trigger_pending());
+    assert_eq!(taker.status(), SpotOrderStatus::Pending);
     assert_eq!(taker.filled_qty(), 0);
     assert_eq!(taker.version, 1);
     assert_eq!(makers[0].filled_qty(), 0);

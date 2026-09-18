@@ -1,4 +1,4 @@
-use common_entity::{StateMachineOwnedV2Diff, ReplayableChanges};
+use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff};
 use example_core_entity::spot::spot_order_v2::{SpotOrderLifecycle, SpotTerminalOrderState};
 use example_core_use_case::*;
 use rstest::{fixture, rstest};
@@ -15,7 +15,7 @@ fn buy_limit_order(order_id: &str, price: u64, qty: u64, cloid: Option<&str>) ->
         symbol: "BTCUSDT".to_string(),
         side: SpotOrderSide::Buy,
         execution: SpotOrderExecution::Limit { price },
-        time_in_force: SpotOrderTimeInForce::Gtc,
+        time_in_force: SpotOrderTif::Gtc,
         qty,
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),
@@ -239,7 +239,7 @@ fn given_trigger_pending_order_when_modify_trigger_price_then_pending_trigger_te
             95,
             SpotOrderTriggerRole::StopLoss,
             SpotOrderExecution::Limit { price: 100 },
-            SpotOrderTimeInForce::Gtc,
+            SpotOrderTif::Gtc,
             Some("0xabcdefabcdefabcdefabcdefabcdefab".to_string()),
             1,
         ),
@@ -272,7 +272,9 @@ fn given_trigger_pending_order_when_modify_trigger_price_then_pending_trigger_te
     };
 
     assert!(changes.updated_order.before.is_trigger_pending());
+    assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Pending);
     assert!(changes.updated_order.after.is_trigger_pending());
+    assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Pending);
     assert_eq!(changes.updated_order.after.order_price(), 110);
     assert_eq!(changes.updated_order.after.qty(), 3);
     assert!(changes.updated_order.after.active_reservation().is_none());

@@ -12,7 +12,7 @@ fn buy_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
         SpotOrderExecution::Limit { price: 100 },
-        SpotOrderTimeInForce::Gtc,
+        SpotOrderTif::Gtc,
         2,
         0,
         SpotOrderStatus::Open,
@@ -34,7 +34,7 @@ fn market_buy_order() -> SpotOrderV2 {
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
         SpotOrderExecution::Market { aggressive_price: 120 },
-        SpotOrderTimeInForce::Ioc,
+        SpotOrderTif::Ioc,
         2,
         0,
         SpotOrderStatus::Open,
@@ -112,7 +112,8 @@ fn reject_as_bad_alo_marks_order_rejected() -> Result<(), SpotOrderV2MatchError>
 fn reject_as_no_liquidity_uses_market_or_ioc_reason() -> Result<(), SpotOrderV2MatchError> {
     // Given：市价单和 IOC 限价单都没有可用对手方流动性。
     let mut market = market_buy_order();
-    let mut limit_ioc = SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Ioc, ..buy_order() };
+    let mut limit_ioc =
+        SpotOrderV2 { order_type: SpotOrderType::Limit { tif: SpotOrderTif::Ioc }, ..buy_order() };
 
     // When：撮合侧按无流动性拒绝。
     market.finish_after_match(0)?;
@@ -134,7 +135,8 @@ fn finish_after_match_covers_gtc_alo_ioc_and_full_fill() -> Result<(), SpotOrder
     assert_eq!(gtc_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
 
     // Given：ALO 本轮也没有成交。
-    let mut alo_no_fill = SpotOrderV2 { time_in_force: SpotOrderTimeInForce::Alo, ..buy_order() };
+    let mut alo_no_fill =
+        SpotOrderV2 { order_type: SpotOrderType::Limit { tif: SpotOrderTif::Alo }, ..buy_order() };
     // Then：finish 后同样报告无成交。
     assert_eq!(alo_no_fill.finish_after_match(0), Err(SpotOrderV2MatchError::NoTradesMatched));
 
