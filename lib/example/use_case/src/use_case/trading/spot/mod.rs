@@ -22,6 +22,11 @@ pub use place_match_spot_order_v2::{
     PlaceSpotOrderV2Error, PlaceSpotOrderV2State, PlaceSpotOrderV2TakerTemplateContext,
     PlaceSpotOrderV2UseCase, build_place_spot_order_v2_taker_template,
 };
+pub use place_only_spot_order_v2::{
+    PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
+    PlaceOnlySpotOrderV2Error, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
+    PlaceOnlySpotOrderV2State, PlaceOnlySpotOrderV2UseCase,
+};
 pub use spot_order_v2_use_case_family_v3::{
     PlaceSpotOrderV2AfterChangesV3, PlaceSpotOrderV2ChangesV3, PlaceSpotOrderV2CmdV3,
     PlaceSpotOrderV2TakerTemplateContextV3, PlaceTriggerPendingSpotOrderV2AfterChangesV3,
