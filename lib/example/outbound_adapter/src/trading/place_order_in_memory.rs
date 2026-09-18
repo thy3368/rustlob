@@ -477,21 +477,21 @@ fn decode_optional_close_reason(
     }
 }
 
-pub(crate) fn base_asset_id_for(symbol: &str) -> &str {
+pub fn base_asset_id_for(symbol: &str) -> &str {
     match symbol {
         "BTCUSDT" => "BTC",
         _ => "BTC",
     }
 }
 
-pub(crate) fn quote_asset_id_for(symbol: &str) -> &str {
+pub fn quote_asset_id_for(symbol: &str) -> &str {
     match symbol {
         "BTCUSDT" => "USDT",
         _ => "USDT",
     }
 }
 
-pub(crate) fn symbol_for_asset(asset: u32) -> &'static str {
+pub fn symbol_for_asset(asset: u32) -> &'static str {
     match asset {
         10_000 | 10_001 => "BTCUSDT",
         _ => "BTCUSDT",

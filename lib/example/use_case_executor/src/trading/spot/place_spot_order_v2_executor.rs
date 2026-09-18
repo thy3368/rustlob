@@ -2,7 +2,8 @@ use cmd_handler::command_use_case_def2::{
     ExecutionResult, MiFamilyExecutionError, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
-    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, OpenMatchSpotOrderV2UseCase,
+    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error,
+    OpenMatchSpotOrderV2UseCase,
 };
 use example_outbound_adapter::{
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
@@ -29,7 +30,7 @@ pub fn execute_place_spot_order_v2_with_outbound<OB>(
 >
 where
     OB: StateSource<
-        OpenMatchSpotOrderV2UseCase,
+            OpenMatchSpotOrderV2UseCase,
             Error = <OB as StateSink<OpenMatchSpotOrderV2UseCase>>::Error,
         > + StateSink<OpenMatchSpotOrderV2UseCase>,
 {

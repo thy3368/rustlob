@@ -22,5 +22,6 @@ pub use trading::{
     DefaultSpotOrderV2CancelOutbound, DefaultSpotOrderV2CancelOutboundError,
     DefaultSpotOrderV2PlaceOnlyOutbound, DefaultSpotOrderV2PlaceOnlyOutboundError,
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
-    InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound,
+    InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for,
+    symbol_for_asset,
 };

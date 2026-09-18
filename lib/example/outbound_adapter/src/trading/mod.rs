@@ -13,5 +13,7 @@ pub use place_default::{DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2Place
 pub use place_only_default::{
     DefaultSpotOrderV2PlaceOnlyOutbound, DefaultSpotOrderV2PlaceOnlyOutboundError,
 };
-pub use place_order_in_memory::InMemoryPlaceOrderOutbound;
+pub use place_order_in_memory::{
+    InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
+};
 pub use place_order_mysql::MySqlPlaceOrderOutbound;
