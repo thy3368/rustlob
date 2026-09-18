@@ -29,7 +29,7 @@ use hotstuff_rs::types::update_sets::{AppStateUpdates, ValidatorSetUpdates};
 use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use serde::{Deserialize, Serialize};
 use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2_with_outbound;
-use use_case_executor::trading::spot::place_spot_order_v2_executor::execute_place_spot_order_v2_with_outbound;
+use use_case_executor::trading::spot::open_match_spot_order_v2_executor::execute_place_spot_order_v2_with_outbound;
 
 type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
 

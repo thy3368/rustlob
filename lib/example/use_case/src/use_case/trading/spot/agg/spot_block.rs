@@ -11,10 +11,11 @@ use crate::entity::{Balance, SpotOrderSide, SpotOrderStatus, SpotOrderType, Spot
 use crate::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
     CancelSpotOrderV2Lookup, CancelSpotOrderV2State, CancelSpotOrderV2UseCase,
+    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2State,
     ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2State,
-    ModifySpotOrderV2UseCase, OrderId, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd,
+    ModifySpotOrderV2UseCase, OpenMatchSpotOrderV2UseCase, OrderId, PlaceMatchSpotOrderV2Changes,
+    PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +28,7 @@ pub enum SpotBlockCommand {
     Cancel(CancelSpotOrderV2Cmd),
     Modify(ModifySpotOrderV2Cmd),
     PlaceMatch(PlaceOnlySpotOrderV2Cmd),
+    Match(MatchSpotOrderV2Cmd),
 }
 
 impl IssuedByParty for SpotBlockCmd {
@@ -62,6 +64,7 @@ pub enum SpotBlockAppliedChanges {
     Cancel(CancelSpotOrderV2Changes),
     Modify(ModifySpotOrderV2Changes),
     PlaceMatch(PlaceMatchSpotOrderV2Changes),
+    Match(MatchSpotOrderV2Changes),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -94,6 +97,8 @@ pub enum SpotBlockItemError {
     Modify(#[from] ModifySpotOrderV2Error),
     #[error(transparent)]
     PlaceMatch(#[from] PlaceMatchSpotOrderV2Error),
+    #[error(transparent)]
+    Match(#[from] MatchSpotOrderV2Error),
     #[error("order not found")]
     OrderNotFound,
     #[error("order lookup is ambiguous")]
@@ -120,6 +125,9 @@ impl ReplayableChanges for SpotBlockChanges {
                     events.extend(changes.to_replayable_events()?);
                 }
                 SpotBlockAppliedChanges::PlaceMatch(changes) => {
+                    events.extend(changes.to_replayable_events()?);
+                }
+                SpotBlockAppliedChanges::Match(changes) => {
                     events.extend(changes.to_replayable_events()?);
                 }
             }
@@ -196,6 +204,18 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                             command_index,
                             command,
                             changes: SpotBlockAppliedChanges::PlaceMatch(changes),
+                        },
+                        Err(error) => {
+                            SpotBlockItemResult::Rejected { command_index, command, error }
+                        }
+                    }
+                }
+                SpotBlockCommand::Match(match_cmd) => {
+                    match apply_match(match_cmd, given_state, &mut working) {
+                        Ok(changes) => SpotBlockItemResult::Applied {
+                            command_index,
+                            command,
+                            changes: SpotBlockAppliedChanges::Match(changes),
                         },
                         Err(error) => {
                             SpotBlockItemResult::Rejected { command_index, command, error }
@@ -306,6 +326,15 @@ impl WorkingSpotBlockState {
             .and_then(|index| self.orders.get(*index))
             .cloned()
             .ok_or(SpotBlockItemError::OrderNotFound)
+    }
+
+    fn order_by_order_id(&self, order_id: &str) -> Result<SpotOrderV2, SpotBlockItemError> {
+        let mut matches = self.orders.iter().filter(|order| order.order_id() == order_id);
+        let order = matches.next().ok_or(SpotBlockItemError::OrderNotFound)?;
+        if matches.next().is_some() {
+            return Err(SpotBlockItemError::OrderLookupAmbiguous);
+        }
+        Ok(order.clone())
     }
 
     fn replace_order(&mut self, order: SpotOrderV2) -> Result<(), SpotBlockError> {
@@ -424,6 +453,52 @@ fn apply_place_match(
     Ok(changes)
 }
 
+fn apply_match(
+    cmd: &MatchSpotOrderV2Cmd,
+    block_state: &SpotBlockState,
+    working: &mut WorkingSpotBlockState,
+) -> Result<MatchSpotOrderV2Changes, SpotBlockItemError> {
+    OpenMatchSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Match)?;
+    let taker_order = working.order_by_order_id(&cmd.order_id)?;
+    let state = MatchSpotOrderV2State {
+        maker_orders: maker_candidates_for_open_match(&taker_order, &working.orders),
+        taker_order,
+        settlement_balances: working.balances.clone(),
+        base_asset_id: block_state.base_asset_id.clone(),
+        quote_asset_id: block_state.quote_asset_id.clone(),
+        fee_account_id: block_state.fee_account_id.clone(),
+        maker_fee_bps: block_state.maker_fee_bps,
+        taker_fee_bps: block_state.taker_fee_bps,
+    };
+    OpenMatchSpotOrderV2UseCase
+        .validate_state_given(cmd, &state)
+        .map_err(SpotBlockItemError::Match)?;
+    let changes = OpenMatchSpotOrderV2UseCase
+        .compute_state_diff(cmd, state)
+        .map_err(SpotBlockItemError::Match)?;
+    apply_match_changes(&changes, working)?;
+    Ok(changes)
+}
+
+fn apply_match_changes(
+    changes: &MatchSpotOrderV2Changes,
+    working: &mut WorkingSpotBlockState,
+) -> Result<(), SpotBlockItemError> {
+    if let Some(taker) = &changes.updated_taker_order {
+        working
+            .replace_order(taker.after.clone())
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    }
+    for maker in &changes.updated_maker_orders {
+        working
+            .replace_order(maker.after.clone())
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    }
+    let balances_after =
+        changes.updated_balances.iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
+    working.replace_balances(&balances_after).map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)
+}
+
 fn apply_place_match_changes(
     changes: &PlaceMatchSpotOrderV2Changes,
     working: &mut WorkingSpotBlockState,
@@ -507,6 +582,24 @@ fn maker_candidates_for(
         .collect()
 }
 
+fn maker_candidates_for_open_match(
+    taker_order: &SpotOrderV2,
+    orders: &[SpotOrderV2],
+) -> Vec<SpotOrderV2> {
+    orders
+        .iter()
+        .filter(|order| order.entity_id() != taker_order.entity_id())
+        .filter(|order| order.order_id() != taker_order.order_id())
+        .filter(|order| order.asset == taker_order.asset)
+        .filter(|order| order.side != taker_order.side)
+        .filter(|order| {
+            matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+        })
+        .filter(|order| matches!(order.order_type, SpotOrderType::Limit { .. }))
+        .cloned()
+        .collect()
+}
+
 fn side_from_place_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> SpotOrderSide {
     if order.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell }
 }
@@ -532,6 +625,7 @@ fn command_party_id(command: &SpotBlockCommand) -> Option<&str> {
         SpotBlockCommand::Cancel(cmd) => Some(cmd.party_id.as_str()),
         SpotBlockCommand::Modify(cmd) => Some(cmd.party_id.as_str()),
         SpotBlockCommand::PlaceMatch(cmd) => cmd.party_id(),
+        SpotBlockCommand::Match(cmd) => Some(cmd.party_id.as_str()),
     }
 }
 
@@ -541,7 +635,9 @@ mod tests {
 
     use super::*;
     use crate::entity::{BalanceLedgerOperation, Reservation, SpotOrderStatusReason, SpotOrderTif};
-    use crate::{PlaceOnlySpotOrderV2OrderType, SpotOrderStatus, SpotOrderType};
+    use crate::{
+        PlaceOnlySpotOrderV2OrderType, PlaceSpotOrderV2Input, SpotOrderStatus, SpotOrderType,
+    };
 
     fn block_state(order: SpotOrderV2, balances: Vec<Balance>) -> SpotBlockState {
         SpotBlockState {
@@ -588,6 +684,31 @@ mod tests {
             10,
             Some("original-cloid".to_owned()),
         )?)
+    }
+
+    fn open_taker_buy_order(
+        order_id: &str,
+        price: u64,
+        qty: u64,
+    ) -> Result<SpotOrderV2, Box<dyn std::error::Error>> {
+        Ok(SpotOrderV2::place(PlaceSpotOrderV2Input {
+            order_id: order_id.to_owned(),
+            asset: 10_001,
+            account_id: "buyer".to_owned(),
+            symbol: "BTCUSDT".to_owned(),
+            side: SpotOrderSide::Buy,
+            limit_price: price,
+            order_type: SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
+            qty,
+            base_asset_id: "BTC".to_owned(),
+            quote_asset_id: "USDT".to_owned(),
+            base_balance_entity_id: "buyer:BTC".to_owned(),
+            quote_balance_entity_id: "buyer:USDT".to_owned(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+            client_order_id: None,
+        })?
+        .order)
     }
 
     fn test_principal_reservation(
@@ -679,6 +800,14 @@ mod tests {
         ))
     }
 
+    fn match_cmd(order_id: &str) -> SpotBlockCommand {
+        SpotBlockCommand::Match(MatchSpotOrderV2Cmd {
+            party_id: "buyer".to_owned(),
+            asset: 10_001,
+            order_id: order_id.to_owned(),
+        })
+    }
+
     #[test]
     fn check_command_rejects_empty_block() {
         let cmd = SpotBlockCmd { commands: vec![] };
@@ -694,6 +823,18 @@ mod tests {
         };
         inner.party_id = "seller".to_owned();
         let cmd = SpotBlockCmd { commands: vec![cancel_cmd(), modify] };
+
+        assert_eq!(SpotBlockUseCase.check_command(&cmd), Err(SpotBlockError::MixedPartyIds));
+    }
+
+    #[test]
+    fn check_command_rejects_mixed_parties_with_match() {
+        let mut match_command = match_cmd("order-1");
+        let SpotBlockCommand::Match(inner) = &mut match_command else {
+            unreachable!();
+        };
+        inner.party_id = "seller".to_owned();
+        let cmd = SpotBlockCmd { commands: vec![cancel_cmd(), match_command] };
 
         assert_eq!(SpotBlockUseCase.check_command(&cmd), Err(SpotBlockError::MixedPartyIds));
     }
@@ -757,6 +898,76 @@ mod tests {
     }
 
     #[test]
+    fn match_missing_taker_is_rejected_and_later_command_runs()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let order = buy_order(10_000, 2)?;
+        let frozen = order.reservation.remaining_amount + order.fee_reservation.remaining_amount;
+        let state = block_state(order, vec![balance("buyer", "USDT", 100_000, frozen)]);
+        let cmd = SpotBlockCmd { commands: vec![match_cmd("missing-order"), cancel_cmd()] };
+
+        let changes = SpotBlockUseCase.compute_state_diff(&cmd, state)?;
+
+        assert!(matches!(
+            &changes.item_results[0],
+            SpotBlockItemResult::Rejected { error: SpotBlockItemError::OrderNotFound, .. }
+        ));
+        assert!(matches!(
+            &changes.item_results[1],
+            SpotBlockItemResult::Applied { changes: SpotBlockAppliedChanges::Cancel(_), .. }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn match_success_updates_working_state_for_later_command()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut taker = open_taker_buy_order("taker-buy", 100, 2)?;
+        taker.exchange_oid = Some(100);
+        let maker = sell_order("maker-1", "seller", 100, 1)?;
+        let mut state = empty_state();
+        state.orders = vec![taker, maker];
+        state.balances = vec![
+            balance("buyer", "USDT", 1_201, 0),
+            balance("buyer", "BTC", 0, 0),
+            balance("seller", "BTC", 0, 1),
+            balance("seller", "USDT", 0, 1),
+            balance("fee", "USDT", 0, 0),
+        ];
+        let cmd = SpotBlockCmd {
+            commands: vec![
+                match_cmd("taker-buy"),
+                SpotBlockCommand::Cancel(CancelSpotOrderV2Cmd {
+                    party_id: "buyer".to_owned(),
+                    asset: 10_001,
+                    lookup: CancelSpotOrderV2Lookup::Oid(100),
+                }),
+            ],
+        };
+
+        let changes = SpotBlockUseCase.compute_state_diff(&cmd, state)?;
+
+        let SpotBlockItemResult::Applied {
+            changes: SpotBlockAppliedChanges::Match(matched), ..
+        } = &changes.item_results[0]
+        else {
+            panic!("match should apply: {:?}", changes.item_results[0]);
+        };
+        let Some(taker_after_match) = matched.updated_taker_order.as_ref() else {
+            panic!("match should update taker");
+        };
+        assert_eq!(taker_after_match.after.filled_qty(), 1);
+        let SpotBlockItemResult::Applied {
+            changes: SpotBlockAppliedChanges::Cancel(cancel), ..
+        } = &changes.item_results[1]
+        else {
+            panic!("cancel should apply after partial match: {:?}", changes.item_results[1]);
+        };
+        assert_eq!(cancel.updated_order.before.filled_qty(), 1);
+        assert_eq!(cancel.updated_order.after.status, SpotOrderStatus::Canceled);
+        Ok(())
+    }
+
+    #[test]
     fn place_match_success_updates_working_book_for_later_cancel_or_modify()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut state = empty_state();
@@ -794,6 +1005,52 @@ mod tests {
         let block_events = changes.to_replayable_events()?;
         assert_eq!(block_events.len(), place_events.len());
         assert!(block_events.iter().all(EntityReplayableEvent::is_created));
+        Ok(())
+    }
+
+    #[test]
+    fn to_replayable_events_includes_match_events_in_block_order()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let taker = open_taker_buy_order("taker-buy", 100, 2)?;
+        let maker = sell_order("maker-1", "seller", 100, 1)?;
+        let mut state = empty_state();
+        state.orders = vec![taker, maker];
+        state.balances = vec![
+            balance("buyer", "USDT", 1_201, 0),
+            balance("buyer", "BTC", 0, 0),
+            balance("seller", "BTC", 0, 1),
+            balance("seller", "USDT", 0, 1),
+            balance("fee", "USDT", 0, 0),
+        ];
+        let cmd = SpotBlockCmd {
+            commands: vec![
+                place_trigger_cmd("new-order", None),
+                match_cmd("missing-order"),
+                match_cmd("taker-buy"),
+            ],
+        };
+
+        let changes = SpotBlockUseCase.compute_state_diff(&cmd, state)?;
+        let events = changes.to_replayable_events()?;
+        let place_events = match &changes.item_results[0] {
+            SpotBlockItemResult::Applied {
+                changes: SpotBlockAppliedChanges::PlaceMatch(changes),
+                ..
+            } => changes.to_replayable_events()?,
+            _ => unreachable!(),
+        };
+        let match_events = match &changes.item_results[2] {
+            SpotBlockItemResult::Applied {
+                changes: SpotBlockAppliedChanges::Match(changes),
+                ..
+            } => changes.to_replayable_events()?,
+            other => panic!("match should apply: {other:?}"),
+        };
+
+        assert!(matches!(&changes.item_results[1], SpotBlockItemResult::Rejected { .. }));
+        assert_eq!(events.len(), place_events.len() + match_events.len());
+        assert!(events[0].is_created());
+        assert_eq!(events[place_events.len()].is_updated(), match_events[0].is_updated());
         Ok(())
     }
 
