@@ -507,7 +507,7 @@ mod tests {
 
         for (is_market, expected_tif) in [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)] {
             let order = single_order(trigger_cmd("trigger-1", is_market))?;
-            assert!(order.is_trigger_pending());
+            assert!(order.is_pending());
             assert_eq!(order.status, SpotOrderStatus::Pending);
             assert_eq!(order.time_in_force(), expected_tif);
             assert_eq!(order.reservation.status, ReservationStatus::ClosedByRelease);
@@ -542,7 +542,7 @@ mod tests {
         assert_eq!(created_parent_order.group_relation, SpotOrderGroupRelation::NormalTpslParent);
         assert_eq!(created_child_orders.len(), 2);
         for child in created_child_orders {
-            assert!(child.is_trigger_pending());
+            assert!(child.is_pending());
             assert_eq!(child.status, SpotOrderStatus::Pending);
             assert!(child.reduce_only);
             assert_ne!(child.side, created_parent_order.side);
