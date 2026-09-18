@@ -237,6 +237,7 @@ impl StateMachineOwnedV2Diff for SpotBlockUseCase {
         _given_state: Self::StateGiven,
         after: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
+        //todo 统计本block中 新增/个性的对象
         Ok(after)
     }
 }
