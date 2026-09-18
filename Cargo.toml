@@ -42,7 +42,7 @@ members = [
     "lib/veldra/entity",
     "lib/veldra/use_case",
     "lib/veldra/outbound_adapter",
-    "lib/veldra/inbound_adapter", "lib/example/use_case_executor",
+    "lib/veldra/inbound_adapter", "lib/example/use_case_executor", "lib/example/dex_inbound_adapter",
 ]
 
 # XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。

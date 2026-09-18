@@ -2629,6 +2629,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dex_inbound_adapter"
+version = "0.1.0"
+
+[[package]]
 name = "diff"
 version = "0.1.0"
 dependencies = [
