@@ -5,6 +5,9 @@ pub mod place_only_spot_order_v2;
 
 pub mod modify_spot_order_v2;
 
+pub mod agg;
+
+
 pub mod spot_order_v2_use_case_family_v3;
 
 pub use cancel_spot_order_v2::{
