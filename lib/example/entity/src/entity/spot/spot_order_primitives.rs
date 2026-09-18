@@ -21,48 +21,6 @@ impl SpotOrderSide {
     }
 }
 
-/// 现货订单执行方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderExecution {
-    /// 市价意图。Hyperliquid adapter 可映射为 IOC + 激进限价。
-    Market {
-        /// 市价意图使用的激进价格，用于冻结上限和 Hyperliquid `p` 字段。
-        aggressive_price: u64,
-    },
-    /// 限价意图，`price` 是 core fixed-point 整数价格。
-    Limit {
-        /// quote 计价价格。
-        price: u64,
-    },
-}
-
-impl SpotOrderExecution {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Market { .. } => "market",
-            Self::Limit { .. } => "limit",
-        }
-    }
-
-    /// 返回限价价格；市价意图没有稳定限价价格。
-    pub const fn limit_price(self) -> Option<u64> {
-        match self {
-            Self::Market { .. } => None,
-            Self::Limit { price } => Some(price),
-        }
-    }
-
-    /// 返回需要提交给 Hyperliquid 的价格字段。
-    ///
-    /// 限价单返回限价价格；市价意图返回 adapter 使用的激进价格。
-    pub const fn order_price(self) -> u64 {
-        match self {
-            Self::Market { aggressive_price } => aggressive_price,
-            Self::Limit { price } => price,
-        }
-    }
-}
-
 /// Hyperliquid 现货限价单的有效方式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderTif {
@@ -95,8 +53,6 @@ pub enum SpotOrderTriggerRole {
 pub enum SpotOrderType {
     /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
     Limit { tif: SpotOrderTif },
-    /// 市价意图；本地仍保存提交给交易所的激进限价。
-    Market,
     /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
     Trigger { is_market: bool, trigger_price: u64, tpsl: SpotOrderTriggerRole },
 }
@@ -105,7 +61,6 @@ impl SpotOrderType {
     pub const fn effective_tif(self) -> SpotOrderTif {
         match self {
             Self::Limit { tif } => tif,
-            Self::Market => SpotOrderTif::Ioc,
             Self::Trigger { is_market: true, .. } => SpotOrderTif::Ioc,
             Self::Trigger { is_market: false, .. } => SpotOrderTif::Gtc,
         }
@@ -118,7 +73,6 @@ impl SpotOrderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Limit { .. } => "limit",
-            Self::Market => "market",
             Self::Trigger { is_market: true, .. } => "trigger_market",
             Self::Trigger { is_market: false, .. } => "trigger_limit",
         }
