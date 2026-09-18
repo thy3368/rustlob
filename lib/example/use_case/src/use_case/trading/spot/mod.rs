@@ -17,8 +17,8 @@ pub use open_match_spot_order_v2::{
     MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
 };
 pub use place_match_spot_order_v2::{
-    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Cmd,
-    PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
 };
 pub use place_only_spot_order_v2::{
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,

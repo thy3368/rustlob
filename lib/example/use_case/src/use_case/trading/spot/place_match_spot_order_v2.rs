@@ -1,8 +1,7 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, MiStateMachineV2,
-    MiStateMachineV2Unchecked, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityError, EntityReplayableEvent, MiStateMachineV2, MiStateMachineV2Unchecked,
+    ReplayableChanges, StateMachineOwnedV2Diff,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{Balance, SpotOrderV2};
@@ -13,17 +12,6 @@ use crate::{
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, PlaceOnlySpotOrderV2UseCase,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlaceMatchSpotOrderV2Cmd {
-    pub place_order: PlaceOnlySpotOrderV2OrderCmd,
-}
-//PlaceOnlySpotOrderV2Cmd
-impl IssuedByParty for PlaceMatchSpotOrderV2Cmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.place_order.party_id.as_str())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceMatchSpotOrderV2State {
     pub maker_orders: Vec<SpotOrderV2>,
@@ -33,14 +21,34 @@ pub struct PlaceMatchSpotOrderV2State {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceMatchSpotOrderV2AfterChanges {
-    PlacedOnly { created_order: SpotOrderV2 },
-    PlacedAndMatched { created_taker_order: SpotOrderV2, match_after: MatchSpotOrderV2AfterChanges },
+    SinglePlacedOnly {
+        created_order: SpotOrderV2,
+    },
+    SinglePlacedAndMatched {
+        created_taker_order: SpotOrderV2,
+        match_after: MatchSpotOrderV2AfterChanges,
+    },
+    NormalTpslPlacedAndMatched {
+        created_parent_order: SpotOrderV2,
+        created_child_orders: Vec<SpotOrderV2>,
+        match_after: MatchSpotOrderV2AfterChanges,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceMatchSpotOrderV2Changes {
-    PlacedOnly { created_order: SpotOrderV2 },
-    PlacedAndMatched { created_taker_order: SpotOrderV2, match_changes: MatchSpotOrderV2Changes },
+    SinglePlacedOnly {
+        created_order: SpotOrderV2,
+    },
+    SinglePlacedAndMatched {
+        created_taker_order: SpotOrderV2,
+        match_changes: MatchSpotOrderV2Changes,
+    },
+    NormalTpslPlacedAndMatched {
+        created_parent_order: SpotOrderV2,
+        created_child_orders: Vec<SpotOrderV2>,
+        match_changes: MatchSpotOrderV2Changes,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -63,9 +71,23 @@ pub struct PlaceMatchSpotOrderV2UseCase;
 impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         match self {
-            Self::PlacedOnly { created_order } => Ok(vec![created_order.track_create_event()?]),
-            Self::PlacedAndMatched { created_taker_order, match_changes } => {
+            Self::SinglePlacedOnly { created_order } => {
+                Ok(vec![created_order.track_create_event()?])
+            }
+            Self::SinglePlacedAndMatched { created_taker_order, match_changes } => {
                 let mut events = vec![created_taker_order.track_create_event()?];
+                events.extend(match_changes.to_replayable_events()?);
+                Ok(events)
+            }
+            Self::NormalTpslPlacedAndMatched {
+                created_parent_order,
+                created_child_orders,
+                match_changes,
+            } => {
+                let mut events = vec![created_parent_order.track_create_event()?];
+                for child in created_child_orders {
+                    events.push(child.track_create_event()?);
+                }
                 events.extend(match_changes.to_replayable_events()?);
                 Ok(events)
             }
@@ -74,22 +96,22 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
 }
 
 impl MiStateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
-    type Command = PlaceMatchSpotOrderV2Cmd;
+    type Command = PlaceOnlySpotOrderV2Cmd;
     type StateGiven = PlaceMatchSpotOrderV2State;
     type Error = PlaceMatchSpotOrderV2Error;
     type StateChanged = PlaceMatchSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        PlaceOnlySpotOrderV2UseCase
-            .check_command(&PlaceOnlySpotOrderV2Cmd::Single(cmd.place_order.clone()))?;
+        PlaceOnlySpotOrderV2UseCase.check_command(cmd)?;
         Ok(())
     }
 
     fn validate_state_given(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
+        PlaceOnlySpotOrderV2UseCase.validate_state_given(cmd, &())?;
         if state.fee_account_id.is_empty() {
             return Err(PlaceMatchSpotOrderV2Error::InvalidFeeAccountId);
         }
@@ -101,38 +123,44 @@ impl MiStateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let place_cmd = PlaceOnlySpotOrderV2Cmd::Single(cmd.place_order.clone());
-        let place_after = PlaceOnlySpotOrderV2UseCase.compute_state_changed(&place_cmd, &())?;
-        let PlaceOnlySpotOrderV2AfterChanges::Single { created_order } = place_after else {
-            return Err(PlaceMatchSpotOrderV2Error::InvalidPlaceBranch);
-        };
-
-        if !matches!(cmd.place_order.order_type, PlaceOnlySpotOrderV2OrderType::Limit { .. }) {
-            return Ok(PlaceMatchSpotOrderV2AfterChanges::PlacedOnly { created_order });
+        let place_after = PlaceOnlySpotOrderV2UseCase.compute_state_changed(cmd, &())?;
+        match (cmd, place_after) {
+            (
+                PlaceOnlySpotOrderV2Cmd::Single(order_cmd),
+                PlaceOnlySpotOrderV2AfterChanges::Single { created_order },
+            ) => {
+                if !matches!(order_cmd.order_type, PlaceOnlySpotOrderV2OrderType::Limit { .. }) {
+                    return Ok(PlaceMatchSpotOrderV2AfterChanges::SinglePlacedOnly {
+                        created_order,
+                    });
+                }
+                let match_after =
+                    compute_match_after_for_created_taker(order_cmd, created_order.clone(), state)?;
+                Ok(PlaceMatchSpotOrderV2AfterChanges::SinglePlacedAndMatched {
+                    created_taker_order: created_order,
+                    match_after,
+                })
+            }
+            (
+                PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, .. },
+                PlaceOnlySpotOrderV2AfterChanges::NormalTpsl {
+                    created_parent_order,
+                    created_child_orders,
+                },
+            ) => {
+                let match_after = compute_match_after_for_created_taker(
+                    parent,
+                    created_parent_order.clone(),
+                    state,
+                )?;
+                Ok(PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
+                    created_parent_order,
+                    created_child_orders,
+                    match_after,
+                })
+            }
+            _ => Err(PlaceMatchSpotOrderV2Error::InvalidPlaceBranch),
         }
-
-        let match_cmd = MatchSpotOrderV2Cmd {
-            party_id: cmd.place_order.party_id.clone(),
-            asset: cmd.place_order.asset,
-            order_id: cmd.place_order.order_id.clone(),
-        };
-        let match_state = MatchSpotOrderV2State {
-            taker_order: created_order.clone(),
-            maker_orders: state.maker_orders.clone(),
-            settlement_balances: state.settlement_balances.clone(),
-            base_asset_id: cmd.place_order.base_asset_id.clone(),
-            quote_asset_id: cmd.place_order.quote_asset_id.clone(),
-            fee_account_id: state.fee_account_id.clone(),
-            maker_fee_bps: cmd.place_order.maker_fee_bps,
-            taker_fee_bps: cmd.place_order.taker_fee_bps,
-        };
-        let match_after =
-            OpenMatchSpotOrderV2UseCase.compute_state_changed(&match_cmd, &match_state)?;
-
-        Ok(PlaceMatchSpotOrderV2AfterChanges::PlacedAndMatched {
-            created_taker_order: created_order,
-            match_after,
-        })
     }
 }
 
@@ -144,32 +172,68 @@ impl StateMachineOwnedV2Diff for PlaceMatchSpotOrderV2UseCase {
         after: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
         match after {
-            PlaceMatchSpotOrderV2AfterChanges::PlacedOnly { created_order } => {
-                Ok(PlaceMatchSpotOrderV2Changes::PlacedOnly { created_order })
+            PlaceMatchSpotOrderV2AfterChanges::SinglePlacedOnly { created_order } => {
+                Ok(PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order })
             }
-            PlaceMatchSpotOrderV2AfterChanges::PlacedAndMatched {
+            PlaceMatchSpotOrderV2AfterChanges::SinglePlacedAndMatched {
                 created_taker_order,
                 match_after,
-            } => {
-                let match_state = MatchSpotOrderV2State {
-                    taker_order: created_taker_order.clone(),
-                    maker_orders: state.maker_orders,
-                    settlement_balances: state.settlement_balances,
-                    base_asset_id: created_taker_order.reservation.asset_id.clone(),
-                    quote_asset_id: created_taker_order.fee_reservation.asset_id.clone(),
-                    fee_account_id: state.fee_account_id,
-                    maker_fee_bps: 0,
-                    taker_fee_bps: 0,
-                };
-                let match_changes =
-                    OpenMatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?;
-                Ok(PlaceMatchSpotOrderV2Changes::PlacedAndMatched {
-                    created_taker_order,
-                    match_changes,
-                })
-            }
+            } => Ok(PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+                created_taker_order: created_taker_order.clone(),
+                match_changes: compute_match_changes(state, created_taker_order, match_after)?,
+            }),
+            PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
+                created_parent_order,
+                created_child_orders,
+                match_after,
+            } => Ok(PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+                created_parent_order: created_parent_order.clone(),
+                created_child_orders,
+                match_changes: compute_match_changes(state, created_parent_order, match_after)?,
+            }),
         }
     }
+}
+
+fn compute_match_after_for_created_taker(
+    order_cmd: &PlaceOnlySpotOrderV2OrderCmd,
+    created_taker_order: SpotOrderV2,
+    state: &PlaceMatchSpotOrderV2State,
+) -> Result<MatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Error> {
+    let match_cmd = MatchSpotOrderV2Cmd {
+        party_id: order_cmd.party_id.clone(),
+        asset: order_cmd.asset,
+        order_id: order_cmd.order_id.clone(),
+    };
+    let match_state = MatchSpotOrderV2State {
+        taker_order: created_taker_order,
+        maker_orders: state.maker_orders.clone(),
+        settlement_balances: state.settlement_balances.clone(),
+        base_asset_id: order_cmd.base_asset_id.clone(),
+        quote_asset_id: order_cmd.quote_asset_id.clone(),
+        fee_account_id: state.fee_account_id.clone(),
+        maker_fee_bps: order_cmd.maker_fee_bps,
+        taker_fee_bps: order_cmd.taker_fee_bps,
+    };
+    Ok(OpenMatchSpotOrderV2UseCase.compute_state_changed(&match_cmd, &match_state)?)
+}
+
+fn compute_match_changes(
+    state: PlaceMatchSpotOrderV2State,
+    created_taker_order: SpotOrderV2,
+    match_after: MatchSpotOrderV2AfterChanges,
+) -> Result<MatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error> {
+    let match_state = MatchSpotOrderV2State {
+        taker_order: created_taker_order.clone(),
+        maker_orders: state.maker_orders,
+        settlement_balances: state.settlement_balances,
+        base_asset_id: created_taker_order.reservation.asset_id.clone(),
+        quote_asset_id: created_taker_order.fee_reservation.asset_id,
+        fee_account_id: state.fee_account_id,
+        maker_fee_bps: 0,
+        taker_fee_bps: 0,
+    };
+    Ok(OpenMatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?)
 }
 
 #[cfg(test)]
@@ -180,25 +244,23 @@ mod tests {
     use crate::entity::{BalanceLedgerOperation, Reservation, SpotOrderSide, SpotOrderTif};
     use crate::{PlaceOnlySpotOrderV2OrderType, SpotOrderStatus, SpotOrderType};
 
-    fn place_cmd(order_type: PlaceOnlySpotOrderV2OrderType) -> PlaceMatchSpotOrderV2Cmd {
-        PlaceMatchSpotOrderV2Cmd {
-            place_order: PlaceOnlySpotOrderV2OrderCmd {
-                party_id: "buyer".to_string(),
-                asset: 10_001,
-                order_id: "taker-buy".to_string(),
-                symbol: "BTCUSDT".to_string(),
-                is_buy: true,
-                price: "100".to_string(),
-                size: "1".to_string(),
-                order_type,
-                reduce_only: false,
-                cloid: None,
-                base_asset_id: "BTC".to_string(),
-                quote_asset_id: "USDT".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
-            },
-        }
+    fn place_cmd(order_type: PlaceOnlySpotOrderV2OrderType) -> PlaceOnlySpotOrderV2Cmd {
+        PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
+            party_id: "buyer".to_string(),
+            asset: 10_001,
+            order_id: "taker-buy".to_string(),
+            symbol: "BTCUSDT".to_string(),
+            is_buy: true,
+            price: "100".to_string(),
+            size: "1".to_string(),
+            order_type,
+            reduce_only: false,
+            cloid: None,
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+        })
     }
 
     fn test_principal_reservation(
@@ -265,13 +327,15 @@ mod tests {
         };
 
         let changes = PlaceMatchSpotOrderV2UseCase.compute_state_diff(&cmd, state)?;
-        let PlaceMatchSpotOrderV2Changes::PlacedAndMatched { created_taker_order, match_changes } =
-            &changes
+        let PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+            created_taker_order,
+            match_changes,
+        } = &changes
         else {
             panic!("limit order should continue to matching");
         };
 
-        assert_eq!(created_taker_order.order_id(), cmd.place_order.order_id);
+        assert_eq!(created_taker_order.order_id(), "taker-buy");
         assert_eq!(
             match_changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)
@@ -280,6 +344,71 @@ mod tests {
         let events = changes.to_replayable_events()?;
         assert!(events[0].is_created());
         assert!(events.iter().skip(1).any(EntityReplayableEvent::is_created));
+        Ok(())
+    }
+
+    #[test]
+    fn normal_tpsl_parent_is_placed_then_matched_and_children_are_created()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let PlaceOnlySpotOrderV2Cmd::Single(parent) =
+            place_cmd(PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() })
+        else {
+            unreachable!();
+        };
+        let child = PlaceOnlySpotOrderV2OrderCmd {
+            party_id: parent.party_id.clone(),
+            asset: parent.asset,
+            order_id: "tpsl-child".to_string(),
+            symbol: parent.symbol.clone(),
+            is_buy: false,
+            price: "90".to_string(),
+            size: "1".to_string(),
+            order_type: PlaceOnlySpotOrderV2OrderType::Trigger {
+                is_market: false,
+                trigger_price: "90".to_string(),
+                trigger_role: "sl".to_string(),
+            },
+            reduce_only: true,
+            cloid: None,
+            base_asset_id: parent.base_asset_id.clone(),
+            quote_asset_id: parent.quote_asset_id.clone(),
+            maker_fee_bps: parent.maker_fee_bps,
+            taker_fee_bps: parent.taker_fee_bps,
+        };
+        let cmd = PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children: vec![child] };
+        let state = PlaceMatchSpotOrderV2State {
+            maker_orders: vec![sell_order("maker-1", "seller", 100, 1)?],
+            settlement_balances: vec![
+                balance("buyer", "USDT", 101, 0),
+                balance("buyer", "BTC", 0, 0),
+                balance("seller", "BTC", 0, 1),
+                balance("seller", "USDT", 0, 1),
+                balance("fee", "USDT", 0, 0),
+            ],
+            fee_account_id: "fee".to_string(),
+        };
+
+        let changes = PlaceMatchSpotOrderV2UseCase.compute_state_diff(&cmd, state)?;
+        let PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+            created_parent_order,
+            created_child_orders,
+            match_changes,
+        } = &changes
+        else {
+            panic!("normal tpsl parent should continue to matching");
+        };
+
+        assert_eq!(created_parent_order.order_id(), "taker-buy");
+        assert_eq!(
+            created_child_orders.iter().map(SpotOrderV2::order_id).collect::<Vec<_>>(),
+            vec!["tpsl-child"]
+        );
+        assert_eq!(match_changes.created_trades.len(), 1);
+        let events = changes.to_replayable_events()?;
+        assert!(events[0].is_created());
+        assert!(events[1].is_created());
+        assert!(events.iter().skip(2).any(EntityReplayableEvent::is_created));
+        assert!(events.iter().skip(2).any(EntityReplayableEvent::is_updated));
         Ok(())
     }
 
@@ -297,11 +426,11 @@ mod tests {
         };
 
         let changes = PlaceMatchSpotOrderV2UseCase.compute_state_diff(&cmd, state)?;
-        let PlaceMatchSpotOrderV2Changes::PlacedOnly { created_order } = &changes else {
+        let PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order } = &changes else {
             panic!("trigger order should not continue to matching");
         };
 
-        assert_eq!(created_order.order_id(), cmd.place_order.order_id);
+        assert_eq!(created_order.order_id(), "taker-buy");
         let events = changes.to_replayable_events()?;
         assert_eq!(events.len(), 1);
         assert!(events[0].is_created());

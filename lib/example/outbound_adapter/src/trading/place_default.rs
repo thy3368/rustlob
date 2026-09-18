@@ -1,9 +1,9 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
-    MatchSpotOrderV2Cmd, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase, PlaceMatchSpotOrderV2Cmd,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, SpotOrderV2CommandV3,
-    SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
+    MatchSpotOrderV2Cmd, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+    SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -74,7 +74,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbou
 
     fn load_given_state(
         &self,
-        _cmd: &PlaceMatchSpotOrderV2Cmd,
+        _cmd: &PlaceOnlySpotOrderV2Cmd,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }

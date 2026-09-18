@@ -1166,7 +1166,8 @@ mod tests {
             after.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)
         );
-        let changes = OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
+        let changes =
+            OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
         assert!(changes.updated_taker_order.is_none());
         assert_eq!(changes.updated_balances.len(), 5);
     }
