@@ -19,10 +19,10 @@ pub use shared::{
 #[cfg(feature = "test-support")]
 pub use trading::FakeSpotOrderV2CancelOutbound;
 pub use trading::{
-    DefaultSpotOrderV2CancelOutbound, DefaultSpotOrderV2CancelOutboundError,
-    DefaultSpotOrderV2ModifyOutbound, DefaultSpotOrderV2ModifyOutboundError,
-    DefaultSpotOrderV2PlaceOnlyOutbound, DefaultSpotOrderV2PlaceOnlyOutboundError,
-    DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
-    InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for,
-    symbol_for_asset,
+    DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError, DefaultSpotOrderV2CancelOutbound,
+    DefaultSpotOrderV2CancelOutboundError, DefaultSpotOrderV2ModifyOutbound,
+    DefaultSpotOrderV2ModifyOutboundError, DefaultSpotOrderV2PlaceOnlyOutbound,
+    DefaultSpotOrderV2PlaceOnlyOutboundError, DefaultSpotOrderV2PlaceOutbound,
+    DefaultSpotOrderV2PlaceOutboundError, InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound,
+    base_asset_id_for, quote_asset_id_for, symbol_for_asset,
 };

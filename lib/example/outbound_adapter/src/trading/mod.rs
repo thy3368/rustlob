@@ -6,6 +6,7 @@ mod place_default;
 mod place_only_default;
 mod place_order_in_memory;
 mod place_order_mysql;
+mod spot_block_default;
 
 pub use cancel_default::{DefaultSpotOrderV2CancelOutbound, DefaultSpotOrderV2CancelOutboundError};
 #[cfg(feature = "test-support")]
@@ -19,3 +20,4 @@ pub use place_order_in_memory::{
     InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
 };
 pub use place_order_mysql::MySqlPlaceOrderOutbound;
+pub use spot_block_default::{DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError};
