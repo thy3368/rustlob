@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    SpotOrderExecution, SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif,
-    SpotOrderTriggerRole, SpotOrderType, SpotOrderV2, SpotOrderV2BehaviorError,
+    SpotOrderExecution, SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif, SpotOrderTriggerRole,
+    SpotOrderType, SpotOrderV2, SpotOrderV2BehaviorError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -334,8 +334,7 @@ fn build_order(
             } else {
                 SpotOrderExecution::Limit { price }
             };
-            let tif =
-                if *is_market { SpotOrderTif::Ioc } else { SpotOrderTif::Gtc };
+            let tif = if *is_market { SpotOrderTif::Ioc } else { SpotOrderTif::Gtc };
             let mut created = SpotOrderV2::new_trigger_pending(
                 order.order_id.clone(),
                 order.asset,
@@ -495,11 +494,9 @@ mod tests {
     #[test]
     fn creates_limit_and_trigger_orders_without_side_effect_facts()
     -> Result<(), PlaceOnlySpotOrderV2Error> {
-        for (tif, expected_tif) in [
-            ("gtc", SpotOrderTif::Gtc),
-            ("Alo", SpotOrderTif::Alo),
-            ("Ioc", SpotOrderTif::Ioc),
-        ] {
+        for (tif, expected_tif) in
+            [("gtc", SpotOrderTif::Gtc), ("Alo", SpotOrderTif::Alo), ("Ioc", SpotOrderTif::Ioc)]
+        {
             let order = single_order(limit_cmd(tif))?;
             assert!(matches!(order.state, SpotOrderState::Open { .. }));
             assert_eq!(order.status, SpotOrderStatus::Open);
@@ -508,9 +505,7 @@ mod tests {
             assert!(order.fee_reservation.is_active());
         }
 
-        for (is_market, expected_tif) in
-            [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)]
-        {
+        for (is_market, expected_tif) in [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)] {
             let order = single_order(trigger_cmd("trigger-1", is_market))?;
             assert_eq!(order.state, SpotOrderState::TriggerPending);
             assert_eq!(order.status, SpotOrderStatus::Pending);

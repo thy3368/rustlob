@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
-    ReplayableChanges,
+    Entity, EntityReplayableEvent, MiStateMachineV2Unchecked, ReplayableChanges,
+    StateMachineOwnedV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{
@@ -23,8 +23,7 @@ use crate::entity::{
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{
-    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTif,
-    SpotTrade,
+    MatchSpotOrderV2Input, PlaceSpotOrderV2Input, SpotOrderExecution, SpotOrderTif, SpotTrade,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1184,7 +1183,7 @@ impl BalanceMap {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{StateMachineOwnedV2Diff, MiStateMachineV2};
+    use common_entity::{MiStateMachineV2, StateMachineOwnedV2Diff};
 
     use super::*;
     use crate::{SpotOrderExecution, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif};

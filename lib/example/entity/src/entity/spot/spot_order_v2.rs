@@ -2202,7 +2202,12 @@ impl FieldDiff for SpotOrderV2 {
         push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "symbol", &self.symbol, &other.symbol);
         push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
-        push_change(&mut changes, "execution", self.execution().as_str(), other.execution().as_str());
+        push_change(
+            &mut changes,
+            "execution",
+            self.execution().as_str(),
+            other.execution().as_str(),
+        );
         push_change(
             &mut changes,
             "time_in_force",

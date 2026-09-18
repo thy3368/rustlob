@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, StateMachineOwnedV2Diff, MiStateMachineV2Unchecked,
-    ReplayableChanges,
+    Entity, EntityReplayableEvent, MiStateMachineV2Unchecked, ReplayableChanges,
+    StateMachineOwnedV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -548,7 +548,7 @@ fn map_reservation_error_to_cancel(error: crate::ReservationError) -> CancelSpot
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{StateMachineOwnedV2Diff, ReplayableChanges};
+    use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff};
 
     use super::*;
     use crate::{
