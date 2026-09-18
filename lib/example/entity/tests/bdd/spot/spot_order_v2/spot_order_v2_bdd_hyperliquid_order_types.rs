@@ -136,7 +136,7 @@ fn trigger_limit_tp_has_no_hold_until_trigger_then_becomes_gtc()
     let mut order = outcome.order;
 
     assert!(outcome.freeze_ledger_entry.is_none());
-    assert!(order.is_trigger_pending());
+    assert!(order.is_pending());
     assert_eq!(order.status, SpotOrderStatus::Pending);
     assert!(order.active_reservation().is_none());
     assert_eq!(order.fill(1), Err(SpotOrderV2MatchError::OrderNotMatchable));
@@ -147,7 +147,7 @@ fn trigger_limit_tp_has_no_hold_until_trigger_then_becomes_gtc()
         maker_fee_bps: 2,
         taker_fee_bps: 5,
     })?;
-    assert!(!order.is_trigger_pending());
+    assert!(!order.is_pending());
     assert!(order.active_reservation().is_some());
     assert_eq!(order.time_in_force(), example_core_entity::SpotOrderTif::Gtc);
     assert_eq!(order.version, 2);
@@ -222,7 +222,7 @@ fn normal_tpsl_atomically_creates_parent_and_tp_sl_children()
                 parent_order_id: outcome.parent.order.order_id.clone(),
             }
         );
-        assert!(child.order.is_trigger_pending());
+        assert!(child.order.is_pending());
         assert_eq!(child.order.status, SpotOrderStatus::Pending);
         assert!(child.order.active_reservation().is_none());
         assert!(child.freeze_ledger_entry.is_none());

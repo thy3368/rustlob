@@ -426,7 +426,7 @@ impl MiStateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
                 if fee_account_id.is_empty() {
                     return Err(SpotOrderV2UseCaseFamilyV3Error::InvalidFeeAccountId);
                 }
-                if !order.is_trigger_pending() {
+                if !order.is_pending() {
                     return Err(SpotOrderV2UseCaseFamilyV3Error::OrderNotTriggerPending);
                 }
                 let mut triggered = order.clone();

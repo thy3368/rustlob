@@ -1,4 +1,3 @@
-use example_core_entity::spot::spot_order_v2::SpotOrderState;
 use example_core_entity::*;
 
 fn trigger_pending_order() -> SpotOrderV2 {
@@ -68,7 +67,7 @@ fn given_trigger_pending_order_when_created_then_it_has_no_reservation_and_canno
     let mut order = trigger_pending_order();
     let mut makers = vec![maker_sell_order()];
 
-    assert!(order.is_trigger_pending());
+    assert!(order.is_pending());
     assert_eq!(order.status(), SpotOrderStatus::Pending);
     assert_eq!(order.active_reservation(), None);
     assert_eq!(order.active_fee_reservation(), None);
@@ -97,7 +96,6 @@ fn given_trigger_pending_order_when_triggered_then_active_order_state_is_created
         taker_fee_bps: 10,
     })?;
 
-    assert!(matches!(order.state, SpotOrderState::Open { .. }));
     assert_eq!(order.status(), SpotOrderStatus::Open);
     assert_eq!(order.status_reason(), None);
     assert_eq!(
@@ -117,7 +115,6 @@ fn given_trigger_pending_order_when_canceled_then_only_trigger_rule_is_canceled(
         balance_entity_id: "balance:trader-1:USDT".to_string(),
     })?;
 
-    assert!(matches!(order.state, SpotOrderState::Canceled { .. }));
     assert_eq!(order.status(), SpotOrderStatus::Canceled);
     assert_eq!(order.status_reason(), Some(SpotOrderStatusReason::CanceledByUser));
     assert_eq!(outcome.unfreeze_ledger_entry, None);
@@ -140,10 +137,9 @@ fn given_active_order_when_matching_then_active_state_advances_without_trigger_f
     )?;
 
     assert_eq!(outcome.trades.len(), 1);
-    assert!(matches!(taker.state, SpotOrderState::PartiallyFilled { .. }));
     assert_eq!(taker.filled_qty(), 1);
     assert_eq!(taker.status(), SpotOrderStatus::PartiallyFilled);
-    assert!(!taker.is_trigger_pending());
+    assert!(!taker.is_pending());
     Ok(())
 }
 
@@ -161,6 +157,5 @@ fn given_active_order_when_canceled_then_reservation_is_released()
     assert_eq!(unfreeze_ledger_entry.amount, 200);
     assert_eq!(order.reservation.remaining_amount, 0);
     assert_eq!(order.status(), SpotOrderStatus::Canceled);
-    assert!(matches!(order.state, SpotOrderState::Canceled { .. }));
     Ok(())
 }

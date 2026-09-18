@@ -1,4 +1,3 @@
-use example_core_entity::spot::spot_order_v2::SpotOrderState;
 use example_core_entity::{SettlementKind, SettlementTransferPurpose, *};
 
 fn trigger_pending_buy_order() -> SpotOrderV2 {
@@ -65,7 +64,7 @@ fn given_trigger_pending_order_when_match_is_attempted_before_trigger_then_it_is
         taker.match_with_makers(makers.as_mut_slice(), match_input("match-before-trigger")),
         Err(SpotOrderV2BehaviorError::OrderNotMatchable)
     );
-    assert!(taker.is_trigger_pending());
+    assert!(taker.is_pending());
     assert_eq!(taker.status(), SpotOrderStatus::Pending);
     assert_eq!(taker.filled_qty(), 0);
     assert_eq!(taker.version, 1);
@@ -87,7 +86,6 @@ fn given_trigger_pending_buy_order_when_triggered_without_crossing_maker_then_it
         taker.match_with_makers(makers.as_mut_slice(), match_input("match-non-crossing"))?;
 
     // Then: 订单已进入 active，可挂单等待后续撮合；本轮不产生成交事实。
-    assert!(matches!(taker.state, SpotOrderState::Open { .. }));
     assert_eq!(taker.status(), SpotOrderStatus::Open);
     assert_eq!(taker.status_reason(), None);
     assert_eq!(

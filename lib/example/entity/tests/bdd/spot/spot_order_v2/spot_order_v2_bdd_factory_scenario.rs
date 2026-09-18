@@ -1,4 +1,3 @@
-use example_core_entity::spot::spot_order_v2::SpotOrderState;
 use example_core_entity::*;
 
 fn factory_entry_parent_order() -> SpotOrderV2 {
@@ -95,7 +94,7 @@ fn assert_same_market_and_owner(parent: &SpotOrderV2, child: &SpotOrderV2) {
 }
 
 fn assert_tpsl_child_shape(parent: &SpotOrderV2, child: &SpotOrderV2) {
-    assert!(child.is_trigger_pending());
+    assert!(child.is_pending());
     assert_eq!(child.status(), SpotOrderStatus::Pending);
     assert_same_market_and_owner(parent, child);
     assert_ne!(child.side, parent.side);
@@ -106,7 +105,6 @@ fn assert_tpsl_child_shape(parent: &SpotOrderV2, child: &SpotOrderV2) {
 fn given_factory_parent_with_tp_sl_when_created_then_three_spot_order_v2_orders_exist() {
     let (parent, take_profit, stop_loss) = factory_parent_with_tpsl_orders();
 
-    assert!(matches!(parent.state, SpotOrderState::Open { .. }));
     assert_eq!(parent.status(), SpotOrderStatus::Open);
 
     assert_tpsl_child_shape(&parent, &take_profit);
@@ -157,7 +155,7 @@ fn given_factory_child_when_triggered_then_it_becomes_active_spot_order_v2()
 -> Result<(), SpotOrderV2BehaviorError> {
     let (_parent, mut take_profit, _stop_loss) = factory_parent_with_tpsl_orders();
 
-    assert!(take_profit.is_trigger_pending());
+    assert!(take_profit.is_pending());
     assert_eq!(take_profit.active_reservation(), None);
 
     take_profit.trigger(TriggerSpotOrderV2Input {
@@ -167,7 +165,6 @@ fn given_factory_child_when_triggered_then_it_becomes_active_spot_order_v2()
         taker_fee_bps: 10,
     })?;
 
-    assert!(matches!(take_profit.state, SpotOrderState::Open { .. }));
     assert_eq!(take_profit.status(), SpotOrderStatus::Open);
     assert_eq!(take_profit.status_reason(), None);
     assert_eq!(

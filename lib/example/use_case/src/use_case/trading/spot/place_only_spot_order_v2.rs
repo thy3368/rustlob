@@ -388,7 +388,7 @@ mod tests {
     use common_entity::StateMachineOwnedV2Diff;
 
     use super::*;
-    use crate::entity::{ReservationStatus, SpotOrderState, SpotOrderStatus};
+    use crate::entity::{ReservationStatus, SpotOrderStatus};
 
     fn limit_cmd(tif: &str) -> PlaceOnlySpotOrderV2OrderCmd {
         PlaceOnlySpotOrderV2OrderCmd {
@@ -498,18 +498,18 @@ mod tests {
             [("gtc", SpotOrderTif::Gtc), ("Alo", SpotOrderTif::Alo), ("Ioc", SpotOrderTif::Ioc)]
         {
             let order = single_order(limit_cmd(tif))?;
-            assert!(matches!(order.state, SpotOrderState::Open { .. }));
             assert_eq!(order.status, SpotOrderStatus::Open);
-            assert_eq!(order.time_in_force, expected_tif);
+            assert!(order.active_reservation().is_some());
+            assert_eq!(order.time_in_force(), expected_tif);
             assert!(order.reservation.is_active());
             assert!(order.fee_reservation.is_active());
         }
 
         for (is_market, expected_tif) in [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)] {
             let order = single_order(trigger_cmd("trigger-1", is_market))?;
-            assert_eq!(order.state, SpotOrderState::TriggerPending);
+            assert!(order.is_trigger_pending());
             assert_eq!(order.status, SpotOrderStatus::Pending);
-            assert_eq!(order.time_in_force, expected_tif);
+            assert_eq!(order.time_in_force(), expected_tif);
             assert_eq!(order.reservation.status, ReservationStatus::ClosedByRelease);
             assert_eq!(order.fee_reservation.status, ReservationStatus::ClosedByRelease);
             assert_eq!(order.reservation.remaining_amount, 0);
@@ -542,7 +542,7 @@ mod tests {
         assert_eq!(created_parent_order.group_relation, SpotOrderGroupRelation::NormalTpslParent);
         assert_eq!(created_child_orders.len(), 2);
         for child in created_child_orders {
-            assert_eq!(child.state, SpotOrderState::TriggerPending);
+            assert!(child.is_trigger_pending());
             assert_eq!(child.status, SpotOrderStatus::Pending);
             assert!(child.reduce_only);
             assert_ne!(child.side, created_parent_order.side);

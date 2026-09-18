@@ -159,7 +159,7 @@ fn given_conditional_order_command_when_placed_then_trigger_pending_order_is_cre
     };
 
     assert_eq!(changes.created_order, order_template);
-    assert!(changes.created_order.is_trigger_pending());
+    assert!(changes.created_order.is_pending());
     assert_eq!(changes.created_order.status(), SpotOrderStatus::Pending);
     assert!(changes.created_order.active_reservation().is_none());
     assert!(changes.created_order.active_fee_reservation().is_none());
@@ -179,8 +179,8 @@ fn given_trigger_pending_order_when_triggered_then_order_becomes_active_and_free
         panic!("expected trigger changes");
     };
 
-    assert!(changes.updated_order.before.is_trigger_pending());
-    assert!(!changes.updated_order.after.is_trigger_pending());
+    assert!(changes.updated_order.before.is_pending());
+    assert!(!changes.updated_order.after.is_pending());
     assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Open);
     assert_eq!(changes.updated_order.after.status_reason(), Some(SpotOrderStatusReason::Triggered));
     assert_eq!(changes.updated_order.after.reservation.original_amount, 200);

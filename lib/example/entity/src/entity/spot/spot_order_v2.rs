@@ -432,15 +432,6 @@ pub struct SpotOrderIdentity {
     pub client_order_id: Option<String>,
 }
 
-/// `SpotOrderV2` 跨生命周期共享的业务事实。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotOrderCommonFacts {
-    /// 买卖方向。
-    pub side: SpotOrderSide,
-    /// 以 base asset 计价的下单数量。
-    pub qty: u64,
-}
-
 /// 现货订单在 `normalTpsl` 中承担的关系角色。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SpotOrderGroupRelation {
@@ -463,25 +454,6 @@ impl SpotOrderGroupRelation {
             }
         }
     }
-}
-
-/// `SpotOrderV2` 的唯一权威状态。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderState {
-    /// 条件单已接受，等待触发；不冻结、不撮合。
-    TriggerPending,
-    /// 普通订单已进入执行流程，尚未成交。
-    Open { reservation: Reservation, fee_reservation: Reservation },
-    /// 普通订单已部分成交，剩余数量仍在业务上可撤。
-    PartiallyFilled { filled_qty: u64, reservation: Reservation, fee_reservation: Reservation },
-    /// 订单已完全成交。
-    Filled { filled_qty: u64, reason: SpotOrderStatusReason },
-    /// 订单已取消。
-    Canceled { filled_qty: u64, reason: SpotOrderStatusReason },
-    /// 订单提交或触发时被拒绝。
-    Rejected { reason: SpotOrderStatusReason },
-    /// 条件单或订单已过期。
-    Expired { filled_qty: u64, reason: SpotOrderStatusReason },
 }
 
 /// 条件单触发输入。
@@ -514,12 +486,6 @@ pub struct SpotOrderV2 {
     /// 订单身份事实。
     #[serde(skip, default = "SpotOrderV2::serde_default_identity")]
     pub identity: SpotOrderIdentity,
-    /// 跨条件单/普通单共享的业务事实。
-    #[serde(skip, default = "SpotOrderV2::serde_default_common")]
-    pub common: SpotOrderCommonFacts,
-    /// 订单生命周期权威状态。
-    #[serde(default = "SpotOrderV2::serde_default_state")]
-    pub state: SpotOrderState,
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
@@ -575,26 +541,6 @@ impl SpotOrderV2 {
             symbol: String::with_capacity(0),
             client_order_id: None,
         }
-    }
-
-    fn serde_default_common() -> SpotOrderCommonFacts {
-        SpotOrderCommonFacts { side: SpotOrderSide::Buy, qty: 0 }
-    }
-
-    fn serde_default_state() -> SpotOrderState {
-        let reservation = Self::empty_trigger_reservation(
-            "serde-default",
-            "",
-            ReservationKind::SpotBuyQuote,
-            "UNRESERVED",
-        );
-        let fee_reservation = Self::empty_trigger_reservation(
-            "serde-default:fee",
-            "",
-            ReservationKind::SpotBuyFeeQuote,
-            "UNRESERVED",
-        );
-        SpotOrderState::Open { reservation, fee_reservation }
     }
 
     fn serde_default_order_type() -> SpotOrderType {
@@ -682,27 +628,8 @@ impl SpotOrderV2 {
             symbol: symbol.clone(),
             client_order_id: client_order_id.clone(),
         };
-        let common = SpotOrderCommonFacts { side, qty };
-        let reason = status_reason.unwrap_or(SpotOrderStatusReason::RejectedAtPlacement);
-        let state = match status {
-            SpotOrderStatus::Pending => SpotOrderState::TriggerPending,
-            SpotOrderStatus::Open => SpotOrderState::Open {
-                reservation: reservation.clone(),
-                fee_reservation: fee_reservation.clone(),
-            },
-            SpotOrderStatus::PartiallyFilled => SpotOrderState::PartiallyFilled {
-                filled_qty,
-                reservation: reservation.clone(),
-                fee_reservation: fee_reservation.clone(),
-            },
-            SpotOrderStatus::Filled => SpotOrderState::Filled { filled_qty, reason },
-            SpotOrderStatus::Canceled => SpotOrderState::Canceled { filled_qty, reason },
-            SpotOrderStatus::Rejected => SpotOrderState::Rejected { reason },
-        };
         Self {
             identity,
-            common,
-            state,
             order_id,
             asset,
             exchange_oid,
@@ -807,8 +734,6 @@ impl SpotOrderV2 {
             symbol: symbol.clone(),
             client_order_id: client_order_id.clone(),
         };
-        let common = SpotOrderCommonFacts { side, qty };
-        let state = SpotOrderState::TriggerPending;
         let reservation = Self::empty_trigger_reservation(
             order_id.as_str(),
             account_id.as_str(),
@@ -823,8 +748,6 @@ impl SpotOrderV2 {
         );
         Self {
             identity,
-            common,
-            state,
             order_id,
             asset,
             exchange_oid,
@@ -1083,7 +1006,7 @@ impl SpotOrderV2 {
         &mut self,
         input: TriggerSpotOrderV2Input,
     ) -> Result<(), SpotOrderV2BehaviorError> {
-        if !matches!(self.state, SpotOrderState::TriggerPending) {
+        if !self.is_pending() {
             return Err(SpotOrderV2BehaviorError::OrderNotMatchable);
         }
         if !matches!(self.order_type, SpotOrderType::Trigger { .. }) {
@@ -1113,14 +1036,10 @@ impl SpotOrderV2 {
 
         self.filled_qty = 0;
         self.status = SpotOrderStatus::Open;
-        self.status_reason = Some(SpotOrderStatusReason::Triggered);
+        self.status_reason = None;
         self.reservation = reservation;
         self.fee_reservation = fee_reservation;
         self.version = next_version;
-        self.state = SpotOrderState::Open {
-            reservation: self.reservation.clone(),
-            fee_reservation: self.fee_reservation.clone(),
-        };
         Ok(())
     }
 
@@ -1307,28 +1226,12 @@ impl SpotOrderV2 {
 
     /// 返回 Hyperliquid 细分状态原因。
     pub fn status_reason(&self) -> Option<SpotOrderStatusReason> {
-        match self.state {
-            SpotOrderState::Filled { reason, .. }
-            | SpotOrderState::Canceled { reason, .. }
-            | SpotOrderState::Expired { reason, .. }
-            | SpotOrderState::Rejected { reason } => Some(reason),
-            SpotOrderState::TriggerPending
-            | SpotOrderState::Open { .. }
-            | SpotOrderState::PartiallyFilled { .. } => None,
-        }
+        self.status_reason
     }
 
     /// 返回订单当前已经成交的数量。
     pub fn filled_qty(&self) -> u64 {
-        match self.state {
-            SpotOrderState::TriggerPending
-            | SpotOrderState::Open { .. }
-            | SpotOrderState::Rejected { .. } => 0,
-            SpotOrderState::PartiallyFilled { filled_qty, .. }
-            | SpotOrderState::Filled { filled_qty, .. }
-            | SpotOrderState::Canceled { filled_qty, .. }
-            | SpotOrderState::Expired { filled_qty, .. } => filled_qty,
-        }
+        self.filled_qty
     }
 
     /// 返回交易所确认后的 numeric `oid`。
@@ -1337,25 +1240,25 @@ impl SpotOrderV2 {
     }
 
     /// 返回订单是否仍是未触发条件单。
-    pub fn is_trigger_pending(&self) -> bool {
-        matches!(self.state, SpotOrderState::TriggerPending)
+    pub fn is_pending(&self) -> bool {
+        self.status == SpotOrderStatus::Pending
     }
 
     /// 返回 active lifecycle 的 principal reservation；未触发条件单返回 `None`。
     pub fn active_reservation(&self) -> Option<&Reservation> {
-        match &self.state {
-            SpotOrderState::Open { reservation, .. }
-            | SpotOrderState::PartiallyFilled { reservation, .. } => Some(reservation),
-            _ => None,
+        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+            Some(&self.reservation)
+        } else {
+            None
         }
     }
 
     /// 返回 active lifecycle 的 fee reservation；未触发条件单返回 `None`。
     pub fn active_fee_reservation(&self) -> Option<&Reservation> {
-        match &self.state {
-            SpotOrderState::Open { fee_reservation, .. }
-            | SpotOrderState::PartiallyFilled { fee_reservation, .. } => Some(fee_reservation),
-            _ => None,
+        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+            Some(&self.fee_reservation)
+        } else {
+            None
         }
     }
 
@@ -1693,12 +1596,6 @@ impl SpotOrderV2 {
 
     /// 校验订单当前是否仍然允许进入撮合。
     pub fn ensure_matchable(&self) -> Result<(), SpotOrderV2MatchError> {
-        if !matches!(
-            self.state,
-            SpotOrderState::Open { .. } | SpotOrderState::PartiallyFilled { .. }
-        ) {
-            return Err(SpotOrderV2MatchError::OrderNotMatchable);
-        }
         if !self.has_consistent_execution_state() {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
@@ -1783,27 +1680,6 @@ impl SpotOrderV2 {
         self.version = next_version;
         self.status = status;
         self.status_reason = status_reason;
-        let reason = status_reason.unwrap_or(SpotOrderStatusReason::RejectedAtPlacement);
-        self.state = match status {
-            SpotOrderStatus::Pending => SpotOrderState::TriggerPending,
-            SpotOrderStatus::Open => SpotOrderState::Open {
-                reservation: self.reservation.clone(),
-                fee_reservation: self.fee_reservation.clone(),
-            },
-            SpotOrderStatus::PartiallyFilled => SpotOrderState::PartiallyFilled {
-                filled_qty: self.filled_qty,
-                reservation: self.reservation.clone(),
-                fee_reservation: self.fee_reservation.clone(),
-            },
-            SpotOrderStatus::Filled => SpotOrderState::Filled {
-                filled_qty: self.filled_qty,
-                reason: status_reason.unwrap_or(SpotOrderStatusReason::Filled),
-            },
-            SpotOrderStatus::Canceled => {
-                SpotOrderState::Canceled { filled_qty: self.filled_qty, reason }
-            }
-            SpotOrderStatus::Rejected => SpotOrderState::Rejected { reason },
-        };
     }
 
     fn next_version(&self) -> Result<u64, SpotOrderV2MatchError> {
@@ -1906,22 +1782,15 @@ impl SpotOrderV2 {
         &mut self,
         input: CancelSpotOrderV2Input,
     ) -> Result<CancelSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
-        if matches!(self.state, SpotOrderState::TriggerPending) {
+        if self.is_pending() {
             let next_version = self.next_version()?;
             self.version = next_version;
             self.status = SpotOrderStatus::Canceled;
             self.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
-            self.state = SpotOrderState::Canceled {
-                filled_qty: 0,
-                reason: SpotOrderStatusReason::CanceledByUser,
-            };
             return Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: None });
         }
 
-        if !matches!(
-            self.state,
-            SpotOrderState::Open { .. } | SpotOrderState::PartiallyFilled { .. }
-        ) {
+        if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
             return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
         }
 
@@ -2521,7 +2390,6 @@ mod tests {
 
     fn pending_order() -> SpotOrderV2 {
         SpotOrderV2 {
-            state: SpotOrderState::TriggerPending,
             status: SpotOrderStatus::Pending,
             reservation: SpotOrderV2::empty_trigger_reservation(
                 "pending-order",
