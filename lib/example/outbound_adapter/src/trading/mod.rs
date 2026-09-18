@@ -1,6 +1,7 @@
 mod cancel_default;
 #[cfg(feature = "test-support")]
 mod cancel_fake;
+mod modify_default;
 mod place_default;
 mod place_only_default;
 mod place_order_in_memory;
@@ -9,6 +10,7 @@ mod place_order_mysql;
 pub use cancel_default::{DefaultSpotOrderV2CancelOutbound, DefaultSpotOrderV2CancelOutboundError};
 #[cfg(feature = "test-support")]
 pub use cancel_fake::FakeSpotOrderV2CancelOutbound;
+pub use modify_default::{DefaultSpotOrderV2ModifyOutbound, DefaultSpotOrderV2ModifyOutboundError};
 pub use place_default::{DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError};
 pub use place_only_default::{
     DefaultSpotOrderV2PlaceOnlyOutbound, DefaultSpotOrderV2PlaceOnlyOutboundError,

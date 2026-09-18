@@ -1,18 +1,19 @@
+use cmd_handler::command_use_case_def2::{MiFamilyExecutionError, MiFamilyExecutionSpec};
+use example_core_use_case::{
+    ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+pub use use_case_executor::trading::spot::modify_spot_order_v2_executor::execute_modify_spot_order_v2;
 
-use crate::command::exchange::actions::order::reply::{
-    OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
-    RestingOrderStatusWire,
-};
+use crate::command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
+use crate::command::exchange::actions::order::reply::{OrderStatusWire, RestingOrderStatusWire};
 use crate::command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
 use crate::command::exchange::common::validate::{validate_cloid, validate_envelope_common};
-use crate::command::exchange::common::wire::ExchangeRequestEnvelopeWire;
+use crate::command::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
 use crate::command::exchange::error::ExchangeHttpError;
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
-
-const STUB_MODIFIED_OID: u64 = 77738309;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ModifyContractError {
@@ -93,6 +94,55 @@ struct TriggerWire {
     tpsl: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModifySpotOrderV2Request {
+    pub party_id: String,
+    pub asset: u32,
+    pub order_id: OrderId,
+    pub is_buy: bool,
+    pub price: String,
+    pub size: String,
+    pub order_type: ModifySpotOrderV2OrderType,
+    pub cloid: Option<String>,
+}
+
+impl ModifySpotOrderV2Request {
+    fn from_wire_modify(
+        party_id: String,
+        action: &ActionWire,
+    ) -> Result<Self, ModifyContractError> {
+        Ok(Self {
+            party_id,
+            asset: action.order.a,
+            order_id: order_id_from_wire_oid(&action.oid)?,
+            is_buy: action.order.b,
+            price: decimal_wire_to_core_units(&action.order.p),
+            size: decimal_wire_to_core_units(&action.order.s),
+            order_type: modify_order_type_from_wire(&action.order.t)?,
+            cloid: action.order.c.clone(),
+        })
+    }
+}
+
+pub struct SpotOrderV2ModifyExecutionSpec;
+
+impl MiFamilyExecutionSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
+    type Request = ModifySpotOrderV2Request;
+
+    fn command(request: &Self::Request) -> ModifySpotOrderV2Cmd {
+        ModifySpotOrderV2Cmd {
+            party_id: request.party_id.clone(),
+            asset: request.asset,
+            order_id: request.order_id.clone(),
+            is_buy: request.is_buy,
+            price: request.price.clone(),
+            size: request.size.clone(),
+            order_type: request.order_type.clone(),
+            cloid: request.cloid.clone(),
+        }
+    }
+}
+
 pub(crate) struct ModifyAction;
 
 impl ExchangeActionHandler for ModifyAction {
@@ -168,21 +218,89 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     Ok(())
 }
 
-async fn execute(_request: RequestWire) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
-    // 官方文档未给出 modify 成功响应示例。
-    // 官方 Python SDK 的 basic_order_modify.py 只打印 modify_result，没有对 shape 做任何断言。
-    // 这里先采用与 order 一致的最小成功形状并固定在测试中。
-    Ok(OrderResponseWire {
-        status: "ok",
-        response: OrderResponseEnvelopeWire {
-            type_: "order",
-            data: OrderResponseDataWire {
-                statuses: vec![OrderStatusWire::Resting {
-                    resting: RestingOrderStatusWire { oid: STUB_MODIFIED_OID },
-                }],
+fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, ModifyContractError> {
+    if let Some(oid) = oid.as_u64() {
+        if oid > 0 {
+            return Ok(OrderId::Oid(oid));
+        }
+    }
+    if let Some(cloid) = oid.as_str() {
+        if validate_cloid(cloid).is_ok() {
+            return Ok(OrderId::Cloid(cloid.to_string()));
+        }
+    }
+    Err(ModifyContractError::InvalidOid)
+}
+
+fn modify_order_type_from_wire(
+    order_type: &OrderTypeWire,
+) -> Result<ModifySpotOrderV2OrderType, ModifyContractError> {
+    match (&order_type.limit, &order_type.trigger) {
+        (Some(limit), None) => Ok(ModifySpotOrderV2OrderType::Limit { tif: limit.tif.clone() }),
+        (None, Some(trigger)) => Ok(ModifySpotOrderV2OrderType::Trigger {
+            is_market: trigger.is_market,
+            trigger_price: decimal_wire_to_core_units(&trigger.trigger_px),
+            trigger_role: trigger.tpsl.clone(),
+        }),
+        _ => Err(ModifyContractError::InvalidOrderType),
+    }
+}
+
+fn decimal_wire_to_core_units(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let mut seen_dot = false;
+    let mut normalized = String::with_capacity(trimmed.len());
+
+    for ch in trimmed.chars() {
+        if ch == '.' {
+            if seen_dot {
+                return raw.to_string();
+            }
+            seen_dot = true;
+            continue;
+        }
+        if !ch.is_ascii_digit() {
+            return raw.to_string();
+        }
+        normalized.push(ch);
+    }
+
+    if normalized.is_empty() { raw.to_string() } else { normalized }
+}
+
+async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+    let modify_request = ModifySpotOrderV2Request::from_wire_modify(party_id, &request.action)
+        .map_err(ExchangeHttpError::contract)?;
+    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+    let status = match execute_modify_spot_order_v2(&command) {
+        Ok(result) => OrderStatusWire::Resting {
+            resting: RestingOrderStatusWire {
+                oid: result.changes.updated_order.after.exchange_oid().unwrap_or(0),
             },
         },
-    })
+        Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
+    };
+
+    Ok(ok_statuses_response("order", vec![status]))
+}
+
+fn modify_execution_error_message<BE, OE>(error: MiFamilyExecutionError<BE, OE>) -> String
+where
+    BE: std::fmt::Display,
+    OE: std::fmt::Display,
+{
+    match error {
+        MiFamilyExecutionError::Business(error) => error.to_string(),
+        MiFamilyExecutionError::ProjectEvents(error) => {
+            format!("project replayable events failed: {error}")
+        }
+        MiFamilyExecutionError::LoadState(error) => format!("load_state failed: {error}"),
+        MiFamilyExecutionError::Persist(error) => format!("persist failed: {error}"),
+        MiFamilyExecutionError::Replay(error) => format!("replay failed: {error}"),
+        MiFamilyExecutionError::Publish(error) => format!("publish failed: {error}"),
+    }
 }
 
 #[cfg(test)]
@@ -226,6 +344,81 @@ mod tests {
         assert_eq!(error.to_string(), "Invalid `action.a`. `a` must be omitted when false.");
     }
 
+    #[test]
+    fn maps_oid_request_to_modify_command() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
+            .expect("request parses");
+        let modify_request =
+            ModifySpotOrderV2Request::from_wire_modify("buyer".to_string(), &request.action)
+                .expect("modify request should build");
+
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+
+        assert_eq!(command.party_id, "buyer");
+        assert_eq!(command.asset, 10_000);
+        assert_eq!(command.order_id, OrderId::Oid(77738308));
+        assert!(command.is_buy);
+        assert_eq!(command.price, "18914");
+        assert_eq!(command.size, "002");
+        assert_eq!(
+            command.order_type,
+            ModifySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() }
+        );
+    }
+
+    #[test]
+    fn maps_cloid_lookup_request_to_modify_command() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "modify",
+                    "oid": "0x1234567890abcdef1234567890abcdef",
+                    "order": {
+                        "a": 10000,
+                        "b": false,
+                        "p": "1891.4",
+                        "s": "0.02",
+                        "r": false,
+                        "t": {
+                            "trigger": {
+                                "isMarket": true,
+                                "triggerPx": "1900.5",
+                                "tpsl": "tp"
+                            }
+                        },
+                        "c": "0xfedcba0987654321fedcba0987654321"
+                    }
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("request parses");
+        let modify_request =
+            ModifySpotOrderV2Request::from_wire_modify("seller".to_string(), &request.action)
+                .expect("modify request should build");
+
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+
+        assert_eq!(
+            command.order_id,
+            OrderId::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
+        );
+        assert_eq!(command.cloid.as_deref(), Some("0xfedcba0987654321fedcba0987654321"));
+        assert_eq!(
+            command.order_type,
+            ModifySpotOrderV2OrderType::Trigger {
+                is_market: true,
+                trigger_price: "19005".to_string(),
+                trigger_role: "tp".to_string(),
+            }
+        );
+    }
+
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
         let response = execute(
@@ -237,7 +430,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"resting\": {\n            \"oid\": 77738309\n          }\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
         );
     }
 
