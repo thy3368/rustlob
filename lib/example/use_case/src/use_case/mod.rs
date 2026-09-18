@@ -31,7 +31,7 @@ pub use trading::{
     HyperliquidPerpOrderDetailView, HyperliquidPerpRiskSnapshot, MatchHyperliquidPerpOrderChanges,
     MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
     MatchHyperliquidPerpOrderUseCase, MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes,
-    MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
+    MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
     PlaceHyperliquidPerpOrderChanges, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
     PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
     PlaceHyperliquidPerpOrderUseCase, PlaceMatchSpotOrderV2AfterChanges,

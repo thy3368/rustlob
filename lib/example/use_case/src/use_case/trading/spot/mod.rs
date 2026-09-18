@@ -1,5 +1,5 @@
 pub mod cancel_spot_order_v2;
-pub mod match_spot_order_v2;
+pub mod open_match_spot_order_v2;
 pub mod place_match_spot_order_v2;
 pub mod place_only_spot_order_v2;
 
@@ -12,9 +12,9 @@ pub use cancel_spot_order_v2::{
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase,
 };
-pub use match_spot_order_v2::{
+pub use open_match_spot_order_v2::{
     MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
-    MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
+    MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
 };
 pub use place_match_spot_order_v2::{
     PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Cmd,

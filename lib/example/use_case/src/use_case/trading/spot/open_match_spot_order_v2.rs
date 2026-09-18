@@ -857,9 +857,9 @@ pub struct MatchSpotOrderV2State {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MatchSpotOrderV2UseCase;
+pub struct OpenMatchSpotOrderV2UseCase;
 
-impl MiStateMachineV2Unchecked for MatchSpotOrderV2UseCase {
+impl MiStateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
     type Command = MatchSpotOrderV2Cmd;
     type StateGiven = MatchSpotOrderV2State;
     type Error = MatchSpotOrderV2Error;
@@ -957,7 +957,7 @@ impl MiStateMachineV2Unchecked for MatchSpotOrderV2UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for MatchSpotOrderV2UseCase {
+impl StateMachineOwnedV2Diff for OpenMatchSpotOrderV2UseCase {
     type StateDiff = MatchSpotOrderV2Changes;
 
     fn do_compute_state_diff(
@@ -1135,7 +1135,7 @@ mod tests {
 
     #[test]
     fn place_gtc_without_cross_keeps_state_and_outputs_no_side_effects() {
-        let use_case = MatchSpotOrderV2UseCase;
+        let use_case = OpenMatchSpotOrderV2UseCase;
         let taker = buy_order(SpotOrderTif::Gtc);
         let makers = vec![sell_order("maker-1", "seller", 110, 1)];
         let balances = vec![
@@ -1166,14 +1166,14 @@ mod tests {
             after.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)
         );
-        let changes = MatchSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
+        let changes = OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
         assert!(changes.updated_taker_order.is_none());
         assert_eq!(changes.updated_balances.len(), 5);
     }
 
     #[test]
     fn place_ioc_partial_fill_releases_remainder() {
-        let use_case = MatchSpotOrderV2UseCase;
+        let use_case = OpenMatchSpotOrderV2UseCase;
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1201, 0),
@@ -1213,7 +1213,7 @@ mod tests {
 
     #[test]
     fn merge_before_after_uses_generated_taker_as_before_truth() {
-        let use_case = MatchSpotOrderV2UseCase;
+        let use_case = OpenMatchSpotOrderV2UseCase;
         let taker = buy_order(SpotOrderTif::Ioc);
         let makers = vec![sell_order("maker-1", "seller", 100, 1)];
         let balances = vec![
@@ -1236,7 +1236,7 @@ mod tests {
 
         let after = use_case.compute_state_changed(&match_cmd(), &state).unwrap();
 
-        let changes = MatchSpotOrderV2UseCase::do_compute_state_diff(state, after).unwrap();
+        let changes = OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after).unwrap();
 
         assert_eq!(changes.updated_taker_order.as_ref().map(|pair| &pair.before), Some(&taker));
         assert_eq!(changes.updated_maker_orders[0].before, makers[0]);
@@ -1253,7 +1253,7 @@ mod tests {
 
     #[test]
     fn place_alo_cross_rejects_and_releases() {
-        let use_case = MatchSpotOrderV2UseCase;
+        let use_case = OpenMatchSpotOrderV2UseCase;
         let makers = vec![sell_order("maker-1", "seller", 99, 1)];
         let balances = vec![
             balance("buyer", "USDT", 1201, 0),
