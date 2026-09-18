@@ -67,6 +67,8 @@ pub use spot::{
     PlaceSpotOrderV2CmdV3, PlaceSpotOrderV2TakerTemplateContextV3,
     PlaceTriggerPendingSpotOrderV2AfterChangesV3, PlaceTriggerPendingSpotOrderV2ChangesV3,
     PlaceTriggerPendingSpotOrderV2CmdV3, PlaceTriggerPendingSpotOrderV2TemplateContextV3,
+    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
+    SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
     SpotOrderV2AfterChangesV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
     SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3, SpotOrderV2UseCaseFamilyV3Error,
     TriggerSpotOrderV2AfterChangesV3, TriggerSpotOrderV2ChangesV3, TriggerSpotOrderV2CmdV3,

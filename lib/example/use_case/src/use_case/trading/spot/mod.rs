@@ -7,9 +7,12 @@ pub mod modify_spot_order_v2;
 
 pub mod agg;
 
-
 pub mod spot_order_v2_use_case_family_v3;
 
+pub use agg::{
+    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
+    SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
+};
 pub use cancel_spot_order_v2::{
     CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
