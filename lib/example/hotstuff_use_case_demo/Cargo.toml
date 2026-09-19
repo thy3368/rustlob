@@ -4,8 +4,11 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+default-run = "hotstuff_use_case_demo"
 
 [dependencies]
+axum = "0.7"
+borsh = "0.10"
 cmd_handler = { path = "../../common/cmd_handler" }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core"] }
 example_core_use_case = { path = "../use_case" }
@@ -14,6 +17,7 @@ hotstuff_rs = { path = "../../common/hotstuff_rs" }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["io-util", "net", "rt-multi-thread", "sync", "time"] }
 use_case_executor = { path = "../use_case_executor" }
 
 [lints]
