@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use example_core_use_case::entity::AssetReservation;
-use example_core_use_case::{Balance, MarketRules, SpotOrderTimeInForce, SpotOrderV2};
+use example_core_use_case::{Balance, MarketRules, SpotOrderV2};
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
 
