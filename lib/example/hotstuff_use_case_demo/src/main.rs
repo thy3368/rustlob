@@ -9,11 +9,12 @@ use example_core_use_case::{
 };
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
-use hotstuff_use_case_demo::demo_runtime::{
-    CANCEL_RESULT_KEY, DEFAULT_HTTP_ADDR, DemoResult, MemDB, NODE_COUNT, PLACE_RESULT_KEY,
-    SpotOrderApp, decode_requests, demo_replica_configuration, demo_validator_set_state,
-    get_from_snapshot, mock_network, start_http_server,
+use hotstuff_use_case_demo::node::demo_runtime::{
+    CANCEL_RESULT_KEY, DemoResult, MemDB, NODE_COUNT, PLACE_RESULT_KEY, SpotOrderApp,
+    decode_requests, demo_replica_configuration, demo_validator_set_state, get_from_snapshot,
 };
+use hotstuff_use_case_demo::node::http_server::{DEFAULT_HTTP_ADDR, start_http_server};
+use hotstuff_use_case_demo::network::network_stub::mock_network;
 
 fn main() -> DemoResult<()> {
     println!("[hotstuff_use_case_demo] 启动 3 节点 HotStuff spot order use case demo");

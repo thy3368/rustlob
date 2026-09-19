@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use hotstuff_use_case_demo::demo_runtime::{DemoResult, NODE_COUNT};
-use hotstuff_use_case_demo::tcp_node::{TcpNodeConfig, run_tcp_node};
+use hotstuff_use_case_demo::node::demo_runtime::{DemoResult, NODE_COUNT};
+use hotstuff_use_case_demo::node::tcp_node::{TcpNodeConfig, run_tcp_node};
 
 const DEFAULT_PEER_ADDRS: [&str; NODE_COUNT] =
     ["127.0.0.1:39101", "127.0.0.1:39102", "127.0.0.1:39103"];

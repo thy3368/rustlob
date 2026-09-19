@@ -1,13 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::net::{SocketAddr, TcpListener};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum::routing::post;
-use axum::{Json, Router};
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -22,14 +16,12 @@ use hotstuff_rs::app::{
 };
 use hotstuff_rs::block_tree::accessors::public::BlockTreeSnapshot;
 use hotstuff_rs::block_tree::pluggables::{KVGet, KVStore, WriteBatch};
-use hotstuff_rs::networking::messages::Message;
-use hotstuff_rs::networking::network::Network;
 use hotstuff_rs::replica::Configuration;
 use hotstuff_rs::types::crypto_primitives::{CryptoHasher, Digest};
 use hotstuff_rs::types::data_types::{
     BufferSize, ChainID, CryptoHash, Data, Datum, EpochLength, Power,
 };
-use hotstuff_rs::types::update_sets::{AppStateUpdates, ValidatorSetUpdates};
+use hotstuff_rs::types::update_sets::AppStateUpdates;
 use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use serde::Serialize;
 use use_case_executor::trading::spot::spot_block_executor::execute_spot_block_with_outbound;
@@ -39,70 +31,6 @@ pub type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
 pub const NODE_COUNT: usize = 3;
 pub const PLACE_RESULT_KEY: &[u8] = b"place:buyer:demo-place-1";
 pub const CANCEL_RESULT_KEY: &[u8] = b"cancel:buyer:77738308";
-pub const DEFAULT_HTTP_ADDR: &str = "127.0.0.1:39001";
-
-#[derive(Clone)]
-struct HttpCommandState {
-    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommand>>>,
-}
-
-async fn post_spot_block_command(
-    State(state): State<HttpCommandState>,
-    Json(command): Json<SpotBlockCommand>,
-) -> Result<StatusCode, (StatusCode, &'static str)> {
-    enqueue_spot_block_command(&state.leader_request_queue, command)?;
-    Ok(StatusCode::ACCEPTED)
-}
-
-pub fn enqueue_spot_block_command(
-    leader_request_queue: &Arc<Mutex<Vec<SpotBlockCommand>>>,
-    command: SpotBlockCommand,
-) -> Result<(), (StatusCode, &'static str)> {
-    let mut queue = leader_request_queue
-        .lock()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "leader request queue poisoned"))?;
-    queue.push(command);
-    Ok(())
-}
-
-pub fn start_http_server(
-    addr: SocketAddr,
-    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommand>>>,
-) -> DemoResult<std::thread::JoinHandle<()>> {
-    let listener = TcpListener::bind(addr)?;
-    listener.set_nonblocking(true)?;
-    let local_addr = listener.local_addr()?;
-
-    let handle = std::thread::spawn(move || {
-        let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                eprintln!("[hotstuff_use_case_demo] HTTP runtime 启动失败: {error}");
-                return;
-            }
-        };
-
-        runtime.block_on(async move {
-            let listener = match tokio::net::TcpListener::from_std(listener) {
-                Ok(listener) => listener,
-                Err(error) => {
-                    eprintln!("[hotstuff_use_case_demo] HTTP listener 初始化失败: {error}");
-                    return;
-                }
-            };
-            let app = Router::new()
-                .route("/spot-block/commands", post(post_spot_block_command))
-                .with_state(HttpCommandState { leader_request_queue });
-
-            println!("[hotstuff_use_case_demo] HTTP listener 已启动: http://{local_addr}");
-            if let Err(error) = axum::serve(listener, app).await {
-                eprintln!("[hotstuff_use_case_demo] HTTP server 退出: {error}");
-            }
-        });
-    });
-
-    Ok(handle)
-}
 
 #[derive(Clone)]
 pub struct MemDB(Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>>);
@@ -178,58 +106,6 @@ impl KVGet for MemDBSnapshot<'_> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         self.0.get(key).cloned()
     }
-}
-
-#[derive(Clone)]
-pub struct NetworkStub {
-    my_verifying_key: VerifyingKey,
-    all_peers: HashMap<VerifyingKey, Sender<(VerifyingKey, Message)>>,
-    inbox: Arc<Mutex<Receiver<(VerifyingKey, Message)>>>,
-}
-
-impl Network for NetworkStub {
-    fn init_validator_set(&mut self, _: ValidatorSet) {}
-
-    fn update_validator_set(&mut self, _: ValidatorSetUpdates) {}
-
-    fn send(&mut self, peer: VerifyingKey, message: Message) {
-        if let Some(peer) = self.all_peers.get(&peer) {
-            let _ = peer.send((self.my_verifying_key, message));
-        }
-    }
-
-    fn broadcast(&mut self, message: Message) {
-        for peer in self.all_peers.values() {
-            let _ = peer.send((self.my_verifying_key, message.clone()));
-        }
-    }
-
-    fn recv(&mut self) -> Option<(VerifyingKey, Message)> {
-        let Ok(inbox) = self.inbox.lock() else {
-            return None;
-        };
-        inbox.try_recv().ok()
-    }
-}
-
-pub fn mock_network(peers: impl Iterator<Item = VerifyingKey>) -> Vec<NetworkStub> {
-    let mut all_peers = HashMap::new();
-    let peer_and_inboxes: Vec<_> = peers
-        .map(|peer| {
-            let (sender, receiver) = mpsc::channel();
-            all_peers.insert(peer, sender);
-            (peer, receiver)
-        })
-        .collect();
-
-    peer_and_inboxes
-        .into_iter()
-        .map(|(my_verifying_key, inbox)| NetworkStub {
-            my_verifying_key,
-            all_peers: all_peers.clone(),
-            inbox: Arc::new(Mutex::new(inbox)),
-        })
-        .collect()
 }
 
 #[derive(Debug, Serialize)]
@@ -622,44 +498,4 @@ pub fn demo_validator_set_state(verifying_keys: &[VerifyingKey]) -> ValidatorSet
 
 pub fn deterministic_signing_keys() -> Vec<SigningKey> {
     (1..=NODE_COUNT).map(|seed| SigningKey::from_bytes(&[seed as u8; 32])).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use example_core_use_case::PlaceOnlySpotOrderV2OrderType;
-
-    use super::*;
-
-    fn place_match_command(order_id: &str, cloid: &str) -> SpotBlockCommand {
-        SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(
-            PlaceOnlySpotOrderV2OrderCmd {
-                party_id: "buyer".to_string(),
-                asset: 10_001,
-                order_id: order_id.to_string(),
-                symbol: "BTCUSDT".to_string(),
-                is_buy: true,
-                price: "100".to_string(),
-                size: "1".to_string(),
-                order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
-                reduce_only: false,
-                cloid: Some(cloid.to_string()),
-                base_asset_id: "BTC".to_string(),
-                quote_asset_id: "USDT".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
-            },
-        ))
-    }
-
-    #[test]
-    fn enqueue_spot_block_command_pushes_place_match_to_leader_queue() {
-        let queue = Arc::new(Mutex::new(Vec::new()));
-        let command = place_match_command("http-order-1", "http-cloid-1");
-
-        assert!(enqueue_spot_block_command(&queue, command.clone()).is_ok());
-
-        let queued = queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        assert_eq!(queued.len(), 1);
-        assert_eq!(queued[0], command);
-    }
 }
