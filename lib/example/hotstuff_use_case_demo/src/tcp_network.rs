@@ -16,7 +16,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc as tokio_mpsc;
 
 const VERIFYING_KEY_LEN: usize = 32;
-const OUTBOUND_BUFFER: usize = 4096;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
 const SEND_ERROR_LOG_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -26,7 +25,7 @@ pub struct TcpNetwork {
     peer_addrs: Arc<Mutex<HashMap<VerifyingKey, SocketAddr>>>,
     inbound_sender: Sender<(VerifyingKey, Message)>,
     inbound_receiver: Arc<Mutex<Receiver<(VerifyingKey, Message)>>>,
-    outbound_sender: tokio_mpsc::Sender<OutboundMessage>,
+    outbound_sender: tokio_mpsc::UnboundedSender<OutboundMessage>,
 }
 
 struct OutboundMessage {
@@ -45,7 +44,7 @@ impl TcpNetwork {
         let local_addr = std_listener.local_addr()?;
 
         let (inbound_sender, inbound_receiver) = mpsc::channel();
-        let (outbound_sender, outbound_receiver) = tokio_mpsc::channel(OUTBOUND_BUFFER);
+        let (outbound_sender, outbound_receiver) = tokio_mpsc::unbounded_channel();
         let network = Self {
             my_verifying_key,
             peer_addrs: Arc::new(Mutex::new(peer_addrs)),
@@ -61,7 +60,7 @@ impl TcpNetwork {
     fn spawn_io_thread(
         &self,
         std_listener: std::net::TcpListener,
-        outbound_receiver: tokio_mpsc::Receiver<OutboundMessage>,
+        outbound_receiver: tokio_mpsc::UnboundedReceiver<OutboundMessage>,
         local_addr: SocketAddr,
     ) {
         let inbound_sender = self.inbound_sender.clone();
@@ -105,7 +104,7 @@ impl TcpNetwork {
             return;
         }
 
-        let _ = self.outbound_sender.try_send(OutboundMessage { peer, message });
+        let _ = self.outbound_sender.send(OutboundMessage { peer, message });
     }
 }
 
@@ -158,7 +157,7 @@ async fn accept_loop(listener: TcpListener, inbound_sender: Sender<(VerifyingKey
 async fn outbound_loop(
     my_verifying_key: VerifyingKey,
     peer_addrs: Arc<Mutex<HashMap<VerifyingKey, SocketAddr>>>,
-    mut outbound_receiver: tokio_mpsc::Receiver<OutboundMessage>,
+    mut outbound_receiver: tokio_mpsc::UnboundedReceiver<OutboundMessage>,
 ) {
     let mut streams = HashMap::new();
     let mut last_error_logs = HashMap::new();

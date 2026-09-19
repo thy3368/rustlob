@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ed25519_dalek::SigningKey;
 use example_core_use_case::SpotBlockCommand;
-use hotstuff_rs::block_tree::accessors::public::BlockTreeCamera;
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
+use hotstuff_rs::types::data_types::CryptoHash;
 
 use crate::demo_runtime::{
     DemoResult, MemDB, NODE_COUNT, SpotOrderApp, decode_requests, demo_replica_configuration,
@@ -60,7 +60,9 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
     let network = TcpNetwork::bind(my_verifying_key, my_tcp_addr, peer_map)?;
     let configuration = demo_replica_configuration(my_signing_key);
     let node_index = config.node_index;
-    let commit_kv_store = kv_store.clone();
+    let payload_block_hashes = Arc::new(Mutex::new(HashSet::<CryptoHash>::new()));
+    let inserted_payload_block_hashes = Arc::clone(&payload_block_hashes);
+    let committed_payload_block_hashes = Arc::clone(&payload_block_hashes);
 
     let replica = ReplicaSpec::builder()
         .app(SpotOrderApp::new(Arc::clone(&request_queue)))
@@ -72,6 +74,9 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
                 .map(|requests| !requests.is_empty())
                 .unwrap_or(false);
             if has_requests {
+                if let Ok(mut hashes) = inserted_payload_block_hashes.lock() {
+                    hashes.insert(event.block.hash);
+                }
                 println!(
                     "[hotstuff_tcp_node:{node_index}] block inserted: height={}",
                     event.block.height
@@ -79,18 +84,10 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
             }
         })
         .on_commit_block(move |event: &CommitBlockEvent| {
-            let camera = BlockTreeCamera::new(commit_kv_store.clone());
-            let snapshot = camera.snapshot();
-            let Some(block) = snapshot.block(&event.block).ok().flatten() else {
-                return;
-            };
-            let has_requests =
-                decode_requests(&block.data).map(|requests| !requests.is_empty()).unwrap_or(false);
-            if has_requests {
-                println!(
-                    "[hotstuff_tcp_node:{node_index}] block committed: height={}",
-                    block.height
-                );
+            if let Ok(mut hashes) = committed_payload_block_hashes.lock() {
+                if hashes.remove(&event.block) {
+                    println!("[hotstuff_tcp_node:{node_index}] payload block committed");
+                }
             }
         })
         .build()
