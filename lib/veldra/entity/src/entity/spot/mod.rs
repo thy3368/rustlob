@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use example_core_use_case::entity::AssetReservation;
-use example_core_use_case::{Balance, MarketRules, SpotOrderV2};
+use example_core_use_case::{Balance, MarketRules, SpotOrderTif, SpotOrderV2};
 
 use crate::entity::{AccountAssetKey, stable_hash_hex};
 
@@ -96,13 +96,8 @@ fn balance_commitment(balance: &Balance) -> String {
 }
 
 fn spot_order_commitment(order: &SpotOrderV2) -> String {
-    let execution = match order.execution {
-        example_core_use_case::SpotOrderExecution::Market { aggressive_price } => {
-            format!("market:{aggressive_price}")
-        }
-        example_core_use_case::SpotOrderExecution::Limit { price } => format!("limit:{price}"),
-    };
     let status_reason = order.status_reason.map(|value| value.as_str()).unwrap_or_default();
+    let order_price = order.order_price().to_string();
     stable_hash_hex(&[
         order.order_id.as_str(),
         order.asset.to_string().as_str(),
@@ -110,8 +105,8 @@ fn spot_order_commitment(order: &SpotOrderV2) -> String {
         order.account_id.as_str(),
         order.symbol.as_str(),
         order.side.as_str(),
-        execution.as_str(),
-        spot_order_tif(order.time_in_force),
+        order_price.as_str(),
+        spot_order_tif(order.time_in_force()),
         order.qty.to_string().as_str(),
         order.filled_qty.to_string().as_str(),
         order.status.as_str(),
@@ -131,11 +126,11 @@ fn spot_order_commitment(order: &SpotOrderV2) -> String {
     ])
 }
 
-fn spot_order_tif(value: SpotOrderTimeInForce) -> &'static str {
+fn spot_order_tif(value: SpotOrderTif) -> &'static str {
     match value {
-        SpotOrderTimeInForce::Gtc => "gtc",
-        SpotOrderTimeInForce::Ioc => "ioc",
-        SpotOrderTimeInForce::Alo => "alo",
+        SpotOrderTif::Gtc => "gtc",
+        SpotOrderTif::Ioc => "ioc",
+        SpotOrderTif::Alo => "alo",
     }
 }
 
