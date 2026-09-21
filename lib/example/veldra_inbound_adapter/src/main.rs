@@ -3,6 +3,7 @@ use std::io;
 use actix_web::{App, HttpServer};
 use example_veldra_inbound_adapter::command::exchange::http::build_exchange_scope;
 use example_veldra_inbound_adapter::command::info::http::build_info_scope;
+use example_veldra_inbound_adapter::on_event::spot::on_aeron_match_spot_order::run_match_spot_order_aeron;
 use example_veldra_inbound_adapter::on_time::spot::timer::run_timer;
 
 #[actix_web::main]
@@ -13,6 +14,12 @@ async fn main() -> io::Result<()> {
     tokio::spawn(async {
         if let Err(error) = run_timer().await {
             eprintln!("timer task stopped: {error}");
+        }
+    });
+
+    tokio::task::spawn_blocking(|| {
+        if let Err(error) = run_match_spot_order_aeron() {
+            eprintln!("Aeron spot order receiver stopped: {error}");
         }
     });
 

@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+aeron-rs = "0.1.8"
 actix-web = "4"
 cmd_handler = { path = "../../common/cmd_handler" }
 common_entity = { package = "entity", path = "../../common/entity" }
