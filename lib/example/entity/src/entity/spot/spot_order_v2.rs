@@ -38,17 +38,6 @@ impl SpotOrderHoldAsset {
     }
 }
 
-/// 订单建立时声明的冻结需求。
-///
-/// 这是订单聚合内部业务事实，不代表 authoritative 冻结记录本身。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotOrderHoldRequirement {
-    /// 订单需要冻结的资产角色。
-    pub asset: SpotOrderHoldAsset,
-    /// 订单视角下的冻结数量。
-    pub amount: u64,
-}
-
 /// 订单手续费预冻结时使用的成交角色。
 ///
 /// 下单阶段不知道最终会以 maker 还是 taker 成交，因此订单侧会先按最坏角色
@@ -99,17 +88,6 @@ pub struct SpotOrderFeeConsumeRequirement {
     pub role: SpotTradeFeeRole,
     /// 本次 consume 采用的真实费率，单位为 bps。
     pub fee_bps: u64,
-}
-
-/// 订单侧 principal / fee 释放需求组合。
-///
-/// use case 只读取该组合语义，再映射到 authoritative reservation / balance 变化。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotOrderReleaseRequirements {
-    /// 订单 principal 冻结释放需求。
-    pub principal: Option<SpotOrderReleaseRequirement>,
-    /// 订单 fee 冻结释放需求。
-    pub fee: Option<SpotOrderReleaseRequirement>,
 }
 
 /// 订单终态允许释放冻结的业务原因。
@@ -186,35 +164,6 @@ pub enum SpotOrderV2MatchError {
     /// 订单没有稳定 quote 名义价值，无法计算 quote 计价手续费。
     #[error("spot order quote notional is unavailable")]
     QuoteNotionalUnavailable,
-}
-
-/// Hyperliquid 订单事实驱动的下单输入。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlaceHyperliquidSpotOrderV2Input {
-    pub order_id: String,
-    pub asset: u32,
-    pub account_id: String,
-    pub symbol: String,
-    pub side: SpotOrderSide,
-    pub limit_price: u64,
-    pub qty: u64,
-    pub reduce_only: bool,
-    pub order_type: SpotOrderType,
-    pub base_asset_id: String,
-    pub quote_asset_id: String,
-    pub base_balance_entity_id: String,
-    pub quote_balance_entity_id: String,
-    pub maker_fee_bps: u64,
-    pub taker_fee_bps: u64,
-    pub client_order_id: Option<String>,
-    /// 订单创建时间，单位为 Unix 纳秒。
-    pub created_at: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceHyperliquidSpotOrderV2Outcome {
-    pub order: SpotOrderV2,
-    pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
 }
 
 /// 撮合行为输入。
@@ -865,27 +814,6 @@ impl SpotOrderV2 {
         self.order_type.effective_tif()
     }
 
-    /// 返回订单 quote 名义价值。
-    ///
-    /// 价格乘法溢出时返回 `None`。
-    pub fn notional_quote(&self) -> Option<u64> {
-        self.qty.checked_mul(self.match_limit_price()?)
-    }
-
-    /// 返回该订单内嵌的 principal reservation 快照。
-    pub fn to_reservation(
-        &self,
-        _base_asset_id: &str,
-        _quote_asset_id: &str,
-    ) -> Result<Reservation, ReservationError> {
-        Ok(self.reservation.clone())
-    }
-
-    /// 返回该订单内嵌的 fee reservation 快照。
-    pub fn to_fee_reservation(&self) -> Reservation {
-        self.fee_reservation.clone()
-    }
-
     /// 返回订单当前剩余可成交数量。
     fn remaining_qty(&self) -> Option<u64> {
         self.qty.checked_sub(self.filled_qty)
@@ -901,11 +829,6 @@ impl SpotOrderV2 {
             SpotOrderSide::Buy => SpotOrderHoldAsset::Quote,
             SpotOrderSide::Sell => SpotOrderHoldAsset::Base,
         }
-    }
-
-    fn hold_snapshot_amount(&self) -> Option<u64> {
-        let amount = self.reservation.original_amount;
-        if amount == 0 { None } else { Some(amount) }
     }
 
     fn release_snapshot_amount(&self) -> Option<u64> {
@@ -933,33 +856,6 @@ impl SpotOrderV2 {
     fn quote_fee_amount_with_bps_round_up(&self, fee_bps: u64) -> Option<u64> {
         let notional = self.initial_quote_hold_snapshot()?;
         fee_amount_round_up(notional, fee_bps)
-    }
-
-    /// 返回该订单建立时声明的冻结需求。
-    ///
-    /// 这只是订单侧业务事实，不是实际冻结记录，也不携带 reservation / balance / asset
-    /// 聚合标识。
-    pub fn hold_requirement(&self) -> Option<SpotOrderHoldRequirement> {
-        Some(SpotOrderHoldRequirement {
-            asset: self.hold_asset(),
-            amount: self.hold_snapshot_amount()?,
-        })
-    }
-
-    /// 返回用户撤单语义下的释放需求。
-    ///
-    /// 只有当前仍可撤单的订单会返回释放需求；数量是订单侧允许释放的上界，
-    /// 外部用例仍需对照 authoritative hold 状态决定实际释放量。
-    fn cancel_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
-        if !self.can_be_cancelled() {
-            return None;
-        }
-
-        Some(SpotOrderReleaseRequirement {
-            asset: self.hold_asset(),
-            amount: self.release_snapshot_amount()?,
-            reason: SpotOrderReleaseReason::Canceled,
-        })
     }
 
     /// 返回订单在终态下允许释放的冻结需求。
@@ -1009,19 +905,6 @@ impl SpotOrderV2 {
         })
     }
 
-    /// 返回撤单语义下允许释放 fee reservation remainder 的订单侧 requirement。
-    fn fee_cancel_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
-        if !self.can_be_cancelled() {
-            return None;
-        }
-
-        Some(SpotOrderReleaseRequirement {
-            asset: self.fee_hold_asset(),
-            amount: self.fee_release_remaining_amount()?,
-            reason: SpotOrderReleaseReason::Canceled,
-        })
-    }
-
     /// 返回订单终态下允许释放 fee reservation remainder 的订单侧 requirement。
     fn fee_terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
         let principal_release = self.terminal_release_requirement()?;
@@ -1058,34 +941,13 @@ impl SpotOrderV2 {
         Ok(SpotOrderFeeConsumeRequirement { asset: self.fee_hold_asset(), amount, role, fee_bps })
     }
 
-    /// 返回订单在当前终态下是否存在订单侧释放需求。
-    #[cfg(test)]
-    fn has_terminal_release(&self) -> bool {
-        self.terminal_release_requirement().is_some()
-    }
-
-    /// 返回用户撤单时订单侧允许释放的 principal / fee requirement。
-    pub fn cancel_release_requirements(
-        &self,
-        _maker_fee_bps: u64,
-        _taker_fee_bps: u64,
-    ) -> SpotOrderReleaseRequirements {
-        SpotOrderReleaseRequirements {
-            principal: self.cancel_release_requirement(),
-            fee: self.fee_cancel_release_requirement(),
-        }
-    }
-
     /// 返回订单终态下允许释放的 principal / fee requirement。
     pub fn terminal_release_requirements(
         &self,
         _maker_fee_bps: u64,
         _taker_fee_bps: u64,
-    ) -> SpotOrderReleaseRequirements {
-        SpotOrderReleaseRequirements {
-            principal: self.terminal_release_requirement(),
-            fee: self.fee_terminal_release_requirement(),
-        }
+    ) -> (Option<SpotOrderReleaseRequirement>, Option<SpotOrderReleaseRequirement>) {
+        (self.terminal_release_requirement(), self.fee_terminal_release_requirement())
     }
 
     /// 返回该订单是否允许撤销。
@@ -1102,29 +964,6 @@ impl SpotOrderV2 {
             SpotOrderStatus::Filled => self.filled_qty == self.qty,
             SpotOrderStatus::Canceled => self.filled_qty <= self.qty,
             SpotOrderStatus::Rejected => self.filled_qty == 0,
-        }
-    }
-
-    /// 返回 principal reservation 是否仍符合买卖方向与订单冻结语义。
-    pub fn has_consistent_principal_reservation(&self) -> bool {
-        if self.reservation.market_kind != ReservationMarketKind::Spot {
-            return false;
-        }
-        if self.reservation.owner_account_id != self.account_id {
-            return false;
-        }
-        if self.reservation.caused_by_order_id != self.order_id {
-            return false;
-        }
-        match self.side {
-            SpotOrderSide::Buy => {
-                self.reservation.reservation_kind == ReservationKind::SpotBuyQuote
-                    && self.initial_quote_hold_snapshot() == Some(self.reservation.original_amount)
-            }
-            SpotOrderSide::Sell => {
-                self.reservation.reservation_kind == ReservationKind::SpotSellBase
-                    && self.reservation.original_amount == self.qty
-            }
         }
     }
 

@@ -91,9 +91,8 @@ pub use spot_entity::spot_order_primitives::{
 };
 pub use spot_entity::spot_order_v2::{
     ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Input, CancelSpotOrderV2Outcome,
-    MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, PlaceHyperliquidSpotOrderV2Input,
-    PlaceHyperliquidSpotOrderV2Outcome, SpotOrderFeeConsumeRequirement,
+    MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, SpotOrderFeeConsumeRequirement,
     SpotOrderFeeHoldRequirement, SpotOrderGroupRelation, SpotOrderHoldAsset,
-    SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
-    SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
+    SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError,
+    SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
 };
