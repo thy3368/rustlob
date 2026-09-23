@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, StateMachineV2Unchecked, action_type};
+use common_entity::{Entity, ExecutionContext, StateMachineV2Unchecked, action_type};
 use thiserror::Error;
 
 use crate::MarketRules;
@@ -290,6 +290,7 @@ impl StateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;

@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, StateMachineV2Unchecked};
+use common_entity::{Entity, ExecutionContext, StateMachineV2Unchecked};
 use thiserror::Error;
 
 use crate::entity::{
@@ -149,6 +149,7 @@ impl StateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let before = state.leverage_setting.clone();
         let after = before.update_leverage(cmd.leverage).map_err(map_leverage_setting_error)?;
@@ -277,7 +278,7 @@ mod tests {
         let state = state(HyperliquidPerpMarginMode::Cross, None);
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state)
+            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now())
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
@@ -295,7 +296,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state)
+            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now())
             .unwrap();
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -316,7 +317,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, false), &state)
+            .compute_state_changed_unchecked(&cmd(10, false), &state, &ExecutionContext::now())
             .unwrap();
 
         assert_eq!(

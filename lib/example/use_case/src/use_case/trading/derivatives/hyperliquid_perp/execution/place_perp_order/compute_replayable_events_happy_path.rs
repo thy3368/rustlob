@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::{StateMachineV2, StateMachineV2Unchecked};
+use common_entity::{ExecutionContext, StateMachineV2Unchecked};
 
 use super::*;
 
@@ -32,7 +32,9 @@ fn compute_after_changes_and_events(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     state: PlaceHyperliquidPerpOrderState,
 ) -> (PlaceHyperliquidPerpOrderChanges, Vec<cmd_handler::EntityReplayableEvent>) {
-    let changes = use_case().compute_state_changed(cmd, &state).unwrap();
+    let changes = use_case()
+        .compute_state_changed_with_context(cmd, &state, &ExecutionContext::now())
+        .unwrap();
     let events = changes.to_replayable_events().unwrap();
     (changes, events)
 }
