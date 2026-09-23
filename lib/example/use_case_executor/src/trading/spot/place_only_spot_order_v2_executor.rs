@@ -159,7 +159,7 @@ mod tests {
         let PlaceOnlySpotOrderV2Changes::Single { created_order } = &result.changes else {
             panic!("single limit command should produce single-order changes");
         };
-        assert_eq!(created_order.status, SpotOrderStatus::Open);
+        assert_eq!(created_order.status, SpotOrderStatus::Pending);
         assert_eq!(result.events.len(), 1);
         assert!(result.events[0].is_created());
         assert_eq!(result.events[0].entity_type, SpotOrderV2::entity_type());
