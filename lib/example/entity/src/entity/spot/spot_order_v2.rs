@@ -15,7 +15,7 @@ use crate::entity::{
     ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationStatus,
 };
-use crate::support::{concat2, concat3, concat4};
+use crate::support::{concat2, concat3};
 
 const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
 
@@ -188,43 +188,6 @@ pub enum SpotOrderV2MatchError {
     QuoteNotionalUnavailable,
 }
 
-/// 下单行为输入。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlaceSpotOrderV2Input {
-    /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
-    /// Hyperliquid 现货资产编号。
-    pub asset: u32,
-    /// 拥有该订单的交易账户 ID。
-    pub account_id: String,
-    /// 交易对展示名。
-    pub symbol: String,
-    /// 买卖方向。
-    pub side: SpotOrderSide,
-    /// Hyperliquid `p` 字段；普通市价意图同样保存激进限价。
-    pub limit_price: u64,
-    /// 订单类型；普通市价意图由 IOC 限价表达。
-    pub order_type: SpotOrderType,
-    /// base 计价下单数量。
-    pub qty: u64,
-    /// base 资产 ID。
-    pub base_asset_id: String,
-    /// quote 资产 ID。
-    pub quote_asset_id: String,
-    /// base 余额实体 ID。
-    pub base_balance_entity_id: String,
-    /// quote 余额实体 ID。
-    pub quote_balance_entity_id: String,
-    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
-    pub maker_fee_bps: u64,
-    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
-    pub taker_fee_bps: u64,
-    /// 客户端自定义订单 ID。
-    pub client_order_id: Option<String>,
-    /// 订单创建时间，单位为 Unix 纳秒。
-    pub created_at: u64,
-}
-
 /// Hyperliquid 订单事实驱动的下单输入。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceHyperliquidSpotOrderV2Input {
@@ -252,24 +215,6 @@ pub struct PlaceHyperliquidSpotOrderV2Input {
 pub struct PlaceHyperliquidSpotOrderV2Outcome {
     pub order: SpotOrderV2,
     pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
-}
-
-/// Hyperliquid `normalTpsl` 原子创建结果。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceHyperliquidNormalTpslOutcome {
-    /// 产生 principal 冻结流水的 entry 父单。
-    pub parent: PlaceHyperliquidSpotOrderV2Outcome,
-    /// 保持 `TriggerPending` 且不产生冻结流水的 TP/SL 子单。
-    pub children: Vec<PlaceHyperliquidSpotOrderV2Outcome>,
-}
-
-/// 下单行为结果。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlaceSpotOrderV2Outcome {
-    /// 新创建的订单聚合。
-    pub order: SpotOrderV2,
-    /// 本次下单直接派生的冻结流水。
-    pub freeze_ledger_entry: BalanceLedgerEntryV2,
 }
 
 /// 撮合行为输入。
@@ -351,42 +296,6 @@ pub enum SpotOrderV2BehaviorError {
     BalanceLedger(#[from] BalanceLedgerEntryV2Error),
 }
 
-/// `normalTpsl` 父子订单关系校验错误。
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum SpotOrderGroupRelationError {
-    #[error("normalTpsl parent must be a limit order")]
-    ParentMustBeLimit,
-    #[error("normalTpsl parent must not be reduce-only")]
-    ParentMustNotBeReduceOnly,
-    #[error("normalTpsl must contain at least one child order")]
-    ChildrenRequired,
-    #[error("normalTpsl child must be a trigger order")]
-    ChildMustBeTrigger,
-    #[error("normalTpsl child must be reduce-only")]
-    ChildMustBeReduceOnly,
-    #[error("normalTpsl child must have the opposite side from its parent")]
-    ChildSideMustOpposeParent,
-    #[error("normalTpsl child account differs from its parent")]
-    ChildAccountMismatch,
-    #[error("normalTpsl child asset differs from its parent")]
-    ChildAssetMismatch,
-    #[error("normalTpsl child symbol differs from its parent")]
-    ChildSymbolMismatch,
-    #[error("normalTpsl child quantity exceeds its parent quantity")]
-    ChildQuantityExceedsParent,
-    #[error("normalTpsl order ids must be unique")]
-    DuplicateOrderId,
-}
-
-/// `normalTpsl` 创建错误，保留关系错误与单单下单错误的具体语义。
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum PlaceHyperliquidNormalTpslError {
-    #[error(transparent)]
-    Relation(#[from] SpotOrderGroupRelationError),
-    #[error(transparent)]
-    Placement(#[from] SpotOrderV2BehaviorError),
-}
-
 impl From<SpotOrderV2MatchError> for SpotOrderV2BehaviorError {
     fn from(error: SpotOrderV2MatchError) -> Self {
         match error {
@@ -415,13 +324,6 @@ fn fee_amount_round_up(notional: u64, fee_bps: u64) -> Option<u64> {
     let scaled = notional.checked_mul(fee_bps)?;
     let numerator = scaled.checked_add(FEE_BPS_DENOMINATOR.checked_sub(1)?)?;
     Some(numerator / FEE_BPS_DENOMINATOR)
-}
-
-#[derive(Debug, Clone)]
-struct PlacePrincipalHoldPlan {
-    freeze_asset_id: String,
-    freeze_balance_entity_id: String,
-    amount: u64,
 }
 
 /// `SpotOrderV2` 的稳定身份事实。
@@ -577,175 +479,6 @@ impl SpotOrderV2 {
         SpotOrderType::Limit { tif: SpotOrderTif::Gtc }
     }
 
-    /// 从已校验业务事实或回放事件构造订单快照。
-    ///
-    /// 构造器只负责装配订单事实，不承担完整业务校验；一致性由查询方法暴露，
-    /// 再由 use case 决定如何映射为命令错误。
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        order_id: String,
-        asset: u32,
-        exchange_oid: Option<u64>,
-        account_id: String,
-        symbol: String,
-        side: SpotOrderSide,
-        limit_price: u64,
-        order_type: SpotOrderType,
-        qty: u64,
-        filled_qty: u64,
-        status: SpotOrderStatus,
-        status_reason: Option<SpotOrderStatusReason>,
-        reservation: Reservation,
-        client_order_id: Option<String>,
-        version: u64,
-        created_at: u64,
-        updated_at: u64,
-    ) -> Self {
-        let fee_reservation = Self::default_fee_reservation_from_order_parts(
-            order_id.as_str(),
-            account_id.as_str(),
-            side,
-            qty,
-            limit_price,
-            "USDT",
-        );
-        Self::new_with_fee_reservation(
-            order_id,
-            asset,
-            exchange_oid,
-            account_id,
-            symbol,
-            side,
-            limit_price,
-            order_type,
-            qty,
-            filled_qty,
-            status,
-            status_reason,
-            reservation,
-            fee_reservation,
-            client_order_id,
-            version,
-            created_at,
-            updated_at,
-        )
-    }
-
-    /// 从已校验业务事实或回放事件构造带 fee reservation 的订单快照。
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_fee_reservation(
-        order_id: String,
-        asset: u32,
-        exchange_oid: Option<u64>,
-        account_id: String,
-        symbol: String,
-        side: SpotOrderSide,
-        limit_price: u64,
-        order_type: SpotOrderType,
-        qty: u64,
-        filled_qty: u64,
-        status: SpotOrderStatus,
-        status_reason: Option<SpotOrderStatusReason>,
-        reservation: Reservation,
-        fee_reservation: Reservation,
-        client_order_id: Option<String>,
-        version: u64,
-        created_at: u64,
-        updated_at: u64,
-    ) -> Self {
-        let identity = SpotOrderIdentity {
-            order_id: order_id.clone(),
-            asset,
-            exchange_oid,
-            account_id: account_id.clone(),
-            symbol: symbol.clone(),
-            client_order_id: client_order_id.clone(),
-        };
-        Self {
-            identity,
-            order_id,
-            asset,
-            exchange_oid,
-            account_id,
-            symbol,
-            side,
-            limit_price,
-            reduce_only: false,
-            order_type,
-            group_relation: SpotOrderGroupRelation::Standalone,
-            qty,
-            filled_qty,
-            status,
-            status_reason,
-            reservation,
-            fee_reservation,
-            client_order_id,
-            created_at,
-            updated_at,
-            version,
-        }
-    }
-
-    /// 从已校验业务事实创建普通 active order，并生成 principal / fee reservation。
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_active(
-        order_id: String,
-        asset: u32,
-        exchange_oid: Option<u64>,
-        account_id: String,
-        symbol: String,
-        side: SpotOrderSide,
-        limit_price: u64,
-        order_type: SpotOrderType,
-        qty: u64,
-        base_asset_id: &str,
-        quote_asset_id: &str,
-        maker_fee_bps: u64,
-        taker_fee_bps: u64,
-        client_order_id: Option<String>,
-        created_at: u64,
-    ) -> Result<Self, SpotOrderV2BehaviorError> {
-        let reservation = Self::principal_reservation(
-            order_id.as_str(),
-            account_id.as_str(),
-            side,
-            qty,
-            limit_price,
-            base_asset_id,
-            quote_asset_id,
-        )?;
-        let fee_reservation = Self::fee_reservation(
-            order_id.as_str(),
-            account_id.as_str(),
-            side,
-            qty,
-            limit_price,
-            quote_asset_id,
-            maker_fee_bps,
-            taker_fee_bps,
-        )?;
-        Ok(Self::new_with_fee_reservation(
-            order_id,
-            asset,
-            exchange_oid,
-            account_id,
-            symbol,
-            side,
-            limit_price,
-            order_type,
-            qty,
-            0,
-            SpotOrderStatus::Open,
-            None,
-            reservation,
-            fee_reservation,
-            client_order_id,
-            1,
-            created_at,
-            created_at,
-        ))
-    }
-
     /// 创建未触发条件单；该状态不生成 principal / fee reservation。
     #[allow(clippy::too_many_arguments)]
     pub fn new_pending_trigger(
@@ -797,38 +530,6 @@ impl SpotOrderV2 {
             updated_at: created_at,
             version,
         }
-    }
-
-    /// 创建未触发条件单；保留该名称兼容已有调用方。
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_trigger_pending(
-        order_id: String,
-        asset: u32,
-        exchange_oid: Option<u64>,
-        account_id: String,
-        symbol: String,
-        side: SpotOrderSide,
-        qty: u64,
-        limit_price: u64,
-        order_type: SpotOrderType,
-        client_order_id: Option<String>,
-        version: u64,
-        created_at: u64,
-    ) -> Self {
-        Self::new_pending_trigger(
-            order_id,
-            asset,
-            exchange_oid,
-            account_id,
-            symbol,
-            side,
-            qty,
-            limit_price,
-            order_type,
-            client_order_id,
-            version,
-            created_at,
-        )
     }
 
     /// 创建尚未进入撮合执行阶段的普通限价订单。
@@ -886,77 +587,6 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 可 BDD 规格化的聚合根行为：创建现货订单并派生冻结流水。
-    ///
-    /// 该方法只创建订单聚合和下游余额流水单据，不执行余额落账。
-    pub fn place(
-        input: PlaceSpotOrderV2Input,
-    ) -> Result<PlaceSpotOrderV2Outcome, SpotOrderV2BehaviorError> {
-        if input.qty == 0 {
-            return Err(SpotOrderV2BehaviorError::InvalidQuantity);
-        }
-
-        let order_price = input.limit_price;
-        if order_price == 0 {
-            return Err(SpotOrderV2BehaviorError::InvalidPrice);
-        }
-
-        let quote_notional = quote_notional(input.qty, order_price)
-            .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
-        let principal_hold = Self::place_principal_hold_plan(&input, quote_notional);
-
-        let reservation = Self::principal_reservation(
-            input.order_id.as_str(),
-            input.account_id.as_str(),
-            input.side,
-            input.qty,
-            order_price,
-            input.base_asset_id.as_str(),
-            input.quote_asset_id.as_str(),
-        )?;
-        let fee_reservation = Self::fee_reservation(
-            input.order_id.as_str(),
-            input.account_id.as_str(),
-            input.side,
-            input.qty,
-            order_price,
-            input.quote_asset_id.as_str(),
-            input.maker_fee_bps,
-            input.taker_fee_bps,
-        )?;
-        let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-            concat2("balance-ledger:freeze:", input.order_id.as_str()),
-            input.account_id.clone(),
-            principal_hold.freeze_asset_id,
-            principal_hold.freeze_balance_entity_id,
-            principal_hold.amount,
-            BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
-        )?;
-
-        let order = Self::new_with_fee_reservation(
-            input.order_id,
-            input.asset,
-            None,
-            input.account_id,
-            input.symbol,
-            input.side,
-            input.limit_price,
-            input.order_type,
-            input.qty,
-            0,
-            SpotOrderStatus::Open,
-            None,
-            reservation,
-            fee_reservation,
-            input.client_order_id,
-            1,
-            input.created_at,
-            input.created_at,
-        );
-
-        Ok(PlaceSpotOrderV2Outcome { order, freeze_ledger_entry })
-    }
-
     /// 按 Hyperliquid 强类型订单事实创建订单。
     pub fn place_hyperliquid(
         input: PlaceHyperliquidSpotOrderV2Input,
@@ -996,97 +626,52 @@ impl SpotOrderV2 {
         if !matches!(input.order_type, SpotOrderType::Limit { .. }) {
             return Err(SpotOrderV2BehaviorError::InvalidPrice);
         }
-        let mut outcome = Self::place(PlaceSpotOrderV2Input {
-            order_id: input.order_id,
-            asset: input.asset,
-            account_id: input.account_id,
-            symbol: input.symbol,
-            side: input.side,
-            limit_price: input.limit_price,
-            order_type: input.order_type,
-            qty: input.qty,
+        let quote_notional = quote_notional(input.qty, input.limit_price)
+            .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
+        let (freeze_asset_id, freeze_balance_entity_id, freeze_amount) = match input.side {
+            SpotOrderSide::Buy => (
+                input.quote_asset_id.clone(),
+                input.quote_balance_entity_id.clone(),
+                quote_notional,
+            ),
+            SpotOrderSide::Sell => {
+                (input.base_asset_id.clone(), input.base_balance_entity_id.clone(), input.qty)
+            }
+        };
+        let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
+            concat2("balance-ledger:freeze:", input.order_id.as_str()),
+            input.account_id.clone(),
+            freeze_asset_id,
+            freeze_balance_entity_id,
+            freeze_amount,
+            BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
+        )?;
+        let mut order = Self::new_pending_limit(
+            input.order_id,
+            input.asset,
+            None,
+            input.account_id,
+            input.symbol,
+            input.side,
+            input.qty,
+            input.limit_price,
+            input.order_type,
+            input.client_order_id,
+            0,
+            input.created_at,
+        );
+        order.reduce_only = input.reduce_only;
+        order.activate_pending_limit(ActivatePendingSpotOrderV2Input {
             base_asset_id: input.base_asset_id,
             quote_asset_id: input.quote_asset_id,
-            base_balance_entity_id: input.base_balance_entity_id,
-            quote_balance_entity_id: input.quote_balance_entity_id,
             maker_fee_bps: input.maker_fee_bps,
             taker_fee_bps: input.taker_fee_bps,
-            client_order_id: input.client_order_id,
-            created_at: input.created_at,
+            timestamp: input.created_at,
         })?;
-        outcome.order.reduce_only = input.reduce_only;
         Ok(PlaceHyperliquidSpotOrderV2Outcome {
-            order: outcome.order,
-            freeze_ledger_entry: Some(outcome.freeze_ledger_entry),
+            order,
+            freeze_ledger_entry: Some(freeze_ledger_entry),
         })
-    }
-
-    /// 原子校验并创建 Hyperliquid `normalTpsl` entry 父单及 TP/SL 子单。
-    pub fn place_hyperliquid_normal_tpsl(
-        parent: PlaceHyperliquidSpotOrderV2Input,
-        children: Vec<PlaceHyperliquidSpotOrderV2Input>,
-    ) -> Result<PlaceHyperliquidNormalTpslOutcome, PlaceHyperliquidNormalTpslError> {
-        Self::validate_normal_tpsl_relation(&parent, children.as_slice())?;
-
-        let parent_order_id = parent.order_id.clone();
-        let mut parent_outcome = Self::place_hyperliquid(parent)?;
-        parent_outcome.order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
-
-        let mut child_outcomes = Vec::with_capacity(children.len());
-        for child in children {
-            let mut child_outcome = Self::place_hyperliquid(child)?;
-            child_outcome.order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
-                parent_order_id: parent_order_id.clone(),
-            };
-            child_outcomes.push(child_outcome);
-        }
-
-        Ok(PlaceHyperliquidNormalTpslOutcome { parent: parent_outcome, children: child_outcomes })
-    }
-
-    fn validate_normal_tpsl_relation(
-        parent: &PlaceHyperliquidSpotOrderV2Input,
-        children: &[PlaceHyperliquidSpotOrderV2Input],
-    ) -> Result<(), SpotOrderGroupRelationError> {
-        if !matches!(parent.order_type, SpotOrderType::Limit { .. }) {
-            return Err(SpotOrderGroupRelationError::ParentMustBeLimit);
-        }
-        if parent.reduce_only {
-            return Err(SpotOrderGroupRelationError::ParentMustNotBeReduceOnly);
-        }
-        if children.is_empty() {
-            return Err(SpotOrderGroupRelationError::ChildrenRequired);
-        }
-
-        for (index, child) in children.iter().enumerate() {
-            if !child.order_type.is_trigger() {
-                return Err(SpotOrderGroupRelationError::ChildMustBeTrigger);
-            }
-            if !child.reduce_only {
-                return Err(SpotOrderGroupRelationError::ChildMustBeReduceOnly);
-            }
-            if child.side == parent.side {
-                return Err(SpotOrderGroupRelationError::ChildSideMustOpposeParent);
-            }
-            if child.account_id != parent.account_id {
-                return Err(SpotOrderGroupRelationError::ChildAccountMismatch);
-            }
-            if child.asset != parent.asset {
-                return Err(SpotOrderGroupRelationError::ChildAssetMismatch);
-            }
-            if child.symbol != parent.symbol {
-                return Err(SpotOrderGroupRelationError::ChildSymbolMismatch);
-            }
-            if child.qty > parent.qty {
-                return Err(SpotOrderGroupRelationError::ChildQuantityExceedsParent);
-            }
-            if child.order_id == parent.order_id
-                || children[..index].iter().any(|previous| previous.order_id == child.order_id)
-            {
-                return Err(SpotOrderGroupRelationError::DuplicateOrderId);
-            }
-        }
-        Ok(())
     }
 
     /// 可 BDD 规格化的聚合根行为：未触发条件单进入 active 订单生命周期。
@@ -1242,46 +827,6 @@ impl SpotOrderV2 {
         )
     }
 
-    fn default_fee_reservation_from_order_parts(
-        order_id: &str,
-        account_id: &str,
-        side: SpotOrderSide,
-        qty: u64,
-        order_price: u64,
-        quote_asset_id: &str,
-    ) -> Reservation {
-        match Self::fee_reservation(
-            order_id,
-            account_id,
-            side,
-            qty,
-            order_price,
-            quote_asset_id,
-            1,
-            1,
-        ) {
-            Ok(reservation) => reservation,
-            Err(_) => Reservation {
-                reservation_id: concat4("reservation:", order_id, ":fee:", "fallback"),
-                owner_account_id: account_id.to_string(),
-                caused_by_order_id: order_id.to_string(),
-                market_kind: ReservationMarketKind::Spot,
-                reservation_kind: match side {
-                    SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-                    SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
-                },
-                asset_id: quote_asset_id.to_string(),
-                original_amount: 1,
-                consumed_amount: 0,
-                released_amount: 0,
-                remaining_amount: 1,
-                status: ReservationStatus::Active,
-                close_reason: None,
-                version: 1,
-            },
-        }
-    }
-
     fn empty_pending_reservation(
         order_id: &str,
         account_id: &str,
@@ -1309,24 +854,6 @@ impl SpotOrderV2 {
             status: ReservationStatus::ClosedByRelease,
             close_reason: None,
             version: 1,
-        }
-    }
-
-    fn place_principal_hold_plan(
-        input: &PlaceSpotOrderV2Input,
-        quote_notional: u64,
-    ) -> PlacePrincipalHoldPlan {
-        match input.side {
-            SpotOrderSide::Buy => PlacePrincipalHoldPlan {
-                freeze_asset_id: input.quote_asset_id.clone(),
-                freeze_balance_entity_id: input.quote_balance_entity_id.clone(),
-                amount: quote_notional,
-            },
-            SpotOrderSide::Sell => PlacePrincipalHoldPlan {
-                freeze_asset_id: input.base_asset_id.clone(),
-                freeze_balance_entity_id: input.base_balance_entity_id.clone(),
-                amount: input.qty,
-            },
         }
     }
 

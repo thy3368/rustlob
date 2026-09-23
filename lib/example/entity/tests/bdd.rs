@@ -36,9 +36,6 @@ mod account_balance_ledger_entry_v2_bdd_tests;
 #[path = "bdd/account/settlement_transfer_voucher_bdd_tests.rs"]
 mod account_settlement_transfer_voucher_bdd_tests;
 
-#[path = "bdd/spot/spot_order_v2/spot_order_v2_bdd_hyperliquid_order_types.rs"]
-mod spot_order_v2_bdd_hyperliquid_order_types;
-
 #[path = "bdd/spot/spot_trade/spot_trade_bdd_notional_quote.rs"]
 mod spot_trade_bdd_notional_quote;
 #[path = "bdd/spot/spot_trade/spot_trade_bdd_settlement_transfer_voucher.rs"]
