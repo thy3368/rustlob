@@ -250,7 +250,7 @@ fn compute_match_changes(
 
 #[cfg(test)]
 mod tests {
-    use common_entity::StateMachineOwnedV2Diff;
+    use common_entity::{ExecutionContext, StateMachineOwnedV2Diff};
 
     use super::*;
     use crate::entity::{BalanceLedgerOperation, Reservation, SpotOrderSide, SpotOrderTif};
@@ -272,7 +272,6 @@ mod tests {
             quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
-            executed_at_ms: 1_717_171_717_000,
         })
     }
 
@@ -339,7 +338,9 @@ mod tests {
             fee_account_id: "fee".to_string(),
         };
 
-        let changes = PlaceMatchSpotOrderV2UseCase.compute_state_diff(&cmd, state)?;
+        let context = ExecutionContext { execution_time_ms: 1_717_171_717_000 };
+        let changes =
+            PlaceMatchSpotOrderV2UseCase.compute_state_diff_with_context(&cmd, state, &context)?;
         let PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
             match_changes,
@@ -354,6 +355,7 @@ mod tests {
             Some(BalanceLedgerOperation::Freeze)
         );
         assert_eq!(match_changes.created_trades.len(), 1);
+        assert_eq!(match_changes.created_trades[0].executed_at_ms, context.execution_time_ms);
         let events = changes.to_replayable_events()?;
         assert!(events[0].is_created());
         assert!(events.iter().skip(1).any(EntityReplayableEvent::is_created));
@@ -387,7 +389,6 @@ mod tests {
             quote_asset_id: parent.quote_asset_id.clone(),
             maker_fee_bps: parent.maker_fee_bps,
             taker_fee_bps: parent.taker_fee_bps,
-            executed_at_ms: parent.executed_at_ms,
         };
         let cmd = PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children: vec![child] };
         let state = PlaceMatchSpotOrderV2State {
