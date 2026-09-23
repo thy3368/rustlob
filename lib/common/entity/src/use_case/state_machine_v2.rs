@@ -440,16 +440,17 @@ use crate::{ReplayableChanges, action_type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecutionContext {
-    pub execution_time_ms: u64,
+    /// 当前 use case 执行时间，单位为 Unix 纳秒。
+    pub execution_time_ns: u64,
 }
 
 impl ExecutionContext {
     pub fn now() -> Self {
-        let execution_time_ms = std::time::SystemTime::now()
+        let execution_time_ns = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_millis().try_into().unwrap_or(u64::MAX))
+            .map(|duration| duration.as_nanos().try_into().unwrap_or(u64::MAX))
             .unwrap_or_default();
-        Self { execution_time_ms }
+        Self { execution_time_ns }
     }
 }
 
