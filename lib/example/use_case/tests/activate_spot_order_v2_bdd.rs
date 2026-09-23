@@ -74,6 +74,9 @@ fn state(order: SpotOrderV2, maker_fee_bps: u64, taker_fee_bps: u64) -> Activate
     }
 }
 
+// Given：账户有足够的 USDT 余额，待激活买单需要冻结 quote principal 和 quote fee。
+// When：调用 ActivateSpotOrderV2UseCase 激活买单。
+// Then：订单变为 Open，USDT 可用余额与冻结余额正确变化，并生成 principal、fee ledger 及 replay events。
 #[test]
 fn buy_activation_freezes_quote_principal_and_quote_fee() {
     let order = pending_limit("buy-1", SpotOrderSide::Buy);
@@ -99,6 +102,9 @@ fn buy_activation_freezes_quote_principal_and_quote_fee() {
     assert!(events[4].is_created());
 }
 
+// Given：账户有足够的 BTC 余额，待激活卖单需要冻结 base principal。
+// When：调用 ActivateSpotOrderV2UseCase 激活卖单。
+// Then：订单冻结 BTC principal，BTC 可用余额按冻结数量减少。
 #[test]
 fn sell_activation_freezes_base_principal() {
     let order = pending_limit("sell-1", SpotOrderSide::Sell);
@@ -113,6 +119,9 @@ fn sell_activation_freezes_base_principal() {
     assert_eq!(changes.updated_balances[0].after.available, 8);
 }
 
+// Given：待激活买单的 maker 和 taker 手续费率均为零。
+// When：调用 ActivateSpotOrderV2UseCase 激活订单。
+// Then：不创建 fee ledger，只创建 principal ledger，并投影出对应的 replay events。
 #[test]
 fn zero_fee_activation_skips_fee_ledger() {
     let order = pending_limit("zero-fee", SpotOrderSide::Buy);
@@ -126,6 +135,9 @@ fn zero_fee_activation_skips_fee_ledger() {
     assert_eq!(changes.to_replayable_events().expect("events should project").len(), 3);
 }
 
+// Given：账户余额充足，且订单是无需市场价格判断的待激活 trigger order。
+// When：调用 ActivateSpotOrderV2UseCase 激活 trigger order。
+// Then：订单直接变为 Open，并保留 Trigger 订单类型。
 #[test]
 fn pending_trigger_activation_does_not_need_market_price() {
     let order = pending_trigger("trigger-1");
@@ -138,6 +150,9 @@ fn pending_trigger_activation_does_not_need_market_price() {
     assert!(matches!(changes.updated_order.after.order_type, SpotOrderType::Trigger { .. }));
 }
 
+// Given：订单已经处于 Open 状态，不再是 Pending。
+// When：对该订单执行激活状态校验。
+// Then：校验返回 OrderNotPending 业务错误。
 #[test]
 fn open_order_is_rejected_by_activation_state_validation() {
     let mut order = pending_limit("open-1", SpotOrderSide::Buy);

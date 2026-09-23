@@ -142,7 +142,7 @@ fn given_hyperliquid_spot_order_shapes_when_placed_then_lifecycle_and_holds_matc
         assert_eq!(order.time_in_force(), expected_tif);
         assert_eq!(order.order_type, SpotOrderType::Limit { tif: expected_tif });
         assert_pending_without_reservations(&order);
-        assert!(order.can_enter_matching());
+        assert!(!order.can_enter_matching());
 
         // 固定执行上下文必须透传到订单生命周期时间，且创建时 updated_at 与 created_at 相同。
         assert_eq!(order.created_at, CREATED_AT);
@@ -201,7 +201,7 @@ fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
     assert!(!created_parent_order.reduce_only);
     assert_eq!(created_parent_order.order_type, SpotOrderType::Limit { tif: SpotOrderTif::Gtc });
     assert_pending_without_reservations(created_parent_order);
-    assert!(created_parent_order.can_enter_matching());
+    assert!(!created_parent_order.can_enter_matching());
 
     // 子单数量、方向、账户、资产和交易对都来自合法父子约束；每个子单保持 Pending 且不冻结。
     assert_eq!(created_child_orders.len(), 2);
