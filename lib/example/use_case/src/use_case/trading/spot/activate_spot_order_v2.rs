@@ -1,0 +1,420 @@
+use std::collections::{HashMap, HashSet};
+
+use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+use common_entity::{
+    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2Unchecked,
+};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::entity::account::balance_ledger_entry_v2::{
+    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
+};
+use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::entity::{
+    ActivatePendingSpotOrderV2Input, Balance, Reservation, SpotOrderV2, SpotOrderV2BehaviorError,
+};
+use crate::support::{concat2, concat3};
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ActivateSpotOrderV2Cmd {
+    pub party_id: String,
+    pub asset: u32,
+    pub order_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivateSpotOrderV2State {
+    pub pending_order: SpotOrderV2,
+    pub balances: Vec<Balance>,
+    pub base_asset_id: String,
+    pub quote_asset_id: String,
+    pub maker_fee_bps: u64,
+    pub taker_fee_bps: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivateSpotOrderV2AfterChanges {
+    pub activated_order_after: SpotOrderV2,
+    pub balances_after: Vec<Balance>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActivateSpotOrderV2Changes {
+    pub updated_order: UpdatedEntityPair<SpotOrderV2>,
+    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ActivateSpotOrderV2Error {
+    #[error("party id must not be empty")]
+    InvalidPartyId,
+    #[error("order id must not be empty")]
+    InvalidOrderId,
+    #[error("pending order id does not match command")]
+    OrderIdMismatch,
+    #[error("pending order account id does not match command")]
+    AccountIdMismatch,
+    #[error("pending order asset does not match command")]
+    AssetMismatch,
+    #[error("order is not pending")]
+    OrderNotPending,
+    #[error("order execution state is inconsistent")]
+    InconsistentExecutionState,
+    #[error("base asset id must not be empty")]
+    InvalidBaseAssetId,
+    #[error("quote asset id must not be empty")]
+    InvalidQuoteAssetId,
+    #[error("balance not found")]
+    BalanceNotFound,
+    #[error("available balance is insufficient")]
+    InsufficientAvailableBalance,
+    #[error("arithmetic overflow while computing spot order activation")]
+    ArithmeticOverflow,
+    #[error(transparent)]
+    OrderBehavior(#[from] SpotOrderV2BehaviorError),
+    #[error(transparent)]
+    BalanceLedger(BalanceLedgerEntryV2Error),
+}
+
+impl From<BalanceLedgerEntryV2Error> for ActivateSpotOrderV2Error {
+    fn from(error: BalanceLedgerEntryV2Error) -> Self {
+        match error {
+            BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+                Self::InsufficientAvailableBalance
+            }
+            BalanceLedgerEntryV2Error::ArithmeticOverflow => Self::ArithmeticOverflow,
+            other => Self::BalanceLedger(other),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ActivateSpotOrderV2UseCase;
+
+impl ReplayableChanges for ActivateSpotOrderV2Changes {
+    fn to_replayable_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        let event_capacity = 1usize
+            .saturating_add(self.created_balance_ledger_entries.len())
+            .saturating_add(self.created_balance_ledger_entries.len());
+        let mut events = Vec::with_capacity(event_capacity);
+        events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
+        events.extend(balance_replay_events_from_ledger_entries(
+            &self.updated_balances,
+            &self.created_balance_ledger_entries,
+        )?);
+        for entry in &self.created_balance_ledger_entries {
+            events.push(entry.track_create_event()?);
+        }
+        Ok(events)
+    }
+}
+
+impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
+    type Command = ActivateSpotOrderV2Cmd;
+    type StateGiven = ActivateSpotOrderV2State;
+    type Error = ActivateSpotOrderV2Error;
+    type StateChanged = ActivateSpotOrderV2AfterChanges;
+
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        if cmd.party_id.is_empty() {
+            return Err(ActivateSpotOrderV2Error::InvalidPartyId);
+        }
+        if cmd.order_id.is_empty() {
+            return Err(ActivateSpotOrderV2Error::InvalidOrderId);
+        }
+        Ok(())
+    }
+
+    fn validate_state_given(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::StateGiven,
+    ) -> Result<(), Self::Error> {
+        validate_activation_state(cmd, state)
+    }
+
+    fn compute_state_changed_unchecked(
+        &self,
+        _cmd: &Self::Command,
+        state: &Self::StateGiven,
+        context: &ExecutionContext,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let mut activated_order_after = state.pending_order.clone();
+        activated_order_after.activate_pending(ActivatePendingSpotOrderV2Input {
+            base_asset_id: state.base_asset_id.clone(),
+            quote_asset_id: state.quote_asset_id.clone(),
+            maker_fee_bps: state.maker_fee_bps,
+            taker_fee_bps: state.taker_fee_bps,
+            timestamp: context.execution_time_ns,
+        })?;
+
+        let mut balance_book = BalanceMap::new(&state.balances);
+        let mut created_balance_ledger_entries = Vec::with_capacity(2);
+        let principal_entry = apply_freeze_for_reservation(
+            &activated_order_after,
+            &activated_order_after.reservation,
+            concat2("balance-ledger:freeze:", activated_order_after.order_id()),
+            &mut balance_book,
+        )?;
+        created_balance_ledger_entries.push(principal_entry);
+
+        if activated_order_after.fee_reservation.original_amount > 0 {
+            let fee_entry = apply_freeze_for_reservation(
+                &activated_order_after,
+                &activated_order_after.fee_reservation,
+                concat3("balance-ledger:freeze:", activated_order_after.order_id(), ":fee"),
+                &mut balance_book,
+            )?;
+            created_balance_ledger_entries.push(fee_entry);
+        }
+
+        Ok(ActivateSpotOrderV2AfterChanges {
+            activated_order_after,
+            balances_after: balance_book.into_balances(),
+            created_balance_ledger_entries,
+        })
+    }
+}
+
+impl StateMachineOwnedV2Diff for ActivateSpotOrderV2UseCase {
+    type StateDiff = ActivateSpotOrderV2Changes;
+
+    fn do_compute_state_diff(
+        state: ActivateSpotOrderV2State,
+        after: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(ActivateSpotOrderV2Changes {
+            updated_order: UpdatedEntityPair {
+                before: state.pending_order,
+                after: after.activated_order_after,
+            },
+            updated_balances: merge_balance_pairs(state.balances, after.balances_after)?,
+            created_balance_ledger_entries: after.created_balance_ledger_entries,
+        })
+    }
+}
+
+fn validate_activation_state(
+    cmd: &ActivateSpotOrderV2Cmd,
+    state: &ActivateSpotOrderV2State,
+) -> Result<(), ActivateSpotOrderV2Error> {
+    if state.pending_order.order_id() != cmd.order_id {
+        return Err(ActivateSpotOrderV2Error::OrderIdMismatch);
+    }
+    if !state.pending_order.belongs_to_account(&cmd.party_id) {
+        return Err(ActivateSpotOrderV2Error::AccountIdMismatch);
+    }
+    if !state.pending_order.trades_asset(cmd.asset) {
+        return Err(ActivateSpotOrderV2Error::AssetMismatch);
+    }
+    if !state.pending_order.is_pending() {
+        return Err(ActivateSpotOrderV2Error::OrderNotPending);
+    }
+    if !state.pending_order.has_consistent_execution_state() {
+        return Err(ActivateSpotOrderV2Error::InconsistentExecutionState);
+    }
+    if state.base_asset_id.is_empty() {
+        return Err(ActivateSpotOrderV2Error::InvalidBaseAssetId);
+    }
+    if state.quote_asset_id.is_empty() {
+        return Err(ActivateSpotOrderV2Error::InvalidQuoteAssetId);
+    }
+
+    let principal_reservation = SpotOrderV2::principal_reservation(
+        state.pending_order.order_id(),
+        state.pending_order.account_id(),
+        state.pending_order.side(),
+        state.pending_order.qty(),
+        state.pending_order.order_price(),
+        &state.base_asset_id,
+        &state.quote_asset_id,
+    )
+    .map_err(SpotOrderV2BehaviorError::from)?;
+    ensure_balance_exists(&state.balances, &principal_reservation)?;
+
+    let fee_reservation = SpotOrderV2::fee_reservation(
+        state.pending_order.order_id(),
+        state.pending_order.account_id(),
+        state.pending_order.side(),
+        state.pending_order.qty(),
+        state.pending_order.order_price(),
+        &state.quote_asset_id,
+        state.maker_fee_bps,
+        state.taker_fee_bps,
+    )
+    .map_err(SpotOrderV2BehaviorError::from)?;
+    if fee_reservation.original_amount > 0 {
+        ensure_balance_exists(&state.balances, &fee_reservation)?;
+    }
+
+    Ok(())
+}
+
+fn ensure_balance_exists(
+    balances: &[Balance],
+    reservation: &Reservation,
+) -> Result<(), ActivateSpotOrderV2Error> {
+    balances
+        .iter()
+        .find(|balance| {
+            balance.belongs_to_account(&reservation.owner_account_id)
+                && balance.is_asset(&reservation.asset_id)
+        })
+        .map(|_| ())
+        .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
+}
+
+struct BalanceMap {
+    balances: HashMap<String, Balance>,
+}
+
+impl BalanceMap {
+    fn new(balances: &[Balance]) -> Self {
+        Self {
+            balances: balances
+                .iter()
+                .cloned()
+                .map(|balance| (balance.entity_id(), balance))
+                .collect(),
+        }
+    }
+
+    fn get_mut(
+        &mut self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<&mut Balance, ActivateSpotOrderV2Error> {
+        self.balances
+            .get_mut(&concat3(account_id, ":", asset_id))
+            .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
+    }
+
+    fn entity_id_for_account_asset(
+        &self,
+        account_id: &str,
+        asset_id: &str,
+    ) -> Result<String, ActivateSpotOrderV2Error> {
+        self.balances
+            .get(&concat3(account_id, ":", asset_id))
+            .map(Entity::entity_id)
+            .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
+    }
+
+    fn into_balances(self) -> Vec<Balance> {
+        let mut balances = self.balances.into_values().collect::<Vec<_>>();
+        balances.sort_by_key(|lhs| lhs.entity_id());
+        balances
+    }
+}
+
+fn apply_freeze_for_reservation(
+    order: &SpotOrderV2,
+    reservation: &Reservation,
+    entry_id: String,
+    balance_book: &mut BalanceMap,
+) -> Result<BalanceLedgerEntryV2, ActivateSpotOrderV2Error> {
+    let mut entry = BalanceLedgerEntryV2::freeze(
+        entry_id,
+        order.account_id().to_string(),
+        reservation.asset_id.clone(),
+        balance_book.entity_id_for_account_asset(order.account_id(), &reservation.asset_id)?,
+        reservation.original_amount,
+        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id().to_string() },
+    )
+    .map_err(ActivateSpotOrderV2Error::from)?;
+    let balance = balance_book.get_mut(order.account_id(), &reservation.asset_id)?;
+    entry.apply_to(balance).map_err(ActivateSpotOrderV2Error::from)?;
+    Ok(entry)
+}
+
+fn merge_balance_pairs(
+    before: Vec<Balance>,
+    after: Vec<Balance>,
+) -> Result<Vec<UpdatedEntityPair<Balance>>, ActivateSpotOrderV2Error> {
+    let before_map =
+        before.into_iter().map(|balance| (balance.entity_id(), balance)).collect::<HashMap<_, _>>();
+    let mut seen = HashSet::new();
+    let mut pairs = Vec::with_capacity(after.len());
+    for balance in after {
+        let balance_id = balance.entity_id();
+        let before_balance = before_map
+            .get(&balance_id)
+            .cloned()
+            .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)?;
+        if !seen.insert(balance_id) {
+            return Err(ActivateSpotOrderV2Error::BalanceNotFound);
+        }
+        pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
+    }
+    Ok(pairs)
+}
+
+fn balance_replay_events_from_ledger_entries(
+    updated_balances: &[UpdatedEntityPair<Balance>],
+    ledger_entries: &[BalanceLedgerEntryV2],
+) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+    let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
+    for balance in updated_balances {
+        let balance_id = balance.before.entity_id();
+        current_balances.insert(balance_id, balance.before.clone());
+    }
+
+    let mut events = Vec::with_capacity(ledger_entries.len());
+    for entry in ledger_entries {
+        let Some(before) = current_balances.get(&entry.balance_entity_id).cloned() else {
+            return Err(common_entity::EntityError::Custom(
+                "balance ledger entry does not belong to updated balances".to_string(),
+            ));
+        };
+        let (
+            Some(entry_before_available),
+            Some(entry_before_frozen),
+            Some(entry_after_available),
+            Some(entry_after_frozen),
+        ) = (
+            entry.before_available,
+            entry.before_frozen,
+            entry.after_available,
+            entry.after_frozen,
+        )
+        else {
+            return Err(common_entity::EntityError::Custom(
+                "balance ledger entry has not been applied".to_string(),
+            ));
+        };
+        if before.available != entry_before_available || before.frozen != entry_before_frozen {
+            return Err(common_entity::EntityError::Custom(
+                "balance ledger entry breaks balance replay chain".to_string(),
+            ));
+        }
+        let next_version = before
+            .version
+            .checked_add(1)
+            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
+        let after = Balance::new(
+            before.account_id.clone(),
+            before.asset_id.clone(),
+            entry_after_available,
+            entry_after_frozen,
+            next_version,
+        );
+        events.push(after.track_update_event_from(&before)?);
+        current_balances.insert(entry.balance_entity_id.clone(), after);
+    }
+
+    for balance in updated_balances {
+        let balance_id = balance.after.entity_id();
+        if current_balances.get(&balance_id) != Some(&balance.after) {
+            return Err(common_entity::EntityError::Custom(
+                "balance replay chain does not reach case-level balance after state".to_string(),
+            ));
+        }
+    }
+    Ok(events)
+}
