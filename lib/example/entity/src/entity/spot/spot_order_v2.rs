@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
-    FourColorArchetype,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityLifecycle, FieldDiff,
+    FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -221,6 +221,8 @@ pub struct PlaceSpotOrderV2Input {
     pub taker_fee_bps: u64,
     /// 客户端自定义订单 ID。
     pub client_order_id: Option<String>,
+    /// 订单创建时间，单位为 Unix 纳秒。
+    pub created_at: u64,
 }
 
 /// Hyperliquid 订单事实驱动的下单输入。
@@ -242,6 +244,8 @@ pub struct PlaceHyperliquidSpotOrderV2Input {
     pub maker_fee_bps: u64,
     pub taker_fee_bps: u64,
     pub client_order_id: Option<String>,
+    /// 订单创建时间，单位为 Unix 纳秒。
+    pub created_at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -279,6 +283,8 @@ pub struct MatchSpotOrderV2Input {
     pub taker_fee_bps: u64,
     /// 本次撮合生成成交事实使用的业务时间，单位毫秒。
     pub executed_at_ms: u64,
+    /// 本次订单状态变更时间，单位为 Unix 纳秒。
+    pub timestamp: u64,
 }
 
 /// 撮合行为结果。
@@ -293,6 +299,8 @@ pub struct MatchSpotOrderV2Outcome {
 pub struct CancelSpotOrderV2Input {
     /// 被释放冻结余额对应的余额实体 ID。
     pub balance_entity_id: String,
+    /// 撤单时间，单位为 Unix 纳秒。
+    pub timestamp: u64,
 }
 
 /// 撤单行为结果。
@@ -468,6 +476,8 @@ pub struct TriggerSpotOrderV2Input {
     pub maker_fee_bps: u64,
     /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
     pub taker_fee_bps: u64,
+    /// 条件单触发时间，单位为 Unix 纳秒。
+    pub timestamp: u64,
 }
 
 /// `SpotOrderV2 v2` 的目标态订单聚合。
@@ -528,6 +538,10 @@ pub struct SpotOrderV2 {
     pub fee_reservation: Reservation,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
+    /// 订单创建时间，单位为 Unix 纳秒。
+    pub created_at: u64,
+    /// 订单最后更新时间，单位为 Unix 纳秒。
+    pub updated_at: u64,
     /// 当前订单实体版本，用于生成可重放更新事件。
     pub version: u64,
 }
@@ -569,6 +583,8 @@ impl SpotOrderV2 {
         reservation: Reservation,
         client_order_id: Option<String>,
         version: u64,
+        created_at: u64,
+        updated_at: u64,
     ) -> Self {
         let fee_reservation = Self::default_fee_reservation_from_order_parts(
             order_id.as_str(),
@@ -595,6 +611,8 @@ impl SpotOrderV2 {
             fee_reservation,
             client_order_id,
             version,
+            created_at,
+            updated_at,
         )
     }
 
@@ -617,6 +635,8 @@ impl SpotOrderV2 {
         fee_reservation: Reservation,
         client_order_id: Option<String>,
         version: u64,
+        created_at: u64,
+        updated_at: u64,
     ) -> Self {
         let identity = SpotOrderIdentity {
             order_id: order_id.clone(),
@@ -645,6 +665,8 @@ impl SpotOrderV2 {
             reservation,
             fee_reservation,
             client_order_id,
+            created_at,
+            updated_at,
             version,
         }
     }
@@ -666,6 +688,7 @@ impl SpotOrderV2 {
         maker_fee_bps: u64,
         taker_fee_bps: u64,
         client_order_id: Option<String>,
+        created_at: u64,
     ) -> Result<Self, SpotOrderV2BehaviorError> {
         let reservation = Self::principal_reservation(
             order_id.as_str(),
@@ -703,6 +726,8 @@ impl SpotOrderV2 {
             fee_reservation,
             client_order_id,
             1,
+            created_at,
+            created_at,
         ))
     }
 
@@ -720,6 +745,7 @@ impl SpotOrderV2 {
         order_type: SpotOrderType,
         client_order_id: Option<String>,
         version: u64,
+        created_at: u64,
     ) -> Self {
         let identity = SpotOrderIdentity {
             order_id: order_id.clone(),
@@ -760,6 +786,8 @@ impl SpotOrderV2 {
             reservation,
             fee_reservation,
             client_order_id,
+            created_at,
+            updated_at: created_at,
             version,
         }
     }
@@ -828,6 +856,8 @@ impl SpotOrderV2 {
             fee_reservation,
             input.client_order_id,
             1,
+            input.created_at,
+            input.created_at,
         );
 
         Ok(PlaceSpotOrderV2Outcome { order, freeze_ledger_entry })
@@ -863,6 +893,7 @@ impl SpotOrderV2 {
                 input.order_type,
                 input.client_order_id,
                 1,
+                input.created_at,
             );
             order.reduce_only = input.reduce_only;
             return Ok(PlaceHyperliquidSpotOrderV2Outcome { order, freeze_ledger_entry: None });
@@ -887,6 +918,7 @@ impl SpotOrderV2 {
             maker_fee_bps: input.maker_fee_bps,
             taker_fee_bps: input.taker_fee_bps,
             client_order_id: input.client_order_id,
+            created_at: input.created_at,
         })?;
         outcome.order.reduce_only = input.reduce_only;
         Ok(PlaceHyperliquidSpotOrderV2Outcome {
@@ -1004,6 +1036,7 @@ impl SpotOrderV2 {
         self.reservation = reservation;
         self.fee_reservation = fee_reservation;
         self.version = next_version;
+        self.updated_at = input.timestamp;
         Ok(())
     }
 
@@ -1638,10 +1671,12 @@ impl SpotOrderV2 {
         next_version: u64,
         status: SpotOrderStatus,
         status_reason: Option<SpotOrderStatusReason>,
+        timestamp: u64,
     ) {
         self.version = next_version;
         self.status = status;
         self.status_reason = status_reason;
+        self.updated_at = timestamp;
     }
 
     fn next_version(&self) -> Result<u64, SpotOrderV2MatchError> {
@@ -1656,7 +1691,11 @@ impl SpotOrderV2 {
     /// 领域方法：按成交事实推进订单生命周期。
     ///
     /// 可 BDD 规格化的聚合根行为：成交后推进 filled quantity 与生命周期状态。
-    pub fn fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+    pub fn fill(
+        &mut self,
+        added_fill_qty: u64,
+        timestamp: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         self.ensure_matchable()?;
         let next_filled_qty = self
             .filled_qty
@@ -1667,7 +1706,7 @@ impl SpotOrderV2 {
         }
         let next_version = self.next_version()?;
         self.filled_qty = next_filled_qty;
-        self.transition_to(next_version, self.matched_status_for(next_filled_qty), None);
+        self.transition_to(next_version, self.matched_status_for(next_filled_qty), None, timestamp);
         Ok(())
     }
 
@@ -1725,8 +1764,8 @@ impl SpotOrderV2 {
                 input.executed_at_ms,
             );
 
-            maker.fill(terms.trade_qty)?;
-            self.fill(terms.trade_qty)?;
+            maker.fill(terms.trade_qty, input.timestamp)?;
+            self.fill(terms.trade_qty, input.timestamp)?;
             trades.push(trade);
 
             if self.remaining_qty().ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)? == 0 {
@@ -1750,6 +1789,7 @@ impl SpotOrderV2 {
             self.version = next_version;
             self.status = SpotOrderStatus::Canceled;
             self.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
+            self.updated_at = input.timestamp;
             return Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: None });
         }
 
@@ -1783,19 +1823,25 @@ impl SpotOrderV2 {
             next_version,
             SpotOrderStatus::Canceled,
             Some(SpotOrderStatusReason::CanceledByUser),
+            input.timestamp,
         );
 
         Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: Some(unfreeze_ledger_entry) })
     }
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
-    fn cancel_ioc_unfilled(&mut self, next_filled_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+    fn cancel_ioc_unfilled(
+        &mut self,
+        next_filled_qty: u64,
+        timestamp: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         let next_version = self.next_version()?;
         self.filled_qty = next_filled_qty;
         self.transition_to(
             next_version,
             SpotOrderStatus::Canceled,
             Some(SpotOrderStatusReason::IocCancelRejected),
+            timestamp,
         );
         Ok(())
     }
@@ -1803,12 +1849,16 @@ impl SpotOrderV2 {
     /// 领域方法：按 IOC / 市价订单无流动性语义拒绝订单。
     ///
     /// 可 BDD 规格化的聚合根行为：IOC 或市价订单因无流动性被拒绝。
-    pub(crate) fn reject_as_no_liquidity(&mut self) -> Result<(), SpotOrderV2MatchError> {
+    pub(crate) fn reject_as_no_liquidity(
+        &mut self,
+        timestamp: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         let next_version = self.next_version()?;
         self.transition_to(
             next_version,
             SpotOrderStatus::Rejected,
             Some(self.no_liquidity_status_reason()),
+            timestamp,
         );
         Ok(())
     }
@@ -1816,7 +1866,11 @@ impl SpotOrderV2 {
     /// 领域方法：应用 taker 本轮撮合结束后的业务结果。
     ///
     /// 可 BDD 规格化的聚合根行为：taker 本轮撮合结束后进入终态或成交态。
-    pub fn finish_after_match(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> {
+    pub fn finish_after_match(
+        &mut self,
+        added_fill_qty: u64,
+        timestamp: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         let next_filled_qty = self
             .filled_qty
             .checked_add(added_fill_qty)
@@ -1827,15 +1881,15 @@ impl SpotOrderV2 {
                 if added_fill_qty == 0 {
                     return Err(SpotOrderV2MatchError::NoTradesMatched);
                 }
-                self.fill(added_fill_qty)
+                self.fill(added_fill_qty, timestamp)
             }
             SpotOrderTif::Ioc => {
                 if added_fill_qty == 0 {
-                    self.reject_as_no_liquidity()
+                    self.reject_as_no_liquidity(timestamp)
                 } else if next_filled_qty == self.qty {
-                    self.fill(added_fill_qty)
+                    self.fill(added_fill_qty, timestamp)
                 } else {
-                    self.cancel_ioc_unfilled(next_filled_qty)
+                    self.cancel_ioc_unfilled(next_filled_qty, timestamp)
                 }
             }
         }
@@ -1844,12 +1898,13 @@ impl SpotOrderV2 {
     /// 领域方法：将 ALO 订单按“会立即吃单”语义拒绝。
     ///
     /// 可 BDD 规格化的聚合根行为：ALO 会立即吃单时被拒绝。
-    pub fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderV2MatchError> {
+    pub fn reject_as_bad_alo(&mut self, timestamp: u64) -> Result<(), SpotOrderV2MatchError> {
         let next_version = self.next_version()?;
         self.transition_to(
             next_version,
             SpotOrderStatus::Rejected,
             Some(SpotOrderStatusReason::BadAloPxRejected),
+            timestamp,
         );
         Ok(())
     }
@@ -1946,6 +2001,8 @@ impl FieldDiff for SpotOrderV2 {
             EntityFieldChange::new("group_relation", "", self.group_relation.replay_value()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
             EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
+            EntityFieldChange::new("created_at", "", self.created_at.to_string()),
+            EntityFieldChange::new("updated_at", "", self.updated_at.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new(
                 "status_reason",
@@ -2084,6 +2141,18 @@ impl FieldDiff for SpotOrderV2 {
             "filled_qty",
             self.filled_qty.to_string(),
             other.filled_qty.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "created_at",
+            self.created_at.to_string(),
+            other.created_at.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "updated_at",
+            self.updated_at.to_string(),
+            other.updated_at.to_string(),
         );
         push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(
@@ -2269,6 +2338,8 @@ impl Entity for SpotOrderV2 {
             | "exchange_oid"
             | "qty"
             | "filled_qty"
+            | "created_at"
+            | "updated_at"
             | "limit_price"
             | "version"
             | "reservation_original_amount"
@@ -2285,6 +2356,16 @@ impl Entity for SpotOrderV2 {
 
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
         Ok(stable_order_entity_id(&self.order_id))
+    }
+}
+
+impl EntityLifecycle for SpotOrderV2 {
+    fn created_at(&self) -> u64 {
+        self.created_at
+    }
+
+    fn updated_at(&self) -> u64 {
+        self.updated_at
     }
 }
 
