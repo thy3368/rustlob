@@ -6497,6 +6497,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "cmd_handler",
+ "entity",
  "example_core_use_case",
  "libmdbx",
  "serde",
