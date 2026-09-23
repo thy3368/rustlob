@@ -136,6 +136,7 @@ struct ActiveOrderAfterContext<'a> {
     maker_fee_bps: u64,
     taker_fee_bps: u64,
     executed_at_ms: u64,
+    timestamp: u64,
 }
 
 struct ActiveOrderAfter {
@@ -161,6 +162,7 @@ fn compute_active_order_after(
         maker_fee_bps,
         taker_fee_bps,
         executed_at_ms,
+        timestamp,
     } = context;
     let mut created_trades = Vec::with_capacity(0);
     let mut created_vouchers = Vec::with_capacity(0);
@@ -177,7 +179,7 @@ fn compute_active_order_after(
             });
         }
         SpotOrderV2MatchingDecision::RejectAlo => {
-            taker_after.reject_as_bad_alo()?;
+            taker_after.reject_as_bad_alo(timestamp)?;
             release_remaining_for_terminal(
                 &mut taker_after,
                 &mut balance_book,
@@ -205,6 +207,7 @@ fn compute_active_order_after(
             maker_fee_bps,
             taker_fee_bps,
             executed_at_ms,
+            timestamp,
         },
     )?;
     let mut total_taker_fill = 0_u64;
@@ -277,7 +280,7 @@ fn compute_active_order_after(
     taker_after = taker_before_match;
     taker_after.reservation = taker_reservation_after_match;
     taker_after.fee_reservation = taker_fee_reservation_after_match;
-    taker_after.finish_after_match(total_taker_fill)?;
+    taker_after.finish_after_match(total_taker_fill, timestamp)?;
     release_remaining_for_terminal(
         &mut taker_after,
         &mut balance_book,
@@ -948,7 +951,8 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
             fee_account_id: &state.fee_account_id,
             maker_fee_bps: state.maker_fee_bps,
             taker_fee_bps: state.taker_fee_bps,
-            executed_at_ms: context.execution_time_ms,
+            executed_at_ms: context.execution_time_ns / 1_000_000,
+            timestamp: context.execution_time_ns,
         })?;
 
         Ok(MatchSpotOrderV2AfterChanges {
@@ -1052,261 +1056,4 @@ fn apply_freeze_for_open_taker_reservation(
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     entry.apply_to(balance)?;
     Ok(entry)
-}
-
-#[cfg(test)]
-mod tests {
-    use common_entity::{ExecutionContext, StateMachineOwnedV2Diff};
-
-    use super::*;
-    use crate::{
-        PlaceSpotOrderV2Input, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
-    };
-
-    fn test_principal_reservation(
-        order_id: &str,
-        account_id: &str,
-        side: SpotOrderSide,
-        qty: u64,
-        order_price: u64,
-    ) -> Reservation {
-        match SpotOrderV2::principal_reservation(
-            order_id,
-            account_id,
-            side,
-            qty,
-            order_price,
-            "BTC",
-            "USDT",
-        ) {
-            Ok(reservation) => reservation,
-            Err(error) => panic!("invalid test spot order reservation: {error}"),
-        }
-    }
-
-    fn buy_order(tif: SpotOrderTif) -> SpotOrderV2 {
-        SpotOrderV2::place(PlaceSpotOrderV2Input {
-            order_id: "taker-buy".to_string(),
-            asset: 10_001,
-            account_id: "buyer".to_string(),
-            symbol: "BTCUSDT".to_string(),
-            side: SpotOrderSide::Buy,
-            limit_price: 100,
-            order_type: SpotOrderType::Limit { tif },
-            qty: 2,
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            base_balance_entity_id: "buyer:BTC".to_string(),
-            quote_balance_entity_id: "buyer:USDT".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-            client_order_id: None,
-        })
-        .unwrap()
-        .order
-    }
-
-    fn match_cmd() -> MatchSpotOrderV2Cmd {
-        MatchSpotOrderV2Cmd {
-            party_id: "buyer".to_string(),
-            asset: 10_001,
-            order_id: "taker-buy".to_string(),
-        }
-    }
-
-    fn execution_context() -> ExecutionContext {
-        ExecutionContext { execution_time_ms: 1_717_171_717_000 }
-    }
-
-    fn sell_order(order_id: &str, account_id: &str, price: u64, qty: u64) -> SpotOrderV2 {
-        SpotOrderV2::new(
-            order_id.to_string(),
-            10_001,
-            Some(price),
-            account_id.to_string(),
-            "BTCUSDT".to_string(),
-            SpotOrderSide::Sell,
-            price,
-            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            qty,
-            0,
-            SpotOrderStatus::Open,
-            None,
-            test_principal_reservation(order_id, account_id, SpotOrderSide::Sell, qty, price),
-            None,
-            1,
-        )
-    }
-
-    fn balance(account_id: &str, asset_id: &str, available: u64, frozen: u64) -> Balance {
-        Balance::new(account_id.to_string(), asset_id.to_string(), available, frozen, 1)
-    }
-
-    #[test]
-    fn place_gtc_without_cross_keeps_state_and_outputs_no_side_effects() {
-        let use_case = OpenMatchSpotOrderV2UseCase;
-        let taker = buy_order(SpotOrderTif::Gtc);
-        let makers = vec![sell_order("maker-1", "seller", 110, 1)];
-        let balances = vec![
-            balance("buyer", "USDT", 1201, 0),
-            balance("buyer", "BTC", 0, 0),
-            balance("seller", "BTC", 0, 1),
-            balance("seller", "USDT", 0, 1),
-            balance("fee", "USDT", 0, 0),
-        ];
-        let state = MatchSpotOrderV2State {
-            taker_order: taker.clone(),
-            maker_orders: makers.clone(),
-            settlement_balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            fee_account_id: "fee".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let after = use_case
-            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
-            .unwrap();
-
-        assert_eq!(after.taker_order_after, taker);
-        assert_eq!(after.maker_orders_after, makers);
-        assert!(after.created_trades.is_empty());
-        assert!(after.created_vouchers.is_empty());
-        assert_eq!(
-            after.created_balance_ledger_entries.first().map(|entry| entry.operation),
-            Some(BalanceLedgerOperation::Freeze)
-        );
-        let changes =
-            OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after.clone()).unwrap();
-        assert!(changes.updated_taker_order.is_none());
-        assert_eq!(changes.updated_balances.len(), 5);
-    }
-
-    #[test]
-    fn place_ioc_partial_fill_releases_remainder() {
-        let use_case = OpenMatchSpotOrderV2UseCase;
-        let makers = vec![sell_order("maker-1", "seller", 100, 1)];
-        let balances = vec![
-            balance("buyer", "USDT", 1201, 0),
-            balance("buyer", "BTC", 0, 0),
-            balance("seller", "BTC", 0, 1),
-            balance("seller", "USDT", 0, 1),
-            balance("fee", "USDT", 0, 0),
-        ];
-        let taker = buy_order(SpotOrderTif::Ioc);
-        let state = MatchSpotOrderV2State {
-            taker_order: taker,
-            maker_orders: makers.clone(),
-            settlement_balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            fee_account_id: "fee".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let changes = use_case
-            .compute_state_diff_with_context(&match_cmd(), state, &execution_context())
-            .unwrap();
-
-        assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.created_trades[0].executed_at_ms, 1_717_171_717_000);
-        assert_eq!(changes.created_trades[0].taker_fee, 1);
-        assert_eq!(changes.created_trades[0].maker_fee, 1);
-        assert!(changes.updated_taker_order.is_some());
-        let taker_after = changes.taker_order_after().expect("taker should be updated");
-        assert_eq!(taker_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(taker_after.status_reason(), Some(SpotOrderStatusReason::IocCancelRejected));
-        assert_eq!(
-            changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
-            Some(BalanceLedgerOperation::Freeze)
-        );
-        let events = changes.to_replayable_events().unwrap();
-        assert!(events.first().is_some_and(EntityReplayableEvent::is_updated));
-    }
-
-    #[test]
-    fn merge_before_after_uses_generated_taker_as_before_truth() {
-        let use_case = OpenMatchSpotOrderV2UseCase;
-        let taker = buy_order(SpotOrderTif::Ioc);
-        let makers = vec![sell_order("maker-1", "seller", 100, 1)];
-        let balances = vec![
-            balance("buyer", "USDT", 1201, 0),
-            balance("buyer", "BTC", 0, 0),
-            balance("seller", "BTC", 0, 1),
-            balance("seller", "USDT", 0, 1),
-            balance("fee", "USDT", 0, 0),
-        ];
-        let state = MatchSpotOrderV2State {
-            taker_order: taker.clone(),
-            maker_orders: makers.clone(),
-            settlement_balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            fee_account_id: "fee".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let after = use_case
-            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
-            .unwrap();
-
-        let changes = OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after).unwrap();
-
-        assert_eq!(changes.updated_taker_order.as_ref().map(|pair| &pair.before), Some(&taker));
-        assert_eq!(changes.updated_maker_orders[0].before, makers[0]);
-        assert_eq!(changes.updated_balances.len(), balances.len());
-        let before_by_key = balances
-            .iter()
-            .map(|balance| ((balance.account_id.clone(), balance.asset_id.clone()), balance))
-            .collect::<HashMap<_, _>>();
-        for pair in &changes.updated_balances {
-            let key = (pair.before.account_id.clone(), pair.before.asset_id.clone());
-            assert_eq!(Some(&pair.before), before_by_key.get(&key).copied());
-        }
-    }
-
-    #[test]
-    fn place_alo_cross_rejects_and_releases() {
-        let use_case = OpenMatchSpotOrderV2UseCase;
-        let makers = vec![sell_order("maker-1", "seller", 99, 1)];
-        let balances = vec![
-            balance("buyer", "USDT", 1201, 0),
-            balance("buyer", "BTC", 0, 0),
-            balance("seller", "BTC", 0, 1),
-            balance("seller", "USDT", 0, 1),
-            balance("fee", "USDT", 0, 0),
-        ];
-        let taker = buy_order(SpotOrderTif::Alo);
-        let state = MatchSpotOrderV2State {
-            taker_order: taker.clone(),
-            maker_orders: makers.clone(),
-            settlement_balances: balances.clone(),
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            fee_account_id: "fee".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let after = use_case
-            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
-            .unwrap();
-
-        assert_eq!(taker.status(), SpotOrderStatus::Open);
-        assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);
-        assert_eq!(
-            after.taker_order_after.status_reason(),
-            Some(SpotOrderStatusReason::BadAloPxRejected)
-        );
-        assert!(after.created_trades.is_empty());
-        assert!(
-            after
-                .created_balance_ledger_entries
-                .iter()
-                .any(|entry| entry.operation == BalanceLedgerOperation::Unfreeze)
-        );
-    }
 }

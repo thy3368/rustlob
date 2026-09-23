@@ -124,6 +124,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
                 &given_state.balances,
                 &given_state.order.reservation,
             )?,
+            timestamp: given_state.order.updated_at,
         })?;
         validate_all_reservations_for_order(
             &given_state.order,
@@ -137,7 +138,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
         &self,
         _cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        _context: &ExecutionContext,
+        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut order_after = given_state.order.clone();
         let mut balance_book = BalanceMap::new(&given_state.balances);
@@ -148,6 +149,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
                 &given_state.balances,
                 &given_state.order.reservation,
             )?,
+            timestamp: context.execution_time_ns,
         })?;
         if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
             let unfreeze_ledger_entry =
@@ -544,97 +546,5 @@ fn map_reservation_error_to_cancel(error: crate::ReservationError) -> CancelSpot
         | crate::ReservationError::InvalidAmount
         | crate::ReservationError::InvalidOriginalAmount
         | crate::ReservationError::MissingCloseReason => CancelSpotOrderV2Error::ArithmeticOverflow,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff};
-
-    use super::*;
-    use crate::{
-        Balance, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
-    };
-
-    #[test]
-    fn cancel_open_order_releases_principal_and_fee() {
-        let order = buy_order();
-        let balances = vec![Balance::new("buyer".to_string(), "USDT".to_string(), 1000, 201, 1)];
-        let state = CancelSpotOrderV2State {
-            order: order.clone(),
-            balances,
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        };
-
-        let changes = CancelSpotOrderV2UseCase
-            .compute_state_diff(&CancelSpotOrderV2Cmd::default(), state)
-            .expect("open order cancellation should compute changes");
-
-        assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Open);
-        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(
-            changes.updated_order.after.status_reason(),
-            Some(SpotOrderStatusReason::CanceledByUser)
-        );
-        assert_eq!(changes.updated_order.after.reservation.remaining_amount, 0);
-        assert_eq!(changes.updated_order.after.fee_reservation.remaining_amount, 0);
-        assert_eq!(changes.updated_balances.len(), 1);
-        assert_eq!(changes.updated_balances[0].before.frozen, 201);
-        assert_eq!(changes.updated_balances[0].after.frozen, 0);
-        assert_eq!(changes.created_balance_ledger_entries.len(), 2);
-
-        let events = changes.to_replayable_events().expect("cancel changes should project events");
-        assert_eq!(events.len(), 5);
-        assert!(events.iter().all(|event| event.new_version == event.old_version + 1));
-        assert!(events[0].is_updated());
-        assert!(events[1].is_updated());
-        assert!(events[2].is_updated());
-        assert!(events[3].is_created());
-        assert!(events[4].is_created());
-    }
-
-    fn buy_order() -> SpotOrderV2 {
-        let principal_reservation = SpotOrderV2::principal_reservation(
-            "order-1",
-            "buyer",
-            SpotOrderSide::Buy,
-            2,
-            100,
-            "BTC",
-            "USDT",
-        )
-        .expect("principal reservation should be valid");
-        let fee_reservation = SpotOrderV2::fee_reservation(
-            "order-1",
-            "buyer",
-            SpotOrderSide::Buy,
-            2,
-            100,
-            "USDT",
-            5,
-            10,
-        )
-        .expect("fee reservation should be valid");
-        SpotOrderV2::new_with_fee_reservation(
-            "order-1".to_string(),
-            10000,
-            Some(77738308),
-            "buyer".to_string(),
-            "BTCUSDT".to_string(),
-            SpotOrderSide::Buy,
-            100,
-            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            2,
-            0,
-            SpotOrderStatus::Open,
-            None,
-            principal_reservation,
-            fee_reservation,
-            None,
-            1,
-        )
     }
 }

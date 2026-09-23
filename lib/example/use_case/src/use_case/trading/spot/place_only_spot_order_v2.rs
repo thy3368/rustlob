@@ -173,20 +173,22 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
-        _context: &ExecutionContext,
+        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         match cmd {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
-                Ok(PlaceOnlySpotOrderV2AfterChanges::Single { created_order: build_order(order)? })
+                Ok(PlaceOnlySpotOrderV2AfterChanges::Single {
+                    created_order: build_order(order, context.execution_time_ns)?,
+                })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
-                let mut created_parent_order = build_order(parent)?;
+                let mut created_parent_order = build_order(parent, context.execution_time_ns)?;
                 created_parent_order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
-                    let mut child_order = build_order(child)?;
+                    let mut child_order = build_order(child, context.execution_time_ns)?;
                     child_order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
                         parent_order_id: parent_order_id.clone(),
                     };
@@ -302,6 +304,7 @@ fn validate_normal_tpsl(
 
 fn build_order(
     order: &PlaceOnlySpotOrderV2OrderCmd,
+    created_at: u64,
 ) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
     let side = if order.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
     let qty = parse_positive_u64(&order.size, PlaceOnlySpotOrderV2Error::InvalidSize)?;
@@ -324,6 +327,7 @@ fn build_order(
                 order.maker_fee_bps,
                 order.taker_fee_bps,
                 order.cloid.clone(),
+                created_at,
             )?;
             created.reduce_only = order.reduce_only;
             created.order_type = SpotOrderType::Limit { tif };
@@ -349,6 +353,7 @@ fn build_order(
                 },
                 order.cloid.clone(),
                 1,
+                created_at,
             );
             created.reduce_only = order.reduce_only;
             Ok(created)
