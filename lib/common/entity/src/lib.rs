@@ -1,7 +1,7 @@
-use std::sync::LazyLock;
 use std::sync::atomic::AtomicU64;
+use std::sync::LazyLock;
 
-pub use entity_derive::{ActionType, ObjectType, action_type, function};
+pub use entity_derive::{action_type, function, ActionType, ObjectType};
 
 mod entity_v2;
 
@@ -23,16 +23,12 @@ pub use use_case::executor::{
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
 pub use use_case::state_machine_v2::StateMachineOwnedV2Diff as MultiAggregateUseCaseBeforeAfter;
-/// 文档首选称呼：围绕主业务主题组织多个相关 use case 的多聚合编排抽象。
-///
-/// 这是 `core.use_case` 层的多聚合 `use-case family` 公开称呼，只用于跨聚合或多业务对象协调。
-pub use use_case::state_machine_v2::StateMachineV2 as MultiAggregateUseCase;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use use_case::state_machine_v2::StateMachineV2Unchecked as MultiAggregateUseCaseUnchecked;
 pub use use_case::state_machine_v2::{
-    StateMachineOwnedV2Diff, StateMachineV2, StateMachineV2Unchecked,
+    ExecutionContext, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
 

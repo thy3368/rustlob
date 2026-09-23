@@ -1,3 +1,4 @@
+use crate::use_case::state_machine_v2::ExecutionContext;
 use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
@@ -85,20 +86,14 @@ impl StateMachineExecutor {
         OB: StateSink<F>,
     {
         family.check_command(command).map_err(ExecutionError::Business)?;
+        let context = ExecutionContext::now();
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
             state_source.load_given_state(command).map_err(ExecutionError::LoadState)?;
 
-        // 在已加载状态上校验 command，并计算 / 合并 before-after changes。
-        family.validate_state_given(command, &given_state).map_err(ExecutionError::Business)?;
-
-        let after = family
-            .compute_state_changed_unchecked(command, &given_state)
-            .map_err(ExecutionError::Business)?;
-
         let changes =
-            F::do_compute_state_diff(given_state, after).map_err(ExecutionError::Business)?;
+            family.compute_state_diff(&command, given_state).map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
         let events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;

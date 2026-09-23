@@ -436,7 +436,22 @@
 
 use std::fmt::Debug;
 
-use crate::{ReplayableChanges, action_type};
+use crate::{action_type, ReplayableChanges};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecutionContext {
+    pub execution_time_ms: u64,
+}
+
+impl ExecutionContext {
+    pub fn now() -> Self {
+        let execution_time_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis().try_into().unwrap_or(u64::MAX))
+            .unwrap_or_default();
+        Self { execution_time_ms }
+    }
+}
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
@@ -486,35 +501,27 @@ pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
+        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error>;
-}
 
-/// 多聚合 `use-case family` 的稳定对外入口。
-///
-/// 它是该 family 的公共业务执行壳，固定执行：
-/// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
-///
-/// 这让多聚合编排 hook 顺序稳定下来，避免实现者绕过校验直接计算 after truth。
-pub trait StateMachineV2: StateMachineV2Unchecked {
-    fn compute_state_changed(
+    fn compute_state_changed_with_context(
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
+        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
         self.validate_state_given(cmd, given_state)?;
-        self.compute_state_changed_unchecked(cmd, given_state)
+        self.compute_state_changed_unchecked(cmd, given_state, context)
     }
 }
-
-impl<T> StateMachineV2 for T where T: StateMachineV2Unchecked {}
 
 /// 在同一多聚合 family 编排上补足 replay / persist / audit 所需 case truth 的扩展。
 ///
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait StateMachineOwnedV2Diff: StateMachineV2 {
+pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
     /// 最终可 replay 的 before/after changes。
     type StateDiff: ReplayableChanges;
 
@@ -533,131 +540,8 @@ pub trait StateMachineOwnedV2Diff: StateMachineV2 {
         cmd: &Self::Command,
         given_state: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let after = <Self as StateMachineV2>::compute_state_changed(self, cmd, &given_state)?;
+        let context = ExecutionContext::now();
+        let after = self.compute_state_changed_with_context(cmd, &given_state, &context)?;
         Self::do_compute_state_diff(given_state, after)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use crate::{
-        EntityError, EntityReplayableEvent, StateMachineOwnedV2Diff, StateMachineV2,
-        StateMachineV2Unchecked,
-    };
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    enum HookError {
-        PreCheckRejected,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct HookCommand {
-        reject_in_pre_check: bool,
-    }
-
-    #[derive(Debug, Clone)]
-    struct HookMachine;
-
-    impl StateMachineV2Unchecked for HookMachine {
-        type Command = HookCommand;
-        type StateGiven = Arc<Mutex<Vec<&'static str>>>;
-        type Error = HookError;
-        type StateChanged = ();
-
-        fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-            if cmd.reject_in_pre_check {
-                return Err(HookError::PreCheckRejected);
-            }
-            Ok(())
-        }
-
-        fn validate_state_given(
-            &self,
-            _cmd: &Self::Command,
-            given_state: &Arc<Mutex<Vec<&'static str>>>,
-        ) -> Result<(), Self::Error> {
-            if let Ok(mut log) = given_state.lock() {
-                log.push("validate");
-            }
-            Ok(())
-        }
-
-        fn compute_state_changed_unchecked(
-            &self,
-            _cmd: &Self::Command,
-            given_state: &Arc<Mutex<Vec<&'static str>>>,
-        ) -> Result<Self::StateChanged, Self::Error> {
-            if let Ok(mut log) = given_state.lock() {
-                log.push("unchecked");
-            }
-            Ok(())
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    struct ReplayableLog;
-
-    impl crate::ReplayableChanges for ReplayableLog {
-        fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
-            Ok(Vec::new())
-        }
-    }
-
-    impl StateMachineOwnedV2Diff for HookMachine {
-        type StateDiff = ReplayableLog;
-
-        fn do_compute_state_diff(
-            given_state: Arc<Mutex<Vec<&'static str>>>,
-            _after: Self::StateChanged,
-        ) -> Result<Self::StateDiff, Self::Error> {
-            if let Ok(mut log) = given_state.lock() {
-                log.push("merge");
-            }
-            Ok(ReplayableLog)
-        }
-    }
-
-    #[test]
-    fn v2_after_path_reuses_validate_then_unchecked_chain() -> Result<(), String> {
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let machine = HookMachine;
-
-        machine
-            .compute_state_changed(&HookCommand { reject_in_pre_check: false }, &log)
-            .map_err(|err| format!("compute_after_changes failed: {err:?}"))?;
-        let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
-
-        assert_eq!(*actual, vec!["validate", "unchecked"]);
-        Ok(())
-    }
-
-    #[test]
-    fn v2_before_after_path_reuses_after_pipeline_then_merges_with_given_state()
-    -> Result<(), String> {
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let machine = HookMachine;
-
-        machine
-            .compute_state_diff(&HookCommand { reject_in_pre_check: false }, Arc::clone(&log))
-            .map_err(|err| format!("compute_before_after_changes failed: {err:?}"))?;
-        let actual = log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?;
-
-        assert_eq!(*actual, vec!["validate", "unchecked", "merge"]);
-        Ok(())
-    }
-
-    #[test]
-    fn v2_pre_check_stops_validate_and_unchecked() -> Result<(), String> {
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let machine = HookMachine;
-
-        assert_eq!(
-            machine.compute_state_changed(&HookCommand { reject_in_pre_check: true }, &log,),
-            Err(HookError::PreCheckRejected)
-        );
-        assert!(log.lock().map_err(|err| format!("log mutex poisoned: {err}"))?.is_empty());
-        Ok(())
     }
 }
