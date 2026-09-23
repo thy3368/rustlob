@@ -35,7 +35,7 @@ pub struct MatchSpotOrderV3Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchSpotOrderV3AfterChanges {
     /// 没有成交，订单继续留在订单簿；本次没有其它业务副作用。
-    Resting ,
+    Resting,
     /// 发生成交但仍有剩余数量，订单继续可撮合。
     PartiallyFilled {
         taker_order_after: SpotOrderV2,
@@ -235,174 +235,69 @@ fn replay_events(
     Ok(events)
 }
 
-struct ActiveOrderAfterInput<'a> {
-    taker_after: SpotOrderV2,
-    maker_orders_after: Vec<SpotOrderV2>,
-    balance_book: BalanceMap,
-    created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-    base_asset_id: &'a str,
-    quote_asset_id: &'a str,
-    fee_account_id: &'a str,
-    maker_fee_bps: u64,
-    taker_fee_bps: u64,
-    executed_at_ms: u64,
-    timestamp: u64,
-}
-
-struct ActiveOrderAfter {
-    taker_order_after: SpotOrderV2,
-    maker_orders_after: Vec<SpotOrderV2>,
-    balances_after: Vec<Balance>,
+struct MatchedTradeEffects {
     created_trades: Vec<SpotTrade>,
     created_vouchers: Vec<SettlementTransferVoucher>,
     created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    total_taker_fill: u64,
 }
 
-fn classify_after(after: ActiveOrderAfter) -> MatchSpotOrderV3AfterChanges {
-    let ActiveOrderAfter {
-        taker_order_after,
-        maker_orders_after,
-        balances_after,
-        created_trades,
-        created_vouchers,
-        created_balance_ledger_entries,
-    } = after;
-
-    match taker_order_after.status() {
-        SpotOrderStatus::Open => MatchSpotOrderV3AfterChanges::Resting,
-        SpotOrderStatus::PartiallyFilled => MatchSpotOrderV3AfterChanges::PartiallyFilled {
-            taker_order_after,
-            maker_orders_after,
-            balances_after,
-            created_trades,
-            created_vouchers,
-            created_balance_ledger_entries,
-        },
-        SpotOrderStatus::Filled => MatchSpotOrderV3AfterChanges::Filled {
-            filled_taker_order_after: taker_order_after,
-            maker_orders_after,
-            balances_after,
-            created_trades,
-            created_vouchers,
-            created_balance_ledger_entries,
-        },
-        SpotOrderStatus::Canceled => MatchSpotOrderV3AfterChanges::CanceledAfterPartialFill {
-            canceled_taker_order_after: taker_order_after,
-            maker_orders_after,
-            balances_after,
-            created_trades,
-            created_vouchers,
-            created_balance_ledger_entries,
-        },
-        SpotOrderStatus::Rejected => MatchSpotOrderV3AfterChanges::Rejected {
-            rejected_taker_order_after: taker_order_after,
-            balances_after,
-            created_balance_ledger_entries,
-        },
-        SpotOrderStatus::Pending => MatchSpotOrderV3AfterChanges::Rejected {
-            rejected_taker_order_after: taker_order_after,
-            balances_after,
-            created_balance_ledger_entries,
-        },
-    }
+struct MatchedTradeSettlementContext<'a> {
+    base_asset_id: &'a str,
+    quote_asset_id: &'a str,
+    fee_account_id: &'a str,
+    balance_book: &'a mut BalanceMap,
+    ledger_entries: &'a mut Vec<BalanceLedgerEntryV2>,
 }
 
-fn compute_active_order_after(
-    input: ActiveOrderAfterInput<'_>,
-) -> Result<ActiveOrderAfter, MatchSpotOrderV3Error> {
-    let ActiveOrderAfterInput {
-        mut taker_after,
-        mut maker_orders_after,
-        mut balance_book,
-        mut created_balance_ledger_entries,
+fn settle_matched_trades(
+    taker_order: &mut SpotOrderV2,
+    maker_orders: &mut [SpotOrderV2],
+    trades: impl IntoIterator<Item = SpotTrade>,
+    context: MatchedTradeSettlementContext<'_>,
+) -> Result<MatchedTradeEffects, MatchSpotOrderV3Error> {
+    let MatchedTradeSettlementContext {
         base_asset_id,
         quote_asset_id,
         fee_account_id,
-        maker_fee_bps,
-        taker_fee_bps,
-        executed_at_ms,
-        timestamp,
-    } = input;
-    let mut created_trades = Vec::with_capacity(0);
-    let mut created_vouchers = Vec::with_capacity(0);
-
-    match spot_order_v2_matching_decision(&taker_after, maker_orders_after.first())? {
-        SpotOrderV2MatchingDecision::Rest => {
-            return Ok(ActiveOrderAfter {
-                taker_order_after: taker_after,
-                maker_orders_after,
-                balances_after: balance_book.into_balances(),
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            });
-        }
-        SpotOrderV2MatchingDecision::RejectAlo => {
-            taker_after.reject_as_bad_alo(timestamp)?;
-            release_remaining_for_terminal(
-                &mut taker_after,
-                &mut balance_book,
-                &mut created_balance_ledger_entries,
-                maker_fee_bps,
-                taker_fee_bps,
-            )?;
-            return Ok(ActiveOrderAfter {
-                taker_order_after: taker_after,
-                maker_orders_after,
-                balances_after: balance_book.into_balances(),
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            });
-        }
-        SpotOrderV2MatchingDecision::Match => {}
-    }
-
-    let taker_before_match = taker_after.clone();
-    let match_outcome = taker_after.match_with_makers(
-        &mut maker_orders_after,
-        MatchSpotOrderV2Input {
-            match_id: concat2("spot-match:", taker_after.order_id()),
-            maker_fee_bps,
-            taker_fee_bps,
-            executed_at_ms,
-            timestamp,
-        },
-    )?;
+        balance_book,
+        ledger_entries,
+    } = context;
+    let mut created_trades = Vec::new();
+    let mut created_vouchers = Vec::new();
     let mut total_taker_fill = 0_u64;
-    for (index, trade) in match_outcome.trades.into_iter().enumerate() {
+
+    for (index, trade) in trades.into_iter().enumerate() {
         let trade_notional =
             trade.notional_quote().ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
-
         total_taker_fill = total_taker_fill
             .checked_add(trade.qty)
             .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
 
         let taker_principal_consume =
-            principal_consume_amount_for_taker(&taker_after, trade.qty, trade_notional);
+            principal_consume_amount_for_taker(taker_order, trade.qty, trade_notional);
         consume_reservation(
-            &mut taker_after.reservation,
+            &mut taker_order.reservation,
             taker_principal_consume,
             ReservationCloseReason::Filled,
         )?;
-        let Some(maker_order_after) = maker_orders_after.get_mut(index) else {
+        let Some(maker_order) = maker_orders.get_mut(index) else {
             return Err(MatchSpotOrderV3Error::BalanceNotFound);
         };
         let maker_principal_consume =
-            principal_consume_amount_for_maker(maker_order_after, trade.qty, trade_notional);
+            principal_consume_amount_for_maker(maker_order, trade.qty, trade_notional);
         consume_reservation(
-            &mut maker_order_after.reservation,
+            &mut maker_order.reservation,
             maker_principal_consume,
             ReservationCloseReason::Filled,
         )?;
-
         consume_reservation(
-            &mut taker_after.fee_reservation,
+            &mut taker_order.fee_reservation,
             trade.taker_fee,
             ReservationCloseReason::Filled,
         )?;
         consume_reservation(
-            &mut maker_order_after.fee_reservation,
+            &mut maker_order.fee_reservation,
             trade.maker_fee,
             ReservationCloseReason::Filled,
         )?;
@@ -425,14 +320,82 @@ fn compute_active_order_after(
                 base_asset_id,
                 quote_asset_id,
                 fee_account_id,
-                balance_book: &mut balance_book,
-                ledger_entries: &mut created_balance_ledger_entries,
+                balance_book,
+                ledger_entries,
             },
         )?;
-
         created_trades.push(trade);
         created_vouchers.push(voucher);
     }
+
+    Ok(MatchedTradeEffects {
+        created_trades,
+        created_vouchers,
+        created_balance_ledger_entries: std::mem::take(ledger_entries),
+        total_taker_fill,
+    })
+}
+
+fn compute_match_after(
+    state: &MatchSpotOrderV3State,
+    context: &ExecutionContext,
+) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
+    let mut taker_after = state.taker_order.clone();
+    let mut maker_orders_after = state.maker_orders.clone();
+    let mut balance_book = BalanceMap::new(&state.settlement_balances);
+    let mut created_balance_ledger_entries = Vec::new();
+    let executed_at_ms = context.execution_time_ns / 1_000_000;
+    let timestamp = context.execution_time_ns;
+
+    match spot_order_v2_matching_decision(&taker_after, maker_orders_after.first())? {
+        SpotOrderV2MatchingDecision::Rest => return Ok(MatchSpotOrderV3AfterChanges::Resting),
+        SpotOrderV2MatchingDecision::RejectAlo => {
+            taker_after.reject_as_bad_alo(timestamp)?;
+            release_remaining_for_terminal(
+                &mut taker_after,
+                &mut balance_book,
+                &mut created_balance_ledger_entries,
+                state.maker_fee_bps,
+                state.taker_fee_bps,
+            )?;
+            return Ok(MatchSpotOrderV3AfterChanges::Rejected {
+                rejected_taker_order_after: taker_after,
+                balances_after: balance_book.into_balances(),
+                created_balance_ledger_entries,
+            });
+        }
+        SpotOrderV2MatchingDecision::Match => {}
+    }
+
+    let taker_before_match = taker_after.clone();
+    let match_outcome = taker_after.match_with_makers(
+        &mut maker_orders_after,
+        MatchSpotOrderV2Input {
+            match_id: concat2("spot-match:", taker_after.order_id()),
+            maker_fee_bps: state.maker_fee_bps,
+            taker_fee_bps: state.taker_fee_bps,
+            executed_at_ms,
+            timestamp,
+        },
+    )?;
+    let MatchedTradeEffects {
+        created_trades,
+        created_vouchers,
+        created_balance_ledger_entries: settled_balance_ledger_entries,
+        total_taker_fill,
+    } = settle_matched_trades(
+        &mut taker_after,
+        &mut maker_orders_after,
+        match_outcome.trades,
+        MatchedTradeSettlementContext {
+            base_asset_id: &state.base_asset_id,
+            quote_asset_id: &state.quote_asset_id,
+            fee_account_id: &state.fee_account_id,
+            balance_book: &mut balance_book,
+            ledger_entries: &mut created_balance_ledger_entries,
+        },
+    )?;
+    created_balance_ledger_entries = settled_balance_ledger_entries;
 
     let taker_reservation_after_match = taker_after.reservation.clone();
     let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
@@ -444,18 +407,45 @@ fn compute_active_order_after(
         &mut taker_after,
         &mut balance_book,
         &mut created_balance_ledger_entries,
-        maker_fee_bps,
-        taker_fee_bps,
+        state.maker_fee_bps,
+        state.taker_fee_bps,
     )?;
 
-    Ok(ActiveOrderAfter {
-        taker_order_after: taker_after,
-        maker_orders_after,
-        balances_after: balance_book.into_balances(),
-        created_trades,
-        created_vouchers,
-        created_balance_ledger_entries,
-    })
+    let balances_after = balance_book.into_balances();
+    match taker_after.status() {
+        SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV3AfterChanges::PartiallyFilled {
+            taker_order_after: taker_after,
+            maker_orders_after,
+            balances_after,
+            created_trades,
+            created_vouchers,
+            created_balance_ledger_entries,
+        }),
+        SpotOrderStatus::Filled => Ok(MatchSpotOrderV3AfterChanges::Filled {
+            filled_taker_order_after: taker_after,
+            maker_orders_after,
+            balances_after,
+            created_trades,
+            created_vouchers,
+            created_balance_ledger_entries,
+        }),
+        SpotOrderStatus::Canceled => Ok(MatchSpotOrderV3AfterChanges::CanceledAfterPartialFill {
+            canceled_taker_order_after: taker_after,
+            maker_orders_after,
+            balances_after,
+            created_trades,
+            created_vouchers,
+            created_balance_ledger_entries,
+        }),
+        SpotOrderStatus::Rejected => Ok(MatchSpotOrderV3AfterChanges::Rejected {
+            rejected_taker_order_after: taker_after,
+            balances_after,
+            created_balance_ledger_entries,
+        }),
+        SpotOrderStatus::Open | SpotOrderStatus::Pending => {
+            Err(MatchSpotOrderV3Error::OrderMatch(SpotOrderV2MatchError::NoTradesMatched))
+        }
+    }
 }
 
 fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
@@ -1099,21 +1089,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
         state: &Self::StateGiven,
         context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let after = compute_active_order_after(ActiveOrderAfterInput {
-            taker_after: state.taker_order.clone(),
-            maker_orders_after: state.maker_orders.clone(),
-            balance_book: BalanceMap::new(&state.settlement_balances),
-            created_balance_ledger_entries: Vec::with_capacity(0),
-            base_asset_id: &state.base_asset_id,
-            quote_asset_id: &state.quote_asset_id,
-            fee_account_id: &state.fee_account_id,
-            maker_fee_bps: state.maker_fee_bps,
-            taker_fee_bps: state.taker_fee_bps,
-            executed_at_ms: context.execution_time_ns / 1_000_000,
-            timestamp: context.execution_time_ns,
-        })?;
-
-        Ok(classify_after(after))
+        compute_match_after(state, context)
     }
 }
 
@@ -1125,7 +1101,7 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV3UseCase {
         after: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
         match after {
-            MatchSpotOrderV3AfterChanges::Resting { .. } => Ok(MatchSpotOrderV3Changes::Resting),
+            MatchSpotOrderV3AfterChanges::Resting => Ok(MatchSpotOrderV3Changes::Resting),
             MatchSpotOrderV3AfterChanges::Rejected {
                 rejected_taker_order_after,
                 balances_after,
@@ -1150,16 +1126,28 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV3UseCase {
                 created_trades,
                 created_vouchers,
                 created_balance_ledger_entries,
-            } => matched_after_to_changes(
-                state,
-                MatchSpotOrderV3MatchedKind::PartiallyFilled,
-                taker_order_after,
-                maker_orders_after,
-                balances_after,
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            ),
+            } => {
+                if created_trades.is_empty() {
+                    return Err(MatchSpotOrderV3Error::OrderMatch(
+                        SpotOrderV2MatchError::NoTradesMatched,
+                    ));
+                }
+                let (updated_taker_order, updated_maker_orders, updated_balances) =
+                    build_matched_pairs(
+                        state,
+                        taker_order_after,
+                        maker_orders_after,
+                        balances_after,
+                    )?;
+                Ok(MatchSpotOrderV3Changes::PartiallyFilled {
+                    updated_taker_order,
+                    updated_maker_orders,
+                    updated_balances,
+                    created_trades,
+                    created_vouchers,
+                    created_balance_ledger_entries,
+                })
+            }
             MatchSpotOrderV3AfterChanges::Filled {
                 filled_taker_order_after,
                 maker_orders_after,
@@ -1167,16 +1155,28 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV3UseCase {
                 created_trades,
                 created_vouchers,
                 created_balance_ledger_entries,
-            } => matched_after_to_changes(
-                state,
-                MatchSpotOrderV3MatchedKind::Filled,
-                filled_taker_order_after,
-                maker_orders_after,
-                balances_after,
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            ),
+            } => {
+                if created_trades.is_empty() {
+                    return Err(MatchSpotOrderV3Error::OrderMatch(
+                        SpotOrderV2MatchError::NoTradesMatched,
+                    ));
+                }
+                let (filled_taker_order, updated_maker_orders, updated_balances) =
+                    build_matched_pairs(
+                        state,
+                        filled_taker_order_after,
+                        maker_orders_after,
+                        balances_after,
+                    )?;
+                Ok(MatchSpotOrderV3Changes::Filled {
+                    filled_taker_order,
+                    updated_maker_orders,
+                    updated_balances,
+                    created_trades,
+                    created_vouchers,
+                    created_balance_ledger_entries,
+                })
+            }
             MatchSpotOrderV3AfterChanges::CanceledAfterPartialFill {
                 canceled_taker_order_after,
                 maker_orders_after,
@@ -1184,69 +1184,50 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV3UseCase {
                 created_trades,
                 created_vouchers,
                 created_balance_ledger_entries,
-            } => matched_after_to_changes(
-                state,
-                MatchSpotOrderV3MatchedKind::CanceledAfterPartialFill,
-                canceled_taker_order_after,
-                maker_orders_after,
-                balances_after,
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            ),
+            } => {
+                if created_trades.is_empty() {
+                    return Err(MatchSpotOrderV3Error::OrderMatch(
+                        SpotOrderV2MatchError::NoTradesMatched,
+                    ));
+                }
+                let (canceled_taker_order, updated_maker_orders, updated_balances) =
+                    build_matched_pairs(
+                        state,
+                        canceled_taker_order_after,
+                        maker_orders_after,
+                        balances_after,
+                    )?;
+                Ok(MatchSpotOrderV3Changes::CanceledAfterPartialFill {
+                    canceled_taker_order,
+                    updated_maker_orders,
+                    updated_balances,
+                    created_trades,
+                    created_vouchers,
+                    created_balance_ledger_entries,
+                })
+            }
         }
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the three matched outcomes share one complete settlement fact set"
-)]
-fn matched_after_to_changes(
+fn build_matched_pairs(
     state: MatchSpotOrderV3State,
-    kind: MatchSpotOrderV3MatchedKind,
     taker_order_after: SpotOrderV2,
     maker_orders_after: Vec<SpotOrderV2>,
     balances_after: Vec<Balance>,
-    created_trades: Vec<SpotTrade>,
-    created_vouchers: Vec<SettlementTransferVoucher>,
-    created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
-) -> Result<MatchSpotOrderV3Changes, MatchSpotOrderV3Error> {
-    if created_trades.is_empty() {
-        return Err(MatchSpotOrderV3Error::OrderMatch(SpotOrderV2MatchError::NoTradesMatched));
-    }
+) -> Result<
+    (
+        UpdatedEntityPair<SpotOrderV2>,
+        Vec<UpdatedEntityPair<SpotOrderV2>>,
+        Vec<UpdatedEntityPair<Balance>>,
+    ),
+    MatchSpotOrderV3Error,
+> {
     let updated_taker_order =
         UpdatedEntityPair { before: state.taker_order, after: taker_order_after };
     let updated_maker_orders = zip_pairs(state.maker_orders, maker_orders_after)?;
     let updated_balances = merge_balance_pairs(state.settlement_balances, balances_after)?;
-    Ok(match kind {
-        MatchSpotOrderV3MatchedKind::PartiallyFilled => MatchSpotOrderV3Changes::PartiallyFilled {
-            updated_taker_order,
-            updated_maker_orders,
-            updated_balances,
-            created_trades,
-            created_vouchers,
-            created_balance_ledger_entries,
-        },
-        MatchSpotOrderV3MatchedKind::Filled => MatchSpotOrderV3Changes::Filled {
-            filled_taker_order: updated_taker_order,
-            updated_maker_orders,
-            updated_balances,
-            created_trades,
-            created_vouchers,
-            created_balance_ledger_entries,
-        },
-        MatchSpotOrderV3MatchedKind::CanceledAfterPartialFill => {
-            MatchSpotOrderV3Changes::CanceledAfterPartialFill {
-                canceled_taker_order: updated_taker_order,
-                updated_maker_orders,
-                updated_balances,
-                created_trades,
-                created_vouchers,
-                created_balance_ledger_entries,
-            }
-        }
-    })
+    Ok((updated_taker_order, updated_maker_orders, updated_balances))
 }
 
 impl MatchSpotOrderV3Changes {
@@ -1263,13 +1244,6 @@ impl MatchSpotOrderV3Changes {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MatchSpotOrderV3MatchedKind {
-    PartiallyFilled,
-    Filled,
-    CanceledAfterPartialFill,
 }
 
 pub(super) struct BalanceMap {
