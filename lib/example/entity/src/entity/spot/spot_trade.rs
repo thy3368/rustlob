@@ -41,6 +41,8 @@ pub struct SpotTrade {
     pub price: u64,
     /// 成交数量，以 base asset 计价。
     pub qty: u64,
+    /// 业务成交时间，单位为 Unix epoch 毫秒。
+    pub executed_at_ms: u64,
     /// taker 为本笔成交支付的 quote 手续费金额。
     pub taker_fee: u64,
     /// maker 为本笔成交支付的 quote 手续费金额。
@@ -64,6 +66,7 @@ impl SpotTrade {
         qty: u64,
         taker_fee: u64,
         maker_fee: u64,
+        executed_at_ms: u64,
     ) -> Self {
         Self {
             trade_id,
@@ -79,6 +82,7 @@ impl SpotTrade {
             qty,
             taker_fee,
             maker_fee,
+            executed_at_ms,
         }
     }
 
@@ -393,6 +397,7 @@ impl FieldDiff for SpotTrade {
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("executed_at_ms", "", self.executed_at_ms.to_string()),
             EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
             EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
         ]
@@ -467,7 +472,7 @@ impl Entity for SpotTrade {
         match field_name {
             "trade_id" | "match_id" | "symbol" | "taker_order_id" | "maker_order_id"
             | "taker_account_id" | "maker_account_id" | "taker_side" => 0,
-            "asset" | "price" | "qty" | "taker_fee" | "maker_fee" => 1,
+            "asset" | "price" | "qty" | "executed_at_ms" | "taker_fee" | "maker_fee" => 1,
             _ => 0,
         }
     }
@@ -506,6 +511,7 @@ mod tests {
             2,
             2,
             1,
+            1_717_171_717_000,
         )
     }
 
@@ -574,6 +580,7 @@ mod tests {
             2,
             2,
             1,
+            1_717_171_717_000,
         );
         assert_eq!(sell_taker.buyer_account_id(), "buyer");
         assert_eq!(sell_taker.seller_account_id(), "seller");
@@ -598,6 +605,10 @@ mod tests {
         }));
         assert!(event.field_changes.iter().any(|change| {
             change.field_name_as_str().ok() == Some("maker_fee") && change.new_value_bytes() == b"1"
+        }));
+        assert!(event.field_changes.iter().any(|change| {
+            change.field_name_as_str().ok() == Some("executed_at_ms")
+                && change.new_value_bytes() == b"1717171717000"
         }));
     }
 }
