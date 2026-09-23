@@ -872,9 +872,9 @@ pub struct MatchSpotOrderV2State {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct OpenMatchSpotOrderV2UseCase;
+pub struct MatchSpotOrderV2UseCase;
 
-impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
+impl StateMachineV2Unchecked for MatchSpotOrderV2UseCase {
     type Command = MatchSpotOrderV2Cmd;
     type StateGiven = MatchSpotOrderV2State;
     type Error = MatchSpotOrderV2Error;
@@ -961,7 +961,7 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for OpenMatchSpotOrderV2UseCase {
+impl StateMachineOwnedV2Diff for MatchSpotOrderV2UseCase {
     type StateDiff = MatchSpotOrderV2Changes;
 
     fn do_compute_state_diff(

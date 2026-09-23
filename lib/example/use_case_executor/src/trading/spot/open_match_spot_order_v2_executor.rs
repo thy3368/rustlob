@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{
 };
 use example_core_use_case::{
     MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error,
-    OpenMatchSpotOrderV2UseCase,
+    MatchSpotOrderV2UseCase,
 };
 use example_outbound_adapter::{
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
@@ -23,16 +23,16 @@ pub fn execute_place_spot_order_v2_with_outbound<OB>(
     outbound: &OB,
 ) -> Result<
     ExecutionResult<MatchSpotOrderV2Changes>,
-    ExecutionError<MatchSpotOrderV2Error, <OB as StateSink<OpenMatchSpotOrderV2UseCase>>::Error>,
+    ExecutionError<MatchSpotOrderV2Error, <OB as StateSink<MatchSpotOrderV2UseCase>>::Error>,
 >
 where
     OB: StateSource<
-            OpenMatchSpotOrderV2UseCase,
-            Error = <OB as StateSink<OpenMatchSpotOrderV2UseCase>>::Error,
-        > + StateSink<OpenMatchSpotOrderV2UseCase>,
+        MatchSpotOrderV2UseCase,
+            Error = <OB as StateSink<MatchSpotOrderV2UseCase>>::Error,
+        > + StateSink<MatchSpotOrderV2UseCase>,
 {
-    StateMachineExecutor.execute::<OpenMatchSpotOrderV2UseCase, OB, OB>(
-        &OpenMatchSpotOrderV2UseCase,
+    StateMachineExecutor.execute::<MatchSpotOrderV2UseCase, OB, OB>(
+        &MatchSpotOrderV2UseCase,
         command,
         outbound,
         outbound,
@@ -45,7 +45,7 @@ mod tests {
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV2Cmd, MatchSpotOrderV2State,
-        OpenMatchSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
+        MatchSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
         SpotOrderV2,
     };
 
@@ -65,7 +65,7 @@ mod tests {
     #[derive(Debug, Default)]
     struct FakePlaceSpotOrderV2Outbound;
 
-    impl StateSource<OpenMatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
+    impl StateSource<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
         type Error = FakePlaceSpotOrderV2OutboundError;
 
         fn load_given_state(
@@ -91,7 +91,7 @@ mod tests {
         }
     }
 
-    impl StateSink<OpenMatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
+    impl StateSink<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
         type Error = FakePlaceSpotOrderV2OutboundError;
 
         fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

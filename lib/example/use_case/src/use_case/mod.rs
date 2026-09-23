@@ -39,7 +39,7 @@ pub use trading::{
     MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2State,
     ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
     ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-    ModifySpotOrderV2UseCase, OpenMatchSpotOrderV2UseCase, OrderId,
+    ModifySpotOrderV2UseCase, MatchSpotOrderV2UseCase, OrderId,
     PlaceHyperliquidPerpOrderChanges, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
     PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderState,
     PlaceHyperliquidPerpOrderUseCase, PlaceMatchSpotOrderV2AfterChanges,

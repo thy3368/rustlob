@@ -9,7 +9,7 @@ use crate::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
     MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
-    MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
+    MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, PlaceOnlySpotOrderV2UseCase,
 };
@@ -283,7 +283,7 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let match_after = OpenMatchSpotOrderV2UseCase.compute_state_changed_with_context(
+    let match_after = MatchSpotOrderV2UseCase.compute_state_changed_with_context(
         &match_cmd,
         &match_state,
         context,
@@ -323,5 +323,5 @@ fn compute_match_changes(
         maker_fee_bps: 0,
         taker_fee_bps: 0,
     };
-    Ok(OpenMatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?)
+    Ok(MatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?)
 }
