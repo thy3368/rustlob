@@ -572,4 +572,3 @@ fn balance_replay_events_from_ledger_entries(
     }
     Ok(events)
 }
-
