@@ -798,7 +798,6 @@ mod tests {
                 quote_asset_id: "USDT".to_owned(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
-                executed_at_ms: 1_717_171_717_000,
             },
         ))
     }
