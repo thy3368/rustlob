@@ -2368,6 +2368,3 @@ impl EntityLifecycle for SpotOrderV2 {
         self.updated_at
     }
 }
-
-
-
