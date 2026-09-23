@@ -13,8 +13,8 @@ use crate::{
     ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase, CancelSpotOrderV2Changes,
     CancelSpotOrderV2Cmd, CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error,
-    MatchSpotOrderV2State, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd, ModifySpotOrderV2Error,
-    ModifySpotOrderV2State, ModifySpotOrderV2UseCase, MatchSpotOrderV2UseCase, OrderId,
+    MatchSpotOrderV2State, MatchSpotOrderV2UseCase, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
+    ModifySpotOrderV2Error, ModifySpotOrderV2State, ModifySpotOrderV2UseCase, OrderId,
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State,
     PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
 };
@@ -524,9 +524,7 @@ fn apply_match(
         maker_fee_bps: block_state.maker_fee_bps,
         taker_fee_bps: block_state.taker_fee_bps,
     };
-    MatchSpotOrderV2UseCase
-        .validate_state_given(cmd, &state)
-        .map_err(SpotBlockItemError::Match)?;
+    MatchSpotOrderV2UseCase.validate_state_given(cmd, &state).map_err(SpotBlockItemError::Match)?;
     let changes = MatchSpotOrderV2UseCase
         .compute_state_diff(cmd, state)
         .map_err(SpotBlockItemError::Match)?;

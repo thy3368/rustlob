@@ -1,6 +1,7 @@
 pub mod activate_spot_order_v2;
 pub mod cancel_spot_order_v2;
 pub mod match_spot_order_v2;
+pub mod match_spot_order_v3;
 pub mod place_only_spot_order_v2;
 
 pub mod modify_spot_order_v2;
@@ -11,6 +12,10 @@ pub mod generate_spot_klines_from_historical_trades;
 pub use activate_spot_order_v2::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
+};
+pub use agg::place_match_spot_order_v2::{
+    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
 };
 pub use agg::{
     SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
@@ -26,18 +31,18 @@ pub use generate_spot_klines_from_historical_trades::{
     GenerateSpotKlinesFromHistoricalTradesError, GenerateSpotKlinesFromHistoricalTradesState,
     GenerateSpotKlinesFromHistoricalTradesUseCase,
 };
-pub use modify_spot_order_v2::{
-    ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
-    ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-    ModifySpotOrderV2UseCase, OrderId,
-};
 pub use match_spot_order_v2::{
     MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
     MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
 };
-pub use agg::place_match_spot_order_v2::{
-    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+pub use match_spot_order_v3::{
+    MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd,
+    MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
+};
+pub use modify_spot_order_v2::{
+    ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
+    ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
+    ModifySpotOrderV2UseCase, OrderId,
 };
 pub use place_only_spot_order_v2::{
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
