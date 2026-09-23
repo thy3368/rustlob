@@ -90,11 +90,12 @@ pub use spot_entity::spot_order_primitives::{
     SpotOrderType,
 };
 pub use spot_entity::spot_order_v2::{
-    CancelSpotOrderV2Input, CancelSpotOrderV2Outcome, MatchSpotOrderV2Input,
-    MatchSpotOrderV2Outcome, PlaceHyperliquidNormalTpslError, PlaceHyperliquidNormalTpslOutcome,
-    PlaceHyperliquidSpotOrderV2Input, PlaceHyperliquidSpotOrderV2Outcome, PlaceSpotOrderV2Input,
-    PlaceSpotOrderV2Outcome, SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement,
-    SpotOrderGroupRelation, SpotOrderGroupRelationError, SpotOrderHoldAsset,
-    SpotOrderHoldRequirement, SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2,
-    SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
+    ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Input, CancelSpotOrderV2Outcome,
+    MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, PlaceHyperliquidNormalTpslError,
+    PlaceHyperliquidNormalTpslOutcome, PlaceHyperliquidSpotOrderV2Input,
+    PlaceHyperliquidSpotOrderV2Outcome, PlaceSpotOrderV2Input, PlaceSpotOrderV2Outcome,
+    SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderGroupRelation,
+    SpotOrderGroupRelationError, SpotOrderHoldAsset, SpotOrderHoldRequirement,
+    SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError,
+    SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
 };

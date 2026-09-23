@@ -480,6 +480,21 @@ pub struct TriggerSpotOrderV2Input {
     pub timestamp: u64,
 }
 
+/// 普通限价单进入撮合执行阶段的激活输入。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivatePendingSpotOrderV2Input {
+    /// base 资产 ID。
+    pub base_asset_id: String,
+    /// quote 资产 ID。
+    pub quote_asset_id: String,
+    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub maker_fee_bps: u64,
+    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    pub taker_fee_bps: u64,
+    /// 订单进入撮合执行阶段的时间，单位为 Unix 纳秒。
+    pub timestamp: u64,
+}
+
 /// `SpotOrderV2 v2` 的目标态订单聚合。
 ///
 /// 这是一个 `MomentInterval + AggregateRoot`，只表达订单自身的业务真相：
@@ -733,7 +748,7 @@ impl SpotOrderV2 {
 
     /// 创建未触发条件单；该状态不生成 principal / fee reservation。
     #[allow(clippy::too_many_arguments)]
-    pub fn new_trigger_pending(
+    pub fn new_pending_trigger(
         order_id: String,
         asset: u32,
         exchange_oid: Option<u64>,
@@ -755,18 +770,97 @@ impl SpotOrderV2 {
             symbol: symbol.clone(),
             client_order_id: client_order_id.clone(),
         };
-        let reservation = Self::empty_trigger_reservation(
-            order_id.as_str(),
-            account_id.as_str(),
-            ReservationKind::SpotBuyQuote,
-            "UNRESERVED",
-        );
-        let fee_reservation = Self::empty_trigger_reservation(
-            concat2(order_id.as_str(), ":fee").as_str(),
-            account_id.as_str(),
-            ReservationKind::SpotBuyFeeQuote,
-            "UNRESERVED",
-        );
+        let reservation =
+            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
+        let fee_reservation =
+            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
+        Self {
+            identity,
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            limit_price,
+            reduce_only: false,
+            order_type,
+            group_relation: SpotOrderGroupRelation::Standalone,
+            qty,
+            filled_qty: 0,
+            status: SpotOrderStatus::Pending,
+            status_reason: None,
+            reservation,
+            fee_reservation,
+            client_order_id,
+            created_at,
+            updated_at: created_at,
+            version,
+        }
+    }
+
+    /// 创建未触发条件单；保留该名称兼容已有调用方。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_trigger_pending(
+        order_id: String,
+        asset: u32,
+        exchange_oid: Option<u64>,
+        account_id: String,
+        symbol: String,
+        side: SpotOrderSide,
+        qty: u64,
+        limit_price: u64,
+        order_type: SpotOrderType,
+        client_order_id: Option<String>,
+        version: u64,
+        created_at: u64,
+    ) -> Self {
+        Self::new_pending_trigger(
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            qty,
+            limit_price,
+            order_type,
+            client_order_id,
+            version,
+            created_at,
+        )
+    }
+
+    /// 创建尚未进入撮合执行阶段的普通限价订单。
+    ///
+    /// 订单创建只记录用户意图；principal / fee reservation 在撮合入口激活时生成。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_pending_limit(
+        order_id: String,
+        asset: u32,
+        exchange_oid: Option<u64>,
+        account_id: String,
+        symbol: String,
+        side: SpotOrderSide,
+        qty: u64,
+        limit_price: u64,
+        order_type: SpotOrderType,
+        client_order_id: Option<String>,
+        version: u64,
+        created_at: u64,
+    ) -> Self {
+        let identity = SpotOrderIdentity {
+            order_id: order_id.clone(),
+            asset,
+            exchange_oid,
+            account_id: account_id.clone(),
+            symbol: symbol.clone(),
+            client_order_id: client_order_id.clone(),
+        };
+        let reservation =
+            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
+        let fee_reservation =
+            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
         Self {
             identity,
             order_id,
@@ -881,7 +975,7 @@ impl SpotOrderV2 {
             if !matches!(input.order_type, SpotOrderType::Trigger { .. }) {
                 return Err(SpotOrderV2BehaviorError::InvalidPrice);
             }
-            let mut order = Self::new_trigger_pending(
+            let mut order = Self::new_pending_trigger(
                 input.order_id,
                 input.asset,
                 None,
@@ -1040,6 +1134,49 @@ impl SpotOrderV2 {
         Ok(())
     }
 
+    /// 可 BDD 规格化的聚合根行为：激活 Pending 普通限价单并生成冻结需求。
+    ///
+    /// 普通限价单不需要独立的触发条件；它在进入撮合执行入口时从 Pending 激活为 Open。
+    /// 未触发 Trigger 订单不能通过该行为绕过触发流程。
+    pub fn activate_pending_limit(
+        &mut self,
+        input: ActivatePendingSpotOrderV2Input,
+    ) -> Result<(), SpotOrderV2BehaviorError> {
+        if !self.is_pending() || !matches!(self.order_type, SpotOrderType::Limit { .. }) {
+            return Err(SpotOrderV2BehaviorError::OrderNotMatchable);
+        }
+
+        let reservation = Self::principal_reservation(
+            self.order_id.as_str(),
+            self.account_id.as_str(),
+            self.side,
+            self.qty,
+            self.limit_price,
+            input.base_asset_id.as_str(),
+            input.quote_asset_id.as_str(),
+        )?;
+        let fee_reservation = Self::fee_reservation(
+            self.order_id.as_str(),
+            self.account_id.as_str(),
+            self.side,
+            self.qty,
+            self.limit_price,
+            input.quote_asset_id.as_str(),
+            input.maker_fee_bps,
+            input.taker_fee_bps,
+        )?;
+        let next_version = self.next_version()?;
+
+        self.filled_qty = 0;
+        self.status = SpotOrderStatus::Open;
+        self.status_reason = None;
+        self.reservation = reservation;
+        self.fee_reservation = fee_reservation;
+        self.version = next_version;
+        self.updated_at = input.timestamp;
+        Ok(())
+    }
+
     /// 为 spot 订单构造 principal reservation。
     #[allow(clippy::too_many_arguments)]
     pub fn principal_reservation(
@@ -1145,19 +1282,26 @@ impl SpotOrderV2 {
         }
     }
 
-    fn empty_trigger_reservation(
+    fn empty_pending_reservation(
         order_id: &str,
         account_id: &str,
-        reservation_kind: ReservationKind,
-        asset_id: &str,
+        side: SpotOrderSide,
+        fee: bool,
     ) -> Reservation {
+        let reservation_kind = match (side, fee) {
+            (SpotOrderSide::Buy, false) => ReservationKind::SpotBuyQuote,
+            (SpotOrderSide::Sell, false) => ReservationKind::SpotSellBase,
+            (SpotOrderSide::Buy, true) => ReservationKind::SpotBuyFeeQuote,
+            (SpotOrderSide::Sell, true) => ReservationKind::SpotSellFeeQuote,
+        };
+        let suffix = if fee { ":fee:pending" } else { ":pending" };
         Reservation {
-            reservation_id: concat3("reservation:", order_id, ":trigger-pending"),
+            reservation_id: concat3("reservation:", order_id, suffix),
             owner_account_id: account_id.to_string(),
             caused_by_order_id: order_id.to_string(),
             market_kind: ReservationMarketKind::Spot,
             reservation_kind,
-            asset_id: asset_id.to_string(),
+            asset_id: "UNRESERVED".to_string(),
             original_amount: 0,
             consumed_amount: 0,
             released_amount: 0,
@@ -1239,6 +1383,25 @@ impl SpotOrderV2 {
     /// 返回订单是否仍是未触发条件单。
     pub fn is_pending(&self) -> bool {
         self.status == SpotOrderStatus::Pending
+    }
+
+    /// 返回订单当前是否具备进入撮合执行入口的业务资格。
+    ///
+    /// Pending 普通限价单可在撮合入口激活；Pending Trigger 必须先经过独立触发行为。
+    /// 已激活的 Trigger 与普通限价单一样，按其 Open / PartiallyFilled 状态参与撮合。
+    pub fn can_enter_matching(&self) -> bool {
+        if !self.has_consistent_execution_state() {
+            return false;
+        }
+        match self.status {
+            SpotOrderStatus::Pending => matches!(self.order_type, SpotOrderType::Limit { .. }),
+            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => {
+                self.remaining_qty().is_some_and(|remaining| remaining > 0)
+            }
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected => {
+                false
+            }
+        }
     }
 
     /// 返回 active lifecycle 的 principal reservation；未触发条件单返回 `None`。
