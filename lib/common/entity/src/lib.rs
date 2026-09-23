@@ -1,7 +1,7 @@
-use std::sync::atomic::AtomicU64;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicU64;
 
-pub use entity_derive::{action_type, function, ActionType, ObjectType};
+pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
 
