@@ -312,29 +312,25 @@ fn build_order(
     match &order.order_type {
         PlaceOnlySpotOrderV2OrderType::Limit { tif } => {
             let tif = parse_tif(tif)?;
-            let mut created = SpotOrderV2::new_active(
+            let mut created = SpotOrderV2::new_pending_limit(
                 order.order_id.clone(),
                 order.asset,
                 None,
                 order.party_id.clone(),
                 order.symbol.clone(),
                 side,
+                qty,
                 price,
                 SpotOrderType::Limit { tif },
-                qty,
-                order.base_asset_id.as_str(),
-                order.quote_asset_id.as_str(),
-                order.maker_fee_bps,
-                order.taker_fee_bps,
                 order.cloid.clone(),
+                1,
                 created_at,
-            )?;
+            );
             created.reduce_only = order.reduce_only;
-            created.order_type = SpotOrderType::Limit { tif };
             Ok(created)
         }
         PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
-            let mut created = SpotOrderV2::new_trigger_pending(
+            let mut created = SpotOrderV2::new_pending_trigger(
                 order.order_id.clone(),
                 order.asset,
                 None,
@@ -503,11 +499,11 @@ mod tests {
             [("gtc", SpotOrderTif::Gtc), ("Alo", SpotOrderTif::Alo), ("Ioc", SpotOrderTif::Ioc)]
         {
             let order = single_order(limit_cmd(tif))?;
-            assert_eq!(order.status, SpotOrderStatus::Open);
-            assert!(order.active_reservation().is_some());
+            assert_eq!(order.status, SpotOrderStatus::Pending);
+            assert!(order.active_reservation().is_none());
             assert_eq!(order.time_in_force(), expected_tif);
-            assert!(order.reservation.is_active());
-            assert!(order.fee_reservation.is_active());
+            assert_eq!(order.reservation.remaining_amount, 0);
+            assert_eq!(order.fee_reservation.remaining_amount, 0);
         }
 
         for (is_market, expected_tif) in [(false, SpotOrderTif::Gtc), (true, SpotOrderTif::Ioc)] {
