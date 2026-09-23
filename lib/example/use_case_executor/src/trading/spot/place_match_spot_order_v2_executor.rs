@@ -48,9 +48,10 @@ mod tests {
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use common_entity::Entity;
     use example_core_use_case::{
-        Balance, BalanceLedgerOperation, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-        PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-        SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        ActivatePendingSpotOrderV2Input, Balance, BalanceLedgerOperation,
+        PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+        PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotOrderSide, SpotOrderTif,
+        SpotOrderType, SpotOrderV2,
     };
 
     use super::*;
@@ -142,23 +143,31 @@ mod tests {
         )
         .map_err(|_| FakePlaceMatchSpotOrderV2OutboundError)?;
 
-        Ok(SpotOrderV2::new(
+        let mut order = SpotOrderV2::new_pending_limit(
             order_id.to_string(),
             10_001,
             Some(price),
             account_id.to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
+            qty,
             price,
             SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            qty,
+            None,
             0,
-            SpotOrderStatus::Open,
-            None,
-            reservation,
-            None,
             1,
-        ))
+        );
+        order
+            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
+                timestamp: 1,
+            })
+            .map_err(|_| FakePlaceMatchSpotOrderV2OutboundError)?;
+        debug_assert_eq!(order.reservation, reservation);
+        Ok(order)
     }
 
     #[test]

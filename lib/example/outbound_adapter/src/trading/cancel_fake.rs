@@ -4,8 +4,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
-    SpotOrderV2,
+    CancelSpotOrderV2UseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -54,26 +53,25 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             10,
         )
         .map_err(|_| FakeSpotOrderV2CancelOutboundError)?;
-        let order = SpotOrderV2::new_with_fee_reservation(
+        let mut order = SpotOrderV2::new_pending_limit(
             "order-1".to_string(),
             request.asset,
             Some(77738308),
             request.party_id.clone(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
+            2,
             100,
             SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            2,
+            None,
             0,
-            SpotOrderStatus::Open,
-            None,
-            principal_reservation,
-            fee_reservation,
-            None,
-            1,
-            1,
             1,
         );
+        order.reservation = principal_reservation;
+        order.fee_reservation = fee_reservation;
+        order.status = example_core_use_case::SpotOrderStatus::Open;
+        order.version = 1;
+        order.updated_at = 1;
 
         Ok(CancelSpotOrderV2State {
             balances: vec![Balance::new(

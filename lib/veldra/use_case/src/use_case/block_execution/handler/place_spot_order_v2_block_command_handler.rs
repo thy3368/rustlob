@@ -42,11 +42,15 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
 
     fn execute(
         &self,
-        _envelope: &CommandEnvelope<ProductCommand>,
+        envelope: &CommandEnvelope<ProductCommand>,
         command: &Self::Command,
         exchange_state: &ExchangeState,
     ) -> Result<Self::Execution, BuildBlockError> {
-        execute_place_spot_order_v2(command, &exchange_state.spot)
+        execute_place_spot_order_v2(
+            command,
+            &exchange_state.spot,
+            ExecutionContext { execution_time_ns: envelope.timestamp_ns },
+        )
     }
 
     fn apply(&self, exchange_state: &mut ExchangeState, execution: &Self::Execution) {
@@ -62,6 +66,7 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
 fn execute_place_spot_order_v2(
     command: &PlaceOnlySpotOrderV2Cmd,
     spot_state: &SpotState,
+    context: ExecutionContext,
 ) -> Result<PlaceSpotOrderV2ExecutionBundle, BuildBlockError> {
     let state = build_place_state(command, spot_state)?;
     PlaceMatchSpotOrderV2UseCase
@@ -71,7 +76,7 @@ fn execute_place_spot_order_v2(
         .validate_state_given(command, &state)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
     let changes = PlaceMatchSpotOrderV2UseCase
-        .compute_state_diff_with_context(command, state, &ExecutionContext::now())
+        .compute_state_diff_with_context(command, state, &context)
         .map_err(|error| BuildBlockError::SpotExecution(error.to_string()))?;
 
     let account_id = parent_order(command).party_id.clone();
@@ -218,8 +223,8 @@ fn apply_match_changes(
     spot_state: &mut SpotState,
     changes: &example_core_use_case::MatchSpotOrderV2Changes,
 ) {
-    if let Some(pair) = &changes.updated_taker_order {
-        apply_order(spot_state, &pair.after);
+    if let Some(order) = changes.taker_order_after() {
+        apply_order(spot_state, order);
     }
     for pair in &changes.updated_maker_orders {
         apply_order(spot_state, &pair.after);

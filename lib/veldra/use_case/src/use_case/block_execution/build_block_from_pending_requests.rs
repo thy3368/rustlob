@@ -187,17 +187,17 @@ fn extract_place_spot_order_v2_changes(
         }
     };
     changes.extend(created_orders.into_iter().cloned().map(BlockEntityChange::SpotOrderCreated));
+    if let Some(pair) = &match_changes.activated_taker_order {
+        changes.push(BlockEntityChange::SpotOrderUpdated(pair.clone()));
+    }
     if let Some(pair) = &match_changes.updated_taker_order {
         changes.push(BlockEntityChange::SpotOrderUpdated(pair.clone()));
     }
     changes.extend(
-        match_changes.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
-    );
-    changes.extend(
-        balance_update_pairs(match_changes).into_iter().map(BlockEntityChange::BalanceUpdated),
-    );
-    changes.extend(
         match_changes.created_trades.iter().cloned().map(BlockEntityChange::SpotTradeCreated),
+    );
+    changes.extend(
+        match_changes.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
     );
     changes.extend(
         match_changes
@@ -205,6 +205,9 @@ fn extract_place_spot_order_v2_changes(
             .iter()
             .cloned()
             .map(BlockEntityChange::SettlementTransferVoucherCreated),
+    );
+    changes.extend(
+        balance_update_pairs(match_changes).into_iter().map(BlockEntityChange::BalanceUpdated),
     );
     changes.extend(
         match_changes

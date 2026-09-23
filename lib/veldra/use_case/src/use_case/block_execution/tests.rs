@@ -34,7 +34,7 @@ fn sample_command() -> BuildBlockFromCommandsCommand {
 }
 
 fn execution_context() -> ExecutionContext {
-    ExecutionContext::now()
+    ExecutionContext { execution_time_ns: 1_717_171_717_000_000_000 }
 }
 
 fn sample_envelope() -> CommandEnvelope<ProductCommand> {
@@ -226,15 +226,16 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     let new_block = block(&changes);
     let body = execution_body(&changes);
 
-    assert_eq!(changes.ordered_changes.len(), 5);
+    assert_eq!(changes.ordered_changes.len(), 6);
     assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
+    assert!(matches!(changes.ordered_changes[1], BlockEntityChange::SpotOrderUpdated(_)));
     assert!(
-        changes.ordered_changes[1..3]
+        changes.ordered_changes[2..4]
             .iter()
             .all(|change| matches!(change, BlockEntityChange::BalanceUpdated(_)))
     );
     assert!(
-        changes.ordered_changes[3..5]
+        changes.ordered_changes[4..6]
             .iter()
             .all(|change| matches!(change, BlockEntityChange::BalanceLedgerEntryCreated(_)))
     );
@@ -246,7 +247,7 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!(body.block_height, new_block.block_height);
     assert_eq!(body.block_hash, new_block.block_hash);
     assert_eq!(body.commands.len(), 1);
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 6);
     assert_eq!(body.replayable_events, events);
 
     let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
@@ -319,8 +320,8 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.ordered_changes.len(), 6);
-    assert_eq!(events.len(), 6);
+    assert_eq!(changes.ordered_changes.len(), 7);
+    assert_eq!(events.len(), 7);
 
     let treasury_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!(
@@ -343,7 +344,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!((spot_usdt_change.available, spot_usdt_change.frozen), (9_800, 200));
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5]);
+    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5, 6]);
 
     Ok(())
 }
@@ -366,7 +367,7 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5]);
+    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5, 6]);
 
     Ok(())
 }
@@ -637,8 +638,8 @@ fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
 
     assert_eq!(block(&changes).block_height, 2);
     assert_eq!(execution_body(&changes).block_height, 2);
-    assert_eq!(changes.ordered_changes.len(), 5);
-    assert_eq!(events.len(), 5);
+    assert_eq!(changes.ordered_changes.len(), 6);
+    assert_eq!(events.len(), 6);
     assert_eq!(events.len(), changes.ordered_changes.len());
 
     Ok(())

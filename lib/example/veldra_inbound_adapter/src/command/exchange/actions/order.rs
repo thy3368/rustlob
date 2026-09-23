@@ -516,7 +516,8 @@ where
 #[cfg(test)]
 mod tests {
     use example_core_use_case::{
-        SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
+        ActivatePendingSpotOrderV2Input, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        SpotTrade,
     };
 
     use super::*;
@@ -579,25 +580,30 @@ mod tests {
     }
 
     fn spot_order(order_id: &str, exchange_oid: u64) -> SpotOrderV2 {
-        match SpotOrderV2::new_active(
+        let mut order = SpotOrderV2::new_pending_limit(
             order_id.to_string(),
             10_001,
             Some(exchange_oid),
             "buyer".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
+            2,
             100,
             SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            2,
-            "BTC",
-            "USDT",
-            DEFAULT_MAKER_FEE_BPS,
-            DEFAULT_TAKER_FEE_BPS,
             None,
-        ) {
-            Ok(order) => order,
-            Err(error) => panic!("test order should be valid: {error}"),
-        }
+            0,
+            1,
+        );
+        order
+            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
+                taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
+                timestamp: 1,
+            })
+            .expect("test order should be valid");
+        order
     }
 
     fn build_units(request: &RequestWire) -> Vec<PlaceMatchExecutionUnit> {
@@ -609,6 +615,7 @@ mod tests {
 
     fn empty_match_changes() -> MatchSpotOrderV2Changes {
         MatchSpotOrderV2Changes {
+            activated_taker_order: None,
             updated_taker_order: None,
             updated_maker_orders: vec![],
             updated_balances: vec![],

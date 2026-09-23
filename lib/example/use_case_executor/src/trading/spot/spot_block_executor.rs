@@ -39,10 +39,10 @@ mod tests {
 
     use cmd_handler::EntityReplayableEvent;
     use example_core_use_case::{
-        Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, ModifySpotOrderV2Cmd,
-        ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId, SpotBlockAppliedChanges,
-        SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotOrderSide,
-        SpotOrderTif, SpotOrderType, SpotOrderV2,
+        ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+        ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
+        SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult,
+        SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
     };
 
     use super::*;
@@ -140,23 +140,30 @@ mod tests {
     }
 
     fn buy_order() -> Result<SpotOrderV2, FakeSpotBlockOutboundError> {
-        SpotOrderV2::new_active(
+        let mut order = SpotOrderV2::new_pending_limit(
             "order-1".to_owned(),
             10_001,
             Some(777),
             "buyer".to_owned(),
             "BTCUSDT".to_owned(),
             SpotOrderSide::Buy,
+            2,
             10_000,
             SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            2,
-            "BTC",
-            "USDT",
-            5,
-            10,
             Some("original-cloid".to_owned()),
-        )
-        .map_err(|_| FakeSpotBlockOutboundError)
+            0,
+            1,
+        );
+        order
+            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+                base_asset_id: "BTC".to_owned(),
+                quote_asset_id: "USDT".to_owned(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
+                timestamp: 1,
+            })
+            .map_err(|_| FakeSpotBlockOutboundError)?;
+        Ok(order)
     }
 
     fn cancel_command() -> SpotBlockCommand {

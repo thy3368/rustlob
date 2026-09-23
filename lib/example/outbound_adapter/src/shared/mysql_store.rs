@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use example_core_use_case::{
-    Balance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    Balance, MarketRules, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -211,35 +211,31 @@ impl MySqlStore {
                     let side = decode_side_mysql(side.as_str())?;
                     let order_type =
                         decode_order_type_mysql(execution.as_str(), time_in_force.as_str())?;
-                    let reservation = SpotOrderV2::principal_reservation(
-                        order_id.as_str(),
-                        account_id.as_str(),
-                        side,
-                        qty,
-                        price,
-                        "BTC",
-                        "USDT",
-                    )
-                    .ok()?;
-                    let order = SpotOrderV2::new(
+                    let mut order = SpotOrderV2::new_pending_limit(
                         order_id.clone(),
                         asset,
                         None,
                         account_id,
                         symbol,
                         side,
+                        qty,
                         price,
                         order_type,
-                        qty,
+                        None,
                         0,
-                        SpotOrderStatus::Open,
-                        None,
-                        reservation,
-                        None,
-                        1,
-                        1,
                         1,
                     );
+                    order
+                        .activate_pending_limit(
+                            example_core_use_case::ActivatePendingSpotOrderV2Input {
+                                base_asset_id: "BTC".to_string(),
+                                quote_asset_id: "USDT".to_string(),
+                                maker_fee_bps: 1,
+                                taker_fee_bps: 1,
+                                timestamp: 1,
+                            },
+                        )
+                        .ok()?;
                     Some((order_id, order))
                 },
             )

@@ -6,10 +6,10 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd,
-    SpotBlockCommand, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase, SpotOrderSide,
-    SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges,
+    SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult, SpotBlockState,
+    SpotBlockUseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use hotstuff_rs::app::{
     App, ProduceBlockRequest, ProduceBlockResponse, ValidateBlockRequest, ValidateBlockResponse,
@@ -330,46 +330,58 @@ fn demo_sell_order(
     )
     .map_err(|_| DemoSpotBlockOutboundError)?;
 
-    Ok(SpotOrderV2::new(
+    let mut order = SpotOrderV2::new_pending_limit(
         order_id.to_string(),
         10_001,
         Some(price),
         account_id.to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
+        qty,
         price,
         SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-        qty,
+        None,
         0,
-        SpotOrderStatus::Open,
-        None,
-        reservation,
-        None,
         1,
-        1,
-        1,
-    ))
+    );
+    order
+        .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 1,
+            taker_fee_bps: 1,
+            timestamp: 1,
+        })
+        .map_err(|_| DemoSpotBlockOutboundError)?;
+    debug_assert_eq!(order.reservation, reservation);
+    Ok(order)
 }
 
 fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
-    SpotOrderV2::new_active(
+    let mut order = SpotOrderV2::new_pending_limit(
         "cancel-buy".to_string(),
         10_001,
         Some(77738308),
         "buyer".to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
+        2,
         100,
         SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-        2,
-        "BTC",
-        "USDT",
-        5,
-        10,
         Some("demo-cancel-1".to_string()),
+        0,
         1,
-    )
-    .map_err(|_| DemoSpotBlockOutboundError)
+    );
+    order
+        .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+            timestamp: 1,
+        })
+        .map_err(|_| DemoSpotBlockOutboundError)?;
+    Ok(order)
 }
 
 impl App<MemDB> for SpotOrderApp {

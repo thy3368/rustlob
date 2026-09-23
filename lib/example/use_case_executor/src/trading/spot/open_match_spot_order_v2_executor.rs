@@ -44,8 +44,9 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
-        Balance, MatchSpotOrderV2Cmd, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
-        SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV2Cmd, MatchSpotOrderV2State,
+        OpenMatchSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
+        SpotOrderV2,
     };
 
     use super::*;
@@ -146,23 +147,31 @@ mod tests {
         )
         .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
 
-        Ok(SpotOrderV2::new(
+        let mut order = SpotOrderV2::new_pending_limit(
             order_id.to_string(),
             10_001,
             Some(price),
             account_id.to_string(),
             "BTCUSDT".to_string(),
             side,
+            qty,
             price,
             SpotOrderType::Limit { tif },
-            qty,
+            None,
             0,
-            SpotOrderStatus::Open,
-            None,
-            reservation,
-            None,
             1,
-        ))
+        );
+        order
+            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
+                timestamp: 1,
+            })
+            .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
+        debug_assert_eq!(order.reservation, reservation);
+        Ok(order)
     }
 
     #[test]

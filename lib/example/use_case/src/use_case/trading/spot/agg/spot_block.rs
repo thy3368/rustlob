@@ -486,9 +486,9 @@ fn apply_match_changes(
     changes: &MatchSpotOrderV2Changes,
     working: &mut WorkingSpotBlockState,
 ) -> Result<(), SpotBlockItemError> {
-    if let Some(taker) = &changes.updated_taker_order {
+    if let Some(taker) = changes.taker_order_after() {
         working
-            .replace_order(taker.after.clone())
+            .replace_order(taker.clone())
             .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
     }
     for maker in &changes.updated_maker_orders {
@@ -514,9 +514,8 @@ fn apply_place_match_changes(
             match_changes,
         } => {
             let taker_after = match_changes
-                .updated_taker_order
-                .as_ref()
-                .map(|pair| pair.after.clone())
+                .taker_order_after()
+                .cloned()
                 .unwrap_or_else(|| created_taker_order.clone());
             working
                 .upsert_order(taker_after)
@@ -539,9 +538,8 @@ fn apply_place_match_changes(
             match_changes,
         } => {
             let parent_after = match_changes
-                .updated_taker_order
-                .as_ref()
-                .map(|pair| pair.after.clone())
+                .taker_order_after()
+                .cloned()
                 .unwrap_or_else(|| created_parent_order.clone());
             working
                 .upsert_order(parent_after)
@@ -630,4 +628,3 @@ fn command_party_id(command: &SpotBlockCommand) -> Option<&str> {
         SpotBlockCommand::Match(cmd) => Some(cmd.party_id.as_str()),
     }
 }
-

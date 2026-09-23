@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     Balance, MarketRules, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, ReservationStatus, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
-    SpotOrderType, SpotOrderV2, SpotTrade,
+    ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation, SpotOrderSide,
+    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 
 use crate::shared::{
@@ -156,36 +156,7 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
             }
 
             if event.is_created() && event_string_field(event, "order_id").is_some() {
-                let order = SpotOrderV2::new(
-                    {
-                        event_string_field(event, "order_id")
-                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                    },
-                    event_u64_field(event, "asset")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                        as u32,
-                    event_u64_field(event, "exchange_oid"),
-                    event_string_field(event, "account_id")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    event_string_field(event, "symbol")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    decode_side(event)?,
-                    decode_limit_price(event)?,
-                    decode_order_type(event)?,
-                    event_u64_field(event, "qty")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    event_u64_field(event, "filled_qty")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    decode_status(event)?,
-                    None,
-                    decode_embedded_order_reservation(event)?,
-                    event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
-                    event_u64_field(event, "version").unwrap_or(1),
-                    event_u64_field(event, "created_at")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    event_u64_field(event, "updated_at")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                );
+                let order = decode_order_from_event(event)?;
                 state.orders.insert(order.order_id.clone(), order);
                 state.next_order_sequence = state
                     .next_order_sequence
@@ -338,14 +309,97 @@ fn decode_status(
     }
 }
 
+fn decode_bool(value: &str) -> Result<bool, PlaceOrderOutboundError> {
+    match value {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_group_relation(
+    value: Option<&str>,
+) -> Result<SpotOrderGroupRelation, PlaceOrderOutboundError> {
+    match value {
+        None | Some("") | Some("standalone") => Ok(SpotOrderGroupRelation::Standalone),
+        Some("normal_tpsl_parent") => Ok(SpotOrderGroupRelation::NormalTpslParent),
+        Some(value) => value
+            .strip_prefix("normal_tpsl_child:")
+            .filter(|parent_order_id| !parent_order_id.is_empty())
+            .map(|parent_order_id| SpotOrderGroupRelation::NormalTpslChild {
+                parent_order_id: parent_order_id.to_string(),
+            })
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed),
+    }
+}
+
+fn decode_status_reason(
+    value: Option<&str>,
+) -> Result<Option<SpotOrderStatusReason>, PlaceOrderOutboundError> {
+    let Some(value) = value.filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let reason = match value {
+        "filled" => SpotOrderStatusReason::Filled,
+        "canceled" => SpotOrderStatusReason::CanceledByUser,
+        "triggered" => SpotOrderStatusReason::Triggered,
+        "rejected" => SpotOrderStatusReason::RejectedAtPlacement,
+        "marginCanceled" => SpotOrderStatusReason::MarginCanceled,
+        "vaultWithdrawalCanceled" => SpotOrderStatusReason::VaultWithdrawalCanceled,
+        "openInterestCapCanceled" => SpotOrderStatusReason::OpenInterestCapCanceled,
+        "selfTradeCanceled" => SpotOrderStatusReason::SelfTradeCanceled,
+        "reduceOnlyCanceled" => SpotOrderStatusReason::ReduceOnlyCanceled,
+        "siblingFilledCanceled" => SpotOrderStatusReason::SiblingFilledCanceled,
+        "delistedCanceled" => SpotOrderStatusReason::DelistedCanceled,
+        "liquidatedCanceled" => SpotOrderStatusReason::LiquidatedCanceled,
+        "scheduledCancel" => SpotOrderStatusReason::ScheduledCancel,
+        "tickRejected" => SpotOrderStatusReason::TickRejected,
+        "minTradeNtlRejected" => SpotOrderStatusReason::MinTradeNtlRejected,
+        "perpMarginRejected" => SpotOrderStatusReason::PerpMarginRejected,
+        "reduceOnlyRejected" => SpotOrderStatusReason::ReduceOnlyRejected,
+        "badAloPxRejected" => SpotOrderStatusReason::BadAloPxRejected,
+        "iocCancelRejected" => SpotOrderStatusReason::IocCancelRejected,
+        "badTriggerPxRejected" => SpotOrderStatusReason::BadTriggerPxRejected,
+        "marketOrderNoLiquidityRejected" => SpotOrderStatusReason::MarketOrderNoLiquidityRejected,
+        "positionIncreaseAtOpenInterestCapRejected" => {
+            SpotOrderStatusReason::PositionIncreaseAtOpenInterestCapRejected
+        }
+        "positionFlipAtOpenInterestCapRejected" => {
+            SpotOrderStatusReason::PositionFlipAtOpenInterestCapRejected
+        }
+        "tooAggressiveAtOpenInterestCapRejected" => {
+            SpotOrderStatusReason::TooAggressiveAtOpenInterestCapRejected
+        }
+        "openInterestIncreaseRejected" => SpotOrderStatusReason::OpenInterestIncreaseRejected,
+        "insufficientSpotBalanceRejected" => SpotOrderStatusReason::InsufficientSpotBalanceRejected,
+        "oracleRejected" => SpotOrderStatusReason::OracleRejected,
+        "perpMaxPositionRejected" => SpotOrderStatusReason::PerpMaxPositionRejected,
+        _ => return Err(PlaceOrderOutboundError::EventDecodeFailed),
+    };
+    Ok(Some(reason))
+}
+
 fn decode_embedded_order_reservation(
     event: &EntityReplayableEvent,
+) -> Result<Reservation, PlaceOrderOutboundError> {
+    decode_embedded_reservation(event, false)
+}
+
+fn decode_embedded_order_fee_reservation(
+    event: &EntityReplayableEvent,
+) -> Result<Reservation, PlaceOrderOutboundError> {
+    decode_embedded_reservation(event, true)
+}
+
+fn decode_embedded_reservation(
+    event: &EntityReplayableEvent,
+    fee: bool,
 ) -> Result<Reservation, PlaceOrderOutboundError> {
     let order_id =
         event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     let account_id = event_string_field(event, "account_id")
         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-    let reservation_id = event_string_field(event, "reservation_id")
+    let reservation_id = reservation_string_field(event, fee, "id")
         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     Ok(Reservation {
         reservation_id,
@@ -353,28 +407,44 @@ fn decode_embedded_order_reservation(
         caused_by_order_id: order_id,
         market_kind: ReservationMarketKind::Spot,
         reservation_kind: decode_reservation_kind(
-            event_string_field(event, "reservation_kind")
+            reservation_string_field(event, fee, "kind")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
                 .as_str(),
         )?,
-        asset_id: event_string_field(event, "reservation_asset_id")
+        asset_id: reservation_string_field(event, fee, "asset_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        original_amount: event_u64_field(event, "reservation_original_amount")
+        original_amount: reservation_u64_field(event, fee, "original_amount")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        consumed_amount: event_u64_field(event, "reservation_consumed_amount")
+        consumed_amount: reservation_u64_field(event, fee, "consumed_amount")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        released_amount: event_u64_field(event, "reservation_released_amount")
+        released_amount: reservation_u64_field(event, fee, "released_amount")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        remaining_amount: event_u64_field(event, "reservation_remaining_amount")
+        remaining_amount: reservation_u64_field(event, fee, "remaining_amount")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         status: decode_reservation_status(
-            event_string_field(event, "reservation_status")
+            reservation_string_field(event, fee, "status")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
                 .as_str(),
         )?,
         close_reason: None,
         version: 1,
     })
+}
+
+fn reservation_string_field(
+    event: &EntityReplayableEvent,
+    fee: bool,
+    suffix: &str,
+) -> Option<String> {
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
+    event_string_field(event, field_name.as_str())
+}
+
+fn reservation_u64_field(event: &EntityReplayableEvent, fee: bool, suffix: &str) -> Option<u64> {
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
+    event_u64_field(event, field_name.as_str())
 }
 
 fn decode_created_reservation(
@@ -536,33 +606,145 @@ fn apply_order_update_event(
     if let Some(filled_qty) = event_u64_field(event, "filled_qty") {
         order.filled_qty = filled_qty;
     }
+    if let Some(status_reason) = event_string_field(event, "status_reason") {
+        order.status_reason = decode_status_reason(Some(status_reason.as_str()))?;
+    }
+    if let Some(reduce_only) = event_string_field(event, "reduce_only") {
+        order.reduce_only = decode_bool(reduce_only.as_str())?;
+    }
+    if let Some(group_relation) = event_string_field(event, "group_relation") {
+        order.group_relation = decode_group_relation(Some(group_relation.as_str()))?;
+    }
+    if let Some(updated_at) = event_u64_field(event, "updated_at") {
+        order.updated_at = updated_at;
+    }
+    if let Some(qty) = event_u64_field(event, "qty") {
+        order.qty = qty;
+    }
+    if let Some(limit_price) = event_u64_field(event, "limit_price") {
+        order.limit_price = limit_price;
+    }
+    if let Some(exchange_oid) = event_u64_field(event, "exchange_oid") {
+        order.exchange_oid = Some(exchange_oid);
+        order.identity.exchange_oid = Some(exchange_oid);
+    }
+    if let Some(client_order_id) = event_string_field(event, "client_order_id") {
+        order.client_order_id = (!client_order_id.is_empty()).then_some(client_order_id.clone());
+        order.identity.client_order_id = order.client_order_id.clone();
+    }
+    apply_reservation_update(&mut order.reservation, event, false)?;
+    apply_reservation_update(&mut order.fee_reservation, event, true)?;
     order.version = event.new_version;
+    Ok(())
+}
+
+fn decode_order_from_event(
+    event: &EntityReplayableEvent,
+) -> Result<SpotOrderV2, PlaceOrderOutboundError> {
+    let order_id =
+        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let asset =
+        event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32;
+    let exchange_oid = event_u64_field(event, "exchange_oid");
+    let account_id = event_string_field(event, "account_id")
+        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let symbol =
+        event_string_field(event, "symbol").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let side = decode_side(event)?;
+    let limit_price = decode_limit_price(event)?;
+    let order_type = decode_order_type(event)?;
+    let qty = event_u64_field(event, "qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let client_order_id =
+        event_string_field(event, "client_order_id").filter(|value| !value.is_empty());
+    let version = event_u64_field(event, "version").unwrap_or(1);
+    let created_at =
+        event_u64_field(event, "created_at").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let updated_at =
+        event_u64_field(event, "updated_at").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let mut order = if order_type.is_trigger() {
+        SpotOrderV2::new_pending_trigger(
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            qty,
+            limit_price,
+            order_type,
+            client_order_id,
+            version,
+            created_at,
+        )
+    } else {
+        SpotOrderV2::new_pending_limit(
+            order_id,
+            asset,
+            exchange_oid,
+            account_id,
+            symbol,
+            side,
+            qty,
+            limit_price,
+            order_type,
+            client_order_id,
+            version,
+            created_at,
+        )
+    };
+    order.filled_qty =
+        event_u64_field(event, "filled_qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    order.status = decode_status(event)?;
+    order.status_reason =
+        decode_status_reason(event_string_field(event, "status_reason").as_deref())?;
+    order.reduce_only = event_string_field(event, "reduce_only")
+        .map(|value| decode_bool(value.as_str()))
+        .transpose()?
+        .unwrap_or(false);
+    order.group_relation =
+        decode_group_relation(event_string_field(event, "group_relation").as_deref())?;
+    order.reservation = decode_embedded_order_reservation(event)?;
+    order.fee_reservation = decode_embedded_order_fee_reservation(event)?;
+    order.updated_at = updated_at;
+    Ok(order)
+}
+
+fn apply_reservation_update(
+    reservation: &mut Reservation,
+    event: &EntityReplayableEvent,
+    fee: bool,
+) -> Result<(), PlaceOrderOutboundError> {
+    if let Some(value) = reservation_string_field(event, fee, "id") {
+        reservation.reservation_id = value;
+    }
+    if let Some(value) = reservation_string_field(event, fee, "asset_id") {
+        reservation.asset_id = value;
+    }
+    if let Some(value) = reservation_string_field(event, fee, "kind") {
+        reservation.reservation_kind = decode_reservation_kind(value.as_str())?;
+    }
+    if let Some(value) = reservation_string_field(event, fee, "status") {
+        reservation.status = decode_reservation_status(value.as_str())?;
+    }
+    if let Some(value) = reservation_u64_field(event, fee, "original_amount") {
+        reservation.original_amount = value;
+    }
+    if let Some(value) = reservation_u64_field(event, fee, "consumed_amount") {
+        reservation.consumed_amount = value;
+    }
+    if let Some(value) = reservation_u64_field(event, fee, "released_amount") {
+        reservation.released_amount = value;
+    }
+    if let Some(value) = reservation_u64_field(event, fee, "remaining_amount") {
+        reservation.remaining_amount = value;
+    }
     Ok(())
 }
 
 fn decode_order_snapshot_from_event(
     event: &EntityReplayableEvent,
 ) -> Result<SpotOrderV2, PlaceOrderOutboundError> {
-    Ok(SpotOrderV2::new(
-        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32,
-        event_u64_field(event, "exchange_oid"),
-        event_string_field(event, "account_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "symbol").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        decode_side(event)?,
-        decode_limit_price(event)?,
-        decode_order_type(event)?,
-        event_u64_field(event, "qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_u64_field(event, "filled_qty").unwrap_or(0),
-        decode_status(event).unwrap_or(SpotOrderStatus::Open),
-        None,
-        decode_embedded_order_reservation(event)?,
-        event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
-        event.new_version,
-        event_u64_field(event, "created_at").unwrap_or(1),
-        event_u64_field(event, "updated_at").unwrap_or(1),
-    ))
+    decode_order_from_event(event)
 }
 
 fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
