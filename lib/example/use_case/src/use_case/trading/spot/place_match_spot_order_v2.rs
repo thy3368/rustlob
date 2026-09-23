@@ -247,4 +247,3 @@ fn compute_match_changes(
     };
     Ok(OpenMatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?)
 }
-
