@@ -9,12 +9,12 @@ use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
 use hotstuff_rs::types::data_types::CryptoHash;
 
+use crate::network::tcp_network::TcpNetwork;
 use crate::node::demo_runtime::{
     DemoResult, MemDB, NODE_COUNT, SpotOrderApp, decode_requests, demo_replica_configuration,
     demo_validator_set_state, deterministic_signing_keys,
 };
 use crate::node::http_server::start_http_server;
-use crate::network::tcp_network::TcpNetwork;
 
 pub struct TcpNodeConfig {
     pub node_index: usize,

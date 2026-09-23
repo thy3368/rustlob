@@ -133,6 +133,7 @@ fn match_with_makers_can_consume_multiple_makers() -> Result<(), SpotOrderV2Beha
             match_id: "match-1".to_string(),
             maker_fee_bps: 100,
             taker_fee_bps: 100,
+            executed_at_ms: 1_717_171_717_000,
         },
     )?;
 
@@ -168,6 +169,7 @@ fn match_with_makers_stops_at_first_non_crossing_maker() -> Result<(), SpotOrder
             match_id: "match-2".to_string(),
             maker_fee_bps: 0,
             taker_fee_bps: 0,
+            executed_at_ms: 1_717_171_717_000,
         },
     )?;
 
@@ -191,6 +193,7 @@ fn match_with_makers_returns_empty_when_best_maker_does_not_cross()
             match_id: "match-empty".to_string(),
             maker_fee_bps: 0,
             taker_fee_bps: 0,
+            executed_at_ms: 1_717_171_717_000,
         },
     )?;
 
@@ -217,6 +220,7 @@ fn match_with_makers_rejects_invalid_maker() {
                 match_id: "match-invalid".to_string(),
                 maker_fee_bps: 0,
                 taker_fee_bps: 0,
+                executed_at_ms: 1_717_171_717_000,
             },
         ),
         Err(SpotOrderV2BehaviorError::SameSideMaker)

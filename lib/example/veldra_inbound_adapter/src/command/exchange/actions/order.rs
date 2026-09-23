@@ -734,6 +734,7 @@ mod tests {
             2,
             1,
             1,
+            2,
         ));
         let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order: order,

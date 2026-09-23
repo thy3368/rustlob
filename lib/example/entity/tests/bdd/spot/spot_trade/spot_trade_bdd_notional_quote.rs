@@ -15,6 +15,7 @@ fn trade(price: u64, qty: u64, taker_fee: u64, maker_fee: u64) -> SpotTrade {
         qty,
         taker_fee,
         maker_fee,
+        1_717_171_717_000,
     )
 }
 

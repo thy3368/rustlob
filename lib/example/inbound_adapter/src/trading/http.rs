@@ -9,8 +9,8 @@ use cmd_handler::command_use_case_def2::{
     ExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
 };
 use example_core_use_case::{
-    PlaceSpotOrderV2CmdV3, SpotOrderV2CaseChangesV3, SpotOrderV2CommandV3,
-    SpotOrderV2UseCaseFamilyV3, SpotOrderV2UseCaseFamilyV3Error,
+    PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +18,8 @@ use crate::common::{HttpInboundError, find_string_field, find_u64_field};
 
 pub trait PlaceOrderOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
-    type Outbound: StateSource<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>
-        + StateSink<SpotOrderV2UseCaseFamilyV3, Error = Self::OutboundError>;
+    type Outbound: StateSource<PlaceMatchSpotOrderV2UseCase, Error = Self::OutboundError>
+        + StateSink<PlaceMatchSpotOrderV2UseCase, Error = Self::OutboundError>;
 
     fn place_order_outbound(&self) -> &Self::Outbound;
 }
@@ -35,44 +35,35 @@ pub struct PlaceOrderHttpRequest {
 }
 
 impl PlaceOrderHttpRequest {
-    fn into_command(self) -> SpotOrderV2CommandV3 {
-        let _adapter_symbol = self.symbol;
+    fn into_command(self) -> PlaceOnlySpotOrderV2Cmd {
         let _trace_id = self.trace_id;
         let _command_id = self.command_id;
-        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2CmdV3 {
+        PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
+            order_id: format!("{}-{}-11", self.trader_id, self.symbol),
             party_id: self.trader_id,
             asset: 10_001,
+            symbol: self.symbol,
             is_buy: true,
             price: self.price.to_string(),
             size: self.qty.to_string(),
-            tif: "Gtc".to_string(),
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() },
+            reduce_only: false,
             cloid: None,
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
         })
     }
 }
 
-impl crate::common::ExampleBusinessErrorMapping for SpotOrderV2UseCaseFamilyV3Error {
+impl crate::common::ExampleBusinessErrorMapping for PlaceMatchSpotOrderV2Error {
     fn inbound_error_code(&self) -> &'static str {
-        match self {
-            SpotOrderV2UseCaseFamilyV3Error::InvalidPrice => "invalid_price",
-            SpotOrderV2UseCaseFamilyV3Error::InvalidSize => "invalid_qty",
-            SpotOrderV2UseCaseFamilyV3Error::InvalidTimeInForce => "invalid_time_in_force",
-            SpotOrderV2UseCaseFamilyV3Error::InsufficientAvailableBalance => {
-                "insufficient_available_balance"
-            }
-            SpotOrderV2UseCaseFamilyV3Error::InsufficientFrozenBalance => {
-                "insufficient_frozen_balance"
-            }
-            SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow => "arithmetic_overflow",
-            _ => "spot_order_v2_rejected",
-        }
+        "spot_order_v2_rejected"
     }
 
     fn http_status_code(&self) -> u16 {
-        match self {
-            SpotOrderV2UseCaseFamilyV3Error::ArithmeticOverflow => 500,
-            _ => 400,
-        }
+        400
     }
 }
 
@@ -108,24 +99,24 @@ pub fn handle_place_order_http<OB>(
 ) -> Result<
     PlaceOrderHttpResponse,
     ExecutionError<
-        SpotOrderV2UseCaseFamilyV3Error,
-        <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        PlaceMatchSpotOrderV2Error,
+        <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
     >,
 >
 where
     OB: StateSource<
-            SpotOrderV2UseCaseFamilyV3,
-            Error = <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
-        > + StateSink<SpotOrderV2UseCaseFamilyV3>,
+            PlaceMatchSpotOrderV2UseCase,
+            Error = <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
+        > + StateSink<PlaceMatchSpotOrderV2UseCase>,
 {
     let command = request.into_command();
-    let result = StateMachineExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
-        &SpotOrderV2UseCaseFamilyV3,
+    let result = StateMachineExecutor.execute::<PlaceMatchSpotOrderV2UseCase, OB, OB>(
+        &PlaceMatchSpotOrderV2UseCase,
         &command,
         outbound,
         outbound,
     )?;
-    let _changes: SpotOrderV2CaseChangesV3 = result.changes;
+    let _changes = result.changes;
     Ok(PlaceOrderHttpReplyMapper.map(result.events))
 }
 
@@ -244,14 +235,14 @@ mod tests {
         };
 
         let response =
-            handle_place_order_http(request, &outbound).expect("v3 place order should execute");
+            handle_place_order_http(request, &outbound).expect("place-match order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
         assert_eq!(response.principal_reservation_amount, 300);
         assert_eq!(response.remaining_quote, 700);
-        assert_eq!(response.domain_event_count, 3);
-        assert_eq!(counts, (3, 3));
+        assert_eq!(response.domain_event_count, 5);
+        assert_eq!(counts, (5, 5));
 
         Ok(())
     }
@@ -284,6 +275,6 @@ mod tests {
         assert_eq!(body["order_id"], "trader-1-BTCUSDT-11");
         assert_eq!(body["principal_reservation_amount"], 300);
         assert_eq!(body["remaining_quote"], 700);
-        assert_eq!(body["domain_event_count"], 3);
+        assert_eq!(body["domain_event_count"], 5);
     }
 }

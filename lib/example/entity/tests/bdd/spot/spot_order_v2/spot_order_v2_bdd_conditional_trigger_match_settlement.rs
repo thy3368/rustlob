@@ -52,7 +52,12 @@ fn trigger_as_active(order: &mut SpotOrderV2) -> Result<(), SpotOrderV2BehaviorE
 }
 
 fn match_input(match_id: &str) -> MatchSpotOrderV2Input {
-    MatchSpotOrderV2Input { match_id: match_id.to_string(), maker_fee_bps: 5, taker_fee_bps: 10 }
+    MatchSpotOrderV2Input {
+        match_id: match_id.to_string(),
+        maker_fee_bps: 5,
+        taker_fee_bps: 10,
+        executed_at_ms: 1_717_171_717_000,
+    }
 }
 
 #[test]

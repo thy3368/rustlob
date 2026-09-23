@@ -26,12 +26,6 @@ pub enum PlaceOrderOutboundError {
     Store(#[from] StoreError),
 }
 
-impl From<example_core_use_case::SpotOrderV2UseCaseFamilyV3Error> for PlaceOrderOutboundError {
-    fn from(error: example_core_use_case::SpotOrderV2UseCaseFamilyV3Error) -> Self {
-        Self::BuildSpotOrderV2State(error.to_string())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DepositQuoteOutboundError {
     #[error("balance not found")]

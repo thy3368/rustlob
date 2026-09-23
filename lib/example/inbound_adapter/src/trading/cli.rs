@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{
     ExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
 };
 use example_core_use_case::{
-    PlaceSpotOrderV2CmdV3, SpotOrderV2CommandV3, SpotOrderV2UseCaseFamilyV3,
-    SpotOrderV2UseCaseFamilyV3Error,
+    PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
 use serde::Serialize;
 
@@ -55,16 +55,22 @@ impl ExampleCliParseErrorMapping for ParsePlaceOrderCliArgsError {
 }
 
 impl PlaceOrderCliCommand {
-    fn into_command(self) -> SpotOrderV2CommandV3 {
-        let _adapter_symbol = self.symbol;
-        SpotOrderV2CommandV3::Place(PlaceSpotOrderV2CmdV3 {
+    fn into_command(self) -> PlaceOnlySpotOrderV2Cmd {
+        PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
+            order_id: format!("{}-{}-11", self.trader_id, self.symbol),
             party_id: self.trader_id,
             asset: 10_001,
+            symbol: self.symbol,
             is_buy: true,
             price: self.price.to_string(),
             size: self.qty.to_string(),
-            tif: "Gtc".to_string(),
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() },
+            reduce_only: false,
             cloid: None,
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
         })
     }
 }
@@ -147,19 +153,19 @@ pub fn run_place_order_cli<OB>(
 ) -> Result<
     PlaceOrderCliResponse,
     ExecutionError<
-        SpotOrderV2UseCaseFamilyV3Error,
-        <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
+        PlaceMatchSpotOrderV2Error,
+        <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
     >,
 >
 where
     OB: StateSource<
-            SpotOrderV2UseCaseFamilyV3,
-            Error = <OB as StateSink<SpotOrderV2UseCaseFamilyV3>>::Error,
-        > + StateSink<SpotOrderV2UseCaseFamilyV3>,
+            PlaceMatchSpotOrderV2UseCase,
+            Error = <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
+        > + StateSink<PlaceMatchSpotOrderV2UseCase>,
 {
     let command = command.into_command();
-    let result = StateMachineExecutor.execute::<SpotOrderV2UseCaseFamilyV3, OB, OB>(
-        &SpotOrderV2UseCaseFamilyV3,
+    let result = StateMachineExecutor.execute::<PlaceMatchSpotOrderV2UseCase, OB, OB>(
+        &PlaceMatchSpotOrderV2UseCase,
         &command,
         outbound,
         outbound,
@@ -184,7 +190,7 @@ mod tests {
         };
 
         let response =
-            run_place_order_cli(command, &outbound).expect("v3 place order should execute");
+            run_place_order_cli(command, &outbound).expect("place-match order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
@@ -192,7 +198,7 @@ mod tests {
             response.summary,
             "accepted order_id=trader-1-BTCUSDT-11 principal_reservation_amount=200 remaining_quote=800"
         );
-        assert_eq!(counts, (3, 3));
+        assert_eq!(counts, (5, 5));
 
         Ok(())
     }

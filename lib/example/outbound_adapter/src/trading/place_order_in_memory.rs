@@ -1,11 +1,10 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
-    Balance, MarketRules, PlaceSpotOrderV2TakerTemplateContextV3, Reservation,
-    ReservationCloseReason, ReservationKind, ReservationMarketKind, ReservationStatus,
-    SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotOrderV2CommandV3,
-    SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3, SpotTrade,
-    build_place_spot_order_v2_taker_template_v3,
+    Balance, MarketRules, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+    PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason, ReservationKind,
+    ReservationMarketKind, ReservationStatus, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
+    SpotOrderType, SpotOrderV2, SpotTrade,
 };
 
 use crate::shared::{
@@ -65,21 +64,20 @@ impl InMemoryPlaceOrderOutbound {
 }
 
 const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
-const DEFAULT_MAKER_FEE_BPS: u64 = 5;
-const DEFAULT_TAKER_FEE_BPS: u64 = 10;
 
-impl StateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
+impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn load_given_state(
         &self,
-        cmd: &SpotOrderV2CommandV3,
-    ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-        let SpotOrderV2CommandV3::Place(cmd) = cmd else {
-            return Err(PlaceOrderOutboundError::UnsupportedCommandBranch);
+        cmd: &PlaceOnlySpotOrderV2Cmd,
+    ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
+        let order_cmd = match cmd {
+            PlaceOnlySpotOrderV2Cmd::Single(order)
+            | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order,
         };
         let state = self.store.lock_state()?;
-        let symbol = symbol_for_asset(cmd.asset);
+        let symbol = symbol_for_asset(order_cmd.asset);
         let market_rules = state
             .market_rules_by_symbol
             .get(symbol)
@@ -100,35 +98,24 @@ impl StateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
                 1,
             ));
         }
-        if !state.balances.contains_key(&balance_key(cmd.party_id.as_str(), base_asset_id.as_str()))
+        if !state
+            .balances
+            .contains_key(&balance_key(order_cmd.party_id.as_str(), base_asset_id.as_str()))
             || !state
                 .balances
-                .contains_key(&balance_key(cmd.party_id.as_str(), quote_asset_id.as_str()))
+                .contains_key(&balance_key(order_cmd.party_id.as_str(), quote_asset_id.as_str()))
         {
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
 
-        let order_id =
-            format!("{}-{}-{}", cmd.party_id, market_rules.symbol, state.next_order_sequence);
-        let taker_order = build_place_spot_order_v2_taker_template_v3(
-            cmd,
-            PlaceSpotOrderV2TakerTemplateContextV3 {
-                order_id,
-                symbol: market_rules.symbol.clone(),
-                settlement_balances: &settlement_balances,
-                base_asset_id: base_asset_id.clone(),
-                quote_asset_id: quote_asset_id.clone(),
-                maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
-                taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
-            },
-        )?;
         let maker_orders = state
             .orders
             .values()
             .filter(|order| {
-                order.trades_asset(cmd.asset)
+                order.trades_asset(order_cmd.asset)
                     && order.trades_symbol(market_rules.symbol.as_str())
-                    && order.side() != taker_order.side()
+                    && order.side()
+                        != if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell }
                     && matches!(
                         order.status(),
                         SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
@@ -137,20 +124,15 @@ impl StateSource<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
             .cloned()
             .collect();
 
-        Ok(SpotOrderV2GivenStateV3::Place {
-            taker_order,
+        Ok(PlaceMatchSpotOrderV2State {
             maker_orders,
             settlement_balances,
-            base_asset_id,
-            quote_asset_id,
             fee_account_id: DEFAULT_FEE_ACCOUNT_ID.to_string(),
-            maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
-            taker_fee_bps: DEFAULT_TAKER_FEE_BPS,
         })
     }
 }
 
-impl StateSink<SpotOrderV2UseCaseFamilyV3> for InMemoryPlaceOrderOutbound {
+impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -519,6 +501,8 @@ fn decode_created_trade(
         event_u64_field(event, "qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "taker_fee").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "maker_fee").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+        event_u64_field(event, "executed_at_ms")
+            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
     ))
 }
 

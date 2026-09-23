@@ -137,6 +137,7 @@ fn given_factory_tp_sl_children_when_created_then_they_have_no_reservation_and_c
                 match_id: "match-factory-tp-pending".to_string(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
+                executed_at_ms: 1_717_171_717_000,
             },
         ),
         Err(SpotOrderV2BehaviorError::OrderNotMatchable)
@@ -148,6 +149,7 @@ fn given_factory_tp_sl_children_when_created_then_they_have_no_reservation_and_c
                 match_id: "match-factory-sl-pending".to_string(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
+                executed_at_ms: 1_717_171_717_000,
             },
         ),
         Err(SpotOrderV2BehaviorError::OrderNotMatchable)

@@ -40,6 +40,7 @@ fn derive_balance_ledger_entries_maps_spot_principal_and_fee_legs() {
         2,
         1,
         2,
+        1_717_171_717_000,
     );
     let voucher = trade
         .derive_spot_settlement_transfer_voucher_with_fees(

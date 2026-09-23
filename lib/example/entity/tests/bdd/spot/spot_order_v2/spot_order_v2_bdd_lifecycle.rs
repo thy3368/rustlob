@@ -80,6 +80,7 @@ fn given_trigger_pending_order_when_created_then_it_has_no_reservation_and_canno
                 match_id: "match-trigger-pending".to_string(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
+                executed_at_ms: 1_717_171_717_000,
             },
         ),
         Err(SpotOrderV2BehaviorError::OrderNotMatchable)
@@ -135,6 +136,7 @@ fn given_active_order_when_matching_then_active_state_advances_without_trigger_f
             match_id: "match-active".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
+            executed_at_ms: 1_717_171_717_000,
         },
     )?;
 

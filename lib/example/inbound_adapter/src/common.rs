@@ -249,9 +249,9 @@ pub(crate) mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
     use example_core_use_case::{
-        Balance, DepositQuoteCmd, DepositQuoteState, PlaceSpotOrderV2TakerTemplateContextV3,
-        SpotOrderV2CommandV3, SpotOrderV2GivenStateV3, SpotOrderV2UseCaseFamilyV3,
-        WithdrawQuoteCmd, WithdrawQuoteState, build_place_spot_order_v2_taker_template_v3,
+        Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
+        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,
+        WithdrawQuoteState,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum TestOutboundError {
@@ -341,48 +341,27 @@ pub(crate) mod tests {
         }
     }
 
-    impl StateSource<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+    impl StateSource<PlaceMatchSpotOrderV2UseCase> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
         fn load_given_state(
             &self,
-            cmd: &SpotOrderV2CommandV3,
-        ) -> Result<SpotOrderV2GivenStateV3, Self::Error> {
-            let SpotOrderV2CommandV3::Place(cmd) = cmd else {
-                return Err(TestOutboundError::StoreUnavailable);
-            };
+            _cmd: &PlaceOnlySpotOrderV2Cmd,
+        ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
                 Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
                 Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
                 Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
             ];
-            let taker_order = build_place_spot_order_v2_taker_template_v3(
-                cmd,
-                PlaceSpotOrderV2TakerTemplateContextV3 {
-                    order_id: "trader-1-BTCUSDT-11".to_string(),
-                    symbol: "BTCUSDT".to_string(),
-                    settlement_balances: &settlement_balances,
-                    base_asset_id: "BTC".to_string(),
-                    quote_asset_id: "USDT".to_string(),
-                    maker_fee_bps: 5,
-                    taker_fee_bps: 10,
-                },
-            )
-            .map_err(|_| TestOutboundError::StoreUnavailable)?;
-            Ok(SpotOrderV2GivenStateV3::Place {
-                taker_order,
+            Ok(PlaceMatchSpotOrderV2State {
                 maker_orders: Vec::new(),
                 settlement_balances,
-                base_asset_id: "BTC".to_string(),
-                quote_asset_id: "USDT".to_string(),
                 fee_account_id: "fee".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
             })
         }
     }
 
-    impl StateSink<SpotOrderV2UseCaseFamilyV3> for PlaceOrderTestOutbound {
+    impl StateSink<PlaceMatchSpotOrderV2UseCase> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
