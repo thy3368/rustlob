@@ -92,8 +92,9 @@ impl StateMachineExecutor {
         let given_state =
             state_source.load_given_state(command).map_err(ExecutionError::LoadState)?;
 
-        let changes =
-            family.compute_state_diff(&command, given_state).map_err(ExecutionError::Business)?;
+        let changes = family
+            .compute_state_diff_with_context(command, given_state, &context)
+            .map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
         let events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;

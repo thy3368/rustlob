@@ -436,7 +436,7 @@
 
 use std::fmt::Debug;
 
-use crate::{action_type, ReplayableChanges};
+use crate::{ReplayableChanges, action_type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecutionContext {
@@ -541,7 +541,16 @@ pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
         given_state: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
         let context = ExecutionContext::now();
-        let after = self.compute_state_changed_with_context(cmd, &given_state, &context)?;
+        self.compute_state_diff_with_context(cmd, given_state, &context)
+    }
+
+    fn compute_state_diff_with_context(
+        &self,
+        cmd: &Self::Command,
+        given_state: Self::StateGiven,
+        context: &ExecutionContext,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        let after = self.compute_state_changed_with_context(cmd, &given_state, context)?;
         Self::do_compute_state_diff(given_state, after)
     }
 }
