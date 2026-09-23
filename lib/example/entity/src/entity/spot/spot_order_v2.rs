@@ -997,7 +997,7 @@ impl SpotOrderV2 {
             return Ok(false);
         };
 
-        match self.crosses_order(best_maker) {
+        match self.crosses_maker(best_maker) {
             Ok(crosses) => Ok(crosses),
             Err(_) => Ok(true),
         }
@@ -1049,7 +1049,9 @@ impl SpotOrderV2 {
     }
 
     /// 返回该订单是否会和给定 maker 订单成交。
-    fn crosses_order(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
+    ///
+    /// 该查询会校验 maker 的方向与可用价格，再按 taker 方向判断价格是否交叉。
+    pub fn crosses_maker(&self, maker: &SpotOrderV2) -> Result<bool, SpotOrderV2MatchError> {
         if self.side == maker.side {
             return Err(SpotOrderV2MatchError::SameSideMaker);
         }
@@ -1068,7 +1070,7 @@ impl SpotOrderV2 {
             return Ok(false);
         }
 
-        best_maker.map_or(Ok(false), |maker| self.crosses_order(maker))
+        best_maker.map_or(Ok(false), |maker| self.crosses_maker(maker))
     }
 
     /// 返回给定成交后数量对应的撮合状态。
@@ -1380,7 +1382,7 @@ pub fn spot_order_v2_next_trade_terms(
 ) -> Result<Option<SpotOrderV2TradeTerms>, SpotOrderV2MatchError> {
     maker.ensure_matchable()?;
     maker.ensure_compatible_maker_for(taker)?;
-    if !taker.crosses_order(maker)? {
+    if !taker.crosses_maker(maker)? {
         return Ok(None);
     }
 
@@ -1877,6 +1879,33 @@ mod tests {
             assert_eq!(order.time_in_force(), tif);
             assert!(order.can_enter_matching());
         }
+    }
+
+    #[test]
+    fn crosses_maker_checks_side_and_price() {
+        let mut taker = pending_order(SpotOrderType::Limit { tif: SpotOrderTif::Gtc });
+        let mut maker = SpotOrderV2::new_pending_limit(
+            "maker-1".to_string(),
+            10_001,
+            Some(1),
+            "trader-2".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Sell,
+            2,
+            99,
+            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
+            None,
+            1,
+            1,
+        );
+
+        taker.activate_pending(activation_input(5, 10)).expect("taker should activate");
+        maker.activate_pending(activation_input(5, 10)).expect("maker should activate");
+
+        assert!(taker.crosses_maker(&maker).expect("compatible maker should be checked"));
+
+        maker.limit_price = 101;
+        assert!(!taker.crosses_maker(&maker).expect("maker price should be checked"));
     }
 
     #[test]

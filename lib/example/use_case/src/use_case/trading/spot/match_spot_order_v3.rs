@@ -6,10 +6,7 @@ use common_entity::{
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
-use spot_entity::spot_order_v2::{
-    SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError, SpotOrderV2MatchingDecision,
-    spot_order_v2_matching_decision,
-};
+use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
 use crate::entity::account::balance_ledger_entry_v2::{
@@ -19,7 +16,7 @@ use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
-    SettlementTransferVoucher, SpotOrderSide, SpotOrderStatus, spot as spot_entity,
+    SettlementTransferVoucher, SpotOrderSide, SpotOrderStatus, SpotOrderTif, spot as spot_entity,
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
@@ -347,9 +344,44 @@ fn compute_match_after(
     let executed_at_ms = context.execution_time_ns / 1_000_000;
     let timestamp = context.execution_time_ns;
 
-    match spot_order_v2_matching_decision(&taker_after, maker_orders_after.first())? {
-        SpotOrderV2MatchingDecision::Rest => return Ok(MatchSpotOrderV3AfterChanges::Resting),
-        SpotOrderV2MatchingDecision::RejectAlo => {
+    match taker_after.time_in_force() {
+        SpotOrderTif::Gtc | SpotOrderTif::Ioc => {
+            let taker_before_match = taker_after.clone();
+            let match_outcome = taker_after.match_with_makers(
+                &mut maker_orders_after,
+                MatchSpotOrderV2Input {
+                    match_id: concat2("spot-match:", taker_after.order_id()),
+                    maker_fee_bps: state.maker_fee_bps,
+                    taker_fee_bps: state.taker_fee_bps,
+                    executed_at_ms,
+                    timestamp,
+                },
+            )?;
+            if matches!(taker_after.time_in_force(), SpotOrderTif::Gtc)
+                && match_outcome.trades.is_empty()
+            {
+                return Ok(MatchSpotOrderV3AfterChanges::Resting);
+            }
+
+            finish_matched_after(
+                state,
+                taker_before_match,
+                taker_after,
+                maker_orders_after,
+                balance_book,
+                created_balance_ledger_entries,
+                match_outcome.trades,
+                timestamp,
+            )
+        }
+        SpotOrderTif::Alo => {
+            let Some(best_maker) = maker_orders_after.first() else {
+                return Ok(MatchSpotOrderV3AfterChanges::Resting);
+            };
+            if !taker_after.crosses_maker(best_maker)? {
+                return Ok(MatchSpotOrderV3AfterChanges::Resting);
+            }
+
             taker_after.reject_as_bad_alo(timestamp)?;
             release_remaining_for_terminal(
                 &mut taker_after,
@@ -358,26 +390,25 @@ fn compute_match_after(
                 state.maker_fee_bps,
                 state.taker_fee_bps,
             )?;
-            return Ok(MatchSpotOrderV3AfterChanges::Rejected {
+            Ok(MatchSpotOrderV3AfterChanges::Rejected {
                 rejected_taker_order_after: taker_after,
                 balances_after: balance_book.into_balances(),
                 created_balance_ledger_entries,
-            });
+            })
         }
-        SpotOrderV2MatchingDecision::Match => {}
     }
+}
 
-    let taker_before_match = taker_after.clone();
-    let match_outcome = taker_after.match_with_makers(
-        &mut maker_orders_after,
-        MatchSpotOrderV2Input {
-            match_id: concat2("spot-match:", taker_after.order_id()),
-            maker_fee_bps: state.maker_fee_bps,
-            taker_fee_bps: state.taker_fee_bps,
-            executed_at_ms,
-            timestamp,
-        },
-    )?;
+fn finish_matched_after(
+    state: &MatchSpotOrderV3State,
+    taker_before_match: SpotOrderV2,
+    mut taker_after: SpotOrderV2,
+    mut maker_orders_after: Vec<SpotOrderV2>,
+    mut balance_book: BalanceMap,
+    mut created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    trades: Vec<SpotTrade>,
+    timestamp: u64,
+) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
     let MatchedTradeEffects {
         created_trades,
         created_vouchers,
@@ -386,7 +417,7 @@ fn compute_match_after(
     } = settle_matched_trades(
         &mut taker_after,
         &mut maker_orders_after,
-        match_outcome.trades,
+        trades,
         MatchedTradeSettlementContext {
             base_asset_id: &state.base_asset_id,
             quote_asset_id: &state.quote_asset_id,
