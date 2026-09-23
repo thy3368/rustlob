@@ -6,6 +6,7 @@ pub mod place_only_spot_order_v2;
 pub mod modify_spot_order_v2;
 
 pub mod agg;
+pub mod generate_spot_klines_from_historical_trades;
 
 pub mod spot_order_v2_use_case_family_v3;
 
@@ -17,6 +18,11 @@ pub use cancel_spot_order_v2::{
     CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase,
+};
+pub use generate_spot_klines_from_historical_trades::{
+    GenerateSpotKlinesFromHistoricalTradesChanges, GenerateSpotKlinesFromHistoricalTradesCmd,
+    GenerateSpotKlinesFromHistoricalTradesError, GenerateSpotKlinesFromHistoricalTradesState,
+    GenerateSpotKlinesFromHistoricalTradesUseCase,
 };
 pub use modify_spot_order_v2::{
     ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,

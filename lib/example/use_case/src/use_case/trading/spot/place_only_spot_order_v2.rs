@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,8 @@ pub struct PlaceOnlySpotOrderV2OrderCmd {
     pub quote_asset_id: String,
     pub maker_fee_bps: u64,
     pub taker_fee_bps: u64,
+    #[serde(default)]
+    pub executed_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +175,7 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         match cmd {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
@@ -405,6 +408,7 @@ mod tests {
             quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 1,
             taker_fee_bps: 5,
+            executed_at_ms: 1_717_171_717_000,
         }
     }
 

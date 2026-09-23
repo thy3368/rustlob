@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -35,6 +35,8 @@ pub struct PlaceSpotOrderV2CmdV3 {
     pub size: String,
     pub tif: String,
     pub cloid: Option<String>,
+    #[serde(default)]
+    pub executed_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +81,8 @@ pub struct TriggerSpotOrderV2CmdV3 {
     pub party_id: String,
     pub asset: u32,
     pub order_id: String,
+    #[serde(default)]
+    pub executed_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -450,6 +454,7 @@ impl StateMachineV2Unchecked for SpotOrderV2UseCaseFamilyV3 {
         &self,
         cmd: &Self::Command,
         given_state: &SpotOrderV2GivenStateV3,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         match (cmd, given_state) {
             (
@@ -593,6 +598,7 @@ struct ActiveOrderAfterContext<'a> {
     fee_account_id: &'a str,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
+    executed_at_ms: u64,
 }
 
 struct ActiveOrderAfter {
@@ -639,6 +645,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
             fee_account_id: context.fee_account_id,
             maker_fee_bps: context.maker_fee_bps,
             taker_fee_bps: context.taker_fee_bps,
+            executed_at_ms: context.cmd.executed_at_ms,
         })?;
 
         Ok(SpotOrderV2AfterChangesV3::Place(PlaceSpotOrderV2AfterChangesV3 {
@@ -693,6 +700,7 @@ impl SpotOrderV2UseCaseFamilyV3 {
             fee_account_id: context.fee_account_id,
             maker_fee_bps: context.maker_fee_bps,
             taker_fee_bps: context.taker_fee_bps,
+            executed_at_ms: context.cmd.executed_at_ms,
         })?;
 
         Ok(SpotOrderV2AfterChangesV3::Trigger(Box::new(TriggerSpotOrderV2AfterChangesV3 {
@@ -720,6 +728,7 @@ fn compute_active_order_after(
         fee_account_id,
         maker_fee_bps,
         taker_fee_bps,
+        executed_at_ms,
     } = context;
     let mut created_trades = Vec::with_capacity(0);
     let mut created_vouchers = Vec::with_capacity(0);
@@ -763,6 +772,7 @@ fn compute_active_order_after(
             match_id: concat2("spot-match:", taker_after.order_id()),
             maker_fee_bps,
             taker_fee_bps,
+            executed_at_ms,
         },
     )?;
     let mut total_taker_fill = 0_u64;
@@ -1746,6 +1756,7 @@ mod tests {
             size: "2".to_string(),
             tif: tif.to_string(),
             cloid: None,
+            executed_at_ms: 1_717_171_717_000,
         })
     }
 
@@ -1843,6 +1854,7 @@ mod tests {
         };
 
         assert_eq!(changes.created_trades.len(), 1);
+        assert_eq!(changes.created_trades[0].executed_at_ms, 1_717_171_717_000);
         assert_eq!(changes.created_trades[0].taker_fee, 1);
         assert_eq!(changes.created_trades[0].maker_fee, 1);
         assert_eq!(changes.updated_taker_order.after.status(), SpotOrderStatus::Canceled);

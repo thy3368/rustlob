@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -137,6 +137,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
         &self,
         _cmd: &Self::Command,
         given_state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut order_after = given_state.order.clone();
         let mut balance_book = BalanceMap::new(&given_state.balances);

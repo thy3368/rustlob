@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -168,6 +168,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut working = WorkingSpotBlockState::try_from_state(given_state)?;
         let mut item_results = Vec::with_capacity(cmd.commands.len());
@@ -797,6 +798,7 @@ mod tests {
                 quote_asset_id: "USDT".to_owned(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
+                executed_at_ms: 1_717_171_717_000,
             },
         ))
     }

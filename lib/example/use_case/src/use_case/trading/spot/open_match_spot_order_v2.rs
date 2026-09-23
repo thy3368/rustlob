@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -135,6 +135,7 @@ struct ActiveOrderAfterContext<'a> {
     fee_account_id: &'a str,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
+    executed_at_ms: u64,
 }
 
 struct ActiveOrderAfter {
@@ -159,6 +160,7 @@ fn compute_active_order_after(
         fee_account_id,
         maker_fee_bps,
         taker_fee_bps,
+        executed_at_ms,
     } = context;
     let mut created_trades = Vec::with_capacity(0);
     let mut created_vouchers = Vec::with_capacity(0);
@@ -202,6 +204,7 @@ fn compute_active_order_after(
             match_id: concat2("spot-match:", taker_after.order_id()),
             maker_fee_bps,
             taker_fee_bps,
+            executed_at_ms,
         },
     )?;
     let mut total_taker_fill = 0_u64;
@@ -912,6 +915,7 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
         &self,
         _cmd: &Self::Command,
         state: &Self::StateGiven,
+        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut balance_book = BalanceMap::new(&state.settlement_balances);
         let mut created_balance_ledger_entries = Vec::new();
@@ -944,6 +948,7 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
             fee_account_id: &state.fee_account_id,
             maker_fee_bps: state.maker_fee_bps,
             taker_fee_bps: state.taker_fee_bps,
+            executed_at_ms: context.execution_time_ms,
         })?;
 
         Ok(MatchSpotOrderV2AfterChanges {
@@ -1051,7 +1056,7 @@ fn apply_freeze_for_open_taker_reservation(
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{StateMachineOwnedV2Diff, StateMachineV2};
+    use common_entity::{ExecutionContext, StateMachineOwnedV2Diff};
 
     use super::*;
     use crate::{
@@ -1109,6 +1114,10 @@ mod tests {
         }
     }
 
+    fn execution_context() -> ExecutionContext {
+        ExecutionContext { execution_time_ms: 1_717_171_717_000 }
+    }
+
     fn sell_order(order_id: &str, account_id: &str, price: u64, qty: u64) -> SpotOrderV2 {
         SpotOrderV2::new(
             order_id.to_string(),
@@ -1156,7 +1165,9 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_state_changed(&match_cmd(), &state).unwrap();
+        let after = use_case
+            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
+            .unwrap();
 
         assert_eq!(after.taker_order_after, taker);
         assert_eq!(after.maker_orders_after, makers);
@@ -1195,9 +1206,12 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let changes = use_case.compute_state_diff(&match_cmd(), state).unwrap();
+        let changes = use_case
+            .compute_state_diff_with_context(&match_cmd(), state, &execution_context())
+            .unwrap();
 
         assert_eq!(changes.created_trades.len(), 1);
+        assert_eq!(changes.created_trades[0].executed_at_ms, 1_717_171_717_000);
         assert_eq!(changes.created_trades[0].taker_fee, 1);
         assert_eq!(changes.created_trades[0].maker_fee, 1);
         assert!(changes.updated_taker_order.is_some());
@@ -1235,7 +1249,9 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_state_changed(&match_cmd(), &state).unwrap();
+        let after = use_case
+            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
+            .unwrap();
 
         let changes = OpenMatchSpotOrderV2UseCase::do_compute_state_diff(state, after).unwrap();
 
@@ -1275,7 +1291,9 @@ mod tests {
             taker_fee_bps: 10,
         };
 
-        let after = use_case.compute_state_changed(&match_cmd(), &state).unwrap();
+        let after = use_case
+            .compute_state_changed_with_context(&match_cmd(), &state, &execution_context())
+            .unwrap();
 
         assert_eq!(taker.status(), SpotOrderStatus::Open);
         assert_eq!(after.taker_order_after.status(), SpotOrderStatus::Rejected);
