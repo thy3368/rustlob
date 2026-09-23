@@ -94,5 +94,5 @@ pub use spot_entity::spot_order_v2::{
     MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, SpotOrderFeeConsumeRequirement,
     SpotOrderFeeHoldRequirement, SpotOrderGroupRelation, SpotOrderHoldAsset,
     SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError,
-    SpotOrderV2MatchError, SpotTradeFeeRole, TriggerSpotOrderV2Input,
+    SpotOrderV2MatchError, SpotTradeFeeRole,
 };

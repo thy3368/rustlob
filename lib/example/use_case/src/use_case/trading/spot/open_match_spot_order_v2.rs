@@ -329,6 +329,14 @@ fn validate_reservation_for_order(
     if reservation.reservation_kind != expected_kind {
         return Err(MatchSpotOrderV2Error::ReservationKindMismatch);
     }
+    let is_zero_fee_reservation = matches!(
+        expected_kind,
+        ReservationKind::SpotBuyFeeQuote | ReservationKind::SpotSellFeeQuote
+    ) && reservation.original_amount == 0
+        && reservation.remaining_amount == 0;
+    if !reservation.is_active() && !is_zero_fee_reservation {
+        return Err(MatchSpotOrderV2Error::ReservationKindMismatch);
+    }
     let expected_asset = match expected_kind {
         ReservationKind::SpotBuyQuote
         | ReservationKind::SpotBuyFeeQuote
@@ -411,9 +419,10 @@ fn release_remaining_for_terminal(
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), MatchSpotOrderV2Error> {
-    let requirements = order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
+    let (principal_requirement, fee_requirement) =
+        order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
 
-    if let Some(requirement) = requirements.principal {
+    if let Some(requirement) = principal_requirement {
         release_order_reservation(
             order_after,
             OrderReservationSlot::Principal,
@@ -424,7 +433,7 @@ fn release_remaining_for_terminal(
         )?;
     }
 
-    if let Some(requirement) = requirements.fee {
+    if let Some(requirement) = fee_requirement {
         release_order_reservation(
             order_after,
             OrderReservationSlot::Fee,
@@ -898,12 +907,19 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
         if state.fee_account_id.is_empty() {
             return Err(MatchSpotOrderV2Error::InvalidFeeAccountId);
         }
+
+        if !state.taker_order.can_enter_matching() {
+            return Err(MatchSpotOrderV2Error::OrderMatch(
+                SpotOrderV2MatchError::OrderNotMatchable,
+            ));
+        }
         validate_all_reservations_for_order(
             &state.taker_order,
             &state.base_asset_id,
             &state.quote_asset_id,
         )?;
         for maker in &state.maker_orders {
+            maker.ensure_matchable()?;
             validate_all_reservations_for_order(
                 maker,
                 &state.base_asset_id,
@@ -920,32 +936,11 @@ impl StateMachineV2Unchecked for OpenMatchSpotOrderV2UseCase {
         state: &Self::StateGiven,
         context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let mut balance_book = BalanceMap::new(&state.settlement_balances);
-        let mut created_balance_ledger_entries = Vec::new();
-        let freeze_ledger_entry = apply_freeze_for_open_taker_reservation(
-            &state.taker_order,
-            concat2("balance-ledger:freeze:", state.taker_order.order_id()),
-            &state.taker_order.reservation.asset_id,
-            state.taker_order.reservation.original_amount,
-            &mut balance_book,
-        )?;
-        created_balance_ledger_entries.push(freeze_ledger_entry);
-        if state.taker_order.fee_reservation.original_amount > 0 {
-            let fee_freeze_ledger_entry = apply_freeze_for_open_taker_reservation(
-                &state.taker_order,
-                concat3("balance-ledger:freeze:", state.taker_order.order_id(), ":fee"),
-                &state.taker_order.fee_reservation.asset_id,
-                state.taker_order.fee_reservation.original_amount,
-                &mut balance_book,
-            )?;
-            created_balance_ledger_entries.push(fee_freeze_ledger_entry);
-        }
-
         let after = compute_active_order_after(ActiveOrderAfterContext {
             taker_after: state.taker_order.clone(),
             maker_orders_after: state.maker_orders.clone(),
-            balance_book,
-            created_balance_ledger_entries,
+            balance_book: BalanceMap::new(&state.settlement_balances),
+            created_balance_ledger_entries: Vec::new(),
             base_asset_id: &state.base_asset_id,
             quote_asset_id: &state.quote_asset_id,
             fee_account_id: &state.fee_account_id,
@@ -1020,40 +1015,9 @@ impl BalanceMap {
             .ok_or(MatchSpotOrderV2Error::BalanceNotFound)
     }
 
-    pub(super) fn entity_id_for_account_asset(
-        &self,
-        account_id: &str,
-        asset_id: &str,
-    ) -> Result<String, MatchSpotOrderV2Error> {
-        self.balances
-            .get(&concat3(account_id, ":", asset_id))
-            .map(Entity::entity_id)
-            .ok_or(MatchSpotOrderV2Error::BalanceNotFound)
-    }
-
     pub(super) fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances
     }
-}
-
-fn apply_freeze_for_open_taker_reservation(
-    order: &SpotOrderV2,
-    entry_id: String,
-    asset_id: &str,
-    amount: u64,
-    balance_book: &mut BalanceMap,
-) -> Result<BalanceLedgerEntryV2, MatchSpotOrderV2Error> {
-    let mut entry = BalanceLedgerEntryV2::freeze(
-        entry_id,
-        order.account_id().to_string(),
-        asset_id.to_string(),
-        balance_book.entity_id_for_account_asset(order.account_id(), asset_id)?,
-        amount,
-        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id().to_string() },
-    )?;
-    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    entry.apply_to(balance)?;
-    Ok(entry)
 }

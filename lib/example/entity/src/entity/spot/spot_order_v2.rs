@@ -316,22 +316,7 @@ impl SpotOrderGroupRelation {
     }
 }
 
-/// 条件单触发输入。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TriggerSpotOrderV2Input {
-    /// base 资产 ID。
-    pub base_asset_id: String,
-    /// quote 资产 ID。
-    pub quote_asset_id: String,
-    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
-    pub maker_fee_bps: u64,
-    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
-    pub taker_fee_bps: u64,
-    /// 条件单触发时间，单位为 Unix 纳秒。
-    pub timestamp: u64,
-}
-
-/// 普通限价单进入撮合执行阶段的激活输入。
+/// Pending 订单进入撮合执行阶段的激活输入。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivatePendingSpotOrderV2Input {
     /// base 资产 ID。
@@ -536,15 +521,15 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 可 BDD 规格化的聚合根行为：激活 Pending 普通限价单并生成冻结需求。
+    /// 可 BDD 规格化的聚合根行为：激活 Pending 订单并生成冻结需求。
     ///
-    /// 普通限价单不需要独立的触发条件；它在进入撮合执行入口时从 Pending 激活为 Open。
-    /// 未触发 Trigger 订单不能通过该行为绕过触发流程。
-    pub fn activate_pending_limit(
+    /// 该行为只负责订单自身从 Pending 到 Open 的生命周期推进，以及 principal / fee
+    /// reservation 的订单侧事实生成；Trigger 是否满足触发条件由上层流程保证。
+    pub fn activate_pending(
         &mut self,
         input: ActivatePendingSpotOrderV2Input,
     ) -> Result<(), SpotOrderV2BehaviorError> {
-        if !self.is_pending() || !matches!(self.order_type, SpotOrderType::Limit { .. }) {
+        if !self.is_pending() {
             return Err(SpotOrderV2BehaviorError::OrderNotMatchable);
         }
 
@@ -623,7 +608,12 @@ impl SpotOrderV2 {
     ) -> Result<Reservation, ReservationError> {
         let fee_bps = maker_fee_bps.max(taker_fee_bps);
         let amount = if fee_bps == 0 {
-            1
+            return Ok(Self::empty_zero_fee_reservation(
+                order_id,
+                account_id,
+                side,
+                quote_asset_id,
+            ));
         } else {
             let notional =
                 quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?;
@@ -642,6 +632,33 @@ impl SpotOrderV2 {
             quote_asset_id.to_string(),
             amount,
         )
+    }
+
+    fn empty_zero_fee_reservation(
+        order_id: &str,
+        account_id: &str,
+        side: SpotOrderSide,
+        quote_asset_id: &str,
+    ) -> Reservation {
+        let reservation_kind = match side {
+            SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+            SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        };
+        Reservation {
+            reservation_id: concat3("reservation:", order_id, ":fee"),
+            owner_account_id: account_id.to_string(),
+            caused_by_order_id: order_id.to_string(),
+            market_kind: ReservationMarketKind::Spot,
+            reservation_kind,
+            asset_id: quote_asset_id.to_string(),
+            original_amount: 0,
+            consumed_amount: 0,
+            released_amount: 0,
+            remaining_amount: 0,
+            status: ReservationStatus::ClosedByRelease,
+            close_reason: None,
+            version: 1,
+        }
     }
 
     fn empty_pending_reservation(
@@ -731,14 +748,14 @@ impl SpotOrderV2 {
 
     /// 返回订单当前是否具备进入撮合执行入口的业务资格。
     ///
-    /// Pending 普通限价单可在撮合入口激活；Pending Trigger 必须先经过独立触发行为。
-    /// 已激活的 Trigger 与普通限价单一样，按其 Open / PartiallyFilled 状态参与撮合。
+    /// 所有 Pending 订单都必须先经过独立 activation use case；已激活的 Trigger 与普通限价单
+    /// 一样，按其 Open / PartiallyFilled 状态参与撮合。
     pub fn can_enter_matching(&self) -> bool {
         if !self.has_consistent_execution_state() {
             return false;
         }
         match self.status {
-            SpotOrderStatus::Pending => matches!(self.order_type, SpotOrderType::Limit { .. }),
+            SpotOrderStatus::Pending => false,
             SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => {
                 self.remaining_qty().is_some_and(|remaining| remaining > 0)
             }
@@ -1763,5 +1780,126 @@ impl EntityLifecycle for SpotOrderV2 {
 
     fn updated_at(&self) -> u64 {
         self.updated_at
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{ReservationKind, ReservationStatus, SpotOrderTriggerRole};
+
+    fn activation_input(maker_fee_bps: u64, taker_fee_bps: u64) -> ActivatePendingSpotOrderV2Input {
+        ActivatePendingSpotOrderV2Input {
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps,
+            taker_fee_bps,
+            timestamp: 10,
+        }
+    }
+
+    fn pending_order(order_type: SpotOrderType) -> SpotOrderV2 {
+        SpotOrderV2::new_pending_limit(
+            "order-1".to_string(),
+            10_001,
+            Some(1),
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Buy,
+            2,
+            100,
+            order_type,
+            None,
+            1,
+            1,
+        )
+    }
+
+    #[test]
+    fn pending_limit_order_activation_builds_open_order_reservations() {
+        let mut order = pending_order(SpotOrderType::Limit { tif: SpotOrderTif::Gtc });
+
+        order.activate_pending(activation_input(5, 10)).expect("pending limit should activate");
+
+        assert_eq!(order.status, SpotOrderStatus::Open);
+        assert_eq!(order.filled_qty, 0);
+        assert_eq!(order.version, 2);
+        assert_eq!(order.updated_at, 10);
+        assert_eq!(order.reservation.asset_id, "USDT");
+        assert_eq!(order.reservation.original_amount, 200);
+        assert_eq!(order.reservation.reservation_kind, ReservationKind::SpotBuyQuote);
+        assert_eq!(order.reservation.status, ReservationStatus::Active);
+        assert_eq!(order.fee_reservation.asset_id, "USDT");
+        assert_eq!(order.fee_reservation.original_amount, 1);
+        assert_eq!(order.fee_reservation.reservation_kind, ReservationKind::SpotBuyFeeQuote);
+        assert_eq!(order.fee_reservation.status, ReservationStatus::Active);
+    }
+
+    #[test]
+    fn activate_pending_trigger_preserves_trigger_facts() {
+        let trigger_type = SpotOrderType::Trigger {
+            is_market: false,
+            trigger_price: 90,
+            tpsl: SpotOrderTriggerRole::StopLoss,
+        };
+        let mut order = SpotOrderV2::new_pending_trigger(
+            "trigger-1".to_string(),
+            10_001,
+            Some(2),
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Sell,
+            2,
+            100,
+            trigger_type,
+            None,
+            1,
+            1,
+        );
+
+        order.activate_pending(activation_input(5, 10)).expect("pending trigger should activate");
+
+        assert_eq!(order.status, SpotOrderStatus::Open);
+        assert_eq!(order.order_type, trigger_type);
+        assert_eq!(order.reservation.asset_id, "BTC");
+        assert_eq!(order.reservation.original_amount, 2);
+        assert_eq!(order.fee_reservation.asset_id, "USDT");
+    }
+
+    #[test]
+    fn activate_pending_supports_all_limit_tifs() {
+        for tif in [SpotOrderTif::Gtc, SpotOrderTif::Ioc, SpotOrderTif::Alo] {
+            let mut order = pending_order(SpotOrderType::Limit { tif });
+
+            order.activate_pending(activation_input(5, 10)).expect("pending tif should activate");
+
+            assert_eq!(order.status, SpotOrderStatus::Open);
+            assert_eq!(order.time_in_force(), tif);
+            assert!(order.can_enter_matching());
+        }
+    }
+
+    #[test]
+    fn activate_pending_rejects_non_pending_statuses() {
+        for status in [
+            SpotOrderStatus::Open,
+            SpotOrderStatus::PartiallyFilled,
+            SpotOrderStatus::Filled,
+            SpotOrderStatus::Canceled,
+            SpotOrderStatus::Rejected,
+        ] {
+            let mut order = pending_order(SpotOrderType::Limit { tif: SpotOrderTif::Gtc });
+            order.status = status;
+            order.filled_qty = match status {
+                SpotOrderStatus::PartiallyFilled => 1,
+                SpotOrderStatus::Filled => order.qty,
+                _ => 0,
+            };
+
+            assert_eq!(
+                order.activate_pending(activation_input(5, 10)),
+                Err(SpotOrderV2BehaviorError::OrderNotMatchable)
+            );
+        }
     }
 }

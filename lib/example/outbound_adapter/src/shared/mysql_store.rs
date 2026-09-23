@@ -226,7 +226,7 @@ impl MySqlStore {
                         1,
                     );
                     order
-                        .activate_pending_limit(
+                        .activate_pending(
                             example_core_use_case::ActivatePendingSpotOrderV2Input {
                                 base_asset_id: "BTC".to_string(),
                                 quote_asset_id: "USDT".to_string(),

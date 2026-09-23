@@ -6,6 +6,8 @@ use thiserror::Error;
 
 use crate::entity::{Balance, SpotOrderV2};
 use crate::{
+    ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
+    ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
     MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
     MatchSpotOrderV2Error, MatchSpotOrderV2State, OpenMatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
@@ -26,11 +28,13 @@ pub enum PlaceMatchSpotOrderV2AfterChanges {
     },
     SinglePlacedAndMatched {
         created_taker_order: SpotOrderV2,
+        activation_after: ActivateSpotOrderV2AfterChanges,
         match_after: MatchSpotOrderV2AfterChanges,
     },
     NormalTpslPlacedAndMatched {
         created_parent_order: SpotOrderV2,
         created_child_orders: Vec<SpotOrderV2>,
+        activation_after: ActivateSpotOrderV2AfterChanges,
         match_after: MatchSpotOrderV2AfterChanges,
     },
 }
@@ -42,11 +46,13 @@ pub enum PlaceMatchSpotOrderV2Changes {
     },
     SinglePlacedAndMatched {
         created_taker_order: SpotOrderV2,
+        activation_changes: ActivateSpotOrderV2Changes,
         match_changes: MatchSpotOrderV2Changes,
     },
     NormalTpslPlacedAndMatched {
         created_parent_order: SpotOrderV2,
         created_child_orders: Vec<SpotOrderV2>,
+        activation_changes: ActivateSpotOrderV2Changes,
         match_changes: MatchSpotOrderV2Changes,
     },
 }
@@ -55,6 +61,8 @@ pub enum PlaceMatchSpotOrderV2Changes {
 pub enum PlaceMatchSpotOrderV2Error {
     #[error(transparent)]
     PlaceOnly(#[from] PlaceOnlySpotOrderV2Error),
+    #[error(transparent)]
+    Activation(#[from] ActivateSpotOrderV2Error),
     #[error(transparent)]
     Match(#[from] MatchSpotOrderV2Error),
     #[error("place-match only supports a single active limit order")]
@@ -74,20 +82,27 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
             Self::SinglePlacedOnly { created_order } => {
                 Ok(vec![created_order.track_create_event()?])
             }
-            Self::SinglePlacedAndMatched { created_taker_order, match_changes } => {
+            Self::SinglePlacedAndMatched {
+                created_taker_order,
+                activation_changes,
+                match_changes,
+            } => {
                 let mut events = vec![created_taker_order.track_create_event()?];
+                events.extend(activation_changes.to_replayable_events()?);
                 events.extend(match_changes.to_replayable_events()?);
                 Ok(events)
             }
             Self::NormalTpslPlacedAndMatched {
                 created_parent_order,
                 created_child_orders,
+                activation_changes,
                 match_changes,
             } => {
                 let mut events = vec![created_parent_order.track_create_event()?];
                 for child in created_child_orders {
                     events.push(child.track_create_event()?);
                 }
+                events.extend(activation_changes.to_replayable_events()?);
                 events.extend(match_changes.to_replayable_events()?);
                 Ok(events)
             }
@@ -136,14 +151,16 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
                         created_order,
                     });
                 }
-                let match_after = compute_match_after_for_created_taker(
-                    order_cmd,
-                    created_order.clone(),
-                    state,
-                    context,
-                )?;
+                let (activation_after, match_after) =
+                    compute_activate_and_match_after_for_created_taker(
+                        order_cmd,
+                        created_order.clone(),
+                        state,
+                        context,
+                    )?;
                 Ok(PlaceMatchSpotOrderV2AfterChanges::SinglePlacedAndMatched {
                     created_taker_order: created_order,
+                    activation_after,
                     match_after,
                 })
             }
@@ -154,15 +171,17 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
                     created_child_orders,
                 },
             ) => {
-                let match_after = compute_match_after_for_created_taker(
-                    parent,
-                    created_parent_order.clone(),
-                    state,
-                    context,
-                )?;
+                let (activation_after, match_after) =
+                    compute_activate_and_match_after_for_created_taker(
+                        parent,
+                        created_parent_order.clone(),
+                        state,
+                        context,
+                    )?;
                 Ok(PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
                     created_parent_order,
                     created_child_orders,
+                    activation_after,
                     match_after,
                 })
             }
@@ -184,63 +203,122 @@ impl StateMachineOwnedV2Diff for PlaceMatchSpotOrderV2UseCase {
             }
             PlaceMatchSpotOrderV2AfterChanges::SinglePlacedAndMatched {
                 created_taker_order,
+                activation_after,
                 match_after,
-            } => Ok(PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
-                created_taker_order: created_taker_order.clone(),
-                match_changes: compute_match_changes(state, created_taker_order, match_after)?,
-            }),
+            } => {
+                let activation_changes = compute_activation_changes(
+                    &state,
+                    &created_taker_order,
+                    activation_after.clone(),
+                )?;
+                let match_changes = compute_match_changes(state, activation_after, match_after)?;
+                Ok(PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+                    created_taker_order,
+                    activation_changes,
+                    match_changes,
+                })
+            }
             PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
                 created_parent_order,
                 created_child_orders,
+                activation_after,
                 match_after,
-            } => Ok(PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
-                created_parent_order: created_parent_order.clone(),
-                created_child_orders,
-                match_changes: compute_match_changes(state, created_parent_order, match_after)?,
-            }),
+            } => {
+                let activation_changes = compute_activation_changes(
+                    &state,
+                    &created_parent_order,
+                    activation_after.clone(),
+                )?;
+                let match_changes = compute_match_changes(state, activation_after, match_after)?;
+                Ok(PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+                    created_parent_order,
+                    created_child_orders,
+                    activation_changes,
+                    match_changes,
+                })
+            }
         }
     }
 }
 
-fn compute_match_after_for_created_taker(
+fn compute_activate_and_match_after_for_created_taker(
     order_cmd: &PlaceOnlySpotOrderV2OrderCmd,
     created_taker_order: SpotOrderV2,
     state: &PlaceMatchSpotOrderV2State,
     context: &ExecutionContext,
-) -> Result<MatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Error> {
+) -> Result<
+    (ActivateSpotOrderV2AfterChanges, MatchSpotOrderV2AfterChanges),
+    PlaceMatchSpotOrderV2Error,
+> {
+    let activation_cmd = ActivateSpotOrderV2Cmd {
+        party_id: order_cmd.party_id.clone(),
+        asset: order_cmd.asset,
+        order_id: order_cmd.order_id.clone(),
+    };
+    let activation_state = ActivateSpotOrderV2State {
+        pending_order: created_taker_order,
+        balances: state.settlement_balances.clone(),
+        base_asset_id: order_cmd.base_asset_id.clone(),
+        quote_asset_id: order_cmd.quote_asset_id.clone(),
+        maker_fee_bps: order_cmd.maker_fee_bps,
+        taker_fee_bps: order_cmd.taker_fee_bps,
+    };
+    let activation_after = ActivateSpotOrderV2UseCase.compute_state_changed_with_context(
+        &activation_cmd,
+        &activation_state,
+        context,
+    )?;
     let match_cmd = MatchSpotOrderV2Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
         order_id: order_cmd.order_id.clone(),
     };
     let match_state = MatchSpotOrderV2State {
-        taker_order: created_taker_order,
+        taker_order: activation_after.activated_order_after.clone(),
         maker_orders: state.maker_orders.clone(),
-        settlement_balances: state.settlement_balances.clone(),
+        settlement_balances: activation_after.balances_after.clone(),
         base_asset_id: order_cmd.base_asset_id.clone(),
         quote_asset_id: order_cmd.quote_asset_id.clone(),
         fee_account_id: state.fee_account_id.clone(),
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    Ok(OpenMatchSpotOrderV2UseCase.compute_state_changed_with_context(
+    let match_after = OpenMatchSpotOrderV2UseCase.compute_state_changed_with_context(
         &match_cmd,
         &match_state,
         context,
-    )?)
+    )?;
+    Ok((activation_after, match_after))
+}
+
+fn compute_activation_changes(
+    state: &PlaceMatchSpotOrderV2State,
+    created_taker_order: &SpotOrderV2,
+    activation_after: ActivateSpotOrderV2AfterChanges,
+) -> Result<ActivateSpotOrderV2Changes, PlaceMatchSpotOrderV2Error> {
+    let activation_state = ActivateSpotOrderV2State {
+        pending_order: created_taker_order.clone(),
+        balances: state.settlement_balances.clone(),
+        base_asset_id: String::new(),
+        quote_asset_id: String::new(),
+        maker_fee_bps: 0,
+        taker_fee_bps: 0,
+    };
+    Ok(ActivateSpotOrderV2UseCase::do_compute_state_diff(activation_state, activation_after)?)
 }
 
 fn compute_match_changes(
     state: PlaceMatchSpotOrderV2State,
-    created_taker_order: SpotOrderV2,
+    activation_after: ActivateSpotOrderV2AfterChanges,
     match_after: MatchSpotOrderV2AfterChanges,
 ) -> Result<MatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error> {
+    let activated_taker_order = activation_after.activated_order_after;
     let match_state = MatchSpotOrderV2State {
-        taker_order: created_taker_order.clone(),
+        taker_order: activated_taker_order.clone(),
         maker_orders: state.maker_orders,
-        settlement_balances: state.settlement_balances,
-        base_asset_id: created_taker_order.reservation.asset_id.clone(),
-        quote_asset_id: created_taker_order.fee_reservation.asset_id,
+        settlement_balances: activation_after.balances_after,
+        base_asset_id: String::new(),
+        quote_asset_id: String::new(),
         fee_account_id: state.fee_account_id,
         maker_fee_bps: 0,
         taker_fee_bps: 0,

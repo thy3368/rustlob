@@ -109,7 +109,7 @@ mod tests {
                 1,
             );
             order
-                .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+                .activate_pending(ActivatePendingSpotOrderV2Input {
                     base_asset_id: "BTC".to_owned(),
                     quote_asset_id: "USDT".to_owned(),
                     maker_fee_bps: 5,

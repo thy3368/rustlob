@@ -158,7 +158,7 @@ mod tests {
             1,
         );
         order
-            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+            .activate_pending(ActivatePendingSpotOrderV2Input {
                 base_asset_id: "BTC".to_string(),
                 quote_asset_id: "USDT".to_string(),
                 maker_fee_bps: 5,
@@ -191,6 +191,7 @@ mod tests {
         let changes = result.changes;
         let PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
+            activation_changes,
             match_changes,
         } = &changes
         else {
@@ -198,7 +199,7 @@ mod tests {
         };
         assert_eq!(created_taker_order.order_id(), "taker-buy");
         assert_eq!(
-            match_changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
+            activation_changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)
         );
         assert_eq!(match_changes.created_trades.len(), 1);

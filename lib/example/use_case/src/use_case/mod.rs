@@ -10,6 +10,8 @@ pub use funding::{
 };
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
 pub use trading::{
+    ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
+    ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
     AllocateHyperliquidPerpInsuranceFundChanges, AllocateHyperliquidPerpInsuranceFundCmd,
     AllocateHyperliquidPerpInsuranceFundError, AllocateHyperliquidPerpInsuranceFundState,
     AllocateHyperliquidPerpInsuranceFundUseCase, ApplyHyperliquidPerpLiquidationFillChanges,

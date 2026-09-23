@@ -52,6 +52,8 @@ pub use derivatives::{
     UpdateHyperliquidPerpLeverageUseCase,
 };
 pub use spot::{
+    ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
+    ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
     CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, GenerateSpotKlinesFromHistoricalTradesChanges,

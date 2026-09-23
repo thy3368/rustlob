@@ -446,11 +446,13 @@ fn order_statuses_from_place_match_changes(
         }
         PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
+            activation_changes: _,
             match_changes,
         } => vec![order_status_from_match_changes(created_taker_order, match_changes)],
         PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
             created_parent_order,
             created_child_orders,
+            activation_changes: _,
             match_changes,
         } => {
             let mut statuses = Vec::with_capacity(1 + created_child_orders.len());
@@ -515,9 +517,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use cmd_handler::command_use_case_def2::UpdatedEntityPair;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
-        SpotTrade,
+        ActivatePendingSpotOrderV2Input, ActivateSpotOrderV2Changes, SpotOrderSide, SpotOrderTif,
+        SpotOrderType, SpotOrderV2, SpotTrade,
     };
 
     use super::*;
@@ -595,7 +598,7 @@ mod tests {
             1,
         );
         order
-            .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+            .activate_pending(ActivatePendingSpotOrderV2Input {
                 base_asset_id: "BTC".to_string(),
                 quote_asset_id: "USDT".to_string(),
                 maker_fee_bps: DEFAULT_MAKER_FEE_BPS,
@@ -615,12 +618,19 @@ mod tests {
 
     fn empty_match_changes() -> MatchSpotOrderV2Changes {
         MatchSpotOrderV2Changes {
-            activated_taker_order: None,
             updated_taker_order: None,
             updated_maker_orders: vec![],
             updated_balances: vec![],
             created_trades: vec![],
             created_vouchers: vec![],
+            created_balance_ledger_entries: vec![],
+        }
+    }
+
+    fn empty_activation_changes(order: &SpotOrderV2) -> ActivateSpotOrderV2Changes {
+        ActivateSpotOrderV2Changes {
+            updated_order: UpdatedEntityPair { before: order.clone(), after: order.clone() },
+            updated_balances: vec![],
             created_balance_ledger_entries: vec![],
         }
     }
@@ -744,6 +754,7 @@ mod tests {
             2,
         ));
         let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+            activation_changes: empty_activation_changes(&order),
             created_taker_order: order,
             match_changes,
         };
@@ -767,6 +778,7 @@ mod tests {
         let parent = spot_order("parent", 44);
         let child = spot_order("child", 45);
         let changes = PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+            activation_changes: empty_activation_changes(&parent),
             created_parent_order: parent,
             created_child_orders: vec![child],
             match_changes: empty_match_changes(),

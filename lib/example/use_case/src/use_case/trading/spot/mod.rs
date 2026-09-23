@@ -1,3 +1,4 @@
+pub mod activate_spot_order_v2;
 pub mod cancel_spot_order_v2;
 pub mod open_match_spot_order_v2;
 pub mod place_match_spot_order_v2;
@@ -8,6 +9,10 @@ pub mod modify_spot_order_v2;
 pub mod agg;
 pub mod generate_spot_klines_from_historical_trades;
 
+pub use activate_spot_order_v2::{
+    ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
+    ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
+};
 pub use agg::{
     SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
     SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
