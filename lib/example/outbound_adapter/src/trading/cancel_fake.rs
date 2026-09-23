@@ -71,6 +71,8 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             fee_reservation,
             None,
             1,
+            1,
+            1,
         );
 
         Ok(CancelSpotOrderV2State {

@@ -1,5 +1,5 @@
 use example_core_use_case::{
-    Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteChanges,
+    Balance, DepositQuoteChanges, DepositQuoteCmd, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteChanges,
     WithdrawQuoteCmd,
 };
 use veldra_core_entity::{
@@ -42,7 +42,7 @@ pub(in crate::use_case::block_execution) trait BlockCommandHandler {
 }
 
 pub(in crate::use_case::block_execution) enum ResolvedBlockCommandHandler<'a> {
-    PlaceSpotOrderV2(&'static PlaceSpotOrderV2BlockCommandHandler, &'a PlaceSpotOrderV2CmdV3),
+    PlaceSpotOrderV2(&'static PlaceSpotOrderV2BlockCommandHandler, &'a PlaceOnlySpotOrderV2Cmd),
     DepositQuote(&'static DepositQuoteBlockCommandHandler, &'a DepositQuoteCmd),
     WithdrawQuote(&'static WithdrawQuoteBlockCommandHandler, &'a WithdrawQuoteCmd),
     PerpUnsupported(&'static PerpUnsupportedBlockCommandHandler),

@@ -1,7 +1,9 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::StateMachineV2Unchecked;
-use example_core_use_case::{DepositQuoteChanges, PlaceSpotOrderV2ChangesV3, WithdrawQuoteChanges};
+use cmd_handler::command_use_case_def2::{ReplayableChanges, UpdatedEntityPair};
+use common_entity::{Entity, ExecutionContext, StateMachineV2Unchecked};
+use example_core_use_case::{
+    DepositQuoteChanges, PlaceMatchSpotOrderV2Changes, WithdrawQuoteChanges,
+};
 use veldra_core_entity::{
     BlockExecutionBody, CommandEnvelope, ExchangeState, ProductCommand, build_new_block,
 };
@@ -58,6 +60,7 @@ impl StateMachineV2Unchecked for BuildBlockFromCommandsUseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
+        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let parent_block_hash = state.parent_block_hash.clone();
         let mut exchange_state = state.exchange_state.clone();
@@ -159,43 +162,91 @@ fn build_block_changes(
 }
 
 fn extract_place_spot_order_v2_changes(
-    execution: &PlaceSpotOrderV2ChangesV3,
+    execution: &PlaceMatchSpotOrderV2Changes,
 ) -> Vec<BlockEntityChange> {
     let mut changes = Vec::new();
-    if execution.updated_taker_order.before == execution.updated_taker_order.after {
-        changes
-            .push(BlockEntityChange::SpotOrderCreated(execution.updated_taker_order.after.clone()));
-    } else {
-        changes.push(BlockEntityChange::SpotOrderUpdated(execution.updated_taker_order.clone()));
+    let (created_orders, match_changes) = match execution {
+        PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order } => {
+            changes.push(BlockEntityChange::SpotOrderCreated(created_order.clone()));
+            return changes;
+        }
+        PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+            created_taker_order,
+            match_changes,
+        } => (vec![created_taker_order], match_changes),
+        PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+            created_parent_order,
+            created_child_orders,
+            match_changes,
+        } => {
+            changes.push(BlockEntityChange::SpotOrderCreated(created_parent_order.clone()));
+            changes.extend(
+                created_child_orders.iter().cloned().map(BlockEntityChange::SpotOrderCreated),
+            );
+            (Vec::new(), match_changes)
+        }
+    };
+    changes.extend(created_orders.into_iter().cloned().map(BlockEntityChange::SpotOrderCreated));
+    if let Some(pair) = &match_changes.updated_taker_order {
+        changes.push(BlockEntityChange::SpotOrderUpdated(pair.clone()));
     }
     changes.extend(
-        execution.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
+        match_changes.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
     );
     changes.extend(
-        execution
-            .updated_balances
-            .iter()
-            .filter(|pair| pair.before != pair.after)
-            .cloned()
-            .map(BlockEntityChange::BalanceUpdated),
+        balance_update_pairs(match_changes).into_iter().map(BlockEntityChange::BalanceUpdated),
     );
-    changes
-        .extend(execution.created_trades.iter().cloned().map(BlockEntityChange::SpotTradeCreated));
     changes.extend(
-        execution
+        match_changes.created_trades.iter().cloned().map(BlockEntityChange::SpotTradeCreated),
+    );
+    changes.extend(
+        match_changes
             .created_vouchers
             .iter()
             .cloned()
             .map(BlockEntityChange::SettlementTransferVoucherCreated),
     );
     changes.extend(
-        execution
+        match_changes
             .created_balance_ledger_entries
             .iter()
             .cloned()
             .map(BlockEntityChange::BalanceLedgerEntryCreated),
     );
     changes
+}
+
+fn balance_update_pairs(
+    changes: &example_core_use_case::MatchSpotOrderV2Changes,
+) -> Vec<UpdatedEntityPair<example_core_use_case::Balance>> {
+    use std::collections::HashMap;
+
+    let mut current = changes
+        .updated_balances
+        .iter()
+        .map(|pair| (pair.before.entity_id(), pair.before.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut pairs = Vec::with_capacity(changes.created_balance_ledger_entries.len());
+
+    for entry in &changes.created_balance_ledger_entries {
+        let Some(before) = current.get(&entry.balance_entity_id).cloned() else {
+            continue;
+        };
+        let (Some(available), Some(frozen)) = (entry.after_available, entry.after_frozen) else {
+            continue;
+        };
+        let after = example_core_use_case::Balance::new(
+            before.account_id.clone(),
+            before.asset_id.clone(),
+            available,
+            frozen,
+            before.version.saturating_add(1),
+        );
+        pairs.push(UpdatedEntityPair { before, after: after.clone() });
+        current.insert(entry.balance_entity_id.clone(), after);
+    }
+
+    pairs
 }
 
 fn extract_deposit_quote_change(execution: &DepositQuoteChanges) -> BlockEntityChange {

@@ -181,6 +181,10 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
                     decode_embedded_order_reservation(event)?,
                     event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
                     event_u64_field(event, "version").unwrap_or(1),
+                    event_u64_field(event, "created_at")
+                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                    event_u64_field(event, "updated_at")
+                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
                 );
                 state.orders.insert(order.order_id.clone(), order);
                 state.next_order_sequence = state
@@ -556,6 +560,8 @@ fn decode_order_snapshot_from_event(
         decode_embedded_order_reservation(event)?,
         event_string_field(event, "client_order_id").filter(|value| !value.is_empty()),
         event.new_version,
+        event_u64_field(event, "created_at").unwrap_or(1),
+        event_u64_field(event, "updated_at").unwrap_or(1),
     ))
 }
 

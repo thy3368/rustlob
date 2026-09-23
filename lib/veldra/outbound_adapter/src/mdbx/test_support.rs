@@ -2,7 +2,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use example_core_use_case::{Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3};
+use common_entity::ExecutionContext;
+use example_core_use_case::{
+    Balance, DepositQuoteCmd, MarketRules, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
+    PlaceOnlySpotOrderV2OrderType,
+};
 use veldra_core_entity::{
     AccountAssetKey, BlockExecutionBody, ExchangeState, NewBlock, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand,
@@ -99,15 +103,22 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                 nonce: 1,
                 timestamp_ns: 1_000,
                 command: ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(
-                    PlaceSpotOrderV2CmdV3 {
+                    PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
                         party_id: "trader-1".to_string(),
                         asset: 10_001,
+                        order_id: "trader-1-BTCUSDT-7".to_string(),
+                        symbol: "BTCUSDT".to_string(),
                         is_buy: true,
                         price: "100".to_string(),
                         size: "2".to_string(),
-                        tif: "Gtc".to_string(),
+                        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() },
+                        reduce_only: false,
                         cloid: Some("cl-1".to_string()),
-                    },
+                        base_asset_id: "BTC".to_string(),
+                        quote_asset_id: "USDT".to_string(),
+                        maker_fee_bps: 5,
+                        taker_fee_bps: 10,
+                    }),
                 )),
             },
             veldra_core_entity::CommandEnvelope {
@@ -126,7 +137,11 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
 
 pub fn built_block() -> BuildBlockFromCommandsChanges {
     BuildBlockFromCommandsUseCase
-        .compute_state_changed_unchecked(&sample_command(), &sample_state())
+        .compute_state_changed_unchecked(
+            &sample_command(),
+            &sample_state(),
+            &ExecutionContext::now(),
+        )
         .expect("block should build")
 }
 

@@ -346,6 +346,8 @@ fn demo_sell_order(
         reservation,
         None,
         1,
+        1,
+        1,
     ))
 }
 
@@ -365,6 +367,7 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
         5,
         10,
         Some("demo-cancel-1".to_string()),
+        1,
     )
     .map_err(|_| DemoSpotBlockOutboundError)
 }

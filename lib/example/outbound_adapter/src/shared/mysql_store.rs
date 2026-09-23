@@ -237,6 +237,8 @@ impl MySqlStore {
                         reservation,
                         None,
                         1,
+                        1,
+                        1,
                     );
                     Some((order_id, order))
                 },

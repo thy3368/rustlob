@@ -1,5 +1,8 @@
 use cmd_handler::EntityReplayableEvent;
-use example_core_use_case::{DepositQuoteCmd, PlaceSpotOrderV2CmdV3, WithdrawQuoteCmd};
+use example_core_use_case::{
+    DepositQuoteCmd, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
+    PlaceOnlySpotOrderV2OrderType, WithdrawQuoteCmd,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{PerpState, SpotState, TreasuryState, stable_hash_hex};
@@ -64,24 +67,59 @@ impl ProductCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotCommand {
-    PlaceSpotOrderV2(PlaceSpotOrderV2CmdV3),
+    PlaceSpotOrderV2(PlaceOnlySpotOrderV2Cmd),
 }
 
 impl SpotCommand {
     pub fn commitment(&self) -> String {
         match self {
-            Self::PlaceSpotOrderV2(command) => stable_hash_hex(&[
-                "spot.place_spot_order_v2",
-                command.party_id.as_str(),
-                command.asset.to_string().as_str(),
-                if command.is_buy { "buy" } else { "sell" },
-                command.price.as_str(),
-                command.size.as_str(),
-                command.tif.as_str(),
-                command.cloid.as_deref().unwrap_or_default(),
-            ]),
+            Self::PlaceSpotOrderV2(command) => spot_order_command_commitment(command),
         }
     }
+}
+
+fn spot_order_command_commitment(command: &PlaceOnlySpotOrderV2Cmd) -> String {
+    match command {
+        PlaceOnlySpotOrderV2Cmd::Single(order) => {
+            let fields = order_commitment_fields(order);
+            stable_hash_hex(&["spot.place_spot_order_v2", fields.as_str()])
+        }
+        PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
+            let mut fields = vec!["spot.place_spot_order_v2.normal_tpsl".to_string()];
+            fields.push(order_commitment_fields(parent).to_string());
+            for child in children {
+                fields.push(order_commitment_fields(child).to_string());
+            }
+            let refs = fields.iter().map(String::as_str).collect::<Vec<_>>();
+            stable_hash_hex(&refs)
+        }
+    }
+}
+
+fn order_commitment_fields(order: &PlaceOnlySpotOrderV2OrderCmd) -> String {
+    let order_type = match &order.order_type {
+        PlaceOnlySpotOrderV2OrderType::Limit { tif } => format!("limit:{tif}"),
+        PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
+            format!("trigger:{is_market}:{trigger_price}:{trigger_role}")
+        }
+    };
+    format!(
+        "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        order.party_id,
+        order.asset,
+        order.order_id,
+        order.symbol,
+        order.is_buy,
+        order.price,
+        order.size,
+        order_type,
+        order.reduce_only,
+        order.cloid.as_deref().unwrap_or_default(),
+        order.base_asset_id,
+        order.quote_asset_id,
+        order.maker_fee_bps,
+        order.taker_fee_bps,
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -48,7 +48,7 @@ fn execute_withdraw_quote(
     let balance = treasury_quote_balance(treasury_state, command.party_id.as_str())?;
     CommandUseCase4::pre_check_command(&WithdrawQuoteUseCase, command)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
-    let state = WithdrawQuoteState { quote_balance: balance.clone() };
+    let state = WithdrawQuoteState { quote_balance: balance };
     CommandUseCase4::validate_against_state(&WithdrawQuoteUseCase, command, &state)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
     CommandUseCase4::compute_changes(&WithdrawQuoteUseCase, command, state)

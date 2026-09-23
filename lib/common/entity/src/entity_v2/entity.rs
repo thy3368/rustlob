@@ -836,6 +836,33 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Clone, Copy)]
+    struct LifecycleValue {
+        created_at: u64,
+        updated_at: u64,
+    }
+
+    impl EntityLifecycle for LifecycleValue {
+        fn created_at(&self) -> u64 {
+            self.created_at
+        }
+
+        fn updated_at(&self) -> u64 {
+            self.updated_at
+        }
+    }
+
+    #[test]
+    fn entity_lifecycle_accepts_equal_and_forward_timestamps() {
+        assert!(LifecycleValue { created_at: 10, updated_at: 10 }.has_valid_lifecycle());
+        assert!(LifecycleValue { created_at: 10, updated_at: 11 }.has_valid_lifecycle());
+    }
+
+    #[test]
+    fn entity_lifecycle_rejects_updated_timestamp_before_creation() {
+        assert!(!LifecycleValue { created_at: 11, updated_at: 10 }.has_valid_lifecycle());
+    }
+
     #[test]
     fn entity_defaults_to_unclassified_four_color_archetype() {
         assert_eq!(TestEntity::four_color_archetype(), FourColorArchetype::Unclassified);

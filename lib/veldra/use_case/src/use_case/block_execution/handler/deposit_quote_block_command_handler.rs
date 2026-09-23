@@ -48,7 +48,7 @@ fn execute_deposit_quote(
     let balance = treasury_quote_balance(treasury_state, command.party_id.as_str())?;
     CommandUseCase4::pre_check_command(&DepositQuoteUseCase, command)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
-    let state = DepositQuoteState { quote_balance: balance.clone() };
+    let state = DepositQuoteState { quote_balance: balance };
     CommandUseCase4::validate_against_state(&DepositQuoteUseCase, command, &state)
         .map_err(|error| BuildBlockError::TreasuryExecution(error.to_string()))?;
     CommandUseCase4::compute_changes(&DepositQuoteUseCase, command, state)

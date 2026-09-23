@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
+use example_core_use_case::{PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderType};
 use veldra_core_entity::{CommandEnvelope, ProductCommand, SpotCommand, TreasuryCommand};
 
 use super::BuildBlockError;
@@ -102,16 +103,17 @@ fn is_alo_priority_command(command: &ProductCommand) -> bool {
     matches!(
         command,
         ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command))
-            if matches!(command.tif.as_str(), "alo" | "Alo")
+            if matches!(command, PlaceOnlySpotOrderV2Cmd::Single(order) if matches!(&order.order_type, PlaceOnlySpotOrderV2OrderType::Limit { tif } if matches!(tif.as_str(), "alo" | "Alo")))
     )
 }
 
 fn command_party_id(command: &ProductCommand) -> Option<&str> {
     // 用 payload 中的业务发起方反查 envelope.account_id，防止包裹层身份被串改。
     match command {
-        ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command)) => {
-            Some(command.party_id.as_str())
-        }
+        ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(command)) => Some(match command {
+            PlaceOnlySpotOrderV2Cmd::Single(order)
+            | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order.party_id.as_str(),
+        }),
         ProductCommand::Treasury(TreasuryCommand::DepositQuote(command)) => {
             Some(command.party_id.as_str())
         }

@@ -1,15 +1,22 @@
 use std::collections::BTreeMap;
 
 use cmd_handler::command_use_case_def2::ReplayableChanges;
-use common_entity::StateMachineV2Unchecked;
+use common_entity::{ExecutionContext, StateMachineV2Unchecked};
 use example_core_use_case::{
-    Balance, DepositQuoteCmd, MarketRules, PlaceSpotOrderV2CmdV3, SpotOrderTimeInForce,
-    WithdrawQuoteCmd,
+    Balance, DepositQuoteCmd, MarketRules, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
+    PlaceOnlySpotOrderV2OrderType, WithdrawQuoteCmd,
 };
 use veldra_core_entity::{
     AccountAssetKey, CommandEnvelope, ExchangeState, PerpCommand, ProductCommand, SpotAssetPair,
     SpotCommand, TreasuryCommand, stable_hash_hex,
 };
+
+#[derive(Clone, Copy)]
+enum SpotOrderTimeInForce {
+    Gtc,
+    Ioc,
+    Alo,
+}
 
 use super::*;
 use crate::use_case::block_execution::canonical_batch::{
@@ -24,6 +31,10 @@ use crate::use_case::block_execution::handler::withdraw_quote_block_command_hand
 
 fn sample_command() -> BuildBlockFromCommandsCommand {
     BuildBlockFromCommandsCommand { block_height: 2 }
+}
+
+fn execution_context() -> ExecutionContext {
+    ExecutionContext::now()
 }
 
 fn sample_envelope() -> CommandEnvelope<ProductCommand> {
@@ -42,20 +53,31 @@ fn sample_spot_envelope_with(
         account_id: account_id.to_string(),
         nonce,
         timestamp_ns,
-        command: ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(PlaceSpotOrderV2CmdV3 {
-            party_id: account_id.to_string(),
-            asset: 10_001,
-            is_buy: true,
-            price: "100".to_string(),
-            size: "2".to_string(),
-            tif: match time_in_force {
-                SpotOrderTimeInForce::Gtc => "Gtc",
-                SpotOrderTimeInForce::Ioc => "Ioc",
-                SpotOrderTimeInForce::Alo => "Alo",
-            }
-            .to_string(),
-            cloid: Some("cl-1".to_string()),
-        })),
+        command: ProductCommand::Spot(SpotCommand::PlaceSpotOrderV2(
+            PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
+                party_id: account_id.to_string(),
+                asset: 10_001,
+                order_id: format!("{account_id}-BTCUSDT-7"),
+                symbol: "BTCUSDT".to_string(),
+                is_buy: true,
+                price: "100".to_string(),
+                size: "2".to_string(),
+                order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+                    tif: match time_in_force {
+                        SpotOrderTimeInForce::Gtc => "Gtc",
+                        SpotOrderTimeInForce::Ioc => "Ioc",
+                        SpotOrderTimeInForce::Alo => "Alo",
+                    }
+                    .to_string(),
+                },
+                reduce_only: false,
+                cloid: Some("cl-1".to_string()),
+                base_asset_id: "BTC".to_string(),
+                quote_asset_id: "USDT".to_string(),
+                maker_fee_bps: 5,
+                taker_fee_bps: 10,
+            }),
+        )),
     }
 }
 
@@ -198,15 +220,24 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
+        &execution_context(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
     let new_block = block(&changes);
     let body = execution_body(&changes);
 
-    assert_eq!(changes.ordered_changes.len(), 3);
+    assert_eq!(changes.ordered_changes.len(), 5);
     assert!(matches!(changes.ordered_changes[0], BlockEntityChange::SpotOrderCreated(_)));
-    assert!(matches!(changes.ordered_changes[1], BlockEntityChange::BalanceUpdated(_)));
-    assert!(matches!(changes.ordered_changes[2], BlockEntityChange::BalanceLedgerEntryCreated(_)));
+    assert!(
+        changes.ordered_changes[1..3]
+            .iter()
+            .all(|change| matches!(change, BlockEntityChange::BalanceUpdated(_)))
+    );
+    assert!(
+        changes.ordered_changes[3..5]
+            .iter()
+            .all(|change| matches!(change, BlockEntityChange::BalanceLedgerEntryCreated(_)))
+    );
     assert_eq!(new_block.block_height, 2);
     assert_eq!(new_block.parent_block_hash, "parent-1");
     assert!(!new_block.commands_root.is_empty());
@@ -215,11 +246,11 @@ fn single_spot_command_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!(body.block_height, new_block.block_height);
     assert_eq!(body.block_hash, new_block.block_hash);
     assert_eq!(body.commands.len(), 1);
-    assert_eq!(events.len(), 3);
+    assert_eq!(events.len(), 5);
     assert_eq!(body.replayable_events, events);
 
     let next_usdt = spot_balance_after(&changes, "trader-1", "USDT");
-    assert_eq!((next_usdt.available, next_usdt.frozen), (9_800, 200));
+    assert_eq!((next_usdt.available, next_usdt.frozen), (9_799, 201));
 
     Ok(())
 }
@@ -230,11 +261,13 @@ fn same_input_produces_same_block_commitment() -> Result<(), BuildBlockError> {
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
+        &execution_context(),
     )?;
     let second = StateMachineV2Unchecked::compute_state_changed_unchecked(
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
+        &execution_context(),
     )?;
 
     assert_eq!(block(&first), block(&second));
@@ -256,6 +289,7 @@ fn treasury_deposit_updates_exchange_state() -> Result<(), BuildBlockError> {
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
+        &execution_context(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
@@ -281,11 +315,12 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
+        &execution_context(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    assert_eq!(changes.ordered_changes.len(), 4);
-    assert_eq!(events.len(), 4);
+    assert_eq!(changes.ordered_changes.len(), 6);
+    assert_eq!(events.len(), 6);
 
     let treasury_usdt = spot_balance_after(&changes, "trader-1", "USDT");
     assert_eq!(
@@ -308,7 +343,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
     assert_eq!((spot_usdt_change.available, spot_usdt_change.frozen), (9_800, 200));
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2, 3]);
+    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5]);
 
     Ok(())
 }
@@ -326,11 +361,12 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
+        &execution_context(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
-    assert_eq!(sequences, vec![0, 1, 2, 3]);
+    assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5]);
 
     Ok(())
 }
@@ -369,7 +405,18 @@ fn place_spot_order_v2_handler_returns_changes_and_sequence() -> Result<(), Buil
         &state.exchange_state,
     )?;
     assert_eq!(result.next_order_sequence, 8);
-    assert_eq!(result.changes.updated_taker_order.after.order_id, "trader-1-BTCUSDT-7");
+    let created_order_id = match &result.changes {
+        example_core_use_case::PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order }
+        | example_core_use_case::PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
+            created_taker_order: created_order,
+            ..
+        } => created_order.order_id.as_str(),
+        example_core_use_case::PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+            created_parent_order,
+            ..
+        } => created_parent_order.order_id.as_str(),
+    };
+    assert_eq!(created_order_id, "trader-1-BTCUSDT-7");
 
     Ok(())
 }
@@ -544,6 +591,7 @@ fn compute_changes_rejects_non_canonical_batch() {
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
+        &execution_context(),
     );
 
     assert_eq!(result, Err(BuildBlockError::NonCanonicalCommandOrder));
@@ -568,6 +616,7 @@ fn compute_changes_uses_canonical_commands_for_block_root() -> Result<(), BuildB
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &state,
+        &execution_context(),
     )?;
 
     assert_eq!(block(&changes).commands_root, expected_root);
@@ -582,13 +631,14 @@ fn changes_are_the_single_business_truth_and_events_are_projected_from_them()
         &BuildBlockFromCommandsUseCase,
         &sample_command(),
         &sample_state(),
+        &execution_context(),
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
     assert_eq!(block(&changes).block_height, 2);
     assert_eq!(execution_body(&changes).block_height, 2);
-    assert_eq!(changes.ordered_changes.len(), 3);
-    assert_eq!(events.len(), 3);
+    assert_eq!(changes.ordered_changes.len(), 5);
+    assert_eq!(events.len(), 5);
     assert_eq!(events.len(), changes.ordered_changes.len());
 
     Ok(())

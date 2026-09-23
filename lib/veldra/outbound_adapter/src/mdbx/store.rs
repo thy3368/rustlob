@@ -105,12 +105,12 @@ impl VeldraMdbxBlockStore {
 
         // 先写 block header 本体，再写 hash -> height 的查找索引，支撑按高度和按 hash 两种读取路径。
         let header_record = BlockHeaderRecord::from(header);
-        txn.put(&block_headers, &height_key, &encode_record(&header_record)?, WriteFlags::empty())
+        txn.put(&block_headers, height_key, &encode_record(&header_record)?, WriteFlags::empty())
             .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         txn.put(
             &block_hash_to_height,
             header.block_hash.as_bytes(),
-            &height_key,
+            height_key,
             WriteFlags::empty(),
         )
         .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
@@ -123,7 +123,7 @@ impl VeldraMdbxBlockStore {
                 command,
             )?;
             let key = encode_block_sequence_key(header.block_height, command_index as u64);
-            txn.put(&block_commands, &key, &encode_record(&record)?, WriteFlags::empty())
+            txn.put(&block_commands, key, &encode_record(&record)?, WriteFlags::empty())
                 .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         }
 
@@ -131,7 +131,7 @@ impl VeldraMdbxBlockStore {
         for event in &body.replayable_events {
             let record = StoredReplayableEvent::from_event(header.block_height, event)?;
             let key = encode_block_sequence_key(header.block_height, event.sequence);
-            txn.put(&block_events, &key, &encode_record(&record)?, WriteFlags::empty())
+            txn.put(&block_events, key, &encode_record(&record)?, WriteFlags::empty())
                 .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         }
 
@@ -174,7 +174,7 @@ impl VeldraMdbxBlockStore {
                         StoredBalanceSnapshot::from_balance(header.block_height, &balance.after)?;
                     txn.put(
                         &balances,
-                        &encode_account_asset_key(
+                        encode_account_asset_key(
                             &balance.after.account_id,
                             &balance.after.asset_id,
                         ),
