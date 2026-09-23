@@ -4,6 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use example_core_use_case::MatchSpotOrderV2Cmd;
 use use_case_executor::trading::spot::open_match_spot_order_v2_executor::execute_place_spot_order_v2;
 
+///todo 处理条件单
+
 fn scheduled_place_commands(round: u64) -> [MatchSpotOrderV2Cmd; 2] {
     [scheduled_place_command(round, 1), scheduled_place_command(round, 2)]
 }

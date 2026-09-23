@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges};
-use common_entity::StateMachineV2Unchecked;
+use common_entity::{ExecutionContext, StateMachineV2Unchecked};
 use example_core_use_case::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
 use example_core_use_case::{
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
@@ -191,7 +191,7 @@ where
     let state = outbound.load_given_state(&cmd).map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
-        .compute_state_changed_unchecked(&cmd, &state)
+        .compute_state_changed_unchecked(&cmd, &state, &ExecutionContext::now())
         .map_err(UpdateLeverageExecutionError::Business)?;
     let events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;
