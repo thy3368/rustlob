@@ -3,6 +3,10 @@ pub mod option;
 mod reservation;
 
 pub mod hyperliquid_account;
+pub use market_data::{
+    KlineAggregationError, KlineCandle, KlineInterval, KlineUpdate, SpotKlineAggregator,
+    SpotKlineTradeInput,
+};
 pub mod perp;
 
 pub mod spot;
@@ -79,6 +83,7 @@ pub use reservation::{
     ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 use spot as spot_entity;
+pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,

@@ -279,8 +279,6 @@ pub struct MatchSpotOrderV2Input {
     pub taker_fee_bps: u64,
     /// 本次撮合生成成交事实使用的业务时间，单位毫秒。
     pub executed_at_ms: u64,
-    /// 本次撮合生成成交事实使用的业务时间，单位毫秒。
-    pub executed_at_ms: u64,
 }
 
 /// 撮合行为结果。

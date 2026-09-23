@@ -780,6 +780,7 @@ mod tests {
             2,
             2,
             1,
+            1_717_171_717_000,
         );
 
         let voucher = trade
@@ -836,6 +837,7 @@ mod tests {
             2,
             2,
             1,
+            1_717_171_717_000,
         );
 
         assert_eq!(
@@ -866,6 +868,7 @@ mod tests {
             2,
             1,
             2,
+            1_717_171_717_000,
         );
 
         let voucher = trade
@@ -1029,6 +1032,7 @@ mod tests {
             2,
             2,
             1,
+            1_717_171_717_000,
         );
         let principal_voucher = trade
             .derive_spot_principal_settlement_transfer_voucher(
