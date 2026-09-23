@@ -5,6 +5,9 @@ use example_core_entity::{
     SpotOrderV2BehaviorError, SpotOrderV2MatchError, TriggerSpotOrderV2Input,
 };
 
+const CREATED_AT: u64 = 1_717_171_717_000_000_000;
+const UPDATED_AT: u64 = CREATED_AT + 1;
+
 fn input(order_id: &str, order_type: SpotOrderType) -> PlaceHyperliquidSpotOrderV2Input {
     PlaceHyperliquidSpotOrderV2Input {
         order_id: order_id.to_owned(),
@@ -23,6 +26,7 @@ fn input(order_id: &str, order_type: SpotOrderType) -> PlaceHyperliquidSpotOrder
         maker_fee_bps: 2,
         taker_fee_bps: 5,
         client_order_id: Some(format!("cloid-{order_id}")),
+        created_at: CREATED_AT,
     }
 }
 
@@ -78,8 +82,10 @@ fn limit_gtc_reserves_and_remains_cancelable() -> Result<(), SpotOrderV2Behavior
     assert!(order.active_reservation().is_some());
     assert_eq!(order.version, 1);
 
-    order
-        .cancel(CancelSpotOrderV2Input { balance_entity_id: "balance:trader-1:USDC".to_owned() })?;
+    order.cancel(CancelSpotOrderV2Input {
+        balance_entity_id: "balance:trader-1:USDC".to_owned(),
+        timestamp: UPDATED_AT,
+    })?;
     assert_eq!(order.status, SpotOrderStatus::Canceled);
     assert_eq!(order.version, 2);
     Ok(())
@@ -95,7 +101,7 @@ fn limit_alo_crossing_is_rejected_as_bad_alo_price() -> Result<(), SpotOrderV2Ma
     .map_err(|_| SpotOrderV2MatchError::OrderNotMatchable)?
     .order;
 
-    order.reject_as_bad_alo()?;
+    order.reject_as_bad_alo(UPDATED_AT)?;
     assert_eq!(order.order_type, SpotOrderType::Limit { tif: SpotOrderTif::Alo });
     assert_eq!(order.status, SpotOrderStatus::Rejected);
     assert_eq!(order.status_reason, Some(SpotOrderStatusReason::BadAloPxRejected));
@@ -113,7 +119,7 @@ fn limit_ioc_keeps_partial_fill_and_cancels_remainder() -> Result<(), SpotOrderV
     .map_err(|_| SpotOrderV2MatchError::OrderNotMatchable)?
     .order;
 
-    order.finish_after_match(1)?;
+    order.finish_after_match(1, UPDATED_AT)?;
     assert_eq!(order.filled_qty, 1);
     assert_eq!(order.status, SpotOrderStatus::Canceled);
     assert_eq!(order.status_reason, Some(SpotOrderStatusReason::IocCancelRejected));
@@ -139,13 +145,14 @@ fn trigger_limit_tp_has_no_hold_until_trigger_then_becomes_gtc()
     assert!(order.is_pending());
     assert_eq!(order.status, SpotOrderStatus::Pending);
     assert!(order.active_reservation().is_none());
-    assert_eq!(order.fill(1), Err(SpotOrderV2MatchError::OrderNotMatchable));
+    assert_eq!(order.fill(1, UPDATED_AT), Err(SpotOrderV2MatchError::OrderNotMatchable));
 
     order.trigger(TriggerSpotOrderV2Input {
         base_asset_id: "PURR".to_owned(),
         quote_asset_id: "USDC".to_owned(),
         maker_fee_bps: 2,
         taker_fee_bps: 5,
+        timestamp: UPDATED_AT,
     })?;
     assert!(!order.is_pending());
     assert!(order.active_reservation().is_some());
@@ -173,10 +180,11 @@ fn trigger_market_sl_becomes_ioc_and_converges_after_match()
         quote_asset_id: "USDC".to_owned(),
         maker_fee_bps: 2,
         taker_fee_bps: 5,
+        timestamp: UPDATED_AT,
     })?;
     assert_eq!(order.limit_price, 110);
     assert_eq!(order.time_in_force(), example_core_entity::SpotOrderTif::Ioc);
-    order.finish_after_match(1)?;
+    order.finish_after_match(1, UPDATED_AT + 1)?;
     assert_eq!(order.status, SpotOrderStatus::Canceled);
     assert_eq!(order.filled_qty, 1);
     Ok(())
@@ -226,7 +234,7 @@ fn normal_tpsl_atomically_creates_parent_and_tp_sl_children()
         assert_eq!(child.order.status, SpotOrderStatus::Pending);
         assert!(child.order.active_reservation().is_none());
         assert!(child.freeze_ledger_entry.is_none());
-        assert_eq!(child.order.fill(1), Err(SpotOrderV2MatchError::OrderNotMatchable));
+        assert_eq!(child.order.fill(1, UPDATED_AT), Err(SpotOrderV2MatchError::OrderNotMatchable));
     }
     assert_ne!(outcome.children[0].order.order_id, outcome.children[1].order.order_id);
     assert_eq!(
