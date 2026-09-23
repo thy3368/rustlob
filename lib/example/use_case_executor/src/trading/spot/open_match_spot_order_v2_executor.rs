@@ -188,6 +188,7 @@ mod tests {
         );
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(changes.created_trades.len(), 1);
+        assert!(changes.created_trades[0].executed_at_ms > 0);
         assert!(!changes.updated_balances.is_empty());
         assert!(!changes.created_balance_ledger_entries.is_empty());
         assert!(changes.updated_balances.iter().any(|pair| pair.before != pair.after));
