@@ -8,37 +8,37 @@ pub enum BalanceLedgerReason {
     /// 订单下单冻结余额。
     FreezeForOrder {
         /// 触发本次余额冻结的订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 撤单释放冻结余额。
     UnfreezeForCancel {
         /// 被撤销订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 立即单冻结余额。
     ReserveForImmediateOrder {
         /// 触发本次余额冻结的订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 现货改单增加冻结余额。
     ModifySpotOrderFreeze {
         /// 触发本次余额冻结调整的订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 现货改单释放冻结余额。
     ModifySpotOrderUnfreeze {
         /// 触发本次余额解冻调整的订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 现货撤单为买单释放冻结 quote。
     CancelSpotOrderReleaseQuote {
         /// 被撤销订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 现货撤单为卖单释放冻结 base。
     CancelSpotOrderReleaseBase {
         /// 被撤销订单 ID。
-        order_id: String,
+        order_id: u64,
     },
     /// 现货清结算为买方增加 base 可用余额。
     SettleSpotTradeBuyerReceiveBase {
@@ -129,15 +129,16 @@ impl BalanceLedgerReason {
     }
 
     /// 返回关联订单 ID；非下单冻结场景返回 `None`。
-    pub fn order_id(&self) -> Option<&str> {
+    pub fn order_id(&self) -> Option<String> {
         match self {
-            Self::FreezeForOrder { order_id }
-            | Self::UnfreezeForCancel { order_id }
-            | Self::ReserveForImmediateOrder { order_id }
+            Self::FreezeForOrder { order_id } | Self::ReserveForImmediateOrder { order_id } => {
+                Some(order_id.to_string())
+            }
+            Self::UnfreezeForCancel { order_id }
             | Self::ModifySpotOrderFreeze { order_id }
             | Self::ModifySpotOrderUnfreeze { order_id }
             | Self::CancelSpotOrderReleaseQuote { order_id }
-            | Self::CancelSpotOrderReleaseBase { order_id } => Some(order_id.as_str()),
+            | Self::CancelSpotOrderReleaseBase { order_id } => Some(order_id.to_string()),
             Self::SettleSpotTradeBuyerReceiveBase { .. }
             | Self::SettleSpotTradeBuyerReleaseFrozenQuote { .. }
             | Self::SettleSpotTradeSellerReceiveQuote { .. }
