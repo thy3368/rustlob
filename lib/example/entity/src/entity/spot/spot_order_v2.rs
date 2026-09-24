@@ -1737,7 +1737,7 @@ mod tests {
 
     fn pending_order(order_type: SpotOrderType) -> SpotOrderV2 {
         SpotOrderV2::new_pending_limit(
-            "order-1".to_string(),
+            1,
             10_001,
             "trader-1".to_string(),
             "BTCUSDT".to_string(),
@@ -1779,7 +1779,7 @@ mod tests {
             tpsl: SpotOrderTriggerRole::StopLoss,
         };
         let mut order = SpotOrderV2::new_pending_trigger(
-            "trigger-1".to_string(),
+            2,
             10_001,
             "trader-1".to_string(),
             "BTCUSDT".to_string(),
@@ -1818,7 +1818,7 @@ mod tests {
     fn crosses_maker_checks_side_and_price() {
         let mut taker = pending_order(SpotOrderType::Limit { tif: SpotOrderTif::Gtc });
         let mut maker = SpotOrderV2::new_pending_limit(
-            "maker-1".to_string(),
+            3,
             10_001,
             "trader-2".to_string(),
             "BTCUSDT".to_string(),
