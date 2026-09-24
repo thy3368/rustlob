@@ -13,14 +13,14 @@ pub fn build_request(sequence: u64) -> SpotBlockCommand {
     SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
         party_id: "buyer".to_string(),
         asset: 10_001,
-        order_id: format!("timer-order-{sequence}"),
+        order_id: sequence.saturating_add(1),
         symbol: "BTCUSDT".to_string(),
         is_buy: true,
         price: "100".to_string(),
         size: "1".to_string(),
         order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
         reduce_only: false,
-        cloid: Some(format!("timer-cloid-{sequence}")),
+        cloid: Some(format!("0x{sequence:032x}")),
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),
         maker_fee_bps: 5,
@@ -59,11 +59,11 @@ pub fn run_request_per_second() -> Result<(), reqwest::Error> {
 mod tests {
     use super::*;
 
-    fn order_fields(command: &SpotBlockCommand) -> (&str, &str) {
+    fn order_fields(command: &SpotBlockCommand) -> (u64, &str) {
         let SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(order)) = command else {
             panic!("expected a single PlaceMatch command");
         };
-        (order.order_id.as_str(), order.cloid.as_deref().unwrap_or_default())
+        (order.order_id, order.cloid.as_deref().unwrap_or_default())
     }
 
     #[test]
@@ -73,6 +73,10 @@ mod tests {
 
         assert_ne!(order_fields(&first).0, order_fields(&second).0);
         assert_ne!(order_fields(&first).1, order_fields(&second).1);
+        assert_eq!(order_fields(&first).0, 8);
+        assert_eq!(order_fields(&second).0, 9);
+        assert_eq!(order_fields(&first).1, "0x00000000000000000000000000000007");
+        assert_eq!(order_fields(&second).1, "0x00000000000000000000000000000008");
     }
 
     #[test]
